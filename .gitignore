@@ -24,3 +24,6 @@ test-output.txt
 test-tmp.txt
 packages/engine/test-output.txt
 packages/engine/test-tmp.txt
+
+# 治理会话数据以顶层 doc-govern/ 为权威源
+packages/engine/doc-govern/
