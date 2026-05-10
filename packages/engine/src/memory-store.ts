@@ -445,8 +445,22 @@ export class MemoryStore {
    */
   private _safeDbRun(sql: string, params: unknown[], opName: string): void {
     if (!this._db) return;
+    if (this._lifecycle !== "active") {
+      if (this._observer) {
+        this._observer.emit({
+          type: "memory.write_blocked",
+          priority: PipelinePriority.HIGH,
+          payload: { opName, lifecycle: this._lifecycle, sql: sql.slice(0, 80) },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      } else {
+        console.warn(`[MemoryStore] _safeDbRun 被拒: lifecycle=${this._lifecycle}, op=${opName}`);
+      }
+      return;
+    }
     try {
-      this._db.run(sql, params as any);
+      this._db.run(sql, params as (string | number | Uint8Array | null)[]);
     } catch (e) {
       if (this._observer) {
         this._observer.emit({
@@ -758,6 +772,22 @@ export class MemoryStore {
     // 前置过滤：非 JSON 格式的纯文本字符串直接跳过，不进入 JSON.parse
     // 支持 JSON 对象 ({) 和数组 ([) 两种合法格式
     const contentStr = raw.content as string;
+    // 空值防护：content 为 null/undefined 时 JSON.parse 返回 null，
+    // 下游 MemoryEntry.content 类型标注为非 null，访问 content.key 会抛 TypeError
+    if (contentStr === null || contentStr === undefined) {
+      if (this._observer) {
+        this._observer.emit({
+          type: "memory.deserialize_failed",
+          priority: PipelinePriority.HIGH,
+          payload: { id: raw.id, reason: "null content" },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      } else {
+        console.error(`[MemoryStore] null content，跳过行 ${raw.id}`);
+      }
+      return null;
+    }
     if (typeof contentStr === 'string' && contentStr.trim().length > 0 && !contentStr.trimStart().startsWith('{') && !contentStr.trimStart().startsWith('[')) {
       if (this._observer) {
         this._observer.emit({

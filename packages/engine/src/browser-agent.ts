@@ -105,7 +105,11 @@ export class BrowserAgent extends BaseAgent {
     await super.shutdown();
     if (this.browser) {
       try { await this.browser.close(); } catch (e) {
-        this._safeReporter?.({ source: "BrowserAgent.shutdown", error: e, severity: "degraded", hint: "browser.close() failed" });
+        if (this._safeReporter) {
+          this._safeReporter({ source: "BrowserAgent.shutdown", error: e, severity: "degraded", hint: "browser.close() failed" });
+        } else {
+          console.warn(`[BrowserAgent] browser.close() 失败: ${String(e)}`);
+        }
       }
     }
     this.browser = null;

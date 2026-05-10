@@ -1,4 +1,4 @@
-import type { TaskNode, Tag, ImpactScope, ReplanResult } from "@cortex/shared";
+import type { TaskNode, Tag, ImpactScope, ReplanResult, SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "./llm-adapter.js";
 
 /**
@@ -8,8 +8,14 @@ import type { LlmAdapter } from "./llm-adapter.js";
  */
 export class MetaAgent {
   private _nodeCounter = 0; // 防 Date.now() 高频碰撞
+  private _safeReporter?: SafeErrorReporter;
 
   constructor(private readonly llm: LlmAdapter) {}
+
+  /** 注入错误上报通道（observer 双通道模式） */
+  setSafeReporter(reporter: SafeErrorReporter): void {
+    this._safeReporter = reporter;
+  }
 
   /**
    * 重规划：当节点执行失败时，基于"原始意图 vs 当前事实"的冲突生成替代方案。
@@ -132,8 +138,12 @@ export class MetaAgent {
       const parsed: PlanItem[] = JSON.parse(jsonStr);
       return parsed.flatMap((item, i) => this._toTaskNode(item, parentId, i));
     } catch {
-      console.warn(`[meta-agent] JSON 解析失败 (${raw.length} chars)，回退为单 generic 节点。` +
-        ` 原始输出前200字: ${raw.slice(0, 200)}`);
+      const msg = `JSON 解析失败 (${raw.length} chars)，回退为单 generic 节点。原始输出前200字: ${raw.slice(0, 200)}`;
+      if (this._safeReporter) {
+        this._safeReporter({ source: "MetaAgent._parsePlan", error: msg, severity: "degraded" });
+      } else {
+        console.warn(`[meta-agent] ${msg}`);
+      }
       return [this._fallbackNode(raw, parentId)];
     }
   }

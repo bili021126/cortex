@@ -1,5 +1,6 @@
 import type { AgentType, TaskNode } from "@cortex/shared";
-import { AGENT_TAGS } from "@cortex/shared";
+import { AGENT_TAGS, PipelinePriority } from "@cortex/shared";
+import type { PipelineObserver } from "./pipeline-observer.js";
 
 /** invariant 违规上报回调签名。默认 console.error，外部可注入 observer.emit。 */
 export interface InvariantViolation {
@@ -16,6 +17,7 @@ export type InvariantReporter = (violation: InvariantViolation) => void;
  */
 export class TaskBoard {
   private nodes = new Map<string, TaskNode>();
+  private _observer?: PipelineObserver;
 
   /**
    * invariant 违规上报后端。
@@ -23,6 +25,11 @@ export class TaskBoard {
    * 在 bootstrap 中注入 observer.emit 后，所有 invariant 违规会走 observer 管道。
    */
   static onInvariant: InvariantReporter | null = null;
+
+  /** 注入 PipelineObserver（与 onInvariant 互补的双通道模式） */
+  setObserver(observer: PipelineObserver): void {
+    this._observer = observer;
+  }
 
   addNode(node: TaskNode): void {
     this.nodes.set(node.id, node);
@@ -143,6 +150,14 @@ export class TaskBoard {
       const msg = `results 包含未在 claimedBy 中的 agentType: ${orphanTypes} — claimedBy=[${node.claimedBy}]`;
       if (TaskBoard.onInvariant) {
         TaskBoard.onInvariant({ source: "TaskBoard.complete", message: msg, details: { nodeId, orphanTypes, claimedBy: node.claimedBy } });
+      } else if (this._observer) {
+        this._observer.emit({
+          type: "task_board.invariant_violation",
+          priority: PipelinePriority.CRITICAL,
+          payload: { source: "TaskBoard.complete", message: msg, nodeId, orphanTypes, claimedBy: node.claimedBy },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
       } else {
         console.error(`[invariant] TaskBoard.complete: ${msg}`);
       }

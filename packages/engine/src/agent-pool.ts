@@ -1,5 +1,7 @@
 import type { AgentType, AgentConfig } from "@cortex/shared";
 import { AgentStatus } from "@cortex/shared";
+import type { PipelineObserver } from "./pipeline-observer.js";
+import { PipelinePriority } from "@cortex/shared";
 
 /**
  * AgentPool —— Agent 生命周期管理 + 状态机追踪
@@ -13,6 +15,7 @@ export class AgentPool {
   private configs = new Map<AgentType, AgentConfig>();
   private active = new Map<AgentType, Set<string>>();
   private statuses = new Map<string, AgentStatus>(); // instanceId → status
+  private _observer?: PipelineObserver;
 
   /**
    * invariant 违规上报后端。
@@ -20,6 +23,11 @@ export class AgentPool {
    * 在 bootstrap 中注入 observer.emit 后，所有状态机违规会走 observer 管道。
    */
   static onInvariant: ((violation: { source: string; message: string; details?: unknown }) => void) | null = null;
+
+  /** 注入 PipelineObserver（与 onInvariant 互补的双通道模式） */
+  setObserver(observer: PipelineObserver): void {
+    this._observer = observer;
+  }
 
   /** 合法状态流转表 */
   private static readonly VALID_TRANSITIONS: Record<AgentStatus, Set<AgentStatus>> = {
@@ -57,6 +65,14 @@ export class AgentPool {
       const msg = `非法流转 ${current} → ${status} (instance: ${instanceId})`;
       if (AgentPool.onInvariant) {
         AgentPool.onInvariant({ source: "AgentPool.setStatus", message: msg, details: { instanceId, current, attempted: status } });
+      } else if (this._observer) {
+        this._observer.emit({
+          type: "agent_pool.invariant_violation",
+          priority: PipelinePriority.CRITICAL,
+          payload: { source: "AgentPool.setStatus", message: msg, instanceId, current, attempted: status },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
       } else {
         console.error(`[invariant] AgentPool.setStatus: ${msg}`);
       }
