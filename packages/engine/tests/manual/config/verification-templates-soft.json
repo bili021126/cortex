@@ -1,0 +1,118 @@
+{
+  "_note": "自审视软约束技能模板。不设具体检查清单——只给方向性指引，让专家凭自己的专业直觉在代码库中自由探索。安全硬约束（只读+受限写入）不变。",
+
+  "templates": [
+    {
+      "key": "keqing",
+      "type": "review",
+      "name": "刻晴",
+      "title": "代码质量深度侦察",
+      "narrative": "没有清单给你。整个 codebase 向你敞开——你凭玉衡星的专业直觉，去找那些不对劲的地方：",
+      "steps": [
+        "扫描 engine/src/ 下你认为最关键的模块——不是看有没有人改过，而是看代码本身是否经得起推敲",
+        "重点关注异常处理模式：有没有 try-catch 覆盖面不足的函数？有没有 catch 块里什么都没做的？有没有本该有 observer 上报却只有 console 的？",
+        "留意状态管理：状态机的流转是否完整？有没有遗漏的终态？有没有可以从终态跳回激活态的漏洞？",
+        "检查资源清理：Agent 的生命周期、数据库连接、文件句柄——创建和销毁是否配对？有没有泄漏风险？",
+        "审视代码中的\"假守卫\"——那些写了检查但实际不生效的条件、永远为真的 if、永远不会触发的 catch"
+      ],
+      "outputFormat": "不求全，求准。每个发现附带 3-5 行源码引用和判断。宁深挖一个真问题，不罗列十个假动作。",
+      "outputFile": "test-output/self-examination-soft/keqing-quality-recon.md"
+    },
+    {
+      "key": "beidou",
+      "type": "ops",
+      "name": "北斗",
+      "title": "工程就绪性自由诊断",
+      "narrative": "船长不需要航海图——她看一眼海面就知道风浪在哪儿。整个项目的工程面向你敞开：",
+      "steps": [
+        "检查构建链路：从 pnpm build 到 dist 产出——每一步是否可靠？有没有中间产物残留？有没有可以删除的死代码路径？",
+        "检查依赖树：有没有过时的依赖？有没有版本冲突？有没有应该在 devDependencies 但跑到了 dependencies 的包？",
+        "检查配置一致性：tsconfig 继承链、eslint 配置、package.json scripts——三套配置之间有没有矛盾？",
+        "检查运行时脆弱点：有没有全局变量污染？有没有进程级单例可能被多 worker 并发打穿？有没有未捕获的 unhandledRejection？",
+        "检查测试基础：vitest 配置是否完整？CI 脚本能否在裸环境跑通？有没有隐式依赖开发机本地路径的测试？"
+      ],
+      "outputFormat": "列出你确信的问题，附命令输出或文件引用。不确定的事标注'需要进一步验证'。",
+      "outputFile": "test-output/self-examination-soft/beidou-ops-diagnosis.md"
+    },
+    {
+      "key": "nahida",
+      "type": "analysis",
+      "name": "纳西妲",
+      "title": "架构全景自由分析",
+      "narrative": "雨林里每片叶子都连着根。你不看单个函数——你看它们之间的连接、依赖、呼吸：",
+      "steps": [
+        "画出 packages/ 之间的依赖图——有没有循环？有没有不该存在的反向依赖？有没有本该独立的模块被拉进了不属于它的层？",
+        "扫描 engine/src/ 的 import 关系——哪些模块被过度依赖（高扇入）？哪些模块依赖过多（高扇出）？哪些 import 形成了隐藏的循环链？",
+        "审视 shared/ 拆分后的模块语义——agent.ts / task.ts / memory.ts / infra.ts 的职责边界是否真的清晰？有没有跨域的类型引用？",
+        "寻找架构中的\"单点脆弱\"——哪个模块坏掉会导致整个系统不可用？哪个 Agent 的缺失会让整个调度器停止工作？",
+        "评估扩展成本：如果要新增一个 Agent 类型，需要改几个文件？如果要替换 sql.js 为更好的实现，需要改几个模块？"
+      ],
+      "outputFormat": "用文字描述你的分析，附 import 依赖的简要证据。重点不是'有什么'，而是'为什么这样'和'这样有什么风险'。",
+      "outputFile": "test-output/self-examination-soft/nahida-architecture-analysis.md"
+    },
+    {
+      "key": "ningguang",
+      "type": "doc-govern",
+      "name": "凝光",
+      "title": "治理合规自由审计",
+      "narrative": "天权不查代码有没有 bug——她查代码有没有说谎。声明和实现之间，清单和现实之间，有多少水分：",
+      "steps": [
+        "打开 package.json 的 scripts 区块——每个命令在执行时是否真的做了它声称的事？lint 真的在 lint 吗，还是指向了不存在的文件？typecheck 真的在检查吗？",
+        "审视 .env 和 .env.example 的一致性——.env.example 是否完整反映 .env 的结构？有没有 .env.example 没有但代码里硬编码读取的环境变量？",
+        "扫描 docs/ 中的架构文档声明 vs 实际代码——文档里说的模块结构在代码里是否存在？文档里声称的约束在代码中是否被遵守？",
+        "检查 tsconfig 继承链——每个包的 tsconfig 是否真的继承了自己声称的 base？有没有跳过继承层级直接复制的配置？",
+        "寻找\"声明残留\"——有没有模块已改名但文档还叫旧名？有没有功能已删除但 README 还在介绍？有没有废弃的 API 还在 index.ts 中导出？"
+      ],
+      "outputFormat": "逐条列出声明与现实的对比。每一项标注：声明的来源（文件:行号），实际的状况，判定（✅一致 / ⚠️声明不实 / ❌未落地）。",
+      "outputFile": "test-output/self-examination-soft/ningguang-governance-audit.md"
+    },
+    {
+      "key": "mona",
+      "type": "loop",
+      "name": "莫娜",
+      "title": "模式发现与趋势预言",
+      "narrative": "水镜映出的是水面下的星座。你不找 bug——你找 pattern。那些反复出现的东西，就是系统在告诉你什么：",
+      "steps": [
+        "扫描 engine/src/ 中所有 try-catch 块——它们的模式是否统一？有没有三种不同的兜底风格在同一个文件里共存？",
+        "统计 observer.emit 的调用分布——哪些模块完全没接入 observer？哪些模块的所有异常上报都走 observer？从分布中看到了什么？",
+        "识别代码中的重复模式——有没有 3 个以上模块共享相同结构的函数签名？有没有 5 个以上地方用同样的 try-catch + observer + console 三段式？",
+        "评估代码演进方向——从 git log 或文件修改时间看，最近半个月改动最密集的模块是哪些？这些改动是修复还是新增？是收敛还是发散？",
+        "预言：如果不加干预，三个月后这个项目的最大技术债会是什么？最大风险点是什么？"
+      ],
+      "outputFormat": "模式总结 + 趋势判断 + 预言。每个模式附带 2-3 个代码位置作为证据。",
+      "outputFile": "test-output/self-examination-soft/mona-pattern-discovery.md"
+    },
+    {
+      "key": "amber",
+      "type": "inspector",
+      "name": "安柏",
+      "title": "全项目变更侦察",
+      "narrative": "侦察骑士不看代码好不好——她看哪里有东西。整个项目就是你要侦察的地图：",
+      "steps": [
+        "list_dir 扫一遍 packages/ 的目录树——有没有不认识的目录？有没有本该存在但消失了的东西？有没有不该出现在这里的文件？",
+        "search_file 找 *.db、*.log、*.tmp——有没有应该在 .gitignore 但没在的文件？有没有临时文件残留在工作区？",
+        "统计各包的文件数量与大小——哪个包在膨胀？哪个包被冷落？新增文件最多的区域是哪里？",
+        "检查 .gitignore 的完整性——node_modules、dist、.env、*.db 是否都在忽略列表中？有没有遗漏的模式？",
+        "寻找\"被遗忘的文件\"——用 list_dir 遍历各包的入口文件（index.ts / main.ts），确认它们导出的内容在别的包中确实有被引用。有没有导出了但全项目无人引用的模块？"
+      ],
+      "outputFormat": "列出侦察发现。每一个发现附带绝对的路径引用。不确定的事明确标注'需要确认'。",
+      "outputFile": "test-output/self-examination-soft/amber-reconnaissance.md"
+    },
+    {
+      "key": "albedo",
+      "type": "code",
+      "name": "阿贝多",
+      "title": "核心层深度代码审查",
+      "narrative": "炼金术士不信任任何未经实验验证的代码。你会在最不起眼的角落找到别人忽略的问题：",
+      "steps": [
+        "深入审查 memory-store.ts——不只是看 try-catch 有没有写，而是看整个持久化链路：写入→序列化→文件系统→反序列化→加载——每一环是否经得起异常场景？",
+        "深入审查 scheduler.ts——不只是看 claimedBy 和 node.complete，而是看整个调度状态机：创建→认领→执行→完成/失败→重规划——每一条状态流转路径是否都走到了正确的终点？",
+        "审查 agent-pool.ts 和 task-board.ts——这两个是无 observer 的纯数据结构模块。它们的内部状态一致性是否经得起并发操作？有没有操作序列会导致不一致的内部状态？",
+        "审查 llm-adapter.ts 和 token 计量——API 调用的重试策略、超时处理、token 预估是否合理？缓存策略是否正确处理了相同 prompt 不同参数的场景？",
+        "审查代码中任何让你觉得\"这不对\"的地方——哪怕说不上来为什么。列出代码位置，附上你的直觉判断。"
+      ],
+      "outputFormat": "每项发现附带 5-10 行源码引用 + 分析。判断可以是 ✅/⚠️/❌，也可以是'需要进一步实验验证'。",
+      "outputFile": "test-output/self-examination-soft/albedo-deep-review.md"
+    }
+  ]
+}

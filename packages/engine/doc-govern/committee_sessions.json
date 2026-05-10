@@ -1,0 +1,55 @@
+{
+  "committee_sessions": [
+    {
+      "session_id": "c8775c2b-bae6-4ecd-9678-5ff0613ba9cd",
+      "task_id": "2a894824-84c4-46c7-9381-8a3e45338eca",
+      "trigger": "MULTI_VIEW_REQUIRED",
+      "pillars": [
+        "CodeGen",
+        "Maint"
+      ],
+      "discussion": [],
+      "verdict": {
+        "decision": "PROCEED",
+        "reasoning": "无观点产出。",
+        "meta_agent_snapshot": "取向:partner | 模型:mock-model | 时间:2026-05-05T19:39:01.784Z"
+      },
+      "duration": 194,
+      "timestamp": 1778009941784
+    },
+    {
+      "session_id": "69bf2669-2bba-4d92-bafc-279cc50613ac",
+      "task_id": "5bde3e35-bc48-43d5-8dde-71dbb51442d8",
+      "trigger": "MULTI_VIEW_REQUIRED",
+      "pillars": [
+        "CodeGen",
+        "Maint"
+      ],
+      "discussion": [],
+      "verdict": {
+        "decision": "PROCEED",
+        "reasoning": "无观点产出。",
+        "meta_agent_snapshot": "取向:partner | 模型:mock-model | 时间:2026-05-05T19:39:02.308Z"
+      },
+      "duration": 228,
+      "timestamp": 1778009942308
+    },
+    {
+      "session_id": "e536715a-21b9-43ef-bd23-7e0d98ecc1b1",
+      "task_id": "13698ab4-34db-430b-801a-5b586d94e167",
+      "trigger": "MULTI_VIEW_REQUIRED",
+      "pillars": [
+        "CodeGen",
+        "Maint"
+      ],
+      "discussion": [],
+      "verdict": {
+        "decision": "PROCEED",
+        "reasoning": "无观点产出。",
+        "meta_agent_snapshot": "取向:partner | 模型:mock-model | 时间:2026-05-05T19:39:04.187Z"
+      },
+      "duration": 404,
+      "timestamp": 1778009944187
+    }
+  ]
+}

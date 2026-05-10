@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>计算器 - Cortex 测试用</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+        }
+        .calculator {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        h1::before {
+            content: "🧮";
+            font-size: 1.8rem;
+        }
+        label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: block;
+            color: #555;
+        }
+        #expression {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            font-size: 1.2rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        #expression:focus {
+            border-color: #4a90d9;
+        }
+        #calculateBtn {
+            width: 100%;
+            margin-top: 1rem;
+            padding: 0.8rem;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #calculateBtn:hover {
+            background: #3a7bc8;
+        }
+        #calculateBtn:active {
+            transform: scale(0.98);
+        }
+        .result-area {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            min-height: 3.5rem;
+            display: flex;
+            align-items: center;
+        }
+        #result {
+            font-size: 1.3rem;
+            color: #2d3436;
+            word-break: break-all;
+        }
+        .error {
+            color: #e74c3c;
+            font-weight: 500;
+        }
+        .help-text {
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: #888;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator" id="calcApp">
+        <h1>计算器</h1>
+        <label for="expression">输入表达式</label>
+        <input type="text" id="expression" placeholder="例如：2+3*4 或 (10-5)*2" autofocus>
+        <button id="calculateBtn">计算</button>
+        <div class="result-area">
+            <span id="result"></span>
+        </div>
+        <div class="help-text">
+            支持 + - * / 和括号，例：2.5*4 或 10/(2+3)
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            const input = document.getElementById('expression');
+            const button = document.getElementById('calculateBtn');
+            const resultDiv = document.getElementById('result');
+
+            function calculate() {
+                const expr = input.value.trim();
+                if (!expr) {
+                    resultDiv.innerHTML = '<span class="error">请输入表达式</span>';
+                    return;
+                }
+                // 安全检查：只允许数字、运算符、括号、空格和小数点
+                const sanitized = expr.replace(/\s/g, '');
+                if (!/^[0-9+\-*/().]+$/.test(sanitized)) {
+                    resultDiv.innerHTML = '<span class="error">表达式包含非法字符</span>';
+                    return;
+                }
+                try {
+                    // 使用 Function 作为安全的 eval 替代（仍然需谨慎，但测试环境可控）
+                    const result = new Function('return (' + sanitized + ')')();
+                    if (typeof result !== 'number' || !isFinite(result)) {
+                        throw new Error('计算结果无效');
+                    }
+                    resultDiv.textContent = '结果：' + result;
+                    resultDiv.className = '';
+                } catch (e) {
+                    resultDiv.innerHTML = '<span class="error">计算出错：' + e.message + '</span>';
+                    resultDiv.className = 'error';
+                }
+            }
+
+            button.addEventListener('click', calculate);
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    calculate();
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

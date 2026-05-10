@@ -1,0 +1,120 @@
+{
+  "_note": "自审视验证技能模板。由甘雨在规划时读取，为每位专家提供代码级验证指引。每次自审视完成后，根据验证报告更新此文件——这是认知闭环的第一块肌肉记忆。",
+
+  "templates": [
+    {
+      "key": "keqing",
+      "type": "review",
+      "name": "刻晴",
+      "title": "验证 P0 + P1 修复",
+      "narrative": "你不是在看「文件有没有被碰过」。你要翻开每一行代码，亲眼确认：",
+      "steps": [
+        "打开 memory-store.ts，找到 _saveDb 函数——里面必须是 try-catch 包裹 writeFileSync，不是赤裸裸的写入",
+        "打开 memory-store.ts，找到 _deserializeRow 函数——JSON.parse 必须被 try-catch 保护，解析失败返回 null 而非崩溃",
+        "打开 memory-store.ts，找到 _sqlRead 的 catch 块——确认已从 console.warn 改为 observer.emit('memory.sql_degraded')",
+        "打开 scheduler.ts，找到 _dispatchSingle 和 _dispatchMulti——确认 node.complete 的 emit 都被 if (result.success) / if (allSuccess) 守卫着",
+        "打开 scheduler.ts，找到 claimedBy 相关代码——确认已从 console.error 改为 observer.emit('scheduler.invariant_violation')",
+        "确认 source 目录下 8 个执行 Agent 全部继承自 BaseAgent，没有独立实现的漏网之鱼"
+      ],
+      "outputFormat": "每项输出：实际读到的代码行（3-5 行上下文）+ 判断（✅已修 / ⚠️部分 / ❌未修）",
+      "outputFile": "test-output/self-examination/keqing-p1-verification.md"
+    },
+    {
+      "key": "beidou",
+      "type": "ops",
+      "name": "北斗",
+      "title": "验证 P2 修复",
+      "narrative": "你是船长，不是文书。你要亲手「开一下船」确认每个修复不是光说不练：",
+      "steps": [
+        "打开 meta-agent.ts，找到 _extractJson——必须是平衡括号计数算法（有 depth 变量），不是简单正则 /\\[([\\s\\S]*?)\\]/",
+        "打开 confirm-gate.ts，找到 handleTimeout——确认方法被保留（不是被删除的空壳），周围有测试覆盖",
+        "搜全项目 \"ToolRegistry\"——确认源码层无残留引用",
+        "搜全项目 \"packages/engine/packages\"——确认 engine 下没有嵌套子包残留",
+        "打开 agent-pool.ts，找到 setStatus 或 VALID_TRANSITIONS——确认状态流转用了表驱动校验",
+        "确认 memory-store.ts 的 obliterate 方法正确跳过了 CAS expected 校验",
+        "确认 tmp/ 已在 .gitignore 中"
+      ],
+      "outputFormat": "每项输出：实际操作结果 + 判断",
+      "outputFile": "test-output/self-examination/beidou-p2-verification.md"
+    },
+    {
+      "key": "nahida",
+      "type": "analysis",
+      "name": "纳西妲",
+      "title": "验证 P3 修复 + 架构趋势",
+      "narrative": "你是草神。你看到的不是一行行代码，是它们之间的连接、依赖、呼吸：",
+      "steps": [
+        "搜全项目 \"console.warn\"——统计出现次数，特别关注 memory-store.ts 中是否已归零（已迁移至 observer）",
+        "打开 shared/src/ 下的 agent.ts、task.ts、memory.ts、infra.ts——确认它们的 import 形成单向自底向上图，无循环",
+        "打开 shared/src/index.ts——确认它只是一个 barrel，约 5 行 re-export，不含任何业务逻辑",
+        "打开 browser-e2e.ts——确认其中 3 处 docs/test.html 引用已更新为 webui/test.html",
+        "确认 playwright 在 package.json 中位于 devDependencies（非 dependencies），engines.node 上限 < 25.0.0"
+      ],
+      "outputFormat": "在此基础上，评估修复后的整体架构趋势——耦合是降低了还是转移了？模块边界是更清晰了还是模糊了？",
+      "outputFile": "test-output/self-examination/nahida-p3-verification.md"
+    },
+    {
+      "key": "ningguang",
+      "type": "doc-govern",
+      "name": "凝光",
+      "title": "清单一致性审计",
+      "narrative": "你是天权。你的工作不是写代码，而是拿着清单对着代码逐条核对：",
+      "steps": [
+        "统计全项目中 console.warn vs console.error vs observer.emit 的调用次数——observer.emit 应占主导",
+        "同时打开 root/.env 和 engine/.env——确认 DEEPSEEK_CHAT_MODEL 值一致（不应一个是 flash 一个是 reasoner）",
+        "逐项对比共识修复清单中的 P0/P1 条目与实际代码：grep 对应函数，确认修复是否真正落地而非仅改注释",
+        "重点关注三个高风险点：_saveDb 是否有 try-catch、_deserializeRow 是否防 JSON.parse 崩溃、_dispatchSingle 中 node.complete 是否有 success 守卫",
+        "标识所有标记为已完成的项是否真的代码级完成了——不是改了个标记或加了行注释就算完成"
+      ],
+      "outputFormat": "每项输出：清单声明 vs 代码实况对比 + 判断（✅一致 / ⚠️声明不实 / ❌未落地）",
+      "outputFile": "test-output/self-examination/ningguang-fixlist-consistency.md"
+    },
+    {
+      "key": "mona",
+      "type": "loop",
+      "name": "莫娜",
+      "title": "修复质量趋势与模式提炼",
+      "narrative": "你是占星术士。在水镜中，你看见的不是单个修复点，而是它们共同形成的星座：",
+      "steps": [
+        "搜 memory-store.ts 和 scheduler.ts 中的 try-catch——对比修复前后的密度变化",
+        "搜全项目 \"observer.emit\"——统计调用点数量，与 console.warn 残留数量对比",
+        "识别这次 P0-P3 修复中反复出现的模式：try-catch 防护、observer 错误上报、invariant 断言、状态机表驱动——它们是否可以沉淀为通用工具？",
+        "评估整体代码质量变化趋势——是正在变好，还是修了旧坑又挖了新坑？"
+      ],
+      "outputFormat": "输出模式总结 + 趋势判断 + 可沉淀技能建议",
+      "outputFile": "test-output/self-examination/mona-quality-trend.md"
+    },
+    {
+      "key": "amber",
+      "type": "inspector",
+      "name": "安柏",
+      "title": "变更规模侦察",
+      "narrative": "你是侦察骑士。你不需要评价代码的好坏，你只需要如实报告你看到了什么：",
+      "steps": [
+        "list_dir 检查 test-output/self-examination/——确认 self-examination-summary.md 和 consensus-fix-list.md 存在",
+        "search_file \"*.db\" 在 .cortex/ 下——确认临时 DB 文件（shared-consensus.db、memory-self-exam.db 等）路径符合规范",
+        "打开 .gitignore——确认 tmp/ 已在忽略列表中",
+        "统计这次修复涉及的文件变更范围：memory-store.ts、scheduler.ts、pipeline-observer.ts 等核心文件的改动行数",
+        "重点观察 shared/ 拆分后的 import 影响范围——有多少文件通过 index.ts barrel 导入？"
+      ],
+      "outputFormat": "每项输出：文件路径 + 统计数据 + 观察结论",
+      "outputFile": "test-output/self-examination/amber-change-summary.md"
+    },
+    {
+      "key": "albedo",
+      "type": "code",
+      "name": "阿贝多",
+      "title": "P0 修复深度代码审查",
+      "narrative": "你是炼金术士。你的实验台需要精确到每一行：",
+      "steps": [
+        "memory-store.ts 的 _saveDb 函数（约 line 422）：确认 try-catch 包裹 writeFileSync，catch 中有 observer.emit('memory.persist_failed', CRITICAL)，无 observer 时 console.error 兜底",
+        "memory-store.ts 的 _deserializeRow 函数（约 line 568）：确认 JSON.parse(raw.content) 和 JSON.parse(raw.metadata) 均被 try-catch 保护，返回 null 而非崩溃。同时检查 _loadFromDb 和 _sqlRead 调用侧是否适配了 null 检查",
+        "memory-store.ts 的 _sqlRead catch 块（约 line 508）：确认已从 console.warn 改为 observer.emit('memory.sql_degraded', HIGH) + 内存扫描降级",
+        "scheduler.ts 的 _dispatchSingle 末尾（约 line 440）：确认 node.complete emit 被 if (result.success) 包裹。_dispatchMulti 末尾（约 line 538）：确认 node.complete 被 if (allSuccess) 包裹。三条路径互斥——成功只发 node.complete，失败只发 node.failed",
+        "scheduler.ts 的 claimedBy invariant：确认已从 console.error 改为 observer.emit('scheduler.invariant_violation', CRITICAL)"
+      ],
+      "outputFormat": "每项输出：实际读到的代码行（3-5 行上下文）+ 判断（✅修复正确 / ⚠️有残留 / ❌未修）",
+      "outputFile": "test-output/self-examination/albedo-p0-code-review.md"
+    }
+  ]
+}
