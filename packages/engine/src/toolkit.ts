@@ -283,9 +283,22 @@ export class Toolkit {
             ["--line-number", "--max-count", "30", "--no-heading", query],
             { cwd: searchRoot, encoding: "utf-8", timeout: 15_000 },
           );
-        } catch {
-          // rg 不可用或超时 —— 退回简单 grep
-          output = this._grepFallback(searchRoot, query);
+        } catch (e) {
+          // rg 非零退出码区分：
+          //   exit 1 = 无匹配结果（正常，rg 语义如此）→ 返回空
+          //   exit 2 = 真错误（rg 未安装/权限拒绝/正则非法）→ 退回 grep 降级
+          //   其他 = 超时/spawn 失败 → 退回 grep 降级
+          const err = e as { status?: number; stderr?: unknown };
+          const stderr = err.stderr?.toString() ?? "";
+          if (err.status === 1) {
+            // 无匹配，rg 正常工作
+            output = "";
+          } else {
+            console.warn(
+              `[toolkit] search_code: rg failed (exit ${err.status ?? "?"}), falling back to grep. stderr: ${stderr.slice(0, 200)}`,
+            );
+            output = this._grepFallback(searchRoot, query);
+          }
         }
         if (!output.trim()) {
           return { success: true, output: `未找到匹配 "${query}" 的结果` };

@@ -46,7 +46,8 @@ describe("MetaAgent", () => {
 
     const nodes = await meta.plan("添加一个日期格式化工具函数");
 
-    expect(nodes.length).toBe(2);
+    // mock 返回 2 个顶层 PlanItem，其中一个有 1 个 child → 扁平化后共 3 个 TaskNode
+    expect(nodes.length).toBe(3);
     expect(nodes[0]).toBeTruthy();
     expect(nodes[1]).toBeTruthy();
 
@@ -92,7 +93,8 @@ describe("MetaAgent", () => {
 
     const nodes = await meta.plan("test", { parentId: "parent-node-999" });
 
-    expect(nodes.length).toBe(2);
+    // mock 返回 2 个顶层 PlanItem，其中一个有 1 个 child → 扁平化后共 3 个 TaskNode
+    expect(nodes.length).toBe(3);
     // 顶层节点的 parentId 应继承传入的 context.parentId
     const impl = nodes.find((n) => n.type === "implementation")!;
     expect(impl.parentId).toBe("parent-node-999");

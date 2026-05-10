@@ -2,7 +2,7 @@
 // @cortex/engine —— 桶导出
 // ============================================================
 
-// Agent 类（Core-1：9 个独立类）
+// Agent 类（Core-1：10 个独立类）
 export { CodeAgent } from "./code-agent.js";
 export { ReviewAgent } from "./review-agent.js";
 export { AnalysisAgent } from "./analysis-agent.js";
@@ -11,6 +11,7 @@ export { LoopAgent } from "./loop-agent.js";
 export { DocGovernAgent } from "./doc-govern-agent.js";
 export { ButlerAgent } from "./butler-agent.js";
 export { InspectorAgent } from "./inspector-agent.js";
+export { BrowserAgent } from "./browser-agent.js";
 export { MetaAgent } from "./meta-agent.js";
 
 // 共享 ReAct 辅助

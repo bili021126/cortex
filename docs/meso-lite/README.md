@@ -47,14 +47,14 @@ docs/
 ## 核心交付 (议题五 Section 4.5)
 
 ### 运行时
-- [x] CortexEngine (`@cortex/cortex-engine`) — DI 组装所有子包
+- [x] CortexEngine (`@cortex/engine`) — DI 组装所有子包
 - [x] MetaAgent — 关键词分类 + 模板任务树生成
-- [x] CoroutineRunner (`@cortex/pillar`) — ReAct 循环 (Think→Act→Observe)
-- [x] Scheduler (`@cortex/scheduler`) — 拓扑排序 + 节点调度
+- [x] CoroutineRunner (ReAct 循环, `@cortex/engine`) — Think→Act→Observe
+- [x] Scheduler (`@cortex/engine`) — 拓扑排序 + 节点调度
 - [x] DeepSeekLLMInvoker — 真实 LLM 驱动工具调用
 
 ### 记忆
-- [x] MemoryStore + MemoryAccessorAdapter (`@cortex/memory`)
+- [x] MemoryStore + MemoryAccessorAdapter (`@cortex/engine`)
 - [x] 取向维度过滤 + 私密记忆隔离
 - [x] active ↔ archived 双态流转
 
@@ -63,12 +63,12 @@ docs/
 - [x] 时间盒: critical→120s, high→60s, medium→30s, low→15s
 
 ### 确认门
-- [x] ToolGateway (`@cortex/pillar`) — L2/L3 不可逆操作拦截
+- [x] ToolGateway (`@cortex/engine`) — L2/L3 不可逆操作拦截
 - [x] ConsoleChannel — stdin/stdout 两阶段确认
 - [x] 7 个真实工具: read_file, write_file (L2), list_dir, run_shell (L1), search_code, git_diff, git_log
 
 ### 脊髓
-- [x] InMemoryTransport (`@cortex/event-bus`) — 环形缓冲, 定向订阅
+- [x] InMemoryTransport (`@cortex/engine`) — 环形缓冲, 定向订阅
 - [x] 节点生命周期事件: NODE_STARTED/PROGRESS/COMPLETED/FAILED/SKIPPED
 - [x] CortexEventType 完整目录 (原则三: 事实描述, 非指令式)
 

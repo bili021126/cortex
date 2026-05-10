@@ -12,8 +12,13 @@ export class ConfirmGate {
   private bridge?: PlatformBridge;
   private _bypass = false;
 
-  /** 测试模式：跳过所有确认，直接放行 */
-  bypassAll(): void { this._bypass = true; }
+  /** 测试模式：跳过所有确认，直接放行。生产过程调用将抛错。 */
+  bypassAll(): void {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ConfirmGate.bypassAll() called in production — forbidden. Use setBridge() for real user interaction.");
+    }
+    this._bypass = true;
+  }
 
   /** 判定是否需要确认 */
   needsConfirmation(level: ReversibilityLevel): boolean {

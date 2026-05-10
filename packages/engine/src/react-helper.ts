@@ -81,9 +81,14 @@ export async function runReActLoop(
         });
       }
     } catch (e) {
-      // ReAct 循环崩溃：保留已完成轮次的中间输出，不让 40 轮推理打水漂
-      finalOutput = `[ReAct loop crashed at iteration ${loops}/${maxLoops}: ${String(e)}]`;
-      break;
+      // ReAct 循环崩溃：保留已完成轮次的中间输出在 output 中，但标记 success=false
+      return {
+        nodeId: node.id,
+        agentType: callerType,
+        success: false,
+        output: `[partial output before crash at iteration ${loops}/${maxLoops}]`,
+        error: `[ReAct loop crashed at iteration ${loops}/${maxLoops}: ${String(e)}]`,
+      };
     }
   }
 
