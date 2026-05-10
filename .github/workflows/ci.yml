@@ -18,6 +18,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cortex/shared build
       - run: pnpm --filter @cortex/engine typecheck
 
   lint:
@@ -44,6 +45,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cortex/shared build
       - run: pnpm --filter @cortex/engine exec vitest run --config vitest.ci.config.ts
 
   build:
