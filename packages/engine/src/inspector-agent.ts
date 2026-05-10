@@ -113,10 +113,11 @@ export class InspectorAgent extends BaseAgent {
         });
         facts.push(`[tsc --noEmit] ✅ 编译通过。`);
         if (tscOut.trim()) facts.push(`[tsc 输出] ${tscOut.trim().slice(0, 500)}`);
-      } catch (e: any) {
-        const stdout = e.stdout?.toString() ?? "";
-        const stderr = e.stderr?.toString() ?? "";
-        facts.push(`[tsc --noEmit] ❌ 编译失败 (exit ${e.status ?? "?"})`);
+      } catch (e) {
+        const err = e as { stdout?: unknown; stderr?: unknown; status?: number | string };
+        const stdout = err.stdout?.toString() ?? "";
+        const stderr = err.stderr?.toString() ?? "";
+        facts.push(`[tsc --noEmit] ❌ 编译失败 (exit ${err.status ?? "?"})`);
         if (stdout.trim()) facts.push(`[tsc stdout]\n${stdout.trim().slice(0, 800)}`);
         if (stderr.trim()) facts.push(`[tsc stderr]\n${stderr.trim().slice(0, 800)}`);
       }
@@ -138,10 +139,11 @@ export class InspectorAgent extends BaseAgent {
         const trimmed = tsxOut.trim();
         facts.push(`[tsx] ✅ 测试全部通过。`);
         if (trimmed) facts.push(`[tsx 输出]\n${trimmed.slice(0, 500)}`);
-      } catch (e: any) {
-        const stdout = e.stdout?.toString() ?? "";
-        const stderr = e.stderr?.toString() ?? "";
-        facts.push(`[tsx] ❌ 测试失败 (exit ${e.status ?? "?"})`);
+      } catch (e) {
+        const err = e as { stdout?: unknown; stderr?: unknown; status?: number | string };
+        const stdout = err.stdout?.toString() ?? "";
+        const stderr = err.stderr?.toString() ?? "";
+        facts.push(`[tsx] ❌ 测试失败 (exit ${err.status ?? "?"})`);
         if (stdout.trim()) facts.push(`[tsx stdout]\n${stdout.trim().slice(0, 600)}`);
         if (stderr.trim()) facts.push(`[tsx stderr]\n${stderr.trim().slice(0, 600)}`);
       }

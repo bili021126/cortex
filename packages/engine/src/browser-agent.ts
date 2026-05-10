@@ -177,8 +177,8 @@ export class BrowserAgent extends BaseAgent {
           default:
             return { success: false, error: `未知 browser_do 操作: "${action}"。支持: navigate, type, click, read, screenshot` };
         }
-      } catch (e: any) {
-        return { success: false, error: `browser_do.${action} 失败: ${e.message?.slice(0, 300) ?? String(e)}` };
+      } catch (e) {
+        return { success: false, error: `browser_do.${action} 失败: ${e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300)}` };
       }
     });
   }

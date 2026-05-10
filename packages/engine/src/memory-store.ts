@@ -7,6 +7,7 @@ import type {
 } from "@cortex/shared";
 import { MemoryState, LinkType, PipelinePriority } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
@@ -40,9 +41,6 @@ export interface MemoryWriteInput {
 export class MemoryStore {
   private memories = new Map<string, MemoryEntry>();
   private links = new Map<string, MemoryLink[]>();
-
-  private _memCounter = 0;
-  private _linkCounter = 0;
 
   // ── SQLite 持久化 ──────────────────────────
   private _SQL?: SqlJsStatic;
@@ -104,7 +102,7 @@ export class MemoryStore {
       throw new Error(`MemoryStore 已关闭 (状态: ${this._lifecycle})，拒绝写入`);
     }
     const now = Date.now();
-    const id = `mem-${now}-${this._memCounter++}`;
+    const id = `mem-${crypto.randomUUID()}`;
 
     const entry: MemoryEntry = {
       id,
@@ -149,10 +147,10 @@ export class MemoryStore {
           "write",
         );
         this._scheduleFlush();
-      } catch (_e) {
+      } catch (e) {
         // 假阳性禁止原则：DB 失败回滚内存
         this.memories.delete(id);
-        throw _e;
+        throw e;
       }
     }
 
@@ -214,7 +212,7 @@ export class MemoryStore {
           }
           stmt.free();
           void this._scheduleFlush();
-        } catch (_e) {
+        } catch (e) {
           // 假阳性禁止原则：DB 失败回滚内存访问计数
           for (const m of results) {
             m.accessCount = originalAccessCounts.get(m.id) ?? m.accessCount;
@@ -224,7 +222,7 @@ export class MemoryStore {
             this._observer.emit({
               type: "memory.db_write_failed",
               priority: PipelinePriority.CRITICAL,
-              payload: { opName: "read.access_tracking", error: String(_e).slice(0, 300) },
+              payload: { opName: "read.access_tracking", error: String(e).slice(0, 300) },
               timestamp: Date.now(),
               notificationType: "WARNING",
             });
@@ -268,7 +266,7 @@ export class MemoryStore {
 
     const now = Date.now();
     const link: MemoryLink = {
-      id: `link-${now}-${this._linkCounter++}`,
+      id: `link-${crypto.randomUUID()}`,
       sourceId,
       targetId,
       linkType,
@@ -288,10 +286,10 @@ export class MemoryStore {
           "link",
         );
         this._scheduleFlush();
-      } catch (_e) {
+      } catch (e) {
         // 假阳性禁止原则：DB 失败回滚内存
         existing.pop();
-        throw _e;
+        throw e;
       }
     }
 
@@ -333,10 +331,10 @@ export class MemoryStore {
       try {
         this._safeDbRun("UPDATE memories SET state = ? WHERE id = ?", [newState, memoryId], "cas");
         this._scheduleFlush();
-      } catch (_e) {
+      } catch (e) {
         // 假阳性禁止原则：DB 失败回滚内存
         m.state = expected;
-        throw _e;
+        throw e;
       }
     }
 
@@ -369,10 +367,10 @@ export class MemoryStore {
       try {
         this._safeDbRun("UPDATE memories SET state = ? WHERE id = ?", [MemoryState.Obliterated, memoryId], "obliterate");
         this._scheduleFlush();
-      } catch (_e) {
+      } catch (e) {
         // 假阳性禁止原则：DB 失败回滚内存
         m.state = previousState;
-        throw _e;
+        throw e;
       }
     }
     return true;
@@ -539,9 +537,6 @@ export class MemoryStore {
         const entry = this._deserializeRow(raw);
         if (!entry) continue; // 跳过 JSON 损坏的行
         this.memories.set(entry.id, entry);
-        // 恢复计数器
-        const idNum = parseInt(entry.id.split("-").pop() ?? "0", 10);
-        if (!isNaN(idNum) && idNum >= this._memCounter) this._memCounter = idNum + 1;
       }
     }
 
@@ -567,8 +562,6 @@ export class MemoryStore {
           this.links.set(link.sourceId, existing);
         }
         existing.push(link);
-        const linkNum = parseInt(link.id.split("-").pop() ?? "0", 10);
-        if (!isNaN(linkNum) && linkNum >= this._linkCounter) this._linkCounter = linkNum + 1;
       }
     }
   }

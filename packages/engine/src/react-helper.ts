@@ -80,9 +80,9 @@ export async function runReActLoop(
           tool_call_id: tc.id,
         });
       }
-    } catch (e: any) {
+    } catch (e) {
       // ReAct 循环崩溃：保留已完成轮次的中间输出，不让 40 轮推理打水漂
-      finalOutput = `[ReAct loop crashed at iteration ${loops}/${maxLoops}: ${String(e?.message ?? e)}]`;
+      finalOutput = `[ReAct loop crashed at iteration ${loops}/${maxLoops}: ${String(e)}]`;
       break;
     }
   }

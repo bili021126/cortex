@@ -440,14 +440,14 @@ export class LlmAdapter {
           // 5xx 服务端错误 → 重试
           lastError = new Error(`LLM API server error ${res.status}: ${await res.text().catch(() => "(body unreadable)")}`);
         }
-      } catch (e: any) {
-        if (e.name === "AbortError") {
+      } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") {
           lastError = new Error(`LLM API timeout after ${LlmAdapter.REQUEST_TIMEOUT_MS / 1000}s`);
-        } else if (e.message?.startsWith("LLM API client error")) {
+        } else if (e instanceof Error && e.message?.startsWith("LLM API client error")) {
           // 不可重试的客户端错误，立即抛出让调用方感知
           throw e;
         } else {
-          lastError = e;
+          lastError = e instanceof Error ? e : new Error(String(e));
         }
       } finally {
         clearTimeout(timeoutId);

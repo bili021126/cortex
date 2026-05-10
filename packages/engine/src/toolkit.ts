@@ -310,9 +310,10 @@ export class Toolkit {
           maxBuffer: 5 * 1024 * 1024, // 5MB
         });
         return { success: true, output: output.slice(0, 10_000) };
-      } catch (e: any) {
-        const stderr = e.stderr ?? "";
-        const message = e.message?.slice(0, 500) ?? String(e);
+      } catch (e) {
+        const err = e as { stderr?: unknown; message?: string };
+        const stderr = err.stderr ?? "";
+        const message = err.message?.slice(0, 500) ?? String(e);
         return { success: false, error: `命令执行失败: ${message}${stderr ? `\nstderr: ${String(stderr).slice(0, 500)}` : ""}` };
       }
     });
