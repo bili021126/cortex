@@ -48,10 +48,10 @@ export class AgentPool {
     return true;
   }
 
-  /** 更新实例状态（含流转合法性校验） */
-  setStatus(instanceId: string, status: AgentStatus): void {
+  /** 更新实例状态（含流转合法性校验）。成功返回 true，非法流转返回 false。 */
+  setStatus(instanceId: string, status: AgentStatus): boolean {
     const current = this.statuses.get(instanceId);
-    if (current === undefined) return;
+    if (current === undefined) return false;
     const allowed = AgentPool.VALID_TRANSITIONS[current];
     if (!allowed.has(status)) {
       const msg = `非法流转 ${current} → ${status} (instance: ${instanceId})`;
@@ -60,9 +60,10 @@ export class AgentPool {
       } else {
         console.error(`[invariant] AgentPool.setStatus: ${msg}`);
       }
-      return;
+      return false;
     }
     this.statuses.set(instanceId, status);
+    return true;
   }
 
   /** 获取某类型下所有实例的状态列表 */
@@ -84,16 +85,19 @@ export class AgentPool {
     return [...instances].some((id) => this.statuses.get(id) === AgentStatus.Awake);
   }
 
-  /** 回收 Agent 实例。绕过状态机校验直接清理——非法流转情况（如崩溃后强制回收）已在 warn 中记录。 */
+  /** 回收 Agent 实例。优先走 setStatus() 状态机流转；仅当非法流转（如崩溃后强制回收）时直写 Map 兜底。 */
   destroy(agentType: AgentType, instanceId: string): void {
     const current = this.statuses.get(instanceId);
-    if (current !== undefined && current !== AgentStatus.Destroyed) {
-      if (current !== AgentStatus.Draining) {
-        console.warn(
-          `[agent-pool] destroy 绕过状态机: ${current} → Destroyed (instance: ${instanceId})，强制清理`,
-        );
-      }
-      // 直接置状态，不经过 setStatus——绕过流转校验，语义与"强制清理"一致
+    if (current === undefined || current === AgentStatus.Destroyed) {
+      this.active.get(agentType)?.delete(instanceId);
+      return;
+    }
+
+    const ok = this.setStatus(instanceId, AgentStatus.Destroyed);
+    if (!ok) {
+      console.warn(
+        `[agent-pool] destroy 绕过状态机: ${current} → Destroyed (instance: ${instanceId})，强制清理`,
+      );
       this.statuses.set(instanceId, AgentStatus.Destroyed);
     }
     this.active.get(agentType)?.delete(instanceId);

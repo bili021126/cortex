@@ -8,6 +8,8 @@ node_modules/
 # 构建产物
 dist/
 *.tsbuildinfo
+# 测试构建产物混入（dist/ 已覆盖，显式标注防回归）
+packages/shared/dist/__tests__/
 
 # IDE
 .vscode/

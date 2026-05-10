@@ -64,6 +64,8 @@ export class ButlerAgent {
 
   async wakeup(): Promise<void> {
     // 订阅关键事件（NORMAL 级别事件不订阅——管家无需响应全量信息流）
+    // 遥测预留：memory.* 域事件（persist_failed / sql_degraded / deserialize_failed 等）
+    // 当前仅由 memory-store 发射，PipelineObserver 不做消费——预留给未来遥测/监控系统接入
     this.observer.on(PipelinePriority.CRITICAL, this._onCritical.bind(this));
     this.observer.on(PipelinePriority.HIGH, this._onHigh.bind(this));
     this._setStatus(AS.Awake);
