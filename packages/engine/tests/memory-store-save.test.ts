@@ -41,6 +41,9 @@ describe("MemoryStore._saveDb", () => {
     expect(entry).toBeDefined();
     expect(entry!.summary).toBe("test persistence");
 
+    // 等待防抖刷盘完成（默认 200ms 延迟）
+    await store.flush();
+
     // 确认 db 文件存在且非空
     const stat = fs.statSync(dbPath);
     expect(stat.size).toBeGreaterThan(0);
@@ -138,7 +141,9 @@ describe("MemoryStore._deserializeRow", () => {
       metadata: { version: 1, env: "test" },
     });
 
-    // reload from same file
+    // 等待防抖刷盘完成后，从同一文件重新加载
+    await store.flush();
+
     const store2 = new MemoryStore();
     await store2.init(dbPath);
     const reloaded = store2.peek(id);
