@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { MemoryType, MemoryState, AgentType, LinkType } from "@cortex/shared";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
 import { MemoryStore } from "../src/memory-store";
+import { PipelineObserver } from "../src/pipeline-observer";
 
 describe("MemoryStore", () => {
   let store: MemoryStore;
@@ -514,5 +515,38 @@ describe("MemoryStore", () => {
     store.read({ keywords: ["CSA"], trackAccess: true });
 
     expect(store.peek(id)!.accessCount).toBe(before + 2);
+  });
+
+  // ── _deserializeRow null content 边界 ─────────
+
+  it("_deserializeRow: null content 返回 null 不崩溃（observer 通道）", () => {
+    const obs = new PipelineObserver();
+    const s = new MemoryStore(obs);
+    const emitted: any[] = [];
+    obs.on(PipelinePriority.HIGH, (event) => {
+      emitted.push({ type: event.type, payload: event.payload });
+    });
+
+    const result = (s as any)._deserializeRow({ id: "mem-null", content: null });
+    expect(result).toBeNull();
+
+    const failed = emitted.filter((e) => e.type === "memory.deserialize_failed");
+    expect(failed.length).toBe(1);
+    expect(failed[0].payload.reason).toBe("null content");
+  });
+
+  it("_deserializeRow: undefined content 返回 null 不崩溃", () => {
+    const result = (store as any)._deserializeRow({ id: "mem-undefined", content: undefined });
+    expect(result).toBeNull();
+  });
+
+  it("_deserializeRow: null content 无 observer 时 console.error 兜底", () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const result = (store as any)._deserializeRow({ id: "mem-null-no-obs", content: null });
+    expect(result).toBeNull();
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[MemoryStore] null content")
+    );
+    errSpy.mockRestore();
   });
 });

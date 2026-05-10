@@ -17,6 +17,7 @@
  *   用例5: close() 幂等: 重复调用不抛异常
  *   用例6: close() 取消防抖定时器，防止 flush 后重触发
  *   用例7: closing 状态下 flush() 可正常落盘
+ *   用例8: closing 状态下 _safeDbRun 拒绝 DB 写入（observer + console 双通道）
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -225,5 +226,51 @@ describe("MemoryStore 生命周期状态机", () => {
 
     // 清理
     try { require("fs").unlinkSync(dbPath); } catch {}
+  });
+
+  // ─── 用例8: closing 状态下 _safeDbRun 拒绝写入 ──
+
+  it("用例8: closing 状态下 _safeDbRun 拒绝 DB 写入（observer 双通道）", async () => {
+    await store.init(":memory:");
+
+    // Arrange: 注册事件监听
+    const emitted: any[] = [];
+    observer.on(PipelinePriority.HIGH, (event) => {
+      emitted.push({ type: event.type, payload: event.payload });
+    });
+
+    // 手动切为 closing 态
+    (store as any)._lifecycle = "closing";
+
+    // Act: 直接调用 _safeDbRun
+    (store as any)._safeDbRun("INSERT INTO memories (id) VALUES (?)", ["x"], "write");
+
+    // Assert: observer 收到 memory.write_blocked 事件
+    const blockedEvents = emitted.filter((e) => e.type === "memory.write_blocked");
+    expect(blockedEvents.length).toBe(1);
+    expect(blockedEvents[0].payload.opName).toBe("write");
+    expect(blockedEvents[0].payload.lifecycle).toBe("closing");
+
+    // 恢复 lifecycle 以避免 close() 被跳过
+    (store as any)._lifecycle = "active";
+    await store.close();
+  });
+
+  it("用例8b: closing 状态下无 observer 时 console.warn 兜底", async () => {
+    const noObsStore = new MemoryStore();
+    await noObsStore.init(":memory:");
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    (noObsStore as any)._lifecycle = "closing";
+    (noObsStore as any)._safeDbRun("INSERT INTO memories (id) VALUES (?)", ["y"], "write");
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[MemoryStore] _safeDbRun 被拒")
+    );
+
+    warnSpy.mockRestore();
+    (noObsStore as any)._lifecycle = "active";
+    await noObsStore.close();
   });
 });

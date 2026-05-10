@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { LlmAdapter } from "../src/llm-adapter";
 import { MetaAgent } from "../src/meta-agent";
+import type { SafeErrorReporter } from "@cortex/shared";
 
 function mockMetaAgentLlm() {
   const adapter = new LlmAdapter({
@@ -98,5 +99,47 @@ describe("MetaAgent", () => {
     // 顶层节点的 parentId 应继承传入的 context.parentId
     const impl = nodes.find((n) => n.type === "implementation")!;
     expect(impl.parentId).toBe("parent-node-999");
+  });
+
+  // ── setSafeReporter: JSON 解析失败走 reporter ──
+
+  it("setSafeReporter 注入后 JSON 解析失败走 reporter 而非 console.warn", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner",
+    });
+    adapter.injectMock(async () => ({
+      content: "This is not JSON at all.",
+      toolCalls: [],
+    }));
+
+    const meta = new MetaAgent(adapter);
+    const reporterCalls: any[] = [];
+    const reporter: SafeErrorReporter = (ctx) => { reporterCalls.push(ctx); };
+    meta.setSafeReporter(reporter);
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const nodes = await meta.plan("随便说点什么");
+
+    // reporter 应被调用
+    expect(reporterCalls.length).toBe(1);
+    expect(reporterCalls[0].source).toBe("MetaAgent._parsePlan");
+    expect(reporterCalls[0].severity).toBe("degraded");
+
+    // console.warn 不应被调用（走 reporter 通道后跳过 console）
+    const metaAgentWarns = warnSpy.mock.calls.filter(
+      (c) => typeof c[0] === "string" && c[0].includes("[meta-agent]")
+    );
+    expect(metaAgentWarns.length).toBe(0);
+
+    warnSpy.mockRestore();
+
+    // 行为不变：仍返回兜底单节点
+    expect(nodes.length).toBe(1);
+    expect(nodes[0].type).toBe("generic");
+    expect(nodes[0].tags).toContain("analysis");
   });
 });
