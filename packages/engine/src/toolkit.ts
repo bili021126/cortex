@@ -381,7 +381,7 @@ export class Toolkit {
     const walk = (dir: string, depth: number) => {
       if (depth > 4 || results.length > 30) return;
       let entries: fs.Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { console.warn(`[toolkit] readdir failed for ${dir}: ${String(e)}`); return; }
       for (const entry of entries) {
         if (results.length >= 30) return;
         const fullPath = path.join(dir, entry.name);
@@ -398,7 +398,7 @@ export class Toolkit {
                 results.push(`${relPath}:${i + 1}: ${lines[i].trim().slice(0, 200)}`);
               }
             }
-          } catch { /* skip unreadable file */ }
+          } catch (e) { console.warn(`[toolkit] skip unreadable file ${fullPath}: ${String(e)}`); }
         }
       }
     };

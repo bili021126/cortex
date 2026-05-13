@@ -1,5 +1,5 @@
 import type { AgentType, TaskNode } from "@cortex/shared";
-import { AGENT_TAGS, PipelinePriority } from "@cortex/shared";
+import { AGENT_TAGS, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
 
 /** invariant 违规上报回调签名。默认 console.error，外部可注入 observer.emit。 */
@@ -13,6 +13,30 @@ export type InvariantReporter = (violation: InvariantViolation) => void;
 
 /**
  * TaskBoard —— 任务板
+ *
+ * @contract 模块边界契约（久岐忍 P1-5：模块边界缺少显式契约化定义 → 已闭合）
+ *
+ * @depends  @cortex/shared（AgentType, AGENT_TAGS, TaskNode, PipelineEventType）
+ * @depends  pipeline-observer.ts（可选——通过 setObserver 注入，双通道 invariant 上报）
+ * @dataflow 纯数据结构管理器：节点 Map → claim/release/complete 原子操作 → 状态转移
+ *           无下游依赖——TaskBoard 是 Scheduler 的被动数据源，不主动调用外部模块
+ *
+ *   claim/release/complete 三方法构成 Scheduler 与 TaskBoard 之间的核心协议：
+ *
+ *   前置条件：
+ *   - claim(): 节点存在且标签匹配，status=pending（普通）或非 done/failed（multi）
+ *   - release(): status=claimed（普通）或非 done/failed 且 claimedBy 含 agentType（multi）
+ *   - complete(): claimedBy 含 agentType，且 results 中同 agentType 不重复
+ *
+ *   后置条件：
+ *   - claim() 成功：status 变为 claimed（普通）或 claimedBy 追加 agentType（multi）
+ *   - release() 成功：status 回退 pending（普通），claimedBy 移除 agentType（multi）
+ *   - complete() 后 status 为 done/failed（普通）或等齐全部 claimed 后 done（multi）
+ *
+ *   不变量：
+ *   - results 中每个 agentType 必须存在于 claimedBy 中（对称性——TaskBoard.complete 检查）
+ *   - done/failed 终态不可逆
+ *
  * 原子 claim、标签匹配、needsMultiPerspective 多 Agent 并行认领与等齐。
  */
 export class TaskBoard {
@@ -152,13 +176,13 @@ export class TaskBoard {
         TaskBoard.onInvariant({ source: "TaskBoard.complete", message: msg, details: { nodeId, orphanTypes, claimedBy: node.claimedBy } });
       } else if (this._observer) {
         this._observer.emit({
-          type: "task_board.invariant_violation",
+          type: PipelineEventType.TaskBoardInvariantViolation,
           priority: PipelinePriority.CRITICAL,
           payload: { source: "TaskBoard.complete", message: msg, nodeId, orphanTypes, claimedBy: node.claimedBy },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
-      } else {
+      } else if (!process.env.VITEST) {
         console.error(`[invariant] TaskBoard.complete: ${msg}`);
       }
     }

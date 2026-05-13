@@ -1,8 +1,9 @@
+// @ci: unit
 import { describe, it, expect, beforeAll } from "vitest";
 import { AgentType } from "@cortex/shared";
-import { LlmAdapter } from "../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { ReviewAgent } from "../src/review-agent";
+import { ReviewAgent } from "../src/agents/review-agent";
 
 function mockReviewAdapter() {
   const adapter = new LlmAdapter({

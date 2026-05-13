@@ -9,8 +9,8 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { AgentType, MemoryType } from "@cortex/shared";
-import type { LlmAdapter } from "../../../src/llm-adapter";
+import { AgentType, LinkType, MemoryType } from "@cortex/shared";
+import type { LlmAdapter } from "@cortex/llm";
 import { MemoryStore } from "../../../src/memory-store";
 import personaPrompts from "./persona-prompts.json" assert { type: "json" };
 
@@ -29,6 +29,9 @@ const PERSONA_TYPE_MAP: Record<string, AgentType> = {
   yoimiya: AgentType.Browser,
   ganyu: AgentType.Meta,
   thoma: AgentType.Butler,
+  zhongli: AgentType.Strategist,
+  kuki: AgentType.Api,
+  alhaitham: AgentType.Data,
 };
 
 function buildPersonas(prompts: Record<string, { emoji: string; name: string; title: string; systemPrompt: string } | string>): Persona[] {
@@ -60,6 +63,8 @@ export interface RoundConfig {
   minTurns: number;
   maxTurns: number;
   topic: string;
+  /** 稀疏注意力模式：hca=广度浅读（热身/概览轮），csa=深度窄读（讨论/收束轮）。默认 csa。 */
+  queryMode?: 'hca' | 'csa';
 }
 
 export interface MeetingConfig {
@@ -68,6 +73,30 @@ export interface MeetingConfig {
   background: string;
   rounds: RoundConfig[];
   personas: Persona[];
+}
+
+export interface MaterialItem {
+  /** 材料名称 */
+  name: string;
+  /** 材料描述——说明该材料的用途和在会议中的作用 */
+  description: string;
+  /** 来源——谁产出的这份材料 */
+  source: string;
+  /** 文件路径（相对于项目根目录） */
+  filePath?: string;
+  /** 所属阶段——该材料在会议流程的哪个阶段被使用 */
+  phase: "热身" | "第一轮" | "第二轮" | "第三轮" | "第二阶段·无主题" | "全程参考";
+  /** 是否必须——缺失时是否阻断会议 */
+  required: boolean;
+}
+
+export interface MaterialChecklist {
+  /** 清单版本 */
+  version: string;
+  /** 最后更新日期 */
+  updatedAt: string;
+  /** 材料列表 */
+  items: MaterialItem[];
 }
 
 // ═══════════════════════════════════════════════
@@ -108,28 +137,107 @@ const CONFIRMED_CLOSED: ClosedItem[] = [
 ];
 
 // ═══════════════════════════════════════════════
+// 材料清单（2026-05-04 初版）
+//
+// 圆桌会议各阶段所需的材料及其来源。
+// 每次圆桌启动前，由凝光按此清单校验材料是否完备——
+// 缺失必需材料（required=true）则阻断会议，缺失可选材料则标记警告。
+// ═══════════════════════════════════════════════
+
+export const MATERIAL_CHECKLIST: MaterialChecklist = {
+  version: "1.0",
+  updatedAt: "2026-05-04",
+  items: [
+    {
+      name: "Agent 审视报告（7 份）",
+      description: "刻晴、阿贝多、纳西妲、凝光、莫娜、安柏、北斗在软约束自由审视中产出的独立审视报告，各从自己专业角度发现代码、架构、工程、治理、模式中的问题",
+      source: "软约束自审视脚本（cortex-self-examination.ts --soft）",
+      filePath: "test-output/self-examination-soft/",
+      phase: "第一轮",
+      required: true,
+    },
+    {
+      name: "共识修复清单（上一轮）",
+      description: "上一轮圆桌产出的 P0-P3 修复清单——如为首次圆桌则此项为空，视为无历史基准",
+      source: "上一轮圆桌凝光收束签署",
+      filePath: "test-output/self-examination/consensus-fix-list.md",
+      phase: "第一轮",
+      required: false,
+    },
+    {
+      name: "根因归簇分析报告",
+      description: "AI 归因分析引擎对 7 份审视报告进行跨报告去重归簇后产出的根因分析——将 206+ 项发现归为 6 个根因簇，标注每簇的发生频率、影响范围、修复成本估算",
+      source: "AI 归因分析引擎（在自审视完成后自动触发）",
+      filePath: "test-output/self-examination-soft/root-cause-cluster-analysis.md",
+      phase: "第二阶段·无主题",
+      required: true,
+    },
+    {
+      name: "钟离战略评估报告",
+      description: "钟离（StrategistAgent）在第四阶段半读取全部审视报告后产出的战略判断——架构方向、契约完整性、阶段跃迁判定、磨损预警",
+      source: "钟离（StrategistAgent）· 第四阶段半战略分析",
+      filePath: "test-output/self-examination-soft/zhongli-strategy-assessment.md",
+      phase: "第二阶段·无主题",
+      required: false,
+    },
+    {
+      name: "宪法 v2.5 全文",
+      description: "Cortex 概念顶层设计 v2.5——作为讨论的宪法基准，所有修复建议不得违宪",
+      source: "docs/Cortex 概念顶层设计 v2.5.md",
+      filePath: "docs/Cortex 概念顶层设计 v2.5.md",
+      phase: "全程参考",
+      required: true,
+    },
+    {
+      name: "Agent 标签词汇表",
+      description: "Agent 标签词汇表 v2.0——标签匹配的语法参考",
+      source: "docs/core/Agent标签词汇表-v2.0.md",
+      filePath: "docs/core/Agent标签词汇表-v2.0.md",
+      phase: "全程参考",
+      required: false,
+    },
+    {
+      name: "意图响应体系设计",
+      description: "意图响应体系设计文档——澄清层+匹配增强+模式区分的概念蓝图，供第三轮宪法演进讨论参考",
+      source: "架构设计",
+      filePath: "docs/core/意图响应体系设计.md",
+      phase: "第三轮",
+      required: false,
+    },
+    {
+      name: "自由审视摘要",
+      description: "自审视脚本自动生成的执行摘要——包含执行概况、Agent 产出明细、整体状态速览",
+      source: "cortex-self-examination.ts 自动生成",
+      filePath: "test-output/self-examination-soft/self-examination-summary.md",
+      phase: "热身",
+      required: false,
+    },
+  ],
+};
+
+// ═══════════════════════════════════════════════
 // 审视共识会议配置（2026-05-04 修复验证审视后）
 // ═══════════════════════════════════════════════
 
 export const SHENSHI_CONFIG: MeetingConfig = {
   name: "审视共识会议", emoji: "\u{1F50D}",
-  background: `「Cortex 修复验证审视 · 第二轮共识会议」
+  background: `「Cortex 审视共识会议」
 
-2026年5月4日，Cortex 完成了首轮修复验证审视——7 位 Agent 验证了 P0-P3 共 30 项修复。
-验证结果：24 项已完成、3 项部分完成、3 项未开始（整体符合预期）。
-
-现在，审视委员会（6 位 Agent）再次召集，进行第二轮圆桌会议。
-目标：基于修复后的代码实况，产出新版共识修复清单——标注哪些已闭合、哪些仍需投入、哪些新问题浮现。
+审视委员会召集，基于当前代码库实况进行圆桌讨论。
+目标：产出共识修复清单——标注已闭合项、仍需投入项、新浮现问题。
 
 制度：审视共识会议——四轮发言，强约束轮次，凝光最终收束。
 会议模式：已闭合确认 → 修复陈述 → 交叉验证 → 凝光收束全员签署
-每轮硬顶 3 次发言机会，质量不足则提前终止。`,
+每轮硬顶发言机会，质量不足则提前终止。
+
+⚠️ 所有事实应来自本轮的审视报告和各 Agent 的亲手验证——禁止引用历史记忆。`,
 
   rounds: [
     {
       title: "第零轮 · 已闭合项确认",
       minTurns: 1,
       maxTurns: 2,
+      queryMode: "hca",
       topic: `在讨论新问题之前，先建立地面真相基准线。
 
 请每位 Agent 根据自己亲手的验证结果，逐一确认哪些修复项已经确定闭合。
@@ -145,6 +253,7 @@ export const SHENSHI_CONFIG: MeetingConfig = {
       title: "第一轮 · 修复验证陈述",
       minTurns: 2,
       maxTurns: 3,
+      queryMode: "csa",
       topic: `请结合你自己的验证结果，陈述你发现的 TOP 3 关键发现。
 重点：哪些修复闭合得很好，哪些修复未完成或有残留。
 如果你发现了新问题（修复引入的副作用、验证过程中暴露的隐藏债务），务必提出来。
@@ -158,6 +267,7 @@ export const SHENSHI_CONFIG: MeetingConfig = {
       title: "第二轮 · 交叉验证与重点识别",
       minTurns: 2,
       maxTurns: 3,
+      queryMode: "csa",
       topic: `基于前两轮的陈述进行交叉分析：
 1. 哪些问题被多人独立发现——这意味着共识强度高，应升级优先级
 2. 哪些问题是同一问题的不同表现——应合并为一条修复项
@@ -171,6 +281,7 @@ export const SHENSHI_CONFIG: MeetingConfig = {
       title: "第三轮 · 凝光收束与全员签署",
       minTurns: 2,
       maxTurns: 3,
+      queryMode: "csa",
       topic: `基于前三轮的所有陈述和交叉分析，凝光现在收束共识。
 
 凝光：请产出完整更新版修复优先级清单，格式如下：
@@ -190,18 +301,7 @@ export const SHENSHI_CONFIG: MeetingConfig = {
 - [ ] ...
 
 ### ✅ 已闭合（从清单移除——第零轮已确认 + 代码级验证）
-- ✅ scheduler node.failed 去重 + node.complete 守卫（刻晴、阿贝多验证：三条路径互斥，_dispatchNode 底部统一发射）
-- ✅ MemoryStore _saveDb try-catch + observer.emit('memory.persist_failed')（阿贝多、凝光验证：observer+console 双通道）
-- ✅ MemoryStore _deserializeRow JSON.parse try-catch 防护（阿贝多、刻晴验证：null 返回 + 调用侧 null 检查）
-- ✅ MemoryStore _sqlRead observer 迁移（凝光验证：catch 中 observer.emit('memory.sql_degraded')）
-- ✅ scheduler claimedBy invariant observer 化（阿贝多验证：console.error → observer.emit('scheduler.invariant_violation')）
-- ✅ Agent 层继承已闭合（刻晴验证）
-- ✅ eslint/tsconfig 已就位（安柏、北斗验证）
-- ✅ shared 编译通过（北斗验证）
-- ✅ shared 四域拆分（纳西妲、安柏验证）
-- ✅ test.html 已迁 webui/（安柏验证）
-- ✅ tmp/ 已进 gitignore（安柏验证）
-- （第零轮中各 Agent 确认的其他已闭合项）
+- （第零轮中各 Agent 亲手验证的已闭合项——具体条目见第零轮会议记录）
 
 ⚠️ 排除规则（必须遵守）：
 - 上述 ✅ 已闭合节中的任何项目，禁止出现在 P0/P1/P2/P3 修复清单中
@@ -251,25 +351,31 @@ export const CODE_REVIEW_ROUNDTABLE: MeetingConfig = {
       title: "第一轮 · 持久化链路与状态机——区分「本轮必修」vs「Core-2 再修」",
       minTurns: 5,
       maxTurns: 7,
+      queryMode: "csa",
       topic: `【聚焦根因簇 A（持久化链路防御不足）+ B（状态机流转不完整）】
 
-请每位委员基于自己的审视经验，讨论以下问题的修复策略：
+⚠️ 约束：这是「分类决策」会议，不是「架构设计」会议。每个发言必须给出明确的「必修/延后」判断，
+禁止提出新的架构方案或设计模式——如 write-guard 模式、StateGuard 框架、epoch 纪元锁等都不需要在本轮讨论。
 
+待分类项：
 簇 A：持久化链路防御不足
-- MemoryStore.write() 缺少 _lifecycle 守卫——刻晴标记为 🔴 致命（close 期间写入：内存有、DB 无、flush 跳过）
-- write-through 模式缺少事务包裹——阿贝多标记为 🟠
-- ID 生成使用 Date.now() + 计数器——毫秒级时序竞态——阿贝多标记为 🟠
-- try-catch 风格发散（28+4+5+2 处）——莫娜标记为 4 种变体并存
+- A1. MemoryStore.write() 缺少 _lifecycle 守卫——刻晴标记为 🔴 致命（close 期间写入：内存有、DB 无、flush 跳过）
+- A2. write-through 模式缺少事务包裹——阿贝多标记为 🟠
+- A3. ID 生成使用 Date.now() + 计数器——毫秒级时序竞态——阿贝多标记为 🟠
+- A4. try-catch 风格发散（28+4+5+2 处）——莫娜标记为 4 种变体并存
 
 簇 B：状态机流转不完整
-- AgentPool.destroy() 绕过 setStatus() 直写 Map——刻晴标记为 🟠 硬伤
-- setStatus() 返回 void——非法流转时调用方无法感知——阿贝多标记为 🟠
-- complete() 中 results 与 claimedBy 边界不同步——阿贝多标记为 🟠
+- B1. AgentPool.destroy() 绕过 setStatus() 直写 Map——刻晴标记为 🟠 硬伤
+- B2. setStatus() 返回 void——非法流转时调用方无法感知——阿贝多标记为 🟠
+- B3. complete() 中 results 与 claimedBy 边界不同步——阿贝多标记为 🟠
 
-讨论目标：
-1. 逐项判断：哪些必须本轮立即修复（Core-1 内闭），哪些可以推迟到 Core-2
-2. 评估每项修复的代价与风险（改动的文件数、影响面、回归风险）
-3. 收束为「本轮必修清单」——不超过 5 项
+讨论目标（严格按此顺序）：
+1. 逐项判断：**必修**（Core-1 内闭）还是 **延后**（Core-2 再修）
+2. 必修项必须给出 1 句话核心理由（禁止展开方案设计）
+3. 延后项给出风险评估（延后到 Core-2 会造成什么后果）
+4. 收束为「本轮必修清单」——不超过 5 项
+
+发言格式：每项一条，格式为「A1: 必修/延后。理由：xxx」
 
 收束要求：本轮结束时凝光输出「第一轮收束结论」，列出本轮必修项及其排期。`,
     },
@@ -277,26 +383,31 @@ export const CODE_REVIEW_ROUNDTABLE: MeetingConfig = {
       title: "第二轮 · 工程债务与可观测管道——评估偿还优先级",
       minTurns: 5,
       maxTurns: 7,
+      queryMode: "csa",
       topic: `【聚焦根因簇 C（可观测管道覆盖不全）+ D（基础设施/工程债务）】
 
-请每位委员基于自己的经验讨论：
+⚠️ 约束：这是「优先级评估」会议，不是「重构设计」会议。每个发言必须给出「必修/可延后/已归因」的判断，
+禁止提出新的架构方案。
 
+待分类项：
 簇 C：可观测管道覆盖不全
-- ButlerAgent._onNormal 空吞 NORMAL 优先级事件——刻晴标记为 🔴（已修复：移除 NORMAL 订阅 + 删除空方法）
-- observer.emit memory 域 6 次事件无消费者——莫娜标记为 🟡
+- C1. ButlerAgent._onNormal 空吞 NORMAL 优先级事件——刻晴标记为 🔴（已修复：移除 NORMAL 订阅 + 删除空方法）
+- C2. observer.emit memory 域 6 次事件无消费者——莫娜标记为 🟡
 
 簇 D：基础设施/工程债务
-- engine 23 源文件无同目录 __tests__/——纳西妲标记 🟡
-- llm-adapter + toolkit 无熔断降级——纳西妲标记 🟡
-- infra.ts 6 子域混杂——纳西妲标记 🟡
-- test-tmp.txt 未被 .gitignore——安柏标记 🟡
-- shared/dist/__tests__/ 测试产物混入构建——安柏标记 🟡
-- 根目录 webui/ 与 doc-govern/ 目录整理——安柏标记
+- D1. engine 23 源文件无同目录 __tests__/——纳西妲标记 🟡
+- D2. llm-adapter + toolkit 无熔断降级——纳西妲标记 🟡
+- D3. infra.ts 6 子域混杂——纳西妲标记 🟡
+- D4. test-tmp.txt 未被 .gitignore——安柏标记 🟡
+- D5. shared/dist/__tests__/ 测试产物混入构建——安柏标记 🟡
+- D6. 根目录 webui/ 与 doc-govern/ 目录整理——安柏标记
 
-讨论目标：
-1. 评估哪些工程债务必须在 Core-2 启动前偿还（否则 Core-2 开发受阻）
-2. 哪些可以等 Core-2 中逐步解决
-3. 特别注意：纳西妲提到的「llm-adapter + toolkit 无熔断」——DeepSeek 4.1 发布后调用量将暴增，没有熔断是单点故障
+讨论目标（严格按此顺序）：
+1. 逐项判断：**必须 Core-2 前偿还** / **Core-2 中逐步解决** / **已归因无需修复**
+2. 特别注意：纳西妲提到的「llm-adapter + toolkit 无熔断」——DeepSeek 4.1 发布后调用量将暴增，没有熔断是单点故障
+3. 收束为「Core-2 前必修工程债」——不超过 4 项
+
+发言格式：每项一条，格式为「D2: 必修。理由：xxx」或「D3: 延后。风险：xxx」
 
 收束要求：本轮结束时凝光输出「第二轮收束结论」，更新优先级矩阵。`,
     },
@@ -304,6 +415,7 @@ export const CODE_REVIEW_ROUNDTABLE: MeetingConfig = {
       title: "第三轮 · 模式债务 + DeepSeek 4.1 多模态——宪法演进讨论",
       minTurns: 5,
       maxTurns: 7,
+      queryMode: "hca",
       topic: `【聚焦根因簇 E（代码模式债务）+ F（治理合规偏差，已归因）+ DeepSeek 4.1 多模态预留】
 
 簇 E：代码模式债务（莫娜发现）
@@ -334,6 +446,175 @@ DeepSeek 4.1 多模态预留（2026-06 发布）
 };
 
 // ═══════════════════════════════════════════════
+// 软约束共识圆桌配置（2026-05-11 合入）
+//
+// 流程：软约束自审视（7 Agent 自由探索）→ 本圆桌（硬约束共识）
+//       → 产出 consensus-fix-list.md → 供下一轮硬约束验证使用
+//
+// 与 CODE_REVIEW_ROUNDTABLE 的区别：
+//   - CODE_REVIEW_ROUNDTABLE 是根因簇深度讨论（设计走向、宪法演进）
+//   - 本圆桌是纯粹的「分类决策」——从自由探索发现中提取可操作修复清单
+// ═══════════════════════════════════════════════
+
+export const SOFT_CONSENSUS_ROUNDTABLE: MeetingConfig = {
+  name: "软约束共识圆桌", emoji: "\u{1F9EA}",
+  background: `「Cortex 自审视 · 软约束共识圆桌」
+
+Cortex 刚刚完成了软约束自由审视——9 位 Agent 在代码库中自由探索，各自从专业角度产出了审视报告。
+这些报告包含：
+  · 刻晴（⚡）：代码质量侦察——发现代码层面的具体缺陷
+  · 阿贝多（⚗️）：核心层深度审查——持久化链路、状态机等核心模块
+  · 纳西妲（🌿）：架构全景分析——依赖图、模块边界、扩展成本
+  · 凝光（💎）：治理合规审计——声明与实际之间的偏差
+  · 莫娜（🔮）：模式发现——隐藏的模式债务和趋势
+  · 安柏（🐰）：全项目侦察——目录结构、配置异常
+  · 北斗（⚓）：工程就绪诊断——构建、依赖、运行时脆弱点
+  · 久岐忍（😈）：API 契约设计——模块边界与接口规范
+  · 艾尔海森（📚）：数据层设计——类型体系与存储规范
+
+现在，全体委员需要从这些自由探索的发现中，提取一份「可操作的共识修复清单」。
+这不是设计讨论——这是分类决策。每一项发现需要回答：修不修？多急修？
+
+制度：单轮合并圆桌
+- 每人 3-5 次发言机会
+- 一轮内完成陈述→交叉验证→凝光收束签署
+- 禁止架构设计——只做分类
+- 9 位 Agent 全体入席`,
+  rounds: [
+    {
+      title: "发现陈述 + 共识签署（合并轮）",
+      minTurns: 3,
+      maxTurns: 5,
+      queryMode: "hca",
+      topic: `【基于各自审视报告，直接产出共识修复清单】
+
+⚠️ 约束：一轮内完成全部流程。发言顺序：
+
+第一阶段（第1次发言，所有人）：
+  陈述你认为最关键的发现——每人最多 3 项，按严重度排序
+  格式：「A. [严重度] 发现内容。理由：xxx」
+
+第二阶段（第2次发言，所有人）：
+  对他人的发现表态——同意/反对/补充。反对必须附理由。
+  确认重复项（多人独立发现 → 升级），解明矛盾项（当场对质）。
+  格式：「发现X: 必修/延后。理由：xxx」
+
+第三阶段（第3-5次发言，凝光主导）：
+  凝光收束全体表态，产出 P0-P3 共识修复清单：
+
+## 审视共识修复清单（软约束 + 圆桌共识）
+
+### P0 立即修复（阻断级——不修则下阶段无法推进）
+- [ ] 文件/模块: 具体问题描述。发现者：某某。理由：xxx
+
+### P1 高优先（Core-2 启动前必须完成）
+- [ ] 文件/模块: 具体问题描述。发现者：某某。理由：xxx
+
+### P2 重要（Core-2 期间修复）
+- [ ] 文件/模块: 具体问题描述。发现者：某某。理由：xxx
+
+### P3 改善（可延后但不应遗忘）
+- [ ] 文件/模块: 具体问题描述。发现者：某某。理由：xxx
+
+### ✅ 已确认无需修复
+- ✅ xxx（理由）
+
+定级原则：
+- P0=阻断（数据静默损坏/observer缺失/CI缺失/安全漏洞）
+- P1=高风险（竞态/配置冲突/行为不可预测）
+- P2=可规划修复（工程债务/测试覆盖）
+- P3=改善项（代码风格/日志优化/目录整理）
+
+其他 Agent：审阅凝光的清单——
+- 你的关键发现是否被正确记录和定级？
+- 定级是否合理？如有遗漏或定级错误，必须在发言中明确指出。
+- 如无异议，签署「确认」。
+
+最终产出一份全员签署的共识修复清单。`,
+    },
+  ],
+
+  personas: buildPersonas(personaPrompts).filter((p) => p.type !== AgentType.Browser),
+};
+
+// ═══════════════════════════════════════════════
+// 归因分析圆桌——第二阶段 · 无主题会议（2026-05-04 入宪）
+//
+// 与前三轮圆桌不同——本会议不设固定议题。
+// 材料：根因归簇分析报告（AI 归因引擎产出，将 206+ 发现归为 6 个根因簇）+ 钟离战略评估。
+//
+// Agent 的自由度：
+//   - 没有预定义的「待分类项」——Agent 从归因报告中自己提取想讨论的点
+//   - 没有强制性「必修/延后」判断——Agent 可以深入讨论任何一个根因簇的任意侧面
+//   - 可以质疑归因报告本身的归簇逻辑——A 发现和 B 发现真的属于同一个根因吗？
+//   - 可以讨论跨簇的关联——簇 C（可观测管道）和簇 A（持久化链路）之间有没有隐藏的因果链？
+//   - 唯一的硬约束：发言必须有据——引用归因报告中的具体发现编号或审视报告中的原文
+//
+// 制度：单轮开放讨论（无 maxTurns 硬顶，质量不足自动终止）
+//   - 凝光不事先设定议题，由 Agent 自发展开
+//   - 凝光在讨论过程中动态记录共识点和分歧点
+//   - 讨论自然收束后，凝光输出「归因共识纪要」
+// ═══════════════════════════════════════════════
+
+export const ATTRIBUTION_ROUNDTABLE: MeetingConfig = {
+  name: "归因分析圆桌", emoji: "\u{1F9EA}",
+  background: `「Cortex 自审视 · 归因分析圆桌——第二阶段·无主题」
+
+第一阶段的软约束共识圆桌已经完成了「发现→分类→修复清单」的标准流程。
+但现在桌上多了一份新文件：根因归簇分析报告。
+
+这不是另一份审视报告——这是 AI 归因分析引擎跨报告去重后产出的根因地图。
+206+ 项发现归为 6 个根因簇，每个簇标注了发生频率、影响范围、修复成本估算。
+
+这份报告是全新的——前三轮圆桌时它还不存在。
+现在，审视委员会需要面对它。
+
+制度：第二阶段 · 无主题圆桌
+- 没有预设议题——Agent 从归因报告中自己提取想讨论的点
+- 没有必须回答的问题——可以深入任何一个根因簇的任何侧面
+- 发言必须有据——引用归因报告中的具体发现编号或审视报告中的原文
+- 凝光动态记录共识点和分歧点，讨论自然收束后输出「归因共识纪要」
+- 10 位 Agent 全体入席（第一阶段圆桌参与者的知识延续）`,
+
+  rounds: [
+    {
+      title: "开放讨论 · 根因归簇审视",
+      minTurns: 3,
+      maxTurns: 8,
+      queryMode: "hca",
+      topic: `【无预设议题——从归因报告中自由展开】
+
+桌上有一份「根因归簇分析报告」——AI 归因引擎将 206+ 项发现归为 6 个根因簇：
+  簇 A：持久化链路防御不足
+  簇 B：状态机流转不完整
+  簇 C：可观测管道覆盖不全
+  簇 D：基础设施/工程债务
+  簇 E：代码模式债务
+  簇 F：治理合规偏差（已归因）
+
+你可以：
+1. 选择任何一个根因簇深入讨论——为什么这些问题会聚合成这个根因？归因逻辑是否站得住？
+2. 质疑归簇——某条发现被归入簇 A，但它真的是持久化问题吗？还是状态机问题的另一个表现？
+3. 发现跨簇关联——簇 C 的可观测盲区是不是导致簇 A 的持久化缺陷一直没被发现的原因？
+4. 提出归因报告遗漏的维度——有没有哪类问题散落在多份审视报告中，但没有被归因引擎识别为独立簇？
+5. 讨论修复优先级——根因视角下的修复顺序和第一轮圆桌的「按发现定级」有没有冲突？
+
+⚠️ 唯一硬约束：发言必须有据。
+- 引用归因报告时标注发现编号（如 A1, B2, C1）
+- 引用审视报告时标注 Agent 名 + 报告章节
+- 不要凭空发挥——你的每一个观点都要在材料中找得到锚点
+
+凝光的任务：
+- 不设定议题，不引导方向——让讨论自然展开
+- 动态记录共识点（多人认同的判断）和分歧点（对同一归簇的不同解读）
+- 讨论自然收束后，输出「归因共识纪要」——不是修复清单，而是对根因地图的集体确认或修正`,
+    },
+  ],
+
+  personas: buildPersonas(personaPrompts),
+};
+
+// ═══════════════════════════════════════════════
 // 发言质量规则（注入为第二层 system prompt）
 // ═══════════════════════════════════════════════
 
@@ -353,6 +634,31 @@ export const QUALITY_RULES = `
 // ═══════════════════════════════════════════════
 // 共识校验：检测已闭合项是否错误进入修复清单
 // ═══════════════════════════════════════════════
+
+/**
+ * 从共识修复清单文本中提取 P0-P3 条目。
+ * 用于共识晋升——将圆桌产出的修复项写入 Conceptual 记忆。
+ */
+function extractConsensusItems(consensusText: string): Array<{ priority: string; description: string }> {
+  const items: Array<{ priority: string; description: string }> = [];
+  // 匹配 P0/P1/P2/P3 节中的 - [ ] 或 - [x] 条目
+  const sectionRegex = /### (P[0-3])[\s\S]*?(?=###|$)/g;
+  let sectionMatch;
+  while ((sectionMatch = sectionRegex.exec(consensusText)) !== null) {
+    const priority = sectionMatch[1];
+    const sectionBody = sectionMatch[0];
+    // 提取该节中的所有 - [ ] / - [x] 条目
+    const itemRegex = /^[-*]\s*\[[ x]\]\s*(.+)$/gm;
+    let itemMatch;
+    while ((itemMatch = itemRegex.exec(sectionBody)) !== null) {
+      const desc = itemMatch[1].trim();
+      if (desc.length > 10) {
+        items.push({ priority, description: desc });
+      }
+    }
+  }
+  return items;
+}
 
 function validateConsensus(filePath: string) {
   if (!fs.existsSync(filePath)) return;
@@ -391,12 +697,22 @@ function validateConsensus(filePath: string) {
 // 通用会议引擎
 // ═══════════════════════════════════════════════
 
+export interface SeedMemory {
+  memoryType: MemoryType;
+  content: Record<string, unknown>;
+  summary: string;
+  agentType: AgentType;
+  creatorId: string;
+  weight?: number;
+}
+
 export async function runMeeting(
   config: MeetingConfig,
   adapter: LlmAdapter,
   chatModel: string,
   dbDir: string,
   consensusOutputPath?: string,
+  seedMemories?: SeedMemory[],
 ) {
   const dbPath = path.resolve(dbDir, "shared-consensus.db");
 
@@ -425,6 +741,22 @@ export async function runMeeting(
       creatorId: "system",
       weight: 10,
     });
+
+    // 种子记忆注入：在会议开始前将审视报告摘要写入 MemoryStore
+    if (seedMemories && seedMemories.length > 0) {
+      console.log(`  🌱 注入 ${seedMemories.length} 条种子记忆...`);
+      for (const seed of seedMemories) {
+        memory.write({
+          memoryType: seed.memoryType,
+          content: seed.content,
+          summary: seed.summary,
+          agentType: seed.agentType,
+          creatorId: seed.creatorId,
+          weight: seed.weight ?? 5,
+        });
+      }
+      console.log(`  ✅ 种子记忆注入完成\n`);
+    }
 
     const allStats: Array<{
       round: number; title: string;
@@ -456,10 +788,33 @@ export async function runMeeting(
         let cycleSubstantive = 0;
 
         for (const persona of config.personas) {
+          // ── 关键词快速 PASS：persona 领域与 topic 无交集时跳过 LLM ──
+          const topicLower = round.topic.toLowerCase();
+          const KW_MAP: Record<string, string[]> = {
+            Code: ["code", "deep", "bug", "logic", "function", "class", "module", "type-check", "compile"],
+            Review: ["review", "quality", "code", "bug", "anti-pattern", "style", "defect"],
+            Ops: ["ops", "build", "ci", "deploy", "dependency", "config", "runtime", "test", "shell", "readiness"],
+            Analysis: ["analysis", "architecture", "dependency", "module", "boundary", "design", "pattern", "extension"],
+            DocGovern: ["govern", "doc", "audit", "compliance", "constitution", "rule", "policy", "declaration"],
+            Loop: ["pattern", "trend", "memory", "skill", "learning", "discovery", "repeat"],
+            Inspector: ["inspect", "directory", "file", "structure", "git", "config", "missing", "anomaly", "recon"],
+            Api: ["api", "contract", "interface", "signature", "boundary", "export", "import", "type-safe", "design"],
+            Data: ["data", "schema", "serialization", "storage", "consistency", "naming", "field", "model"],
+          };
+          const agentKws = KW_MAP[persona.type] ?? [];
+          const hasRelevance = agentKws.length === 0 || agentKws.some((kw) => topicLower.includes(kw));
+
+          if (!hasRelevance) {
+            console.log(`  ${persona.emoji} ${persona.name} [${turn}]: ⏭️ 关键词无交集，自动PASS`);
+            roundSpeeches.push({ turn, speaker: persona.name, said: false, chars: 0, preview: "" });
+            continue;
+          }
+
+          // ── DSA 稀疏注意力：按轮次 queryMode 决定读取广度/深度 ──
           const recentMems = memory.read({
             memoryTypes: [MemoryType.Episodic, MemoryType.Knowledge],
-            limit: 20,
-          });
+            queryMode: round.queryMode ?? 'csa',
+          } as any);
 
           const history = recentMems
             .map((m) => {
@@ -472,7 +827,7 @@ export async function runMeeting(
           const turnPrompt = [
             `${config.emoji} ${config.name} · 第${ri + 1}轮 · 第${turn}次发言`,
             "",
-            `📋 话题: ${round.topic.slice(0, 200)}`,
+            `📋 话题: ${round.topic}`,
             "",
             "📖 会议记录（优先阅读，了解上下文）：",
             history || "(暂无记录)",
@@ -544,6 +899,34 @@ export async function runMeeting(
       }
 
       allStats.push({ round: ri + 1, title: round.title, speeches: roundSpeeches });
+
+      // ── 轮间上下文重置：将本轮要点压缩为 Conceptual 记忆 ──
+      // HCA 轮（广度浅读）产生大量观察 → 压缩为要点摘要
+      // CSA 轮（深度窄读）产生聚焦结论 → 压缩为决策锚点
+      // 下一轮 Agent 读取记忆时，DSA queryMode 决定看到摘要还是细节
+      const roundMode = round.queryMode ?? 'csa';
+      const saidSpeeches = roundSpeeches.filter((s) => s.said && s.chars > 40);
+      if (saidSpeeches.length > 0) {
+        const roundDigest = saidSpeeches
+          .map((s) => `[${s.speaker} R${ri + 1}T${s.turn}] ${s.preview.slice(0, 150)}`)
+          .join("\n");
+        memory.write({
+          memoryType: MemoryType.Conceptual,
+          content: {
+            round: ri + 1,
+            title: round.title,
+            mode: roundMode,
+            substantiveSpeeches: saidSpeeches.length,
+            totalSpeeches: roundSpeeches.filter((s) => s.said).length,
+            digest: roundDigest,
+          },
+          summary: `[轮次收束:${config.name}] R${ri + 1} ${round.title} (${roundMode.toUpperCase()}) — ${saidSpeeches.length} 次实质发言`,
+          agentType: AgentType.Meta,
+          creatorId: "system",
+          weight: roundMode === 'hca' ? 4 : 7,
+        });
+        console.log(`  🔄 上下文重置: R${ri + 1} 收束 → Conceptual (${roundMode.toUpperCase()}, weight=${roundMode === 'hca' ? 4 : 7})`);
+      }
     }
 
     // 最终统计
@@ -580,7 +963,12 @@ export async function runMeeting(
 
     // 共识覆写：提取凝光最终发言 → 共识清单覆写 markdown 文件
     if (consensusOutputPath) {
-      const finalRound = config.rounds.length;
+      // 取凝光所有轮次中实际的最大轮号（而非 config.rounds.length，
+      // 因为单轮配置在 maxTurns>1 时会展开为多轮）
+      const allRounds = allMems
+        .filter((m: any) => m.memoryType === MemoryType.Episodic)
+        .map((m: any) => m.content?.round ?? 0);
+      const finalRound = allRounds.length > 0 ? Math.max(...allRounds) : config.rounds.length;
       const ningEpisodic = allMems.filter(
         (m: any) =>
           m.memoryType === MemoryType.Episodic &&
@@ -638,6 +1026,44 @@ export async function runMeeting(
         console.log(`  📝 共识清单已覆写: ${consensusOutputPath} (${(header + speechText + historySection).length} 字符)`);
         if (oldContent) {
           console.log(`  📜 旧版已追加至「历史版本」区`);
+        }
+
+        // ── 共识晋升：P0-P3 修复项 → CONCEPTUAL 记忆 ──
+        // FSA 闭环：共识产出（Episodic 讨论）晋升为 Conceptual（持久知识），
+        // 链接到凝光的收束发言和全体参会 Agent 的实质贡献。
+        const promotedItems = extractConsensusItems(speechText);
+        if (promotedItems.length > 0) {
+          console.log(`  🧠 共识晋升: ${promotedItems.length} 项 P0-P3 条目 → Conceptual 记忆`);
+          for (const item of promotedItems) {
+            const memId = memory.write({
+              memoryType: MemoryType.Conceptual,
+              content: {
+                taskType: "consensus-fix-item",
+                priority: item.priority,
+                description: item.description,
+                source: config.name,
+                round: finalRound,
+              },
+              summary: `[共识修复:${item.priority}] ${item.description.slice(0, 120)}`,
+              agentType: AgentType.DocGovern,
+              creatorId: "凝光",
+              weight: item.priority === "P0" ? 10 : item.priority === "P1" ? 8 : item.priority === "P2" ? 6 : 4,
+            });
+            // FSA 反馈：共识产出链接到凝光的收束发言
+            if (lastSpeech) {
+              memory.link(memId, (lastSpeech as any).id, LinkType.DerivedFrom, "system");
+            }
+            // 链接到全体参会 Agent 的最后一轮实质发言（ConfirmedUseful）
+            const lastRoundEpisodic = allMems.filter(
+              (m: any) =>
+                m.memoryType === MemoryType.Episodic &&
+                m.content?.round === finalRound &&
+                String(m.content?.speech ?? "").length > 40
+            );
+            for (const epiMem of lastRoundEpisodic.slice(0, 10)) {
+              memory.link(memId, (epiMem as any).id, LinkType.ConfirmedUseful, "system");
+            }
+          }
         }
 
         // 共识校验：P0 修复 → 检测已闭合项是否错误进入修复清单

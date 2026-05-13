@@ -1,10 +1,11 @@
 import type { TaskNode, NodeResult, AgentType, MemoryQuery, SafeErrorReporter } from "@cortex/shared";
-import { Agent, AgentStatus as AS, MemoryType, LinkType } from "@cortex/shared";
-import type { LlmAdapter } from "./llm-adapter.js";
+import { Agent, AgentStatus as AS, MemoryType } from "@cortex/shared";
+import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "./toolkit.js";
 import type { MemoryStore } from "./memory-store.js";
 import type { AgentPool } from "./agent-pool.js";
-import { runReActLoop } from "./react-helper.js";
+import { executeWithMemoryPipeline } from "./memory/pipeline.js";
+import { PoolAwareState } from "./pool-aware.js";
 
 /**
  * BaseAgent —— 所有 Agent 的抽象基类。
@@ -15,26 +16,21 @@ export abstract class BaseAgent implements Agent {
   abstract readonly type: AgentType;
   abstract readonly systemPrompt: string;
 
-  // 方案B：AgentPool 为状态唯一权威源
-  // status 改为只读 getter，委托到 AgentPool
-  // _localStatus 为测试环境（无 Pool）提供降级支持
-  private _localStatus = AS.Created;
-  private _pool: AgentPool | null = null;
-  private _instanceId: string | null = null;
+  // 方案B：状态所有权归一，委托给 PoolAwareState 共享组件（消除复制粘贴）
+  // 使用 `() => this.type` 延迟求值，避免 abstract property 初始化顺序问题
+  protected readonly _state = new PoolAwareState(() => this.type);
 
-  /** 方案B：Agent.status 只读 getter —— Pool 有则委托，否则降级到 _localStatus */
+  /** 方案B：Agent.status 只读 getter —— 委托到 PoolAwareState */
   get status(): AS {
-    if (this._pool && this._instanceId) {
-      const s = this._pool.getStatus(this._instanceId);
-      if (s !== undefined) return s;
-    }
-    return this._localStatus;
+    return this._state.status;
   }
 
   /** ReAct 循环上限。子类可覆写（如 InspectorAgent 用 24 以降低幻觉风险）。 */
-  protected maxLoops = 48;
+  protected maxLoops = 64;
 
-  /** SafeErrorReporter —— 统一错误上报，杜绝静默吞错 */
+  /** SafeErrorReporter —— 统一错误上报，杜绝静默吞错
+   *  注意：仅用于 executeWithMemoryPipeline 等非状态机的内部错误上报。
+   *  状态机相关错误由 PoolAwareState 自行上报。 */
   protected _safeReporter: SafeErrorReporter | null = null;
 
   constructor(
@@ -43,24 +39,24 @@ export abstract class BaseAgent implements Agent {
     protected readonly memory?: MemoryStore,
   ) {}
 
-  /** 注入 SafeErrorReporter（由 bootstrap 在上层统一注入） */
+  /** 注入 SafeErrorReporter（由 bootstrap 在上层统一注入）。双路径：自身 + PoolAwareState */
   setSafeReporter(reporter: SafeErrorReporter): void {
     this._safeReporter = reporter;
+    this._state.setSafeReporter(reporter);
   }
 
   /** 注入 AgentPool 引用（方案B：状态所有权归一） */
   setPool(pool: AgentPool, instanceId: string): void {
-    this._pool = pool;
-    this._instanceId = instanceId;
+    this._state.setPool(pool, instanceId);
   }
 
-  /** 方案B：内部状态变更——Pool 有则走 Pool（唯一权威源），否则写 _localStatus */
+  /** 方案B：内部状态变更——委托到 PoolAwareState.transition()
+   *
+   * 治理判例 NG-2026-0511-LocalStatus-Bypass：
+   * 无 Pool 的降级路径仅允许测试/诊断环境使用，仍须校验流转合法性。
+   * 禁止直接写入 _localStatus 绕过状态机。 */
   private _setStatus(status: AS): void {
-    if (this._pool && this._instanceId) {
-      this._pool.setStatus(this._instanceId, status);
-    } else {
-      this._localStatus = status;
-    }
+    this._state.transition(status);
   }
 
   async wakeup(): Promise<void> {
@@ -79,9 +75,20 @@ export abstract class BaseAgent implements Agent {
     this._setStatus(AS.Active);
     try {
       const enrichedNode = await this.preExecuteHook(node);
-      const result = this.memory
-        ? await this._executeWithMemory(enrichedNode, model)
-        : await runReActLoop(this.type, this.llm, this.toolkit, this.systemPrompt, enrichedNode, model, this.maxLoops);
+      const result = await executeWithMemoryPipeline(
+        {
+          agentType: this.type,
+          llm: this.llm,
+          toolkit: this.toolkit,
+          systemPrompt: this.systemPrompt,
+          maxLoops: this.maxLoops,
+          memory: this.memory,
+        },
+        enrichedNode,
+        model,
+        this.memory ? (n) => this.getMemoryQuery(n) : undefined,
+        this._safeReporter ?? undefined,
+      );
       return result;
     } finally {
       if (this.status === AS.Active) this._setStatus(AS.Awake);
@@ -93,7 +100,7 @@ export abstract class BaseAgent implements Agent {
     this._setStatus(AS.Destroyed);
   }
 
-  // ── 记忆增强执行 ──────────────────────────────────
+  // ── 记忆检索策略模板方法 ──────────────────────
 
   /**
    * 记忆检索策略模板方法。
@@ -108,8 +115,6 @@ export abstract class BaseAgent implements Agent {
     const keywords: string[] = [];
 
     // 1. 中文关键词：提取 CJK 字符序列，用 2-gram 滑动窗口分词
-    //    "修复计算器按钮点击事件" → ["修复","复计","计算","算器","器按","按钮","钮点","点击","击事","事件"]
-    //    无需外部 NLP 库——bigram 在 SQL LIKE 中匹配召回率足够。
     const cjkChars = payload.replace(/[^一-鿿㐀-䶿]/g, "");
     for (let i = 0; i <= cjkChars.length - 2; i++) {
       keywords.push(cjkChars.slice(i, i + 2));
@@ -126,84 +131,4 @@ export abstract class BaseAgent implements Agent {
     };
   }
 
-  private async _executeWithMemory(node: TaskNode, model: string): Promise<NodeResult> {
-    if (this.memory) {
-      const query = this.getMemoryQuery(node);
-      const ctx = this.memory.read(query);
-      if (ctx.length > 0) {
-        const ctxSummary = ctx.map((m) => `[记忆] ${m.summary}`).join("\n");
-        const enrichedNode: TaskNode = {
-          ...node,
-          payload: `上下文记忆：\n${ctxSummary}\n\n任务：${node.payload}`,
-        };
-        return this._executeAndRemember(enrichedNode, model);
-      }
-    }
-    return this._executeAndRemember(node, model);
-  }
-
-  private async _executeAndRemember(node: TaskNode, model: string): Promise<NodeResult> {
-    const result = await runReActLoop(
-      this.type, this.llm, this.toolkit, this.systemPrompt, node, model, this.maxLoops,
-    );
-    if (this.memory && result.success) {
-      // 结构化经验内容：区分常规任务和修复节点
-      const isFix = node.type === "bugfix" || node.type === "refactor";
-      const content: Record<string, unknown> = {
-        taskType: node.type,
-        entities: node.tags,
-        decision: result.output ?? "",
-        outcome: "success",
-      };
-      if (isFix) {
-        // bugfix/refactor 节点：把这次修了什么坑记录下来
-        content.pitfall = node.payload.slice(0, 300);
-        content.lesson = `${this.type} successfully fixed a ${node.type}. The original error context is preserved above.`;
-      }
-
-      try {
-        const memId = this.memory.write({
-          memoryType: MemoryType.Episodic,
-          content,
-          summary: isFix
-            ? `[修复记录] ${this.type} 修复了 ${node.type}: ${node.payload.slice(0, 100)}`
-            : `${this.type} 完成 ${node.type} 任务: ${node.payload.slice(0, 120)}`,
-          agentType: this.type,
-          creatorId: this.type,
-          metadata: { taskId: node.id, nodeType: node.type, tags: node.tags },
-        });
-        const ctxMemId = this.memory.write({
-          memoryType: MemoryType.Episodic,
-          content: { nodeId: node.id, nodeType: node.type, tags: node.tags },
-          summary: `[上下文] 节点 ${node.id} (${node.type}): ${node.payload.slice(0, 60)}`,
-          agentType: this.type,
-          creatorId: this.type,
-          metadata: { taskId: node.id },
-        });
-        this.memory.link(memId, ctxMemId, LinkType.ProducedBy, this.type);
-
-        // 修复节点：额外链接到父任务（如果有 parentId）
-        if (isFix && node.parentId) {
-          const parentMemories = this.memory.read({
-            metadataFilter: { taskId: node.parentId },
-            limit: 1,
-          });
-          if (parentMemories.length > 0) {
-            this.memory.link(memId, parentMemories[0].id, LinkType.ProducedBy, this.type);
-          }
-        }
-      } catch (memErr) {
-        // 记忆写入失败不阻塞任务结果——任务已完成，记忆不可靠但可恢复
-        if (this._safeReporter) {
-          this._safeReporter({
-            source: `${this.type}._executeAndRemember`,
-            error: memErr,
-            severity: "degraded",
-            hint: `任务 ${node.id} 已成功完成，但记忆写入失败`,
-          });
-        }
-      }
-    }
-    return result;
-  }
 }

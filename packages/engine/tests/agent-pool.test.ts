@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AgentPool } from "../src/agent-pool";
 import { AgentType } from "@cortex/shared";
@@ -82,6 +83,9 @@ describe("AgentPool", () => {
 
     it("无 observer 也无 onInvariant 时 console.error 兜底", () => {
       const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      // vitest 环境下静默 console 回退，需临时解除以验证 fallback 行为
+      const prevVitest = process.env.VITEST;
+      delete process.env.VITEST;
 
       const ok = pool.setStatus("inst-1", AgentStatus.Active);
       expect(ok).toBe(false);
@@ -90,6 +94,7 @@ describe("AgentPool", () => {
         expect.stringContaining("[invariant] AgentPool.setStatus")
       );
       errSpy.mockRestore();
+      process.env.VITEST = prevVitest;
     });
 
     it("onInvariant 静态回调优先于 observer", () => {

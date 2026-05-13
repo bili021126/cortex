@@ -17,7 +17,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { AgentType } from "@cortex/shared";
-import { LlmAdapter } from "../../../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { SHENSHI_CONFIG, runMeeting } from "../config/roundtable-config";
 import { loadAuditContext, enhancePersonasWithAudit, printAuditSummary } from "../config/audit-loader";
 import personaPrompts from "../config/persona-prompts.json" assert { type: "json" };
@@ -77,8 +77,8 @@ async function main() {
     console.log(`📦 加载缓存: ${adapter.cacheSize} 条`);
   }
 
-  // ══ 动态加载审计报告，注入最新验证数据到 Persona 提示词 ══
-  const AUDIT_DIR = path.join(ROOT, "test-output", "self-examination");
+  // ══ 动态加载审计报告，注入最新自由审视数据到 Persona 提示词 ══
+  const AUDIT_DIR = path.join(ROOT, "test-output", "self-examination-soft");
   const auditCtx = loadAuditContext(AUDIT_DIR);
   printAuditSummary(auditCtx);
 

@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TaskBoard 树稳健性压力测试
  * 覆盖六大暗雷：并发 claim、父节点失败级联、重规划插入运行中层、
@@ -10,11 +11,11 @@ import { TaskBoard } from "../src/task-board";
 import { AgentPool } from "../src/agent-pool";
 import { PipelineObserver } from "../src/pipeline-observer";
 import { ConfirmGate } from "../src/confirm-gate";
-import { LlmAdapter } from "../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { CodeAgent } from "../src/code-agent";
-import { ReviewAgent } from "../src/review-agent";
-import { AnalysisAgent } from "../src/analysis-agent";
+import { CodeAgent } from "../src/agents/code-agent";
+import { ReviewAgent } from "../src/agents/review-agent";
+import { AnalysisAgent } from "../src/agents/analysis-agent";
 import { MemoryStore } from "../src/memory-store";
 import { MetaAgent } from "../src/meta-agent";
 import { Scheduler, topologicalSort } from "../src/scheduler";

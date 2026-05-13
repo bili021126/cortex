@@ -1,5 +1,5 @@
 import type { ObservableEvent, PipelineHandler, SafeErrorReporter, SafeErrorContext } from "@cortex/shared";
-import { PipelinePriority } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 
 /**
  * handler 异常上报回调签名。
@@ -56,6 +56,12 @@ export class PipelineObserver {
    * 异常通过 `_onHandlerError` 上报，不调用者透明。
    */
   emit(event: ObservableEvent): void {
+    // 幂等键：每次 emit 自动生成 requestId（若调用方未提供）
+    // 下游可用此字段区分"未上报"与"上报失败"，消除报警盲区
+    if (!event.requestId) {
+      event.requestId = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    }
+
     const handlers = this.handlers.get(event.priority);
     if (handlers) {
       for (let i = 0; i < handlers.length; i++) {
@@ -107,7 +113,7 @@ export class PipelineObserver {
       if (count >= PipelineObserver.SILENT_UPGRADE_THRESHOLD) {
         this._silentCounters.delete(ctx.source);
         this.emit({
-          type: "error.silent_upgraded",
+          type: PipelineEventType.ErrorSilentUpgraded,
           priority: PipelinePriority.HIGH,
           payload: {
             source: ctx.source,
@@ -127,7 +133,7 @@ export class PipelineObserver {
 
     const priority = ctx.severity === "fatal" ? PipelinePriority.CRITICAL : PipelinePriority.HIGH;
     this.emit({
-      type: "error.reported",
+      type: PipelineEventType.ErrorReported,
       priority,
       payload: {
         source: ctx.source,

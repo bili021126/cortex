@@ -22,6 +22,7 @@ Thumbs.db
 # Cortex runtime artifacts
 .cortex/
 tmp/
+test-output/
 test-output.txt
 test-tmp.txt
 packages/engine/test-output.txt

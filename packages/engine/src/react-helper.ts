@@ -1,8 +1,8 @@
 import type { TaskNode, NodeResult, AgentType, LlmMessage, ToolDef } from "@cortex/shared";
-import type { LlmAdapter } from "./llm-adapter.js";
+import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "./toolkit.js";
 
-const DEFAULT_MAX_LOOPS = 48; // 主循环上限。pro 模型 thinking mode 需充裕轮次。loop 44 时注入"强制收束"提示。
+const DEFAULT_MAX_LOOPS = 64; // 主循环上限。pro 模型 thinking mode 需充裕轮次。loop 60 时注入"强制收束"提示。
 
 /**
  * 共享 ReAct 循环——所有 Agent 共用。
@@ -32,8 +32,22 @@ export async function runReActLoop(
     },
   }));
 
+  const TOOL_DISCIPLINE = [
+    "──── ⚠️ 工具使用硬约束（违反将导致任务失败）────",
+    "",
+    "· 文件搜索 → 必须用 search_code，禁止用 run_shell 执行 grep/findstr/rg/dir",
+    "· 目录浏览 → 必须用 list_files，禁止用 run_shell 执行 ls/dir/Get-ChildItem",
+    "· 文件读取 → 必须用 read_file，禁止用 run_shell 执行 cat/type/Get-Content",
+    "· 文件写入 → 必须用 write_file，禁止用 run_shell 执行 echo/copy/Out-File",
+    "· run_shell 仅用于构建/测试/包管理命令（如 pnpm build, npx vitest, npm install），",
+    "  绝不用于文件搜索、目录浏览、文件读写等已有专用工具的操作。",
+    "",
+    "违反此约束 = 你根本没在执行任务，是在浪费时间。",
+  ].join("\n");
+
   const messages: LlmMessage[] = [
     { role: "system", content: systemPrompt },
+    { role: "system", content: TOOL_DISCIPLINE },
     { role: "user", content: `Task: ${node.payload}` },
   ];
 

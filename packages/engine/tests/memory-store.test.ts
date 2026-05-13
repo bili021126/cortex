@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
 import { MemoryStore } from "../src/memory-store";
@@ -527,7 +528,7 @@ describe("MemoryStore", () => {
       emitted.push({ type: event.type, payload: event.payload });
     });
 
-    const result = (s as any)._deserializeRow({ id: "mem-null", content: null });
+    const result = (s as any)._storage.deserializeRow({ id: "mem-null", content: null });
     expect(result).toBeNull();
 
     const failed = emitted.filter((e) => e.type === "memory.deserialize_failed");
@@ -536,13 +537,13 @@ describe("MemoryStore", () => {
   });
 
   it("_deserializeRow: undefined content 返回 null 不崩溃", () => {
-    const result = (store as any)._deserializeRow({ id: "mem-undefined", content: undefined });
+    const result = (store as any)._storage.deserializeRow({ id: "mem-undefined", content: undefined });
     expect(result).toBeNull();
   });
 
   it("_deserializeRow: null content 无 observer 时 console.error 兜底", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = (store as any)._deserializeRow({ id: "mem-null-no-obs", content: null });
+    const result = (store as any)._storage.deserializeRow({ id: "mem-null-no-obs", content: null });
     expect(result).toBeNull();
     expect(errSpy).toHaveBeenCalledWith(
       expect.stringContaining("[MemoryStore] null content")

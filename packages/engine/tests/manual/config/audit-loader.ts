@@ -70,17 +70,21 @@ export interface AuditContext {
 // ═══════════════════════════════════════════════
 
 const AGENT_REPORT_MAP: Record<string, string[]> = {
-  keqing: ["keqing-p1-verification.md", "keqing-code-quality-audit.md"],
-  nahida: ["nahida-p3-verification.md", "nahida-architecture-analysis.md"],
-  albedo: ["albedo-p0-code-review.md", "albedo-core-code-audit.md"],
-  beidou: ["beidou-p2-verification.md", "beidou-ops-readiness.md", "beidou-deploy-readiness.md"],
-  amber: ["amber-change-summary.md", "amber-filesystem-inspect.md"],
-  ningguang: ["ningguang-fixlist-consistency.md"],
+  keqing: ["keqing-quality-recon.md"],
+  nahida: ["nahida-architecture-analysis.md"],
+  albedo: ["albedo-deep-review.md"],
+  beidou: ["beidou-ops-diagnosis.md"],
+  amber: ["amber-reconnaissance.md"],
+  ningguang: ["ningguang-governance-audit.md"],
+  mona: ["mona-pattern-discovery.md"],
+  kuki: ["kuki-api-design.md"],
+  alhaitham: ["alhaitham-data-design.md"],
 };
 
 const AGENT_NAME_MAP: Record<string, string> = {
   keqing: "刻晴", nahida: "纳西妲", albedo: "阿贝多",
   beidou: "北斗", amber: "安柏", ningguang: "凝光",
+  mona: "莫娜", kuki: "久岐忍", alhaitham: "艾尔海森",
 };
 
 // ═══════════════════════════════════════════════

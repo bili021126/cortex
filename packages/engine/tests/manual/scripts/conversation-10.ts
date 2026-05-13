@@ -22,7 +22,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, MemoryType } from "@cortex/shared";
-import { LlmAdapter } from "../../../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { MemoryStore } from "../../../src/memory-store";
 
 // ══════════════════════════════════════════════�?

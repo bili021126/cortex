@@ -35,6 +35,8 @@ export interface MemoryEntry {
   projectFingerprint?: string;
   metadata?: Record<string, unknown>;
   isPrivate: boolean;
+  /** 语义嵌入向量（384d Float32，异步生成，NULL 时跳过向量粗召） */
+  embedding?: number[];
 }
 
 export enum LinkType {
@@ -45,6 +47,10 @@ export enum LinkType {
   RefactoredFrom = "REFACTORED_FROM",
   CitedInCommittee = "CITED_IN_COMMITTEE",
   CascadeTo = "CASCADE_TO",
+  /** FSA 反馈：检索到的记忆在决策中被实际引用 */
+  ConfirmedUseful = "CONFIRMED_USEFUL",
+  /** FSA 反馈：检索到的记忆在决策中未被引用，标记为噪音候选 */
+  ConfirmedNoise = "CONFIRMED_NOISE",
 }
 
 export interface MemoryLink {
@@ -65,14 +71,22 @@ export interface MemoryQuery {
   agentTypes?: AgentType[];
   includePrivate?: boolean;
   limit?: number;
+  /** 稀疏注意力模式：hca=广度浅读（MetaAgent 规划），csa=深度窄读（Agent 执行）。默认 csa。 */
+  queryMode?: 'hca' | 'csa';
   /** HCA 模式（MetaAgent 规划扫描）：false 时不累加 accessCount/不刷新 lastAccessedAt。默认 true（CSA 模式）。 */
   trackAccess?: boolean;
   /** BFS 图检索深度（沿关联边遍历）。0 = 仅关键词匹配，不展开。默认 2。 */
   bfsDepth?: number;
   /** BFS 最大展开节点数，防止图爆炸。默认 20。 */
   bfsMaxNodes?: number;
+  /** BFS 遍历方向：'both' = 出边+入边双向（默认，兼容旧行为），'outbound' = 仅出边（抗噪音）。 */
+  bfsDirection?: 'both' | 'outbound';
   /** BFS 遍历时过滤关联边类型。未指定时遍历所有边。 */
   linkTypes?: LinkType[];
   /** 按 metadata 字段精确过滤记忆条目。多个键值间为 AND 关系。 */
   metadataFilter?: Record<string, unknown>;
+  /** 向量粗召模式：提供 query embedding 以启用语义召回。384d number[]。 */
+  queryEmbedding?: number[];
+  /** 向量粗召 Top-K 数量（默认 50） */
+  vectorTopK?: number;
 }

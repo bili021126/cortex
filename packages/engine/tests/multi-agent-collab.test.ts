@@ -1,3 +1,4 @@
+// @ci: llm
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, MemoryType, MemoryState, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
@@ -5,14 +6,14 @@ import { TaskBoard } from "../src/task-board";
 import { AgentPool } from "../src/agent-pool";
 import { PipelineObserver } from "../src/pipeline-observer";
 import { ConfirmGate } from "../src/confirm-gate";
-import { LlmAdapter } from "../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { CodeAgent } from "../src/code-agent";
-import { ReviewAgent } from "../src/review-agent";
-import { AnalysisAgent } from "../src/analysis-agent";
+import { CodeAgent } from "../src/agents/code-agent";
+import { ReviewAgent } from "../src/agents/review-agent";
+import { AnalysisAgent } from "../src/agents/analysis-agent";
 import { MemoryStore } from "../src/memory-store";
 import { MetaAgent } from "../src/meta-agent";
-import { InspectorAgent } from "../src/inspector-agent";
+import { InspectorAgent } from "../src/agents/inspector-agent";
 import { Scheduler } from "../src/scheduler";
 
 // ─── Mock helpers ────────────────────────────────

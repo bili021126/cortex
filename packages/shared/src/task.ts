@@ -21,6 +21,17 @@ export interface TaskNode {
   reasoningEffort?: "high" | "max";
 }
 
+/**
+ * 节点执行结果——所有 Agent.execute() 的返回值。
+ *
+ * @contract 久岐忍 P2-8：端点返回字段不可膨胀 → 已闭合
+ *   此类型是 Engine → Consumer 的契约边界。任何新增字段必须：
+ *   1. 在对应 PR 中显式声明
+ *   2. 更新本文档的字段列表
+ *   3. 标注 @since 版本
+ *   禁止在返回对象中附加契约未声明的字段——隐式膨胀字段一旦被下游依赖，
+ *   下个版本移除时即为无声的破坏性变更。
+ */
 export interface NodeResult {
   nodeId: string;
   agentType?: AgentType; // 错误节点可能无 Agent 匹配

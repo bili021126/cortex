@@ -7,70 +7,17 @@ on:
     branches: [main, master]
 
 jobs:
-  typecheck:
-    name: TypeScript 编译检查
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @cortex/shared build
-      - run: pnpm --filter @cortex/engine typecheck
-
-  lint:
-    name: ESLint 代码规范
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @cortex/engine lint
-
-  unit-test:
-    name: 单元测试（无 LLM 依赖）
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @cortex/shared build
-      - run: pnpm --filter @cortex/engine exec vitest run --config vitest.ci.config.ts
-
-  build:
-    name: 构建（shared → testing → engine）
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm -r build
-
   gate:
-    name: 门禁全绿
-    needs: [typecheck, lint, unit-test, build]
+    name: 门禁（构建 + 类型检查 + 单元测试 + Lint）
     runs-on: ubuntu-latest
-    if: always()
     steps:
-      - name: 判定门禁
-        run: |
-          if [ "${{ needs.typecheck.result }}" != "success" ]; then echo "❌ typecheck 未通过"; exit 1; fi
-          if [ "${{ needs.lint.result }}" != "success" ]; then echo "❌ lint 未通过"; exit 1; fi
-          if [ "${{ needs.unit-test.result }}" != "success" ]; then echo "❌ unit-test 未通过"; exit 1; fi
-          if [ "${{ needs.build.result }}" != "success" ]; then echo "❌ build 未通过"; exit 1; fi
-          echo "✅ 全部门禁通过"
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: npx tsx scripts/ci-gate.ts
+        env:
+          DEEPSEEK_API_KEY: ""

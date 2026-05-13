@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * 测试文件: MemoryStore 生命周期状态机测试
  *
@@ -40,7 +41,7 @@ describe("MemoryStore 生命周期状态机", () => {
     await store.init(":memory:");
 
     // Arrange: 预创建表结构已完成，直接测试 _safeDbRun
-    const db = (store as any)._db;
+    const db = (store as any)._persistence.db;
     expect(db).toBeTruthy();
 
     // Act: 通过 write() 间接调用 _safeDbRun
@@ -71,14 +72,13 @@ describe("MemoryStore 生命周期状态机", () => {
       emitted.push({ type: event.type, payload: event.payload });
     });
 
-    // 劫持 _db.run 使 INSERT 失败
-    const origRun = (store as any)._db.run.bind((store as any)._db);
-    (store as any)._db.run = (...args: any[]) => {
-      const sql: string = args[0] ?? "";
+    // 劫持 _db.prepare 使 INSERT 失败
+    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
+    (store as any)._persistence.db.prepare = (sql: string) => {
       if (sql.includes("INSERT INTO")) {
         throw new Error("DISK_FULL");
       }
-      return origRun(...args);
+      return origPrepare(sql);
     };
 
     // Act: write 应抛异常
@@ -105,14 +105,13 @@ describe("MemoryStore 生命周期状态机", () => {
   it("用例3: _safeDbRun DB 失败时重新抛出异常（假阳性禁止原则）", async () => {
     await store.init(":memory:");
 
-    // 劫持 DB：INSERT INTO 时抛异常
-    const origRun = (store as any)._db.run.bind((store as any)._db);
-    (store as any)._db.run = (...args: any[]) => {
-      const sql: string = args[0] ?? "";
+    // 劫持 _db.prepare：INSERT INTO 时抛异常
+    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
+    (store as any)._persistence.db.prepare = (sql: string) => {
       if (sql.includes("INSERT INTO")) {
         throw new Error("PERSIST_FAILURE");
       }
-      return origRun(...args);
+      return origPrepare(sql);
     };
 
     // Act & Assert: 必须抛出
@@ -135,7 +134,7 @@ describe("MemoryStore 生命周期状态机", () => {
     await store.init(":memory:");
 
     // Assert: 初始为 active
-    expect((store as any)._lifecycle).toBe("active");
+    expect((store as any)._persistence.lifecycle).toBe("active");
 
     // 写入一条触发 flush 队列
     store.write({
@@ -150,8 +149,8 @@ describe("MemoryStore 生命周期状态机", () => {
     await store.close();
 
     // Assert: 终态为 closed
-    expect((store as any)._lifecycle).toBe("closed");
-    expect((store as any)._db).toBeUndefined();
+    expect((store as any)._persistence.lifecycle).toBe("closed");
+    expect((store as any)._persistence.db).toBeUndefined();
     expect(store.isPersisted).toBe(false);
   });
 
@@ -181,13 +180,13 @@ describe("MemoryStore 生命周期状态机", () => {
     });
 
     // 应存在定时器
-    expect((store as any)._flushTimer).not.toBeNull();
+    expect((store as any)._persistence._flushTimer).not.toBeNull();
 
     // Act: close 应清除定时器
     await store.close();
 
     // Assert: 定时器已清
-    expect((store as any)._flushTimer).toBeNull();
+    expect((store as any)._persistence._flushTimer).toBeNull();
   });
 
   // ─── 用例7: closing 状态下 flush() ───────────────
@@ -213,14 +212,14 @@ describe("MemoryStore 生命周期状态机", () => {
 
     // 手动 flush 确保落盘（close 前）
     await store2.flush();
-    expect((store2 as any)._dirty).toBe(false);
+    expect((store2 as any)._persistence._dirty).toBe(false);
 
     await store2.close();
 
     // 重新打开验证数据完整性
     const store3 = new MemoryStore(observer);
     await store3.init(dbPath);
-    const results = store3.read({});
+    const results = store3.read({ queryMode: 'hca' });
     expect(results.length).toBeGreaterThanOrEqual(5);
     await store3.close();
 
@@ -230,7 +229,7 @@ describe("MemoryStore 生命周期状态机", () => {
 
   // ─── 用例8: closing 状态下 _safeDbRun 拒绝写入 ──
 
-  it("用例8: closing 状态下 _safeDbRun 拒绝 DB 写入（observer 双通道）", async () => {
+  it("用例8: closing 状态下 run() 拒绝 DB 写入并抛错（observer 双通道）", async () => {
     await store.init(":memory:");
 
     // Arrange: 注册事件监听
@@ -240,37 +239,43 @@ describe("MemoryStore 生命周期状态机", () => {
     });
 
     // 手动切为 closing 态
-    (store as any)._lifecycle = "closing";
+    (store as any)._persistence._lifecycle = "closing";
 
-    // Act: 直接调用 _safeDbRun
-    (store as any)._safeDbRun("INSERT INTO memories (id) VALUES (?)", ["x"], "write");
+    // Act: 直接调用 _persistence.run——应抛错（治理判例 NG-2026-0509-Persist-False-Positive）
+    expect(() => {
+      (store as any)._persistence.run("INSERT INTO memories (id) VALUES (?)", ["x"], "write");
+    }).toThrow(/已 closing，拒绝写入/);
 
-    // Assert: observer 收到 memory.write_blocked 事件
+    // Assert: observer 在抛错前已收到 memory.write_blocked 事件
     const blockedEvents = emitted.filter((e) => e.type === "memory.write_blocked");
     expect(blockedEvents.length).toBe(1);
     expect(blockedEvents[0].payload.opName).toBe("write");
     expect(blockedEvents[0].payload.lifecycle).toBe("closing");
 
     // 恢复 lifecycle 以避免 close() 被跳过
-    (store as any)._lifecycle = "active";
+    (store as any)._persistence._lifecycle = "active";
     await store.close();
   });
 
-  it("用例8b: closing 状态下无 observer 时 console.warn 兜底", async () => {
+  it("用例8b: closing 状态下无 observer 时 console.warn 兜底并抛错", async () => {
     const noObsStore = new MemoryStore();
     await noObsStore.init(":memory:");
 
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    (noObsStore as any)._lifecycle = "closing";
-    (noObsStore as any)._safeDbRun("INSERT INTO memories (id) VALUES (?)", ["y"], "write");
+    (noObsStore as any)._persistence._lifecycle = "closing";
+
+    // Act: 应抛错（治理判例 NG-2026-0509-Persist-False-Positive），且抛错前 console.warn 已触发
+    expect(() => {
+      (noObsStore as any)._persistence.run("INSERT INTO memories (id) VALUES (?)", ["y"], "write");
+    }).toThrow(/已 closing，拒绝写入/);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[MemoryStore] _safeDbRun 被拒")
+      expect.stringContaining("[MemoryStore] run 被拒")
     );
 
     warnSpy.mockRestore();
-    (noObsStore as any)._lifecycle = "active";
+    (noObsStore as any)._persistence._lifecycle = "active";
     await noObsStore.close();
   });
 });

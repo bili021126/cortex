@@ -5,14 +5,14 @@
 
 ---
 
-## 一、词汇表——17 标签 × 6 Agent
+## 一、词汇表——16 标签 × 10 Agent
 
 | # | 标签 | 归属 Agent | 含义 | MetaAgent 何时用 |
 |---|------|-----------|------|-----------------|
 | 1 | `implementation` | CodeAgent | 写新代码/新功能 | 用户要求实现新功能 |
 | 2 | `bugfix` | CodeAgent | 修复已知 bug | 用户报告 bug 或测试失败 |
 | 3 | `refactor` | CodeAgent | 重构现有代码（不改行为） | 用户要求改善代码结构 |
-| 4 | `test` | CodeAgent | 写新测试或修改现有测试 | 用户要求补充/修正测试 |
+| 4 | `test` | CodeAgent + OpsAgent | CodeAgent 写新测试/修改测试；OpsAgent 检测测试完备性和适配性 | 用户要求补充/修正测试 或 测试质量检查 |
 | 5 | `config` | CodeAgent | 配置文件修改（依赖/构建/环境） | 用户要求改配置 |
 | 6 | `review` | ReviewAgent | 通用代码审查 | 产出需要审查 |
 | 7 | `audit` | ReviewAgent | 安全/性能/合规审计 | 安全或性能风险节点 |

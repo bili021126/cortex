@@ -1,5 +1,6 @@
+// @ci: llm
 import { describe, it, expect, vi } from "vitest";
-import { LlmAdapter } from "../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { MetaAgent } from "../src/meta-agent";
 import type { SafeErrorReporter } from "@cortex/shared";
 
@@ -83,7 +84,7 @@ describe("MetaAgent", () => {
     const nodes = await meta.plan("随便说点什么");
 
     expect(nodes.length).toBe(1);
-    expect(nodes[0].type).toBe("generic");
+    expect(nodes[0].type).toBe("analysis");
     expect(nodes[0].tags).toContain("analysis");
     expect(nodes[0].payload).toBe("I think this task should be done in one step: just add the function.");
   });
@@ -139,7 +140,7 @@ describe("MetaAgent", () => {
 
     // 行为不变：仍返回兜底单节点
     expect(nodes.length).toBe(1);
-    expect(nodes[0].type).toBe("generic");
+    expect(nodes[0].type).toBe("analysis");
     expect(nodes[0].tags).toContain("analysis");
   });
 });

@@ -1,87 +1,13 @@
 // ============================================================
 // @cortex/shared — 基础设施类型域
-// 工具、确认门、管线、平台、文件锁、LLM 协议
+// PipelineObserver、SafeErrorReporter、LLM 协议、Agent 接口
+//
+// 已拆出：toolkit.ts（工具+确认门+信任） / file-lock-manager.ts / cli-adapter.ts
 // ============================================================
 
 import type { AgentType } from "./agent.js";
 import type { AgentStatus } from "./agent.js";
 import type { TaskNode, NodeResult } from "./task.js";
-
-// ─── 工具定义 ──────────────────────────────────────────────
-
-export enum ToolCategory {
-  Read = "read",
-  Write = "write",
-  Shell = "shell",
-  Search = "search",
-}
-
-export interface ToolDefinition {
-  name: string;
-  category: ToolCategory;
-  description: string;
-  /** JSON Schema 参数定义（LLM function calling 用） */
-  parameters?: Record<string, unknown>;
-}
-
-export interface ToolInvocation {
-  toolName: string;
-  params: Record<string, unknown>;
-}
-
-export interface ToolResult {
-  success: boolean;
-  output?: string;
-  error?: string;
-}
-
-/** 工具执行处理器签名 */
-export type ToolHandler = (params: Record<string, unknown>) => Promise<ToolResult>;
-
-// ─── 可逆性等级 ────────────────────────────────────────────
-
-export enum ReversibilityLevel {
-  L0 = "L0", // 纯读取，永不确认
-  L1 = "L1", // 可逆写入，信任够则放行
-  L2 = "L2", // 不可逆写入，永远确认
-  L3 = "L3", // 不可恢复，永远确认
-}
-
-// ─── 确认门 ────────────────────────────────────────────────
-
-export interface ConfirmationRequest {
-  id: string;
-  level: ReversibilityLevel;
-  toolName: string;
-  summary: string; // 管家用的可读摘要
-  detail?: string;
-}
-
-export interface ConfirmationResponse {
-  requestId: string;
-  approved: boolean;
-}
-
-export interface IConfirmGate {
-  needsConfirmation(level: ReversibilityLevel): boolean;
-  request(req: ConfirmationRequest): string;
-  waitFor(requestId: string, timeoutMs?: number): Promise<boolean>;
-}
-
-// ─── 信任模型 ──────────────────────────────────────────────
-
-export type RiskDomain =
-  | "file_write"
-  | "shell_exec"
-  | "network"
-  | "config_change";
-
-export interface TrustScore {
-  agentType: AgentType;
-  domain: RiskDomain;
-  score: number; // 0..1
-  historyCount: number;
-}
 
 // ─── PipelineObserver ──────────────────────────────────────
 
@@ -91,11 +17,98 @@ export enum PipelinePriority {
   NORMAL = 2,
 }
 
-export interface ObservableEvent {
-  type: string;
+/**
+ * 事件类型枚举——封闭集合，镜像代码库中所有 emit 点。
+ * 用枚举替代裸 string，编译期约束事件名拼写。
+ */
+export enum PipelineEventType {
+  // ── AgentPool ──
+  AgentPoolInvariantViolation = "agent_pool.invariant_violation",
+  AgentPoolDestroyBypass = "agent_pool.destroy_bypass",
+  // ── Scheduler ──
+  SchedulerLayerStart = "scheduler.layer.start",
+  SchedulerLoopCrashed = "scheduler.loop_crashed",
+  SchedulerDone = "scheduler.done",
+  SchedulerReplanLimit = "scheduler.replan.limit",
+  SchedulerReplanNoMetaAgent = "scheduler.replan.no_meta_agent",
+  SchedulerReplanFailed = "scheduler.replan.failed",
+  SchedulerNonstandardType = "scheduler.nonstandard_type",
+  SchedulerInvariantViolation = "scheduler.invariant_violation",
+  // ── Node 生命周期 ──
+  NodeStart = "node.start",
+  NodeComplete = "node.complete",
+  NodeFailed = "node.failed",
+  NodeReplan = "node.replan",
+  NodeReplanQueued = "node.replan.queued",
+  NodeSpawnFailed = "node.spawn_failed",
+  // ── Pool ──
+  PoolDestroyFailed = "pool.destroy_failed",
+  // ── MemoryStore ──
+  MemoryDbWriteFailed = "memory.db_write_failed",
+  MemoryWriteBlocked = "memory.write_blocked",
+  MemoryFlushSkipped = "memory.flush_skipped",
+  MemoryPersistFailed = "memory.persist_failed",
+  MemorySqlDegraded = "memory.sql_degraded",
+  MemoryDeserializeFailed = "memory.deserialize_failed",
+  // ── TaskBoard ──
+  TaskBoardInvariantViolation = "task_board.invariant_violation",
+  // ── Error system (PipelineObserver internal) ──
+  ErrorReported = "error.reported",
+  ErrorSilentUpgraded = "error.silent_upgraded",
+  // ── Analysis ──
+  Analysis = "analysis",
+}
+
+/**
+ * 事件 Payload 类型联合——按事件类型锁定额外字段。
+ * 不在枚举中的事件类型不会通过类型检查。
+ */
+export type EventPayloadMap = {
+  [PipelineEventType.AgentPoolInvariantViolation]: { source: string; transition?: string; detail: string };
+  [PipelineEventType.AgentPoolDestroyBypass]: { agentType: AgentType; instanceId: string };
+  [PipelineEventType.SchedulerLayerStart]: { layer: number; nodes: number; round: number };
+  [PipelineEventType.SchedulerLoopCrashed]: { round: number; error: string };
+  [PipelineEventType.SchedulerDone]: { total: number; completed: number; failed: number; durationMs: number; rounds: number };
+  [PipelineEventType.SchedulerReplanLimit]: { totalReplans: number; maxReplans: number };
+  [PipelineEventType.SchedulerReplanNoMetaAgent]: { orphanCount: number; hint: string };
+  [PipelineEventType.SchedulerReplanFailed]: { nodeId: string; error: string };
+  [PipelineEventType.SchedulerNonstandardType]: { nodeId: string; nodeType: string; matchedCount: number; assigned: string; totalAgents: number };
+  [PipelineEventType.SchedulerInvariantViolation]: { nodeId: string; message: string };
+  [PipelineEventType.NodeStart]: { nodeId: string; type: string };
+  [PipelineEventType.NodeComplete]: { nodeId: string; agentType: AgentType; success: true; output?: string };
+  [PipelineEventType.NodeFailed]: { nodeId: string; error: string; agentType?: AgentType };
+  [PipelineEventType.NodeReplan]: { nodeId: string; reason: string; attempt: number };
+  [PipelineEventType.NodeReplanQueued]: { nodeId: string; reason: string; attempt: number };
+  [PipelineEventType.NodeSpawnFailed]: { nodeId: string; agentType: AgentType; reason: string };
+  [PipelineEventType.PoolDestroyFailed]: { agentType: AgentType; instanceId: string; error: string };
+  [PipelineEventType.MemoryDbWriteFailed]: { operation: string; error: string };
+  [PipelineEventType.MemoryWriteBlocked]: { reason: string };
+  [PipelineEventType.MemoryFlushSkipped]: { frameStart: number; spentMs: number };
+  [PipelineEventType.MemoryPersistFailed]: { operation: string; error: string };
+  [PipelineEventType.MemorySqlDegraded]: { operation: string; detail: string };
+  [PipelineEventType.MemoryDeserializeFailed]: { rowId: string; error: string };
+  [PipelineEventType.TaskBoardInvariantViolation]: { source: string; detail: string };
+  [PipelineEventType.ErrorReported]: { source: string; severity: string; error: string; hint?: string };
+  [PipelineEventType.ErrorSilentUpgraded]: { source: string; consecutive: number; threshold: number; lastError: string; hint?: string };
+  [PipelineEventType.Analysis]: unknown;
+};
+
+/** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定
+ *
+ * @governance 久岐忍 P2-6：Cortex 可观测性管道结构性缺陷 → 已闭合
+ *   requestId 使下游可区分"未上报"与"上报失败"，消除报警盲区。
+ */
+export interface ObservableEvent<T extends PipelineEventType = PipelineEventType> {
+  type: T;
   priority: PipelinePriority;
-  payload: unknown;
+  payload: T extends keyof EventPayloadMap ? EventPayloadMap[T] : unknown;
   timestamp: number;
+  /**
+   * 幂等键——每次 emit 生成的唯一标识。
+   * 下游（Sentry/Datadog/管家）可用此字段去重和链路追踪。
+   * 由 PipelineObserver.emit() 自动填充（若调用方未提供）。
+   */
+  requestId?: string;
   /**
    * 通知语义类型。
    *   FYI              — 信息告知，用户看一眼即可
@@ -132,48 +145,6 @@ export interface SafeErrorContext {
  * 防止"有意忽略"退化为"习惯性忽略"。升级逻辑由调用方（PipelineObserver）实现。
  */
 export type SafeErrorReporter = (ctx: SafeErrorContext) => void;
-
-// ─── 文件锁 ────────────────────────────────────────────────
-
-export enum LockType {
-  Read = "read",
-  Write = "write",
-}
-
-export interface IFileLockManager {
-  acquire(filePath: string, lockType: LockType, ownerId: string): boolean;
-  release(filePath: string, ownerId: string): void;
-}
-
-// ─── 平台上下文 ─────────────────────────────────────────────
-
-export enum PlatformKind {
-  CLI = "cli",
-  Electron = "electron",
-}
-
-export interface PlatformContext {
-  kind: PlatformKind;
-  foreground: boolean; // 用户是否在关注
-  idle: boolean; // 用户是否空闲
-}
-
-// ─── PlatformBridge ────────────────────────────────────────
-
-/**
- * PlatformBridge —— Engine ↔ 用户交互的抽象层。
- * Core-1 仅实现 CLIAdapter（stdin/stdout）。Core-2 追加 ElectronAdapter（IPC 弹窗）。
- */
-export interface PlatformBridge {
-  /** 阻塞等待用户确认（L2/L3 操作）。CLI 下为 stdin 读取，Electron 下为系统弹窗。 */
-  confirm(request: ConfirmationRequest): Promise<ConfirmationResponse>;
-
-  /** 通知用户（非阻塞）。 */
-  notify(message: string): void;
-
-  /** 获取当前平台上下文。 */
-  getPlatformContext(): PlatformContext;
-}
 
 // ─── LLM 协议 ─────────────────────────────────────────────
 

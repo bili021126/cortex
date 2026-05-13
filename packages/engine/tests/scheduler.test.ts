@@ -1,15 +1,16 @@
+// @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, MemoryType, PipelinePriority } from "@cortex/shared";
 import { TaskBoard } from "../src/task-board";
 import { AgentPool } from "../src/agent-pool";
 import { PipelineObserver } from "../src/pipeline-observer";
 import { ConfirmGate } from "../src/confirm-gate";
-import { LlmAdapter } from "../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { CodeAgent } from "../src/code-agent";
-import { ReviewAgent } from "../src/review-agent";
-import { AnalysisAgent } from "../src/analysis-agent";
-import { DocGovernAgent } from "../src/doc-govern-agent";
+import { CodeAgent } from "../src/agents/code-agent";
+import { ReviewAgent } from "../src/agents/review-agent";
+import { AnalysisAgent } from "../src/agents/analysis-agent";
+import { DocGovernAgent } from "../src/agents/doc-govern-agent";
 import { MemoryStore } from "../src/memory-store";
 import { Scheduler, topologicalSort } from "../src/scheduler";
 
@@ -203,11 +204,12 @@ describe("Scheduler", () => {
     expect(report.totalNodes).toBe(1);
     expect(report.completed).toBe(1);
 
-    // TaskBoard 的多视角等齐——两种 Agent 都跑了
+    // TaskBoard 的多视角等齐——三种 Agent 都跑了（CodeAgent 也匹配 review+analysis）
     const node = board.getNode("multi-1")!;
     expect(node.status).toBe("done");
-    expect(node.results).toHaveLength(2);
+    expect(node.results).toHaveLength(3);
     const agentTypes = node.results.map((r) => r.agentType);
+    expect(agentTypes).toContain(AgentType.Code);
     expect(agentTypes).toContain(AgentType.Review);
     expect(agentTypes).toContain(AgentType.Analysis);
   });

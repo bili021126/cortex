@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * 测试文件: AgentPool 状态所有权测试 (方案B)
  *
@@ -24,10 +25,10 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { AgentPool } from "../src/agent-pool";
 import { PipelineObserver } from "../src/pipeline-observer";
 import { BaseAgent } from "../src/base-agent";
-import { ButlerAgent } from "../src/butler-agent";
+import { ButlerAgent } from "../src/agents/butler-agent";
 import type { TaskNode, NodeResult, AgentType as AT } from "@cortex/shared";
 import { AgentType, AgentStatus as AS } from "@cortex/shared";
-import type { LlmAdapter } from "../src/llm-adapter";
+import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../src/toolkit";
 
 // 测试用具体 Agent 子类
@@ -133,8 +134,8 @@ describe("AgentPool 状态所有权 (方案B)", () => {
     agent.wakeup();
     expect(agent.status).toBe(AS.Awake);
 
-    // 无 Pool 时仍可正常读写 _localStatus
-    expect((agent as any)._localStatus).toBe(AS.Awake);
+    // 无 Pool 时仍可正常读写 _localStatus（已迁移至 PoolAwareState）
+    expect((agent as any)._state._localStatus).toBe(AS.Awake);
   });
 
   // ─── 用例6: 非法流转拒绝 ─────────────────────────

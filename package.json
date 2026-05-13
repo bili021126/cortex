@@ -9,7 +9,9 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "build:check": "pnpm build && pnpm test",
-    "ci": "pnpm typecheck && pnpm lint && pnpm test",
+    "ci": "npx tsx scripts/ci-gate.ts",
+    "ci:all": "npx tsx scripts/ci-gate.ts --all",
+    "ci:dry": "npx tsx scripts/ci-gate.ts --dry-run",
     "self-exam": "npx tsx packages/engine/tests/manual/scripts/cortex-self-examination.ts",
     "roundtable": "npx tsx packages/engine/tests/manual/scripts/conversation-11.ts"
   },
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.3.0",
+    "tsx": "^4.19.0",
     "typescript-eslint": "^8.59.2",
     "vitest": "^2.1.0"
   }

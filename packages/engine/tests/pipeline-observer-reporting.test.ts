@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * 测试文件: PipelineObserver SafeErrorReporter 上报测试 (方案A)
  *

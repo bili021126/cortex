@@ -1,7 +1,6 @@
 import type { AgentType, AgentConfig } from "@cortex/shared";
-import { AgentStatus } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
-import { PipelinePriority } from "@cortex/shared";
+import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
 
 /**
  * AgentPool —— Agent 生命周期管理 + 状态机追踪
@@ -29,9 +28,9 @@ export class AgentPool {
     this._observer = observer;
   }
 
-  /** 合法状态流转表 */
-  private static readonly VALID_TRANSITIONS: Record<AgentStatus, Set<AgentStatus>> = {
-    [AgentStatus.Created]: new Set([AgentStatus.Awake]),
+  /** 合法状态流转表（pool-aware.ts 共享引用，与 AgentPool 同源） */
+  static readonly VALID_TRANSITIONS: Record<AgentStatus, Set<AgentStatus>> = {
+    [AgentStatus.Created]: new Set([AgentStatus.Awake, AgentStatus.Destroyed]),
     [AgentStatus.Awake]: new Set([AgentStatus.Active, AgentStatus.Draining]),
     [AgentStatus.Active]: new Set([AgentStatus.Awake, AgentStatus.Draining]),
     [AgentStatus.Draining]: new Set([AgentStatus.Destroyed]),
@@ -67,13 +66,13 @@ export class AgentPool {
         AgentPool.onInvariant({ source: "AgentPool.setStatus", message: msg, details: { instanceId, current, attempted: status } });
       } else if (this._observer) {
         this._observer.emit({
-          type: "agent_pool.invariant_violation",
+          type: PipelineEventType.AgentPoolInvariantViolation,
           priority: PipelinePriority.CRITICAL,
           payload: { source: "AgentPool.setStatus", message: msg, instanceId, current, attempted: status },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
-      } else {
+      } else if (!process.env.VITEST) {
         console.error(`[invariant] AgentPool.setStatus: ${msg}`);
       }
       return false;
@@ -101,7 +100,10 @@ export class AgentPool {
     return [...instances].some((id) => this.statuses.get(id) === AgentStatus.Awake);
   }
 
-  /** 回收 Agent 实例。优先走 setStatus() 状态机流转；仅当非法流转（如崩溃后强制回收）时直写 Map 兜底。 */
+  /** 回收 Agent 实例。优先走 setStatus() 状态机流转；仅当非法流转（如崩溃后强制回收）时直写 Map 兜底。
+   *
+   * 治理判例 NG-2026-0511-Destroy-Bypass：
+   * 绕过状态机的直写路径须经 observer 管道上报，不得仅 console.warn。 */
   destroy(agentType: AgentType, instanceId: string): void {
     const current = this.statuses.get(instanceId);
     if (current === undefined || current === AgentStatus.Destroyed) {
@@ -111,9 +113,24 @@ export class AgentPool {
 
     const ok = this.setStatus(instanceId, AgentStatus.Destroyed);
     if (!ok) {
-      console.warn(
-        `[agent-pool] destroy 绕过状态机: ${current} → Destroyed (instance: ${instanceId})，强制清理`,
-      );
+      const violation = {
+        source: "AgentPool.destroy",
+        message: `destroy 绕过状态机: ${current} → Destroyed`,
+        details: { instanceId, agentType },
+      };
+      if (this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.AgentPoolDestroyBypass,
+          priority: PipelinePriority.HIGH,
+          payload: { current, instanceId, agentType, hint: "强制回收，可能为崩溃恢复" },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      } else if (AgentPool.onInvariant) {
+        AgentPool.onInvariant(violation);
+      } else if (!process.env.VITEST) {
+        console.warn(`[agent-pool] ${violation.message} (instance: ${instanceId})，强制清理`);
+      }
       this.statuses.set(instanceId, AgentStatus.Destroyed);
     }
     this.active.get(agentType)?.delete(instanceId);

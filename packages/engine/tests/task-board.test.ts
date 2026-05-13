@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { TaskBoard } from "../src/task-board";
 import { AgentType } from "@cortex/shared";
@@ -45,9 +46,9 @@ describe("TaskBoard", () => {
     const tb = new TaskBoard();
     tb.addNode(makeNode({ id: "a", tags: ["implementation"] }));
     tb.addNode(makeNode({ id: "b", tags: ["deploy"] }));
-    tb.addNode(makeNode({ id: "c", tags: ["bugfix"] }));
+    tb.addNode(makeNode({ id: "c", tags: ["refactor"] }));
     const pending = tb.findPending(AgentType.Code);
-    expect(pending).toHaveLength(2); // implementation + bugfix
+    expect(pending).toHaveLength(2); // implementation + refactor
   });
 
   // ── needsMultiPerspective 多视角节点 ──

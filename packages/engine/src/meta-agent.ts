@@ -1,16 +1,43 @@
 import type { TaskNode, Tag, ImpactScope, ReplanResult, SafeErrorReporter } from "@cortex/shared";
-import type { LlmAdapter } from "./llm-adapter.js";
+import type { LlmAdapter } from "@cortex/llm";
+import type { SkillRegistry } from "@cortex/shared";
 
 /**
- * MetaAgent —— 规划引擎。
+ * MetaAgent —— 战术引擎。
  * 接收用户意图，拆解为 TaskNode 树，写入 TaskBoard。
  * 独享 DeepSeek V4 Pro（reasoner 模型）。
+ *
+ * @contract 模块边界契约（久岐忍 P1-5：模块边界缺少显式契约化定义 → 已闭合）
+ *
+ *   plan(intent) → TaskNode[]：纯函数式规划，不写板
+ *   requestReplan(failedNode, reason, count) → ReplanResult：基于失败诊断生成替代方案
+ *
+ *   调用方（Scheduler）的责任：
+ *   - plan() 返回的 TaskNode[] 由调用方 add 到 TaskBoard
+ *   - requestReplan() 返回的 nodes 由 Scheduler._drainReplanQueue add 到 TaskBoard（领而不执）
+ *   - 调用方负责节点在 TaskBoard 中的生命周期管理
+ *
+ *   异常语义：
+ *   - JSON 解析失败不抛异常——回退为单个 generic fallbackNode
+ *   - LLM 调用失败由 LlmAdapter 抛出，调用方 catch
+ *   - skillRegistry 缺失不阻塞规划——跳过技能增强
+ *
+ * 可选集成 SkillRegistry：规划时查询已沉淀的技能模板，
+ * 注入 prompt 上下文，提升任务拆解精准度。
  */
 export class MetaAgent {
   private _nodeCounter = 0; // 防 Date.now() 高频碰撞
   private _safeReporter?: SafeErrorReporter;
+  private _skillRegistry?: SkillRegistry;
 
-  constructor(private readonly llm: LlmAdapter) {}
+  constructor(private readonly llm: LlmAdapter, skillRegistry?: SkillRegistry) {
+    this._skillRegistry = skillRegistry;
+  }
+
+  /** 注入技能注册表（可后置绑定） */
+  setSkillRegistry(registry: SkillRegistry): void {
+    this._skillRegistry = registry;
+  }
 
   /** 注入错误上报通道（observer 双通道模式） */
   setSafeReporter(reporter: SafeErrorReporter): void {
@@ -87,26 +114,71 @@ export class MetaAgent {
     if (context?.existingTags && context.existingTags.length > 0) {
       parts.push(`Existing context tags: ${context.existingTags.join(", ")}`);
     }
+
+    // ── 技能增强：查询 SkillRegistry 匹配的技能模板 ──
+    if (this._skillRegistry && context?.existingTags) {
+      const matched = this._skillRegistry.queryByTags(context.existingTags as Tag[]);
+      if (matched.length > 0) {
+        const skillLines = matched.map((s) =>
+          `  · ${s.name} (id:${s.id}) [${s.agentType}] tags:[${s.triggerTags.join(",")}] — ${s.trigger}`,
+        );
+        parts.push(
+          `Available skill templates (pre-existing patterns):\n${skillLines.join("\n")}\n\n` +
+          "You MAY reference these skills in your plan by mentioning their id in the payload. " +
+          "These are vetted, repeatable workflows — prefer them over inventing new task sequences.",
+        );
+      }
+    }
+
     parts.push(`User intent: ${intent}`);
 
     return parts.join("\n");
   }
 
   /** 从 LLM 输出提取 JSON（```json ... ``` 或纯字符串）。
-   * 先尝试标记围栏，再尝试提取最外层平衡数组。 */
+   * 先尝试标记围栏，再尝试提取最外层平衡数组。
+   * 括号匹配时识别 JSON 字符串边界，避免 payload 内的 [ ] 字符误导计数器。 */
   private _extractJson(raw: string): string {
-    // 优先匹配 ```json ... ``` 标记围栏
-    const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    // 优先匹配 ```json ... ``` 标记围栏（非贪婪，匹配最近的闭合）
+    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (fenceMatch) return fenceMatch[1];
 
-    // 回退：提取最外层平衡 [ ... ] 数组（处理嵌套 children 等内部数组）
+    // 回退：提取最外层平衡 [ ... ] 数组
     const startIdx = raw.indexOf("[");
     if (startIdx === -1) return raw;
 
     let depth = 0;
+    let inString = false;
+    let stringChar = ""; // 当前字符串的引号字符（" 或 '）
+    let escaped = false;
+
     for (let i = startIdx; i < raw.length; i++) {
-      if (raw[i] === "[") depth++;
-      else if (raw[i] === "]") {
+      const ch = raw[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (ch === stringChar) {
+          inString = false;
+          stringChar = "";
+        }
+        continue;
+      }
+
+      if (ch === "\"" || ch === "'") {
+        inString = true;
+        stringChar = ch;
+        continue;
+      }
+
+      if (ch === "[") depth++;
+      else if (ch === "]") {
         depth--;
         if (depth === 0) return raw.slice(startIdx, i + 1);
       }
@@ -119,7 +191,7 @@ export class MetaAgent {
     return {
       id: `task-${Date.now()}-0`,
       parentId,
-      type: "generic",
+      type: "analysis",
       tags: ["analysis"] as Tag[],
       needsMultiPerspective: false,
       status: "pending",
@@ -132,20 +204,48 @@ export class MetaAgent {
 
   /** 从 LLM 输出解析 JSON 任务树 */
   private _parsePlan(raw: string, parentId?: string): TaskNode[] {
-    const jsonStr = this._extractJson(raw);
+    // 多级容错策略：extractJson → raw直接 → 修复常见JSON问题
+    const candidates = [
+      this._extractJson(raw),
+      raw, // LLM 可能直接输出干净 JSON
+    ];
 
-    try {
-      const parsed: PlanItem[] = JSON.parse(jsonStr);
-      return parsed.flatMap((item, i) => this._toTaskNode(item, parentId, i));
-    } catch {
-      const msg = `JSON 解析失败 (${raw.length} chars)，回退为单 generic 节点。原始输出前200字: ${raw.slice(0, 200)}`;
-      if (this._safeReporter) {
-        this._safeReporter({ source: "MetaAgent._parsePlan", error: msg, severity: "degraded" });
-      } else {
-        console.warn(`[meta-agent] ${msg}`);
+    for (const candidate of candidates) {
+      const items = this._tryParseItems(candidate);
+      if (items !== null) {
+        return items.flatMap((item, i) => this._toTaskNode(item, parentId, i));
       }
-      return [this._fallbackNode(raw, parentId)];
     }
+
+    const msg = `JSON 解析失败 (${raw.length} chars)，回退为单 generic 节点。原始输出前200字: ${raw.slice(0, 200)}`;
+    if (this._safeReporter) {
+      this._safeReporter({ source: "MetaAgent._parsePlan", error: msg, severity: "degraded" });
+    } else {
+      console.warn(`[meta-agent] ${msg}`);
+    }
+    return [this._fallbackNode(raw, parentId)];
+  }
+
+  /** 尝试解析 JSON 为 PlanItem[]，自动修复常见 LLM 格式问题 */
+  private _tryParseItems(jsonStr: string): PlanItem[] | null {
+    if (!jsonStr || jsonStr.length < 2) return null;
+
+    // 策略 1: 直接解析
+    try { return JSON.parse(jsonStr); } catch { /* continue */ }
+
+    // 策略 2: 去除尾部多余逗号（LLM 经典错误）
+    try { return JSON.parse(jsonStr.replace(/,\s*([}\]])/g, "$1")); } catch { /* continue */ }
+
+    // 策略 3: 截取首 [ 到末 ]，再做一次字符串感知提取（双保险）
+    const firstBracket = jsonStr.indexOf("[");
+    const lastBracket = jsonStr.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+      const trimmed = jsonStr.slice(firstBracket, lastBracket + 1);
+      try { return JSON.parse(trimmed); } catch { /* continue */ }
+      try { return JSON.parse(trimmed.replace(/,\s*([}\]])/g, "$1")); } catch { /* continue */ }
+    }
+
+    return null;
   }
 
   /** 将 PlanItem 转为 TaskNode[]（自身 + 所有子孙） */
@@ -166,8 +266,8 @@ export class MetaAgent {
     const self: TaskNode = {
       id: nodeId,
       parentId,
-      type: item.type ?? "generic",
-      tags: (item.tags ?? ["implementation"]) as Tag[],
+      type: item.type ?? "analysis",
+      tags: (item.tags ?? ["code"]) as Tag[],
       needsMultiPerspective: item.needsMultiPerspective ?? false,
       status: "pending",
       claimedBy: [],
@@ -220,7 +320,7 @@ const MAX_REPLAN = 3;
 // ─── 系统提示 ─────────────────────────────────────
 
 const PLANNING_SYSTEM = [
-  "你是甘雨，璃月七星秘书，Cortex 的 MetaAgent 规划师。",
+  "你是甘雨，璃月七星秘书，Cortex 的 MetaAgent 战术中枢。",
   "千年如一日地俯瞰璃月的运转。冷静拆解意图，精准分配兵种，确保每一步都在正确的时机交给正确的人。",
   "",
   "── 最高原则：时序依赖 ──",
@@ -247,20 +347,21 @@ const PLANNING_SYSTEM = [
   "",
   "完整示例（WebUI计算器场景）：",
   "[",
-  '  { "task": "阿贝多写代码", "type": "implementation", "tags": ["implementation"], "children": [',
-  '    { "task": "安柏侦察", "type": "inspect", "tags": ["inspect"], "children": [',
+  '  { "task": "阿贝多写代码", "type": "code", "tags": ["code"], "children": [',
+  '    { "task": "安柏侦察", "type": "inspector", "tags": ["inspector"], "children": [',
   '      { "task": "刻晴审查", "type": "review", "tags": ["review"] }',
   "    ]},",
-  '    { "task": "宵宫UI验证", "type": "generic", "tags": ["browser", "ui_verify"] },',
+  '    { "task": "宵宫UI验证", "type": "browser", "tags": ["browser", "ui_verify"] },',
   '    { "task": "纳西妲架构分析", "type": "analysis", "tags": ["analysis"] },',
-  '    { "task": "凝光合规审计", "type": "audit", "tags": ["audit", "doc_govern"] },',
-  '    { "task": "莫娜模式提炼", "type": "generic", "tags": ["pattern_scan", "skill_precipitate"] },',
+  '    { "task": "凝光合规审计", "type": "doc-govern", "tags": ["doc-govern"] },',
+  '    { "task": "莫娜模式提炼", "type": "loop", "tags": ["loop", "pattern_scan", "skill_precipitate"] },',
   '    { "task": "北斗运维检查", "type": "ops", "tags": ["ops", "deploy"] }',
   "  ]}",
   "]",
   "",
   "── 可用兵种 ──",
-  "  code/阿贝多      —— 炼金术士，写代码、修 bug、重构",
+  "  code/阿贝多      —— 炼金术士，写代码、重构、新功能",
+  "  fix/希格雯       —— 护士长，诊断 bug、最小修复、写病历",
   "  review/刻晴      —— 玉衡星，代码审查、挑剔一切瑕疵",
   "  analysis/纳西妲   —— 草神，架构分析、深度调研",
   "  doc-govern/凝光   —— 天权星，律法审计、合规检查",
@@ -269,11 +370,27 @@ const PLANNING_SYSTEM = [
   "  ops/北斗          —— 南十字船长，运维诊断、环境检查",
   "  browser/宵宫      —— 烟花店老板，浏览器 UI 验证",
   "",
+  "── 标签匹配规则（关键！tag 错误 → Agent 无法认领 → 节点失败）──",
+  "每个节点必须至少有一个 tag 匹配目标 Agent 的认领词汇表：",
+  "  code  → 必须含: code, implementation, refactor, test, config, review, research, analysis",
+  "  fix   → 必须含: fix, bugfix, repair, diagnose, heal",
+  "  review → 必须含: review, audit",
+  "  analysis → 必须含: analysis, research",
+  "  ops → 必须含: ops, deploy, test",
+  "  doc-govern → 必须含: doc_govern, audit, plan_review, doc_audit, constitution_check",
+  "  loop → 必须含: loop, pattern_scan, skill_precipitate",
+  "  inspector → 必须含: inspect, inspector",
+  "  browser → 必须含: browser, ui_verify",
+  "  api   → 必须含: api, api_design, api_integration, endpoint, review, research, analysis",
+  "  data  → 必须含: data, data_model, migration, storage, schema, review, research, analysis",
+  "⚠️ 反例：type=code 但 tags=[\"review\",\"analysis\"] → ❌ 无交集，节点必定失败",
+  "✅ 正例：type=code 且 tags=[\"code\",\"review\"] → ✅ 匹配",
+  "",
   "── 输出格式 ──",
   '每个任务节点的 JSON 格式：',
   '{',
   '  "task": "<一句话任务描述>",',
-  '  "type": "implementation|review|analysis|research|bugfix|refactor|deploy|config|audit|inspect|ops|generic",',
+  '  "type": "implementation|review|analysis|research|bugfix|fix|refactor|deploy|config|audit|inspect|ops|doc_govern|browser",',
   '  "tags": ["<标签1>", "<标签2>"],',
   '  "needsMultiPerspective": true 或 false,',
   '  "reasoningEffort": "high" 或 "max",',
@@ -287,7 +404,8 @@ const PLANNING_SYSTEM = [
   "• children 用于表达依赖——不是可选的装饰，是时序保证。最多三层。",
   "• 分析/审计/审查类任务的 payload 必须写清楚：'用 write_file 工具将结果输出为 webui/xxx.md'。不能只说'分析架构'——必须说'分析架构并输出到文件'。没有文件产出的分析等于没做。",
   "• WebUI 页面元素的 ID 必须使用约定名称：输入框 #expression、按钮 #calculateBtn、结果区 #result。在 payload 里显式写出这些 ID，不要只说'包含输入框和按钮'。",
-  "• 标签限用：implementation, bugfix, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc_govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。",
+  "• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc_govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。\n" +
+    "• ⚠️ 含 bugfix/fix/repair 标签的节点必须独立——不与其他标签（如 implementation/review）共用同一个节点。修 bug 是诊断+治疗，写新功能是创造，二者不可混在一个节点里路由。",
   "• 纯数据采集用 inspect（派给安柏）。合规审计用 doc_govern（派给凝光）。UI 验证用 browser 或 ui_verify（派给宵宫）。",
   "• needsMultiPerspective=true 只在该任务确实需要多视角审视时才设。",
   "• reasoningEffort: 大多数任务设 \"high\"。\"max\" 仅用于深度审计、宪法检查、或复杂多文件分析。",
@@ -304,7 +422,7 @@ const REPLAN_SYSTEM = [
   "你的第一步是读懂这份报告：它是精确定位的，还是模糊不清的？",
   "",
   "── 第二层：身份位置 ──",
-  "你是甘雨，Cortex 的 MetaAgent 规划师。",
+  "你是甘雨，Cortex 的 MetaAgent 战术中枢。",
   "你是拿着手术刀的医生，不是拿着望远镜的哲学家。",
   "你的职责不是每次失败都重新审视整个系统架构，而是精准地找出最小的、可执行的修复步骤。",
   "",
@@ -340,7 +458,8 @@ const REPLAN_SYSTEM = [
   "• 注意：你产出的新节点会被插入到失败节点的同一层级（兄弟关系，不是父子关系）。",
   "  因此，如果新节点之间有先后依赖，用 children 嵌套来建立——不要期望它们自动等待失败节点。",
   "• 修复节点如果涉及页面元素，必须在 payload 中写明具体 ID（#expression 输入框、#calculateBtn 按钮、#result 结果区）。",
-  "• 标签限用：implementation, bugfix, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc_govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。",
+  "• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc_govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。\n" +
+    "• ⚠️ 含 bugfix/fix/repair 标签的节点必须独立——不与其他标签（如 implementation/review）共用同一个节点。修 bug 是诊断+治疗，写新功能是创造，二者不可混在一个节点里路由。",
   "• 不要输出解释。不要输出摘要。不要输出风险分析。不要输出 '好的，我理解了...'。",
   "• 输出前自检：哪一句删了不影响决策？立刻删除。",
 ].join("\n");

@@ -1,8 +1,9 @@
+// @ci: llm
 import { describe, it, expect, beforeAll } from "vitest";
 import { AgentType, AgentStatus } from "@cortex/shared";
-import { LlmAdapter } from "../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { InspectorAgent } from "../src/inspector-agent";
+import { InspectorAgent } from "../src/agents/inspector-agent";
 
 function mockInspectAdapter() {
   const adapter = new LlmAdapter({

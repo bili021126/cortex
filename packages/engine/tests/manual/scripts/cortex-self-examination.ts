@@ -26,25 +26,28 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { AgentType, MemoryType, LinkType, PipelinePriority, type TaskNode, type SafeErrorReporter } from "@cortex/shared";
-import { LlmAdapter } from "../../../src/llm-adapter";
+import { LlmAdapter } from "@cortex/llm";
 import { TaskBoard } from "../../../src/task-board";
 import { AgentPool } from "../../../src/agent-pool";
-import { CodeAgent } from "../../../src/code-agent";
-import { ReviewAgent } from "../../../src/review-agent";
-import { InspectorAgent } from "../../../src/inspector-agent";
-import { BrowserAgent } from "../../../src/browser-agent";
-import { AnalysisAgent } from "../../../src/analysis-agent";
-import { DocGovernAgent } from "../../../src/doc-govern-agent";
-import { LoopAgent } from "../../../src/loop-agent";
-import { OpsAgent } from "../../../src/ops-agent";
+import { CodeAgent } from "../../../src/agents/code-agent";
+import { ReviewAgent } from "../../../src/agents/review-agent";
+import { InspectorAgent } from "../../../src/agents/inspector-agent";
+import { BrowserAgent } from "../../../src/agents/browser-agent";
+import { AnalysisAgent } from "../../../src/agents/analysis-agent";
+import { DocGovernAgent } from "../../../src/agents/doc-govern-agent";
+import { LoopAgent } from "../../../src/agents/loop-agent";
+import { OpsAgent } from "../../../src/agents/ops-agent";
+import { ApiAgent } from "../../../src/agents/api-agent";
+import { DataAgent } from "../../../src/agents/data-agent";
 import { Scheduler } from "../../../src/scheduler";
 import { PipelineObserver } from "../../../src/pipeline-observer";
 import { ConfirmGate } from "../../../src/confirm-gate";
 import { Toolkit } from "../../../src/toolkit";
 import { MemoryStore } from "../../../src/memory-store";
-import { ButlerAgent } from "../../../src/butler-agent";
+import { ButlerAgent } from "../../../src/agents/butler-agent";
 import { MetaAgent } from "../../../src/meta-agent";
-import { runMeeting, CODE_REVIEW_ROUNDTABLE } from "../config/roundtable-config";
+import { StrategistAgent } from "../../../src/strategist-agent";
+import { runMeeting, CODE_REVIEW_ROUNDTABLE, SOFT_CONSENSUS_ROUNDTABLE } from "../config/roundtable-config";
 
 // ═══════════════════════════════════════════════
 // 1. 环境变量——从根目录 .env 加载
@@ -264,6 +267,10 @@ function registerExaminationTools(
     function adaptSegment(cmd: string, pipeIn: boolean): string {
       if (!cmd) return cmd;
       const lower = cmd.trim().toLowerCase();
+      // cd /d 是 CMD 语法，PowerShell 不认——翻译为 Set-Location
+      if (/^cd\s+\/d\s+/i.test(cmd)) {
+        return "Set-Location " + cmd.replace(/^cd\s+\/d\s+/i, "").trim();
+      }
       for (const [unixCmd, winTransform] of Object.entries(UNIX_TO_WIN)) {
         const keyLower = unixCmd.toLowerCase();
         if (lower === keyLower || lower.startsWith(keyLower)) {
@@ -282,11 +289,29 @@ function registerExaminationTools(
 
     function adaptCommand(raw: string): string {
       if (!isWin) return raw;
-      // PowerShell 不支持 &&——替换为 ;（自审视场景下语义等价）
-      let result = raw.trim().replace(/\s*&&\s*/g, "; ");
-      if (result.includes("|")) {
-        const segments = result.split(/\s*\|\s*/).filter((s) => s.length > 0);
-        return segments.map((s, i) => adaptSegment(s, i > 0)).join(" | ");
+      // PowerShell 不支持 && / &——替换为 ;（自审视场景下语义等价）
+      let result = raw.trim().replace(/\s*&&\s*/g, "; ").replace(/\s+&\s+/g, "; ");
+      // 2>/dev/null 和 2>nul 在 PowerShell 中翻译为 2>$null
+      result = result.replace(/\s+2>\/dev\/null/g, " 2>$null");
+      result = result.replace(/\s+2>nul\b/g, " 2>$null");
+      // 拆分管道 | 或分号 ; 的复合命令，逐段翻译
+      const hasPipe = result.includes("|");
+      const hasSemi = result.includes(";");
+      if (hasPipe || hasSemi) {
+        // 统一用 ; 分割（管道内的 | 保持不变）
+        if (hasPipe && !hasSemi) {
+          const segments = result.split(/\s*\|\s*/).filter((s) => s.length > 0);
+          return segments.map((s, i) => adaptSegment(s, i > 0)).join(" | ");
+        }
+        // 有分号（可能兼有管道）：先按分号拆，每段内部再处理管道
+        const semiParts = result.split(/\s*;\s*/).filter((s) => s.length > 0);
+        return semiParts.map((part) => {
+          if (part.includes("|")) {
+            const pipeParts = part.split(/\s*\|\s*/).filter((s) => s.length > 0);
+            return pipeParts.map((s, i) => adaptSegment(s, i > 0)).join(" | ");
+          }
+          return adaptSegment(part, false);
+        }).join("; ");
       }
       return adaptSegment(result, false);
     }
@@ -758,15 +783,18 @@ async function main() {
   console.log(`   📖 种子记忆: 项目入口指引 + 设计哲学 + 上轮审视报告（刻晴/纳西妲/凝光）\n`);
 
   // ── Agent 池注册 ──
-  pool.register({ type: AgentType.Code, maxInstances: 2 });
-  pool.register({ type: AgentType.Review, maxInstances: 2 });
-  pool.register({ type: AgentType.Inspector, maxInstances: 2 });
-  pool.register({ type: AgentType.Browser, maxInstances: 1 });
-  pool.register({ type: AgentType.Analysis, maxInstances: 2 });
-  pool.register({ type: AgentType.DocGovern, maxInstances: 1 });
-  pool.register({ type: AgentType.Ops, maxInstances: 2 });
-  pool.register({ type: AgentType.Loop, maxInstances: 2 });
-  pool.register({ type: AgentType.Butler, maxInstances: 1 });
+  pool.register({ type: AgentType.Code, maxInstances: 12 });
+  pool.register({ type: AgentType.Review, maxInstances: 12 });
+  pool.register({ type: AgentType.Inspector, maxInstances: 12 });
+  pool.register({ type: AgentType.Browser, maxInstances: 12 });
+  pool.register({ type: AgentType.Analysis, maxInstances: 12 });
+  pool.register({ type: AgentType.DocGovern, maxInstances: 12 });
+  pool.register({ type: AgentType.Ops, maxInstances: 12 });
+  pool.register({ type: AgentType.Loop, maxInstances: 12 });
+  pool.register({ type: AgentType.Butler, maxInstances: 12 });
+  pool.register({ type: AgentType.Api, maxInstances: 12 });
+  pool.register({ type: AgentType.Data, maxInstances: 12 });
+  pool.register({ type: AgentType.Strategist, maxInstances: 12 });
 
   const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
 
@@ -839,6 +867,30 @@ async function main() {
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
   console.log("   ⚓ 北斗 (Ops) —— 南十字船长，" + (SOFT_MODE ? "工程就绪诊断" : "P2 验证与工程诊断"));
 
+  // 久岐忍——荒泷派外务奉行，API 契约押运
+  const apiToolkit = new Toolkit(gate);
+  registerExaminationTools(apiToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
+  const apiAgent = new ApiAgent(adapter, apiToolkit, memory);
+  await apiAgent.wakeup();
+  scheduler.register(AgentType.Api, apiAgent, CHAT_MODEL);
+  console.log("   😈 久岐忍 (Api) —— 外务奉行，" + (SOFT_MODE ? "API 契约探索" : "API 契约验证"));
+
+  // 艾尔海森——教令院大书记官，数据完整性审计
+  const dataToolkit = new Toolkit(gate);
+  registerExaminationTools(dataToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
+  const dataAgent = new DataAgent(adapter, dataToolkit, memory);
+  await dataAgent.wakeup();
+  scheduler.register(AgentType.Data, dataAgent, CHAT_MODEL);
+  console.log("   📚 艾尔海森 (Data) —— 大书记官，" + (SOFT_MODE ? "数据模型探索" : "数据完整性审计"));
+
+  // 钟离——往生堂客卿，岩王帝君，战略判断者。不注册到 Scheduler——不参与任务派发，
+  // 在第四阶段所有 Agent 完成探索后独立激活，读取全部报告做战略分析。
+  const strategistAgent = new StrategistAgent(adapter);
+  await strategistAgent.wakeup();
+  pool.spawn(AgentType.Strategist, "zhongli");
+  strategistAgent.setPool(pool, "zhongli");
+  console.log("   🗿 钟离 (Strategist) —— 岩王帝君，" + (SOFT_MODE ? "战略分析（第四阶段后激活）" : "阶段跃迁判定"));
+
   // 托马——神里家管，旁观者，不参与任务派遣
   const butlerAgent = new ButlerAgent(observer);
   await butlerAgent.wakeup();
@@ -857,10 +909,83 @@ async function main() {
       timestamp: Date.now(),
     });
   };
-  for (const a of [codeAgent, reviewAgent, inspectorAgent, browserAgent, analysisAgent, docGovernAgent, loopAgent, opsAgent]) {
+  for (const a of [codeAgent, reviewAgent, inspectorAgent, browserAgent, analysisAgent, docGovernAgent, loopAgent, opsAgent, apiAgent, dataAgent]) {
     a.setSafeReporter(safeReporter);
   }
-  console.log("   🛡️ SafeReporter 已注入 8 位审视委员——静默吞错终结。\n");
+  console.log("   🛡️ SafeReporter 已注入 10 位审视委员——静默吞错终结。\n");
+
+  // ═══════════════════════════════════════════════
+  // Phase 0：HCA 预读上轮共识基线
+  //   在甘雨规划之前，用 HCA（广度浅读）扫描上一轮共识修复清单，
+  //   提取已收敛的关键决策作为本次审视的"地面真相基线"。
+  //   这避免了两类认知偏差：
+  //     1. 情境重置失忆——忘了上轮决定了什么
+  //     2. 重复诊断——把已闭合项当成新问题重新审视
+  // ═══════════════════════════════════════════════
+
+  let phase0Baseline = "";
+  const fixListPath = path.join(ROOT, "test-output", "self-examination", "consensus-fix-list.md");
+  
+  if (!SOFT_MODE && fs.existsSync(fixListPath)) {
+    console.log("🟡 [第零阶段] HCA 预读上轮共识基线...");
+    const rawFixList = fs.readFileSync(fixListPath, "utf-8");
+
+    // 提取 ✅ 已闭合节（地面真相——这些不需要再审视）
+    const closedMatch = rawFixList.match(/### ✅ 已闭合[\s\S]*?(?=###|## 📜|$)/);
+    const closedItems = closedMatch
+      ? closedMatch[0]
+          .split("\n")
+          .filter((l) => l.trim().startsWith("- ✅"))
+          .map((l) => l.trim())
+      : [];
+
+    // 提取 P0 阻断项（需优先验证）
+    const p0Match = rawFixList.match(/### P0[\s\S]*?(?=### P1|### ✅|## 📜|$)/);
+    const p0Items = p0Match
+      ? p0Match[0]
+          .split("\n")
+          .filter((l) => l.trim().startsWith("- [") && !l.includes("[x]"))
+          .map((l) => l.trim())
+      : [];
+
+    if (closedItems.length > 0 || p0Items.length > 0) {
+      phase0Baseline = [
+        "",
+        "── 上轮共识基线（第零阶段 HCA 预读）──",
+        "",
+        "以下是上一轮圆桌会议已经收敛的共识。这些不是新的待办项——",
+        "它们是本次审视的「地面真相」。你不需要重新审视已闭合项，",
+        "也不需要把 P0 项当成新发现——上轮已经讨论过了。",
+        "",
+        ...(closedItems.length > 0
+          ? [
+              `✅ 已闭合（${closedItems.length} 项——这些已经确认修复，不应再出现在任何 Agent 的待修复报告中）：`,
+              ...closedItems.map((item) => `  ${item}`),
+              "",
+            ]
+          : []),
+        ...(p0Items.length > 0
+          ? [
+              `🔴 待验证 P0 阻断项（${p0Items.length} 项——这些是上轮标为 P0 但尚未闭合的，需优先验证是否已落地）：`,
+              ...p0Items.map((item) => `  ${item}`),
+              "",
+            ]
+          : []),
+        "你的任务：以上述基线为锚点，为专家们分配验证任务。",
+        "每人只验证自己擅长领域内的未闭合项。已闭合项只做抽查——",
+        "如果抽查发现某已闭合项实际上未修复，那是重大发现，优先级升为 P0。",
+      ].join("\n");
+
+      console.log(`   📋 已闭合: ${closedItems.length} 项  |  待验证 P0: ${p0Items.length} 项`);
+      console.log(`   🧠 HCA 基线注入: ${phase0Baseline.length} 字符 → 甘雨规划上下文\n`);
+    } else {
+      console.log("   ℹ️ 共识修复清单存在但无可提取的基线项\n");
+    }
+  } else if (SOFT_MODE) {
+    console.log("🟡 [第零阶段] 软约束模式——跳过共识基线预读，各 Agent 自由探索\n");
+  } else {
+    console.log("🟡 [第零阶段] 共识修复清单未找到——本次为首轮审视，无历史基线\n");
+  }
 
   // ── 甘雨自规划 ──
   if (SOFT_MODE) {
@@ -869,7 +994,6 @@ async function main() {
     console.log("🟢 [第三阶段] 甘雨读取共识修复清单，规划验证任务...\n");
   }
 
-  const fixListPath = path.join(ROOT, "test-output", "self-examination", "consensus-fix-list.md");
   const fixListContent = SOFT_MODE
     ? "(软约束模式：不使用修复清单——各 Agent 自由探索整个代码库)"
     : (fs.existsSync(fixListPath) ? fs.readFileSync(fixListPath, "utf-8") : "(共识修复清单未找到)");
@@ -893,9 +1017,9 @@ async function main() {
   if (fs.existsSync(templatesPath)) {
     try {
       templatesData = JSON.parse(fs.readFileSync(templatesPath, "utf-8"));
-      if (templatesData.templates && templatesData.templates.length === 7) {
+      if (templatesData.templates && templatesData.templates.length >= 7) {
         templatesLoaded = true;
-        console.log(`   📋 从 ${templatesFile} 加载 7 条${SOFT_MODE ? "探索" : "验证"}技能模板\n`);
+        console.log(`   📋 从 ${templatesFile} 加载 ${templatesData.templates.length} 条${SOFT_MODE ? "探索" : "验证"}技能模板\n`);
       } else {
         console.log(`   ⚠️ ${templatesFile} 模板数量异常，回退硬编码\n`);
       }
@@ -937,13 +1061,18 @@ async function main() {
   // ── 意图组装 ──
   const intentParts: string[] = [];
 
+  // Phase 0 基线注入：上轮共识作为规划锚点
+  if (phase0Baseline) {
+    intentParts.push(phase0Baseline);
+  }
+
   if (SOFT_MODE) {
     // ═══ 软约束意图：自由探索 ═══
     intentParts.push(
       // 第一层：当前情境——没有目标，只有代码
       "桌上没有「共识修复清单」。这一次，你不是来逐项打勾的。",
       "整个 Cortex 项目的代码库向你完全敞开——packages/、docs/、config/，没有禁区。",
-      "七位专家不是「验证员」——他们是「侦察兵」。各自从自己最专业的角度出发，在代码中自由穿行。",
+      "九位专家不是「验证员」——他们是「侦察兵」。各自从自己最专业的角度出发，在代码中自由穿行。",
       "",
 
       // 第二层：身份位置——你仍然是甘雨，但角色从「分配清单」变为「分配方向」
@@ -956,6 +1085,8 @@ async function main() {
       "  · 凝光（doc-govern）—— 天权，审计治理合规——声明与实际之间有多少水分",
       "  · 莫娜（loop）—— 占星术士，从散落的代码中看见隐藏的模式和趋势",
       "  · 安柏（inspector）—— 侦察骑士，地毯式扫一遍项目目录，报告一切异常",
+      "  · 久岐忍（api）—— 外务奉行，检查每一个模块的接口契约——类型签名是否完整、错误是否被吞、上下游依赖是否断裂",
+      "  · 艾尔海森（data）—— 大书记官，审计数据层——类型定义是否自洽、序列化是否稳定、字段命名是否一致、存储策略是否有窗口期风险",
       "",
 
       // 第三层：分寸拿捏——不设目标，不划边界
@@ -965,16 +1096,17 @@ async function main() {
       "",
 
       // 第四层：任务范围——七个独立根节点，全并行
-      "现在开始规划。为以下七位专家各建一个独立根节点。",
+      "现在开始规划。为以下九位专家各建一个独立根节点。",
       "",
 
       // 硬约束 type 不变
-      "【硬约束】type 必须使用以下七个精确值之一，不允许任何变体、缩写或同义词：",
+      "【硬约束】type 必须使用以下九个精确值之一，不允许任何变体、缩写或同义词：",
       "  type=\"review\"  → 刻晴    type=\"ops\"    → 北斗",
       "  type=\"analysis\" → 纳西妲   type=\"doc-govern\" → 凝光",
       "  type=\"loop\"     → 莫娜    type=\"inspector\" → 安柏",
-      "  type=\"code\"     → 阿贝多",
-      "如果你写出 type=\"implementation\"、type=\"inspect\"、type=\"reviewer\" 或任何不在上述七者中的值，",
+      "  type=\"code\"     → 阿贝多   type=\"api\"       → 久岐忍",
+      "  type=\"data\"     → 艾尔海森",
+      "如果你写出 type=\"implementation\"、type=\"inspect\"、type=\"reviewer\" 或任何不在上述九者中的值，",
       "调度器将无法匹配到对应 Agent，导致那位专家坐在板凳上干等——这是你的失职。",
       "",
     );
@@ -1178,30 +1310,177 @@ async function main() {
   console.log();
 
   // ═══════════════════════════════════════════════
-  // 5. 第五阶段——三轮圆桌代码审阅（宪法 v2.5 入宪）
-  //   仅软约束模式下触发。
-  //   10 位 Agent 全员入席：探索 7 人 + 甘雨 + 托马 + 宵宫
+  // 4.5 钟离战略分析（仅软约束模式）
+  //   读取全部审视报告，从千年视角做架构方向判断、契约完整性评估、阶段跃迁判定。
+  //   钟离不翻代码——他读其他 Agent 的报告，做战略综合。
+  //   AGENT_TOOL_PERMISSIONS 中 Strategist 仅允许 read_file/search_code/list_files——
+  //   在此阶段：钟离通过 prompt 接收报告摘要，不自行调用工具探索。
   // ═══════════════════════════════════════════════
 
   if (SOFT_MODE) {
-    console.log("🟢 [第五阶段] 三轮圆桌代码审阅...");
-    console.log("   入席者: 刻晴 阿贝多 纳西妲 凝光 莫娜 安柏 北斗 宵宫 甘雨 托马");
-    console.log("   制度: 每轮每人 5-7 次发言 · 必须收束结论 · 凝光签署\n");
+    console.log("🟢 [第四阶段半] 钟离战略分析——读取审视报告，千年视角综合判断...\n");
 
-    const ROUNDTABLE_OUTPUT = path.join(OUTPUT_DIR, "roundtable-consensus.md");
+    // 收集所有审视报告内容
+    let reportDigest = "";
+    if (fs.existsSync(OUTPUT_DIR)) {
+      const dirFiles = fs.readdirSync(OUTPUT_DIR) as string[];
+      for (const f of dirFiles.sort()) {
+        if (!f.endsWith(".md") || f.includes("summary") || f.includes("zhongli")) continue;
+        const fp = path.join(OUTPUT_DIR, f);
+        try {
+          const content = fs.readFileSync(fp, "utf-8");
+          // 每份报告取前 2500 字符
+          const excerpt = content.slice(0, 2500);
+          reportDigest += `\n\n### ${f}\n${excerpt}`;
+          if (content.length > 2500) reportDigest += `\n...(截断，全文 ${content.length} 字符)`;
+        } catch {
+          /* skip */
+        }
+      }
+    }
+
+    if (reportDigest) {
+      const strategyPrompt = [
+        "以下是 Cortex 审视委员会专家的自由探索报告摘要。",
+        "你不逐行审查代码——那是他们的事。",
+        "你的任务是以千年视角，做出四个维度的战略判断：",
+        "",
+        "1. **架构方向评估**：当前架构的演进方向是否健康？",
+        "   有没有在朝错误的方向加速？有没有被短期修补绑架了长期路线？",
+        "2. **契约完整性**：各模块之间的接口契约有没有被破坏的迹象？",
+        "   有没有 Agent 在无意中越过了自己的职责边界？",
+        "3. **阶段跃迁判定**：Core-1→Core-2 的跃迁条件是否真的成熟？",
+        "   还有哪些隐藏的阻断项没有被报告覆盖？",
+        "4. **磨损预警**：哪些今天看起来「还好」的问题，",
+        "   如果不处理，会在 Core-3 或更远的将来变成不可逆的架构债务？",
+        "",
+        "输出格式：",
+        "- 每个维度一段话，不列清单、不画表、不写代码。",
+        "- 用碑文风格——每一句经得起时间考验。",
+        "- 如果某维度没有发现重大问题，说「未见结构性风险」即可。",
+        "- 最后给出一个整体阶段建议：",
+        "  「可以跃迁」/「可以跃迁，但需先处理以下 N 项」/「不建议跃迁」。",
+        "",
+        "─── 审视报告摘要 ───",
+        reportDigest,
+      ].join("\n");
+
+      const strategicNode: TaskNode = {
+        id: "zhongli-strategy",
+        type: "strategy_analysis",
+        status: "pending",
+        tags: ["strategy" as const, "strategist" as const],
+        needsMultiPerspective: false,
+        claimedBy: [],
+        payload: strategyPrompt,
+        results: [],
+        createdAt: Date.now(),
+      };
+
+      try {
+        const result = await strategistAgent.execute(strategicNode, CHAT_MODEL);
+        if (result.success && result.output) {
+          const STRATEGY_PATH = path.join(OUTPUT_DIR, "zhongli-strategy-assessment.md");
+          fs.writeFileSync(STRATEGY_PATH, result.output, "utf-8");
+          console.log(`   📄 zhongli-strategy-assessment.md (${result.output.length} 字符)`);
+
+          // 终端预览前 500 字符
+          console.log("\n   🗿 钟离战略判断 —— 预览:");
+          const preview = result.output.slice(0, 500);
+          for (const line of preview.split("\n")) {
+            console.log(`   │ ${line}`);
+          }
+          if (result.output.length > 500) {
+            console.log(`   │ ...(截断，全文见 ${STRATEGY_PATH})`);
+          }
+          console.log();
+        } else {
+          console.log("   ⚠️ 钟离战略分析未产出有效输出\n");
+        }
+      } catch (e) {
+        console.log(`   ❌ 钟离战略分析失败: ${String(e).slice(0, 200)}\n`);
+      }
+    } else {
+      console.log("   ⚠️ 未找到审视报告，跳过战略分析\n");
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // 5. 第五阶段——硬约束共识圆桌（软约束自审视 → 共识修复清单）
+  //   仅软约束模式下触发。
+  //   10 位 Agent 全员入席：探索 7 人 + 甘雨 + 托马 + 宵宫
+  //   流程：
+  //     1. 读取 7 份审视报告 → 提取摘要
+  //     2. 注入为 MemoryStore 种子记忆（Agent 发言时可回溯）
+  //     3. 三轮硬约束圆桌 → 凝光收束签署
+  //     4. 覆写 test-output/self-examination/consensus-fix-list.md
+  //   产出：标准 P0-P3 共识修复清单，可供下一轮硬约束验证直接使用
+  // ═══════════════════════════════════════════════
+
+  if (SOFT_MODE) {
+    console.log("🟢 [第五阶段] 硬约束共识圆桌...");
+    console.log("   入席者: 刻晴 阿贝多 纳西妲 凝光 莫娜 安柏 北斗 久岐忍 艾尔海森");
+    console.log("   制度: 单轮合并 · 每人 3-5 次发言 · 凝光收束签署 · 产出共识修复清单\n");
+
+    const CONSENSUS_OUTPUT = path.join(ROOT, "test-output", "self-examination", "consensus-fix-list.md");
     const DB_DIR = path.join(ROOT, ".cortex");
 
+    // ── 1. 读取审视报告，构建摘要注入 topic ──
+    let reportDigest = "";
+    const agentReportMap: Record<string, { key: string; label: string; emoji: string }> = {
+      keqing: { key: "keqing", label: "刻晴", emoji: "⚡" },
+      albedo: { key: "albedo", label: "阿贝多", emoji: "⚗️" },
+      nahida: { key: "nahida", label: "纳西妲", emoji: "🌿" },
+      ningguang: { key: "ningguang", label: "凝光", emoji: "💎" },
+      mona: { key: "mona", label: "莫娜", emoji: "🔮" },
+      amber: { key: "amber", label: "安柏", emoji: "🐰" },
+      beidou: { key: "beidou", label: "北斗", emoji: "⚓" },
+      kuki: { key: "kuki", label: "久岐忍", emoji: "😈" },
+      alhaitham: { key: "alhaitham", label: "艾尔海森", emoji: "📚" },
+    };
+
+    if (fs.existsSync(OUTPUT_DIR)) {
+      const files = fs.readdirSync(OUTPUT_DIR);
+      for (const [key, info] of Object.entries(agentReportMap)) {
+        const reportFile = files.find(
+          (f) => f.includes(key) && f.endsWith(".md") && !f.includes("summary") && !f.includes("roundtable")
+        );
+        if (!reportFile) {
+          console.log(`   ⚠️ 未找到 ${info.emoji}${info.label} 的审视报告，跳过`);
+          continue;
+        }
+        const reportPath = path.join(OUTPUT_DIR, reportFile);
+        try {
+          const rawContent = fs.readFileSync(reportPath, "utf-8");
+          const summary = rawContent.slice(0, 2000);
+          reportDigest += `\n\n### ${info.emoji}${info.label} 报告摘要（${reportFile}）\n${summary}`;
+          if (rawContent.length > 2000) reportDigest += `\n...(截断，全文 ${rawContent.length} 字符)`;
+          console.log(`   📄 ${info.emoji}${info.label}: ${reportFile} → 摘要注入 (${rawContent.length} 字符)`);
+        } catch (e) {
+          console.log(`   ⚠️ ${info.emoji}${info.label} 报告读取失败: ${String(e)}`);
+        }
+      }
+    }
+    console.log(`   🌱 共 ${Object.keys(agentReportMap).length} 份报告摘要直接注入 topic\n`);
+
+    // ── 2. 将报告摘要注入 topic，不经过 MemoryStore 中转 ──
+    const origTopic = SOFT_CONSENSUS_ROUNDTABLE.rounds[0].topic;
+    const enrichedTopic = origTopic + "\n\n─── 各 Agent 审视报告摘要（请优先阅读，作为发现陈述的依据）───" + reportDigest;
+    SOFT_CONSENSUS_ROUNDTABLE.rounds[0].topic = enrichedTopic;
+
+    // ── 3. 运行硬约束共识圆桌（不传 seedMemories）───
     try {
       await runMeeting(
-        CODE_REVIEW_ROUNDTABLE,
+        SOFT_CONSENSUS_ROUNDTABLE,
         adapter,
         CHAT_MODEL,
         DB_DIR,
-        ROUNDTABLE_OUTPUT,
+        CONSENSUS_OUTPUT,
       );
-      console.log(`   📝 圆桌共识清单: ${ROUNDTABLE_OUTPUT}\n`);
+      console.log(`   📝 共识修复清单: ${CONSENSUS_OUTPUT}\n`);
+      console.log(`   💡 下一轮运行硬约束验证时，将自动读取此清单。\n`);
     } catch (e) {
-      console.error(`   ❌ 圆桌代码审阅失败: ${String(e).slice(0, 200)}`);
+      console.error(`   ❌ 共识圆桌失败: ${String(e).slice(0, 200)}`);
     }
   }
 
@@ -1225,6 +1504,56 @@ async function main() {
   } catch {
     /* 静默 */
   }
+
+  // ── 自动清库归档（防止记忆污染）──
+  console.log("── 清理与归档 ──");
+
+  // 1. 删除本轮专属数据库
+  // DB 生命周期：
+  //   shared-meeting.db   — 旧版圆桌使用（v2.5.5 已迁移至 shared-consensus.db），保留清理以兼容旧数据
+  //   shared-consensus.db — runMeeting() 内部在会议开始时已清理，此处为兜底
+  //   memory-self-exam.db — 本脚本 MemoryStore 实例，每轮审视专用
+  const cleanupFiles = ["shared-meeting.db", "shared-consensus.db", "memory-self-exam.db"];
+  let cleanedCount = 0;
+  for (const f of cleanupFiles) {
+    const fp = path.join(ROOT, ".cortex", f);
+    if (fs.existsSync(fp)) {
+      try {
+        fs.unlinkSync(fp);
+        cleanedCount++;
+        console.log(`   🧹 已清理 ${f}`);
+      } catch (e) {
+        console.log(`   ⚠️ 清理 ${f} 失败: ${String(e)}`);
+      }
+    }
+  }
+  if (cleanedCount === 0) console.log("   ℹ️ 无待清理的临时数据库");
+
+  // 2. 归档报告
+  const archiveBase = path.join(ROOT, "test-output", "archive");
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const archiveDir = path.join(archiveBase, `self-examination-${timestamp}`);
+  if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
+
+  for (const dir of ["self-examination", "self-examination-soft"]) {
+    const src = path.join(ROOT, "test-output", dir);
+    if (fs.existsSync(src)) {
+      const files = fs.readdirSync(src);
+      for (const f of files) {
+        const srcFp = path.join(src, f);
+        try {
+          if (fs.statSync(srcFp).isFile()) {
+            const dstFp = path.join(archiveDir, `${dir}__${f}`);
+            fs.copyFileSync(srcFp, dstFp);
+            fs.unlinkSync(srcFp);
+          }
+        } catch (e) {
+          console.log(`   ⚠️ 归档 ${f} 失败: ${String(e)}`);
+        }
+      }
+    }
+  }
+  console.log(`   📦 报告已归档至 ${archiveDir}`);
 
   console.log(`   全流程耗时: ${execDuration}ms\n`);
 }

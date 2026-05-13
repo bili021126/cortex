@@ -1,3 +1,4 @@
+// @ci: unit
 // ============================================================
 // @cortex/shared —— v2.0 类型定义编译期验证
 // 不测试运行时行为，仅确保关键类型正确导出且可编译
@@ -150,11 +151,21 @@ describe("@cortex/shared v2.0 types", () => {
     expect(AGENT_TAGS[AgentType.Browser]).toContain("ui_verify");
   });
 
-  it("AGENT_TOOL_PERMISSIONS grants full toolset to Code/Review/Analysis agents", () => {
+  it("AGENT_TOOL_PERMISSIONS grants run_shell to Code/Review/Ops for test analysis", () => {
     const codePerms = AGENT_TOOL_PERMISSIONS[AgentType.Code];
     expect(codePerms).toContain("read_file");
     expect(codePerms).toContain("write_file");
     expect(codePerms).toContain("run_shell");
+
+    const reviewPerms = AGENT_TOOL_PERMISSIONS[AgentType.Review];
+    expect(reviewPerms).toContain("run_shell");
+
+    const opsPerms = AGENT_TOOL_PERMISSIONS[AgentType.Ops];
+    expect(opsPerms).toContain("run_shell");
+
+    // 其余 Agent 不持有 run_shell
+    expect(AGENT_TOOL_PERMISSIONS[AgentType.Analysis]).not.toContain("run_shell");
+    expect(AGENT_TOOL_PERMISSIONS[AgentType.Api]).not.toContain("run_shell");
   });
 
   it("PipelinePriority CRITICAL < HIGH < NORMAL", () => {

@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { ConfirmGate } from "../src/confirm-gate";
 import { ReversibilityLevel } from "@cortex/shared";

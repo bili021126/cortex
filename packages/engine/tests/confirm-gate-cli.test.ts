@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { ConfirmGate } from "../src/confirm-gate.js";
 import type { PlatformBridge, ConfirmationRequest, ConfirmationResponse, PlatformContext } from "@cortex/shared";

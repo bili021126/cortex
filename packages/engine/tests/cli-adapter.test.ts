@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { CLIAdapter } from "../src/cli-adapter.js";
 import type { ConfirmationRequest } from "@cortex/shared";

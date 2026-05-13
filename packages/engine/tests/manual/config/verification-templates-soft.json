@@ -23,15 +23,16 @@
       "type": "ops",
       "name": "北斗",
       "title": "工程就绪性自由诊断",
-      "narrative": "船长不需要航海图——她看一眼海面就知道风浪在哪儿。整个项目的工程面向你敞开：",
+      "narrative": "船长不需要航海图——她看一眼海面就知道风浪在哪儿。整个项目的工程面向你敞开：\n\n参考材料：test-output/self-examination-soft/ci-automation-material.md（最近 CI 链路修复的 5 处断裂——同类断点可能还有隐藏）",
       "steps": [
+        "先读 ci-automation-material.md，理解最近暴露的 5 类 CI 断点（运行时依赖缺失 / 孤儿配置 / 配置空洞 / 跨平台兼容 / CLI 语法）——以此为锚点，检查是否还有同类问题",
         "检查构建链路：从 pnpm build 到 dist 产出——每一步是否可靠？有没有中间产物残留？有没有可以删除的死代码路径？",
-        "检查依赖树：有没有过时的依赖？有没有版本冲突？有没有应该在 devDependencies 但跑到了 dependencies 的包？",
-        "检查配置一致性：tsconfig 继承链、eslint 配置、package.json scripts——三套配置之间有没有矛盾？",
+        "检查依赖树：有没有过时的依赖？有没有版本冲突？有没有应该在 devDependencies 但跑到了 dependencies 的包？「tsx 缺失」是类别信号——检查是否还有别的 npx 调用依赖未声明",
+        "检查配置一致性：tsconfig 继承链、eslint 配置、package.json scripts——三套配置之间有没有矛盾？vitest 配置是否存在类似的'孤儿文件'（写了但无人引用）？",
         "检查运行时脆弱点：有没有全局变量污染？有没有进程级单例可能被多 worker 并发打穿？有没有未捕获的 unhandledRejection？",
-        "检查测试基础：vitest 配置是否完整？CI 脚本能否在裸环境跑通？有没有隐式依赖开发机本地路径的测试？"
+        "检查测试基础：vitest 配置是否完整？CI 脚本能否在裸环境跑通？有没有隐式依赖开发机本地路径的测试？--exclude CLI 语法是否正确？"
       ],
-      "outputFormat": "列出你确信的问题，附命令输出或文件引用。不确定的事标注'需要进一步验证'。",
+      "outputFormat": "列出你确信的问题，附命令输出或文件引用。不确定的事标注'需要进一步验证'。特别关注：同类断点的系统性扫描——一个类别发现了，整个类别都要扫一遍。",
       "outputFile": "test-output/self-examination-soft/beidou-ops-diagnosis.md"
     },
     {
@@ -113,6 +114,38 @@
       ],
       "outputFormat": "每项发现附带 5-10 行源码引用 + 分析。判断可以是 ✅/⚠️/❌，也可以是'需要进一步实验验证'。",
       "outputFile": "test-output/self-examination-soft/albedo-deep-review.md"
+    },
+    {
+      "key": "kuki",
+      "type": "api",
+      "name": "久岐忍",
+      "title": "API 契约设计与规范化",
+      "narrative": "荒泷派的押运不需要交警——你定规矩。基于 Cortex 引擎的实际模块结构，为各层设计 API 契约：",
+      "steps": [
+        "扫描 engine/src/ 的模块边界——哪些类/函数暴露为 public API？哪些应该内聚而没有被封装？",
+        "为每个对外暴露的模块定义契约草案：输入类型、输出类型、异常路径——不是描述现有实现，而是定义'应该是什么'",
+        "识别跨模块调用中的 any 泄漏——在哪里突破了类型安全？设计类型守卫来堵上",
+        "绘制 packages/ 之间的模块依赖图——哪些 import 违反了依赖方向？区分明确允许的依赖和需要重新审视的依赖",
+        "产出：一份 API 契约草案（接口签名 + 调用约束），写出到 kuki-api-design.md"
+      ],
+      "outputFormat": "每个模块的 API 契约包含：接口签名、输入/输出类型声明、异常类型、调用方约束。重点不是'有多少接口'，而是'每条边界都有人看守'。",
+      "outputFile": "test-output/self-examination-soft/kuki-api-design.md"
+    },
+    {
+      "key": "alhaitham",
+      "type": "data",
+      "name": "艾尔海森",
+      "title": "数据模型设计与存储规范",
+      "narrative": "智慧宫不需要更多的书——它需要一套编目法。基于 Cortex 的实际数据流，为数据层设计规范：",
+      "steps": [
+        "审查 shared/src/ 当前类型定义——哪些类型承载了多义？哪些字段命名在跨文件时不一致？列出需要统一的命名",
+        "基于 MemoryStore 的实际序列化格式，设计数据版本化策略——新增字段时如何兼容已有数据？",
+        "定义类型层面的外键约束——不是注释，是类型层面可以检查的关系",
+        "审视内存表+SQL 的双写窗口期——设计一致性策略（写入顺序、回滚合约、冲突解决）",
+        "产出：一份数据层设计规范草案，写出到 alhaitham-data-design.md"
+      ],
+      "outputFormat": "包含：类型统一命名表、版本化策略、外键约束声明、双写一致性策略。每项附带现有代码中的反例作为证据——不是吹毛求疵，是指出'现在的做法在什么场景下会出问题'。",
+      "outputFile": "test-output/self-examination-soft/alhaitham-data-design.md"
     }
   ]
 }

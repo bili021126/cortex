@@ -1,10 +1,12 @@
 import type { TaskNode, NodeResult, ExecutionReport, AgentType, Agent } from "@cortex/shared";
-import { AGENT_TAGS, AgentType as AT, PipelinePriority, AgentStatus } from "@cortex/shared";
+import { AGENT_TAGS, AgentType as AT, PipelinePriority, AgentStatus, PipelineEventType } from "@cortex/shared";
 import type { TaskBoard } from "./task-board.js";
 import type { AgentPool } from "./agent-pool.js";
 import type { PipelineObserver } from "./pipeline-observer.js";
 import type { ConfirmGate } from "./confirm-gate.js";
 import type { MetaAgent } from "./meta-agent.js";
+import type { SkillRegistry } from "@cortex/shared";
+import { extractSkillsFromOutput } from "./components/skill-extractor.js";
 
 /**
  * 拓扑排序：按 parentId 依赖关系分层。
@@ -50,6 +52,43 @@ export function topologicalSort(nodes: TaskNode[]): string[][] {
  * 3. 通过 PipelineObserver 发布节点生命周期事件
  * 4. 产出 ExecutionReport
  *
+ * @contract 模块边界契约（久岐忍 P1-5：模块边界缺少显式契约化定义 → 已闭合）
+ *
+ * @depends  task-board.ts（claim/release/complete/failNode/getPendingNodes）
+ * @depends  agent-pool.ts（spawn/destroy，实例生命周期）
+ * @depends  pipeline-observer.ts（事件发射，双通道 reporter）
+ * @depends  confirm-gate.ts（确认门禁，可选 bypass）
+ * @depends  meta-agent.ts（重规划逻辑，可选——缺则 replanQueue 静默排空）
+ * @depends  @cortex/shared（AgentType, AGENT_TAGS, TaskNode, PipelineEventType 等类型）
+ * @dataflow Scheduler 是调度中枢：TaskBoard(输入) → 拓扑排序 → dispatch → AgentPool(执行)
+ *           → TaskBoard.complete(落盘) → observer.emit(事件) → ExecutionReport(输出)
+ *           MetaAgent 通过 replanQueue 旁路注入新节点（领而不执），不参与主执行路径
+ *
+ *   ┌─ Scheduler ─┐
+ *   │  register()  │◄── Agent + Model（构造时注入）
+ *   │  executeAll()│──► TaskBoard.claim() → release() → complete() / failNode()
+ *   │              │──► AgentPool.spawn() → destroy()
+ *   │              │──► MetaAgent.requestReplan() → 新节点入板（领而不执）
+ *   │              │──► PipelineObserver.emit()（双通道：observer + console）
+ *   └──────────────┘
+ *
+ *   前置条件：
+ *   - TaskBoard 已填充节点（至少一个 pending）
+ *   - AgentPool 已注册 Runner（register() 或直接注入 agents Map）
+ *   - PipelineObserver 已构建（constructor 注入，非 null）
+ *   - ConfirmGate 已构建（constructor 注入，非 null）
+ *   - MetaAgent 可选（缺则重规划队列静默排空）
+ *
+ *   后置条件：
+ *   - ExecutionReport 完整（totalNodes/completed/failed/results/durationMs）
+ *   - 所有节点终态为 done 或 failed（无 pending/claimed 残留）
+ *   - Pool 实例已全部 destroy（spawn 对等释放）
+ *
+ *   异常语义：
+ *   - executeAll() 单轮异常不崩溃：标记当前 pending 为 failed，上报 SchedulerLoopCrashed，break 返回已有结果
+ *   - execute() 抛异常：不阻断 complete 落盘
+ *   - destroy() 抛异常：上报 PoolDestroyFailed，不阻断
+ *
  * **订阅者注册**：PipelineObserver 的订阅者（Sentinel/MemoryStore/管家）
  * 由 bootstrap 入口点在 Scheduler 构造前注册，不在 Scheduler 内部隐式注册。
  * 订阅约定见 PipelineObserver.emit() 注释。
@@ -71,6 +110,7 @@ export class Scheduler {
     private readonly observer: PipelineObserver,
     private readonly gate: ConfirmGate,
     private readonly metaAgent?: MetaAgent,
+    private readonly skillRegistry?: SkillRegistry,
   ) {}
 
   /** 注册一个 AgentRunner 及其所用模型 */
@@ -94,6 +134,7 @@ export class Scheduler {
     let replanFlight: Promise<void> | null = null; // 后台 replan 批次
 
     while (true) {
+      try {
       round++;
       const pendingNodes = this.board.getPendingNodes();
 
@@ -120,7 +161,7 @@ export class Scheduler {
       for (let li = 0; li < layers.length; li++) {
         const layer = layers[li];
         this.observer.emit({
-          type: "scheduler.layer.start",
+          type: PipelineEventType.SchedulerLayerStart,
           priority: PipelinePriority.HIGH,
           payload: { layer: li, nodes: layer.length, round },
           timestamp: Date.now(),
@@ -140,6 +181,30 @@ export class Scheduler {
       // ── 执行完毕，若有积压 replan 则后台发射（不 await，下轮循环取结果） ──
       if (this.replanQueue.length > 0 && !replanFlight) {
         replanFlight = this._tryFireReplan();
+      }
+      } catch (loopErr) {
+        // 异常屏障：单轮异常不应崩溃整个 executeAll
+        // 标记当前 pending 节点为失败，保留已完成的节点结果
+        const snappedPending = this.board.getPendingNodes();
+        this.observer.emit({
+          type: PipelineEventType.SchedulerLoopCrashed,
+          priority: PipelinePriority.CRITICAL,
+          payload: {
+            round,
+            error: String(loopErr).slice(0, 300),
+            pendingAtCrash: snappedPending.length,
+            hint: "当前轮次因未预期异常中断，pending 节点将标记为失败",
+          },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+        for (const n of snappedPending) {
+          try { this.board.failNode(n.id); } catch (e) { console.error(`[scheduler] failNode best-effort failed for ${n.id}: ${String(e)}`); }
+          allResults.push({ nodeId: n.id, success: false, error: `Scheduler loop crashed at round ${round}` });
+          failed++;
+        }
+        this.replanQueue.length = 0; // 清空队列，避免无限重试
+        break; // 退出主循环，返回已有结果
       }
     }
 
@@ -170,7 +235,7 @@ export class Scheduler {
     const allNodes = this.board.getAllNodes();
 
     this.observer.emit({
-      type: "scheduler.done",
+      type: PipelineEventType.SchedulerDone,
       priority: PipelinePriority.CRITICAL,
       payload: { total: allNodes.length, completed, failed, durationMs, rounds: round },
       timestamp: Date.now(),
@@ -217,7 +282,7 @@ export class Scheduler {
   private _tryFireReplan(): Promise<void> | null {
     if (this.totalReplans >= Scheduler.MAX_TOTAL_REPLANS) {
       this.observer.emit({
-        type: "scheduler.replan.limit",
+        type: PipelineEventType.SchedulerReplanLimit,
         priority: PipelinePriority.CRITICAL,
         payload: {
           totalReplans: this.totalReplans,
@@ -246,7 +311,7 @@ export class Scheduler {
       this.replanQueue.length = 0;
       if (this.observer && orphanCount > 0) {
         this.observer.emit({
-          type: "scheduler.replan.no_meta_agent",
+          type: PipelineEventType.SchedulerReplanNoMetaAgent,
           priority: PipelinePriority.CRITICAL,
           payload: { orphanCount, hint: "MetaAgent not configured; replan queue drained silently" },
           timestamp: Date.now(),
@@ -269,7 +334,7 @@ export class Scheduler {
       this.replanCount.set(item.node.id, count);
 
       this.observer.emit({
-        type: "node.replan",
+        type: PipelineEventType.NodeReplan,
         priority: PipelinePriority.CRITICAL,
         payload: { nodeId: item.node.id, reason: item.reason, attempt: count },
         timestamp: Date.now(),
@@ -304,7 +369,7 @@ export class Scheduler {
         const nodeId = batch[i]?.node.id ?? "unknown";
         const errMsg = String(r.reason).slice(0, 200);
         this.observer.emit({
-          type: "scheduler.replan.failed",
+          type: PipelineEventType.SchedulerReplanFailed,
           priority: PipelinePriority.CRITICAL,
           payload: { nodeId, error: errMsg },
           timestamp: Date.now(),
@@ -323,7 +388,7 @@ export class Scheduler {
     }
 
     this.observer.emit({
-      type: "node.start",
+      type: PipelineEventType.NodeStart,
       priority: PipelinePriority.HIGH,
       payload: { nodeId, type: node.type },
       timestamp: Date.now(),
@@ -354,7 +419,7 @@ export class Scheduler {
         if (count < Scheduler.REPLAN_MAX_ROUNDS) {
           this.replanQueue.push({ node, reason: result.output ?? result.error ?? "unknown", count });
           this.observer.emit({
-            type: "node.replan.queued",
+            type: PipelineEventType.NodeReplanQueued,
             priority: PipelinePriority.HIGH,
             payload: { nodeId, reason: result.error, attempt: count + 1 },
             timestamp: Date.now(),
@@ -367,7 +432,7 @@ export class Scheduler {
     // 失败发射 node.failed（哨兵/管家需要感知）
     if (!result.success) {
       this.observer.emit({
-        type: "node.failed",
+        type: PipelineEventType.NodeFailed,
         priority: PipelinePriority.CRITICAL,
         payload: { nodeId, error: result.error ?? "unknown" },
         timestamp: Date.now(),
@@ -419,7 +484,7 @@ export class Scheduler {
         `建议 MetaAgent 将大任务拆分为 type="review"+"ops"+"code"... 的独立节点以利用并行。`
       );
       this.observer.emit({
-        type: "scheduler.nonstandard_type",
+        type: PipelineEventType.SchedulerNonstandardType,
         priority: PipelinePriority.HIGH,
         payload: { nodeId: node.id, nodeType: node.type, matchedCount, assigned: agentType, totalAgents: this.agents.size },
         timestamp: Date.now(),
@@ -457,7 +522,7 @@ export class Scheduler {
       this.board.release(node.id, agentType as AgentType);
       this.board.failNode(node.id);
       this.observer.emit({
-        type: "node.spawn_failed",
+        type: PipelineEventType.NodeSpawnFailed,
         priority: PipelinePriority.HIGH,
         payload: { nodeId: node.id, agentType, reason: "pool_exhausted" },
         timestamp: Date.now(),
@@ -486,7 +551,7 @@ export class Scheduler {
     // destroy 异常不应阻断 complete 落盘，但需上报追踪实例泄漏
     try { this.pool.destroy(agentType as AgentType, instanceId); } catch (e) {
       this.observer.emit({
-        type: "pool.destroy_failed",
+        type: PipelineEventType.PoolDestroyFailed,
         priority: PipelinePriority.HIGH,
         payload: { agentType, instanceId, error: String(e).slice(0, 200) },
         timestamp: Date.now(),
@@ -499,11 +564,16 @@ export class Scheduler {
     // node.complete 仅成功时发射——失败由 _dispatchNode 统一发射 node.failed，避免双重通知
     if (result.success) {
       this.observer.emit({
-        type: "node.complete",
+        type: PipelineEventType.NodeComplete,
         priority: PipelinePriority.HIGH,
         payload: { nodeId: node.id, agentType, success: true },
         timestamp: Date.now(),
       });
+
+      // ── 技能沉淀：LoopAgent 完成后提取 SkillTemplate ──
+      if (this.skillRegistry && agentType === AT.Loop && result.output) {
+        this._extractAndRegisterSkills(node.id, result.output);
+      }
     }
 
     return result;
@@ -539,7 +609,7 @@ export class Scheduler {
         // claim 已生效，以 release 释放认领，防 claimedBy 中有该类型但永无结果
         this.board.release(node.id, at as AgentType);
         this.observer.emit({
-          type: "node.spawn_failed",
+          type: PipelineEventType.NodeSpawnFailed,
           priority: PipelinePriority.HIGH,
           payload: { nodeId: node.id, agentType: at, reason: "pool_exhausted" },
           timestamp: Date.now(),
@@ -558,7 +628,7 @@ export class Scheduler {
       // destroy 异常不应阻断 complete 落盘，但需上报追踪实例泄漏
       try { this.pool.destroy(at as AgentType, instanceId); } catch (e) {
         this.observer.emit({
-          type: "pool.destroy_failed",
+          type: PipelineEventType.PoolDestroyFailed,
           priority: PipelinePriority.HIGH,
           payload: { agentType: at, instanceId, error: String(e).slice(0, 200) },
           timestamp: Date.now(),
@@ -579,7 +649,7 @@ export class Scheduler {
         for (const at of currentNode.claimedBy) {
           if (!resultTypes.has(at)) {
             this.observer.emit({
-              type: "scheduler.invariant_violation",
+              type: PipelineEventType.SchedulerInvariantViolation,
               priority: PipelinePriority.CRITICAL,
               payload: {
                 nodeId: node.id,
@@ -608,7 +678,7 @@ export class Scheduler {
     // node.complete 仅全成功时发射——失败由 _dispatchNode 统一发射 node.failed
     if (allSuccess) {
       this.observer.emit({
-        type: "node.complete",
+        type: PipelineEventType.NodeComplete,
         priority: PipelinePriority.HIGH,
         payload: {
           nodeId: node.id,
@@ -630,16 +700,35 @@ export class Scheduler {
   // ── 标签匹配 ──────────────────────────────────
 
   private _findMatchingAgent(node: TaskNode): string | null {
+    // 优先：node.type 若为已知 AgentType，直接匹配（不依赖 tags）
+    const knownTypes = new Set<string>(Object.keys(AGENT_TAGS));
+    if (knownTypes.has(node.type) && this.agents.has(node.type)) {
+      return node.type;
+    }
+
+    // 回退：按 tags 打分匹配
     let bestType: string | null = null;
     let bestScore = 0;
+    let bestDensity = 0; // 匹配密度 = matching / |tags|，平分时打破平局
     for (const [type, tags] of Object.entries(AGENT_TAGS)) {
       if (!this.agents.has(type)) continue;
-      let score = node.tags.filter((t) => (tags as readonly string[]).includes(t)).length;
-      // 平局时：node.type 匹配的 Agent 类型加分（更精准）
+      const tagArr = tags as readonly string[];
+      let score = node.tags.filter((t) => tagArr.includes(t)).length;
+      // 平局打破1：node.type 精确匹配的 Agent 类型加分
       if (score > 0 && node.type === type) score += 1;
+
       if (score > bestScore) {
         bestScore = score;
         bestType = type;
+        bestDensity = tagArr.length > 0 ? score / tagArr.length : 0;
+      } else if (score === bestScore && score > 0 && bestType) {
+        // 平局打破2：选匹配密度更高的 Agent（更专精、标签噪声更少）
+        // 例：tags=["review"] 时 Review(2 标签) 密度 0.5 > Code(8 标签) 密度 0.125
+        const density = tagArr.length > 0 ? score / tagArr.length : 0;
+        if (density > bestDensity) {
+          bestType = type;
+          bestDensity = density;
+        }
       }
     }
     return bestType;
@@ -653,5 +742,76 @@ export class Scheduler {
           node.tags.some((t) => (tags as readonly string[]).includes(t)),
       )
       .map(([type]) => type);
+  }
+
+  /**
+   * 从 LoopAgent 输出中提取技能模板并注册到 SkillRegistry。
+   * 提取失败不阻塞调度——通过 observer 上报诊断信息。
+   */
+  private _extractAndRegisterSkills(nodeId: string, output: string): void {
+    if (!this.skillRegistry) return;
+
+    const { skills, diagnostics } = extractSkillsFromOutput(output);
+
+    for (const diag of diagnostics) {
+      this.observer.emit({
+        type: PipelineEventType.NodeComplete,
+        priority: PipelinePriority.NORMAL,
+        payload: {
+          nodeId,
+          agentType: AT.Loop,
+          success: true,
+          output: `[skill-extractor] ${diag}`,
+        },
+        timestamp: Date.now(),
+      });
+    }
+
+    if (skills.length === 0) {
+      this.observer.emit({
+        type: PipelineEventType.NodeComplete,
+        priority: PipelinePriority.NORMAL,
+        payload: {
+          nodeId,
+          agentType: AT.Loop,
+          success: true,
+          output: `[skill-extractor] 未从 LoopAgent 输出中提取到技能模板`,
+        },
+        timestamp: Date.now(),
+      });
+      return;
+    }
+
+    let registered = 0;
+    for (const skill of skills) {
+      try {
+        this.skillRegistry.register(skill);
+        registered++;
+      } catch (e) {
+        this.observer.emit({
+          type: PipelineEventType.ErrorReported,
+          priority: PipelinePriority.HIGH,
+          payload: {
+            source: `scheduler._tryRegisterSkills.${nodeId}`,
+            severity: "degraded",
+            error: `注册技能 ${skill.id} 失败: ${String(e).slice(0, 200)}`,
+          },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      }
+    }
+
+    this.observer.emit({
+      type: PipelineEventType.NodeComplete,
+      priority: PipelinePriority.NORMAL,
+      payload: {
+        nodeId,
+        agentType: AT.Loop,
+        success: true,
+        output: `[skill-extractor] 成功注册 ${registered}/${skills.length} 个技能模板: ${skills.map((s) => `${s.name}(${s.id})`).join(", ")}`,
+      },
+      timestamp: Date.now(),
+    });
   }
 }

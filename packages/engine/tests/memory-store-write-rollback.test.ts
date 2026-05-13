@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * 测试文件: MemoryStore 写路径 DB 失败回滚测试
  *
@@ -62,14 +63,13 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
   it("用例2: write() — 模拟 DB INSERT 失败，内存中的 entry 被删除", async () => {
     await store.init(":memory:");
 
-    // Arrange: 劫持 _db.run 让 INSERT INTO memories 抛异常
-    const origRun = (store as any)._db.run.bind((store as any)._db);
-    (store as any)._db.run = (...args: any[]) => {
-      const sql: string = args[0] ?? "";
+    // Arrange: 劫持 _db.prepare 让 INSERT INTO memories 抛异常
+    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
+    (store as any)._persistence.db.prepare = (sql: string) => {
       if (sql.includes("INSERT INTO memories")) {
         throw new Error("SIMULATED_DISK_FULL");
       }
-      return origRun(...args);
+      return origPrepare(sql);
     };
 
     // Act: 写入——应抛异常
@@ -137,14 +137,13 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
       creatorId: "y",
     });
 
-    // 劫持 _db.run 让 links INSERT 抛异常
-    const origRun = (store as any)._db.run.bind((store as any)._db);
-    (store as any)._db.run = (...args: any[]) => {
-      const sql: string = args[0] ?? "";
+    // 劫持 _db.prepare 让 links INSERT 抛异常
+    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
+    (store as any)._persistence.db.prepare = (sql: string) => {
       if (sql.includes("INSERT INTO links")) {
         throw new Error("SIMULATED_LINK_DB_FAIL");
       }
-      return origRun(...args);
+      return origPrepare(sql);
     };
 
     // Act: link 应抛异常
@@ -174,15 +173,13 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     // 确认初始状态
     expect(store.peek(id)!.state).toBe(MemoryState.Active);
 
-    // 劫持 _safeDbRun 让 cas 的 UPDATE 抛异常
-    // cas 内部走 _safeDbRun → 我们用 monkey-patch _db.run 在 UPDATE memories SET state 时抛错
-    const origRun = (store as any)._db.run.bind((store as any)._db);
-    (store as any)._db.run = (...args: any[]) => {
-      const sql: string = args[0] ?? "";
+    // 劫持 _db.prepare 让 cas 的 UPDATE 抛异常
+    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
+    (store as any)._persistence.db.prepare = (sql: string) => {
       if (sql.includes("UPDATE memories SET state")) {
         throw new Error("SIMULATED_CAS_DB_FAIL");
       }
-      return origRun(...args);
+      return origPrepare(sql);
     };
 
     // Act: cas 应抛异常
@@ -213,14 +210,13 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     store.archive(id);
     expect(store.peek(id)!.state).toBe(MemoryState.Archived);
 
-    // 劫持 _db.run 让 obliterate 的 UPDATE 抛异常
-    const origRun = (store as any)._db.run.bind((store as any)._db);
-    (store as any)._db.run = (...args: any[]) => {
-      const sql: string = args[0] ?? "";
+    // 劫持 _db.prepare 让 obliterate 的 UPDATE 抛异常
+    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
+    (store as any)._persistence.db.prepare = (sql: string) => {
       if (sql.includes("UPDATE memories SET state")) {
         throw new Error("SIMULATED_OBLITERATE_DB_FAIL");
       }
-      return origRun(...args);
+      return origPrepare(sql);
     };
 
     // Act: obliterate 应抛异常
@@ -258,12 +254,12 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     await store2.close();
 
     // 确认已关闭
-    expect((store2 as any)._lifecycle).toBe("closed");
-    expect((store2 as any)._db).toBeUndefined();
+    expect((store2 as any)._persistence.lifecycle).toBe("closed");
+    expect((store2 as any)._persistence.db).toBeUndefined();
 
     // 手动触发 _scheduleFlush：应静默返回（不抛异常）
     expect(() => {
-      (store2 as any)._scheduleFlush();
+      (store2 as any)._persistence.scheduleFlush();
     }).not.toThrow();
 
     // 清理
@@ -285,7 +281,7 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
 
     // 第一次 close
     await store.close();
-    expect((store as any)._lifecycle).toBe("closed");
+    expect((store as any)._persistence.lifecycle).toBe("closed");
 
     // 第二次 close 不抛异常（幂等）
     await expect(store.close()).resolves.toBeUndefined();

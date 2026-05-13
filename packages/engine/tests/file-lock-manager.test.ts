@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { FileLockManager } from "../src/file-lock-manager";
 import { LockType } from "@cortex/shared";

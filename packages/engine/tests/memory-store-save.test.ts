@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AgentType, MemoryType, MemoryState, PipelinePriority } from "@cortex/shared";
 import { MemoryStore } from "../src/memory-store.js";
