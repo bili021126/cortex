@@ -301,7 +301,7 @@ export function convert(markdown: string): string {
     const olItem = isOrderedListItem(line);
     if (olItem !== null) {
       const items: string[] = [];
-      let startNum = olItem.start;
+      const startNum = olItem.start;
       while (i < lines.length) {
         const item = isOrderedListItem(lines[i]);
         if (item === null) break;

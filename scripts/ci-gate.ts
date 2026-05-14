@@ -69,6 +69,12 @@ const TEST_FILE_PATTERN = /\.test\.ts$/;
 
 const CI_TAG_RE = /@ci\s*:\s*(unit|llm|integration|e2e|manual)/;
 
+/** 剥离 ANSI 转义码（vitest 管道输出仍可能带色） */
+function stripAnsi(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
 // ─── 工具 ────────────────────────────────────────────────
 
 function run(cmd: string, args: string[], cwd: string): { ok: boolean; stdout: string } {
@@ -236,10 +242,11 @@ function runTests(runAll: boolean): { ok: boolean; details: GateResult["testDeta
     console.log(`\n   📦 ${pkg.name} (${runAll ? "全量" : "unit"}模式):`);
     const r = run("pnpm", args, ROOT);
 
-    // 匹配两种 vitest 输出格式：
+    // 匹配两种 vitest 输出格式（先剥离 ANSI 色码）：
     //   全通过: "Tests  29 passed (29)"
     //   有失败: "Tests  2 failed | 27 passed (29)"
-    const testsMatch = r.stdout.match(/Tests\s+(?:(\d+)\s+failed\s+\|\s+)?(\d+)\s+passed\s*\((\d+)\)/);
+    const clean = stripAnsi(r.stdout);
+    const testsMatch = clean.match(/Tests\s+(?:(\d+)\s+failed\s+\|\s+)?(\d+)\s+passed\s*\((\d+)\)/);
     const passed = testsMatch ? parseInt(testsMatch[2], 10) : 0;
     const total = testsMatch ? parseInt(testsMatch[3], 10) : 0;
 
@@ -247,7 +254,7 @@ function runTests(runAll: boolean): { ok: boolean; details: GateResult["testDeta
       console.log(`      ✅ ${pkg.name} 测试通过 (${passed}/${total})`);
     } else {
       console.error(`      ❌ ${pkg.name} 测试失败 (${passed}/${total})`);
-      const tail = r.stdout.split("\n").slice(-20).join("\n");
+      const tail = clean.split("\n").slice(-20).join("\n");
       console.error(tail);
       allOk = false;
     }
