@@ -5,6 +5,8 @@ import { ReversibilityLevel as RL } from "@cortex/shared";
  * ConfirmGate —— 确认门
  * 基于可逆性等级拦截工具调用。L2/L3 永远确认，L1 视信任放行。
  * 用户交互通道由 PlatformBridge 提供（CLIAdapter / ElectronAdapter）。
+ *
+ * @fix M1 — handleTimeout L2/L3 也会回收 pending 条目，防止内存泄漏。
  */
 export class ConfirmGate {
   private pending = new Map<string, ConfirmationRequest>();
@@ -83,11 +85,15 @@ export class ConfirmGate {
     return response.approved;
   }
 
-  /** 处理超时：L1 默认拒接并移除，L2/L3 保留 pending 阻塞 */
+  /** 处理超时：所有等级均移除 pending 条目，防止内存泄漏 */
   handleTimeout(requestId: string, level: ReversibilityLevel): boolean {
     if (!this.pending.has(requestId)) return false;
-    if (level === RL.L0 || level === RL.L1) {
-      this.pending.delete(requestId);
+    // M1: L2/L3 超时时也移除 pending 条目，防止 hasPending() 永远返回 true
+    this.pending.delete(requestId);
+    const resolver = this.resolvers.get(requestId);
+    if (resolver) {
+      this.resolvers.delete(requestId);
+      resolver(false);
     }
     return false;
   }

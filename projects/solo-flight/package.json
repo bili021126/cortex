@@ -1,0 +1,22 @@
+{
+  "name": "solo-flight",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "tsx": "tsx",
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "dev": "tsx --watch src/index.ts",
+    "clean": "node -e \"require('fs').rmSync('./dist',{recursive:true,force:true});require('fs').rmSync('./.pm-data',{recursive:true,force:true})\"",
+    "typecheck": "tsc --noEmit",
+    "build:full": "tsc && tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "tsx": "^4.19.0",
+    "typescript": "^6.0.3"
+  }
+}

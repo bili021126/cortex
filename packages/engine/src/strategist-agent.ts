@@ -2,6 +2,7 @@ import type { AgentType, AgentStatus, TaskNode, NodeResult, SafeErrorReporter } 
 import { AgentType as AT, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { AgentPool } from "./agent-pool.js";
+import { PoolAwareState } from "./pool-aware.js";
 
 /**
  * StrategistAgent（钟离）—— 岩王帝君，战略 MetaAgent。
@@ -22,23 +23,21 @@ import type { AgentPool } from "./agent-pool.js";
  * 不参与 Scheduler 任务派发（与 MetaAgent 同）。仅通过显式调用和 Roundtable 激活。
  *
  * 激活时机：Core-2 启动后，阶段跃迁判定场景首次触发时激活。
+ *
+ * @fix D1 — 治理判例 NG-2026-0511-CopyPaste-StateMachine：
+ *   使用 PoolAwareState 共享组件替代内部状态管理，消除与 PoolAwareState 的代码重复。
  */
 export class StrategistAgent {
   readonly type: AgentType = AT.Strategist;
   readonly systemPrompt: string;
 
-  // 方案B：AgentPool 为状态唯一权威源
-  private _localStatus: AgentStatus = AS.Created;
-  private _pool: AgentPool | null = null;
-  private _instanceId: string | null = null;
+  // 方案B：状态所有权归一，委托给 PoolAwareState 共享组件
+  // 使用 `() => this.type` 延迟求值，避免初始化顺序问题
+  private readonly _state = new PoolAwareState(() => this.type);
 
-  /** 方案B：status 只读 getter */
+  /** 方案B：status 只读 getter —— 委托到 PoolAwareState */
   get status(): AgentStatus {
-    if (this._pool && this._instanceId) {
-      const s = this._pool.getStatus(this._instanceId);
-      if (s !== undefined) return s;
-    }
-    return this._localStatus;
+    return this._state.status;
   }
 
   /** SafeErrorReporter —— 统一错误上报，杜绝静默吞错 */
@@ -86,47 +85,18 @@ export class StrategistAgent {
 
   /** 注入 AgentPool 引用（方案B：状态所有权归一） */
   setPool(pool: AgentPool, instanceId: string): void {
-    this._pool = pool;
-    this._instanceId = instanceId;
+    this._state.setPool(pool, instanceId);
   }
 
-  /** 注入 SafeErrorReporter（由 bootstrap 在上层统一注入） */
+  /** 注入 SafeErrorReporter（由 bootstrap 在上层统一注入）。双路径：自身 + PoolAwareState */
   setSafeReporter(reporter: SafeErrorReporter): void {
     this._safeReporter = reporter;
+    this._state.setSafeReporter(reporter);
   }
 
+  /** 方案B：内部状态变更——委托到 PoolAwareState.transition() */
   private _setStatus(status: AgentStatus): void {
-    if (this._pool && this._instanceId) {
-      const ok = this._pool.setStatus(this._instanceId, status);
-      if (!ok && this._safeReporter) {
-        this._safeReporter({
-          source: "StrategistAgent._setStatus",
-          error: new Error(`Pool 拒绝流转 → ${status}`),
-          severity: "fatal",
-          hint: `instanceId=${this._instanceId}`,
-        });
-      }
-    } else {
-      // 降级路径：无 Pool 时校验本地流转合法性
-      const VALID_LOCAL: Record<string, Set<AgentStatus>> = {
-        [AS.Created]: new Set([AS.Awake]),
-        [AS.Awake]: new Set([AS.Active, AS.Draining]),
-        [AS.Active]: new Set([AS.Awake, AS.Draining]),
-        [AS.Draining]: new Set([AS.Destroyed]),
-        [AS.Destroyed]: new Set([]),
-      };
-      const allowed = VALID_LOCAL[this._localStatus as string];
-      if (!allowed || !allowed.has(status)) {
-        const msg = `[StrategistAgent] 非法流转 ${this._localStatus} → ${status}（无 Pool 降级路径）`;
-        if (this._safeReporter) {
-          this._safeReporter({ source: "StrategistAgent._setStatus", error: new Error(msg), severity: "fatal" });
-        } else if (!process.env.VITEST) {
-          console.error(`[invariant] ${msg}`);
-        }
-        return;
-      }
-      this._localStatus = status;
-    }
+    this._state.transition(status);
   }
 
   async wakeup(): Promise<void> {

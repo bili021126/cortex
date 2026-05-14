@@ -146,6 +146,38 @@ export interface SafeErrorContext {
  */
 export type SafeErrorReporter = (ctx: SafeErrorContext) => void;
 
+// ─── Invariant 违规上报类型（跨包通用） ──────────────────────
+// @migrated-from engine/src/task-board.ts (P1 — 艾尔海森类型迁移计划)
+// TaskBoard 和 AgentPool 共用同一套 invariant 上报签名，统一到 shared 中避免类型漂移。
+
+/** invariant 违规上报上下文 */
+export interface InvariantViolation {
+  /** 违规来源，如 "TaskBoard.complete"、"AgentPool.setStatus" */
+  source: string;
+  /** 人类可读描述 */
+  message: string;
+  /** 附加上下文（claimedBy vs results 等） */
+  details?: unknown;
+}
+
+/** invariant 违规上报回调签名。默认 console.error，外部可注入 observer.emit。 */
+export type InvariantReporter = (violation: InvariantViolation) => void;
+
+// ─── Handler 错误上报类型（跨包通用） ────────────────────────
+// @migrated-from engine/src/pipeline-observer.ts (P1 — 艾尔海森类型迁移计划)
+// PipelineObserver 的 handler 异常回调类型，与外部注入的错误上报后端共享。
+
+/** handler 异常上报上下文 */
+export interface HandlerErrorContext {
+  eventType: string;
+  priority: PipelinePriority;
+  error: unknown;
+  handlerIndex: number; // 异常发生在同优先级第几个 handler 上
+}
+
+/** handler 异常上报回调签名。默认降级到 console.error。外部可注入 Sentry/Datadog 等。 */
+export type HandlerErrorReporter = (ctx: HandlerErrorContext) => void;
+
 // ─── LLM 协议 ─────────────────────────────────────────────
 
 export interface LlmMessage {

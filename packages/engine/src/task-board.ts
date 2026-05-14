@@ -1,15 +1,10 @@
-import type { AgentType, TaskNode } from "@cortex/shared";
+import type { AgentType, TaskNode, InvariantViolation, InvariantReporter } from "@cortex/shared";
 import { AGENT_TAGS, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
 
-/** invariant 违规上报回调签名。默认 console.error，外部可注入 observer.emit。 */
-export interface InvariantViolation {
-  source: string;        // 违规来源，如 "TaskBoard.complete"
-  message: string;       // 人类可读描述
-  details?: unknown;     // 附加上下文（claimedBy vs results 等）
-}
-
-export type InvariantReporter = (violation: InvariantViolation) => void;
+// InvariantViolation + InvariantReporter 已迁移至 @cortex/shared —— 从 shared import 即可
+// 迁移原因（艾尔海森 P1）：TaskBoard 和 AgentPool 共用同一套 invariant 上报签名，
+// 统一到 shared 中可避免类型漂移。
 
 /**
  * TaskBoard —— 任务板

@@ -1,8 +1,7 @@
-import type { MemoryEntry, MemoryLink, MemoryType, AgentType } from "@cortex/shared";
+import type { MemoryEntry, MemoryLink, MemoryType, MemoryWriteInput, AgentType } from "@cortex/shared";
 import { MemoryState, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { PipelineObserver } from "../pipeline-observer.js";
 import * as crypto from "node:crypto";
-import type { MemoryWriteInput } from "../memory-store.js";
 import { EMBEDDING_DIM } from "./schema.js";
 
 /**

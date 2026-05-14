@@ -110,7 +110,8 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
       creatorId: "y",
     });
 
-    const link = store.link(a, b, LinkType.ProducedBy, "code");
+    // D5: link() 改为 3 参数签名
+    const link = store.link(a, b, LinkType.ProducedBy);
     expect(link).toBeTruthy();
     expect(store.getLinks(a)).toHaveLength(1);
 
@@ -148,7 +149,7 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
 
     // Act: link 应抛异常
     expect(() => {
-      store.link(a, b, LinkType.ProducedBy, "code");
+      store.link(a, b, LinkType.ProducedBy);
     }).toThrow("SIMULATED_LINK_DB_FAIL");
 
     // Assert: 内存中的 link 已回滚

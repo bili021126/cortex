@@ -12,6 +12,8 @@ import type { AgentPool } from "./agent-pool.js";
  *
  * "外松内紧"——对外暴露简洁的 status getter + transition API，
  * 内部严密校验流转合法性，不论是否绑定 Pool。
+ *
+ * @fix M7 — _tag getter 不吞没 tagProvider 异常，尽早暴露问题（通过 safeReporter 上报）。
  */
 
 /** 合法状态流转表——引用 AgentPool 权威源，消除双轨校验 */
@@ -34,8 +36,9 @@ export class PoolAwareState {
     this._tagProvider = typeof tagOrProvider === "function" ? tagOrProvider : () => tagOrProvider;
   }
 
+  /** @fix M7 — tagProvider 抛异常时通过 safeReporter 上报，不再吞没为 "Agent" */
   private get _tag(): string {
-    try { return this._tagProvider(); } catch (e) { console.warn(`[PoolAware] tagProvider threw: ${String(e)}`); return "Agent"; }
+    return this._tagProvider();
   }
 
   /** 方案B：status 只读 getter —— Pool 有则委托，否则降级到 _localStatus */

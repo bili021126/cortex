@@ -12,6 +12,7 @@
 // - memory.ts: MemoryEntry、MemoryState、MemoryQuery 等记忆域类型
 // - toolkit.ts/infra.ts/cli-adapter.ts/file-lock-manager.ts/skill-registry.ts:
 //   工具/基础设施/CLI/文件锁/技能注册的辅助类型
+// - fs-adapter.ts: 文件系统适配器接口（纳西妲增强建议：解耦 Toolkit 与 Node.js API）
 //
 // @governance 久岐忍 P1-3：外部端点缺少统一契约文档 → 已闭合
 // ============================================================
@@ -24,3 +25,4 @@ export * from "./file-lock-manager.js";
 export * from "./cli-adapter.js";
 export * from "./infra.js";
 export * from "./skill-registry.js";
+export * from "./fs-adapter.js";

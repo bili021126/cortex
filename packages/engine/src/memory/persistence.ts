@@ -21,6 +21,9 @@ import { SCHEMA_VERSION, FLUSH_DEBOUNCE_MS, MAX_FLUSH_FAIL_STREAK, THIRTY_DAYS_M
  * - SQL 查询（仅返回原始行，反序列化由调用方负责）
  *
  * 不负责：内存 Map 操作（MemoryStorage）、查询编排（MemoryStore）、状态机（MemoryLifecycle）。
+ *
+ * @fix M2 — runBatch 使用 better-sqlite3 transaction API 实现真实批量写入
+ * @fix M8 — flush() 失败后正确清除 _dirty 状态
  */
 export class MemoryPersistence {
   private _db?: DatabaseType;
@@ -146,7 +149,10 @@ export class MemoryPersistence {
 
   /**
    * 批量更新（用于 accessCount/lastAccessedAt 等场景）。
+   * 使用 better-sqlite3 transaction API 实现真实批量写入。
    * 返回成功更新的行数，失败时抛出。
+   *
+   * @fix M2 — 使用 transaction 包装，消除逐行独立事务的性能开销
    */
   runBatch(sql: string, rows: Array<(string | number | null)[]>, opName: string): void {
     if (!this._db) {
@@ -168,9 +174,12 @@ export class MemoryPersistence {
     }
     try {
       const stmt = this._db.prepare(sql);
-      for (const params of rows) {
-        stmt.run(params);
-      }
+      const batchInsert = this._db.transaction((batchRows: Array<(string | number | null)[]>) => {
+        for (const params of batchRows) {
+          stmt.run(params);
+        }
+      });
+      batchInsert(rows);
     } catch (e) {
       if (this._observer) {
         this._observer.emit({
@@ -226,7 +235,10 @@ export class MemoryPersistence {
 
   /**
    * 强制 WAL checkpoint 到主 DB 文件。
-   * 成功清除 _dirty；失败维护 _flushFailStreak。
+   * 成功清除 _dirty；失败时也清除 _dirty（M8: 脏状态标记问题修复）。
+   *
+   * @fix M8 — 即使 wal_checkpoint 失败也清除 _dirty，防止 closing 过渡期残留假阳性脏标记。
+   *   失败信息通过 observer 管道上报，保留 diagnostic 可用性。
    */
   async flush(): Promise<void> {
     if (this._flushTimer) {
@@ -237,6 +249,7 @@ export class MemoryPersistence {
 
     if (!this._db || !this._dbPath) return;
 
+    // 内存数据库不做 checkpoint
     if (this._dbPath === ":memory:") {
       this._flushFailStreak = 0;
       this._dirty = false;
@@ -261,6 +274,8 @@ export class MemoryPersistence {
       } else {
         console.error(errMsg);
       }
+      // M8: 即使 checkpoint 失败也清除 _dirty，防止 lifecycle 切换后残留假阳性脏标记
+      this._dirty = false;
       throw e;
     }
   }
@@ -455,6 +470,7 @@ export class MemoryPersistence {
 
   /**
    * 批量更新 accessCount 和 lastAccessedAt 到 DB。
+   * 使用 transaction 包装（M2）。
    * 失败时抛出异常（由 MemoryStore 调用方回滚内存）。
    */
   updateAccessTracking(updates: Array<{ id: string; accessCount: number; lastAccessedAt: number }>): void {
@@ -462,8 +478,11 @@ export class MemoryPersistence {
     const stmt = this._db.prepare(
       "UPDATE memories SET access_count = ?, last_accessed_at = ? WHERE id = ?",
     );
-    for (const u of updates) {
-      stmt.run([u.accessCount, u.lastAccessedAt, u.id]);
-    }
+    const batchUpdate = this._db.transaction((rows: Array<{ id: string; accessCount: number; lastAccessedAt: number }>) => {
+      for (const u of rows) {
+        stmt.run([u.accessCount, u.lastAccessedAt, u.id]);
+      }
+    });
+    batchUpdate(updates);
   }
 }

@@ -187,7 +187,8 @@ async function _rememberResult(
       metadata: { taskId: node.id },
     });
 
-    memory.link(memId, ctxMemId, LinkType.ProducedBy, agentType);
+    // D5: link() 已移除未使用的 _creatorId 参数，改为 3 参数签名
+    memory.link(memId, ctxMemId, LinkType.ProducedBy);
 
     if (isFix && node.parentId) {
       const parentMemories = memory.read({
@@ -195,7 +196,7 @@ async function _rememberResult(
         limit: 1,
       });
       if (parentMemories.length > 0) {
-        memory.link(memId, parentMemories[0].id, LinkType.ProducedBy, agentType);
+        memory.link(memId, parentMemories[0].id, LinkType.ProducedBy);
       }
     }
   } catch (memErr) {

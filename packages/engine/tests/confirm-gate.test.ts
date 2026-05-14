@@ -33,11 +33,12 @@ describe("ConfirmGate", () => {
     expect(gate.hasPending()).toBe(false);
   });
 
-  it("L2 超时阻塞（保留 pending）", () => {
+  // M1: L2/L3 超时也会移除 pending，防止内存泄漏
+  it("L2 超时移除 pending（M1 修复）", () => {
     const gate = new ConfirmGate();
     gate.request({ id: "3", level: ReversibilityLevel.L2, toolName: "rm", summary: "删文件" });
     const result = gate.handleTimeout("3", ReversibilityLevel.L2);
     expect(result).toBe(false);
-    expect(gate.hasPending()).toBe(true); // 保留请求，阻塞等待
+    expect(gate.hasPending()).toBe(false); // M1: 超时后也移除 pending
   });
 });

@@ -1,4 +1,4 @@
-import type { AgentType, AgentConfig } from "@cortex/shared";
+import type { AgentType, AgentConfig, InvariantReporter } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
 import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
 
@@ -20,8 +20,11 @@ export class AgentPool {
    * invariant 违规上报后端。
    * 默认为 `null`（仅 console.error）。
    * 在 bootstrap 中注入 observer.emit 后，所有状态机违规会走 observer 管道。
+   *
+   * 类型来源：@cortex/shared InvariantReporter（与 TaskBoard 共享同一签名）
+   * @migrated-from 内联回调签名 → shared InvariantReporter (P1 — 艾尔海森类型迁移计划)
    */
-  static onInvariant: ((violation: { source: string; message: string; details?: unknown }) => void) | null = null;
+  static onInvariant: InvariantReporter | null = null;
 
   /** 注入 PipelineObserver（与 onInvariant 互补的双通道模式） */
   setObserver(observer: PipelineObserver): void {

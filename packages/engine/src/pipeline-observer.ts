@@ -1,22 +1,15 @@
-import type { ObservableEvent, PipelineHandler, SafeErrorReporter, SafeErrorContext } from "@cortex/shared";
+import type { ObservableEvent, PipelineHandler, SafeErrorReporter, SafeErrorContext, HandlerErrorContext, HandlerErrorReporter } from "@cortex/shared";
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 
-/**
- * handler 异常上报回调签名。
- * 默认降级到 `console.error`。外部可注入 Sentry/Datadog/事件总线等任意后端。
- */
-export interface HandlerErrorContext {
-  eventType: string;
-  priority: PipelinePriority;
-  error: unknown;
-  handlerIndex: number; // 异常发生在同优先级第几个 handler 上
-}
-
-export type HandlerErrorReporter = (ctx: HandlerErrorContext) => void;
+// HandlerErrorContext + HandlerErrorReporter 已迁移至 @cortex/shared —— 从 shared import 即可
+// 迁移原因（艾尔海森 P1）：PipelineObserver 的 handler 异常回调类型供外部注入自定义错误上报后端使用，
+// 统一到 shared 中可避免外部代码自行推导类型。
 
 /**
  * PipelineObserver —— 可观测事件管道（优先级回调注册表）
  * 替代 v1.1 的 EventBus。所有可观测事件走此管道。
+ *
+ * @fix D4 — off() 支持按 handler 引用精确移除，避免误删其他组件的 handler。
  */
 export class PipelineObserver {
   private handlers = new Map<PipelinePriority, PipelineHandler[]>();
@@ -99,9 +92,31 @@ export class PipelineObserver {
     };
   }
 
-  /** 移除某优先级下所有 handler */
-  off(priority: PipelinePriority): void {
-    this.handlers.delete(priority);
+  /**
+   * 移除某优先级下所有 handler，或仅移除指定的 handler。
+   *
+   * @param priority 优先级
+   * @param handler 可选——指定要移除的 handler 引用；不传则移除该优先级下所有 handler
+   *
+   * @fix D4 — 支持按 handler 引用精确移除，避免 MemoryStoreMonitor.stop() 误删其他组件的 handler。
+   */
+  off(priority: PipelinePriority, handler?: PipelineHandler): void {
+    if (handler === undefined) {
+      // 移除该优先级下所有 handler（旧行为）
+      this.handlers.delete(priority);
+      return;
+    }
+
+    // 精确移除指定的 handler
+    const existing = this.handlers.get(priority);
+    if (existing) {
+      const filtered = existing.filter((h) => h !== handler);
+      if (filtered.length === 0) {
+        this.handlers.delete(priority);
+      } else {
+        this.handlers.set(priority, filtered);
+      }
+    }
   }
 
   // ── 私有：SafeErrorReporter 实现 ─────────────────

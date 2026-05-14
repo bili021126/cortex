@@ -2,6 +2,7 @@ import type {
   MemoryEntry,
   MemoryLink,
   MemoryQuery,
+  MemoryWriteInput,
   MemoryType,
   AgentType,
 } from "@cortex/shared";
@@ -9,27 +10,15 @@ import { MemoryState, LinkType, PipelineEventType, PipelinePriority } from "@cor
 import type { PipelineObserver } from "./pipeline-observer.js";
 import * as crypto from "node:crypto";
 
-import { SCHEMA_VERSION, LINK_WEIGHTS } from "./memory/schema.js";
+import { SCHEMA_VERSION, EMBEDDING_DIM, LINK_WEIGHTS } from "./memory/schema.js";
 import { MemoryStorage } from "./memory/storage.js";
 import { MemoryPersistence } from "./memory/persistence.js";
 import { MemoryLifecycle } from "./memory/lifecycle.js";
 import { MemoryQueryEngine } from "./memory/query.js";
 
-/** MemoryEntry 构造参数（id/createdAt/lastAccessedAt 自动生成） */
-export interface MemoryWriteInput {
-  memoryType: MemoryType;
-  content: Record<string, unknown>;
-  summary: string;
-  agentType: AgentType;
-  creatorId: string;
-  weight?: number;
-  createdAt?: number;
-  projectFingerprint?: string;
-  metadata?: Record<string, unknown>;
-  isPrivate?: boolean;
-  /** 语义嵌入向量（384d number[]），异步生成后传入 */
-  embedding?: number[];
-}
+// MemoryWriteInput 已迁移至 @cortex/shared —— 从 shared import 即可
+// 迁移原因（艾尔海森 P0）：任何包只要想写入记忆条目就必须构造此接口，
+// 定义在 shared 中可避免各包自行重复定义。
 
 /**
  * MemoryStore —— 内存级记忆存储 + better-sqlite3 持久化（Facade）。
@@ -81,6 +70,9 @@ export interface MemoryWriteInput {
  *   - cas()：持久化失败回滚 state（Persist-False-Positive 判例）
  *   - link()：DB 失败回滚内存 pop()
  *   - close()：仅 active 态执行，先 flush 再关闭
+ *
+ * @fix D3 — read() 添加关闭保护，与 write() 一致
+ * @fix D5 — link() 移除未使用的 _creatorId 参数
  */
 export class MemoryStore {
   private _storage: MemoryStorage;
@@ -119,6 +111,13 @@ export class MemoryStore {
   write(input: MemoryWriteInput): string {
     if (this._persistence.lifecycle !== "active") {
       throw new Error(`MemoryStore 已关闭 (状态: ${this._persistence.lifecycle})，拒绝写入`);
+    }
+
+    // M3: 校验 embedding 维度
+    if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
+      throw new Error(
+        `embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`,
+      );
     }
 
     const entry = this._storage.insert(input);
@@ -162,6 +161,11 @@ export class MemoryStore {
   // ── 读取 ────────────────────────────────────────
 
   read(query: MemoryQuery): MemoryEntry[] {
+    // D3: 关闭保护 —— read() 在非 active 态时抛出异常，与 write() 一致
+    if (this._persistence.lifecycle !== "active") {
+      throw new Error(`MemoryStore 已关闭 (状态: ${this._persistence.lifecycle})，拒绝读取`);
+    }
+
     const now = Date.now();
 
     const mode = query.queryMode ?? 'csa';
@@ -192,27 +196,27 @@ export class MemoryStore {
 
     // 阶段 3：访问统计刷新
     if (resolvedTrackAccess) {
+      // M5: 使用更安全的原始值保存方式
+      const originals = new Map(results.map(m => [m.id, { accessCount: m.accessCount, lastAccessedAt: m.lastAccessedAt }]));
+
       for (const m of results) {
         m.accessCount++;
         m.lastAccessedAt = now;
       }
       if (this._persistence.isEnabled && results.length > 0) {
-        // 保存原始值，DB 失败时回滚
-        const originalAccessCounts = new Map<string, number>();
-        const originalLastAccessed = new Map<string, number>();
-        for (const m of results) {
-          originalAccessCounts.set(m.id, m.accessCount - 1);
-          originalLastAccessed.set(m.id, m.lastAccessedAt);
-        }
         try {
           this._persistence.updateAccessTracking(
             results.map((m) => ({ id: m.id, accessCount: m.accessCount, lastAccessedAt: m.lastAccessedAt })),
           );
           void this._persistence.scheduleFlush();
         } catch (e) {
+          // 回滚：从 originals Map 恢复原始值
           for (const m of results) {
-            m.accessCount = originalAccessCounts.get(m.id) ?? m.accessCount;
-            m.lastAccessedAt = originalLastAccessed.get(m.id) ?? m.lastAccessedAt;
+            const orig = originals.get(m.id);
+            if (orig) {
+              m.accessCount = orig.accessCount;
+              m.lastAccessedAt = orig.lastAccessedAt;
+            }
           }
           if (this._observer) {
             this._observer.emit({
@@ -247,7 +251,7 @@ export class MemoryStore {
 
   // ── 关联 ────────────────────────────────────────
 
-  link(sourceId: string, targetId: string, linkType: LinkType, _creatorId: string): MemoryLink | null {
+  link(sourceId: string, targetId: string, linkType: LinkType): MemoryLink | null {
     const source = this._storage.memories.get(sourceId);
     const target = this._storage.memories.get(targetId);
     if (!source || !target) return null;

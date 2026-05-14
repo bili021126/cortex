@@ -8,6 +8,8 @@
  * 3. 超出阈值时告警通知
  *
  * v2.1 新增：补足消费端，之前 MemoryStore 只 emit 不消费。
+ *
+ * @fix D4 — stop() 使用 off(priority, handler) 精确移除，防止误删其他组件的 handler。
  */
 import type { ObservableEvent } from "@cortex/shared";
 import { PipelinePriority, PipelineEventType } from "@cortex/shared";
@@ -21,6 +23,9 @@ export class MemoryStoreMonitor {
   private readonly _threshold: number;
   /** 是否启用 stdout 日志 */
   private readonly _logToStdout: boolean;
+
+  /** 保存绑定的 handler 引用，供 stop() 精确移除 */
+  private readonly _boundHandlers: Map<PipelinePriority, (event: ObservableEvent) => void> = new Map();
 
   constructor(
     private readonly observer: PipelineObserver,
@@ -37,16 +42,26 @@ export class MemoryStoreMonitor {
 
   /** 启动监听 */
   start(): void {
-    this.observer.on(PipelinePriority.CRITICAL, this._onEvent.bind(this));
-    this.observer.on(PipelinePriority.HIGH, this._onEvent.bind(this));
-    this.observer.on(PipelinePriority.NORMAL, this._onEvent.bind(this));
+    const handler = this._onEvent.bind(this);
+
+    this.observer.on(PipelinePriority.CRITICAL, handler);
+    this._boundHandlers.set(PipelinePriority.CRITICAL, handler);
+
+    const handlerHigh = this._onEvent.bind(this);
+    this.observer.on(PipelinePriority.HIGH, handlerHigh);
+    this._boundHandlers.set(PipelinePriority.HIGH, handlerHigh);
+
+    const handlerNormal = this._onEvent.bind(this);
+    this.observer.on(PipelinePriority.NORMAL, handlerNormal);
+    this._boundHandlers.set(PipelinePriority.NORMAL, handlerNormal);
   }
 
-  /** 停止监听 */
+  /** 停止监听（按 handler 引用精确移除，不影响其他组件） */
   stop(): void {
-    this.observer.off(PipelinePriority.CRITICAL);
-    this.observer.off(PipelinePriority.HIGH);
-    this.observer.off(PipelinePriority.NORMAL);
+    for (const [priority, handler] of this._boundHandlers) {
+      this.observer.off(priority, handler);
+    }
+    this._boundHandlers.clear();
   }
 
   private _onEvent(event: ObservableEvent): void {

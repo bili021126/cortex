@@ -39,6 +39,28 @@ export interface MemoryEntry {
   embedding?: number[];
 }
 
+/**
+ * MemoryWriteInput —— 记忆写入构造参数（id/createdAt/lastAccessedAt 由 MemoryStore 自动生成）。
+ *
+ * @migrated-from engine/src/memory-store.ts (P0 — 艾尔海森类型迁移计划)
+ * @usedBy  engine/src/memory-store.ts, engine/src/memory/storage.ts, engine/src/memory/pipeline.ts
+ * @since   v2.1 迁移至 shared，所有需要写入记忆的包共用此类型
+ */
+export interface MemoryWriteInput {
+  memoryType: MemoryType;
+  content: Record<string, unknown>;
+  summary: string;
+  agentType: AgentType;
+  creatorId: string;
+  weight?: number;
+  createdAt?: number;
+  projectFingerprint?: string;
+  metadata?: Record<string, unknown>;
+  isPrivate?: boolean;
+  /** 语义嵌入向量（384d number[]），异步生成后传入 */
+  embedding?: number[];
+}
+
 export enum LinkType {
   AccessedDuring = "ACCESSED_DURING",
   ProducedBy = "PRODUCED_BY",

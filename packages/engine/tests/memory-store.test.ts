@@ -176,20 +176,21 @@ describe("MemoryStore", () => {
       creatorId: "y",
     });
 
-    const link1 = store.link(a, b, LinkType.ProducedBy, "code");
+    // D5: link() 改为 3 参数签名
+    const link1 = store.link(a, b, LinkType.ProducedBy);
     expect(link1).toBeTruthy();
     expect(link1!.sourceId).toBe(a);
     expect(link1!.targetId).toBe(b);
     expect(link1!.linkType).toBe(LinkType.ProducedBy);
 
     // 幂等去重
-    const link2 = store.link(a, b, LinkType.ProducedBy, "code");
+    const link2 = store.link(a, b, LinkType.ProducedBy);
     expect(link2).toBeNull();
 
     // ACCESSED_DURING 可以重复
-    const link3 = store.link(a, b, LinkType.AccessedDuring, "code");
+    const link3 = store.link(a, b, LinkType.AccessedDuring);
     expect(link3).toBeTruthy();
-    const link4 = store.link(a, b, LinkType.AccessedDuring, "code");
+    const link4 = store.link(a, b, LinkType.AccessedDuring);
     expect(link4).toBeTruthy();
   });
 
@@ -216,8 +217,8 @@ describe("MemoryStore", () => {
       creatorId: "z",
     });
 
-    store.link(a, b, LinkType.ProducedBy, "x");
-    store.link(a, c, LinkType.DependsOn, "x");
+    store.link(a, b, LinkType.ProducedBy);
+    store.link(a, c, LinkType.DependsOn);
 
     const links = store.getLinks(a);
     expect(links).toHaveLength(2);
@@ -474,10 +475,8 @@ describe("MemoryStore", () => {
 
     store.obliterate(b);
 
-    // 湮灭态 target 拒绝关联
-    expect(store.link(a, b, LinkType.ProducedBy, "x")).toBeNull();
-    // 湮灭态 source 也拒绝
-    expect(store.link(b, a, LinkType.DependsOn, "y")).toBeNull();
+    expect(store.link(a, b, LinkType.ProducedBy)).toBeNull();
+    expect(store.link(b, a, LinkType.DependsOn)).toBeNull();
   });
 
   // ── HCA/CSA 注意力区分 ────────────────────────

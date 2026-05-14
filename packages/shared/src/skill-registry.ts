@@ -6,6 +6,8 @@
  *
  * 支持 JSON 序列化/反序列化持久化。
  * Core-2 完整 SkillExecutor（步骤执行引擎 + 反馈闭环）预留。
+ *
+ * @fix C5 — unregister 收集待删除 key 到数组后再统一删除，不在 for-of 中修改 Map。
  */
 
 import * as fs from "node:fs";
@@ -45,21 +47,29 @@ export class SkillRegistry {
     this._byAgent.set(template.agentType, byAgent);
   }
 
-  /** 注销技能模板 */
+  /**
+   * 注销技能模板。
+   * C5: 收集待删除的 key 到数组，遍历完后统一删除，不在 for-of 中修改 Map。
+   */
   unregister(id: string): boolean {
     const tmpl = this._byId.get(id);
     if (!tmpl) return false;
 
     this._byId.delete(id);
 
-    // 从标签索引中移除
+    // 从标签索引中移除（C5: 收集待删除 key）
+    const tagsToDelete: string[] = [];
     for (const [tag, templates] of this._byTag) {
       const filtered = templates.filter((t) => t.id !== id);
       if (filtered.length === 0) {
-        this._byTag.delete(tag);
+        tagsToDelete.push(tag);
       } else {
         this._byTag.set(tag, filtered);
       }
+    }
+    // 统一删除空标签
+    for (const tag of tagsToDelete) {
+      this._byTag.delete(tag);
     }
 
     // 从 Agent 类型索引中移除

@@ -1,11 +1,10 @@
-import type { ToolInvocation, ToolResult, ToolDefinition, ToolHandler, ReversibilityLevel, AgentType } from "@cortex/shared";
+import type { ToolInvocation, ToolResult, ToolDefinition, ToolHandler, ReversibilityLevel, AgentType, IFileSystemAdapter, DirectoryEntry } from "@cortex/shared";
 import { ToolCategory, ReversibilityLevel as RL, AGENT_TOOL_PERMISSIONS } from "@cortex/shared";
 import type { ConfirmGate } from "./confirm-gate.js";
 import type { FileLockManager } from "./file-lock-manager.js";
 import { LockType } from "@cortex/shared";
-import * as fs from "node:fs";
+import { NodeFileSystemAdapter } from "./node-fs-adapter.js";
 import * as path from "node:path";
-import { execSync, execFileSync } from "node:child_process";
 
 // ─── 工具元数据（统一存放，一处改全局生效） ──────────────────
 
@@ -104,22 +103,29 @@ const TOOL_META: Record<string, ToolMeta> = {
  * Toolkit —— 工具执行引擎。
  * Agent 通过此层调用工具（read_file / write_file / search_code / run_shell 等）。
  * 回执经 ConfirmGate 判定后才实际执行。
+ *
+ * @fix M6 — search_code rg 回退路径错误传播，_grepFallback 错误包含在返回信息中。
+ * @enhancement 纳西妲增强建议：CLI 框架抽象——通过 IFileSystemAdapter 接口解耦
+ *               Toolkit 与 Node.js 原生 API，支持 Electron/Web 平台适配。
+ *               未注入自定义适配器时，默认使用 NodeFileSystemAdapter。
  */
 export class Toolkit {
   private tools = new Map<string, ToolHandler>();
   private gate?: ConfirmGate;
   private lockManager?: FileLockManager;
   private workspaceRoot: string | null = null;
+  private fs: IFileSystemAdapter;
 
-  constructor(gate?: ConfirmGate, lockManager?: FileLockManager) {
+  constructor(gate?: ConfirmGate, lockManager?: FileLockManager, fsAdapter?: IFileSystemAdapter) {
     this.gate = gate;
     this.lockManager = lockManager;
+    this.fs = fsAdapter ?? new NodeFileSystemAdapter();
     this._registerBuiltins();
   }
 
   /** 设置工作区根目录，所有文件操作路径将以此为沙箱根目录 */
   setWorkspaceRoot(root: string): void {
-    this.workspaceRoot = path.resolve(root);
+    this.workspaceRoot = this.fs.resolve(root);
   }
 
   /** 自定义注册 */
@@ -224,11 +230,11 @@ export class Toolkit {
   private _resolvePath(filePath: string): string {
     if (!this.workspaceRoot) {
       // 未设沙箱时允许任意路径（向后兼容测试场景）
-      return path.resolve(filePath);
+      return this.fs.resolve(filePath);
     }
-    const resolved = path.resolve(filePath);
+    const resolved = this.fs.resolve(filePath);
     const root = this.workspaceRoot;
-    if (resolved === root || resolved.startsWith(root + path.sep)) {
+    if (resolved === root || resolved.startsWith(root + this.fs.sep)) {
       return resolved;
     }
     throw new Error(`路径越界: "${filePath}" 不在工作区 "${root}" 内`);
@@ -239,11 +245,12 @@ export class Toolkit {
   private _registerBuiltins(): void {
     this.tools.set("read_file", async (params) => {
       const filePath = this._resolvePath(params.file_path as string);
-      if (!fs.existsSync(filePath)) {
-        return { success: false, error: `文件不存在: ${filePath}` };
-      }
       try {
-        const content = fs.readFileSync(filePath, "utf-8");
+        const exists = await this.fs.exists(filePath);
+        if (!exists) {
+          return { success: false, error: `文件不存在: ${filePath}` };
+        }
+        const content = await this.fs.readFile(filePath);
         return { success: true, output: content };
       } catch (e) {
         return { success: false, error: `读取失败: ${String(e)}` };
@@ -257,11 +264,8 @@ export class Toolkit {
         return { success: false, error: "write_file 缺少 content 参数" };
       }
       try {
-        const dir = path.dirname(filePath);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
-        fs.writeFileSync(filePath, content, "utf-8");
+        // 使用 IFileSystemAdapter 的 writeFile（内部已处理 mkdir）
+        await this.fs.writeFile(filePath, content);
         return { success: true, output: `已写入 ${filePath} (${content.length} 字符)` };
       } catch (e) {
         return { success: false, error: `写入失败: ${String(e)}` };
@@ -274,21 +278,22 @@ export class Toolkit {
         return { success: false, error: "search_code 缺少 query 参数" };
       }
       try {
-        const searchRoot = this.workspaceRoot ?? process.cwd();
+        const searchRoot = this.workspaceRoot ?? this.fs.cwd();
         // 用 ripgrep 搜索，不可用时退回 Node.js 原生
         let output: string;
+        let fallbackError: string | null = null;
         try {
-          output = execFileSync(
+          output = await this.fs.execFile(
             "rg",
             ["--line-number", "--max-count", "30", "--no-heading", query],
-            { cwd: searchRoot, encoding: "utf-8", timeout: 15_000 },
+            { cwd: searchRoot, timeout: 15_000 },
           );
         } catch (e) {
           // rg 非零退出码区分：
           //   exit 1 = 无匹配结果（正常，rg 语义如此）→ 返回空
           //   exit 2 = 真错误（rg 未安装/权限拒绝/正则非法）→ 退回 grep 降级
           //   其他 = 超时/spawn 失败 → 退回 grep 降级
-          const err = e as { status?: number; stderr?: unknown };
+          const err = e as { status?: number; stderr?: unknown; message?: string };
           const stderr = err.stderr?.toString() ?? "";
           if (err.status === 1) {
             // 无匹配，rg 正常工作
@@ -297,11 +302,20 @@ export class Toolkit {
             console.warn(
               `[toolkit] search_code: rg failed (exit ${err.status ?? "?"}), falling back to grep. stderr: ${stderr.slice(0, 200)}`,
             );
-            output = this._grepFallback(searchRoot, query);
+            // M6: 捕获 _grepFallback 的错误，外层包含原始 rg 错误信息
+            try {
+              output = await this._grepFallback(searchRoot, query);
+            } catch (fallbackErr) {
+              fallbackError = `grep fallback failed: ${String(fallbackErr)}`;
+              output = "";
+            }
           }
         }
         if (!output.trim()) {
-          return { success: true, output: `未找到匹配 "${query}" 的结果` };
+          const msg = fallbackError
+            ? `搜索失败: rg 不可用且 grep 降级也失败 (${fallbackError})`
+            : `未找到匹配 "${query}" 的结果`;
+          return { success: true, output: msg };
         }
         return { success: true, output: output.slice(0, 10_000) };
       } catch (e) {
@@ -315,13 +329,8 @@ export class Toolkit {
         return { success: false, error: "run_shell 缺少 command 参数" };
       }
       try {
-        const cwd = this.workspaceRoot ?? process.cwd();
-        const output = execSync(command, {
-          cwd,
-          encoding: "utf-8",
-          timeout: 60_000,
-          maxBuffer: 5 * 1024 * 1024, // 5MB
-        });
+        const cwd = this.workspaceRoot ?? this.fs.cwd();
+        const output = await this.fs.execCommand(command, { cwd, timeout: 60_000 });
         return { success: true, output: output.slice(0, 10_000) };
       } catch (e) {
         const err = e as { stderr?: unknown; message?: string };
@@ -334,15 +343,16 @@ export class Toolkit {
     this.tools.set("list_files", async (params) => {
       const dirPath = params.dir_path
         ? this._resolvePath(params.dir_path as string)
-        : (this.workspaceRoot ?? process.cwd());
-      if (!fs.existsSync(dirPath)) {
-        return { success: false, error: `目录不存在: ${dirPath}` };
-      }
+        : (this.workspaceRoot ?? this.fs.cwd());
       try {
-        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        const exists = await this.fs.exists(dirPath);
+        if (!exists) {
+          return { success: false, error: `目录不存在: ${dirPath}` };
+        }
+        const entries = await this.fs.listDirectory(dirPath);
         const pattern = params.pattern as string | undefined;
         let listing = entries
-          .map((e) => `${e.isDirectory() ? "[D]" : "[F]"} ${e.name}`)
+          .map((e) => `${e.isDirectory ? "[D]" : "[F]"} ${e.name}`)
           .join("\n");
         if (pattern) {
           // 简单 glob 过滤
@@ -351,7 +361,7 @@ export class Toolkit {
           );
           listing = entries
             .filter((e) => regex.test(e.name))
-            .map((e) => `${e.isDirectory() ? "[D]" : "[F]"} ${e.name}`)
+            .map((e) => `${e.isDirectory ? "[D]" : "[F]"} ${e.name}`)
             .join("\n");
         }
         return { success: true, output: listing || "(空目录)" };
@@ -362,11 +372,12 @@ export class Toolkit {
 
     this.tools.set("delete_file", async (params) => {
       const filePath = this._resolvePath(params.file_path as string);
-      if (!fs.existsSync(filePath)) {
-        return { success: false, error: `文件不存在: ${filePath}` };
-      }
       try {
-        fs.unlinkSync(filePath);
+        const exists = await this.fs.exists(filePath);
+        if (!exists) {
+          return { success: false, error: `文件不存在: ${filePath}` };
+        }
+        await this.fs.unlink(filePath);
         return { success: true, output: `已删除 ${filePath}` };
       } catch (e) {
         return { success: false, error: `删除失败: ${String(e)}` };
@@ -375,34 +386,37 @@ export class Toolkit {
   }
 
   /** 简易 grep 回退（rg 不可用时的纯 Node.js 文本搜索） */
-  private _grepFallback(rootDir: string, query: string): string {
+  private async _grepFallback(rootDir: string, query: string): Promise<string> {
     const results: string[] = [];
     const lowerQuery = query.toLowerCase();
-    const walk = (dir: string, depth: number) => {
+    const walk = async (dir: string, depth: number) => {
       if (depth > 4 || results.length > 30) return;
-      let entries: fs.Dirent[];
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { console.warn(`[toolkit] readdir failed for ${dir}: ${String(e)}`); return; }
+      let entries: DirectoryEntry[];
+      try { entries = await this.fs.listDirectory(dir); } catch (e) { console.warn(`[toolkit] readdir failed for ${dir}: ${String(e)}`); return; }
       for (const entry of entries) {
         if (results.length >= 30) return;
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
+        const fullPath = this.fs.resolve(dir, entry.name);
+        if (entry.isDirectory) {
           if (!entry.name.startsWith(".") && entry.name !== "node_modules" && entry.name !== "dist") {
-            walk(fullPath, depth + 1);
+            await walk(fullPath, depth + 1);
           }
-        } else if (entry.isFile() && /\.(ts|js|json|md|html|css)$/.test(entry.name)) {
+        } else if (/\.(ts|js|json|md|html|css)$/.test(entry.name)) {
           try {
-            const lines = fs.readFileSync(fullPath, "utf-8").split("\n");
+            const content = await this.fs.readFile(fullPath);
+            const lines = content.split("\n");
             for (let i = 0; i < lines.length && results.length < 30; i++) {
               if (lines[i].toLowerCase().includes(lowerQuery)) {
-                const relPath = path.relative(rootDir, fullPath);
-                results.push(`${relPath}:${i + 1}: ${lines[i].trim().slice(0, 200)}`);
+                const relPath = this.fs.resolve(rootDir) === this.fs.resolve(dir)
+                  ? entry.name
+                  : entry.name;
+                results.push(`${fullPath}:${i + 1}: ${lines[i].trim().slice(0, 200)}`);
               }
             }
           } catch (e) { console.warn(`[toolkit] skip unreadable file ${fullPath}: ${String(e)}`); }
         }
       }
     };
-    walk(rootDir, 0);
+    await walk(rootDir, 0);
     return results.join("\n");
   }
 }

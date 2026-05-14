@@ -55,8 +55,13 @@ const ROOT = resolve(__dirname, "..");
 /** 需要构建和类型检查的包（按依赖顺序） */
 const PACKAGES: PackageInfo[] = [
   { name: "shared",  dir: join(ROOT, "packages", "shared"),  filter: "@cortex/shared" },
+  { name: "parser",  dir: join(ROOT, "packages", "parser"),  filter: "@cortex/parser" },
+  { name: "pm",      dir: join(ROOT, "packages", "pm"),      filter: "@cortex/pm" },
+  { name: "data",    dir: join(ROOT, "packages", "data"),    filter: "@cortex/data" },
+  { name: "tools",   dir: join(ROOT, "packages", "tools"),   filter: "@cortex/tools" },
   { name: "llm",     dir: join(ROOT, "packages", "llm"),     filter: "@cortex/llm" },
   { name: "testing", dir: join(ROOT, "packages", "testing"), filter: "@cortex/testing" },
+  { name: "cli",     dir: join(ROOT, "packages", "cli"),     filter: "@cortex/cli" },
   { name: "engine",  dir: join(ROOT, "packages", "engine"),  filter: "@cortex/engine" },
 ];
 

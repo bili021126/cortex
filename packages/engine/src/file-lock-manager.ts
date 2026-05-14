@@ -2,6 +2,8 @@ import { LockType } from "@cortex/shared";
 
 /** 锁超时默认值：30s。Agent 崩溃后锁自动回收，避免文件永久不可写。 */
 const DEFAULT_LOCK_TIMEOUT_MS = 30_000;
+/** 周期性清理间隔：60s */
+const CLEANUP_INTERVAL_MS = 60_000;
 
 interface LockEntry {
   type: LockType;
@@ -13,13 +15,24 @@ interface LockEntry {
  * FileLockManager —— 文件级读写锁
  * 写锁排斥所有，读锁共存。L2/L3 确认等待期间不持锁。
  * 内置锁超时回收：Agent 崩溃后 30s 自动释放过期锁。
+ *
+ * @fix M4 — 构造函数中启动周期性清理定时器，防止无界内存增长。
  */
 export class FileLockManager {
   private locks = new Map<string, LockEntry>();
   private readonly timeoutMs: number;
+  private _cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS) {
     this.timeoutMs = timeoutMs;
+    // M4: 启动周期性清理定时器
+    this._cleanupTimer = setInterval(() => {
+      this.cleanStaleLocks();
+    }, CLEANUP_INTERVAL_MS);
+    // 允许 Node.js 在仅剩此定时器时退出进程
+    if (this._cleanupTimer && typeof this._cleanupTimer === "object" && "unref" in this._cleanupTimer) {
+      this._cleanupTimer.unref();
+    }
   }
 
   /**
@@ -82,7 +95,7 @@ export class FileLockManager {
     return this.locks.get(filePath)?.holders.has(holderId) ?? false;
   }
 
-  /** 全局清理所有过期锁（建议定时器调用） */
+  /** 全局清理所有过期锁（由周期性定时器调用） */
   cleanStaleLocks(): number {
     const now = Date.now();
     let cleaned = 0;
@@ -96,6 +109,15 @@ export class FileLockManager {
       console.warn(`[FileLockManager] 回收 ${cleaned} 个过期锁`);
     }
     return cleaned;
+  }
+
+  /** 释放定时器资源 */
+  dispose(): void {
+    if (this._cleanupTimer) {
+      clearInterval(this._cleanupTimer);
+      this._cleanupTimer = null;
+    }
+    this.locks.clear();
   }
 
   /** 内部：清理特定文件上的过期锁 */

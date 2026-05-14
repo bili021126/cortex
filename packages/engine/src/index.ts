@@ -51,7 +51,7 @@ export { ButlerAgent } from "./agents/butler-agent.js";
 // @contract: 旧版 Agent 类提供与 v2.0 兼容的类实例化路径。所有旧类标记
 // @deprecated，在下一个次版本（v2.2）移除。外部调用方应迁移至
 // createAgent(*AgentConfig(), ...) 组合式路径。
-// MetaAgent / StrategistAgent 等待单独重构。
+// MetaAgent / StrategistAgent 待单独重构。
 /** @deprecated 使用 createAgent(codeAgentConfig(), ...) 替代 */
 export { CodeAgent } from "./agents/code-agent.js";
 /** @deprecated 使用 createAgent(reviewAgentConfig(), ...) 替代 */
@@ -79,9 +79,6 @@ export { DataAgent } from "./agents/data-agent.js";
 
 export { PoolAwareState } from "./pool-aware.js";
 
-// 共享 ReAct 辅助（旧版）
-export { runReActLoop as runReActLoopLegacy } from "./react-helper.js";
-
 // 引擎核心
 // @contract: Scheduler + TaskBoard + AgentPool + ConfirmGate + PipelineObserver
 // 构成调度五元组。FileLockManager 提供文件锁。Toolkit 提供 Agent 工具注入。
@@ -89,7 +86,6 @@ export { runReActLoop as runReActLoopLegacy } from "./react-helper.js";
 // MemoryStore 提供记忆中枢。
 export { Scheduler, topologicalSort } from "./scheduler.js";
 export { TaskBoard } from "./task-board.js";
-export { AgentPool } from "./agent-pool.js";
 export { ConfirmGate } from "./confirm-gate.js";
 export { PipelineObserver } from "./pipeline-observer.js";
 export { FileLockManager } from "./file-lock-manager.js";
@@ -97,4 +93,7 @@ export { Toolkit } from "./toolkit.js";
 export { LlmAdapter } from "@cortex/llm";
 export { CLIAdapter } from "./cli-adapter.js";
 export { MemoryStore } from "./memory-store.js";
-export type { MemoryWriteInput } from "./memory-store.js";
+// MemoryWriteInput 已迁移至 @cortex/shared，从 shared 重新导出以保持向后兼容
+export type { MemoryWriteInput } from "@cortex/shared";
+// NodeFileSystemAdapter 为 IFileSystemAdapter 的 Node.js 默认实现
+export { NodeFileSystemAdapter } from "./node-fs-adapter.js";
