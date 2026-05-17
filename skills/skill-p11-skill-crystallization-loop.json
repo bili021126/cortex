@@ -1,0 +1,24 @@
+{
+  "id": "skill-p11-skill-crystallization-loop-1778962384001",
+  "agentType": "loop",
+  "name": "P11: 技能沉淀闭环 (Pattern → Memory → Registry)",
+  "triggerTags": ["loop", "pattern_scan", "skill_precipitate"],
+  "trigger": "需要从已产出的 pattern.md 文件中提取技能模板并持久化到 MemoryStore 和 SkillRegistry",
+  "steps": [
+    "使用 scanOutputFilesForSkills(workspaceDir) 扫描所有 pattern.md / patterns.md 文件（深度 ≤6，跳过 node_modules 和隐藏目录）",
+    "对每个匹配文件，调用 extractSkillsFromMarkdown(content, agentType, filePath) 提取技能模板",
+    "提取策略按优先级尝试：JSON块提取 → P0-P9格式提取 → 模式段落提取 → 整文件回退",
+    "有效模板校验：必须有 id / agentType / name / triggerTags（数组） / steps（数组且长度>0）",
+    "将去重后的模板注册到 SkillRegistry：registry.registerAll(skills)，以 id 为唯一键",
+    "持久化到 MemoryStore：对每个技能调用 memory.writePending({ memoryType: 'SKILL', subType: 'FACT', content: skill }) 然后 memory.commitMemory(memId)",
+    "验证闭环：从 MemoryStore 回读 loadSkillsFromMemory(memory) 并逐一比对提取的技能（id/name/tags/steps 长度吻合）",
+    "可选：将 SkillRegistry 导出为 JSON 文件 registry.saveJson('.cortex/skills-crystallized.json')"
+  ],
+  "expectedOutput": "技能持久化报告：提取 N 个技能 → 注册 N 个 → 持久化 N/M 个 → 回读验证 N 个匹配",
+  "outputFile": ".cortex/skills-crystallized.json",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384001
+}

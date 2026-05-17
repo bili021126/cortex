@@ -1,5 +1,5 @@
 import type { MemoryEntry, MemoryLink, MemoryType, MemoryWriteInput, AgentType } from "@cortex/shared";
-import { MemoryState, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { MemoryState, MemorySubType, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { PipelineObserver } from "../pipeline-observer.js";
 import * as crypto from "node:crypto";
 import { EMBEDDING_DIM } from "./schema.js";
@@ -35,6 +35,7 @@ export class MemoryStorage {
       id,
       memoryType: input.memoryType,
       state: MemoryState.Active,
+      subType: input.subType,
       content: input.content,
       summary: input.summary,
       agentType: input.agentType,
@@ -69,6 +70,7 @@ export class MemoryStorage {
         id: raw.id as string,
         memoryType: raw.memory_type as MemoryType,
         state: raw.state as MemoryState,
+        subType: raw.sub_type as MemorySubType | undefined,
         content: JSON.parse(contentStr),
         summary: raw.summary as string,
         agentType: raw.agent_type as AgentType,

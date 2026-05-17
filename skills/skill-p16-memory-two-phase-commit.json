@@ -1,0 +1,22 @@
+{
+  "id": "skill-p16-memory-two-phase-commit-1778962384006",
+  "agentType": "code",
+  "name": "P16: MemoryStore 两阶段提交 (Pending → Active)",
+  "triggerTags": ["code", "implementation", "refactor"],
+  "trigger": "需要将数据写入 MemoryStore 并确保半成品（Pending）与已提交（Active）状态隔离",
+  "steps": [
+    "第一阶段 — 写入 Pending：调用 memory.writePending({ memoryType, subType, content, summary, agentType, creatorId }) 获取记忆 ID",
+    "writePending 内部逻辑：调用 write() 做 INSERT（含 SQLite）→ 手动设置 m.state = MemoryState.Pending",
+    "注意：writePending 不应委托给 SemiFinishedMgr.writePending()（两者行为不一致——MemoryStore 路径立即 SQLite INSERT，SemiFinishedMgr 仅内存写入）",
+    "第二阶段 — 提交为 Active：调用 memory.commitMemory(memId)",
+    "commitMemory 内部逻辑：将 state 从 Pending 翻转为 Active，同时将 subType 从 Intent 翻转为 Fact（需额外 SQL UPDATE sub_type 持久化）",
+    "若中途失败：已 Pending 的记忆作为半成品留存在 DB 中，重启后可查询清理",
+    "读取时过滤：read({ memoryTypes, state: 'ACTIVE' }) 仅获取已提交的记忆"
+  ],
+  "expectedOutput": "两阶段提交实现：writePending → ID 返回 → commitMemory → DB 中 state=ACTIVE, subType=FACT 持久化",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384006
+}

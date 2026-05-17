@@ -1,8 +1,8 @@
 import type { TaskNode, NodeResult, MemoryQuery, AgentType, SafeErrorReporter } from "@cortex/shared";
-import { MemoryType, LinkType, MemoryState } from "@cortex/shared";
+import { MemoryType, LinkType, MemoryState, MemorySubType } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../toolkit.js";
-import type { MemoryStore } from "../memory-store.js";
+import type { MemoryStore } from "./memory-store.js";
 import { runReActLoop, type ReActContext } from "../components/react-loop.js";
 
 /**
@@ -162,8 +162,9 @@ async function _rememberResult(
     content.lesson = `${agentType} successfully fixed a ${node.type}. The original error context is preserved above.`;
   }
 
+  // P0-六层防御：使用 writePending + commitMemory 两阶段提交
   try {
-    const memId = memory.write({
+    const memId = memory.writePending({
       memoryType: MemoryType.Episodic,
       content,
       summary: isSuccess
@@ -173,16 +174,18 @@ async function _rememberResult(
         : `[失败教训] ${agentType} 执行 ${node.type} 失败: ${(result.error ?? "unknown").slice(0, 100)}`,
       agentType,
       creatorId: agentType,
+      subType: MemorySubType.Fact,
       weight: isSuccess ? 5 : 3,
       metadata: { taskId: node.id, nodeType: node.type, tags: node.tags },
     });
 
-    const ctxMemId = memory.write({
+    const ctxMemId = memory.writePending({
       memoryType: MemoryType.Episodic,
       content: { nodeId: node.id, nodeType: node.type, tags: node.tags, outcome: isSuccess ? "success" : "failure" },
       summary: `[上下文] 节点 ${node.id} (${node.type}): ${node.payload.slice(0, 60)}`,
       agentType,
       creatorId: agentType,
+      subType: MemorySubType.Fact,
       weight: 1,
       metadata: { taskId: node.id },
     });
@@ -199,6 +202,10 @@ async function _rememberResult(
         memory.link(memId, parentMemories[0].id, LinkType.ProducedBy);
       }
     }
+
+    // 两阶段提交：全部成功 → commit
+    memory.commitMemory(memId);
+    memory.commitMemory(ctxMemId);
   } catch (memErr) {
     if (safeReporter) {
       safeReporter({

@@ -1,0 +1,23 @@
+{
+  "id": "skill-p13-file-reconnaissance-inventory-1778962384003",
+  "agentType": "inspector",
+  "name": "P13: 文件侦察与清单生成",
+  "triggerTags": ["inspector", "inspect"],
+  "trigger": "需要探查目录结构、确认关键文件存在并生成结构化清单报告",
+  "steps": [
+    "使用 list_files(dir_path, pattern='*.ts') 列出目标目录下所有符合模式的文件",
+    "排除子目录（仅统计文件），分别记录文件列表和子目录列表",
+    "对需要确认的关键文件，逐一检查其在返回列表中是否存在",
+    "使用 search_code(query) 搜索关键代码模式作为存在性交叉验证",
+    "整理结构化清单：编号列表 + 关键文件确认表（状态/数据来源/结论）",
+    "添加工具调用溯源部分：记录每次调用的输入与输出片段",
+    "将侦察结果写入 MemoryStore：memory.writePending({ memoryType: 'EPISODIC', subType: 'FACT', content: report }) → commitMemory"
+  ],
+  "expectedOutput": "侦察报告：N 个源文件清单 + K 项关键文件确认（均存在/部分缺失）+ 工具调用溯源",
+  "outputFile": "{output-dir}/report.md",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384003
+}

@@ -5,8 +5,8 @@ import type { AgentPool } from "./agent-pool.js";
 import type { PipelineObserver } from "./pipeline-observer.js";
 import type { ConfirmGate } from "./confirm-gate.js";
 import type { MetaAgent } from "./meta-agent.js";
-import type { SkillRegistry } from "@cortex/shared";
-import { extractSkillsFromOutput } from "./components/skill-extractor.js";
+import { isTestEnv } from "./test-env.js";
+import { type EngineConfig, resolveConfig } from "./config.js";
 
 /**
  * 拓扑排序：按 parentId 依赖关系分层。
@@ -101,8 +101,7 @@ export class Scheduler {
   private totalReplans = 0;
   private replanResults: NodeResult[] = []; // 重规划成功的合成结果
   private replanMap = new Map<string, string[]>(); // originalId → replan-generated new ids
-  private static readonly REPLAN_MAX_ROUNDS = 3; // 单节点最多重规划轮次
-  private static readonly MAX_TOTAL_REPLANS = 3;  // 全局兜底：单次 executeAll 最大重规划次数
+  private readonly config: Required<EngineConfig>;
 
   constructor(
     private readonly board: TaskBoard,
@@ -110,8 +109,10 @@ export class Scheduler {
     private readonly observer: PipelineObserver,
     private readonly gate: ConfirmGate,
     private readonly metaAgent?: MetaAgent,
-    private readonly skillRegistry?: SkillRegistry,
-  ) {}
+    engineConfig?: EngineConfig,
+  ) {
+    this.config = resolveConfig(engineConfig);
+  }
 
   /** 注册一个 AgentRunner 及其所用模型 */
   register(agentType: string, agent: Agent, model: string): void {
@@ -280,13 +281,13 @@ export class Scheduler {
    * 返回 Promise（调用方可 await 或 fire-and-forget）。
    */
   private _tryFireReplan(): Promise<void> | null {
-    if (this.totalReplans >= Scheduler.MAX_TOTAL_REPLANS) {
+    if (this.totalReplans >= this.config.maxTotalReplans) {
       this.observer.emit({
         type: PipelineEventType.SchedulerReplanLimit,
         priority: PipelinePriority.CRITICAL,
         payload: {
           totalReplans: this.totalReplans,
-          maxReplans: Scheduler.MAX_TOTAL_REPLANS,
+          maxReplans: this.config.maxTotalReplans,
           deferred: this.replanQueue.length,
         },
         timestamp: Date.now(),
@@ -324,7 +325,7 @@ export class Scheduler {
     const fullBatch = this.replanQueue.splice(0); // 原子取出，清空队列
 
     // 入口截断：计算可用额度，只取 batch 内能容纳的项
-    const available = Scheduler.MAX_TOTAL_REPLANS - this.totalReplans;
+    const available = this.config.maxTotalReplans - this.totalReplans;
     if (available <= 0) return;
     const batch = fullBatch.slice(0, available);
     this.totalReplans += batch.length; // 同步预留计数器，避免并行回调竞态超限
@@ -341,7 +342,7 @@ export class Scheduler {
         notificationType: "WARNING",
       });
 
-      const result = await this.metaAgent!.requestReplan(item.node, item.reason, count);
+      const result = await this.metaAgent!.requestReplan(item.node, item.reason, count, undefined, this.config.maxReplanPerNode);
 
       // 领而不执：新节点入板，不 dispatch
       const newIds: string[] = [];
@@ -416,7 +417,7 @@ export class Scheduler {
       const isReActTimeout = ((result.error ?? "") + (result.output ?? "")).includes("Exceeded max loops");
       if (!isReActTimeout) {
         const count = this.replanCount.get(nodeId) ?? 0;
-        if (count < Scheduler.REPLAN_MAX_ROUNDS) {
+        if (count < this.config.maxReplanPerNode) {
           this.replanQueue.push({ node, reason: result.output ?? result.error ?? "unknown", count });
           this.observer.emit({
             type: PipelineEventType.NodeReplanQueued,
@@ -477,12 +478,14 @@ export class Scheduler {
           matchedCount++;
         }
       }
-      console.warn(
-        `[scheduler] 节点 ${node.id} type="${node.type}" 非标准 AgentType——` +
-        `仅 ${matchedCount} 个 Agent 可匹配 (已分配 ${agentType})，` +
-        `其余 ${this.agents.size - matchedCount} 个空闲。` +
-        `建议 MetaAgent 将大任务拆分为 type="review"+"ops"+"code"... 的独立节点以利用并行。`
-      );
+      if (!isTestEnv()) {
+        console.warn(
+          `[scheduler] 节点 ${node.id} type="${node.type}" 非标准 AgentType——` +
+          `仅 ${matchedCount} 个 Agent 可匹配 (已分配 ${agentType})，` +
+          `其余 ${this.agents.size - matchedCount} 个空闲。` +
+          `建议 MetaAgent 将大任务拆分为 type="review"+"ops"+"code"... 的独立节点以利用并行。`
+        );
+      }
       this.observer.emit({
         type: PipelineEventType.SchedulerNonstandardType,
         priority: PipelinePriority.HIGH,
@@ -535,6 +538,11 @@ export class Scheduler {
       };
     }
 
+    // 方案B：Agent 状态所有权归一——spawn 后注入 Pool，消除 Agent/Pool 双轨状态分歧
+    if (typeof agent.setPool === 'function') {
+      agent.setPool(this.pool, instanceId);
+    }
+
     const model = this.models.get(agentType) ?? "mock";
     let result: NodeResult;
     try {
@@ -548,6 +556,11 @@ export class Scheduler {
       };
     }
 
+    // 优雅降级：Awake/Active → Draining，再 destroy（避免 Awake → Destroyed 非法流转）
+    const preStatus = this.pool.getStatus(instanceId);
+    if (preStatus === AgentStatus.Awake || preStatus === AgentStatus.Active) {
+      this.pool.setStatus(instanceId, AgentStatus.Draining);
+    }
     // destroy 异常不应阻断 complete 落盘，但需上报追踪实例泄漏
     try { this.pool.destroy(agentType as AgentType, instanceId); } catch (e) {
       this.observer.emit({
@@ -566,14 +579,9 @@ export class Scheduler {
       this.observer.emit({
         type: PipelineEventType.NodeComplete,
         priority: PipelinePriority.HIGH,
-        payload: { nodeId: node.id, agentType, success: true },
+        payload: { nodeId: node.id, agentType, success: true, output: result.output },
         timestamp: Date.now(),
       });
-
-      // ── 技能沉淀：LoopAgent 完成后提取 SkillTemplate ──
-      if (this.skillRegistry && agentType === AT.Loop && result.output) {
-        this._extractAndRegisterSkills(node.id, result.output);
-      }
     }
 
     return result;
@@ -617,6 +625,11 @@ export class Scheduler {
         return null;
       }
 
+      // 方案B：Agent 状态所有权归一——spawn 后注入 Pool
+      if (typeof agent.setPool === 'function') {
+        agent.setPool(this.pool, instanceId);
+      }
+
       const model = this.models.get(at) ?? "mock";
       let result: NodeResult;
       try {
@@ -625,6 +638,11 @@ export class Scheduler {
         result = { nodeId: node.id, agentType: at as AgentType, success: false, error: String(e) };
       }
 
+      // 优雅降级：Awake/Active → Draining，再 destroy（避免 Awake → Destroyed 非法流转）
+      const preStatus2 = this.pool.getStatus(instanceId);
+      if (preStatus2 === AgentStatus.Awake || preStatus2 === AgentStatus.Active) {
+        this.pool.setStatus(instanceId, AgentStatus.Draining);
+      }
       // destroy 异常不应阻断 complete 落盘，但需上报追踪实例泄漏
       try { this.pool.destroy(at as AgentType, instanceId); } catch (e) {
         this.observer.emit({
@@ -682,6 +700,9 @@ export class Scheduler {
         priority: PipelinePriority.HIGH,
         payload: {
           nodeId: node.id,
+          agentType: agentTypes[0] as AgentType,
+          success: true as const,
+          output: combined,
           perspectives: results.map((r) => r.agentType),
           allSuccess: true,
         },
@@ -742,76 +763,5 @@ export class Scheduler {
           node.tags.some((t) => (tags as readonly string[]).includes(t)),
       )
       .map(([type]) => type);
-  }
-
-  /**
-   * 从 LoopAgent 输出中提取技能模板并注册到 SkillRegistry。
-   * 提取失败不阻塞调度——通过 observer 上报诊断信息。
-   */
-  private _extractAndRegisterSkills(nodeId: string, output: string): void {
-    if (!this.skillRegistry) return;
-
-    const { skills, diagnostics } = extractSkillsFromOutput(output);
-
-    for (const diag of diagnostics) {
-      this.observer.emit({
-        type: PipelineEventType.NodeComplete,
-        priority: PipelinePriority.NORMAL,
-        payload: {
-          nodeId,
-          agentType: AT.Loop,
-          success: true,
-          output: `[skill-extractor] ${diag}`,
-        },
-        timestamp: Date.now(),
-      });
-    }
-
-    if (skills.length === 0) {
-      this.observer.emit({
-        type: PipelineEventType.NodeComplete,
-        priority: PipelinePriority.NORMAL,
-        payload: {
-          nodeId,
-          agentType: AT.Loop,
-          success: true,
-          output: `[skill-extractor] 未从 LoopAgent 输出中提取到技能模板`,
-        },
-        timestamp: Date.now(),
-      });
-      return;
-    }
-
-    let registered = 0;
-    for (const skill of skills) {
-      try {
-        this.skillRegistry.register(skill);
-        registered++;
-      } catch (e) {
-        this.observer.emit({
-          type: PipelineEventType.ErrorReported,
-          priority: PipelinePriority.HIGH,
-          payload: {
-            source: `scheduler._tryRegisterSkills.${nodeId}`,
-            severity: "degraded",
-            error: `注册技能 ${skill.id} 失败: ${String(e).slice(0, 200)}`,
-          },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-      }
-    }
-
-    this.observer.emit({
-      type: PipelineEventType.NodeComplete,
-      priority: PipelinePriority.NORMAL,
-      payload: {
-        nodeId,
-        agentType: AT.Loop,
-        success: true,
-        output: `[skill-extractor] 成功注册 ${registered}/${skills.length} 个技能模板: ${skills.map((s) => `${s.name}(${s.id})`).join(", ")}`,
-      },
-      timestamp: Date.now(),
-    });
   }
 }

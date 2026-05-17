@@ -1,8 +1,8 @@
-/**
- * 手动 E2E 快速验证—最简意图全管线打通
+﻿/**
+ * 手动 E2E 快速验证——最简意图全管线打通
  *
  * 用法: npx tsx tests/manual/manual-e2e-verify.ts
- * 前提: 项目根目录?.env 已配置 DEEPSEEK_API_KEY
+ * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY
  *
  * 验证链路:
  *   用户意图 -> MetaAgent 规划 -> Scheduler 执行 -> 诊断
@@ -10,7 +10,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AgentType, PipelinePriority } from "@cortex/shared";
+import { AgentType, PipelinePriority, MemoryType, MemoryState, MemorySubType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { MetaAgent } from "../../../src/meta-agent";
 import { TaskBoard } from "../../../src/task-board";
@@ -28,15 +28,17 @@ import { ConfirmGate } from "../../../src/confirm-gate";
 import { Toolkit } from "../../../src/toolkit";
 import { MemoryStore } from "../../../src/memory-store";
 import { CLIAdapter } from "../../../src/cli-adapter";
+import { ConsistencyLayer } from "../../../src/consistency/consistency-layer";
+import { NodeFileSystemAdapter } from "../../../src/node-fs-adapter";
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 1. 环境变量
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
   if (!fs.existsSync(envPath)) {
-    console.error("�?.env 文件不存在，请在项目根目录创建并配置 DEEPSEEK_API_KEY");
+    console.error(".env 文件不存在，请在项目根目录创建并配置 DEEPSEEK_API_KEY");
     process.exit(1);
   }
   const lines = fs.readFileSync(envPath, "utf-8").split("\n");
@@ -47,9 +49,9 @@ function loadEnv() {
   }
 }
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 2. 真实工具（只读安全）
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 function registerRealTools(toolkit: Toolkit, workspaceRoot: string) {
   const resolve = (p: string) => path.resolve(workspaceRoot, p);
@@ -128,13 +130,13 @@ function registerRealTools(toolkit: Toolkit, workspaceRoot: string) {
     }
   });
 
-  // run_shell �?安全执行，限�?workspace 范围，超�?60s，拦截危险命�?
+  // run_shell: 安全执行，限制 workspace 范围，超时 60s，拦截危险命令
   const DANGEROUS = new RegExp("\\b(rm\\s+-rf|del\\s+/F|format\\s|shutdown|reboot|sudo|chmod\\s+777|>/dev/|/etc/)");
   toolkit.register("run_shell", async (params) => {
     const cmd = (params.command ?? "") as string;
     if (!cmd) return { success: false, error: "run_shell: 缺少 command 参数" };
     if (DANGEROUS.test(cmd)) {
-      return { success: false, error: `run_shell denied: 危险命令已拦�?�?"${cmd.slice(0, 60)}"` };
+      return { success: false, error: `run_shell denied: 危险命令已拦截: "${cmd.slice(0, 60)}"` };
     }
     try {
       const { execSync } = await import("node:child_process");
@@ -154,15 +156,15 @@ function registerRealTools(toolkit: Toolkit, workspaceRoot: string) {
   });
 }
 
-// ══════════════════════════════════════════════�?
-// 3. 主流�?
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
+// 3. 主流程
+// ═══════════════════════════════════════════════
 
 async function main() {
   loadEnv();
   const API_KEY = process.env.DEEPSEEK_API_KEY;
   if (!API_KEY) {
-    console.error("�?DEEPSEEK_API_KEY 未设�?);
+    console.error("DEEPSEEK_API_KEY 未设置");
     process.exit(1);
   }
 
@@ -172,13 +174,13 @@ async function main() {
   const WORKSPACE = process.cwd();
 
   console.log("╔══════════════════════════════════════╗");
-  console.log("�?  手动 E2E 快速验�?                  �?);
+  console.log("║  手动 E2E 快速验证                   ║");
   console.log("╚══════════════════════════════════════╝\n");
   console.log(`  Model:  ${CHAT_MODEL} / ${REASONER_MODEL}`);
   console.log(`  CWD:    ${WORKSPACE}\n`);
 
-  // ── 初始化组�?──
-  console.log("🟢 初始化组�?..");
+  // ── 初始化组件 ──
+  console.log("🟢 初始化组件...");
 
   const adapter = new LlmAdapter({
     apiKey: API_KEY,
@@ -201,7 +203,7 @@ async function main() {
   const memory = new MemoryStore();
   const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", "memory.db");
   await memory.init(MEMORY_DB);
-  console.log(`   �?MemoryStore 持久�? ${MEMORY_DB}`);
+  console.log(`   ✅ MemoryStore 持久化: ${MEMORY_DB}`);
 
   pool.register({ type: AgentType.Code, maxInstances: 3 });
   pool.register({ type: AgentType.Review, maxInstances: 3 });
@@ -256,24 +258,27 @@ async function main() {
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
 
-  console.log("   �?7 Agent 就绪 (Code/Review/Analysis/DocGovern/Inspector/Ops/Loop)\n");
+  console.log("   ✅ 7 Agent 就绪 (Code/Review/Analysis/DocGovern/Inspector/Ops/Loop)\n");
 
   // ── 规划 ──
   console.log("🟢 MetaAgent 规划...");
 
   const intent = [
-    "�?测试环境约束：输出简洁，只读 packages/ �?docs/ 下的文件，不能修改代码�?,
+    "测试环境约束：输出简洁，只读 packages/ 和 docs/ 下的文件，不能修改代码",
     "",
-    "检查项目的 package.json 有哪些依赖，",
-    "然后列出 packages/engine/src 目录下有哪些 TypeScript 源文件�?,
+    "分两步协作——Agent 之间通过 MemoryStore 共享信息：",
+    "1. 一个 Agent（type=inspect 或 type=code）列出 packages/engine/src 下所有 .ts 源文件，",
+    "   特别注意确认 agent-pool.ts、scheduler.ts、memory-store.ts 这三个文件存在",
+    "2. 另一个 Agent（type=review 或 type=analysis）从记忆回读上一步的结果，",
+    "   验证三个关键文件（agent-pool.ts、scheduler.ts、memory-store.ts）都在列表中",
   ].join("");
 
   const planStart = Date.now();
   const nodes = await metaAgent.plan(intent);
   const planDuration = Date.now() - planStart;
 
-  console.log(`   �? 规划耗时: ${planDuration}ms`);
-  console.log(`   节点�? ${nodes.length}`);
+  console.log(`   ✅ 规划耗时: ${planDuration}ms`);
+  console.log(`   节点数: ${nodes.length}`);
   for (const n of nodes) {
     console.log(`     [${n.type}] ${n.payload?.toString().slice(0, 80) ?? "?"}`);
     console.log(`       tags: [${n.tags.join(", ")}]  multi: ${n.needsMultiPerspective}`);
@@ -281,15 +286,15 @@ async function main() {
   console.log();
 
   if (nodes.length === 0) {
-    console.error("   �?MetaAgent 未产出节�?);
+    console.error("   MetaAgent 未产出节点");
     process.exit(1);
   }
 
   // ── 入板 + 执行 ──
-  console.log("🟢 �?TaskBoard + Scheduler 执行...");
+  console.log("🟢 📋 TaskBoard + Scheduler 执行...");
 
   for (const n of nodes) board.addNode(n);
-  console.log(`   �?${board.getAllNodes().length} 节点入板\n`);
+  console.log(`   ✅ ${board.getAllNodes().length} 节点入板\n`);
 
   // 事件收集
   const events: Array<{ type: string; payload: unknown }> = [];
@@ -303,17 +308,17 @@ async function main() {
   const report = await scheduler.executeAll();
   const execDuration = Date.now() - execStart;
 
-  console.log(`\n   �? 执行耗时: ${execDuration}ms`);
+  console.log(`\n   ✅ 执行耗时: ${execDuration}ms`);
   console.log(`   完成: ${report.completed}  失败: ${report.failed}`);
   for (const r of report.results) {
-    const icon = r.success ? "�? : "�?;
+    const icon = r.success ? "✅ " : "❌ ";
     console.log(`   ${icon} [${r.agentType ?? "?"}] ${r.nodeId}: ${(r.output ?? r.error ?? "?").slice(0, 100)}`);
   }
   console.log();
 
   // ── 诊断 ──
   console.log("╔══════════════════════════════════════╗");
-  console.log("�?  诊断报告                            �?);
+  console.log("║  诊断报告                            ║");
   console.log("╚══════════════════════════════════════╝\n");
 
   const allNodes = board.getAllNodes();
@@ -323,8 +328,8 @@ async function main() {
 
   console.log("── 时序 ──");
   console.log(`  规划耗时:       ${planDuration}ms`);
-  console.log(`  执行耗时:        ${execDuration}ms`);
-  console.log(`  全管线耗时:      ${planDuration + execDuration}ms`);
+  console.log(`  执行耗时:       ${execDuration}ms`);
+  console.log(`  全管线耗时:     ${planDuration + execDuration}ms`);
   console.log();
 
   console.log("── 事件统计 ──");
@@ -332,22 +337,121 @@ async function main() {
   console.log(`  node.start:             ${events.filter((e) => e.type === "node.start").length}`);
   console.log(`  node.complete:          ${events.filter((e) => e.type === "node.complete").length}`);
   console.log(`  node.replan:            ${events.filter((e) => e.type === "node.replan").length}`);
-  console.log(`  总事件数:                ${events.length}`);
+  console.log(`  总事件数:               ${events.length}`);
   console.log();
 
   console.log("── TaskBoard ──");
-  console.log(`  总节�?   ${allNodes.length}`);
+  console.log(`  总节点:   ${allNodes.length}`);
   console.log(`  完成:     ${completedNodes.length}`);
   console.log(`  失败:     ${failedNodes.length}`);
-  console.log(`  结果�?   ${allNodes.reduce((sum, n) => sum + n.results.length, 0)}`);
+  console.log(`  结果数:   ${allNodes.reduce((sum, n) => sum + n.results.length, 0)}`);
   console.log();
 
   console.log("── 记忆系统 ──");
-  console.log(`  总条�?       ${memories.length}`);
-  console.log(`  持久�?       ${memory.isPersisted ? "�?sql.js" : "�?仅内�?}`);
+  console.log(`  总条数:       ${memories.length}`);
+  console.log(`  持久化:       ${memory.isPersisted ? "✅ sql.js" : "❌ 仅内存"}`);
   console.log();
 
-  // �?agentType 分组展示产出
+  // ── P0-六层防御：两阶段提交 + 子类型 API 验证 ──
+  console.log("── P0-六层防御 API 验证 ──");
+
+  // 唯一标识符隔离——防止上次 E2E 残留数据污染本次结果
+  const runTag = `P0-e2e-${Date.now()}`;
+
+  // 测试 writePending
+  const pendingId = memory.writePending({
+    memoryType: MemoryType.Episodic,
+    content: { test: "P0-pending-verify", runTag },
+    summary: `[P0测试] 半成品记忆——应默认不可检索 ${runTag}`,
+    agentType: "inspector" as any,
+    creatorId: "e2e-test",
+  });
+  console.log(`  writePending:   ${pendingId ? "✅ " + pendingId.slice(0, 20) + "..." : "❌ 失败"}`);
+
+  // 验证 Pending 记忆默认不可见
+  const pendingOnly = memory.getPending();
+  const hasP = memory.hasPending();
+  console.log(`  hasPending:     ${hasP ? "✅ true" : "❌ false"}`);
+  console.log(`  getPending:     ${pendingOnly.length} 条 Pending`);
+
+  // 验证默认 read() 不返回 Pending
+  const defaultRead = memory.read({ keywords: [runTag] });
+  console.log(`  read(default):  ${defaultRead.length} 条 (期望 0——Pending 默认不可见) ${defaultRead.length === 0 ? "✅" : "❌"}`);
+
+  // 验证显式查询 Pending state 可检索
+  const explicitRead = memory.read({ keywords: [runTag], states: [MemoryState.Pending] });
+  console.log(`  read(Pending):  ${explicitRead.length} 条 (期望 >=1——显式查 Pending 可见) ${explicitRead.length >= 1 ? "✅" : "❌"}`);
+
+  // commit: Pending → Active, Intent → Fact
+  const committed = memory.commitMemory(pendingId);
+  console.log(`  commitMemory:   ${committed ? "✅" : "❌"}`);
+
+  // 验证 commit 后默认 read 可见
+  const afterCommit = memory.read({ keywords: [runTag] });
+  const entry = afterCommit[0];
+  console.log(`  read(after):    ${afterCommit.length} 条 (期望 1) ${afterCommit.length === 1 ? "✅" : "❌"}`);
+  console.log(`  subType:        ${entry?.subType ?? "undefined"} (期望 FACT) ${entry?.subType === "FACT" ? "✅" : "❌"}`);
+  console.log(`  state:          ${entry?.state ?? "?"} (期望 ACTIVE) ${entry?.state === "ACTIVE" ? "✅" : "❌"}`);
+
+  // SubType 过滤验证
+  const factOnly = memory.read({ keywords: [runTag], subTypes: [MemorySubType.Fact] });
+  console.log(`  subTypes(FACT): ${factOnly.length} 条 ${factOnly.length >= 1 ? "✅" : "❌"}`);
+  const intentOnly = memory.read({ keywords: [runTag], subTypes: [MemorySubType.Intent] });
+  console.log(`  subTypes(INTENT): ${intentOnly.length} 条 (期望 0——已 commit 翻转为 Fact) ${intentOnly.length === 0 ? "✅" : "❌"}`);
+  console.log();
+
+  // ── P1-六层防御：ConsistencyLayer ──
+  console.log("── P1-六层防御 API 验证 ──");
+
+  const fsAdapter = new NodeFileSystemAdapter();
+  const cl = new ConsistencyLayer(memory, {
+    projectRoot: WORKSPACE,
+    failThreshold: 0.3,
+    enableInitVerifier: true,
+    enableSchemaEnforcer: true,
+    fs: fsAdapter,
+  });
+
+  // 启动校验
+  const verifyReport = await cl.verify();
+  console.log(`  verify:         ${verifyReport ? "✅ " + verifyReport.totalMemories + " 条记忆, " + verifyReport.checkedMemories + " 条有文件引用" : "❌ 未启用"}`);
+  if (verifyReport) {
+    console.log(`    ok:           ${verifyReport.summary.ok}`);
+    console.log(`    missing:      ${verifyReport.summary.missing}`);
+    console.log(`    fatal:        ${verifyReport.fatal}`);
+  }
+
+  // SchemaEnforcer: 正常输入
+  const validInput = {
+    memoryType: MemoryType.Episodic,
+    content: { test: "p1-valid" },
+    summary: "P1 正常校验输入",
+    agentType: "review" as any,
+    creatorId: "e2e-p1",
+  };
+  const vr1 = cl.validateInput(validInput);
+  console.log(`  validate(正常): ${vr1.valid ? "✅" : "❌ " + vr1.errors.join("; ")}`);
+
+  // SchemaEnforcer: 异常输入（缺 content）
+  const invalidInput = {
+    memoryType: MemoryType.Episodic,
+    content: undefined as any,
+    summary: "",
+    agentType: "review" as any,
+    creatorId: "e2e-p1",
+  };
+  const vr2 = cl.validateInput(invalidInput);
+  console.log(`  validate(异常): ${!vr2.valid ? "✅ 检测到 " + vr2.errors.length + " 个错误: " + vr2.errors.join("; ") : "❌ 应拒绝但通过了"}`);
+
+  // annotateInput
+  const noSubType = { ...validInput, subType: undefined };
+  const annotated = cl.annotateInput(noSubType);
+  console.log(`  annotate:       ${annotated.subType === "FACT" ? "✅ 默认 subType=FACT" : "❌ " + annotated.subType}`);
+  console.log(`  hasVerifier:    ${cl.hasInitVerifier ? "✅" : "❌"}`);
+  console.log(`  hasEnforcer:    ${cl.hasSchemaEnforcer ? "✅" : "❌"}`);
+  console.log();
+
+  // 按 agentType 分组展示产出
   const results = allNodes.flatMap((n) => n.results);
   const byAgent = new Map<string, typeof results>();
   for (const r of results) {
@@ -356,26 +460,26 @@ async function main() {
     byAgent.get(key)!.push(r);
   }
 
-  console.log("── �?Agent 产出 ──");
+  console.log("── 按 Agent 产出 ──");
   byAgent.forEach((agentResults, agentType) => {
     console.log(`  [${agentType}] ${agentResults.length} 条结果`);
     for (const r of agentResults) {
-      console.log(`     ${r.success ? "�? : "�?} ${(r.output ?? r.error ?? "").slice(0, 120)}`);
+      console.log(`     ${r.success ? "✅ " : "❌ "} ${(r.output ?? r.error ?? "").slice(0, 120)}`);
     }
   });
   console.log();
 
   // ── 结论 ──
   console.log("╔══════════════════════════════════════╗");
-  console.log("�?  验证结论                            �?);
+  console.log("║  验证结论                            ║");
   console.log("╚══════════════════════════════════════╝\n");
-  console.log(`  �?规划:     ${nodes.length} 节点 (${planDuration}ms)`);
-  console.log(`  �?执行:     ${report.completed}/${nodes.length} 完成 (${execDuration}ms)`);
-  console.log(`  �?记忆:     ${memories.length} �?(sql.js 持久�?`);
-  console.log(`  �?事件:     ${events.length} 个`);
+  console.log(`  📝 规划:     ${nodes.length} 节点 (${planDuration}ms)`);
+  console.log(`  ⚡ 执行:     ${report.completed}/${nodes.length} 完成 (${execDuration}ms)`);
+  console.log(`  🧠 记忆:     ${memories.length} 条 (sql.js 持久化)`);
+  console.log(`  📡 事件:     ${events.length} 个`);
 
   if (report.failed > 0) {
-    console.log(`\n  ⚠️  ${report.failed} �?Agent 结果标记为失败，详见日志`);
+    console.log(`\n  ⚠️  ${report.failed} 个 Agent 结果标记为失败，详见日志`);
   } else {
     console.log(`\n  🎉 全链路通过`);
   }
@@ -385,6 +489,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("�?验证失败:", err);
+  console.error("❌ 验证失败:", err);
   process.exit(1);
 });

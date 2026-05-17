@@ -1,6 +1,7 @@
 import type { AgentType, TaskNode, InvariantViolation, InvariantReporter } from "@cortex/shared";
 import { AGENT_TAGS, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
+import { isTestEnv } from "./test-env.js";
 
 // InvariantViolation + InvariantReporter 已迁移至 @cortex/shared —— 从 shared import 即可
 // 迁移原因（艾尔海森 P1）：TaskBoard 和 AgentPool 共用同一套 invariant 上报签名，
@@ -33,6 +34,9 @@ import type { PipelineObserver } from "./pipeline-observer.js";
  *   - done/failed 终态不可逆
  *
  * 原子 claim、标签匹配、needsMultiPerspective 多 Agent 并行认领与等齐。
+ *
+ * @fix D6 — invariant 上报单通道收敛：_observer 实例优先于 onInvariant 静态字段，
+ *   消除重复 emit 和维护负担。
  */
 export class TaskBoard {
   private nodes = new Map<string, TaskNode>();
@@ -42,6 +46,8 @@ export class TaskBoard {
    * invariant 违规上报后端。
    * 默认为 `null`（仅 console.error）。
    * 在 bootstrap 中注入 observer.emit 后，所有 invariant 违规会走 observer 管道。
+   *
+   * 优先级：实例 _observer > 静态 onInvariant > console.error
    */
   static onInvariant: InvariantReporter | null = null;
 
@@ -167,19 +173,7 @@ export class TaskBoard {
     if (!node.results.every((r) => r.agentType && node.claimedBy.includes(r.agentType))) {
       const orphanTypes = node.results.filter((r) => r.agentType && !node.claimedBy.includes(r.agentType)).map((r) => r.agentType);
       const msg = `results 包含未在 claimedBy 中的 agentType: ${orphanTypes} — claimedBy=[${node.claimedBy}]`;
-      if (TaskBoard.onInvariant) {
-        TaskBoard.onInvariant({ source: "TaskBoard.complete", message: msg, details: { nodeId, orphanTypes, claimedBy: node.claimedBy } });
-      } else if (this._observer) {
-        this._observer.emit({
-          type: PipelineEventType.TaskBoardInvariantViolation,
-          priority: PipelinePriority.CRITICAL,
-          payload: { source: "TaskBoard.complete", message: msg, nodeId, orphanTypes, claimedBy: node.claimedBy },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-      } else if (!process.env.VITEST) {
-        console.error(`[invariant] TaskBoard.complete: ${msg}`);
-      }
+      this._reportInvariant("TaskBoard.complete", msg, { nodeId, orphanTypes, claimedBy: node.claimedBy });
     }
 
     if (node.needsMultiPerspective) {
@@ -268,10 +262,7 @@ export class TaskBoard {
         // 终态节点无法安全删除（可能仍有外部引用），标记为孤儿并上报
         n.parentId = undefined; // 断开悬空引用
         const msg = `removeSubtree: 终态节点 ${id} (${n.status}) 已解除父节点引用——成为孤儿`;
-        if (TaskBoard.onInvariant) {
-          TaskBoard.onInvariant({ source: "TaskBoard.removeSubtree", message: msg, details: { nodeId: id, status: n.status, originalParentId: nodeId } });
-        }
-        console.warn(`[TaskBoard] ${msg}`);
+        this._reportInvariant("TaskBoard.removeSubtree", msg, { nodeId: id, status: n.status, originalParentId: nodeId });
       }
     }
     const root = this.nodes.get(nodeId);
@@ -280,10 +271,28 @@ export class TaskBoard {
       this.nodes.delete(nodeId);
     } else {
       const msg = `removeSubtree: 跳过终态根节点 ${nodeId} (${root.status})——将成为孤儿`;
-      if (TaskBoard.onInvariant) {
-        TaskBoard.onInvariant({ source: "TaskBoard.removeSubtree", message: msg, details: { nodeId, status: root.status } });
-      }
-      console.warn(`[TaskBoard] ${msg}`);
+      this._reportInvariant("TaskBoard.removeSubtree", msg, { nodeId, status: root.status });
+    }
+  }
+
+  /**
+   * 统一 invariant 上报通道。
+   * 优先级：_observer > onInvariant > console.error
+   * 单通道收敛，消除双路径重复 emit 风险。
+   */
+  private _reportInvariant(source: string, message: string, details?: unknown): void {
+    if (this._observer) {
+      this._observer.emit({
+        type: PipelineEventType.TaskBoardInvariantViolation,
+        priority: PipelinePriority.CRITICAL,
+        payload: { source, detail: JSON.stringify({ message, ...(details as Record<string, unknown> ?? {}) }) },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+    } else if (TaskBoard.onInvariant) {
+      TaskBoard.onInvariant({ source, message, details });
+    } else if (!isTestEnv()) {
+      console.error(`[invariant] ${source}: ${message}`);
     }
   }
 }

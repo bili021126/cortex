@@ -22,6 +22,7 @@ import { SCHEMA_VERSION, FLUSH_DEBOUNCE_MS, MAX_FLUSH_FAIL_STREAK, THIRTY_DAYS_M
  *
  * 不负责：内存 Map 操作（MemoryStorage）、查询编排（MemoryStore）、状态机（MemoryLifecycle）。
  *
+ * @fix D4 — init() 入口处检查 _db 是否已存在。防止两次 init() 导致 DB 连接泄漏和 WAL 锁定。
  * @fix M2 — runBatch 使用 better-sqlite3 transaction API 实现真实批量写入
  * @fix M8 — flush() 失败后正确清除 _dirty 状态
  */
@@ -70,8 +71,16 @@ export class MemoryPersistence {
 
   /**
    * 初始化 SQLite 持久化。创建/打开 DB，建表，从 storage 加载已有数据。
+   *
+   * @throws Error 如果已初始化（_db 已存在），防止 DB 连接泄漏。
    */
   async init(dbPath: string, storage: MemoryStorage): Promise<void> {
+    if (this._db) {
+      throw new Error(
+        `MemoryPersistence already initialized (dbPath: ${this._dbPath}); call close() first`,
+      );
+    }
+
     this._dbPath = dbPath;
 
     const dir = path.dirname(dbPath);
@@ -307,6 +316,7 @@ export class MemoryPersistence {
       id TEXT PRIMARY KEY,
       memory_type TEXT NOT NULL,
       state TEXT NOT NULL DEFAULT 'ACTIVE',
+      sub_type TEXT,
       content TEXT NOT NULL,
       summary TEXT NOT NULL,
       agent_type TEXT NOT NULL,
@@ -335,6 +345,13 @@ export class MemoryPersistence {
     runSQL("CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(memory_type)", "create_tables.idx_type");
     runSQL("CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id)", "create_tables.idx_source");
     runSQL("CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_id)", "create_tables.idx_target");
+
+    // P0-六层防御：为旧数据库添加 sub_type 列（SQLite 不支持 ADD COLUMN IF NOT EXISTS，用 try-catch 兜底）
+    try {
+      runSQL("ALTER TABLE memories ADD COLUMN sub_type TEXT", "migration.add_sub_type");
+    } catch {
+      // 列已存在，忽略
+    }
     runSQL(`CREATE TABLE IF NOT EXISTS __meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -436,6 +453,12 @@ export class MemoryPersistence {
     if (query.timeRange) {
       clauses.push("created_at >= ? AND created_at <= ?");
       params.push(query.timeRange.start, query.timeRange.end);
+    }
+
+    // 子类型（P0-六层防御）
+    if (query.subTypes && query.subTypes.length > 0) {
+      clauses.push(`sub_type IN (${query.subTypes.map(() => "?").join(",")})`);
+      params.push(...query.subTypes);
     }
 
     // 关键词

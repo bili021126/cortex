@@ -36,7 +36,7 @@ describe("PipelineObserver", () => {
     expect(criticalHandler).not.toHaveBeenCalled();
   });
 
-  it("off 移除 handler 后不再调用", () => {
+  it("off 移除所有 handler 后不再调用", () => {
     const po = new PipelineObserver();
     const handler = vi.fn();
     po.on(PipelinePriority.NORMAL, handler);
@@ -48,6 +48,71 @@ describe("PipelineObserver", () => {
       timestamp: Date.now(),
     });
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  // ── D4: off(priority, handler) 精确移除 ──
+  it("D4: off(priority, handler) 只移除指定的 handler，保留其他 handler", () => {
+    const po = new PipelineObserver();
+    const handlerA = vi.fn();
+    const handlerB = vi.fn();
+    po.on(PipelinePriority.NORMAL, handlerA);
+    po.on(PipelinePriority.NORMAL, handlerB);
+
+    // 精确移除 handlerA
+    po.off(PipelinePriority.NORMAL, handlerA);
+
+    const event: ObservableEvent = {
+      type: PipelineEventType.NodeComplete,
+      priority: PipelinePriority.NORMAL,
+      payload: null,
+      timestamp: Date.now(),
+    };
+    po.emit(event);
+
+    // handlerA 被移除，不应调用
+    expect(handlerA).not.toHaveBeenCalled();
+    // handlerB 仍在，应被调用
+    expect(handlerB).toHaveBeenCalledWith(event);
+  });
+
+  it("D4: off(priority, handler) 移除最后一个 handler 后删除整个优先级条目", () => {
+    const po = new PipelineObserver();
+    const handler = vi.fn();
+    po.on(PipelinePriority.CRITICAL, handler);
+
+    // 精确移除唯一的 handler
+    po.off(PipelinePriority.CRITICAL, handler);
+
+    // 内部 handlers Map 中不应再有 CRITICAL 条目
+    po.emit({
+      type: PipelineEventType.NodeFailed,
+      priority: PipelinePriority.CRITICAL,
+      payload: null,
+      timestamp: Date.now(),
+    });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("D4: off(priority, handler) 未注册的 handler 不影响其他 handler", () => {
+    const po = new PipelineObserver();
+    const handlerA = vi.fn();
+    const unregisteredHandler = vi.fn();
+    po.on(PipelinePriority.HIGH, handlerA);
+
+    // 尝试移除未注册的 handler
+    po.off(PipelinePriority.HIGH, unregisteredHandler);
+
+    const event: ObservableEvent = {
+      type: PipelineEventType.NodeStart,
+      priority: PipelinePriority.HIGH,
+      payload: null,
+      timestamp: Date.now(),
+    };
+    po.emit(event);
+
+    // handlerA 应正常调用
+    expect(handlerA).toHaveBeenCalledWith(event);
+    expect(unregisteredHandler).not.toHaveBeenCalled();
   });
 
   // ── P2-6 回归：requestId 幂等键 ──

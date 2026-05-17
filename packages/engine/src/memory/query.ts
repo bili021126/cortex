@@ -24,7 +24,13 @@ export class MemoryQueryEngine {
     if (query.states && query.states.length > 0) {
       results = results.filter((m) => query.states!.includes(m.state));
     } else {
+      // P0-六层防御：默认只返回 Active 记忆，Pending（半成品）不可见
       results = results.filter((m) => m.state === MemoryState.Active);
+    }
+
+    // P0-六层防御：子类型过滤
+    if (query.subTypes && query.subTypes.length > 0) {
+      results = results.filter((m) => m.subType ? query.subTypes!.includes(m.subType) : false);
     }
 
     results = results.filter((m) => now - m.createdAt < THIRTY_DAYS_MS);

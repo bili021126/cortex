@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AgentType, MemoryType, MemoryState, PipelinePriority } from "@cortex/shared";
-import { MemoryStore } from "../src/memory-store.js";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { PipelineObserver } from "../src/pipeline-observer.js";
 import * as fs from "node:fs";
 import * as path from "node:path";

@@ -2,7 +2,7 @@ import type { TaskNode, NodeResult, AgentType, MemoryQuery, SafeErrorReporter } 
 import { Agent, AgentStatus as AS, MemoryType } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "./toolkit.js";
-import type { MemoryStore } from "./memory-store.js";
+import type { MemoryStore } from "./memory/memory-store.js";
 import type { AgentPool } from "./agent-pool.js";
 import { executeWithMemoryPipeline } from "./memory/pipeline.js";
 import { PoolAwareState } from "./pool-aware.js";

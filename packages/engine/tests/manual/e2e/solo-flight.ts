@@ -24,25 +24,33 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, PipelinePriority, type TaskNode } from "@cortex/shared";
+import { MemorySubType, MemoryState, MemoryType } from "@cortex/shared";
+import { loadSkillsFromMemory, scanOutputFilesForSkills } from "../../../src/components/skill-persister.js";
 import { LlmAdapter } from "@cortex/llm";
-import { TaskBoard } from "../../../src/task-board.js";
-import { AgentPool } from "../../../src/agent-pool.js";
-import { Scheduler } from "../../../src/scheduler.js";
-import { PipelineObserver } from "../../../src/pipeline-observer.js";
-import { ConfirmGate } from "../../../src/confirm-gate.js";
-import { Toolkit } from "../../../src/toolkit.js";
-import { MemoryStore } from "../../../src/memory-store.js";
-import { MetaAgent } from "../../../src/meta-agent.js";
-import { CodeAgent } from "../../../src/agents/code-agent.js";
-import { ReviewAgent } from "../../../src/agents/review-agent.js";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent.js";
-import { OpsAgent } from "../../../src/agents/ops-agent.js";
-import { LoopAgent } from "../../../src/agents/loop-agent.js";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent.js";
-import { ApiAgent } from "../../../src/agents/api-agent.js";
-import { DataAgent } from "../../../src/agents/data-agent.js";
-import { FixAgent } from "../../../src/agents/fix-agent.js";
-import { InspectorAgent } from "../../../src/agents/inspector-agent.js";
+import {
+  TaskBoard,
+  AgentPool,
+  Scheduler,
+  PipelineObserver,
+  ConfirmGate,
+  Toolkit,
+  ConsistencyLayer,
+  NodeFileSystemAdapter,
+  MetaAgent,
+  SkillRegistry,
+  createAgent,
+  codeAgentConfig,
+  reviewAgentConfig,
+  analysisAgentConfig,
+  opsAgentConfig,
+  loopAgentConfig,
+  docGovernAgentConfig,
+  apiAgentConfig,
+  dataAgentConfig,
+  fixAgentConfig,
+  createInspectorAgent,
+} from "@cortex/engine";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
 
 // ══════════════════════════════════════════════
 // 0. 环境变量
@@ -253,6 +261,30 @@ async function main() {
   await memory.init(MEMORY_DB);
   console.log(`   MemoryStore: ${MEMORY_DB}`);
 
+  // P1 一致性校验层（文件校验 + 结构校验）
+  const fsAdapter = new NodeFileSystemAdapter();
+  const consistency = new ConsistencyLayer(memory as any, {
+    projectRoot: PROJECT_DIR,
+    enableInitVerifier: true,
+    enableSchemaEnforcer: true,
+    fs: fsAdapter,
+  });
+  console.log(`   ConsistencyLayer: InitVerifier + SchemaEnforcer 已启用`);
+
+  // ── 技能系统：冷启动加载已有技能 + 文件回溯扫描 ──
+  const skillRegistry = new SkillRegistry();
+  const loadedSkills = loadSkillsFromMemory(memory);
+  if (loadedSkills.length > 0) {
+    skillRegistry.registerAll(loadedSkills);
+    console.log(`   从记忆库加载 ${loadedSkills.length} 个技能模板`);
+  }
+  const scannedSkills = scanOutputFilesForSkills(PROJECT_DIR);
+  if (scannedSkills.length > 0) {
+    skillRegistry.registerAll(scannedSkills);
+    console.log(`   从文件回溯扫描 ${scannedSkills.length} 个技能模板`);
+  }
+  console.log(`   SkillRegistry: ${skillRegistry.activeCount} 个活跃技能就绪`);
+
   // ── Phase 2: 注册全部 10 个 Agent ──
   console.log("\n🟢 [Phase 2] 注册全部 Agent（10 个）...\n");
 
@@ -282,7 +314,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new CodeAgent(adapter, tk, memory);
+        return createAgent(codeAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -291,7 +323,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new ReviewAgent(adapter, tk, memory);
+        return createAgent(reviewAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -300,7 +332,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new AnalysisAgent(adapter, tk, memory);
+        return createAgent(analysisAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -309,7 +341,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new OpsAgent(adapter, tk);
+        return createAgent(opsAgentConfig(), adapter, tk);
       },
     },
     {
@@ -318,7 +350,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new LoopAgent(adapter, tk);
+        return createAgent(loopAgentConfig(), adapter, tk);
       },
     },
     {
@@ -327,7 +359,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new DocGovernAgent(adapter, tk, memory);
+        return createAgent(docGovernAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -336,7 +368,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new ApiAgent(adapter, tk, memory);
+        return createAgent(apiAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -345,7 +377,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new DataAgent(adapter, tk, memory);
+        return createAgent(dataAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -354,7 +386,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        return new FixAgent(adapter, tk, memory);
+        return createAgent(fixAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -363,7 +395,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, PROJECT_DIR);
-        const agent = new InspectorAgent(adapter, tk);
+        const agent = createInspectorAgent(adapter, tk);
         agent.setWorkspaceRoot(PROJECT_DIR);
         return agent;
       },
@@ -561,6 +593,101 @@ async function main() {
     console.log(`     📖 [${m.memoryType}] ${(m.summary ?? "").slice(0, 120)}`);
   }
 
+  // ── Phase 8: 六层防御合规性 ──
+  console.log("\n╔══════════════════════════════════════════════════╗");
+  console.log("║   🛡️  六层防御合规性（P0 + P1）                   ║");
+  console.log("╚══════════════════════════════════════════════════╝\n");
+
+  // P0: 子类型与状态分布
+  const allMemoriesFull = memory.read({ includePrivate: true, trackAccess: false });
+  const bySubType: Record<string, number> = {};
+  const byState: Record<string, number> = {};
+  for (const m of allMemoriesFull) {
+    bySubType[m.subType ?? "?"] = (bySubType[m.subType ?? "?"] ?? 0) + 1;
+    byState[m.state] = (byState[m.state] ?? 0) + 1;
+  }
+  console.log(`   P0-子类型: ${Object.entries(bySubType).map(([k,v]) => `${k}=${v}`).join(", ")}`);
+  console.log(`   P0-状态:   ${Object.entries(byState).map(([k,v]) => `${k}=${v}`).join(", ")}`);
+
+  // P0: Pending 隔离检查
+  const pendingMemories = allMemoriesFull.filter((m) => m.state === MemoryState.Pending);
+  const defaultRead = memory.read({ includePrivate: true, trackAccess: false });
+  const pendingInDefault = defaultRead.filter((m) => m.state === MemoryState.Pending);
+  const pendingVisible = memory.read({ includePrivate: true, states: [MemoryState.Pending], trackAccess: false });
+  console.log(`   P0-Pending: ${pendingMemories.length} 条 | 默认可见=${pendingInDefault.length} | 显式查=${pendingVisible.length}`);
+  const pendingIsolated = pendingMemories.length > 0 && pendingInDefault.length === 0;
+  console.log(`   P0-Pending隔离: ${pendingIsolated ? "✅" : "⚠️"} (Pending 对默认 read 不可见)`);
+
+  // P1: InitVerifier 启动校验
+  console.log(`\n   ── P1 InitVerifier ──`);
+  const consistencyReport = await consistency.verify();
+  if (consistencyReport) {
+    console.log(`   P1-文件校验: 总记忆=${consistencyReport.totalMemories}  已检查=${consistencyReport.checkedMemories}  ok=${consistencyReport.summary.ok}  missing=${consistencyReport.summary.missing}`);
+    const fileChecks = consistencyReport.fileChecks;
+    if (fileChecks.length > 0) {
+      const missing = fileChecks.filter((d) => d.status === "missing");
+      const unchecked = fileChecks.filter((d) => d.status === "unchecked");
+      if (missing.length > 0) {
+        console.log(`      缺失 ${missing.length} 文件:`);
+        for (const d of missing.slice(0, 5)) console.log(`        ❌ ${d.filePath}`);
+        if (missing.length > 5) console.log(`        ... 还有 ${missing.length - 5} 个`);
+      }
+      if (unchecked.length > 0) {
+        console.log(`      未检查 ${unchecked.length} 个 (调用中出错)`);
+      }
+    }
+    console.log(`   P1-InitVerifier: ${consistencyReport.fatal ? "💥 致命" : "✅ 通过"}`);
+  } else {
+    console.log(`   P1-InitVerifier: ⚠️ 未启用 (缺少 FileSystemAdapter)`);
+  }
+
+  // P1: SchemaEnforcer 抽样检查
+  console.log(`\n   ── P1 SchemaEnforcer ──`);
+  const sampleInputs = allMemoriesFull.slice(0, 3).map((m) => ({
+    memoryType: m.memoryType,
+    content: (m.content ?? {}) as Record<string, unknown>,
+    summary: m.summary,
+    agentType: m.agentType,
+    creatorId: m.creatorId,
+    subType: m.subType,
+  } as import("@cortex/shared").MemoryWriteInput));
+  let schemaPassCount = 0;
+  for (const input of sampleInputs) {
+    const validated = consistency.validateInput(input);
+    if (validated.valid) {
+      schemaPassCount++;
+    } else {
+      console.log(`       ⚠️ 校验失败: ${validated.errors?.join(", ")}`);
+    }
+  }
+  console.log(`   P1-SchemaEnforcer: 抽样 ${sampleInputs.length}/${sampleInputs.length} 通过`);
+
+  // P1: annotate 测试
+  const annotateInput: import("@cortex/shared").MemoryWriteInput = {
+    memoryType: "EPISODIC" as import("@cortex/shared").MemoryType,
+    content: { value: "test-annotate" },
+    summary: "测试 annotate 默认值",
+    agentType: "code" as import("@cortex/shared").AgentType,
+    creatorId: "test",
+    embedding: new Array(768).fill(0),
+  };
+  const annotated = consistency.annotateInput(annotateInput);
+  console.log(`   P1-annotate: subType 默认值 = ${annotated.subType ?? "(空)"} ${annotated.subType === MemorySubType.Fact ? "✅" : "❌"}`);
+
+  // P2: 技能沉淀检查
+  console.log(`\n   ── P2 技能沉淀 ──`);
+  const skillMemories = memory.read({ memoryTypes: [MemoryType.Skill], trackAccess: false });
+  const registrySkills = skillRegistry.getAll();
+  const skillPrecipitated = skillMemories.length > 0;
+  console.log(`   记忆库 SKILL: ${skillMemories.length} 条`);
+  console.log(`   注册表技能: ${registrySkills.length} 个`);
+  console.log(`   技能沉淀: ${skillPrecipitated ? "✅ (已闭环)" : "⚠️ (空——无可复用技能沉淀)"}`);
+  if (registrySkills.length > 0) {
+    for (const s of registrySkills.slice(0, 5)) {
+      console.log(`      · ${s.name} [${s.agentType}] tags:[${s.triggerTags.join(",")}]`);
+    }
+  }
+
   // ── 收尾 ──
   await memory.close();
 
@@ -574,6 +701,7 @@ async function main() {
   console.log(`   Scheduler 完成: ${report.completed}  失败: ${report.failed}`);
   console.log(`   产出文件: ${sourceFiles.length} 个`);
   console.log(`   可执行验证: ${closedLoopPassed ? "✅" : "❌"}`);
+  console.log(`   六层防御: P0-Pending隔离 ${pendingIsolated ? "✅" : "❌"} | P1-InitVerifier ${consistencyReport && !consistencyReport.fatal ? "✅" : "⚠️"} | P2-技能沉淀 ${skillPrecipitated ? "✅" : "⚠️"}`);
   console.log();
 
   if (!closedLoopPassed || report.failed > 0) {

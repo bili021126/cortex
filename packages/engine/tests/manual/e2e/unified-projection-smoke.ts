@@ -12,7 +12,7 @@
  *   Fix 6: _fusionScore 分离于 weight，阶段 5 统一应用
  */
 import { AgentType, MemoryType } from "@cortex/shared";
-import { MemoryStore } from "../../../src/memory-store.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
 
 // 384 维假 embedding（模拟 all-MiniLM-L6-v2）
 function makeFakeEmbed(seed: number): number[] {

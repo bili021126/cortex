@@ -8,12 +8,13 @@ import { PipelineObserver } from "../src/pipeline-observer";
 import { ConfirmGate } from "../src/confirm-gate";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { CodeAgent } from "../src/agents/code-agent";
-import { ReviewAgent } from "../src/agents/review-agent";
-import { AnalysisAgent } from "../src/agents/analysis-agent";
-import { MemoryStore } from "../src/memory-store";
+import { createAgent } from "../src/components/agent-factory";
+import { codeAgentConfig } from "../src/agents/code-agent";
+import { reviewAgentConfig } from "../src/agents/review-agent";
+import { analysisAgentConfig } from "../src/agents/analysis-agent";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { MetaAgent } from "../src/meta-agent";
-import { InspectorAgent } from "../src/agents/inspector-agent";
+import { createInspectorAgent } from "../src/agents/inspector-agent";
 import { Scheduler } from "../src/scheduler";
 
 // ─── Mock helpers ────────────────────────────────
@@ -30,10 +31,10 @@ async function mockAgent(agentType: string, adapter: LlmAdapter) {
   const tk = new Toolkit();
   let agent;
   switch (agentType) {
-    case AgentType.Code: agent = new CodeAgent(adapter, tk); break;
-    case AgentType.Review: agent = new ReviewAgent(adapter, tk); break;
-    case AgentType.Analysis: agent = new AnalysisAgent(adapter, tk); break;
-    default: agent = new CodeAgent(adapter, tk);
+    case AgentType.Code: agent = createAgent(codeAgentConfig(), adapter, tk); break;
+    case AgentType.Review: agent = createAgent(reviewAgentConfig(), adapter, tk); break;
+    case AgentType.Analysis: agent = createAgent(analysisAgentConfig(), adapter, tk); break;
+    default: agent = createAgent(codeAgentConfig(), adapter, tk);
   }
   await agent.wakeup();
   return agent;
@@ -160,7 +161,7 @@ describe("串行协作 CodeAgent → ReviewAgent", () => {
     failAdapter.injectMock(async () => {
       throw new Error("Code execution failed");
     });
-    const failCodeRunner = new CodeAgent(failAdapter, new Toolkit());
+    const failCodeRunner = createAgent(codeAgentConfig(), failAdapter, new Toolkit());
     await failCodeRunner.wakeup();
 
     const reviewRunner = await mockAgent(AgentType.Review, mockAdapter("Needs work"));
@@ -526,7 +527,7 @@ describe("InspectorAgent 认领 inspect 节点", () => {
     board.addNode(node);
 
     const inspectorAdapter = mockAdapter("事实报告：login.ts 共 45 行，导出 3 个函数");
-    const inspectorRunner = new InspectorAgent(inspectorAdapter, new Toolkit());
+    const inspectorRunner = createInspectorAgent(inspectorAdapter, new Toolkit());
     await inspectorRunner.wakeup();
 
     scheduler.register(AgentType.Inspector, inspectorRunner, "mock");

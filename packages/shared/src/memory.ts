@@ -15,15 +15,30 @@ export enum MemoryType {
 
 export enum MemoryState {
   Active = "ACTIVE",
+  Pending = "PENDING",
   Archived = "ARCHIVED",
   Frozen = "FROZEN",
   Obliterated = "OBLITERATED",
+}
+
+/**
+ * MemorySubType —— 记忆子类型，区分意图（规划阶段的思考）与事实（执行后的产出）。
+ *
+ * P0-六层防御：意图/事实分离是记忆-现实一致性的第一道防线。
+ * 意图记忆在规划阶段写入，事实记忆在执行完成后写入，
+ * 二者在检索中可独立过滤，避免"想做的事"和"做成的事"混淆。
+ */
+export enum MemorySubType {
+  Intent = "INTENT",
+  Fact = "FACT",
 }
 
 export interface MemoryEntry {
   id: string;
   memoryType: MemoryType;
   state: MemoryState;
+  /** P0-六层防御：意图/事实子类型分离 */
+  subType?: MemorySubType;
   content: Record<string, unknown>;
   summary: string;
   agentType: AgentType; // v2.0：替代 orientation_source
@@ -48,6 +63,8 @@ export interface MemoryEntry {
  */
 export interface MemoryWriteInput {
   memoryType: MemoryType;
+  /** P0-六层防御：意图/事实子类型分离 */
+  subType?: MemorySubType;
   content: Record<string, unknown>;
   summary: string;
   agentType: AgentType;
@@ -89,6 +106,8 @@ export interface MemoryQuery {
   keywords?: string[];
   memoryTypes?: MemoryType[];
   states?: MemoryState[];
+  /** P0-六层防御：按子类型过滤（INTENT / FACT） */
+  subTypes?: MemorySubType[];
   timeRange?: { start: number; end: number };
   agentTypes?: AgentType[];
   includePrivate?: boolean;

@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
-import { MemoryStore } from "../src/memory-store";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { PipelineObserver } from "../src/pipeline-observer";
 
 describe("MemoryStore", () => {
@@ -548,5 +548,48 @@ describe("MemoryStore", () => {
       expect.stringContaining("[MemoryStore] null content")
     );
     errSpy.mockRestore();
+  });
+
+  // ── M3: embedding 维度校验 ─────────────────────
+
+  it("M3: write() 校验 embedding 维度 (期望 384)", () => {
+    // 维度正确 → 成功写入
+    const validEmbedding = new Array(384).fill(0.1);
+    const id = store.write({
+      memoryType: MemoryType.Episodic,
+      content: {},
+      summary: "合法 embedding",
+      agentType: AgentType.Code,
+      creatorId: "a",
+      embedding: validEmbedding,
+    });
+    expect(id).toMatch(/^mem-/);
+
+    // 维度错误 → 抛出异常
+    const invalidEmbedding = new Array(128).fill(0.5);
+    expect(() => {
+      store.write({
+        memoryType: MemoryType.Episodic,
+        content: {},
+        summary: "非法 embedding",
+        agentType: AgentType.Code,
+        creatorId: "a",
+        embedding: invalidEmbedding,
+      });
+    }).toThrow(/embedding 维度不匹配/);
+  });
+
+  it("M3: writePending() 也校验 embedding 维度", () => {
+    const invalidEmbedding = new Array(200).fill(0.3);
+    expect(() => {
+      store.writePending({
+        memoryType: MemoryType.Episodic,
+        content: {},
+        summary: "非法 embedding",
+        agentType: AgentType.Code,
+        creatorId: "a",
+        embedding: invalidEmbedding,
+      });
+    }).toThrow(/embedding 维度不匹配/);
   });
 });

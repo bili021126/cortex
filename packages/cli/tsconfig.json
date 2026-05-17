@@ -6,6 +6,9 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../parser" }
+    { "path": "../parser" },
+    { "path": "../engine" },
+    { "path": "../llm" },
+    { "path": "../shared" }
   ]
 }

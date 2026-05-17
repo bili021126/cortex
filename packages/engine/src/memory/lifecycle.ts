@@ -3,27 +3,37 @@ import { MemoryState } from "@cortex/shared";
 import type { MemoryStorage } from "./storage.js";
 
 /**
- * MemoryLifecycle —— 记忆四态状态机。
+ * MemoryLifecycle —— 记忆五态状态机。
  *
  * 职责：
  * - 状态转移规则校验（isValidTransition）
  * - CAS 原子状态变更
+ * - P0-六层防御：Pending（半成品）标记 + 提交
  * - archive / freeze / obliterate 操作
  *
  * 不负责：持久化（通过 persistFn 回调注入）、查询、BFS。
+ *
+ * 状态流转图（v2.1——五态）：
+ *   Active ←→ Pending  （markPending / commit）
+ *   Active  → Archived （archive）
+ *   *       → Frozen   （freeze，Obliterated 除外）
+ *   *       → Obliterated（obliterate）
  */
 export class MemoryLifecycle {
   /**
    * 校验状态转移是否合法。
    *
-   * 规则：
+   * 规则（五态）：
    * - Obliterated 不可逆 → 拒绝所有转移
-   * - 非 Active → Active   → 拒绝复活
+   * - 非 Active 且非 Pending → Active → 拒绝复活
    * - Frozen → 仅可 Obliterated
+   * - Pending ↔ Active（两阶段提交的提交/回退）
+   * - Pending → Archived / Frozen / Obliterated（放弃半成品）
    */
   static isValidTransition(from: MemoryState, to: MemoryState): boolean {
     if (from === MemoryState.Obliterated) return false;
-    if (from !== MemoryState.Active && to === MemoryState.Active) return false;
+    // 复活保护：只有 Active 或 Pending 能回到 Active
+    if (to === MemoryState.Active && from !== MemoryState.Active && from !== MemoryState.Pending) return false;
     if (from === MemoryState.Frozen && to !== MemoryState.Obliterated) return false;
     return true;
   }
@@ -71,6 +81,26 @@ export class MemoryLifecycle {
     persistFn?: (id: string, state: MemoryState) => void,
   ): boolean {
     return this.cas(storage, id, MemoryState.Active, MemoryState.Archived, persistFn);
+  }
+
+  /** ── P0-六层防御：两阶段提交 ── */
+
+  /** markPending: Active → Pending（标记为半成品，暂不可检索） */
+  markPending(
+    storage: MemoryStorage,
+    id: string,
+    persistFn?: (id: string, state: MemoryState) => void,
+  ): boolean {
+    return this.cas(storage, id, MemoryState.Active, MemoryState.Pending, persistFn);
+  }
+
+  /** commit: Pending → Active（半成品验证通过，提交为正式记忆） */
+  commit(
+    storage: MemoryStorage,
+    id: string,
+    persistFn?: (id: string, state: MemoryState) => void,
+  ): boolean {
+    return this.cas(storage, id, MemoryState.Pending, MemoryState.Active, persistFn);
   }
 
   /** freeze: 任意状态 → Frozen（Obliterated 除外） */

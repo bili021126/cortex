@@ -1,0 +1,24 @@
+{
+  "id": "skill-p14-package-migration-to-monorepo-1778962384004",
+  "agentType": "code",
+  "name": "P14: 新包迁移适配到 Monorepo",
+  "triggerTags": ["code", "implementation", "refactor", "config"],
+  "trigger": "需要将外部独立项目或归档代码迁移到 monorepo 工作区作为新包",
+  "steps": [
+    "创建包目录结构：packages/<name>/src/ + packages/<name>/tests/ + 标准的 package.json + tsconfig.json",
+    "package.json 声明：name='@cortex/<name>'、type='module'、private=true、workspace 依赖用 'workspace:*' 协议",
+    "tsconfig.json 配置：extends '../../tsconfig.base.json'、添加 compilerOptions.outDir、声明 references 指向依赖的 workspace 包",
+    "搬运源文件：从源位置复制到 packages/<name>/src/，原样搬运或做必要适配",
+    "适配要点：移除外部运行时依赖改用内置 API（如 uuid → crypto.randomUUID()）、相对路径改为 workspace 协议引用、调整项目根路径计算",
+    "调整导出入口：新增 src/index.ts 统一导出所有公开 API",
+    "创建测试文件：基于源测试适配为 vitest 格式，覆盖核心功能（至少包内所有公开 API 的冒烟测试）",
+    "验证集成：pnpm install → pnpm build（确认编译通过）→ pnpm test（确认全部测试通过）"
+  ],
+  "expectedOutput": "新包迁移完成报告：源文件 N 个 → 测试 N 个 → 构建 ✅ 测试 ✅ (N/N passed)",
+  "outputFile": "packages/<name>/README.md",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384004
+}

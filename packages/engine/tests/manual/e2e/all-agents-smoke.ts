@@ -34,7 +34,7 @@ import { ButlerAgent } from "../../../src/agents/butler-agent.js";
 
 // ── 基础设施 ──
 import { Toolkit } from "../../../src/toolkit.js";
-import { MemoryStore } from "../../../src/memory-store.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
 import { PipelineObserver } from "../../../src/pipeline-observer.js";
 import { ConfirmGate } from "../../../src/confirm-gate.js";
 import { CLIAdapter } from "../../../src/cli-adapter.js";

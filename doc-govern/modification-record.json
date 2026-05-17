@@ -1,0 +1,174 @@
+{
+  "formatVersion": 1,
+  "projectFingerprint": "fp-3a7e2c1b",
+  "createdAt": 1747700000000,
+  "updatedAt": 1747700000000,
+  "records": [
+    {
+      "id": "MOD-schema-enforce-001",
+      "runId": "schema-enforce",
+      "type": "file_created",
+      "agentType": "DataAgent",
+      "description": "创建 ModificationRecord Schema v1 类型定义 (packages/shared/src/modification-record.ts) — 包括 ModificationType, ReversibilityClass, FactAnchor, ModificationRecordItem, ModificationSession, ModificationRecordV1",
+      "filePaths": [
+        "packages/shared/src/modification-record.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-schema-enforce-002",
+      "runId": "schema-enforce",
+      "type": "file_modified",
+      "agentType": "DataAgent",
+      "description": "修改 MemoryState 枚举新增 PENDING 状态，MemoryEntry/MemoryWriteInput 新增 memorySubType 字段，MemoryQuery 新增 includePending 字段",
+      "filePaths": [
+        "packages/shared/src/memory.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-schema-enforce-003",
+      "runId": "schema-enforce",
+      "type": "file_modified",
+      "agentType": "DataAgent",
+      "description": "共享类型桶导出新增 modification-record 模块",
+      "filePaths": [
+        "packages/shared/src/index.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-schema-enforce-004",
+      "runId": "schema-enforce",
+      "type": "file_modified",
+      "agentType": "DataAgent",
+      "description": "MemoryStorage.insert() 支持 initialState 参数和 memorySubType；deserializeRow() 反序列化 memory_sub_type 列",
+      "filePaths": [
+        "packages/engine/src/memory/storage.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-schema-enforce-005",
+      "runId": "schema-enforce",
+      "type": "file_modified",
+      "agentType": "DataAgent",
+      "description": "MemoryLifecycle 新增 PENDING 状态转移规则（PENDING→Active, PENDING→Obliterated），新增 confirmWrite() 方法",
+      "filePaths": [
+        "packages/engine/src/memory/lifecycle.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-schema-enforce-006",
+      "runId": "schema-enforce",
+      "type": "file_modified",
+      "agentType": "DataAgent",
+      "description": "MemoryPersistence 建表新增 memory_sub_type 列和 idx_memories_sub_type 索引；实现 schema v1→v2 迁移逻辑",
+      "filePaths": [
+        "packages/engine/src/memory/persistence.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-schema-enforce-007",
+      "runId": "schema-enforce",
+      "type": "file_modified",
+      "agentType": "DataAgent",
+      "description": "MemoryStore.write() 支持 PENDING 初始状态和 memorySubType 传入；新增 confirmWrite() 方法；read() 默认过滤 PENDING 记忆",
+      "filePaths": [
+        "packages/engine/src/memory-store.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-schema-enforce-008",
+      "runId": "schema-enforce",
+      "type": "file_created",
+      "agentType": "DataAgent",
+      "description": "创建 SchemaEnforcer 组件：校验 ModificationRecord Schema v1 的 8 条约束规则（R-001~R-008），自动注入事实锚点，固定字段序列化",
+      "filePaths": [
+        "packages/engine/src/consistency/schema-enforcer.ts",
+        "packages/engine/src/consistency/modification-record.ts",
+        "packages/engine/src/consistency/index.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747700000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    }
+  ],
+  "sessions": [
+    {
+      "sessionId": "schema-enforce",
+      "startedAt": 1747700000000,
+      "agentTypes": ["DataAgent"],
+      "projectFingerprint": "fp-3a7e2c1b",
+      "startCommitHash": "HEAD",
+      "status": "completed",
+      "recordIds": [
+        "MOD-schema-enforce-001",
+        "MOD-schema-enforce-002",
+        "MOD-schema-enforce-003",
+        "MOD-schema-enforce-004",
+        "MOD-schema-enforce-005",
+        "MOD-schema-enforce-006",
+        "MOD-schema-enforce-007",
+        "MOD-schema-enforce-008"
+      ]
+    }
+  ]
+}

@@ -6,7 +6,7 @@
  * 2. close() 后 write() 抛出 Error（已有保护，验证一致性）
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { MemoryStore } from "../src/memory-store.js";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { MemoryType } from "@cortex/shared";
 
 describe("D3: MemoryStore read() 关闭保护", () => {

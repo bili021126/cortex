@@ -23,7 +23,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
-import { MemoryStore } from "../src/memory-store";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { PipelineObserver } from "../src/pipeline-observer";
 
 describe("MemoryStore 生命周期状态机", () => {

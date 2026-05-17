@@ -67,15 +67,20 @@ export type EventPayloadMap = {
   [PipelineEventType.AgentPoolInvariantViolation]: { source: string; transition?: string; detail: string };
   [PipelineEventType.AgentPoolDestroyBypass]: { agentType: AgentType; instanceId: string };
   [PipelineEventType.SchedulerLayerStart]: { layer: number; nodes: number; round: number };
-  [PipelineEventType.SchedulerLoopCrashed]: { round: number; error: string };
+  [PipelineEventType.SchedulerLoopCrashed]: { round: number; error: string; pendingAtCrash?: number; hint?: string };
   [PipelineEventType.SchedulerDone]: { total: number; completed: number; failed: number; durationMs: number; rounds: number };
-  [PipelineEventType.SchedulerReplanLimit]: { totalReplans: number; maxReplans: number };
+  [PipelineEventType.SchedulerReplanLimit]: { totalReplans: number; maxReplans: number; deferred?: number };
   [PipelineEventType.SchedulerReplanNoMetaAgent]: { orphanCount: number; hint: string };
   [PipelineEventType.SchedulerReplanFailed]: { nodeId: string; error: string };
   [PipelineEventType.SchedulerNonstandardType]: { nodeId: string; nodeType: string; matchedCount: number; assigned: string; totalAgents: number };
   [PipelineEventType.SchedulerInvariantViolation]: { nodeId: string; message: string };
   [PipelineEventType.NodeStart]: { nodeId: string; type: string };
-  [PipelineEventType.NodeComplete]: { nodeId: string; agentType: AgentType; success: true; output?: string };
+  /** 
+   * NodeComplete — 节点完成事件。
+   * @field perspectives 多视角节点场景下，所有参与视角的 agentType 列表；单视角节点不包含此字段。
+   * @field allSuccess   多视角节点场景下，是否所有视角均成功；单视角节点不包含此字段。
+   */
+  [PipelineEventType.NodeComplete]: { nodeId: string; agentType: AgentType; success: true; output?: string; perspectives?: (AgentType | string | undefined)[]; allSuccess?: boolean };
   [PipelineEventType.NodeFailed]: { nodeId: string; error: string; agentType?: AgentType };
   [PipelineEventType.NodeReplan]: { nodeId: string; reason: string; attempt: number };
   [PipelineEventType.NodeReplanQueued]: { nodeId: string; reason: string; attempt: number };
@@ -224,6 +229,10 @@ export interface Agent {
   wakeup(): Promise<void>;
   execute(node: TaskNode, model: string): Promise<NodeResult>;
   shutdown(): Promise<void>;
+  /** 方案B：注入 Pool 引用（Scheduler spawn 时调用） */
+  setPool?(pool: any, instanceId: string): void;
+  /** 注入 SafeErrorReporter */
+  setSafeReporter?(reporter: any): void;
 }
 
 /** Agent 配置（权限由 Toolkit 层 AGENT_TOOL_PERMISSIONS 管理） */

@@ -1,0 +1,33 @@
+{
+  "id": "AM-2026-0606-003",
+  "version": "v2.5.13",
+  "section": "§8.2",
+  "category": "modify",
+  "summary": "修复 DECISION_REQUIRED 回退机制缺失——新增超时阈值、默认行为、防抖策略与离线处理策略，补全三轨语义分层的安全阀",
+  "rationale": "凝光于2026-06-06对宪法v2.5.12进行三项审计时发现发现2-A（DECISION_REQUIRED回退机制缺失）：§8.2定义DECISION_REQUIRED为『打断当前UI→弹出决策界面→阻塞等待用户响应』，但未定义用户不响应时的超时阈值、超时后的默认行为（自动批准/自动驳回/降级为WARNING）、重复DECISION_REQUIRED的防抖策略（同一问题反复弹出）、用户离线/忙碌时的处理策略。此缺口可能导致系统永久阻塞——当用户无法响应时（如关闭终端/离线/忙碌），DECISION_REQUIRED事件将无限期阻塞管线。本次修宪在§8.2轨道表之后新增『DECISION_REQUIRED回退机制』条款，定义四层安全阀：超时阈值与默认行为、防抖合并策略、离线降级路径、审计逃逸记录。判例引用：NG-2026-0606-SelfRef-Gap（凝光三项审计报告，确认发现2-A为P2优先级缺口，三轨覆盖缺口有条件通过但需补充回退机制）。",
+  "before": "### 8.2 通知管线——三轨语义分层\n\nPipelineObserver 发出的事件经优先级分流后，进入通知管线进行语义分层。通知管线将事件按语义分为三轨，由 ButlerAgent 按轨执行不同分发策略。\n\n| 轨道 | 语义 | 触发条件 | ButlerAgent 分发行为 |\n|------|------|---------|---------------------|\n| **FYI** | 信息通知 | NORMAL 优先级 + 非用户决策事件 | 静默记录→写入通知队列→闲时（管线空闲）合并摘要呈现 |\n| **WARNING** | 警告通知 | HIGH 优先级 / 降级事件（degraded）/ 静默计数器升级 | 状态灯变更 + 通知面板标记，不打断当前操作 |\n| **DECISION_REQUIRED** | 需要决策 | CRITICAL 优先级 / ConfirmGate 拦截 / MetaAgent 重规划超限 | 打断当前 UI→弹出决策界面→阻塞等待用户响应 |\n\n**ObservableEvent 协议扩展**：`Observation` 数据结构新增可选字段 `notificationType?: \"FYI\" | \"WARNING\" | \"DECISION_REQUIRED\"`。emit 侧根据优先级和事件类型自动推导默认值，emitter 可显式覆盖。\n\n**与 §6.1 的关系**：三轨语义分层是对 ButlerAgent 职责④（事件通知——\"必要时打断或静默通知\"）的具体化。此前\"必要时\"的判断标准模糊，现以语义三轨替代——DECISION_REQUIRED=必要打断，WARNING=必要通知但不打断，FYI=不必要立即通知。管家不再自行判断\"是否必要\"，而是按轨执行预定义分发策略。\n\n**与 §8.1 的关系**：SafeErrorReporter 的三档严重性（fatal/degraded/silent）属于**错误维度**的分类——关注的是\"系统哪里出了问题\"。通知管线的三轨语义分层属于**呈现维度**的分类——关注的是\"用户需要看到什么、何时看到、如何响应\"。两者正交互补：\n- fatal 错误通常触发 DECISION_REQUIRED（系统不可继续，用户必须决策）\n- degraded 事件触发 WARNING（系统降级运行，用户应知晓）\n- silent 计数器升级触发 WARNING（静默异常累积至阈值，升级告警）\n\n**归因**：当前 PipelineObserver (§8) 统一了事件管道，SafeErrorReporter (§8.1) 统一了错误上报的三档严重性协议。但管道产出的通知如何按语义分发至 ButlerAgent 并呈现给用户，尚无法定条款。ButlerAgent (§6.1) 的\"事件通知\"职责（④）仅描述了\"必要时打断或静默通知\"，未提供具体分发规则。三轨语义分层将优先级语义、事件类型与 UI 行为绑定为宪法级契约——确保 CRITICAL 事件不会静默消失（自动升级为 DECISION_REQUIRED），NORMAL 事件不会打扰用户（归入 FYI 闲时呈现）。",
+  "after": "### 8.2 通知管线——三轨语义分层\n\nPipelineObserver 发出的事件经优先级分流后，进入通知管线进行语义分层。通知管线将事件按语义分为三轨，由 ButlerAgent 按轨执行不同分发策略。\n\n| 轨道 | 语义 | 触发条件 | ButlerAgent 分发行为 |\n|------|------|---------|---------------------|\n| **FYI** | 信息通知 | NORMAL 优先级 + 非用户决策事件 | 静默记录→写入通知队列→闲时（管线空闲）合并摘要呈现 |\n| **WARNING** | 警告通知 | HIGH 优先级 / 降级事件（degraded）/ 静默计数器升级 | 状态灯变更 + 通知面板标记，不打断当前操作 |\n| **DECISION_REQUIRED** | 需要决策 | CRITICAL 优先级 / ConfirmGate 拦截 / MetaAgent 重规划超限 | 打断当前 UI→弹出决策界面→阻塞等待用户响应 |\n\n**DECISION_REQUIRED 回退机制**：DECISION_REQUIRED 轨道必须实现以下四层安全阀，防止系统因用户无法响应而永久阻塞。\n\n1. **超时阈值与默认行为**：每个 DECISION_REQUIRED 事件须携带可选超时阈值（单位：秒，默认 300s=5分钟）。超时后 ButlerAgent 按事件声明的 fallback 策略执行——fallback 策略分三档：(a) `auto_approve`——超时视为用户批准，继续执行原方案；(b) `auto_reject`——超时视为用户拒绝，回滚至前一安全状态；(c) `downgrade_to_warning`——超时不替用户决策，降级为 WARNING 事件记录通知队列，待用户闲时查阅。fallback 策略由事件 emitter 在 emit 时声明，emit 侧未声明时默认使用 `downgrade_to_warning`。\n2. **防抖合并**：同一 emitter 在 60 秒内重复发出同一事件 ID 的 DECISION_REQUIRED，自动折叠为单次通知，计数器+1。折叠期间不打断 UI。防抖窗口过后若问题仍未解决，重新弹出并重置计数器。防抖窗口时长可由 emitter 通过 `debounceWindow?: number` 字段覆盖。\n3. **离线/忙碌降级**：ButlerAgent 检测到用户离线或处于忙碌状态（如正在执行不可中断操作）时，DECISION_REQUIRED 自动降级为 WARNING——写入通知队列并标记为 pending_decision。用户恢复在线后，ButlerAgent 汇总所有 pending_decision 事件以批量决策界面呈现。离线判定标准由 ButlerAgent 实现定义（如 5 分钟内无输入事件）。\n4. **审计逃逸记录**：任何触发回退机制（超时/降级/防抖折叠）的 DECISION_REQUIRED 事件，必须由 ButlerAgent 将事件摘要、回退原因、fallback 执行结果写入 MemoryType.Governance 审计分区。回退不应是无痕的——用户应能在审计记录中追溯所有被自动处理的关键决策。\n\n**ObservableEvent 协议扩展**：`Observation` 数据结构新增可选字段 `notificationType?: \"FYI\" | \"WARNING\" | \"DECISION_REQUIRED\"`，以及回退相关字段 `fallback?: \"auto_approve\" | \"auto_reject\" | \"downgrade_to_warning\"` 和 `debounceWindow?: number`（单位秒，默认 60）。emit 侧根据优先级和事件类型自动推导默认值，emitter 可显式覆盖。\n\n**与 §6.1 的关系**：三轨语义分层是对 ButlerAgent 职责④（事件通知——\"必要时打断或静默通知\"）的具体化。此前\"必要时\"的判断标准模糊，现以语义三轨替代——DECISION_REQUIRED=必要打断，WARNING=必要通知但不打断，FYI=不必要立即通知。管家不再自行判断\"是否必要\"，而是按轨执行预定义分发策略。回退机制进一步约束管家在用户无法响应时的行为，确保系统不因等待决策而永久挂死。\n\n**与 §8.1 的关系**：SafeErrorReporter 的三档严重性（fatal/degraded/silent）属于**错误维度**的分类——关注的是\"系统哪里出了问题\"。通知管线的三轨语义分层属于**呈现维度**的分类——关注的是\"用户需要看到什么、何时看到、如何响应\"。两者正交互补：\n- fatal 错误通常触发 DECISION_REQUIRED（系统不可继续，用户必须决策）\n- degraded 事件触发 WARNING（系统降级运行，用户应知晓）\n- silent 计数器升级触发 WARNING（静默异常累积至阈值，升级告警）\n\n**归因**：当前 PipelineObserver (§8) 统一了事件管道，SafeErrorReporter (§8.1) 统一了错误上报的三档严重性协议。但管道产出的通知如何按语义分发至 ButlerAgent 并呈现给用户，尚无法定条款。ButlerAgent (§6.1) 的\"事件通知\"职责（④）仅描述了\"必要时打断或静默通知\"，未提供具体分发规则。三轨语义分层将优先级语义、事件类型与 UI 行为绑定为宪法级契约——确保 CRITICAL 事件不会静默消失（自动升级为 DECISION_REQUIRED），NORMAL 事件不会打扰用户（归入 FYI 闲时呈现）。",
+  "impact": {
+    "principles": [],
+    "crossReferences": [
+      "八、PipelineObserver",
+      "8.1 SafeErrorReporter",
+      "8.2 通知管线——三轨语义分层",
+      "6.1 ButlerAgent 五大法定职责",
+      "9.5 DocGovern 分区",
+      "原则一（用户确认不可替代）",
+      "AM-2026-0515-002"
+    ],
+    "agents": [
+      "ButlerAgent",
+      "DocGovernAgent"
+    ],
+    "breaking": false,
+    "rationale": "本次修宪不破坏任何现有契约。§8.2 新增『DECISION_REQUIRED 回退机制』段落和 ObservableEvent 协议扩展字段（fallback / debounceWindow），不删除或修改原有轨道定义、协议扩展、关系说明和归因段落。新增的 fallback 机制不替代用户决策权——超时后的默认行为仅为安全阀，不影响原则一（确认在用户手里）的不可变性。breaking=false。"
+  },
+  "source": {
+    "agent": "DocGovernAgent",
+    "trace": "凝光三项审计 2026-06-06——审计发现2-A（DECISION_REQUIRED回退机制缺失）：§8.2定义DECISION_REQUIRED为『打断当前UI→弹出决策界面→阻塞等待用户响应』，但未定义超时阈值、默认行为、防抖策略、离线处理策略。详见审计报告 docs/auditing/2026-06-06-constitution-audit.md。"
+  },
+  "status": "proposed"
+}

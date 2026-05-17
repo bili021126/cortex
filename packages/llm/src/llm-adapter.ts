@@ -1,16 +1,16 @@
-import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter } from "@cortex/shared";
+﻿import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter } from "@cortex/shared";
 import * as crypto from "node:crypto";
 
-// ─── 适配器 ─────────────────────────────────────────
+// 鈹€鈹€鈹€ 閫傞厤鍣?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 /**
- * DeepSeek API 适配器。
- * 支持真实 API 调用和 Mock 注入（用于测试）。
- * 内置 LRU 缓存——相同请求直接返回缓存，省 API 费用。
- * 内置重试——网络异常或 5xx 时自动重试（最多 3 次），30s 超时。
+ * DeepSeek API 閫傞厤鍣ㄣ€?
+ * 鏀寔鐪熷疄 API 璋冪敤鍜?Mock 娉ㄥ叆锛堢敤浜庢祴璇曪級銆?
+ * 鍐呯疆 LRU 缂撳瓨鈥斺€旂浉鍚岃姹傜洿鎺ヨ繑鍥炵紦瀛橈紝鐪?API 璐圭敤銆?
+ * 鍐呯疆閲嶈瘯鈥斺€旂綉缁滃紓甯告垨 5xx 鏃惰嚜鍔ㄩ噸璇曪紙鏈€澶?3 娆★級锛?0s 瓒呮椂銆?
  *
- * 宪法 v2.5.2 裁定：LlmAdapter 独立为 @cortex/llm 包。
- * 零 Engine 运行时依赖，仅依赖 @cortex/shared 类型。
+ * 瀹硶 v2.5.2 瑁佸畾锛歀lmAdapter 鐙珛涓?@cortex/llm 鍖呫€?
+ * 闆?Engine 杩愯鏃朵緷璧栵紝浠呬緷璧?@cortex/shared 绫诲瀷銆?
  */
 export class LlmAdapter {
   private config: LlmAdapterConfig;
@@ -22,7 +22,7 @@ export class LlmAdapter {
   private _cacheMisses = 0;
   private _safeReporter: SafeErrorReporter | null = null;
   private static readonly MAX_CACHE = 500;
-  /** 缓存 TTL：超过此时间的条目在命中时将被淘汰（毫秒）。默认 10 分钟。 */
+  /** 缂撳瓨 TTL锛氳秴杩囨鏃堕棿鐨勬潯鐩湪鍛戒腑鏃跺皢琚窐姹帮紙姣锛夈€傞粯璁?10 鍒嗛挓銆?*/
   private static readonly CACHE_TTL_MS = 10 * 60 * 1000;
   private static readonly MAX_RETRIES = 3;
   private static readonly RETRY_BASE_MS = 1000;
@@ -32,23 +32,23 @@ export class LlmAdapter {
     this.config = config;
   }
 
-  /** 开启/关闭 LLM 响应缓存（测试时省钱用） */
+  /** 寮€鍚?鍏抽棴 LLM 鍝嶅簲缂撳瓨锛堟祴璇曟椂鐪侀挶鐢級 */
   setCacheEnabled(on: boolean): void {
     this._cacheEnabled = on;
     if (!on) this._cache.clear();
   }
 
   /**
-   * 设置缓存模式：
-   * - "exact": 精确匹配，sha256(model + 全部 messages 原文 + tools)
-   * - "fingerprint": 结构指纹，history 部分提取为 (speaker+bucket) 而非全文
-   *   适用于多轮对话中 history 结构相同但措辞不同的场景（如圆桌会议）
+   * 璁剧疆缂撳瓨妯″紡锛?
+   * - "exact": 绮剧‘鍖归厤锛宻ha256(model + 鍏ㄩ儴 messages 鍘熸枃 + tools)
+   * - "fingerprint": 缁撴瀯鎸囩汗锛宧istory 閮ㄥ垎鎻愬彇涓?(speaker+bucket) 鑰岄潪鍏ㄦ枃
+   *   閫傜敤浜庡杞璇濅腑 history 缁撴瀯鐩稿悓浣嗘帾杈炰笉鍚岀殑鍦烘櫙锛堝鍦嗘浼氳锛?
    */
   setCacheMode(mode: "exact" | "fingerprint"): void {
     this._cacheMode = mode;
   }
 
-  /** 缓存命中统计 */
+  /** 缂撳瓨鍛戒腑缁熻 */
   get cacheStats(): { hits: number; misses: number; rate: string } {
     const total = this._cacheHits + this._cacheMisses;
     return {
@@ -58,14 +58,14 @@ export class LlmAdapter {
     };
   }
 
-  /** 将缓存序列化为 JSON 字符串（用于持久化） */
+  /** 灏嗙紦瀛樺簭鍒楀寲涓?JSON 瀛楃涓诧紙鐢ㄤ簬鎸佷箙鍖栵級 */
   saveCache(): string {
     const obj: Record<string, { response: LlmResponse; ts: number }> = {};
     for (const [k, v] of this._cache) obj[k] = v;
     return JSON.stringify(obj);
   }
 
-  /** 从 JSON 字符串恢复缓存 */
+  /** 浠?JSON 瀛楃涓叉仮澶嶇紦瀛?*/
   loadCache(json: string): void {
     try {
       const obj = JSON.parse(json) as Record<string, { response: LlmResponse; ts: number }>;
@@ -74,44 +74,44 @@ export class LlmAdapter {
         this._cache.set(k, v);
       }
     } catch (e) {
-      // 缓存文件损坏，上报但继续运行
+      // 缂撳瓨鏂囦欢鎹熷潖锛屼笂鎶ヤ絾缁х画杩愯
       this._safeReporter?.({ source: "LlmAdapter.loadCache", error: e, severity: "silent", hint: "cache file corrupted, ignored" });
     }
   }
 
-  /** 获取当前缓存条目数 */
+  /** 鑾峰彇褰撳墠缂撳瓨鏉＄洰鏁?*/
   get cacheSize(): number {
     return this._cache.size;
   }
 
-  /** 清空缓存 */
+  /** 娓呯┖缂撳瓨 */
   clearCache(): void {
     this._cache.clear();
     this._cacheHits = 0;
     this._cacheMisses = 0;
   }
 
-  /** 注入 SafeErrorReporter（由 bootstrap 在上层统一注入） */
+  /** 娉ㄥ叆 SafeErrorReporter锛堢敱 bootstrap 鍦ㄤ笂灞傜粺涓€娉ㄥ叆锛?*/
   setSafeReporter(reporter: SafeErrorReporter): void {
     this._safeReporter = reporter;
   }
 
-  /** 注入 Mock 响应器——仅测试用 */
+  /** 娉ㄥ叆 Mock 鍝嶅簲鍣ㄢ€斺€斾粎娴嬭瘯鐢?*/
   injectMock(fn: (messages: LlmMessage[], tools?: ToolDef[]) => Promise<LlmResponse>): void {
     this._mockRespond = fn;
   }
 
-  /** 获取 chat 模型名 */
+  /** 鑾峰彇 chat 妯″瀷鍚?*/
   get chatModel(): string {
     return this.config.chatModel;
   }
 
-  /** 获取推理模型名（MetaAgent 专用） */
+  /** 鑾峰彇鎺ㄧ悊妯″瀷鍚嶏紙MetaAgent 涓撶敤锛?*/
   get reasonerModel(): string {
     return this.config.reasonerModel;
   }
 
-  /** 发送聊天请求，返回文本或工具调用。缓存命中时直接返回。 */
+  /** 鍙戦€佽亰澶╄姹傦紝杩斿洖鏂囨湰鎴栧伐鍏疯皟鐢ㄣ€傜紦瀛樺懡涓椂鐩存帴杩斿洖銆?*/
   async chat(
     model: string,
     messages: LlmMessage[],
@@ -122,7 +122,7 @@ export class LlmAdapter {
       return this._mockRespond(messages, tools);
     }
 
-    // ── 缓存检查 ──
+    // 鈹€鈹€ 缂撳瓨妫€鏌?鈹€鈹€
     const cacheKey = this._cacheKey(model, messages, tools, reasoningEffort);
     if (this._cacheEnabled) {
       const hit = this._cache.get(cacheKey);
@@ -249,7 +249,7 @@ export class LlmAdapter {
       }));
     }
 
-    const res = await fetch(`${this.config.baseUrl}/chat/completions`, {
+    const res = await this._fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -312,7 +312,7 @@ export class LlmAdapter {
               reasoningContent += delta.reasoning_content;
             }
           } catch {
-            // 跳过无法解析的行
+            // 璺宠繃鏃犳硶瑙ｆ瀽鐨勮
           }
         }
       }

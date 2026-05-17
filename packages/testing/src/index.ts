@@ -2,8 +2,9 @@
 // @cortex/testing —— Core-1 测试工具包（v2.0 类型对齐）
 // Mock 合成数据生成器
 // ============================================================
+// 适配：移除 uuid 依赖，使用内置 crypto.randomUUID
 
-import { v4 as uuid } from "uuid";
+import * as crypto from "node:crypto";
 import { AgentType, MemoryType, MemoryState } from "@cortex/shared";
 import type { TaskNode, Tag } from "@cortex/shared";
 
@@ -14,7 +15,7 @@ import type { TaskNode, Tag } from "@cortex/shared";
 export function syntheticTaskNode(overrides?: Partial<TaskNode>): TaskNode {
   const now = Date.now();
   return {
-    id: overrides?.id ?? uuid(),
+    id: overrides?.id ?? crypto.randomUUID(),
     parentId: overrides?.parentId,
     type: overrides?.type ?? "implementation",
     tags: (overrides?.tags ?? ["implementation"]) as Tag[],

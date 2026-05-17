@@ -1,9 +1,9 @@
 import type { ToolInvocation, ToolResult, ToolDefinition, ToolHandler, ReversibilityLevel, AgentType, IFileSystemAdapter, DirectoryEntry } from "@cortex/shared";
-import { ToolCategory, ReversibilityLevel as RL, AGENT_TOOL_PERMISSIONS } from "@cortex/shared";
+import { ToolCategory, ReversibilityLevel as RL, AGENT_TOOL_PERMISSIONS, LockType } from "@cortex/shared";
 import type { ConfirmGate } from "./confirm-gate.js";
 import type { FileLockManager } from "./file-lock-manager.js";
-import { LockType } from "@cortex/shared";
 import { NodeFileSystemAdapter } from "./node-fs-adapter.js";
+import { type EngineConfig, resolveConfig } from "./config.js";
 import * as path from "node:path";
 
 // ─── 工具元数据（统一存放，一处改全局生效） ──────────────────
@@ -115,11 +115,13 @@ export class Toolkit {
   private lockManager?: FileLockManager;
   private workspaceRoot: string | null = null;
   private fs: IFileSystemAdapter;
+  private readonly config: Required<EngineConfig>;
 
-  constructor(gate?: ConfirmGate, lockManager?: FileLockManager, fsAdapter?: IFileSystemAdapter) {
+  constructor(gate?: ConfirmGate, lockManager?: FileLockManager, fsAdapter?: IFileSystemAdapter, engineConfig?: EngineConfig) {
     this.gate = gate;
     this.lockManager = lockManager;
     this.fs = fsAdapter ?? new NodeFileSystemAdapter();
+    this.config = resolveConfig(engineConfig);
     this._registerBuiltins();
   }
 
@@ -168,7 +170,7 @@ export class Toolkit {
       });
 
       // L2/L3 阻塞等待用户确认（默认 5 分钟超时，防永久挂死）
-      const approved = await this.gate.waitFor(reqId, 5 * 60 * 1000);
+      const approved = await this.gate.waitFor(reqId, this.config.toolTimeouts.confirmWait);
       if (!approved) {
         return { success: false, error: `Rejected by ConfirmGate: ${inv.toolName}` };
       }
@@ -286,7 +288,7 @@ export class Toolkit {
           output = await this.fs.execFile(
             "rg",
             ["--line-number", "--max-count", "30", "--no-heading", query],
-            { cwd: searchRoot, timeout: 15_000 },
+            { cwd: searchRoot, timeout: this.config.toolTimeouts.searchCode },
           );
         } catch (e) {
           // rg 非零退出码区分：
@@ -299,9 +301,11 @@ export class Toolkit {
             // 无匹配，rg 正常工作
             output = "";
           } else {
-            console.warn(
-              `[toolkit] search_code: rg failed (exit ${err.status ?? "?"}), falling back to grep. stderr: ${stderr.slice(0, 200)}`,
-            );
+            if (!process.env.VITEST) {
+              console.warn(
+                `[toolkit] search_code: rg failed (exit ${err.status ?? "?"}), falling back to grep. stderr: ${stderr.slice(0, 200)}`,
+              );
+            }
             // M6: 捕获 _grepFallback 的错误，外层包含原始 rg 错误信息
             try {
               output = await this._grepFallback(searchRoot, query);
@@ -330,7 +334,7 @@ export class Toolkit {
       }
       try {
         const cwd = this.workspaceRoot ?? this.fs.cwd();
-        const output = await this.fs.execCommand(command, { cwd, timeout: 60_000 });
+        const output = await this.fs.execCommand(command, { cwd, timeout: this.config.toolTimeouts.runShell });
         return { success: true, output: output.slice(0, 10_000) };
       } catch (e) {
         const err = e as { stderr?: unknown; message?: string };

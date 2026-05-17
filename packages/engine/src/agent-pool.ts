@@ -1,6 +1,7 @@
 import type { AgentType, AgentConfig, InvariantReporter } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
 import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { isTestEnv } from "./test-env.js";
 
 /**
  * AgentPool —— Agent 生命周期管理 + 状态机追踪
@@ -9,6 +10,9 @@ import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared
  *
  * 方案B：AgentPool 为 Agent 状态的唯一权威源。
  * Agent.status 改为只读 getter，委托到 Pool；写路径仅通过 Pool.setStatus()。
+ *
+ * @fix D6 — invariant 上报单通道收敛：_observer 实例优先于 onInvariant 静态字段，
+ *   消除静动态优先级不明确的问题。destroy() 中避免双路径重复 emit。
  */
 export class AgentPool {
   private configs = new Map<AgentType, AgentConfig>();
@@ -20,6 +24,8 @@ export class AgentPool {
    * invariant 违规上报后端。
    * 默认为 `null`（仅 console.error）。
    * 在 bootstrap 中注入 observer.emit 后，所有状态机违规会走 observer 管道。
+   *
+   * 优先级：实例 _observer > 静态 onInvariant > console.error
    *
    * 类型来源：@cortex/shared InvariantReporter（与 TaskBoard 共享同一签名）
    * @migrated-from 内联回调签名 → shared InvariantReporter (P1 — 艾尔海森类型迁移计划)
@@ -65,19 +71,7 @@ export class AgentPool {
     const allowed = AgentPool.VALID_TRANSITIONS[current];
     if (!allowed.has(status)) {
       const msg = `非法流转 ${current} → ${status} (instance: ${instanceId})`;
-      if (AgentPool.onInvariant) {
-        AgentPool.onInvariant({ source: "AgentPool.setStatus", message: msg, details: { instanceId, current, attempted: status } });
-      } else if (this._observer) {
-        this._observer.emit({
-          type: PipelineEventType.AgentPoolInvariantViolation,
-          priority: PipelinePriority.CRITICAL,
-          payload: { source: "AgentPool.setStatus", message: msg, instanceId, current, attempted: status },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-      } else if (!process.env.VITEST) {
-        console.error(`[invariant] AgentPool.setStatus: ${msg}`);
-      }
+      this._reportInvariant("AgentPool.setStatus", msg, { instanceId, current, attempted: status });
       return false;
     }
     this.statuses.set(instanceId, status);
@@ -121,19 +115,7 @@ export class AgentPool {
         message: `destroy 绕过状态机: ${current} → Destroyed`,
         details: { instanceId, agentType },
       };
-      if (this._observer) {
-        this._observer.emit({
-          type: PipelineEventType.AgentPoolDestroyBypass,
-          priority: PipelinePriority.HIGH,
-          payload: { current, instanceId, agentType, hint: "强制回收，可能为崩溃恢复" },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-      } else if (AgentPool.onInvariant) {
-        AgentPool.onInvariant(violation);
-      } else if (!process.env.VITEST) {
-        console.warn(`[agent-pool] ${violation.message} (instance: ${instanceId})，强制清理`);
-      }
+      this._reportInvariant("AgentPool.destroy", violation.message, violation.details);
       this.statuses.set(instanceId, AgentStatus.Destroyed);
     }
     this.active.get(agentType)?.delete(instanceId);
@@ -151,5 +133,26 @@ export class AgentPool {
   /** 某类型当前实例数 */
   count(agentType: AgentType): number {
     return this.active.get(agentType)?.size ?? 0;
+  }
+
+  /**
+   * 统一 invariant 上报通道。
+   * 优先级：_observer > onInvariant > console.error
+   * 单通道收敛，消除双路径重复 emit 风险。
+   */
+  private _reportInvariant(source: string, message: string, details?: unknown): void {
+    if (this._observer) {
+      this._observer.emit({
+        type: PipelineEventType.AgentPoolInvariantViolation,
+        priority: PipelinePriority.CRITICAL,
+        payload: { source, message, detail: JSON.stringify(details ?? {}) },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+    } else if (AgentPool.onInvariant) {
+      AgentPool.onInvariant({ source, message, details });
+    } else if (!isTestEnv()) {
+      console.error(`[invariant] ${source}: ${message}`);
+    }
   }
 }

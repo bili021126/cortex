@@ -1,6 +1,7 @@
 // @ci: integration
 import { describe, it, expect, beforeEach } from "vitest";
-import { SkillRegistry, AgentType } from "@cortex/shared";
+import { SkillRegistry } from "../src/skill-registry.js";
+import { AgentType } from "@cortex/shared";
 import type { SkillTemplate, Tag } from "@cortex/shared";
 import { extractSkillsFromOutput } from "../src/components/skill-extractor.js";
 

@@ -1,0 +1,24 @@
+{
+  "id": "skill-p17-vitest-hierarchical-test-org-1778962384007",
+  "agentType": "code",
+  "name": "P17: Vitest 分层测试组织模式",
+  "triggerTags": ["test", "implementation", "refactor"],
+  "trigger": "需要为 TypeScript monorepo 包编写结构化测试，按模块/层级组织测试用例",
+  "steps": [
+    "每个包独立配置 vitest.config.ts（或 ci 用 vitest.ci.config.ts），include 指向 tests/ 目录",
+    "按模块拆分测试文件：<module>.test.ts（单元测试） / <integration>.test.ts（集成测试）——不同文件对应不同测试范围",
+    "按层级组织 describe 块：外层 describe('ModuleName') → 中层 describe('methodName'/'场景') → 内层 it('具体行为')",
+    "每个测试使用 it / expect 三段式：准备输入 → 调用函数 → 断言输出",
+    "断言优先使用精确匹配：toBe（原始值）/ toEqual（对象深比较）/ toStrictEqual（严格深比较）",
+    "边界情况单独列为一个 it：空输入、null/undefined、超长输入、特殊字符",
+    "异步测试使用 async/await + resolves/rejects 匹配器",
+    "运行方式：vitest run（CI 模式，单次执行）/ vitest（watch 模式，开发用）",
+    "CI 中包无测试文件时使用 --passWithNoTests 避免非零退出"
+  ],
+  "expectedOutput": "测试报告：Test Files N passed / Tests N passed — 每个 describe 块覆盖一个模块的完整行为集",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384007
+}

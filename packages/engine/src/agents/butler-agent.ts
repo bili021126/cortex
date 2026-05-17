@@ -16,6 +16,9 @@ import { PoolAwareState } from "../pool-aware.js";
  * 5. 用户状态感知（foreground/idle）→ 决定通知风格
  *
  * v2.1 消费端增强：订阅 NORMAL 级别事件，确保内存/调度事件不被丢弃。
+ *
+ * @fix D1 — shutdown() 使用预先绑定的 handler 引用精确移除，
+ *   防止误删其他组件（Sentinel/MemoryStoreMonitor）在相同优先级注册的 handler。
  */
 export class ButlerAgent {
   readonly type = AT.Butler;
@@ -23,6 +26,11 @@ export class ButlerAgent {
   private readonly _state = new PoolAwareState(() => this.type);
   private _safeReporter: SafeErrorReporter | null = null;
   private bridge?: PlatformBridge;
+
+  /** 预先绑定的 handler 引用，供 shutdown() 精确移除 */
+  private readonly _boundCritical = this._onCritical.bind(this);
+  private readonly _boundHigh = this._onHigh.bind(this);
+  private readonly _boundNormal = this._onNormal.bind(this);
 
   get status(): AgentStatus {
     return this._state.status;
@@ -45,10 +53,10 @@ export class ButlerAgent {
   }
 
   async wakeup(): Promise<void> {
-    this.observer.on(PipelinePriority.CRITICAL, this._onCritical.bind(this));
-    this.observer.on(PipelinePriority.HIGH, this._onHigh.bind(this));
+    this.observer.on(PipelinePriority.CRITICAL, this._boundCritical);
+    this.observer.on(PipelinePriority.HIGH, this._boundHigh);
     // v2.1: NORMAL 订阅——信息事件不再丢失
-    this.observer.on(PipelinePriority.NORMAL, this._onNormal.bind(this));
+    this.observer.on(PipelinePriority.NORMAL, this._boundNormal);
     this._state.transition(AS.Awake);
   }
 
@@ -57,9 +65,10 @@ export class ButlerAgent {
   }
 
   async shutdown(): Promise<void> {
-    this.observer.off(PipelinePriority.CRITICAL);
-    this.observer.off(PipelinePriority.HIGH);
-    this.observer.off(PipelinePriority.NORMAL);
+    // 使用预先绑定的 handler 引用精确移除，防止误删其他组件的 handler
+    this.observer.off(PipelinePriority.CRITICAL, this._boundCritical);
+    this.observer.off(PipelinePriority.HIGH, this._boundHigh);
+    this.observer.off(PipelinePriority.NORMAL, this._boundNormal);
     this._state.transition(AS.Draining);
     this._state.transition(AS.Destroyed);
   }

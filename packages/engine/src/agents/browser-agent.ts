@@ -1,11 +1,10 @@
-import type { TaskNode, AgentType, Agent, SafeErrorReporter } from "@cortex/shared";
+import type { TaskNode, Agent, SafeErrorReporter } from "@cortex/shared";
 import { AgentType as AT, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../toolkit.js";
-import type { MemoryStore } from "../memory-store.js";
+import type { MemoryStore } from "../memory/memory-store.js";
 import type { AgentPool } from "../agent-pool.js";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
-import { BaseAgent } from "../base-agent.js";
 import { chromium, type Browser, type Page } from "playwright";
 
 export const SYSTEM_PROMPT = [
@@ -182,122 +181,4 @@ export function createBrowserAgent(
       page = null;
     },
   };
-}
-
-/**
- * BrowserAgent（宵宫）—— 基于 BaseAgent 的类实现。
- * 保留为向后兼容，新代码推荐使用 createBrowserAgent() 工厂函数。
- */
-export class BrowserAgent extends BaseAgent {
-  readonly type: AgentType = AT.Browser;
-  readonly systemPrompt = SYSTEM_PROMPT;
-
-  private browser: Browser | null = null;
-  private page: Page | null = null;
-  private workspaceRoot: string | null = null;
-
-  constructor(llm: LlmAdapter, toolkit: Toolkit, memory?: MemoryStore) {
-    super(llm, toolkit, memory);
-    this._registerBrowserTool();
-  }
-
-  setWorkspaceRoot(root: string): void {
-    this.workspaceRoot = root;
-  }
-
-  async wakeup(): Promise<void> {
-    if (this.status !== AS.Created) return;
-    await this._initBrowser();
-    await super.wakeup();
-  }
-
-  protected preExecuteHook(node: TaskNode): TaskNode {
-    if (!this.workspaceRoot) return node;
-    return {
-      ...node,
-      payload: `${node.payload}\n\n[工作区路径] ${this.workspaceRoot}\n（本地 HTML 文件可使用 file:/// 协议打开，例如 file:///${this.workspaceRoot.replace(/\\/g, "/")}/index.html）`,
-    };
-  }
-
-  async execute(node: TaskNode, model: string) {
-    if (!this.page) await this._initBrowser();
-    return super.execute(node, model);
-  }
-
-  async shutdown(): Promise<void> {
-    await super.shutdown();
-    if (this.browser) {
-      try { await this.browser.close(); } catch (e) {
-        if (this._safeReporter) {
-          this._safeReporter({ source: "BrowserAgent.shutdown", error: e, severity: "degraded", hint: "browser.close() failed" });
-        } else {
-          console.warn(`[BrowserAgent] browser.close() 失败: ${String(e)}`);
-        }
-      }
-    }
-    this.browser = null;
-    this.page = null;
-  }
-
-  private async _initBrowser(): Promise<void> {
-    if (this.browser?.isConnected()) return;
-    this.browser = await chromium.launch({ headless: true });
-    this.page = await this.browser.newPage();
-    await this.page.setViewportSize({ width: 1280, height: 720 });
-  }
-
-  private _registerBrowserTool(): void {
-    this.toolkit.register("browser_do", async (params) => {
-      const action = params.action as string;
-      const timeout = (params.timeout as number) ?? 10_000;
-
-      if (!this.page) {
-        return { success: false, error: "浏览器未初始化，请先调用 wakeup()" };
-      }
-
-      try {
-        switch (action) {
-          case "navigate": {
-            const url = params.url as string;
-            if (!url) return { success: false, error: "navigate 缺少 url 参数" };
-            await this.page.goto(url, { timeout, waitUntil: "domcontentloaded" });
-            const title = await this.page.title();
-            return { success: true, output: `已打开页面: ${title} (${url})` };
-          }
-          case "type": {
-            const selector = params.selector as string;
-            const text = params.text as string;
-            if (!selector) return { success: false, error: "type 缺少 selector 参数" };
-            if (text === undefined) return { success: false, error: "type 缺少 text 参数" };
-            await this.page.waitForSelector(selector, { timeout });
-            await this.page.fill(selector, text);
-            return { success: true, output: `已在 "${selector}" 中输入: "${text}"` };
-          }
-          case "click": {
-            const selector = params.selector as string;
-            if (!selector) return { success: false, error: "click 缺少 selector 参数" };
-            await this.page.waitForSelector(selector, { timeout });
-            await this.page.click(selector);
-            return { success: true, output: `已点击 "${selector}"` };
-          }
-          case "read": {
-            const selector = params.selector as string;
-            if (!selector) return { success: false, error: "read 缺少 selector 参数" };
-            await this.page.waitForSelector(selector, { timeout, state: "visible" });
-            const text = await this.page.textContent(selector);
-            return { success: true, output: text ?? "(元素存在但无文本内容)" };
-          }
-          case "screenshot": {
-            const buf = await this.page.screenshot({ type: "png", fullPage: false });
-            const b64 = buf.toString("base64");
-            return { success: true, output: `[截图已生成，${buf.length} bytes，base64 前 200 字符] ${b64.slice(0, 200)}...` };
-          }
-          default:
-            return { success: false, error: `未知 browser_do 操作: "${action}"。支持: navigate, type, click, read, screenshot` };
-        }
-      } catch (e) {
-        return { success: false, error: `browser_do.${action} 失败: ${e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300)}` };
-      }
-    });
-  }
 }

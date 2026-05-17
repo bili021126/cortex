@@ -1,0 +1,79 @@
+packages/engine/src/memory/memory-store.ts(148,5): error TS1068: Unexpected token. A constructor, method, accessor, or property was expected.
+packages/engine/src/memory/memory-store.ts(164,5): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(197,7): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(198,5): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(205,5): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(205,6): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(214,3): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(218,16): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(218,34): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(218,52): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(218,63): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(218,83): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(268,20): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(268,29): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(268,42): error TS1011: An element access expression should take an argument.
+packages/engine/src/memory/memory-store.ts(268,44): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(274,15): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(274,24): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(274,26): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(278,15): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(278,33): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(278,56): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(278,70): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(278,72): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(285,19): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(285,28): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(285,30): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(289,18): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(289,27): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(289,29): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(293,22): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(293,31): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(293,33): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(302,21): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(302,40): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(302,42): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(350,24): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(350,33): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(350,35): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(370,15): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(370,29): error TS1011: An element access expression should take an argument.
+packages/engine/src/memory/memory-store.ts(370,31): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(375,15): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(375,17): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(379,16): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(379,25): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(379,61): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(383,3): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(383,13): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(383,15): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(387,3): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(387,16): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(387,30): error TS1109: Expression expected.
+packages/engine/src/memory/memory-store.ts(388,11): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(388,15): error TS1005: ':' expected.
+packages/engine/src/memory/memory-store.ts(388,36): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(391,3): error TS1434: Unexpected keyword or identifier.
+packages/engine/src/memory/memory-store.ts(391,16): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(391,30): error TS1109: Expression expected.
+packages/engine/src/memory/memory-store.ts(392,11): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(392,15): error TS1005: ':' expected.
+packages/engine/src/memory/memory-store.ts(392,36): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(398,3): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(398,33): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(398,42): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(398,85): error TS1109: Expression expected.
+packages/engine/src/memory/memory-store.ts(398,99): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(409,3): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(409,33): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(409,51): error TS1005: ',' expected.
+packages/engine/src/memory/memory-store.ts(409,60): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(409,74): error TS1011: An element access expression should take an argument.
+packages/engine/src/memory/memory-store.ts(409,76): error TS1005: ';' expected.
+packages/engine/src/memory/memory-store.ts(425,7): error TS1472: 'catch' or 'finally' expected.
+packages/engine/src/memory/memory-store.ts(426,7): error TS1005: 'try' expected.
+packages/engine/src/memory/memory-store.ts(435,9): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(443,5): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(444,3): error TS1128: Declaration or statement expected.
+packages/engine/src/memory/memory-store.ts(446,1): error TS1128: Declaration or statement expected.

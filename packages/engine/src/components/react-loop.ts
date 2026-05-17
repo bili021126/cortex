@@ -1,7 +1,7 @@
 import type { TaskNode, NodeResult, AgentType, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../toolkit.js";
-import type { MemoryStore } from "../memory-store.js";
+import type { MemoryStore } from "../memory/memory-store.js";
 
 const DEFAULT_MAX_LOOPS = 64;
 

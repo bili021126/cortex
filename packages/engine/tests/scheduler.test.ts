@@ -7,11 +7,11 @@ import { PipelineObserver } from "../src/pipeline-observer";
 import { ConfirmGate } from "../src/confirm-gate";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { CodeAgent } from "../src/agents/code-agent";
-import { ReviewAgent } from "../src/agents/review-agent";
-import { AnalysisAgent } from "../src/agents/analysis-agent";
-import { DocGovernAgent } from "../src/agents/doc-govern-agent";
-import { MemoryStore } from "../src/memory-store";
+import { createAgent } from "../src/components/agent-factory";
+import { codeAgentConfig } from "../src/agents/code-agent";
+import { reviewAgentConfig } from "../src/agents/review-agent";
+import { analysisAgentConfig } from "../src/agents/analysis-agent";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { Scheduler, topologicalSort } from "../src/scheduler";
 
 // ─── Mock Agent ────────────────────────────
@@ -24,10 +24,10 @@ async function mockAgentByType(agentType: string, success = true, output = `done
   const tk = new Toolkit();
   let agent;
   switch (agentType) {
-    case AgentType.Code: agent = new CodeAgent(adapter, tk); break;
-    case AgentType.Review: agent = new ReviewAgent(adapter, tk); break;
-    case AgentType.Analysis: agent = new AnalysisAgent(adapter, tk); break;
-    default: agent = new CodeAgent(adapter, tk);
+    case AgentType.Code: agent = createAgent(codeAgentConfig(), adapter, tk); break;
+    case AgentType.Review: agent = createAgent(reviewAgentConfig(), adapter, tk); break;
+    case AgentType.Analysis: agent = createAgent(analysisAgentConfig(), adapter, tk); break;
+    default: agent = createAgent(codeAgentConfig(), adapter, tk);
   }
   await agent.wakeup();
   return agent;
@@ -248,7 +248,7 @@ describe("Scheduler", () => {
     });
     adapter.injectMock(async () => ({ content: "产出内容", toolCalls: [] }));
     // CodeAgent 注入 MemoryStore 以写记忆
-    const agentWithMem = new CodeAgent(adapter, new Toolkit(), memory);
+    const agentWithMem = createAgent(codeAgentConfig(), adapter, new Toolkit(), memory);
 
     const memScheduler = new Scheduler(board, pool, observer, gate);
     await agentWithMem.wakeup();

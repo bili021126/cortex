@@ -1,9 +1,10 @@
 // @ci: llm
 import { describe, it, expect, beforeAll } from "vitest";
 import { AgentType, AgentStatus } from "@cortex/shared";
+import type { Agent } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { InspectorAgent } from "../src/agents/inspector-agent";
+import { createInspectorAgent } from "../src/agents/inspector-agent";
 
 function mockInspectAdapter() {
   const adapter = new LlmAdapter({
@@ -52,31 +53,31 @@ function mockInspectAdapter() {
 describe("InspectorAgent", () => {
   let adapter: LlmAdapter;
   let toolkit: Toolkit;
-  let agent: InspectorAgent;
+  let agent: Agent & { setWorkspaceRoot?: (root: string) => void };
 
   beforeAll(async () => {
     adapter = mockInspectAdapter();
     toolkit = new Toolkit();
-    agent = new InspectorAgent(adapter, toolkit);
+    agent = createInspectorAgent(adapter, toolkit);
     await agent.wakeup();
   });
 
   // ── 状态机 ──────────────────────────────────
 
   it("初始状态为 Created", () => {
-    const a = new InspectorAgent(adapter, new Toolkit());
+    const a = createInspectorAgent(adapter, new Toolkit());
     expect(a.status).toBe(AgentStatus.Created);
     expect(a.type).toBe(AgentType.Inspector);
   });
 
   it("wakeup → Awake", async () => {
-    const a = new InspectorAgent(adapter, new Toolkit());
+    const a = createInspectorAgent(adapter, new Toolkit());
     await a.wakeup();
     expect(a.status).toBe(AgentStatus.Awake);
   });
 
   it("execute 期间为 Active，完成后回 Awake", async () => {
-    const a = new InspectorAgent(adapter, new Toolkit());
+    const a = createInspectorAgent(adapter, new Toolkit());
     await a.wakeup();
 
     const result = await a.execute(
@@ -99,7 +100,7 @@ describe("InspectorAgent", () => {
   });
 
   it("shutdown → Destroyed", async () => {
-    const a = new InspectorAgent(adapter, new Toolkit());
+    const a = createInspectorAgent(adapter, new Toolkit());
     await a.wakeup();
     await a.shutdown();
     expect(a.status).toBe(AgentStatus.Destroyed);
@@ -139,7 +140,7 @@ describe("InspectorAgent", () => {
       toolCalls: [{ id: "w1", name: "write_file", arguments: { file_path: "/x", content: "bad" } }],
     }));
 
-    const badAgent = new InspectorAgent(badAdapter, new Toolkit());
+    const badAgent = createInspectorAgent(badAdapter, new Toolkit());
     await badAgent.wakeup();
     const result = await badAgent.execute(
       {
@@ -169,7 +170,7 @@ describe("InspectorAgent", () => {
       toolCalls: [{ id: "loop", name: "search_code", arguments: { query: "endless" } }],
     }));
 
-    const stuckAgent = new InspectorAgent(stuck, new Toolkit());
+    const stuckAgent = createInspectorAgent(stuck, new Toolkit());
     await stuckAgent.wakeup();
     const result = await stuckAgent.execute(
       {

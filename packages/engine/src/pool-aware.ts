@@ -2,6 +2,7 @@ import type { AgentStatus } from "@cortex/shared";
 import { AgentStatus as AS } from "@cortex/shared";
 import type { SafeErrorReporter } from "@cortex/shared";
 import type { AgentPool } from "./agent-pool.js";
+import { isTestEnv } from "./test-env.js";
 
 /**
  * PoolAwareState —— 方案B 状态管理共享组件。
@@ -50,10 +51,16 @@ export class PoolAwareState {
     return this._localStatus;
   }
 
-  /** 注入 AgentPool 引用（方案B：状态所有权归一） */
+  /** 注入 AgentPool 引用（方案B：状态所有权归一）。
+   *  同步 Pool 初始状态：Agent 已被 wakeup() 唤醒至 Awake，
+   *  但 Pool.spawn() 初始为 Created，需将 Pool 推进到当前本地状态。 */
   setPool(pool: AgentPool, instanceId: string): void {
     this._pool = pool;
     this._instanceId = instanceId;
+    // 同步 Pool 状态（agent 已 wakeup()，Pool 初始为 Created，需推进）
+    if (this._localStatus !== AS.Created) {
+      pool.setStatus(instanceId, this._localStatus);
+    }
   }
 
   /** 注入 SafeErrorReporter（由 bootstrap 在上层统一注入） */
@@ -95,7 +102,7 @@ export class PoolAwareState {
           severity: "fatal",
           hint: "Agent 无 Pool 绑定，状态机一致性无法保证",
         });
-      } else if (!process.env.VITEST) {
+      } else if (!isTestEnv()) {
         console.error(`[invariant] ${msg}`);
       }
       return false;

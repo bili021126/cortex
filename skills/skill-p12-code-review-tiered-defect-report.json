@@ -1,0 +1,24 @@
+{
+  "id": "skill-p12-code-review-tiered-defect-report-1778962384002",
+  "agentType": "review",
+  "name": "P12: 分级缺陷代码审查报告",
+  "triggerTags": ["review", "audit"],
+  "trigger": "需要对代码变更进行结构化审查，产出按严重程度分级的缺陷报告",
+  "steps": [
+    "确定审查范围：未追踪文件（untracked files）、修改文件、新增包/目录",
+    "确定审查焦点：导入路径完整性、类型引用正确性、边界条件、并发安全、潜在破坏性变更",
+    "按严重程度分级审查：P0（阻断级，运行错误/数据丢失/安全漏洞）→ P1（严重，功能受限/技术债）→ P2（警告级，代码质量/维护性）",
+    "P0 级必须附带：文件路径 + 行号 + 代码片段 + 问题描述 + 影响分析 + 预期修正方案",
+    "P1 级附带：文件路径 + 代码片段 + 问题描述 + 影响范围 + 预期修正",
+    "P2 级附带：文件路径 + 简要描述 + 建议修复方式",
+    "每个缺陷条目格式：'### P<N>-<序号>: <标题>' + 文件/代码/影响/修正四段式",
+    "审查完毕后汇总统计：P0 x 个 / P1 x 个 / P2 x 个"
+  ],
+  "expectedOutput": "分级代码审查报告：P0（阻断级）N个 / P1（严重）N个 / P2（警告级）N个 — 每个缺陷含文件路径、代码证据、影响分析和预期修正",
+  "outputFile": "{review-dir}/code-review.md",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384002
+}

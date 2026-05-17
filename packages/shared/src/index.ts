@@ -26,3 +26,6 @@ export * from "./cli-adapter.js";
 export * from "./infra.js";
 export * from "./skill-registry.js";
 export * from "./fs-adapter.js";
+export * from "./modification-record.js";
+export * from "./doc-registry.js";
+export * from "./amendment.js";

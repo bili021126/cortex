@@ -1,9 +1,10 @@
 // @ci: unit
 import { describe, it, expect, beforeAll } from "vitest";
-import { AgentType } from "@cortex/shared";
+import { AgentType, type Agent } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { CodeAgent } from "../src/agents/code-agent";
+import { createAgent } from "../src/components/agent-factory";
+import { codeAgentConfig } from "../src/agents/code-agent";
 
 function mockLlamaAdapter() {
   const adapter = new LlmAdapter({
@@ -44,12 +45,12 @@ function mockLlamaAdapter() {
 describe("CodeAgent", () => {
   let adapter: LlmAdapter;
   let toolkit: Toolkit;
-  let agent: CodeAgent;
+  let agent: Agent;
 
   beforeAll(async () => {
     adapter = mockLlamaAdapter();
     toolkit = new Toolkit();
-    agent = new CodeAgent(adapter, toolkit);
+    agent = createAgent(codeAgentConfig(), adapter, toolkit);
     await agent.wakeup();
   });
 
@@ -87,7 +88,7 @@ describe("CodeAgent", () => {
       toolCalls: [{ id: "loop", name: "read_file", arguments: { file_path: "/x" } }],
     }));
 
-    const stuckAgent = new CodeAgent(stuck, new Toolkit());
+    const stuckAgent = createAgent(codeAgentConfig(), stuck, new Toolkit());
     await stuckAgent.wakeup();
     const result = await stuckAgent.execute(
       {
@@ -109,7 +110,7 @@ describe("CodeAgent", () => {
   });
 
   it("状态机：Created → Awake → Active → Awake", async () => {
-    const a = new CodeAgent(adapter, new Toolkit());
+    const a = createAgent(codeAgentConfig(), adapter, new Toolkit());
     expect(a.status).toBe("created");
 
     await a.wakeup();

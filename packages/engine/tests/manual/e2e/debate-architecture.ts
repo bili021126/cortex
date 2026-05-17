@@ -26,7 +26,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, LinkType, MemoryType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { MemoryStore } from "../../../src/memory-store.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
 import { InspectorAgent } from "../../../src/agents/inspector-agent.js";
 import { ConfirmGate } from "../../../src/confirm-gate.js";
 import { Toolkit } from "../../../src/toolkit.js";

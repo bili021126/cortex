@@ -42,7 +42,7 @@ interface PackageJson {
   peerDependencies?: Record<string, string>;
 }
 
-interface PkgInfo {
+export interface PkgInfo {
   id: string;
   name: string;
   version: string;
@@ -72,18 +72,18 @@ interface DriftItem {
   reason: string;
 }
 
-interface Edge {
+export interface Edge {
   from: string;
   to: string;
   type: 'dependencies' | 'devDependencies' | 'peerDependencies';
 }
 
-interface CycleInfo {
+export interface CycleInfo {
   path: string[];
   packages: string[];
 }
 
-interface AnalyzerMeta {
+export interface AnalyzerMeta {
   scannedAt: string;
   filesScanned: number;
   dependenciesChecked: number;
@@ -91,7 +91,7 @@ interface AnalyzerMeta {
   projectRoot: string;
 }
 
-interface AnalyzerOutput {
+export interface AnalyzerOutput {
   meta: AnalyzerMeta;
   packages: PkgInfo[];
   dependencyGraph: {

@@ -28,7 +28,7 @@ interface PackageJson {
   devDependencies?: Record<string, string>;
 }
 
-interface DepEntry {
+export interface DepEntry {
   depName: string;
   pkg: string;
   pkgName: string;
@@ -39,7 +39,7 @@ interface DepEntry {
   isOpenVersion: boolean;
 }
 
-interface DepGroup {
+export interface DepGroup {
   depName: string;
   entries: DepEntry[];
   uniqueVersions: string[];
@@ -47,7 +47,7 @@ interface DepGroup {
   hasOpenVersion: boolean;
 }
 
-interface DriftItem {
+export interface DriftItem {
   dependency: string;
   occurrences: number;
   versions: Record<string, string>;
@@ -55,14 +55,14 @@ interface DriftItem {
   reason: string;
 }
 
-interface ReportMeta {
+export interface ReportMeta {
   scannedAt: string;
   filesScanned: number;
   dependenciesChecked: number;
   status: 'clean' | 'drift' | 'error';
 }
 
-interface JsonReport {
+export interface JsonReport {
   meta: ReportMeta;
   dependencies: Record<string, unknown>;
   drifts: DriftItem[];

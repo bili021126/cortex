@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { AgentType, MemoryType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { MemoryStore } from "../src/memory-store";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { PipelineObserver } from "../src/pipeline-observer";
 import { executeWithMemoryPipeline, defaultMemoryQuery } from "../src/memory/pipeline";
 import { type ReActContext } from "../src/components/react-loop";

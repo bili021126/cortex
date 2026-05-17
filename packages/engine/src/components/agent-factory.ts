@@ -5,7 +5,7 @@ import type {
 import { AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../toolkit.js";
-import type { MemoryStore } from "../memory-store.js";
+import type { MemoryStore } from "../memory/memory-store.js";
 import type { AgentPool } from "../agent-pool.js";
 import { PoolAwareState } from "../pool-aware.js";
 import { type ReActContext } from "./react-loop.js";
@@ -32,6 +32,10 @@ export interface AgentFactoryConfig {
   getMemoryQuery?: (node: TaskNode) => MemoryQuery;
   /** 执行前钩子——如 InspectorAgent 的 tsc 编译事实采集 */
   preExecuteHook?: (node: TaskNode) => TaskNode | Promise<TaskNode>;
+  /** 记忆 BFS 深度覆写——不提供则由 getMemoryQuery 决定 */
+  memoryBfsDepth?: number;
+  /** 记忆检索条数覆写——不提供则由 getMemoryQuery 决定 */
+  memoryLimit?: number;
 }
 
 /**

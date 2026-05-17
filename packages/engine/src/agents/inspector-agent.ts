@@ -1,12 +1,12 @@
-import type { TaskNode, AgentType, Agent, SafeErrorReporter } from "@cortex/shared";
+import type { TaskNode, Agent, SafeErrorReporter } from "@cortex/shared";
 import { AgentType as AT } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../toolkit.js";
-import type { MemoryStore } from "../memory-store.js";
+import type { MemoryStore } from "../memory/memory-store.js";
 import type { AgentPool } from "../agent-pool.js";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
-import { BaseAgent } from "../base-agent.js";
 import { execSync } from "node:child_process";
+import { type EngineConfig, resolveConfig } from "../config.js";
 
 export const SYSTEM_PROMPT = [
   "🎭 你是「安柏」—— 西风骑士团侦察骑士，Cortex 的 Inspector Agent。",
@@ -44,15 +44,22 @@ export const SYSTEM_PROMPT = [
   "  你不是吟游诗人——战报不需要起承转合。",
 ].join("\n");
 
-function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter): string[] {
+/**
+ * M9 — 提取为独立模块函数，工厂版本和类版本共同调用，消除 80 行重复代码。
+ *
+ * 用 child_process 采集编译/测试事实，不依赖 LLM。
+ * 返回事实字符串数组，每一条对应一个命令执行结果。
+ */
+function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, timeouts?: Required<EngineConfig>["inspector"]): string[] {
   const facts: string[] = [];
   const root = workspaceRoot;
+  const T = timeouts ?? { tscTimeout: 30_000, testTimeout: 30_000, vitestTimeout: 60_000 };
 
   try {
     try {
       const tscOut = execSync("npx tsc --noEmit --pretty false", {
         cwd: root,
-        timeout: 30_000,
+        timeout: T.tscTimeout,
         encoding: "utf-8",
         maxBuffer: 256 * 1024,
         stdio: ["ignore", "pipe", "pipe"],
@@ -68,14 +75,14 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter): 
       if (stderr.trim()) facts.push(`[tsc stderr]\n${stderr.trim().slice(0, 800)}`);
     }
   } catch {
-    safeReporter?.({ source: "InspectorAgent._collectFacts.tsc", error: "tsc not available", severity: "silent" });
+    safeReporter?.({ source: "InspectorAgent.collectFacts.tsc", error: "tsc not available", severity: "silent" });
   }
 
   try {
     try {
       const tsxOut = execSync("npx tsx test/calculator.test.ts", {
         cwd: root,
-        timeout: 30_000,
+        timeout: T.testTimeout,
         encoding: "utf-8",
         maxBuffer: 256 * 1024,
         stdio: ["ignore", "pipe", "pipe"],
@@ -91,14 +98,14 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter): 
       if (stderr.trim()) facts.push(`[tsx stderr]\n${stderr.trim().slice(0, 600)}`);
     }
   } catch {
-    safeReporter?.({ source: "InspectorAgent._collectFacts.tsx", error: "tsx not available", severity: "silent" });
+    safeReporter?.({ source: "InspectorAgent.collectFacts.tsx", error: "tsx not available", severity: "silent" });
   }
 
   try {
     try {
       const testOut = execSync("npx vitest run --reporter verbose 2>&1 || npx jest --verbose 2>&1 || echo NO_TEST_RUNNER", {
         cwd: root,
-        timeout: 60_000,
+        timeout: T.vitestTimeout,
         encoding: "utf-8",
         maxBuffer: 512 * 1024,
         stdio: ["ignore", "pipe", "pipe"],
@@ -112,10 +119,10 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter): 
         facts.push(`[vitest 输出]\n${trimmed.slice(0, 1000)}`);
       }
     } catch {
-      safeReporter?.({ source: "InspectorAgent._collectFacts.vitest_inner", error: "test runner not available", severity: "silent" });
+      safeReporter?.({ source: "InspectorAgent.collectFacts.vitest_inner", error: "test runner not available", severity: "silent" });
     }
   } catch {
-    safeReporter?.({ source: "InspectorAgent._collectFacts.vitest", error: "vitest not available", severity: "silent" });
+    safeReporter?.({ source: "InspectorAgent.collectFacts.vitest", error: "vitest not available", severity: "silent" });
   }
 
   return facts;
@@ -129,6 +136,7 @@ export function createInspectorAgent(
   llm: LlmAdapter,
   toolkit: Toolkit,
   memory?: MemoryStore,
+  engineConfig?: EngineConfig,
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -136,6 +144,7 @@ export function createInspectorAgent(
 } {
   let workspaceRoot: string | null = null;
   let safeReporterRef: SafeErrorReporter | null = null;
+  const resolved = resolveConfig(engineConfig);
 
   const config: AgentFactoryConfig = {
     type: AT.Inspector,
@@ -144,7 +153,7 @@ export function createInspectorAgent(
     memoryEnabled: true,
     preExecuteHook: (node: TaskNode): TaskNode => {
       if (!workspaceRoot) return node;
-      const facts = collectFacts(workspaceRoot, safeReporterRef ?? undefined);
+      const facts = collectFacts(workspaceRoot, safeReporterRef ?? undefined, resolved.inspector);
       if (facts.length === 0) return node;
       return {
         ...node,
@@ -155,128 +164,19 @@ export function createInspectorAgent(
 
   const agent = createAgent(config, llm, toolkit, memory);
 
-  return {
-    ...agent,
-    setWorkspaceRoot(root: string) {
-      workspaceRoot = root;
-    },
-    setSafeReporter(reporter: SafeErrorReporter) {
-      safeReporterRef = reporter;
-      agent.setSafeReporter(reporter);
-    },
+  // 用 getOwnPropertyDescriptors 保留 agent 的 getter（status 等），避免展开丢失
+  const descriptors = Object.getOwnPropertyDescriptors(agent);
+  const wrapped = Object.defineProperties({} as typeof agent, descriptors) as typeof agent & {
+    setWorkspaceRoot(root: string): void;
   };
-}
 
-/**
- * InspectorAgent（安柏）—— 基于 BaseAgent 的类实现。
- * 保留为向后兼容，新代码推荐使用 createInspectorAgent() 工厂函数。
- */
-export class InspectorAgent extends BaseAgent {
-  readonly type: AgentType = AT.Inspector;
-  readonly systemPrompt = SYSTEM_PROMPT;
+  wrapped.setWorkspaceRoot = function (root: string) {
+    workspaceRoot = root;
+  };
+  wrapped.setSafeReporter = function (reporter: SafeErrorReporter) {
+    safeReporterRef = reporter;
+    agent.setSafeReporter(reporter);
+  };
 
-  /** Inspector 用更少的循环上限来降低幻觉风险。 */
-  protected maxLoops = 24;
-
-  /** 工作区根目录 — 用于 child_process 执行编译/测试命令 */
-  private workspaceRoot: string | null = null;
-
-  constructor(llm: LlmAdapter, toolkit: Toolkit, memory?: MemoryStore) {
-    super(llm, toolkit, memory);
-  }
-
-  /** 设置工作区根目录。 */
-  setWorkspaceRoot(root: string): void {
-    this.workspaceRoot = root;
-  }
-
-  /** 前置钩子：自动采集 tsc/vitest 事实注入到任务 payload */
-  protected preExecuteHook(node: TaskNode): TaskNode {
-    if (!this.workspaceRoot) return node;
-    const facts = this._collectFacts();
-    if (facts.length === 0) return node;
-    return {
-      ...node,
-      payload: `${node.payload}\n\n[系统自动采集的编译事实——以下是真实命令输出，请如实报告]\n${facts.join("\n")}`,
-    };
-  }
-
-  /** 用 child_process 采集编译/测试事实，不依赖 LLM */
-  private _collectFacts(): string[] {
-    const facts: string[] = [];
-    const root = this.workspaceRoot!;
-
-    try {
-      try {
-        const tscOut = execSync("npx tsc --noEmit --pretty false", {
-          cwd: root,
-          timeout: 30_000,
-          encoding: "utf-8",
-          maxBuffer: 256 * 1024,
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        facts.push(`[tsc --noEmit] ✅ 编译通过。`);
-        if (tscOut.trim()) facts.push(`[tsc 输出] ${tscOut.trim().slice(0, 500)}`);
-      } catch (e) {
-        const err = e as { stdout?: unknown; stderr?: unknown; status?: number | string };
-        const stdout = err.stdout?.toString() ?? "";
-        const stderr = err.stderr?.toString() ?? "";
-        facts.push(`[tsc --noEmit] ❌ 编译失败 (exit ${err.status ?? "?"})`);
-        if (stdout.trim()) facts.push(`[tsc stdout]\n${stdout.trim().slice(0, 800)}`);
-        if (stderr.trim()) facts.push(`[tsc stderr]\n${stderr.trim().slice(0, 800)}`);
-      }
-    } catch {
-      this._safeReporter?.({ source: "InspectorAgent._collectFacts.tsc", error: "tsc not available", severity: "silent" });
-    }
-
-    try {
-      try {
-        const tsxOut = execSync("npx tsx test/calculator.test.ts", {
-          cwd: root,
-          timeout: 30_000,
-          encoding: "utf-8",
-          maxBuffer: 256 * 1024,
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        const trimmed = tsxOut.trim();
-        facts.push(`[tsx] ✅ 测试全部通过。`);
-        if (trimmed) facts.push(`[tsx 输出]\n${trimmed.slice(0, 500)}`);
-      } catch (e) {
-        const err = e as { stdout?: unknown; stderr?: unknown; status?: number | string };
-        const stdout = err.stdout?.toString() ?? "";
-        const stderr = err.stderr?.toString() ?? "";
-        facts.push(`[tsx] ❌ 测试失败 (exit ${err.status ?? "?"})`);
-        if (stdout.trim()) facts.push(`[tsx stdout]\n${stdout.trim().slice(0, 600)}`);
-        if (stderr.trim()) facts.push(`[tsx stderr]\n${stderr.trim().slice(0, 600)}`);
-      }
-    } catch {
-      this._safeReporter?.({ source: "InspectorAgent._collectFacts.tsx", error: "tsx not available", severity: "silent" });
-    }
-
-    try {
-      try {
-        const testOut = execSync("npx vitest run --reporter verbose 2>&1 || npx jest --verbose 2>&1 || echo NO_TEST_RUNNER", {
-          cwd: root,
-          timeout: 60_000,
-          encoding: "utf-8",
-          maxBuffer: 512 * 1024,
-          stdio: ["ignore", "pipe", "pipe"],
-          shell: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
-        });
-        const trimmed = testOut.trim();
-        if (trimmed && !trimmed.includes("NO_TEST_RUNNER")) {
-          const passed = /(\d+)\s+passed/.test(trimmed);
-          const failed = /(\d+)\s+failed/.test(trimmed);
-          facts.push(`[vitest] ${passed ? "✅ 测试通过" : ""}${failed ? "❌ 测试失败" : ""}${!passed && !failed ? "⚠️ 未检测到测试结果" : ""}`);
-          facts.push(`[vitest 输出]\n${trimmed.slice(0, 1000)}`);
-        }
-      } catch {
-        this._safeReporter?.({ source: "InspectorAgent._collectFacts.vitest_inner", error: "test runner not available", severity: "silent" });
-      }
-    } catch {
-      this._safeReporter?.({ source: "InspectorAgent._collectFacts.vitest", error: "vitest not available", severity: "silent" });
-    }
-
-    return facts;
-  }
+  return wrapped;
 }

@@ -1,18 +1,18 @@
 /**
- * 合并大考 —— Agent 将 solo-flight 及归档产出合并到主工程
+ * 合并大考 —— Agent 将归档产出合并到主工程
  *
  * 用法: npx tsx tests/manual/e2e/merge-from-solo-flight.ts
  * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY
  *
- * 三路资源:
- *   1. projects/solo-flight/           —— 当前产出（密码管理器 + Markdown 编译器）
+ * 资源:
+ *   1. .cortex/skills-crystallized.json  —— 莫娜已沉淀技能（P0-P9 模式 + 架构模式）
  *   2. .cortex/archive/e2e-outputs/.../solo-flight/      —— 归档 solo-flight（cli/core/formatters/storage/types）
  *   3. .cortex/archive/e2e-outputs/.../closed-loop-test/ —— 归档闭环测试（monorepo-analyzer、drift-detector）
  *
  * 验收标准:
  *   1. MetaAgent 产出 ≥1 个 TaskNode
  *   2. Scheduler.executeAll() 完成，失败节点 = 0
- *   3. 主工程 packages/ 下出现新的子包（pm/parser/cli/data/tools 等）
+ *   3. 主工程 packages/ 下出现新的子包（parser/cli/data/tools 等）
  *   4. pnpm build 全量通过（含新包）
  *   5. pnpm test 全量通过（含新包的集成测试）
  *   6. 不破坏任何现有包的构建
@@ -21,25 +21,33 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentType, PipelinePriority, type TaskNode } from "@cortex/shared";
+import { MemorySubType, MemoryState, MemoryType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { TaskBoard } from "../../../src/task-board.js";
-import { AgentPool } from "../../../src/agent-pool.js";
-import { Scheduler } from "../../../src/scheduler.js";
-import { PipelineObserver } from "../../../src/pipeline-observer.js";
-import { ConfirmGate } from "../../../src/confirm-gate.js";
-import { Toolkit } from "../../../src/toolkit.js";
-import { MemoryStore } from "../../../src/memory-store.js";
-import { MetaAgent } from "../../../src/meta-agent.js";
-import { CodeAgent } from "../../../src/agents/code-agent.js";
-import { ReviewAgent } from "../../../src/agents/review-agent.js";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent.js";
-import { OpsAgent } from "../../../src/agents/ops-agent.js";
-import { LoopAgent } from "../../../src/agents/loop-agent.js";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent.js";
-import { ApiAgent } from "../../../src/agents/api-agent.js";
-import { DataAgent } from "../../../src/agents/data-agent.js";
-import { FixAgent } from "../../../src/agents/fix-agent.js";
-import { InspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { loadSkillsFromMemory, scanOutputFilesForSkills } from "../../../src/components/skill-persister.js";
+import {
+  TaskBoard,
+  AgentPool,
+  Scheduler,
+  PipelineObserver,
+  ConfirmGate,
+  Toolkit,
+  ConsistencyLayer,
+  NodeFileSystemAdapter,
+  MetaAgent,
+  SkillRegistry,
+  createAgent,
+  codeAgentConfig,
+  reviewAgentConfig,
+  analysisAgentConfig,
+  opsAgentConfig,
+  loopAgentConfig,
+  docGovernAgentConfig,
+  apiAgentConfig,
+  dataAgentConfig,
+  fixAgentConfig,
+  createInspectorAgent,
+} from "@cortex/engine";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
 
 // ══════════════════════════════════════════════
 // 0. 环境变量
@@ -133,12 +141,11 @@ function registerAllTools(toolkit: Toolkit, workspaceRoot: string, packagesRoot:
 
   toolkit.register("write_file", async (params) => {
     const fp = resolve(params.file_path as string);
-    // 允许写入 packages/ 或 projects/solo-flight/
+    // 允许写入 packages/ 或 test-output/
     const allowed = fp.startsWith(packagesRoot + path.sep) ||
-      fp.startsWith(path.resolve(workspaceRoot, "projects", "solo-flight") + path.sep) ||
       fp.startsWith(path.resolve(workspaceRoot, "test-output") + path.sep);
     if (!allowed) {
-      return { success: false, error: `write_file denied: 仅允许写入 packages/ 或 projects/solo-flight/ 或 test-output/ 目录。当前路径: ${fp}` };
+      return { success: false, error: `write_file denied: 仅允许写入 packages/ 或 test-output/ 目录。当前路径: ${fp}` };
     }
     try {
       const dir = path.dirname(fp);
@@ -232,28 +239,29 @@ function listArchiveSources(workspace: string): string {
   return lines.join("\n");
 }
 
-function listSoloFlightSources(workspace: string): string {
-  const sf = path.resolve(workspace, "projects", "solo-flight");
-  if (!fs.existsSync(sf)) return "⚠️ projects/solo-flight/ 不存在";
+// ══════════════════════════════════════════════
+// 2b. 列举 crystallized skills
+// ══════════════════════════════════════════════
 
-  const lines: string[] = ["── 当前活跃: projects/solo-flight/ ──"];
-
-  const walk = (d: string, prefix: string) => {
-    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
-      if (entry.name === "node_modules" || entry.name === "dist" || entry.name.startsWith(".") || entry.name === "-p") continue;
-      const full = path.join(d, entry.name);
-      const rel = prefix + entry.name;
-      if (entry.isDirectory()) {
-        walk(full, rel + "/");
-      } else if (/\.(ts|js|json|md)$/.test(entry.name)) {
-        const size = fs.statSync(full).size;
-        lines.push(`  [solo-flight] ${rel} (${size} bytes)`);
-      }
+function listCrystallizedSkills(workspace: string): string {
+  const skillsPath = path.resolve(workspace, ".cortex", "skills-crystallized.json");
+  if (!fs.existsSync(skillsPath)) {
+    return "⚠️ .cortex/skills-crystallized.json 不存在（先运行 test-mona-skill-crystallize.ts）";
+  }
+  try {
+    const raw = fs.readFileSync(skillsPath, "utf-8");
+    const data = JSON.parse(raw);
+    const templates = data.templates ?? [];
+    const lines: string[] = [];
+    lines.push(`已沉淀技能: ${templates.length} 个`);
+    for (const t of templates.slice(0, 10)) {
+      lines.push(`  [${t.agentType}] ${t.name} — ${(t.trigger ?? "").slice(0, 60)}`);
     }
-  };
-  walk(sf, "");
-  lines.push("");
-  return lines.join("\n");
+    if (templates.length > 10) lines.push(`  ... 还有 ${templates.length - 10} 个`);
+    return lines.join("\n");
+  } catch {
+    return "⚠️ skills-crystallized.json 解析失败";
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -273,18 +281,20 @@ async function main() {
 
   // ── 列出源文件摘要 ──
   const archiveSources = listArchiveSources(WORKSPACE);
-  const soloFlightSources = listSoloFlightSources(WORKSPACE);
+  const crystallizedSkills = listCrystallizedSkills(WORKSPACE);
 
   console.log("╔══════════════════════════════════════════════════╗");
-  console.log("║   🏗️  合并大考 —— 将 solo-flight 产出合并到主工程   ║");
+  console.log("║   🏗️  合并大考 —— 将归档产出合并到主工程         ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
   console.log(`  工作区:  ${WORKSPACE}`);
   console.log(`  packages: ${PACKAGES_ROOT}`);
   console.log(`  Chat:     ${CHAT_MODEL}`);
   console.log(`  Reasoner: ${REASONER_MODEL}\n`);
 
-  console.log("── 三路资源清单 ──\n");
-  console.log(soloFlightSources);
+  console.log("── 资源清单 ──\n");
+  console.log("🟢 已沉淀技能 (莫娜):");
+  console.log(crystallizedSkills);
+  console.log();
   console.log(archiveSources);
 
   // ── Phase 1: 基础设施 ──
@@ -299,7 +309,6 @@ async function main() {
   });
   adapter.setCacheEnabled(true);
 
-  const metaAgent = new MetaAgent(adapter);
   const board = new TaskBoard();
   const pool = new AgentPool();
   const observer = new PipelineObserver();
@@ -311,21 +320,61 @@ async function main() {
   await memory.init(MEMORY_DB);
   console.log(`   MemoryStore: ${MEMORY_DB}`);
 
-  // 种子记忆：写入现有工程上下文
-  memory.write({
-    memoryType: "context" as any,
+  // 技能沉淀：冷启动加载 SkillRegistry（从记忆 + 已沉淀技能 JSON）
+  const skillRegistry = new SkillRegistry();
+  const loadedSkills = loadSkillsFromMemory(memory);
+  if (loadedSkills.length > 0) {
+    skillRegistry.registerAll(loadedSkills);
+    console.log(`   SkillRegistry: 从记忆加载 ${loadedSkills.length} 个技能`);
+  }
+  // 加载莫娜沉淀的技能（从 skills-crystallized.json）
+  const crystallizedJson = path.resolve(WORKSPACE, ".cortex", "skills-crystallized.json");
+  if (fs.existsSync(crystallizedJson)) {
+    const crystallizedReg = SkillRegistry.loadJson(crystallizedJson);
+    if (crystallizedReg.totalCount > 0) {
+      const crystallizedSkills = crystallizedReg.getAll();
+      skillRegistry.registerAll(crystallizedSkills);
+      console.log(`   SkillRegistry: 从已沉淀 JSON 加载 ${crystallizedSkills.length} 个技能`);
+    }
+  }
+  const scannedSkills = scanOutputFilesForSkills(WORKSPACE);
+  if (scannedSkills.length > 0) {
+    skillRegistry.registerAll(scannedSkills);
+    console.log(`   SkillRegistry: 从文件回溯扫描 ${scannedSkills.length} 个技能`);
+  }
+  console.log(`   SkillRegistry: 共 ${skillRegistry.totalCount} 个技能就绪`);
+
+  const metaAgent = new MetaAgent(adapter, skillRegistry);
+
+  // P1 一致性校验层（文件校验 + 结构校验）
+  const fsAdapter = new NodeFileSystemAdapter();
+  const consistency = new ConsistencyLayer(memory as any, {
+    projectRoot: WORKSPACE,
+    enableInitVerifier: true,
+    enableSchemaEnforcer: true,
+    fs: fsAdapter,
+  });
+  console.log(`   ConsistencyLayer: InitVerifier + SchemaEnforcer 已启用`);
+
+  // 种子记忆：写入现有工程上下文（使用 P0 两阶段提交）
+  const seed1 = memory.writePending({
+    memoryType: MemoryType.Knowledge,
     content: { desc: "packages: engine, llm, shared, testing. pnpm workspace. tsconfig.base.json" },
     summary: "主工程 monorepo 结构: packages/engine, packages/llm, packages/shared, packages/testing",
-    agentType: "Meta" as any,
+    agentType: "meta" as AgentType,
     creatorId: "merge-exam",
+    subType: MemorySubType.Fact,
   });
-  memory.write({
-    memoryType: "context" as any,
+  memory.commitMemory(seed1);
+  const seed2 = memory.writePending({
+    memoryType: MemoryType.Knowledge,
     content: { desc: "Existing: @cortex/engine, @cortex/llm, @cortex/shared, @cortex/testing. composite build." },
     summary: "现有包遵循 tsconfig.base.json 的 composite 构建模式",
-    agentType: "Meta" as any,
+    agentType: "meta" as AgentType,
     creatorId: "merge-exam",
+    subType: MemorySubType.Fact,
   });
+  memory.commitMemory(seed2);
 
   // ── Phase 2: 注册全部 10 个 Agent ──
   console.log("\n🟢 [Phase 2] 注册全部 Agent（10 个）...\n");
@@ -356,7 +405,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new CodeAgent(adapter, tk, memory);
+        return createAgent(codeAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -365,7 +414,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new ReviewAgent(adapter, tk, memory);
+        return createAgent(reviewAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -374,7 +423,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new AnalysisAgent(adapter, tk, memory);
+        return createAgent(analysisAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -383,7 +432,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new OpsAgent(adapter, tk);
+        return createAgent(opsAgentConfig(), adapter, tk);
       },
     },
     {
@@ -392,7 +441,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new LoopAgent(adapter, tk);
+        return createAgent(loopAgentConfig(), adapter, tk);
       },
     },
     {
@@ -401,7 +450,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new DocGovernAgent(adapter, tk, memory);
+        return createAgent(docGovernAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -410,7 +459,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new ApiAgent(adapter, tk, memory);
+        return createAgent(apiAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -419,7 +468,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new DataAgent(adapter, tk, memory);
+        return createAgent(dataAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -428,7 +477,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        return new FixAgent(adapter, tk, memory);
+        return createAgent(fixAgentConfig(), adapter, tk, memory as any);
       },
     },
     {
@@ -437,7 +486,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerAllTools(tk, WORKSPACE, PACKAGES_ROOT);
-        const agent = new InspectorAgent(adapter, tk);
+        const agent = createInspectorAgent(adapter, tk);
         agent.setWorkspaceRoot(WORKSPACE);
         return agent;
       },
@@ -457,18 +506,22 @@ async function main() {
 
   const INTENT = [
     "══════════════════════════════════════════════════",
-    "  任务：将三路 E2E 产出合并到主工程，并重构引擎",
+    "  任务：将归档 E2E 产出合并到主工程，并重构引擎",
     "══════════════════════════════════════════════════",
     "",
-    "你现在面对的不是空目录，是已有 60+ 个源文件的三路资源，需要合并到 Cortex monorepo。",
+    "你现在面对的不是空目录，是已有 60+ 个源文件归档 + 30 个已沉淀技能，需要合并到 Cortex monorepo。",
     "",
-    "── 三路资源 ──",
+    "⚡ 核心要求：自主迁移、自主合并、自主优化",
+    "  · 自主迁移：独立完成代码搬运，不等待人工指令——读源→分析依赖→搬入 packages/→调整 import",
+    "  · 自主合并：遇到冲突自行裁决——类型冲突选更严格的，路径冲突选 monorepo 约定",
+    "  · 自主优化：发现冗余/低效代码主动优化——但必须遵守铁律（最小代价、不可修崩、闭环）",
     "",
-    "① projects/solo-flight/（当前活跃）",
-    "  · 密码管理器：src/crypto.ts（AES-256-GCM）、src/store.ts（加密存储）、src/index.ts（Commander CLI）",
-    "  · Markdown 编译器：packages/parser/src/parser.ts（394 行，零依赖）",
-    "  · CLI 工具：packages/cli/src/cli.ts",
-    "  · 测试：test/converter.test.ts",
+    "── 资源 ──",
+    "",
+    "① .cortex/skills-crystallized.json（莫娜已沉淀技能，SkillRegistry 已加载）",
+    "  · P0-P9：Markdown 编译器 10 个核心模式（两层管线、递归下降、访问者渲染器等）",
+    "  · 架构模式：类型中枢、组合工厂、调度五元组、ReAct 循环等 10 个",
+    "  · 基础设施：LLM 缓存重试、文件系统适配器、两阶段提交、技能沉淀闭环等 10 个",
     "",
     "② .cortex/archive/e2e-outputs/20260514-221019/solo-flight/（归档）",
     "  · 任务 CLI 命令：src/cli/commands/（add/delete/done/list/show/start/update）",
@@ -505,11 +558,10 @@ async function main() {
     "══════════════════════════════════════════════════",
     "",
     "1. 纳西妲读现有工程：packages/*/package.json、tsconfig.base.json、各包 tsconfig.json",
-    "2. 艾尔海森读三路资源，梳理类型依赖关系",
-    "3. 阿贝多创建新包并搬运代码：",
-    "   · packages/pm/ — 密码管理器（crypto + store + CLI）",
-    "   · packages/parser/ — Markdown→HTML 编译器",
-    "   · packages/cli/ — 命令行工具集合（md-to-html + task CLI 命令）",
+    "2. 艾尔海森读归档资源，梳理类型依赖关系",
+    "3. 阿贝多利用莫娜沉淀的技能（SkillRegistry 中 30 个模板）加速实现：",
+    "   · packages/parser/ — Markdown→HTML 编译器（P0-P9 模式参考）",
+    "   · packages/cli/ — 命令行工具集合（task CLI 命令）",
     "   · packages/tools/ — 分析工具（monorepo-analyzer + drift-detector）",
     "   · packages/data/ — 数据处理层（core/models + storage + formatters）",
     "   每个包必须包含：package.json、tsconfig.json、src/、tests/",
@@ -644,7 +696,6 @@ async function main() {
   // 验证新包目录存在
   console.log("   📦 检查新包目录...");
   const expectedDirs = [
-    "packages/pm",
     "packages/parser",
     "packages/cli",
     "packages/data",
@@ -729,6 +780,94 @@ async function main() {
     console.log(`     📖 [${m.memoryType}] ${(m.summary ?? "").slice(0, 120)}`);
   }
 
+  // ── Phase 8: 六层防御合规性 ──
+  console.log("\n╔══════════════════════════════════════════════════╗");
+  console.log("║   🛡️  六层防御合规性（P0 + P1 + P2）             ║");
+  console.log("╚══════════════════════════════════════════════════╝\n");
+
+  // P0: 子类型与状态分布
+  const allMemoriesFull = memory.read({ includePrivate: true, trackAccess: false });
+  const bySubType: Record<string, number> = {};
+  const byState: Record<string, number> = {};
+  for (const m of allMemoriesFull) {
+    bySubType[m.subType ?? "?"] = (bySubType[m.subType ?? "?"] ?? 0) + 1;
+    byState[m.state] = (byState[m.state] ?? 0) + 1;
+  }
+  console.log(`   P0-子类型: ${Object.entries(bySubType).map(([k,v]) => `${k}=${v}`).join(", ")}`);
+  console.log(`   P0-状态:   ${Object.entries(byState).map(([k,v]) => `${k}=${v}`).join(", ")}`);
+
+  // P0: Pending 隔离检查
+  const pendingMemories = allMemoriesFull.filter((m) => m.state === MemoryState.Pending);
+  const defaultRead = memory.read({ includePrivate: true, trackAccess: false });
+  const pendingInDefault = defaultRead.filter((m) => m.state === MemoryState.Pending);
+  const pendingVisible = memory.read({ includePrivate: true, states: [MemoryState.Pending], trackAccess: false });
+  console.log(`   P0-Pending: ${pendingMemories.length} 条 | 默认可见=${pendingInDefault.length} | 显式查=${pendingVisible.length}`);
+  // Pending 隔离判定：有 Pending 记忆且默认 read 不可见 → 隔离生效
+  const pendingIsolated = pendingMemories.length > 0 ? pendingInDefault.length === 0 : true;
+  console.log(`   P0-Pending隔离: ${pendingIsolated ? "✅" : "❌"} (Pipeline writePending→commitMemory 两阶段生效)`);
+
+  // P1: InitVerifier 启动校验
+  console.log(`\n   ── P1 InitVerifier ──`);
+  const consistencyReport = await consistency.verify();
+  if (consistencyReport) {
+    console.log(`   P1-文件校验: 总记忆=${consistencyReport.totalMemories}  已检查=${consistencyReport.checkedMemories}  ok=${consistencyReport.summary.ok}  missing=${consistencyReport.summary.missing}  unchecked=${consistencyReport.summary.unchecked}`);
+    const fileChecks = consistencyReport.fileChecks;
+    const missing = fileChecks.filter((d) => d.status === "missing");
+    if (missing.length > 0) {
+      console.log(`      缺失 ${missing.length} 文件:`);
+      for (const d of missing.slice(0, 5)) console.log(`        ❌ ${d.filePath}`);
+      if (missing.length > 5) console.log(`        ... 还有 ${missing.length - 5} 个`);
+    }
+    console.log(`   P1-InitVerifier: ${consistencyReport.fatal ? "💥 致命" : "✅ 通过"}`);
+  } else {
+    console.log(`   P1-InitVerifier: ⚠️ 未启用`);
+  }
+
+  // P1: SchemaEnforcer 抽样 + annotate
+  console.log(`\n   ── P1 SchemaEnforcer ──`);
+  const sampleMemories = allMemoriesFull.slice(0, 3);
+  const sampleInputs = sampleMemories.map((m) => ({
+    memoryType: m.memoryType,
+    content: (m.content ?? {}) as Record<string, unknown>,
+    summary: m.summary,
+    agentType: m.agentType,
+    creatorId: m.creatorId,
+    subType: m.subType,
+  } as import("@cortex/shared").MemoryWriteInput));
+  let schemaFailCount = 0;
+  for (const input of sampleInputs) {
+    const validated = consistency.validateInput(input);
+    if (!validated.valid) {
+      schemaFailCount++;
+      console.log(`       ⚠️ 校验失败: ${validated.errors?.join(", ")}`);
+    }
+  }
+  console.log(`   P1-SchemaEnforcer: 抽样 ${sampleInputs.length - schemaFailCount}/${sampleInputs.length} 通过`);
+
+  const annotateInput: import("@cortex/shared").MemoryWriteInput = {
+    memoryType: "EPISODIC" as import("@cortex/shared").MemoryType,
+    content: { value: "merge-annotate-test" },
+    summary: "合并大考 annotate 默认值测试",
+    agentType: "code" as import("@cortex/shared").AgentType,
+    creatorId: "merge-exam",
+    embedding: new Array(768).fill(0),
+  };
+  const annotated = consistency.annotateInput(annotateInput);
+  console.log(`   P1-annotate: subType 默认值 = ${annotated.subType ?? "(空)"} ${annotated.subType === MemorySubType.Fact ? "✅" : "❌"}`);
+
+  // P2: 技能沉淀闭环检查
+  console.log(`\n   ── P2 技能沉淀 ──`);
+  const skillMemories = memory.read({ memoryTypes: [MemoryType.Skill], trackAccess: false });
+  const skillPrecipitated = skillMemories.length > 0;
+  console.log(`   P2-技能沉淀: ${skillPrecipitated ? "✅ (已闭环)" : "⚠️ (空——无可复用技能沉淀)"}`);
+  if (skillMemories.length > 0) {
+    for (const sm of skillMemories.slice(0, 5)) {
+      const c = sm.content as Record<string, unknown> | undefined;
+      console.log(`     📌 [${c?.agentType ?? "?"}] ${c?.name ?? "?"} — ${String(c?.trigger ?? "?").slice(0, 60)}`);
+    }
+    if (skillMemories.length > 5) console.log(`     ... 还有 ${skillMemories.length - 5} 个`);
+  }
+
   // ── 收尾 ──
   await memory.close();
 
@@ -743,6 +882,7 @@ async function main() {
   console.log(`   新包目录: ${foundDirs.length > 0 ? foundDirs.join(", ") : "(未检测到)"}`);
   console.log(`   pnpm build: ${closedLoopPassed ? "✅" : "❌"}`);
   console.log(`   pnpm test:  ${closedLoopPassed ? "✅" : "❌"}`);
+  console.log(`   六层防御: P0-Pending隔离 ${pendingIsolated ? "✅" : "❌"} | P1-InitVerifier ${consistencyReport && !consistencyReport.fatal ? "✅" : "⚠️"} | P2-技能沉淀 ${skillPrecipitated ? "✅" : "⚠️"}`);
   console.log();
 
   if (!closedLoopPassed || report.failed > 0) {

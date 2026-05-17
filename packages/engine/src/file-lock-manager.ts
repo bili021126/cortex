@@ -17,11 +17,13 @@ interface LockEntry {
  * 内置锁超时回收：Agent 崩溃后 30s 自动释放过期锁。
  *
  * @fix M4 — 构造函数中启动周期性清理定时器，防止无界内存增长。
+ * @fix S4-05 — dispose() 后设置 _disposed 标记，后续操作立即抛错，防止僵尸锁。
  */
 export class FileLockManager {
   private locks = new Map<string, LockEntry>();
   private readonly timeoutMs: number;
   private _cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private _disposed = false;
 
   constructor(timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS) {
     this.timeoutMs = timeoutMs;
@@ -41,6 +43,7 @@ export class FileLockManager {
    * 遇到过期锁时自动回收后重新尝试获取。
    */
   acquire(filePath: string, type: LockType, holderId: string): boolean {
+    this._checkDisposed("acquire");
     // 先清理该文件上的过期锁
     this._cleanStaleLock(filePath);
 
@@ -68,6 +71,7 @@ export class FileLockManager {
 
   /** 释放锁 */
   release(filePath: string, holderId: string): void {
+    this._checkDisposed("release");
     const existing = this.locks.get(filePath);
     if (!existing) return;
     existing.holders.delete(holderId);
@@ -78,6 +82,7 @@ export class FileLockManager {
 
   /** 刷新锁活跃时间（持锁 Agent 心跳，防止被误回收） */
   touch(filePath: string, holderId: string): void {
+    this._checkDisposed("touch");
     const existing = this.locks.get(filePath);
     if (existing?.holders.has(holderId)) {
       existing.acquiredAt = Date.now();
@@ -86,17 +91,20 @@ export class FileLockManager {
 
   /** 检查是否被锁（不含过期锁） */
   isLocked(filePath: string): boolean {
+    this._checkDisposed("isLocked");
     this._cleanStaleLock(filePath);
     return this.locks.has(filePath);
   }
 
   /** 检查 holder 是否持有某文件的锁 */
   holds(filePath: string, holderId: string): boolean {
+    this._checkDisposed("holds");
     return this.locks.get(filePath)?.holders.has(holderId) ?? false;
   }
 
   /** 全局清理所有过期锁（由周期性定时器调用） */
   cleanStaleLocks(): number {
+    if (this._disposed) return 0;
     const now = Date.now();
     let cleaned = 0;
     for (const [filePath, entry] of this.locks) {
@@ -118,6 +126,14 @@ export class FileLockManager {
       this._cleanupTimer = null;
     }
     this.locks.clear();
+    this._disposed = true;
+  }
+
+  /** 内部：检查是否已释放，是则抛错 */
+  private _checkDisposed(method: string): void {
+    if (this._disposed) {
+      throw new Error(`FileLockManager 已释放，拒绝操作: ${method}`);
+    }
   }
 
   /** 内部：清理特定文件上的过期锁 */

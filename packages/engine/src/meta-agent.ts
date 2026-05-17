@@ -1,6 +1,6 @@
 import type { TaskNode, Tag, ImpactScope, ReplanResult, SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { SkillRegistry } from "@cortex/shared";
+import { SkillRegistry } from "./skill-registry.js";
 
 /**
  * MetaAgent —— 战术引擎。
@@ -24,6 +24,11 @@ import type { SkillRegistry } from "@cortex/shared";
  *
  * 可选集成 SkillRegistry：规划时查询已沉淀的技能模板，
  * 注入 prompt 上下文，提升任务拆解精准度。
+ *
+ * @fix 久岐忍 P1-3：SkillRegistry 实现类从 @cortex/shared 移入本包。
+ *   shared 仅保留 SerializedSkillRegistry 类型。
+ * @fix D5 — _parseReplanResult 支持简洁数组格式中的 impactScope 字段，
+ *   防止 LLM 输出数组格式时 impactScope 被静默认为 "local"。
  */
 export class MetaAgent {
   private _nodeCounter = 0; // 防 Date.now() 高频碰撞
@@ -57,10 +62,11 @@ export class MetaAgent {
     reason: string,
     replanCount: number,
     originalIntent?: string,
+    maxReplan = 3,
   ): Promise<ReplanResult> {
     const prompt = [
       `Original intent: ${originalIntent ?? failedNode.payload}`,
-      `Original task failed (attempt ${replanCount + 1}/${MAX_REPLAN}):`,
+      `Original task failed (attempt ${replanCount + 1}/${maxReplan}):`,
       `Task: ${failedNode.payload}`,
       `Tags: ${failedNode.tags.join(", ")}`,
       `Error: ${reason}`,
@@ -289,8 +295,11 @@ export class MetaAgent {
       // 兼容两种格式：LLM 规范输出 {"tasks":[...], "impactScope":"..."}
       // 以及简洁数组格式 [{task, type, tags, ...}]
       const items: PlanItem[] = Array.isArray(parsed) ? parsed : (parsed.tasks ?? []);
+      // impactScope: 支持对象格式与简洁数组格式
       const impactScope: ImpactScope =
-        (!Array.isArray(parsed) && parsed.impactScope === "subtree") ? "subtree" : "local";
+        (!Array.isArray(parsed) && parsed.impactScope === "subtree") ? "subtree"
+        : (Array.isArray(parsed) && (parsed as any).impactScope === "subtree") ? "subtree"
+        : "local";
       const nodes = items.flatMap((item, i) => this._toTaskNode(item, parentId, i));
       return { nodes, impactScope };
     } catch {
@@ -314,8 +323,6 @@ interface PlanContext {
   parentId?: string;
   existingTags?: string[];
 }
-
-const MAX_REPLAN = 3;
 
 // ─── 系统提示 ─────────────────────────────────────
 

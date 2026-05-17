@@ -76,16 +76,20 @@ describe("AgentPool", () => {
 
       const violations = emitted.filter((e) => e.type === "agent_pool.invariant_violation");
       expect(violations.length).toBe(1);
-      expect(violations[0].payload.instanceId).toBe("inst-1");
-      expect(violations[0].payload.current).toBe(AgentStatus.Created);
-      expect(violations[0].payload.attempted).toBe(AgentStatus.Active);
+      // D6: _observer 优先于 onInvariant，payload 包含 source + message + detail（JSON 字符串）
+      expect(violations[0].payload.source).toBe("AgentPool.setStatus");
+      expect(violations[0].payload.message).toContain("非法流转");
     });
 
     it("无 observer 也无 onInvariant 时 console.error 兜底", () => {
-      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      // vitest 环境下静默 console 回退，需临时解除以验证 fallback 行为
+      // 手动清除测试环境标记，使 isTestEnv() 返回 false
+      // 从而验证非测试环境下的 console.error 兜底行为
       const prevVitest = process.env.VITEST;
+      const prevNodeEnv = process.env.NODE_ENV;
       delete process.env.VITEST;
+      process.env.NODE_ENV = "development";
+
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
       const ok = pool.setStatus("inst-1", AgentStatus.Active);
       expect(ok).toBe(false);
@@ -94,10 +98,12 @@ describe("AgentPool", () => {
         expect.stringContaining("[invariant] AgentPool.setStatus")
       );
       errSpy.mockRestore();
+
       process.env.VITEST = prevVitest;
+      process.env.NODE_ENV = prevNodeEnv;
     });
 
-    it("onInvariant 静态回调优先于 observer", () => {
+    it("_observer 实例优先于 onInvariant 静态回调", () => {
       pool.setObserver(observer);
       const onInvariantCalls: any[] = [];
       AgentPool.onInvariant = (v) => { onInvariantCalls.push(v); };
@@ -107,10 +113,11 @@ describe("AgentPool", () => {
 
       pool.setStatus("inst-1", AgentStatus.Active);
 
-      // onInvariant 应被调用，observer 不应被调用（onInvariant 优先）
-      expect(onInvariantCalls.length).toBe(1);
-      expect(onInvariantCalls[0].source).toBe("AgentPool.setStatus");
-      expect(emitted.length).toBe(0);
+      // D6 修复：_observer 实例优先于 onInvariant 静态字段
+      // observer 应被调用，onInvariant 不应被调用
+      expect(emitted.length).toBe(1);
+      expect(emitted[0].type).toBe("agent_pool.invariant_violation");
+      expect(onInvariantCalls.length).toBe(0);
     });
   });
 });

@@ -1,9 +1,10 @@
 // @ci: unit
 import { describe, it, expect, beforeAll } from "vitest";
-import { AgentType } from "@cortex/shared";
+import { AgentType, type Agent } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { ReviewAgent } from "../src/agents/review-agent";
+import { createAgent } from "../src/components/agent-factory";
+import { reviewAgentConfig } from "../src/agents/review-agent";
 
 function mockReviewAdapter() {
   const adapter = new LlmAdapter({
@@ -55,12 +56,12 @@ function mockReviewAdapter() {
 describe("ReviewAgent", () => {
   let adapter: LlmAdapter;
   let toolkit: Toolkit;
-  let agent: ReviewAgent;
+  let agent: Agent;
 
   beforeAll(async () => {
     adapter = mockReviewAdapter();
     toolkit = new Toolkit();
-    agent = new ReviewAgent(adapter, toolkit);
+    agent = createAgent(reviewAgentConfig(), adapter, toolkit);
     await agent.wakeup();
   });
 
@@ -97,7 +98,7 @@ describe("ReviewAgent", () => {
       toolCalls: [{ id: "w1", name: "write_file", arguments: { file_path: "/x", content: "bad" } }],
     }));
 
-    const badAgent = new ReviewAgent(badAdapter, new Toolkit());
+    const badAgent = createAgent(reviewAgentConfig(), badAdapter, new Toolkit());
     await badAgent.wakeup();
     const result = await badAgent.execute(
       {

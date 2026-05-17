@@ -1,0 +1,23 @@
+{
+  "id": "skill-p10-ci-gate-full-cycle-1778962384000",
+  "agentType": "ops",
+  "name": "P10: CI 门禁全流程",
+  "triggerTags": ["test", "deploy", "ops"],
+  "trigger": "需要执行 CI 门禁检查时（build → typecheck → test → lint 全流程）",
+  "steps": [
+    "执行 `pnpm install` 确认依赖已安装，workspace 链接正确",
+    "按依赖拓扑顺序执行 `pnpm -r build`：shared → parser/data/pm/tools → testing/llm → cli → engine",
+    "逐包执行 `pnpm -r typecheck` 确认无类型错误",
+    "按包粒度执行 `pnpm -r test` 并收集各包测试结果（注意：llm 包可能无测试文件，用 --passWithNoTests）",
+    "执行 `pnpm lint` 检查代码规范",
+    "汇总结果：build/typecheck/test/lint 四项全部通过则门禁通过",
+    "若有失败项，输出失败详情并中止后续步骤"
+  ],
+  "expectedOutput": "CI 门禁结果报告：build ✅ / typecheck ✅ / test ✅ (N/N passed) / lint ✅ — 或具体失败原因",
+  "outputFile": ".cortex/ci-output.txt",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384000
+}

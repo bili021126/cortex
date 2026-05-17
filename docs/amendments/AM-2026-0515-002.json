@@ -1,0 +1,32 @@
+{
+  "id": "AM-2026-0515-002",
+  "version": "v2.5.12",
+  "section": "§8.2",
+  "category": "modify",
+  "summary": "新增 §8.2 通知管线条款——三轨语义分层（FYI/WARNING/DECISION_REQUIRED），ObservableEvent 新增 notificationType 字段，ButlerAgent 三路分发策略入宪",
+  "rationale": "当前 PipelineObserver (§8) 统一了事件管道，SafeErrorReporter (§8.1) 统一了错误上报的三档严重性协议。但管道产出的通知如何按语义分发至 ButlerAgent 并呈现给用户，尚无法定条款。ButlerAgent (§6.1) 的'事件通知'职责（④）仅描述了'必要时打断或静默通知'，未提供具体分发规则。三轨语义分层将优先级语义、事件类型与 UI 行为绑定为宪法级契约——确保 CRITICAL 事件不会静默消失（自动升级为 DECISION_REQUIRED），NORMAL 事件不会打扰用户（归入 FYI 闲时呈现）。此修宪将通知分发规则从 Agent 自行判断提升为宪法强约束。",
+  "before": "\n---\n\n## 九、记忆系统",
+  "after": "\n### 8.2 通知管线——三轨语义分层\n\nPipelineObserver 发出的事件经优先级分流后，进入通知管线进行语义分层。通知管线将事件按语义分为三轨，由 ButlerAgent 按轨执行不同分发策略。\n\n| 轨道 | 语义 | 触发条件 | ButlerAgent 分发行为 |\n|------|------|---------|---------------------|\n| **FYI** | 信息通知 | NORMAL 优先级 + 非用户决策事件 | 静默记录→写入通知队列→闲时（管线空闲）合并摘要呈现 |\n| **WARNING** | 警告通知 | HIGH 优先级 / 降级事件（degraded）/ 静默计数器升级 | 状态灯变更 + 通知面板标记，不打断当前操作 |\n| **DECISION_REQUIRED** | 需要决策 | CRITICAL 优先级 / ConfirmGate 拦截 / MetaAgent 重规划超限 | 打断当前 UI→弹出决策界面→阻塞等待用户响应 |\n\n**ObservableEvent 协议扩展**：`Observation` 数据结构新增可选字段 `notificationType?: \"FYI\" | \"WARNING\" | \"DECISION_REQUIRED\"`。emit 侧根据优先级和事件类型自动推导默认值，emitter 可显式覆盖。\n\n**与 §6.1 的关系**：三轨语义分层是对 ButlerAgent 职责④（事件通知——\"必要时打断或静默通知\"）的具体化。此前\"必要时\"的判断标准模糊，现以语义三轨替代——DECISION_REQUIRED=必要打断，WARNING=必要通知但不打断，FYI=不必要立即通知。管家不再自行判断\"是否必要\"，而是按轨执行预定义分发策略。\n\n**与 §8.1 的关系**：SafeErrorReporter 的三档严重性（fatal/degraded/silent）属于**错误维度**的分类——关注的是\"系统哪里出了问题\"。通知管线的三轨语义分层属于**呈现维度**的分类——关注的是\"用户需要看到什么、何时看到、如何响应\"。两者正交互补：\n- fatal 错误通常触发 DECISION_REQUIRED（系统不可继续，用户必须决策）\n- degraded 事件触发 WARNING（系统降级运行，用户应知晓）\n- silent 计数器升级触发 WARNING（静默异常累积至阈值，升级告警）\n\n**归因**：当前 PipelineObserver (§8) 统一了事件管道，SafeErrorReporter (§8.1) 统一了错误上报的三档严重性协议。但管道产出的通知如何按语义分发至 ButlerAgent 并呈现给用户，尚无法定条款。ButlerAgent (§6.1) 的\"事件通知\"职责（④）仅描述了\"必要时打断或静默通知\"，未提供具体分发规则。三轨语义分层将优先级语义、事件类型与 UI 行为绑定为宪法级契约——确保 CRITICAL 事件不会静默消失（自动升级为 DECISION_REQUIRED），NORMAL 事件不会打扰用户（归入 FYI 闲时呈现）。\n\n---\n\n## 九、记忆系统",
+  "impact": {
+    "principles": [],
+    "crossReferences": [
+      "八、PipelineObserver",
+      "8.1 SafeErrorReporter",
+      "6.1 五大法定职责",
+      "ButlerAgent",
+      "PipelineObserver",
+      "SafeErrorReporter",
+      "ConfirmGate",
+      "MetaAgent"
+    ],
+    "agents": [
+      "ButlerAgent"
+    ],
+    "breaking": false
+  },
+  "source": {
+    "agent": "DocGovernAgent",
+    "trace": "治理闭环审查 2026-05-15——发现宪法 §8 缺少通知分发规则。ButlerAgent 的事件通知职责仅有模糊描述，缺乏宪法级分发契约。PipelineObserver 管道统一了事件采集，但未定义呈现规则。"
+  },
+  "status": "approved"
+}

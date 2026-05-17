@@ -25,7 +25,7 @@ import { Scheduler } from "../../../src/scheduler.js";
 import { PipelineObserver } from "../../../src/pipeline-observer.js";
 import { ConfirmGate } from "../../../src/confirm-gate.js";
 import { Toolkit } from "../../../src/toolkit.js";
-import { MemoryStore } from "../../../src/memory-store.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
 import { MetaAgent } from "../../../src/meta-agent.js";
 import { CodeAgent } from "../../../src/agents/code-agent.js";
 import { ReviewAgent } from "../../../src/agents/review-agent.js";

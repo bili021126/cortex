@@ -9,7 +9,10 @@
  *
  * v2.1 新增：补足消费端，之前 MemoryStore 只 emit 不消费。
  *
+ * @fix D3 — 告警洪泛修复：增加 _alerted 标记，仅在跨过阈值时触发一次告警，
+ *   窗口事件数回落至阈值以下后重置标记，允许下次跨阈值时再次告警。
  * @fix D4 — stop() 使用 off(priority, handler) 精确移除，防止误删其他组件的 handler。
+ * @fix M15 — 简化 start() 中的三次 .bind(this)，使用循环统一绑定。
  */
 import type { ObservableEvent } from "@cortex/shared";
 import { PipelinePriority, PipelineEventType } from "@cortex/shared";
@@ -23,6 +26,13 @@ export class MemoryStoreMonitor {
   private readonly _threshold: number;
   /** 是否启用 stdout 日志 */
   private readonly _logToStdout: boolean;
+
+  /**
+   * 告警标记——防止阈值跨过时重复触发告警。
+   * true: 当前窗口已超过阈值，已触发过告警，不再重复触发。
+   * false: 窗口事件数在阈值以下（或刚回落），允许下次跨阈值时触发告警。
+   */
+  private _alerted = false;
 
   /** 保存绑定的 handler 引用，供 stop() 精确移除 */
   private readonly _boundHandlers: Map<PipelinePriority, (event: ObservableEvent) => void> = new Map();
@@ -42,18 +52,12 @@ export class MemoryStoreMonitor {
 
   /** 启动监听 */
   start(): void {
-    const handler = this._onEvent.bind(this);
+    const boundHandler = this._onEvent.bind(this);
 
-    this.observer.on(PipelinePriority.CRITICAL, handler);
-    this._boundHandlers.set(PipelinePriority.CRITICAL, handler);
-
-    const handlerHigh = this._onEvent.bind(this);
-    this.observer.on(PipelinePriority.HIGH, handlerHigh);
-    this._boundHandlers.set(PipelinePriority.HIGH, handlerHigh);
-
-    const handlerNormal = this._onEvent.bind(this);
-    this.observer.on(PipelinePriority.NORMAL, handlerNormal);
-    this._boundHandlers.set(PipelinePriority.NORMAL, handlerNormal);
+    for (const priority of [PipelinePriority.CRITICAL, PipelinePriority.HIGH, PipelinePriority.NORMAL]) {
+      this.observer.on(priority, boundHandler);
+      this._boundHandlers.set(priority, boundHandler);
+    }
   }
 
   /** 停止监听（按 handler 引用精确移除，不影响其他组件） */
@@ -77,9 +81,13 @@ export class MemoryStoreMonitor {
     const cutoff = now - this._windowMs;
     this._windowEvents = this._windowEvents.filter((t) => t > cutoff);
 
-    // 阈值检测
-    if (this._windowEvents.length > this._threshold) {
+    // 阈值检测：仅在跨过阈值时触发一次告警，防止告警洪泛
+    const overThreshold = this._windowEvents.length > this._threshold;
+    if (overThreshold && !this._alerted) {
+      this._alerted = true;
       this._alert(`MemoryStore 高频异常: ${this._windowEvents.length} 事件/${this._windowMs / 1000}s`, event);
+    } else if (!overThreshold) {
+      this._alerted = false;
     }
 
     // 关键事件落盘

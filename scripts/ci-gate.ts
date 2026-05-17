@@ -61,8 +61,8 @@ const PACKAGES: PackageInfo[] = [
   { name: "tools",   dir: join(ROOT, "packages", "tools"),   filter: "@cortex/tools" },
   { name: "llm",     dir: join(ROOT, "packages", "llm"),     filter: "@cortex/llm" },
   { name: "testing", dir: join(ROOT, "packages", "testing"), filter: "@cortex/testing" },
-  { name: "cli",     dir: join(ROOT, "packages", "cli"),     filter: "@cortex/cli" },
   { name: "engine",  dir: join(ROOT, "packages", "engine"),  filter: "@cortex/engine" },
+  { name: "cli",     dir: join(ROOT, "packages", "cli"),     filter: "@cortex/cli" },
 ];
 
 const TEST_FILE_PATTERN = /\.test\.ts$/;

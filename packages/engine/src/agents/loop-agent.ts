@@ -1,10 +1,6 @@
-import type { MemoryQuery, AgentType } from "@cortex/shared";
+import type { MemoryQuery } from "@cortex/shared";
 import { AgentType as AT, MemoryType, LinkType } from "@cortex/shared";
 import type { TaskNode } from "@cortex/shared";
-import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../toolkit.js";
-import type { MemoryStore } from "../memory-store.js";
-import { BaseAgent } from "../base-agent.js";
 import { type AgentFactoryConfig } from "../components/agent-factory.js";
 import { makeMemoryQuery } from "../memory/pipeline.js";
 
@@ -57,17 +53,4 @@ export function loopAgentConfig(): AgentFactoryConfig {
     memoryEnabled: true,
     getMemoryQuery: loopMemoryQuery,
   };
-}
-
-export class LoopAgent extends BaseAgent {
-  readonly type: AgentType = AT.Loop;
-  readonly systemPrompt = SYSTEM_PROMPT;
-
-  constructor(llm: LlmAdapter, toolkit: Toolkit, memory?: MemoryStore) {
-    super(llm, toolkit, memory);
-  }
-
-  protected getMemoryQuery(node: TaskNode): MemoryQuery {
-    return loopMemoryQuery(node);
-  }
 }

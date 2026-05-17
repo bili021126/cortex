@@ -1,10 +1,13 @@
 {
   "name": "@cortex/cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "cortex": "./dist/main.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -19,7 +22,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cortex/parser": "workspace:*"
+    "@cortex/engine": "workspace:*",
+    "@cortex/llm": "workspace:*",
+    "@cortex/parser": "workspace:*",
+    "@cortex/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

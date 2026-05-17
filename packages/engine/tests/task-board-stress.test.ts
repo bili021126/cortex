@@ -13,10 +13,11 @@ import { PipelineObserver } from "../src/pipeline-observer";
 import { ConfirmGate } from "../src/confirm-gate";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "../src/toolkit";
-import { CodeAgent } from "../src/agents/code-agent";
-import { ReviewAgent } from "../src/agents/review-agent";
-import { AnalysisAgent } from "../src/agents/analysis-agent";
-import { MemoryStore } from "../src/memory-store";
+import { createAgent } from "../src/components/agent-factory";
+import { codeAgentConfig } from "../src/agents/code-agent";
+import { reviewAgentConfig } from "../src/agents/review-agent";
+import { analysisAgentConfig } from "../src/agents/analysis-agent";
+import { MemoryStore } from "../src/memory/memory-store.js";
 import { MetaAgent } from "../src/meta-agent";
 import { Scheduler, topologicalSort } from "../src/scheduler";
 
@@ -67,7 +68,7 @@ describe("暗雷 R1：并发 claim 安全性", () => {
     board.addNode(makeNode({ id: "n3", tags: ["implementation"], payload: "Task 3" }));
 
     const scheduler = new Scheduler(board, pool, observer, gate);
-    const agent = new CodeAgent(mockAdapter("done"), new Toolkit());
+    const agent = createAgent(codeAgentConfig(),mockAdapter("done"), new Toolkit());
     await agent.wakeup();
     scheduler.register(AgentType.Code, agent, "mock");
 
@@ -98,9 +99,9 @@ describe("暗雷 R1：并发 claim 安全性", () => {
 
     const scheduler = new Scheduler(board, pool, observer, gate);
 
-    const codeAgent = new CodeAgent(mockAdapter("code done"), new Toolkit());
+    const codeAgent = createAgent(codeAgentConfig(),mockAdapter("code done"), new Toolkit());
     await codeAgent.wakeup();
-    const reviewAgent = new ReviewAgent(mockAdapter("review done"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("review done"), new Toolkit());
     await reviewAgent.wakeup();
 
     scheduler.register(AgentType.Code, codeAgent, "mock");
@@ -143,10 +144,10 @@ describe("暗雷 R2：父节点失败 → 子节点级联", () => {
     failAdapter.injectMock(async () => {
       throw new Error("BOOM");
     });
-    const failCode = new CodeAgent(failAdapter, new Toolkit());
+    const failCode = createAgent(codeAgentConfig(),failAdapter, new Toolkit());
     await failCode.wakeup();
 
-    const reviewAgent = new ReviewAgent(mockAdapter("review ok"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("review ok"), new Toolkit());
     await reviewAgent.wakeup();
 
     const scheduler = new Scheduler(board, pool, observer, gate);
@@ -204,7 +205,7 @@ describe("暗雷 R3：重规划节点插入运行中层", () => {
     const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
 
     // 注册 Analysis agent 执行重规划产出的 research 节点
-    const analysisAgent = new AnalysisAgent(mockAdapter("Research complete"), new Toolkit());
+    const analysisAgent = createAgent(analysisAgentConfig(),mockAdapter("Research complete"), new Toolkit());
     await analysisAgent.wakeup();
     scheduler.register(AgentType.Analysis, analysisAgent, "mock");
 
@@ -256,7 +257,7 @@ describe("暗雷 R3：重规划节点插入运行中层", () => {
       if (callCount === 1) return { content: "done", toolCalls: [] };
       throw new Error("Fail on second node");
     });
-    const codeAgent = new CodeAgent(dualAdapter, new Toolkit());
+    const codeAgent = createAgent(codeAgentConfig(),dualAdapter, new Toolkit());
     await codeAgent.wakeup();
 
     scheduler.register(AgentType.Code, codeAgent, "mock");
@@ -308,7 +309,7 @@ describe("暗雷 R5：CircuitBreaker 熔断机制", () => {
     const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
 
     // 只注册 Analysis（不匹配 implementation → 重规划节点持续失败）
-    const analysisAgent = new AnalysisAgent(mockAdapter("irrelevant"), new Toolkit());
+    const analysisAgent = createAgent(analysisAgentConfig(),mockAdapter("irrelevant"), new Toolkit());
     await analysisAgent.wakeup();
     scheduler.register(AgentType.Analysis, analysisAgent, "mock");
 
@@ -373,10 +374,10 @@ describe("暗雷 R6：部分层失败处理", () => {
       if (callCount === 1) return { content: "OK", toolCalls: [] };
       throw new Error("Fail");
     });
-    const codeAgent = new CodeAgent(codeAdapter, new Toolkit());
+    const codeAgent = createAgent(codeAgentConfig(),codeAdapter, new Toolkit());
     await codeAgent.wakeup();
 
-    const reviewAgent = new ReviewAgent(mockAdapter("review OK"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("review OK"), new Toolkit());
     await reviewAgent.wakeup();
 
     scheduler.register(AgentType.Code, codeAgent, "mock");
@@ -413,7 +414,7 @@ describe("暗雷 R6：部分层失败处理", () => {
       apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
     });
     allFail.injectMock(async () => { throw new Error("Everything fails"); });
-    const failAgent = new CodeAgent(allFail, new Toolkit());
+    const failAgent = createAgent(codeAgentConfig(),allFail, new Toolkit());
     await failAgent.wakeup();
 
     scheduler.register(AgentType.Code, failAgent, "mock");
@@ -458,9 +459,9 @@ describe("暗雷 R7：多视角 spawn 失败自愈", () => {
 
     const scheduler = new Scheduler(board, pool, observer, gate);
 
-    const reviewAgent = new ReviewAgent(mockAdapter("代码审查通过: 无严重缺陷"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("代码审查通过: 无严重缺陷"), new Toolkit());
     await reviewAgent.wakeup();
-    const analysisAgent = new AnalysisAgent(mockAdapter("架构分析: 符合设计"), new Toolkit());
+    const analysisAgent = createAgent(analysisAgentConfig(),mockAdapter("架构分析: 符合设计"), new Toolkit());
     await analysisAgent.wakeup();
 
     scheduler.register(AgentType.Review, reviewAgent, "mock");
@@ -506,7 +507,7 @@ describe("暗雷 R7：多视角 spawn 失败自愈", () => {
 
     const scheduler = new Scheduler(board, pool, observer, gate);
 
-    const reviewAgent = new ReviewAgent(mockAdapter("unreachable"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("unreachable"), new Toolkit());
     await reviewAgent.wakeup();
     scheduler.register(AgentType.Review, reviewAgent, "mock");
 

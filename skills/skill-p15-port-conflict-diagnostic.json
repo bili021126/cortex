@@ -1,0 +1,23 @@
+{
+  "id": "skill-p15-port-conflict-diagnostic-1778962384005",
+  "agentType": "fix",
+  "name": "P15: 端口冲突诊断与恢复",
+  "triggerTags": ["fix", "bugfix", "diagnose", "heal"],
+  "trigger": "应用启动失败，错误信息包含 'Address already in use' 或 'Port is already in use' 或 'EADDRINUSE'",
+  "steps": [
+    "读取错误日志确认冲突端口号（通常在 'Port X is already in use' 或 'bind: address already in use :::X' 中）",
+    "使用对应平台命令查找占用进程：Windows 用 `netstat -ano | findstr :<PORT>`，Linux/Mac 用 `lsof -i :<PORT>`",
+    "从 netstat/lsof 输出中提取 PID（最后一列或第二列）",
+    "确认该进程是否为预期进程（如残留的旧实例）：检查进程名 `tasklist /FI \"PID eq <PID>\"` 或 `ps -p <PID>`",
+    "若为残留进程，终止之：Windows 用 `taskkill /F /PID <PID>`，Linux/Mac 用 `kill -9 <PID>`",
+    "验证端口已释放：重新执行 `netstat -ano | findstr :<PORT>` 确认无输出",
+    "重启应用并监控日志确认启动成功"
+  ],
+  "expectedOutput": "端口冲突诊断报告：冲突端口 X → 占用进程 PID Y (process_name) → 已终止 → 重启成功",
+  "outputFile": "diagnostic-port-<PORT>.md",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "mona-pattern-scan",
+  "createdAt": 1778962384005
+}
