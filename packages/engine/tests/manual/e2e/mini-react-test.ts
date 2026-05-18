@@ -1,91 +1,92 @@
 /**
- * 超级复杂场景 —�?�?Agent 归入 + 全链路压力测�?
+ * 超级复杂场景 —— 7 Agent 归入 + 全链路压力测试
  *
  * 用法: npx tsx tests/manual/mini-react-test.ts
- * 前提: 项目根目�?.env 已配�?DEEPSEEK_API_KEY
+ * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY
  *
- * 参与 Agent�? 个）:
- *   MetaAgent    —�?规划拆解
- *   InspectorAgent —�?纯事实采集（文件�?导出/行数�?
- *   AnalysisAgent  —�?架构分析 + 模块地图
- *   ReviewAgent    —�?代码审查 4 个核心文�?
- *   DocGovernAgent —�?宪法合规审计
- *   CodeAgent      —�?汇总发现，修复小问�?
- *   LoopAgent      —�?模式提炼，生成技能模�?
- *   OpsAgent       —�?环境诊断 + 运维收尾
- *   ButlerAgent    —�?旁观事件总线，格式化输出
+ * 参与 Agent（9 个）:
+ *   MetaAgent    —— 规划拆解
+ *   InspectorAgent —— 纯事实采集（文件/导出/行数）
+ *   AnalysisAgent  —— 架构分析 + 模块地图
+ *   ReviewAgent    —— 代码审查 4 个核心文件
+ *   DocGovernAgent —— 宪法合规审计
+ *   CodeAgent      —— 汇总发现，修复小问题
+ *   LoopAgent      —— 模式提炼，生成技能模板
+ *   OpsAgent       —— 环境诊断 + 运维收尾
+ *   ButlerAgent    —— 旁观事件总线，格式化输出
  *
- * 验证�?
- *   1. MetaAgent 能否�?7 种意图产出正确类型的 TaskNode
- *   2. Scheduler 能否正确派发到全�?7 �?Agent
- *   3. MemoryStore �?Agent 共享记忆（探针采�?�?铁锤修复引用�?
+ * 验证点：
+ *   1. MetaAgent 能否为 7 种意图产出正确类型的 TaskNode
+ *   2. Scheduler 能否正确派发到全部 7 种 Agent
+ *   3. MemoryStore 与 Agent 共享记忆（探针采集→铁锤修复引用）
  *   4. 多视角节点（review + audit 并行跑同一批文件）
- *   5. 依赖排序（analysis �?fix 有序执行�?
- *   6. ButlerAgent 事件格式化不丢消�?
- *   7. sql.js 持久�?重启不丢
+ *   5. 依赖排序（analysis →fix 有序执行）
+ *   6. ButlerAgent 事件格式化不丢消息
+ *   7. sql.js 持久化重启不丢
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { MetaAgent } from "../../../src/meta-agent";
-import { TaskBoard } from "../../../src/task-board";
-import { AgentPool } from "../../../src/agent-pool";
-import { CodeAgent } from "../../../src/agents/code-agent";
-import { ReviewAgent } from "../../../src/agents/review-agent";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent";
-import { InspectorAgent } from "../../../src/agents/inspector-agent";
-import { LoopAgent } from "../../../src/agents/loop-agent";
-import { OpsAgent } from "../../../src/agents/ops-agent";
-import { ButlerAgent } from "../../../src/agents/butler-agent";
-import { Scheduler } from "../../../src/scheduler";
-import { PipelineObserver } from "../../../src/pipeline-observer";
-import { ConfirmGate } from "../../../src/confirm-gate";
-import { Toolkit } from "../../../src/toolkit";
-import { MemoryStore } from "../../../src/memory-store";
-import { CLIAdapter } from "../../../src/cli-adapter";
+import { MetaAgent } from "../../../src/meta-agent.js";
+import { TaskBoard } from "../../../src/task-board.js";
+import { AgentPool } from "../../../src/agent-pool.js";
+import { createAgent } from "../../../src/components/agent-factory.js";
+import { codeAgentConfig } from "../../../src/agents/code-agent.js";
+import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
+import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
+import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
+import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
+import { ButlerAgent } from "../../../src/agents/butler-agent.js";
+import { Scheduler } from "../../../src/scheduler.js";
+import { PipelineObserver } from "../../../src/pipeline-observer.js";
+import { ConfirmGate } from "../../../src/confirm-gate.js";
+import { Toolkit } from "../../../src/toolkit.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
+import { CLIAdapter } from "../../../src/cli-adapter.js";
 
-// ══════════════════════════════════════════════�?
-// 角色�?—�?原神角色身份
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
+// 角色表 —— 原神角色身份
+// ═══════════════════════════════════════════════
 
 const AGENT_PERSONA: Record<string, { emoji: string; name: string; title: string }> = {
   "meta":       { emoji: "🧊", name: "甘雨",  title: "七星秘书" },
-  "code":       { emoji: "⚗️", name: "阿贝�?, title: "首席炼金术士" },
-  "review":     { emoji: "�?, name: "刻晴",  title: "玉衡�? },
-  "analysis":   { emoji: "🌿", name: "纳西�?, title: "草神" },
-  "doc-govern": { emoji: "💎", name: "凝光",  title: "天权�? },
+  "code":       { emoji: "⚗️", name: "阿贝多", title: "首席炼金术士" },
+  "review":     { emoji: "⚡", name: "刻晴",  title: "玉衡星" },
+  "analysis":   { emoji: "🌿", name: "纳西妲", title: "草神" },
+  "doc-govern": { emoji: "💎", name: "凝光",  title: "天权星" },
   "inspector":  { emoji: "🏹", name: "安柏",  title: "侦察骑士" },
   "loop":       { emoji: "🔮", name: "莫娜",  title: "占星术士" },
-  "ops":        { emoji: "�?, name: "北斗",  title: "南十字船�? },
-  // tag �?persona 别名（用�?node.type / node.tags[0] 查找�?
+  "ops":        { emoji: "⚓", name: "北斗",  title: "南十字船长" },
+  // tag → persona 别名（用于 node.type / node.tags[0] 查找）
   "inspect":         { emoji: "🏹", name: "安柏",  title: "侦察骑士" },
-  "audit":           { emoji: "💎", name: "凝光",  title: "天权�? },
-  "doc_govern":      { emoji: "💎", name: "凝光",  title: "天权�? },
-  "constitution_check": { emoji: "💎", name: "凝光",  title: "天权�? },
-  "implementation":  { emoji: "⚗️", name: "阿贝�?, title: "首席炼金术士" },
-  "bugfix":          { emoji: "⚗️", name: "阿贝�?, title: "首席炼金术士" },
-  "refactor":        { emoji: "⚗️", name: "阿贝�?, title: "首席炼金术士" },
-  "research":        { emoji: "🌿", name: "纳西�?, title: "草神" },
+  "audit":           { emoji: "💎", name: "凝光",  title: "天权星" },
+  "doc_govern":      { emoji: "💎", name: "凝光",  title: "天权星" },
+  "constitution_check": { emoji: "💎", name: "凝光",  title: "天权星" },
+  "implementation":  { emoji: "⚗️", name: "阿贝多", title: "首席炼金术士" },
+  "bugfix":          { emoji: "⚗️", name: "阿贝多", title: "首席炼金术士" },
+  "refactor":        { emoji: "⚗️", name: "阿贝多", title: "首席炼金术士" },
+  "research":        { emoji: "🌿", name: "纳西妲", title: "草神" },
   "pattern_scan":    { emoji: "🔮", name: "莫娜",  title: "占星术士" },
   "skill_precipitate": { emoji: "🔮", name: "莫娜",  title: "占星术士" },
 };
 
 function personaLine(agentType: string, msg: string): string {
   const p = AGENT_PERSONA[agentType] ?? { emoji: "🤖", name: agentType, title: "" };
-  return `${p.emoji} ${p.name}${p.title ? `�?{p.title}）` : ""}: ${msg}`;
+  return `${p.emoji} ${p.name}${p.title ? `（${p.title}）` : ""}: ${msg}`;
 }
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 1. 环境变量
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
   if (!fs.existsSync(envPath)) {
-    console.error("�?.env 文件不存�?);
+    console.error("❌ .env 文件不存在");
     process.exit(1);
   }
   const lines = fs.readFileSync(envPath, "utf-8").split("\n");
@@ -96,9 +97,9 @@ function loadEnv() {
   }
 }
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 2. 真实工具
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 function registerRealTools(toolkit: Toolkit, workspaceRoot: string) {
   const resolve = (p: string) => path.resolve(workspaceRoot, p);
@@ -191,15 +192,15 @@ function registerRealTools(toolkit: Toolkit, workspaceRoot: string) {
   });
 }
 
-// ══════════════════════════════════════════════�?
-// 3. 主流�?
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
+// 3. 主流程
+// ═══════════════════════════════════════════════
 
 async function main() {
   loadEnv();
   const API_KEY = process.env.DEEPSEEK_API_KEY;
   if (!API_KEY) {
-    console.error("�?DEEPSEEK_API_KEY 未设�?);
+    console.error("❌ DEEPSEEK_API_KEY 未设置");
     process.exit(1);
   }
 
@@ -209,14 +210,14 @@ async function main() {
   const WORKSPACE = process.cwd();
 
   console.log("╔══════════════════════════════════════════════╗");
-  console.log("�?  超级复杂场景 · �?Agent 归入全链路测�?     �?);
+  console.log("║  超级复杂场景 · 7 Agent 归入全链路测试      ║");
   console.log("╚══════════════════════════════════════════════╝\n");
   console.log(`  Model:  ${CHAT_MODEL} / ${REASONER_MODEL}`);
   console.log(`  CWD:    ${WORKSPACE}`);
   console.log(`  Agents: Meta + Inspector + Analysis + Review + DocGovern + Code + Loop + Ops + Butler\n`);
 
-  // ── 初始化组�?──
-  console.log("🟢 [Phase 1] 初始化组�?..");
+  // ── 初始化组件 ──
+  console.log("🟢 [Phase 1] 初始化组件...");
 
   const adapter = new LlmAdapter({
     apiKey: API_KEY,
@@ -239,9 +240,9 @@ async function main() {
   const memory = new MemoryStore();
   const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", "memory.db");
   await memory.init(MEMORY_DB);
-  console.log(`   �?MemoryStore 持久�? ${MEMORY_DB}`);
+  console.log(`   ✅ MemoryStore 持久化: ${MEMORY_DB}`);
 
-  // 注册所�?7 种可执行 Agent 的池配额
+  // 注册全部 7 种可执行 Agent 的池配额
   pool.register({ type: AgentType.Code, maxInstances: 3 });
   pool.register({ type: AgentType.Review, maxInstances: 3 });
   pool.register({ type: AgentType.Analysis, maxInstances: 3 });
@@ -253,40 +254,40 @@ async function main() {
   const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
 
   // ── 注册全部 7 种可执行 Agent ──
-  const codeAgent = new CodeAgent(adapter, new Toolkit(gate), memory);
+  const codeAgent = createAgent(codeAgentConfig(), adapter, new Toolkit(gate), memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
 
-  const reviewAgent = new ReviewAgent(adapter, new Toolkit(gate), memory);
+  const reviewAgent = createAgent(reviewAgentConfig(), adapter, new Toolkit(gate), memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
 
-  const analysisAgent = new AnalysisAgent(adapter, new Toolkit(gate), memory);
+  const analysisAgent = createAgent(analysisAgentConfig(), adapter, new Toolkit(gate), memory);
   await analysisAgent.wakeup();
   scheduler.register(AgentType.Analysis, analysisAgent, CHAT_MODEL);
 
-  const docGovernAgent = new DocGovernAgent(adapter, new Toolkit(gate), memory);
+  const docGovernAgent = createAgent(docGovernAgentConfig(), adapter, new Toolkit(gate), memory);
   await docGovernAgent.wakeup();
   scheduler.register(AgentType.DocGovern, docGovernAgent, CHAT_MODEL);
 
-  const inspectorAgent = new InspectorAgent(adapter, new Toolkit(gate));
+  const inspectorAgent = createInspectorAgent(adapter, new Toolkit(gate), memory);
   await inspectorAgent.wakeup();
   scheduler.register(AgentType.Inspector, inspectorAgent, CHAT_MODEL);
 
-  const loopAgent = new LoopAgent(adapter, new Toolkit(gate));
+  const loopAgent = createAgent(loopAgentConfig(), adapter, new Toolkit(gate));
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
 
-  const opsAgent = new OpsAgent(adapter, new Toolkit(gate));
+  const opsAgent = createAgent(opsAgentConfig(), adapter, new Toolkit(gate));
   await opsAgent.wakeup();
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
 
-  console.log("   �?7 可执�?Agent 就绪");
+  console.log("   ✅ 7 可执行 Agent 就绪");
 
-  // ── 注册 ButlerAgent（旁观者，不参�?Scheduler 派发�?──
+  // ── 注册 ButlerAgent（旁观者，不参与 Scheduler 派发）──
   const butler = new ButlerAgent(observer, cliAdapter);
   await butler.wakeup();
-  console.log("   �?ButlerAgent 就绪（事件旁观）\n");
+  console.log("   ✅ ButlerAgent 就绪（事件旁观）\n");
 
   // ── 规划 ──
   console.log("🟢 [Phase 2] 🧊 甘雨（七星秘书）拆解意图...");
@@ -294,41 +295,41 @@ async function main() {
   const intent = [
     "🏥 Cortex 引擎全面健康体检",
     "",
-    "�?packages/engine/src/ 下的核心运行时模块，执行以下完整检查流程：",
+    "在 packages/engine/src/ 下的核心运行时模块，执行以下完整检查流程：",
     "",
-    "1. 事实采集：列出所�?.ts 源文件，统计每个文件的导出符号数、代码行�?,
+    "1. 事实采集：列出所有 .ts 源文件，统计每个文件的导出符号数、代码行数",
     "2. 架构分析：分析所有模块的职责、依赖关系、输入输出，输出模块全景地图",
-    "3. 代码审查：审�?base-agent.ts、memory-store.ts、scheduler.ts、meta-agent.ts �?4 个核心文�?,
-    "   检查代码质量、风格一致性、潜在缺�?,
-    "4. 宪法审计：按 Cortex 宪法条款逐条审计，检查有无违规项和架构偏�?,
-    "5. 问题修复：汇总架构分析、代码审查、宪法审计的发现，修复可以安全修复的小问�?,
-    "6. 模式提炼：从上述已完成的任务中识别可复用的执行模式，形成技能模板摘�?,
-    "7. 环境诊断：检查工作目录结构、git 状态等环境信息，作为运维参�?,
+    "3. 代码审查：审查 base-agent.ts、memory-store.ts、scheduler.ts、meta-agent.ts 这 4 个核心文件",
+    "   检查代码质量、风格一致性、潜在缺陷",
+    "4. 宪法审计：按 Cortex 宪法条款逐条审计，检查有无违规项和架构偏移",
+    "5. 问题修复：汇总架构分析、代码审查、宪法审计的发现，修复可以安全修复的小问题",
+    "6. 模式提炼：从上述已完成的任务中识别可复用的执行模式，形成技能模板摘要",
+    "7. 环境诊断：检查工作目录结构、git 状态等环境信息，作为运维参考",
     "",
-    "各司其职，完工后各自汇报。通过 MemoryStore 共享发现，阿贝多修复时引用前人的诊断结果�?,
+    "各司其职，完工后各自汇报。通过 MemoryStore 共享发现，阿贝多修复时引用前人的诊断结果。",
   ].join("\n");
 
   const planStart = Date.now();
   const nodes = await metaAgent.plan(intent);
   const planDuration = Date.now() - planStart;
 
-  console.log(`   🧊 甘雨 ：「已阅。此意图可拆�?${nodes.length} 个兵种任务，各司其职。�?${planDuration}ms)`);
+  console.log(`   🧊 甘雨 ：「已阅。此意图可拆为 ${nodes.length} 个兵种任务，各司其职。」(${planDuration}ms)`);
   for (const n of nodes) {
     const tagStr = [n.type, ...n.tags].join(" | ");
     const p = AGENT_PERSONA[n.tags[0]] ?? AGENT_PERSONA[n.type] ?? { name: n.type };
-    console.log(`     └─ �?�?${p.emoji}${p.name} :: [${tagStr}] ${n.payload?.toString().slice(0, 80) ?? "?"}`);
+    console.log(`     └─ →${p.emoji}${p.name} :: [${tagStr}] ${n.payload?.toString().slice(0, 80) ?? "?"}`);
   }
   console.log();
 
   if (nodes.length === 0) {
-    console.error("   �?MetaAgent 未产出节�?);
+    console.error("   ❌ MetaAgent 未产出节点");
     process.exit(1);
   }
 
   // ── 入板 ──
-  console.log("🟢 [Phase 3] �?TaskBoard...");
+  console.log("🟢 [Phase 3] 入 TaskBoard...");
   for (const n of nodes) board.addNode(n);
-  console.log(`   �?${board.getAllNodes().length} 节点入板\n`);
+  console.log(`   ✅ ${board.getAllNodes().length} 节点入板\n`);
 
   // ── 事件收集（静默统计，不逐条打印）──
   const events: Array<{ type: string; agentTypes?: string[] }> = [];
@@ -340,15 +341,15 @@ async function main() {
   });
 
   // ── 执行 ──
-  console.log("\n🟢 [Phase 4] Scheduler 执行（所�?Agent 并行调度�?..\n");
+  console.log("\n🟢 [Phase 4] Scheduler 执行（所有 Agent 并行调度）...\n");
   const execStart = Date.now();
   const report = await scheduler.executeAll();
   const execDuration = Date.now() - execStart;
 
-  console.log(`   �? 执行耗时: ${execDuration}ms  |  完成: ${report.completed}  失败: ${report.failed}\n`);
+  console.log(`   ✅ 执行耗时: ${execDuration}ms  |  完成: ${report.completed}  失败: ${report.failed}\n`);
 
-  // ── 角色化结果展�?──
-  console.log("  ══�?各兵种汇�?══�?);
+  // ── 角色化结果展示 ──
+  console.log("  ══ 各兵种汇报 ══");
   const byType = new Map<string, typeof report.results>();
   for (const r of report.results) {
     const key = r.agentType ?? "unknown";
@@ -360,15 +361,15 @@ async function main() {
     const p = AGENT_PERSONA[agentType];
     const ok = results.filter((r) => r.success).length;
     const fail = results.filter((r) => !r.success).length;
-    const statusIcon = fail > 0 ? "⚠️" : "�?;
+    const statusIcon = fail > 0 ? "⚠️" : "✅";
     if (p) {
-      console.log(`  ${p.emoji} ${p.name}�?{p.title}�?${statusIcon} ${ok}�?{fail > 0 ? fail + "�? : ""}`);
+      console.log(`  ${p.emoji} ${p.name}（${p.title}）${statusIcon} ${ok}✅${fail > 0 ? fail + "❌" : ""}`);
     } else {
-      console.log(`  🤖 [${agentType}] ${statusIcon} ${ok}�?{fail > 0 ? fail + "�? : ""}`);
+      console.log(`  🤖 [${agentType}] ${statusIcon} ${ok}✅${fail > 0 ? fail + "❌" : ""}`);
     }
     for (const r of results) {
       const body = (r.output ?? r.error ?? "?").slice(0, 150).replace(/\n/g, " ");
-      const prefix = r.success ? "   └─ �? : "   └─ �?";
+      const prefix = r.success ? "   └─ ✅「" : "   └─ ❌「";
       console.log(`${prefix}${body}」`);
     }
   }
@@ -376,7 +377,7 @@ async function main() {
 
   // ── 诊断报告 ──
   console.log("╔══════════════════════════════════════════════╗");
-  console.log("�?  全链路诊断报�?                             �?);
+  console.log("║  全链路诊断报告                             ║");
   console.log("╚══════════════════════════════════════════════╝\n");
 
   const allNodes = board.getAllNodes();
@@ -388,7 +389,7 @@ async function main() {
   console.log(`  规划: ${planDuration}ms  |  执行: ${execDuration}ms  |  总计: ${planDuration + execDuration}ms`);
   console.log();
 
-  console.log("── Agent 参与�?──");
+  console.log("── Agent 参与度 ──");
   const participated = new Set(report.results.map((r) => r.agentType));
   const ALL_AGENTS: Array<{ type: AgentType; persona: typeof AGENT_PERSONA[string] }> = [
     { type: AgentType.Inspector, persona: AGENT_PERSONA.inspector },
@@ -400,7 +401,7 @@ async function main() {
     { type: AgentType.Ops, persona: AGENT_PERSONA.ops },
   ];
   for (const a of ALL_AGENTS) {
-    const icon = participated.has(a.type) ? "�? : "�?;
+    const icon = participated.has(a.type) ? "✅" : "❌";
     console.log(`   ${icon} ${a.persona.emoji} ${a.persona.name}`);
   }
   console.log();
@@ -410,19 +411,19 @@ async function main() {
   console.log(`  node.start:    ${events.filter((e) => e.type === "node.start").length}`);
   console.log(`  node.complete: ${events.filter((e) => e.type === "node.complete").length}`);
   console.log(`  node.replan:   ${events.filter((e) => e.type === "node.replan").length}`);
-  console.log(`  总事�?         ${events.length}`);
+  console.log(`  总事件:         ${events.length}`);
   console.log();
 
   console.log("── TaskBoard ──");
   console.log(`  节点: ${allNodes.length}  |  完成: ${completedNodes.length}  |  失败: ${failedNodes.length}`);
-  console.log(`  多视角节�? ${allNodes.filter((n) => n.needsMultiPerspective).length}`);
-  console.log(`  有依赖节�? ${allNodes.filter((n) => n.parentId).length}`);
+  console.log(`  多视角节点: ${allNodes.filter((n) => n.needsMultiPerspective).length}`);
+  console.log(`  有依赖节点: ${allNodes.filter((n) => n.parentId).length}`);
   console.log(`  总结果数:   ${allNodes.reduce((s, n) => s + n.results.length, 0)}`);
   console.log();
 
   console.log("── 记忆系统 ──");
-  console.log(`  总条�? ${memories.length}  |  持久�? ${memory.isPersisted ? "�?sql.js" : "�?仅内�?}`);
-  // �?Agent 类型统计记忆
+  console.log(`  总条数: ${memories.length}  |  持久化: ${memory.isPersisted ? "✅ sql.js" : "⚠️ 仅内存"}`);
+  // 按 Agent 类型统计记忆
   const memByAgent = new Map<string, number>();
   for (const m of memories) {
     const key = m.agentType ?? "unknown";
@@ -435,38 +436,38 @@ async function main() {
 
   // ── 终局裁决（甘雨汇总） ──
   console.log("╔══════════════════════════════════════════════╗");
-  console.log("�?  🧊 甘雨：终局裁决                           �?);
+  console.log("║  🧊 甘雨：终局裁决                           ║");
   console.log("╚══════════════════════════════════════════════╝\n");
 
-  console.log(`  🧊 甘雨 ：�?{nodes.length} 个任务已下发�?{participated.size}/7 兵种响应�?{
-    report.failed > 0 ? `�?${report.failed} 项未完成，列入待办。」` : `全员通过。」`
+  console.log(`  🧊 甘雨 ：「${nodes.length} 个任务已下发，${participated.size}/7 兵种响应，${
+    report.failed > 0 ? `⚠️ ${report.failed} 项未完成，列入待办。」` : `全员通过。」`
   }`);
 
   const successCount = report.results.filter((r) => r.success).length;
   const totalCount = report.results.length;
 
-  console.log(`  �?MetaAgent:       ${nodes.length} 节点 (${planDuration}ms)`);
-  console.log(`  �?参与 Agent:      ${participated.size}/7 种`);
-  console.log(`  �?执行结果:        ${successCount}/${totalCount} Agent 运行成功`);
-  console.log(`  �?TaskBoard:       ${completedNodes.length}/${allNodes.length} 节点完成`);
-  console.log(`  �?记忆写入:        ${memories.length} �?(�?Agent 共享)`);
-  console.log(`  �?ButlerAgent:     格式�?${events.length} 个事件`);
+  console.log(`  ✅ MetaAgent:       ${nodes.length} 节点 (${planDuration}ms)`);
+  console.log(`  ✅ 参与 Agent:      ${participated.size}/7 种`);
+  console.log(`  ✅ 执行结果:        ${successCount}/${totalCount} Agent 运行成功`);
+  console.log(`  ✅ TaskBoard:       ${completedNodes.length}/${allNodes.length} 节点完成`);
+  console.log(`  ✅ 记忆写入:        ${memories.length} 条（多 Agent 共享）`);
+  console.log(`  ✅ ButlerAgent:     格式化 ${events.length} 个事件`);
   console.log();
 
   // 逐项验证
-  console.log("── 验证�?──");
+  console.log("── 验证项 ──");
   const checks: Array<{ label: string; pass: boolean }> = [
-    { label: "MetaAgent 产出 �?3 节点", pass: nodes.length >= 3 },
-    { label: "�?3 �?Agent 参与执行", pass: participated.size >= 3 },
-    { label: "记忆�?Agent 共享 (�?2 �?Agent 写入)", pass: memByAgent.size >= 2 },
+    { label: "MetaAgent 产出 ≥3 节点", pass: nodes.length >= 3 },
+    { label: "≥3 种 Agent 参与执行", pass: participated.size >= 3 },
+    { label: "记忆多 Agent 共享 (≥2 种 Agent 写入)", pass: memByAgent.size >= 2 },
     { label: "ButlerAgent 收到事件", pass: events.length > 0 },
-    { label: "�?replan（一次通过�?, pass: events.filter((e) => e.type === "node.replan").length === 0 },
-    { label: "sql.js 持久化确�?, pass: memory.isPersisted },
+    { label: "无 replan（一次通过）", pass: events.filter((e) => e.type === "node.replan").length === 0 },
+    { label: "sql.js 持久化确认", pass: memory.isPersisted },
   ];
 
   let allPassed = true;
   for (const c of checks) {
-    const icon = c.pass ? "�? : "�?;
+    const icon = c.pass ? "✅" : "❌";
     if (!c.pass) allPassed = false;
     console.log(`   ${icon} ${c.label}`);
   }
@@ -483,6 +484,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("�?测试失败:", err);
+  console.error("❌ 测试失败:", err);
   process.exit(1);
 });

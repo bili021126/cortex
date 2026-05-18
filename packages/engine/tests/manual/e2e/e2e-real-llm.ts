@@ -1,44 +1,45 @@
 /**
- * Core-1 v2.0 真实 LLM 全管�?E2E 验证
+ * Core-1 v2.0 真实 LLM 全管线 E2E 验证
  *
  * 用法: npx tsx tests/manual/e2e-real-llm.ts
- * 前提: 项目根目�?.env 已配�?DEEPSEEK_API_KEY
+ * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY
  *
  * 验证链路 (v2.0 完整闭环):
- *   用户意图 �?MetaAgent 规划 �?CodeAgent 执行 �?ReviewAgent 审查
- *   �?DocGovernAgent 审计 �?ConfirmGate L2 确认 �?交付
- *   �?OpsAgent 编译/测试验证
+ *   用户意图 →MetaAgent 规划 →CodeAgent 执行 →ReviewAgent 审查
+ *   →DocGovernAgent 审计 →ConfirmGate L2 确认 →交付
+ *   →OpsAgent 编译/测试验证
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { MetaAgent } from "../../../src/meta-agent";
-import { TaskBoard } from "../../../src/task-board";
-import { AgentPool } from "../../../src/agent-pool";
-import { CodeAgent } from "../../../src/agents/code-agent";
-import { ReviewAgent } from "../../../src/agents/review-agent";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent";
-import { InspectorAgent } from "../../../src/agents/inspector-agent";
-import { OpsAgent } from "../../../src/agents/ops-agent";
-import { LoopAgent } from "../../../src/agents/loop-agent";
-import { Scheduler } from "../../../src/scheduler";
-import { PipelineObserver } from "../../../src/pipeline-observer";
-import { ConfirmGate } from "../../../src/confirm-gate";
-import { Toolkit } from "../../../src/toolkit";
-import { MemoryStore } from "../../../src/memory-store";
-import { CLIAdapter } from "../../../src/cli-adapter";
+import { MetaAgent } from "../../../src/meta-agent.js";
+import { TaskBoard } from "../../../src/task-board.js";
+import { AgentPool } from "../../../src/agent-pool.js";
+import { createAgent } from "../../../src/components/agent-factory.js";
+import { codeAgentConfig } from "../../../src/agents/code-agent.js";
+import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
+import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
+import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
+import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
+import { Scheduler } from "../../../src/scheduler.js";
+import { PipelineObserver } from "../../../src/pipeline-observer.js";
+import { ConfirmGate } from "../../../src/confirm-gate.js";
+import { Toolkit } from "../../../src/toolkit.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
+import { CLIAdapter } from "../../../src/cli-adapter.js";
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 1. 加载环境变量
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
   if (!fs.existsSync(envPath)) {
-    console.error("�?.env 文件不存�?);
+    console.error("❌ .env 文件不存在");
     process.exit(1);
   }
   const lines = fs.readFileSync(envPath, "utf-8").split("\n");
@@ -49,9 +50,9 @@ function loadEnv() {
   }
 }
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 2. 真实工具实现（只读安全）
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 interface RealToolkit {
   registerReal(toolkit: Toolkit, workspaceRoot: string): void;
@@ -73,7 +74,7 @@ const REAL_TOOLS: RealToolkit = {
       }
     });
 
-    // list_files �?Agent 标准工具名，params 对齐 TOOL_META（dir_path + pattern�?
+    // list_files —— Agent 标准工具名，params 对齐 TOOL_META（dir_path + pattern）
     const listHandler = async (params: any) => {
       const dp = resolve((params.dir_path ?? params.path ?? ".") as string);
       if (!fs.existsSync(dp)) return { success: false, error: `Dir not found: ${dp}` };
@@ -88,7 +89,7 @@ const REAL_TOOLS: RealToolkit = {
     toolkit.register("list_files", listHandler);
     toolkit.register("list_dir", listHandler);
 
-    // search_code �?简�?grep（最大深�?4，文件上�?100KB�?
+    // search_code —— 简易 grep（最大深度 4，文件上限 100KB）
     toolkit.register("search_code", async (params) => {
       const query = (params.query ?? params.pattern ?? "") as string;
       const dir = resolve((params.path ?? ".") as string);
@@ -123,11 +124,11 @@ const REAL_TOOLS: RealToolkit = {
       }
     });
 
-    // write_file �?固定输出�?.cortex/e2e-output/，禁止修改现有代�?
+    // write_file —— 固定输出到 .cortex/e2e-output/，禁止修改现有代码
     toolkit.register("write_file", async (params) => {
       const fp = resolve(params.file_path as string);
       const outputDir = path.resolve(workspaceRoot, ".cortex", "e2e-output");
-      // 只允许写�?.cortex/e2e-output/ 目录
+      // 只允许写入 .cortex/e2e-output/ 目录
       if (!fp.startsWith(outputDir + path.sep)) {
         return { success: false, error: `write_file denied: 只能写入 .cortex/e2e-output/ 目录，禁止修改现有代码文件。提交的路径: ${path.relative(workspaceRoot, fp)}` };
       }
@@ -141,13 +142,13 @@ const REAL_TOOLS: RealToolkit = {
       }
     });
 
-    // run_shell �?安全执行，限�?workspace 范围，超�?60s，拦截危险命�?
+    // run_shell —— 安全执行，限定 workspace 范围，超时 60s，拦截危险命令
     const DANGEROUS = new RegExp("\\b(rm\\s+-rf|del\\s+/F|format\\s|shutdown|reboot|sudo|chmod\\s+777|>/dev/|/etc/)");
     toolkit.register("run_shell", async (params) => {
       const cmd = (params.command ?? "") as string;
       if (!cmd) return { success: false, error: "run_shell: 缺少 command 参数" };
       if (DANGEROUS.test(cmd)) {
-        return { success: false, error: `run_shell denied: 危险命令已拦�?�?"${cmd.slice(0, 60)}"` };
+        return { success: false, error: `run_shell denied: 危险命令已拦截 —— "${cmd.slice(0, 60)}"` };
       }
       try {
         const { execSync } = await import("node:child_process");
@@ -168,49 +169,49 @@ const REAL_TOOLS: RealToolkit = {
   },
 };
 
-// ══════════════════════════════════════════════�?
-// 3. 主流�?
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
+// 3. 主流程
+// ═══════════════════════════════════════════════
 
 async function main() {
   loadEnv();
   const API_KEY = process.env.DEEPSEEK_API_KEY;
-  if (!API_KEY) { console.error("�?DEEPSEEK_API_KEY 未设�?); process.exit(1); }
+  if (!API_KEY) { console.error("❌ DEEPSEEK_API_KEY 未设置"); process.exit(1); }
 
   const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner"; // V4-Flash 思考模�? 所�?Agent �?
+  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner"; // V4-Flash 思考模型，所有 Agent 用
   const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-pro"; // MetaAgent 独享旗舰
   const WORKSPACE = process.cwd();
 
   console.log("╔══════════════════════════════════════╗");
-  console.log("�? Core-1 v2.0 真实 LLM E2E 验证       �?);
+  console.log("║  Core-1 v2.0 真实 LLM E2E 验证       ║");
   console.log("╚══════════════════════════════════════╝\n");
   console.log(`  Model:  ${CHAT_MODEL} / ${REASONER_MODEL}  [cache: on, reasoning: dynamic]`);
   console.log(`  Base:   ${BASE_URL}`);
   console.log(`  CWD:    ${WORKSPACE}\n`);
 
-  // ── 3a. 初始化组�?──
-  console.log("🟢 [Phase 1] 初始化组�?..");
+  // ── 3a. 初始化组件 ──
+  console.log("🟢 [Phase 1] 初始化组件...");
 
   const adapter = new LlmAdapter({
     apiKey: API_KEY,
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: "high", // MetaAgent 按标签智能分�?max，其�?high 提�?2-3x
+    reasoningEffort: "high", // MetaAgent 按标签智能分配 max，其他 high 提速 2-3x
   });
-  adapter.setCacheEnabled(true); // 测试省钱：缓存相�?LLM 请求
+  adapter.setCacheEnabled(true); // 测试省钱：缓存相同 LLM 请求
 
   const metaAgent = new MetaAgent(adapter);
   const board = new TaskBoard();
   const pool = new AgentPool();
   const observer = new PipelineObserver();
   const gate = new ConfirmGate();
-  gate.bypassAll(); // E2E 测试模式：跳�?L2/L3 确认，专注验证行为链�?
+  gate.bypassAll(); // E2E 测试模式：跳过 L2/L3 确认，专注验证行为链路
   const memory = new MemoryStore();
   const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", "memory.db");
   await memory.init(MEMORY_DB);
-  console.log(`   �?MemoryStore 持久�? ${MEMORY_DB}`);
+  console.log(`   ✅ MemoryStore 持久化: ${MEMORY_DB}`);
 
   pool.register({ type: AgentType.Code, maxInstances: 3 });
   pool.register({ type: AgentType.Review, maxInstances: 3 });
@@ -222,84 +223,84 @@ async function main() {
 
   const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
 
-  // 注入 CLIAdapter �?ConfirmGate，启用真实用户确认（L2/L3 操作�?stdin 交互�?
+  // 注入 CLIAdapter 到 ConfirmGate，启用真实用户确认（L2/L3 操作到 stdin 交互）
   const cliAdapter = new CLIAdapter();
   gate.setBridge(cliAdapter);
-  console.log("   �?CLIAdapter 已注�?ConfirmGate\n");
+  console.log("   ✅ CLIAdapter 已注入 ConfirmGate\n");
 
-  console.log("   �?组件就绪\n");
+  console.log("   ✅ 组件就绪\n");
 
   // ── 3b. 注册真实工具 ──
   console.log("🟢 [Phase 2] 注册真实工具...");
 
   const codeToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(codeToolkit, WORKSPACE);
-  const codeAgent = new CodeAgent(adapter, codeToolkit, memory);
+  const codeAgent = createAgent(codeAgentConfig(), adapter, codeToolkit, memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
 
   const reviewToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(reviewToolkit, WORKSPACE);
-  const reviewAgent = new ReviewAgent(adapter, reviewToolkit, memory);
+  const reviewAgent = createAgent(reviewAgentConfig(), adapter, reviewToolkit, memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
 
   const analysisToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(analysisToolkit, WORKSPACE);
-  const analysisAgent = new AnalysisAgent(adapter, analysisToolkit, memory);
+  const analysisAgent = createAgent(analysisAgentConfig(), adapter, analysisToolkit, memory);
   await analysisAgent.wakeup();
   scheduler.register(AgentType.Analysis, analysisAgent, CHAT_MODEL);
 
-  // DocGovernAgent —�?只读工具，审计文档合规�?
+  // DocGovernAgent —— 只读工具，审计文档合规性
   const docGovernToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(docGovernToolkit, WORKSPACE);
-  const docGovernAgent = new DocGovernAgent(adapter, docGovernToolkit, memory);
+  const docGovernAgent = createAgent(docGovernAgentConfig(), adapter, docGovernToolkit, memory);
   await docGovernAgent.wakeup();
   scheduler.register(AgentType.DocGovern, docGovernAgent, CHAT_MODEL);
 
-  // InspectorAgent —�?纯事实采集，只读工具
+  // InspectorAgent —— 纯事实采集，只读工具
   const inspectorToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(inspectorToolkit, WORKSPACE);
-  const inspectorAgent = new InspectorAgent(adapter, inspectorToolkit);
+  const inspectorAgent = createInspectorAgent(adapter, inspectorToolkit, memory);
   await inspectorAgent.wakeup();
   scheduler.register(AgentType.Inspector, inspectorAgent, CHAT_MODEL);
 
-  // OpsAgent —�?编译/测试/部署，run_shell + write_file
+  // OpsAgent —— 编译/测试/部署，run_shell + write_file
   const opsToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(opsToolkit, WORKSPACE);
-  const opsAgent = new OpsAgent(adapter, opsToolkit);
+  const opsAgent = createAgent(opsAgentConfig(), adapter, opsToolkit);
   await opsAgent.wakeup();
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
 
-  // LoopAgent —�?模式提炼（只读）
+  // LoopAgent —— 模式提炼（只读）
   const loopToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(loopToolkit, WORKSPACE);
-  const loopAgent = new LoopAgent(adapter, loopToolkit);
+  const loopAgent = createAgent(loopAgentConfig(), adapter, loopToolkit);
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
 
-  console.log("   �?read_file / list_files / search_code / write_file / run_shell 就绪\n");
+  console.log("   ✅ read_file / list_files / search_code / write_file / run_shell 就绪\n");
 
   // ── 3c. 规划 ──
   console.log("🟢 [Phase 3] MetaAgent 规划...");
 
   const intent = [
-    "�?测试环境约束：所�?Agent 输出简洁，只读 packages/ �?docs/ 下的文件，CodeAgent/OpsAgent 写文件限�?.cortex/e2e-output/，禁止修改任何现有代码�?,
+    "⚠️ 测试环境约束：所有 Agent 输出简洁，只读 packages/ 和 docs/ 下的文件，CodeAgent/OpsAgent 写文件限定 .cortex/e2e-output/，禁止修改任何现有代码。",
     "",
-    "🏠 回家看看——探�?Cortex 工具链这个「家」�?,
+    "🏠 回家看看——探索 Cortex 工具链这个「家」。",
     "",
-    "- 探针，去 packages/engine/src/ 转一圈，搞清楚家里每个房间（模块）是干什么的、怎么串起来的�?,
-    "- 铁锤，看看家里工具箱里有什么（Toolkit 注册了哪些工具）。分析完让阿贝多（CodeAgent）在 .cortex/e2e-output/ 里添个实用的小物件——只能写新文件，不能碰现有代码�?,
-    "- 北斗（OpsAgent），�?.cortex/e2e-output/ 里阿贝多刚写的东西拿去编译测试——跑 tsc 检查类型，再跑 pnpm test 验证，报告通过/失败�?,
-    "- 鹰眼，巡视一遍刚动过的地方，看有没有墙皮掉了、线路搭错了、风格不统一�?,
-    "- 法典，把家规（宪�?Constitution）翻出来，看看现在家里有没有违规的地方�?,
+    "- 探针，去 packages/engine/src/ 转一圈，搞清楚家里每个房间（模块）是干什么的、怎么串起来的。",
+    "- 铁锤，看看家里工具箱里有什么（Toolkit 注册了哪些工具）。分析完让阿贝多（CodeAgent）在 .cortex/e2e-output/ 里添个实用的小物件——只能写新文件，不能碰现有代码。",
+    "- 北斗（OpsAgent），把 .cortex/e2e-output/ 里阿贝多刚写的东西拿去编译测试——跑 tsc 检查类型，再跑 pnpm test 验证，报告通过/失败。",
+    "- 鹰眼，巡视一遍刚动过的地方，看有没有墙皮掉了、线路搭错了、风格不统一。",
+    "- 法典，把家规（宪法/Constitution）翻出来，看看现在家里有没有违规的地方。",
   ].join("\n");
   const planStart = Date.now();
   const nodes = await metaAgent.plan(intent);
   const planDuration = Date.now() - planStart;
 
-  console.log(`   �? 规划耗时: ${planDuration}ms`);
-  console.log(`   节点�? ${nodes.length}`);
+  console.log(`   ✅ 规划耗时: ${planDuration}ms`);
+  console.log(`   节点数: ${nodes.length}`);
   for (const n of nodes) {
     console.log(`     [${n.type}] ${n.payload?.toString().slice(0, 80) ?? "?"}`);
     console.log(`       tags: [${n.tags.join(", ")}]  multi: ${n.needsMultiPerspective}`);
@@ -307,18 +308,18 @@ async function main() {
   console.log();
 
   if (nodes.length === 0) {
-    console.error("   �?MetaAgent 未产出节�?);
+    console.error("   ❌ MetaAgent 未产出节点");
     process.exit(1);
   }
 
   // ── 3d. 入板 ──
-  console.log("🟢 [Phase 4] �?TaskBoard...");
+  console.log("🟢 [Phase 4] 入 TaskBoard...");
   for (const n of nodes) {
     board.addNode(n);
   }
-  console.log(`   �?${board.getAllNodes().length} 节点入板\n`);
+  console.log(`   ✅ ${board.getAllNodes().length} 节点入板\n`);
 
-  // 订阅事件看进�?
+  // 订阅事件看进度
   observer.on(PipelinePriority.HIGH, (e) => {
     console.log(`   📡 ${e.type}: ${JSON.stringify((e.payload as any).nodeId ?? e.payload).slice(0, 100)}`);
   });
@@ -329,10 +330,10 @@ async function main() {
   const report = await scheduler.executeAll();
   const execDuration = Date.now() - execStart;
 
-  console.log(`   �? 执行耗时: ${execDuration}ms`);
+  console.log(`   ✅ 执行耗时: ${execDuration}ms`);
   console.log(`   完成: ${report.completed}  失败: ${report.failed}`);
   for (const r of report.results) {
-    const icon = r.success ? "�? : "�?;
+    const icon = r.success ? "✅" : "❌";
     const preview = (r.output ?? r.error ?? "?").slice(0, 100);
     console.log(`   ${icon} [${r.agentType ?? "?"}] ${r.nodeId}: ${preview}`);
   }
@@ -346,7 +347,7 @@ async function main() {
   const memories = memory.read({});
 
   console.log(`   TaskBoard: ${allNodes.length} nodes (${completedNodes.length} done, ${failedNodes.length} failed)`);
-  console.log(`   MemoryStore: ${memories.length} �? [持久�? ${memory.isPersisted ? "�?sql.js" : "�?仅内�?}]`);
+  console.log(`   MemoryStore: ${memories.length} 条 [持久化: ${memory.isPersisted ? "✅ sql.js" : "⚠️ 仅内存"}]`);
   
   for (const n of completedNodes) {
     for (const r of n.results) {
@@ -367,12 +368,12 @@ async function main() {
   const totalDuration = execStart - planStart + execDuration;
 
   console.log("\n╔══════════════════════════════════════╗");
-  console.log("�?  E2E 验证结论                        �?);
+  console.log("║  E2E 验证结论                        ║");
   console.log("╚══════════════════════════════════════╝\n");
-  console.log(`  �?MetaAgent 规划: ${nodes.length} 节点 (${planDuration}ms)`);
-  console.log(`  �?Scheduler 执行: ${report.completed}/${nodes.length} 完成 (${execDuration}ms)`);
-  console.log(`  �?记忆写入: ${memories.length} 条`);
-  console.log(`  �?全管线耗时: ${totalDuration}ms`);
+  console.log(`  ✅ MetaAgent 规划: ${nodes.length} 节点 (${planDuration}ms)`);
+  console.log(`  ✅ Scheduler 执行: ${report.completed}/${nodes.length} 完成 (${execDuration}ms)`);
+  console.log(`  ✅ 记忆写入: ${memories.length} 条`);
+  console.log(`  ✅ 全管线耗时: ${totalDuration}ms`);
   console.log();
 
   if (report.failed > 0) {
@@ -383,6 +384,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("�?E2E 失败:", err);
+  console.error("❌ E2E 失败:", err);
   process.exit(1);
 });

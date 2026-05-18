@@ -51,6 +51,7 @@ export function createBrowserAgent(
   llm: LlmAdapter,
   toolkit: Toolkit,
   memory?: MemoryStore,
+  systemPrompt?: string,
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -119,7 +120,7 @@ export function createBrowserAgent(
 
   const config: AgentFactoryConfig = {
     type: AT.Browser,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: systemPrompt ?? SYSTEM_PROMPT,
     memoryEnabled: true,
     preExecuteHook: (node: TaskNode): TaskNode => {
       if (!workspaceRoot) return node;

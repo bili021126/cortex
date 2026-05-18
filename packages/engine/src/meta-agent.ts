@@ -34,9 +34,18 @@ export class MetaAgent {
   private _nodeCounter = 0; // 防 Date.now() 高频碰撞
   private _safeReporter?: SafeErrorReporter;
   private _skillRegistry?: SkillRegistry;
+  private readonly _planningSystem: string;
+  private readonly _replanSystem: string;
 
-  constructor(private readonly llm: LlmAdapter, skillRegistry?: SkillRegistry) {
+  constructor(
+    private readonly llm: LlmAdapter,
+    skillRegistry?: SkillRegistry,
+    planningSystemPrompt?: string,
+    replanSystemPrompt?: string,
+  ) {
     this._skillRegistry = skillRegistry;
+    this._planningSystem = planningSystemPrompt ?? PLANNING_SYSTEM;
+    this._replanSystem = replanSystemPrompt ?? REPLAN_SYSTEM;
   }
 
   /** 注入技能注册表（可后置绑定） */

@@ -1,5 +1,5 @@
 import type { AgentType, TaskNode, InvariantViolation, InvariantReporter } from "@cortex/shared";
-import { AGENT_TAGS, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { getAgentTags, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { PipelineObserver } from "./pipeline-observer.js";
 import { isTestEnv } from "./test-env.js";
 
@@ -74,7 +74,7 @@ export class TaskBoard {
     if (!node) return null;
 
     // 标签匹配
-    const agentTags = AGENT_TAGS[agentType] as readonly string[];
+    const agentTags = getAgentTags()[agentType] as readonly string[];
     if (!node.tags.some((t) => agentTags.includes(t))) return null;
 
     if (node.needsMultiPerspective) {
@@ -131,7 +131,7 @@ export class TaskBoard {
    * 普通节点只看 pending；multi-perspective 节点包含 running 中但该类型未认领的。
    */
   findPending(agentType: AgentType): TaskNode[] {
-    const agentTags = AGENT_TAGS[agentType] as readonly string[];
+    const agentTags = getAgentTags()[agentType] as readonly string[];
     return Array.from(this.nodes.values()).filter((n) => {
       if (!n.tags.some((t) => agentTags.includes(t))) return false;
       if (n.needsMultiPerspective) {

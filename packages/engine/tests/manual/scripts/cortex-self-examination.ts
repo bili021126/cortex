@@ -25,25 +25,26 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { AgentType, MemoryType, LinkType, PipelinePriority, type TaskNode, type SafeErrorReporter } from "@cortex/shared";
+import { AgentType, MemoryType, LinkType, PipelinePriority, PipelineEventType, type TaskNode, type SafeErrorReporter } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { TaskBoard } from "../../../src/task-board";
 import { AgentPool } from "../../../src/agent-pool";
-import { CodeAgent } from "../../../src/agents/code-agent";
-import { ReviewAgent } from "../../../src/agents/review-agent";
-import { InspectorAgent } from "../../../src/agents/inspector-agent";
-import { BrowserAgent } from "../../../src/agents/browser-agent";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent";
-import { LoopAgent } from "../../../src/agents/loop-agent";
-import { OpsAgent } from "../../../src/agents/ops-agent";
-import { ApiAgent } from "../../../src/agents/api-agent";
-import { DataAgent } from "../../../src/agents/data-agent";
+import { createAgent } from "../../../src/components/agent-factory";
+import { codeAgentConfig } from "../../../src/agents/code-agent";
+import { reviewAgentConfig } from "../../../src/agents/review-agent";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent";
+import { createBrowserAgent } from "../../../src/agents/browser-agent";
+import { analysisAgentConfig } from "../../../src/agents/analysis-agent";
+import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent";
+import { loopAgentConfig } from "../../../src/agents/loop-agent";
+import { opsAgentConfig } from "../../../src/agents/ops-agent";
+import { apiAgentConfig } from "../../../src/agents/api-agent";
+import { dataAgentConfig } from "../../../src/agents/data-agent";
 import { Scheduler } from "../../../src/scheduler";
 import { PipelineObserver } from "../../../src/pipeline-observer";
 import { ConfirmGate } from "../../../src/confirm-gate";
 import { Toolkit } from "../../../src/toolkit";
-import { MemoryStore } from "../../../src/memory-store";
+import { MemoryStore } from "../../../src/memory/memory-store";
 import { ButlerAgent } from "../../../src/agents/butler-agent";
 import { MetaAgent } from "../../../src/meta-agent";
 import { StrategistAgent } from "../../../src/strategist-agent";
@@ -399,7 +400,7 @@ function seedExaminationMemory(memory: MemoryStore): void {
     metadata: { taskId: "self-exam-design-philosophy" },
   });
 
-  memory.link(philId, indexId, LinkType.DerivedFrom, "system");
+  memory.link(philId, indexId, LinkType.DerivedFrom);
 }
 
 /**
@@ -470,7 +471,7 @@ function seedPreviousReports(
       });
 
       if (indexMemId) {
-        memory.link(reportId, indexMemId, LinkType.DerivedFrom, "system");
+        memory.link(reportId, indexMemId, LinkType.DerivedFrom);
       }
     } catch {
       // 写入失败不阻塞整体流程
@@ -742,7 +743,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: REASONING_EFFORT,
+    reasoningEffort: REASONING_EFFORT as "high" | "max",
   });
   adapter.setCacheEnabled(true);
 
@@ -756,7 +757,7 @@ async function main() {
   // 导致 TaskBoard/AgentPool 状态不一致时仅走 console.error，不进 observer，用户不可见。
   TaskBoard.onInvariant = (ctx) => {
     observer.emit({
-      type: "scheduler.invariant_violation",
+      type: PipelineEventType.SchedulerInvariantViolation,
       priority: PipelinePriority.CRITICAL,
       payload: ctx,
       timestamp: Date.now(),
@@ -764,7 +765,7 @@ async function main() {
   };
   AgentPool.onInvariant = (ctx) => {
     observer.emit({
-      type: "agent_pool.invariant_violation",
+      type: PipelineEventType.AgentPoolInvariantViolation,
       priority: PipelinePriority.CRITICAL,
       payload: ctx,
       timestamp: Date.now(),
@@ -804,7 +805,7 @@ async function main() {
   // 阿贝多——西风骑士团首席炼金术士，用科学与实验精神审视代码
   const codeToolkit = new Toolkit(gate);
   registerExaminationTools(codeToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const codeAgent = new CodeAgent(adapter, codeToolkit, memory);
+  const codeAgent = createAgent(codeAgentConfig(), adapter, codeToolkit, memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
   console.log("   ⚗️ 阿贝多 (Code) —— 炼金术士，" + (SOFT_MODE ? "核心层深度审查" : "P0 深度代码审查"));
@@ -812,7 +813,7 @@ async function main() {
   // 刻晴——璃月七星之玉衡，效率至上的法典审查者
   const reviewToolkit = new Toolkit(gate);
   registerExaminationTools(reviewToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const reviewAgent = new ReviewAgent(adapter, reviewToolkit, memory);
+  const reviewAgent = createAgent(reviewAgentConfig(), adapter, reviewToolkit, memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
   console.log("   ⚡ 刻晴 (Review) —— 玉衡星，" + (SOFT_MODE ? "代码质量侦察" : "P1 修复验证"));
@@ -820,7 +821,7 @@ async function main() {
   // 安柏——西风骑士团侦察骑士，永远元气满满的现场调查员
   const inspectorToolkit = new Toolkit(gate);
   registerExaminationTools(inspectorToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const inspectorAgent = new InspectorAgent(adapter, inspectorToolkit);
+  const inspectorAgent = createInspectorAgent(adapter, inspectorToolkit);
   inspectorAgent.setWorkspaceRoot(ROOT);
   await inspectorAgent.wakeup();
   scheduler.register(AgentType.Inspector, inspectorAgent, CHAT_MODEL);
@@ -829,7 +830,7 @@ async function main() {
   // 宵宫——长野原烟花店，观察者视角
   const browserToolkit = new Toolkit(gate);
   registerExaminationTools(browserToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const browserAgent = new BrowserAgent(adapter, browserToolkit);
+  const browserAgent = createBrowserAgent(adapter, browserToolkit);
   browserAgent.setWorkspaceRoot(ROOT);
   await browserAgent.wakeup();
   scheduler.register(AgentType.Browser, browserAgent, CHAT_MODEL);
@@ -838,7 +839,7 @@ async function main() {
   // 纳西妲——草神，温柔但有深度的架构分析师
   const analysisToolkit = new Toolkit(gate);
   registerExaminationTools(analysisToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const analysisAgent = new AnalysisAgent(adapter, analysisToolkit, memory);
+  const analysisAgent = createAgent(analysisAgentConfig(), adapter, analysisToolkit, memory);
   await analysisAgent.wakeup();
   scheduler.register(AgentType.Analysis, analysisAgent, CHAT_MODEL);
   console.log("   🌿 纳西妲 (Analysis) —— 草神，" + (SOFT_MODE ? "架构全景分析" : "P3 验证与架构趋势"));
@@ -846,7 +847,7 @@ async function main() {
   // 凝光——璃月七星之天权，群玉阁的主人，律法与治理的巨擘
   const docGovernToolkit = new Toolkit(gate);
   registerExaminationTools(docGovernToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const docGovernAgent = new DocGovernAgent(adapter, docGovernToolkit);
+  const docGovernAgent = createAgent(docGovernAgentConfig(), adapter, docGovernToolkit);
   await docGovernAgent.wakeup();
   scheduler.register(AgentType.DocGovern, docGovernAgent, CHAT_MODEL);
   console.log("   💎 凝光 (DocGovern) —— 天权星，" + (SOFT_MODE ? "治理合规审计" : "清单一致性审计"));
@@ -854,7 +855,7 @@ async function main() {
   // 莫娜——占星术士，能从水镜中看见隐藏的模式与趋势
   const loopToolkit = new Toolkit(gate);
   registerExaminationTools(loopToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const loopAgent = new LoopAgent(adapter, loopToolkit);
+  const loopAgent = createAgent(loopAgentConfig(), adapter, loopToolkit);
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
   console.log("   🔮 莫娜 (Loop) —— 占星术士，" + (SOFT_MODE ? "模式发现与趋势预言" : "修复质量趋势"));
@@ -862,7 +863,7 @@ async function main() {
   // 北斗——南十字船队大姐头，见过大风大浪的工程实干家
   const opsToolkit = new Toolkit(gate);
   registerExaminationTools(opsToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const opsAgent = new OpsAgent(adapter, opsToolkit);
+  const opsAgent = createAgent(opsAgentConfig(), adapter, opsToolkit);
   await opsAgent.wakeup();
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
   console.log("   ⚓ 北斗 (Ops) —— 南十字船长，" + (SOFT_MODE ? "工程就绪诊断" : "P2 验证与工程诊断"));
@@ -870,7 +871,7 @@ async function main() {
   // 久岐忍——荒泷派外务奉行，API 契约押运
   const apiToolkit = new Toolkit(gate);
   registerExaminationTools(apiToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const apiAgent = new ApiAgent(adapter, apiToolkit, memory);
+  const apiAgent = createAgent(apiAgentConfig(), adapter, apiToolkit, memory);
   await apiAgent.wakeup();
   scheduler.register(AgentType.Api, apiAgent, CHAT_MODEL);
   console.log("   😈 久岐忍 (Api) —— 外务奉行，" + (SOFT_MODE ? "API 契约探索" : "API 契约验证"));
@@ -878,18 +879,26 @@ async function main() {
   // 艾尔海森——教令院大书记官，数据完整性审计
   const dataToolkit = new Toolkit(gate);
   registerExaminationTools(dataToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const dataAgent = new DataAgent(adapter, dataToolkit, memory);
+  const dataAgent = createAgent(dataAgentConfig(), adapter, dataToolkit, memory);
   await dataAgent.wakeup();
   scheduler.register(AgentType.Data, dataAgent, CHAT_MODEL);
   console.log("   📚 艾尔海森 (Data) —— 大书记官，" + (SOFT_MODE ? "数据模型探索" : "数据完整性审计"));
 
-  // 钟离——往生堂客卿，岩王帝君，战略判断者。不注册到 Scheduler——不参与任务派发，
+  // 钟离——往生堂客卿，岩王帝君，契约守护者。不注册到 Scheduler——不参与任务派发，
   // 在第四阶段所有 Agent 完成探索后独立激活，读取全部报告做战略分析。
   const strategistAgent = new StrategistAgent(adapter);
   await strategistAgent.wakeup();
   pool.spawn(AgentType.Strategist, "zhongli");
   strategistAgent.setPool(pool, "zhongli");
-  console.log("   🗿 钟离 (Strategist) —— 岩王帝君，" + (SOFT_MODE ? "战略分析（第四阶段后激活）" : "阶段跃迁判定"));
+  console.log("   🗿 钟离 (Strategist) —— 岩王帝君，" + (SOFT_MODE ? "契约守护+战略分析" : "阶段跃迁判定"));
+
+  // 霜凝——超越者，方向监理。不注册到 Scheduler——不参与任务派发，
+  // 在第四阶段半钟离分析后独立激活，读取全部报告做方向判断与矛盾暴露。
+  const shuangningAgent = new StrategistAgent(adapter);
+  await shuangningAgent.wakeup();
+  pool.spawn(AgentType.Strategist, "shuangning");
+  shuangningAgent.setPool(pool, "shuangning");
+  console.log("   ❄️ 霜凝 (Strategist) —— 超越者，" + (SOFT_MODE ? "方向监理+矛盾暴露" : "监理"));
 
   // 托马——神里家管，旁观者，不参与任务派遣
   const butlerAgent = new ButlerAgent(observer);
@@ -903,7 +912,7 @@ async function main() {
   // 每 Agent 实例注入 observer-backed reporter，杜绝静默吞错。
   const safeReporter: SafeErrorReporter = (ctx) => {
     observer.emit({
-      type: `agent.${ctx.severity === "fatal" ? "fatal" : "error"}`,
+      type: PipelineEventType.ErrorReported,
       priority: ctx.severity === "fatal" ? PipelinePriority.CRITICAL : PipelinePriority.HIGH,
       payload: ctx,
       timestamp: Date.now(),
@@ -912,7 +921,9 @@ async function main() {
   for (const a of [codeAgent, reviewAgent, inspectorAgent, browserAgent, analysisAgent, docGovernAgent, loopAgent, opsAgent, apiAgent, dataAgent]) {
     a.setSafeReporter(safeReporter);
   }
-  console.log("   🛡️ SafeReporter 已注入 10 位审视委员——静默吞错终结。\n");
+  strategistAgent.setSafeReporter(safeReporter);
+  shuangningAgent.setSafeReporter(safeReporter);
+  console.log("   🛡️ SafeReporter 已注入 12 位审视委员——静默吞错终结。\n");
 
   // ═══════════════════════════════════════════════
   // Phase 0：HCA 预读上轮共识基线
@@ -1075,28 +1086,18 @@ async function main() {
       "九位专家不是「验证员」——他们是「侦察兵」。各自从自己最专业的角度出发，在代码中自由穿行。",
       "",
 
-      // 第二层：身份位置——你仍然是甘雨，但角色从「分配清单」变为「分配方向」
-      "你的职责仍然是「分派」，不是「包揽」。但这一次，你给每个人的不是一份「待检查项清单」，",
-      "而是「你该去看什么方向」。方向比清单重要——因为清单会漏，方向不会。",
-      "  · 阿贝多（code）—— 炼金术士，深入核心模块的每一行代码，用实验精神验证正确性",
-      "  · 刻晴（review）—— 玉衡星，扫描整个代码库，用效率主义的视角找不对劲的地方",
-      "  · 北斗（ops）—— 船长，诊断工程就绪性——构建、依赖、配置、运行时脆弱点",
-      "  · 纳西妲（analysis）—— 草神，俯瞰架构全景——依赖图、模块边界、扩展成本",
-      "  · 凝光（doc-govern）—— 天权，审计治理合规——声明与实际之间有多少水分",
-      "  · 莫娜（loop）—— 占星术士，从散落的代码中看见隐藏的模式和趋势",
-      "  · 安柏（inspector）—— 侦察骑士，地毯式扫一遍项目目录，报告一切异常",
-      "  · 久岐忍（api）—— 外务奉行，检查每一个模块的接口契约——类型签名是否完整、错误是否被吞、上下游依赖是否断裂",
-      "  · 艾尔海森（data）—— 大书记官，审计数据层——类型定义是否自洽、序列化是否稳定、字段命名是否一致、存储策略是否有窗口期风险",
-      "",
-
-      // 第三层：分寸拿捏——不设目标，不划边界
-      "不要给任何人设「完成指标」——刻晴不需要检查够 20 个文件才算合格。",
-      "深度比广度重要。一个真问题比十个假报告有价值。",
+      // 第二层：身份与分寸——你是甘雨，分派但不规定方向
+      "你是甘雨。你的职责是把九位专家推入代码库，但不规定他们各自该看什么。",
+      "代码库本身会告诉每个人该关注什么——那是他们的专业直觉决定的事，不是你该替他们做的。",
+      "不设方向、不划边界、不定指标。深度比广度重要，一个真问题比十个假报告有价值。",
       "如果某位专家报告「我仔细看了X，没有发现问题」——那也是重要的发现。",
       "",
 
-      // 第四层：任务范围——七个独立根节点，全并行
-      "现在开始规划。为以下九位专家各建一个独立根节点。",
+      // 第三层：任务范围——九个独立根节点，全并行
+      "现在开始规划。为以下九位专家各建一个独立根节点（无 parentId，全并行）：",
+      "  · 刻晴（review）  · 北斗（ops）    · 纳西妲（analysis）",
+      "  · 凝光（doc-govern） · 莫娜（loop）    · 安柏（inspector）",
+      "  · 阿贝多（code）   · 久岐忍（api）      · 艾尔海森（data）",
       "",
 
       // 硬约束 type 不变
@@ -1400,6 +1401,74 @@ async function main() {
       } catch (e) {
         console.log(`   ❌ 钟离战略分析失败: ${String(e).slice(0, 200)}\n`);
       }
+    // ── 霜凝方向监理分析 ──
+    //   霜凝不判契约、不判合规——她只看方向：系统实际演进是否偏离宪法定义的阶段目标，
+    //   各路判断之间有没有互相抵消的矛盾，三路事后验证（钟离+凝光+霜凝）是否自洽。
+    //   霜凝不做裁决、不替用户决策——仅指出矛盾、暴露分歧、打包呈报。
+    console.log("🟢 [第四阶段半] 霜凝方向监理——方向判断与矛盾暴露...\n");
+
+    const directionPrompt = [
+      "以下是 Cortex 审视委员会专家的自由探索报告摘要。",
+      "钟离已经做了战略分析（契约完整性+架构方向+阶段跃迁+磨损预警），",
+      "凝光会在后续圆桌中做合规审计。",
+      "",
+      "你的视角与钟离不同——你不是契约守护者，你是方向监理：",
+      "",
+      "1. **方向偏移判断**：从各路专家的报告中，能不能看出系统实际演进方向",
+      "   在偏离宪法定义的阶段目标？有没有在朝错误的方向加速？",
+      "2. **矛盾暴露**：不同专家的报告之间有没有互相矛盾或互相抵消的判断？",
+      "   可验证事实层和 LLM 推理层是否被混淆？",
+      "3. **监理自洽**：钟离的战略分析、凝光即将做的合规审计、你的方向判断——",
+      "   这三路判断之间有没有逻辑不自洽的地方？",
+      "",
+      "方向判断输入：",
+      "- 宪法阶段目标：Core-1（类型安全+工程基建+Agent基础能力）→ Core-2（治理层物理分离+多进程+Skill体系）",
+      "- 当前阶段：Core-1 收尾，向 Core-2 过渡",
+      "",
+      "输出格式：",
+      "- 每项一段话，不列清单、不画表、不写代码。",
+      "- 用监理报告风格——指出偏离、暴露矛盾、不做裁决。",
+      "- 如果未见方向偏离，说「方向未见结构性偏离」即可。",
+      "- 最后给出监理结论：「方向健康」/「方向存在 N 项偏离，需关注」/「方向严重偏离，建议暂停跃迁」。",
+      "",
+      "─── 审视报告摘要 ───",
+      reportDigest,
+    ].join("\n");
+
+    const directionNode: TaskNode = {
+      id: "shuangning-direction",
+      type: "direction_oversight",
+      status: "pending",
+      tags: ["strategy" as const, "strategist" as const],
+      needsMultiPerspective: false,
+      claimedBy: [],
+      payload: directionPrompt,
+      results: [],
+      createdAt: Date.now(),
+    };
+
+    try {
+      const dirResult = await shuangningAgent.execute(directionNode, CHAT_MODEL);
+      if (dirResult.success && dirResult.output) {
+        const DIRECTION_PATH = path.join(OUTPUT_DIR, "shuangning-direction-assessment.md");
+        fs.writeFileSync(DIRECTION_PATH, dirResult.output, "utf-8");
+        console.log(`   📄 shuangning-direction-assessment.md (${dirResult.output.length} 字符)`);
+
+        console.log("\n   ❄️ 霜凝方向监理 —— 预览:");
+        const preview = dirResult.output.slice(0, 500);
+        for (const line of preview.split("\n")) {
+          console.log(`   │ ${line}`);
+        }
+        if (dirResult.output.length > 500) {
+          console.log(`   │ ...(截断，全文见 ${DIRECTION_PATH})`);
+        }
+        console.log();
+      } else {
+        console.log("   ⚠️ 霜凝方向监理未产出有效输出\n");
+      }
+    } catch (e) {
+      console.log(`   ❌ 霜凝方向监理失败: ${String(e).slice(0, 200)}\n`);
+    }
     } else {
       console.log("   ⚠️ 未找到审视报告，跳过战略分析\n");
     }

@@ -11,10 +11,15 @@
  * @see CLI 设计文档 §5.2（单次模式资源管理策略）
  */
 
-import { Scheduler, TaskBoard, PipelineObserver, ConfirmGate, CLIAdapter, MemoryStore } from "@cortex/engine";
-import type { EngineConfig } from "@cortex/engine";
-import type { AgentType, AgentConfig } from "@cortex/shared";
+import {
+  Scheduler, TaskBoard, AgentPool, PipelineObserver, ConfirmGate,
+  CLIAdapter, MemoryStore, bootstrapEngine,
+} from "@cortex/engine";
+import type { EngineConfig, BootstrapEngineResult } from "@cortex/engine";
+import type { AgentConfig } from "@cortex/shared";
 import { AgentStatus } from "@cortex/shared";
+import type { LlmAdapter } from "@cortex/llm";
+import { Toolkit } from "@cortex/engine";
 import type { ConfigManager } from "./config-manager.js";
 
 export interface BridgeContext {
@@ -25,6 +30,10 @@ export interface BridgeContext {
   confirmGate?: ConfirmGate;
   cliAdapter?: CLIAdapter;
   initialized: boolean;
+  /** 是否为配置驱动模式（bootstrapEngine 初始化） */
+  bootstrapped?: boolean;
+  /** bootstrapEngine 完整结果 */
+  bootstrapResult?: BootstrapEngineResult;
 }
 
 /**
@@ -86,8 +95,22 @@ export class MiniAgentPool {
   }
 }
 
+/** Bootstrap 配置——使用 bootstrapEngine 的必需参数 */
+export interface BootstrapConfig {
+  llm: LlmAdapter;
+  toolkit: Toolkit;
+  projectRoot: string;
+  dbPath?: string;
+  engineConfig?: EngineConfig;
+}
+
 /**
  * EngineBridge — 引擎组件生命周期管理器。
+ *
+ * 支持两种初始化模式：
+ * 1. 轻量模式（ensureInitialized）—— 使用 MiniAgentPool，无 Agent 注册
+ * 2. 配置驱动模式（ensureBootstrapped）—— 使用 bootstrapEngine，
+ *    从 cortex-agents.json 加载所有 Agent 定义并注册
  */
 export class EngineBridge {
   private ctx: BridgeContext = { initialized: false };
@@ -95,6 +118,7 @@ export class EngineBridge {
   private config: ConfigManager;
   private dbPath?: string;
   private engineConfig?: EngineConfig;
+  private _bootstrapConfig?: BootstrapConfig;
 
   constructor(config: ConfigManager, dbPath?: string, engineConfig?: EngineConfig) {
     this.config = config;
@@ -102,7 +126,57 @@ export class EngineBridge {
     this.engineConfig = engineConfig;
   }
 
-  /** 初始化全部引擎组件（惰性，仅首次调用时创建） */
+  /**
+   * 设置 Bootstrap 配置——启用配置驱动模式。
+   * 必须在 ensureBootstrapped() 之前调用。
+   */
+  setBootstrapConfig(bootstrapConfig: BootstrapConfig): void {
+    this._bootstrapConfig = bootstrapConfig;
+  }
+
+  /**
+   * 配置驱动初始化——使用 bootstrapEngine 加载 cortex-agents.json
+   * 等配置文件，创建所有 Agent 并注册到 Scheduler。
+   *
+   * 此方法完全替代硬编码 Agent 创建流程。
+   * 必须先调用 setBootstrapConfig() 设置 LlmAdapter 等参数。
+   */
+  async ensureBootstrapped(): Promise<BridgeContext> {
+    if (this.ctx.bootstrapped) return this.ctx;
+
+    if (!this._bootstrapConfig) {
+      throw new Error(
+        "[EngineBridge] ensureBootstrapped() 需要先调用 setBootstrapConfig() 设置 LlmAdapter/Toolkit",
+      );
+    }
+
+    const { llm, toolkit, projectRoot, dbPath, engineConfig } =
+      this._bootstrapConfig;
+
+    const result = await bootstrapEngine(projectRoot, {
+      llm,
+      toolkit,
+      dbPath: dbPath ?? this.dbPath,
+      engineConfig: engineConfig ?? this.engineConfig,
+      workspaceRoot: projectRoot,
+    });
+
+    this.ctx = {
+      scheduler: result.scheduler,
+      memoryStore: result.memory,
+      taskBoard: result.board,
+      pipelineObserver: result.observer,
+      confirmGate: result.gate,
+      cliAdapter: result.cliAdapter,
+      initialized: true,
+      bootstrapped: true,
+      bootstrapResult: result,
+    };
+
+    return this.ctx;
+  }
+
+  /** 初始化全部引擎组件（轻量模式，惰性，仅首次调用时创建） */
   async ensureInitialized(): Promise<BridgeContext> {
     if (this.ctx.initialized) return this.ctx;
 
@@ -128,7 +202,9 @@ export class EngineBridge {
 
     // 6. Scheduler（使用 MiniAgentPool）
     // 注意：Scheduler 构造需要 AgentPool 实例。在原型阶段，
-    // MiniAgentPool 满足接口要求。生产环境会使用 engine 的 AgentPool。
+    // MiniAgentPool 满足接口要求。
+    // 配置驱动模式请使用 ensureBootstrapped()，它会用真实 AgentPool
+    // 并从 cortex-agents.json 加载所有 Agent。
     const scheduler = new Scheduler(board, this._pool as any, observer, gate, undefined, this.engineConfig);
 
     this.ctx = {
@@ -144,8 +220,11 @@ export class EngineBridge {
     return this.ctx;
   }
 
-  /** 获取 AgentPool（MiniAgentPool 实例） */
-  get agentPool(): MiniAgentPool {
+  /** 获取 AgentPool（轻量模式使用 MiniAgentPool，配置驱动模式使用真实 AgentPool） */
+  get agentPool(): MiniAgentPool | AgentPool {
+    if (this.ctx.bootstrapped && this.ctx.bootstrapResult) {
+      return this.ctx.bootstrapResult.pool;
+    }
     return this._pool;
   }
 

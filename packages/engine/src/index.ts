@@ -55,6 +55,10 @@ export {
 // MemoryWriteInput 已迁移至 @cortex/shared，重新导出以保持向后兼容
 export type { MemoryWriteInput } from "@cortex/shared";
 
+// ── Bootstrap 集成入口 ──────────────────────────
+export { bootstrapEngine } from "./bootstrap-engine.js";
+export type { BootstrapEngineOptions, BootstrapEngineResult } from "./bootstrap-engine.js";
+
 // ── 引擎核心 ─────────────────────────────────────
 // @contract: Scheduler + TaskBoard + AgentPool + ConfirmGate + PipelineObserver
 // 构成调度五元组。FileLockManager 提供文件锁。Toolkit 提供 Agent 工具注入。

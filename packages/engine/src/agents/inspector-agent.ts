@@ -137,6 +137,7 @@ export function createInspectorAgent(
   toolkit: Toolkit,
   memory?: MemoryStore,
   engineConfig?: EngineConfig,
+  systemPrompt?: string,
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -148,7 +149,7 @@ export function createInspectorAgent(
 
   const config: AgentFactoryConfig = {
     type: AT.Inspector,
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: systemPrompt ?? SYSTEM_PROMPT,
     maxLoops: 24,
     memoryEnabled: true,
     preExecuteHook: (node: TaskNode): TaskNode => {

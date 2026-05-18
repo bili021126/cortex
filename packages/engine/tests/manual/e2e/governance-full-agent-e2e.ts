@@ -34,8 +34,8 @@ import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
 import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
 import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
 import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
-import { ApiAgent } from "../../../src/agents/api-agent.js";
-import { DataAgent } from "../../../src/agents/data-agent.js";
+import { apiAgentConfig } from "../../../src/agents/api-agent.js";
+import { dataAgentConfig } from "../../../src/agents/data-agent.js";
 import { fixAgentConfig } from "../../../src/agents/fix-agent.js";
 import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
 import { ButlerAgent } from "../../../src/agents/butler-agent.js";
@@ -271,8 +271,8 @@ async function main() {
     { type: AgentType.Ops, label: "北斗", inst: createAgent(opsAgentConfig(), adapter, sharedToolkit, memory) },
     { type: AgentType.Loop, label: "莫娜", inst: createAgent(loopAgentConfig(), adapter, sharedToolkit, memory) },
     { type: AgentType.DocGovern, label: "凝光", inst: createAgent(docGovernAgentConfig(), adapter, sharedToolkit) },
-    { type: AgentType.Api, label: "久岐忍", inst: new ApiAgent(adapter, sharedToolkit, memory) },
-    { type: AgentType.Data, label: "艾尔海森", inst: new DataAgent(adapter, sharedToolkit, memory) },
+    { type: AgentType.Api, label: "久岐忍", inst: createAgent(apiAgentConfig(), adapter, sharedToolkit, memory) },
+    { type: AgentType.Data, label: "艾尔海森", inst: createAgent(dataAgentConfig(), adapter, sharedToolkit, memory) },
     { type: AgentType.Fix, label: "希格雯", inst: createAgent(fixAgentConfig(), adapter, sharedToolkit, memory) },
     { type: AgentType.Inspector, label: "安柏", inst: createInspectorAgent(adapter, sharedToolkit, memory) },
   ];

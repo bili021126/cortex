@@ -49,21 +49,24 @@ export function persistSkillsToMemory(
       });
       memory.commitMemory(memId);
       count++;
-    } catch {
-      // 单条写入失败不阻塞整体
+    } catch (e) {
+      console.warn(
+        `[skill-persister] 写入技能失败: ${skill.agentType}:${skill.name}`,
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
 
   return count;
 }
 
-// ─── 2. 读取：MemoryStore → SkillTemplate[] ──────────
+// ─── 2. 读取：MemoryStore → SkillTemplate[] ─────────────
 
 /**
- * 从 MemoryStore 加载已沉淀的技能模板。
- * 查询所有 MemoryType.Skill + state=Active 的记忆。
+ * 从 MemoryStore 加载所有 Skill 类型的记忆，转换为 SkillTemplate 数组。
+ * 用于在系统启动时恢复 SkillRegistry 的注册状态。
  *
- * @returns 反序列化后的技能模板数组。
+ * @returns 从 MemoryStore 恢复的技能模板列表。
  */
 export function loadSkillsFromMemory(memory: MemoryStore): SkillTemplate[] {
   const skillTemplates: SkillTemplate[] = [];
@@ -84,24 +87,22 @@ export function loadSkillsFromMemory(memory: MemoryStore): SkillTemplate[] {
       if (!content || typeof content !== "object") continue;
 
       const skill = content as unknown as SkillTemplate;
-
-      // 基本合法性校验
-      if (!skill.id || !skill.agentType || !skill.name || !skill.triggerTags || !Array.isArray(skill.steps)) {
-        continue;
-      }
+      if (!skill?.id || !skill?.name || !skill?.triggerTags || !Array.isArray(skill.steps)) continue;
 
       skillTemplates.push(skill);
     }
-  } catch {
-    // 查询失败返回空数组（MemoryStore 可能未初始化）
+  } catch (e) {
+    console.warn(
+      "[skill-persister] 从 MemoryStore 加载技能失败",
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   return skillTemplates;
 }
 
-// ─── 3. 文件回溯扫描 ─────────────────────────────────
+// ─── 3. 文件扫描：输出文件 → 技能模板 ─────────────
 
-/** 扫描配置：哪些 glob 对应哪种 AgentType */
 const SCAN_PATTERNS: { glob: string; agentType: AgentType }[] = [
   { glob: "**/pattern*.md", agentType: AgentType.Loop },
   { glob: "**/design*.md", agentType: AgentType.Analysis },
@@ -111,11 +112,11 @@ const SCAN_PATTERNS: { glob: string; agentType: AgentType }[] = [
 ];
 
 /**
- * 扫描工作区下已产出的分析/设计/审查/模式文件，从中提取技能模板。
- * 文件回溯扫描——弥补"上次执行时 LoopAgent 没被调度"的空窗期。
+ * 扫描工作区中的已产出 Markdown 文件，从中提取技能模板。
+ * 用于文件回溯——当技能未显式注册时，从历史产出中反向发现。
  *
  * @param workspaceDir 工作区根目录
- * @returns 提取到的技能模板数组
+ * @returns 发现的技能模板列表（去重）。
  */
 export function scanOutputFilesForSkills(workspaceDir: string): SkillTemplate[] {
   const allSkills: SkillTemplate[] = [];
@@ -133,8 +134,11 @@ export function scanOutputFilesForSkills(workspaceDir: string): SkillTemplate[] 
             allSkills.push(skill);
           }
         }
-      } catch {
-        // 单个文件读取失败不影响其他
+      } catch (e) {
+        console.warn(
+          `[skill-persister] 扫描文件失败: ${filePath}`,
+          e instanceof Error ? e.message : String(e),
+        );
       }
     }
   }
@@ -142,8 +146,10 @@ export function scanOutputFilesForSkills(workspaceDir: string): SkillTemplate[] 
   return allSkills;
 }
 
-// ─── 内部：文件查找 ─────────────────────────────────
-
+/**
+ * 递归查找匹配 glob 模式的文件。
+ * 简单实现：遍历目录树，文件名匹配。
+ */
 function findFiles(root: string, glob: string): string[] {
   const results: string[] = [];
   const pattern = glob.replace("**/", "");
@@ -157,12 +163,18 @@ function findFiles(root: string, glob: string): string[] {
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           walk(fullPath, depth + 1);
-        } else if (entry.name.endsWith(".md") && matchFileName(entry.name, pattern)) {
+        } else if (
+          matchFileName(entry.name, pattern) &&
+          matchFileName(fullPath, glob)
+        ) {
           results.push(fullPath);
         }
       }
-    } catch {
-      // 权限错误忽略
+    } catch (e) {
+      console.warn(
+        `[skill-persister] 遍历目录失败: ${dir}`,
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
 
@@ -170,6 +182,10 @@ function findFiles(root: string, glob: string): string[] {
   return results;
 }
 
+/**
+ * 简单文件名 glob 匹配。
+ * 支持 pattern*.md 形式。
+ */
 function matchFileName(fileName: string, pattern: string): boolean {
   // 简单 glob: pattern*.md 匹配 pattern-anything.md
   if (pattern.endsWith("*.md")) {
@@ -182,16 +198,13 @@ function matchFileName(fileName: string, pattern: string): boolean {
   return fileName.includes(pattern);
 }
 
-// ─── 内部：Markdown 技能提取 ────────────────────────
-
 /**
- * 从 Markdown 内容中非结构化提取技能模板。
- *
- * 策略：
- *   1. 优先查找 JSON 块（SkillTemplate 格式）
- *   2. "## PN — 名称" 格式（莫娜模式提炼输出：P0-P9 带 tags/trigger/配方）
- *   3. "## 模式 N：名称" 格式段落
- *   4. 最终回退：整个文件内容作为单一参考技能
+ * 从 Markdown 内容中提取技能模板。
+ * 策略优先级：
+ *   1. JSON 块提取（SkillTemplate 格式）
+ *   2. P0-P9 章节提取
+ *   3. "模式 N" 章节提取
+ *   4. 兜底：基于文件名生成默认模板
  */
 function extractSkillsFromMarkdown(
   content: string,
@@ -204,49 +217,40 @@ function extractSkillsFromMarkdown(
   const { skills, diagnostics } = extractSkillsFromOutput(content);
   if (skills.length > 0) return skills;
 
-  // 策略 2：P0-P9 格式提取（莫娜 pattern.md 产出）
+  // 策略 2：P0-P9 章节提取
   const pnSections = extractPNSections(content, agentType);
   if (pnSections.length > 0) return pnSections;
 
-  // 策略 3：模式段落提取
+  // 策略 3："模式 N" 章节提取
   const patterns = extractPatternSections(content, agentType);
   if (patterns.length > 0) return patterns;
 
-  // 策略 4：回退——整个文件作为一个参考技能
+  // 策略 4：兜底——基于文件名生成一个默认模板
   const fileName = path.basename(filePath, ".md");
   const firstLine = content.split("\n")[0]?.replace(/^#+\s*/, "") ?? fileName;
   const timestamp = Date.now();
 
-  return [{
-    id: `skill-file-${fileName}-${timestamp}`,
-    agentType,
-    name: `参考: ${firstLine.slice(0, 50)}`,
-    triggerTags: ["research", "analysis"] as Tag[],
-    trigger: `当需要参考 ${fileName} 文档时查询`,
-    steps: [`阅读文件: ${filePath}`],
-    expectedOutput: "理解设计意图后执行",
-    status: "trial",
-    adoptionCount: 0,
-    rejectionCount: 0,
-    discoveredBy: "file-scanner",
-    createdAt: timestamp,
-  }];
+  return [
+    {
+      id: `${fileName}-${timestamp}`,
+      agentType,
+      name: `[文件扫描] ${firstLine.slice(0, 50)}`,
+      triggerTags: ["research", "analysis"] as Tag[],
+      trigger: `检测到文件: ${fileName}`,
+      steps: [`阅读并理解文件: ${filePath}`],
+      expectedOutput: "理解设计意图后执行",
+      status: "trial",
+      adoptionCount: 0,
+      rejectionCount: 0,
+      discoveredBy: "file-scanner",
+      createdAt: timestamp,
+    },
+  ];
 }
 
 /**
- * 从 Markdown 正文提取 "## PN — 名称" 格式模式段落。
- * 这是莫娜（LoopAgent）pattern.md 产出的标准格式：
- *
- *   ## P0 — 两层管线架构 (Two-Layer Pipeline)
- *   **tags**: `parsing`, `architecture`, ...
- *   **trigger**: 任何需要...
- *   ### 观察
- *   ...
- *   ### 配方
- *   步骤 1: ...
- *   步骤 2: ...
- *   ### 适用条件 / ### 关键约束
- *   ...
+ * 从 Markdown 中提取 "## P{N} — 名称" 格式的章节。
+ * 这些是设计文档中的优先级模式描述。
  */
 function extractPNSections(content: string, agentType: AgentType): SkillTemplate[] {
   const patterns: SkillTemplate[] = [];
@@ -259,68 +263,54 @@ function extractPNSections(content: string, agentType: AgentType): SkillTemplate
   while ((match = sectionRegex.exec(content)) !== null) {
     const pNumber = match[1];
     const fullName = match[2].trim();
-    // 去除末尾的英文名括号: "两层管线架构 (Two-Layer Pipeline)" → "两层管线架构"
-    const name = fullName.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    const name = fullName.replace(/\s*\(.*?\)\s*/, "").trim();
     const sectionStart = match.index + match[0].length;
 
-    // 提取到下一个 ## 标题或文件末尾的内容
-    const nextSection = content.slice(sectionStart).search(/\n#{2}\s/);
+    // 找下一个章节或到文件末尾
+    const nextSection = content.slice(sectionStart).search(/\n#{2,}\s/);
     const sectionContent = nextSection === -1
       ? content.slice(sectionStart)
       : content.slice(sectionStart, sectionStart + nextSection);
 
-    // 提取 tags: **tags**: `tag1`, `tag2`, ...
-    const tagsMatch = sectionContent.match(/\*\*tags\*\*\s*[：:]\s*(.+?)(?:\n|$)/);
+    // 提取 triggerTags
+    const tagsMatch = sectionContent.match(/标签[：:]\s*(.+)/);
     const triggerTags: Tag[] = tagsMatch
-      ? tagsMatch[1]
-          .replace(/`/g, "")
-          .split(",")
-          .map((t) => t.trim() as Tag)
-          .filter(Boolean)
-      : [agentType.toLowerCase() as Tag];
+      ? (tagsMatch[1].split(/[，,、\s]+/).filter(Boolean) as Tag[])
+      : ([] as unknown as Tag[]);
 
-    // 提取 trigger: **trigger**: ...
-    const triggerMatch = sectionContent.match(/\*\*trigger\*\*\s*[：:]\s*(.+?)(?:\n|$)/);
+    // 提取 trigger
+    const triggerMatch = sectionContent.match(/触发条件[：:]\s*(.+)/);
     const trigger = triggerMatch
       ? triggerMatch[1].trim()
-      : `当匹配标签 ${agentType} 时触发`;
+      : `P${pNumber}:${agentType}`;
 
-    // 提取步骤：从 "### 配方" 段落中提取编号步骤
-    const recipeMatch = sectionContent.match(/###\s*配方[\s\S]*?(?=\n###|\n##|$)/);
+    // 提取 steps（从"步骤"或"做法"段落）
+    const recipeMatch = sectionContent.match(/步骤[：:]\s*([\s\S]*?)(?=\n#{2,}|\n---|\n$)/);
     let steps: string[] = [];
     if (recipeMatch) {
       const recipeContent = recipeMatch[0];
-      // 提取 "步骤 N: ..." 格式
-      const stepLines = recipeContent.match(/步骤\s*\d+[：:]/g);
+      const stepLines = recipeContent.match(/^\d+[.、]\s*(.+)$/gm);
       if (stepLines) {
-        // 按步骤号分割
-        const stepParts = recipeContent.split(/步骤\s*\d+[：:]/).slice(1);
-        steps = stepParts.map((s) => {
-          // 取第一行作为步骤描述
-          const firstLine = s.split("\n")[0]?.trim() ?? "";
-          return firstLine.replace(/^\s*\d+\.\s*/, "").trim();
-        }).filter((s) => s.length > 0);
+        const stepParts = stepLines.map((s) => s.replace(/^\d+[.、]\s*/, "").trim());
+        steps = stepParts.filter(Boolean);
       }
     }
+
     if (steps.length === 0) {
       steps = ["分析相关代码模式", "遵循已建立的架构约定"];
     }
 
-    // 提取适用条件作为 expectedOutput 的补充
-    const conditionMatch = sectionContent.match(/###\s*(?:适用条件|关键约束)[\s\S]*?(?=\n###|\n##|$)/);
+    // 提取条件作为预期输出
+    const conditionMatch = sectionContent.match(/条件[：:]\s*([\s\S]*?)(?=\n#{2,}|\n---|\n$)/);
     const conditions = conditionMatch
-      ? conditionMatch[0]
-          .split("\n")
-          .filter((l) => l.startsWith("-"))
-          .map((l) => l.replace(/^-\s*/, "").trim())
-          .join("; ")
+      ? conditionMatch[1].split("\n").map((s) => s.trim()).filter(Boolean).join("; ")
       : "";
 
-    const expectedOutput = conditions || `应用 ${name} 模式完成实现`;
+    const expectedOutput = conditions || `P${pNumber}: ${name}`;
 
-    // 生成 skill id
+    // 生成技能名
     const skillName = name.replace(/\s+/g, "-").toLowerCase();
-    const id = `skill-p${pNumber}-${skillName}-${timestamp}`;
+    const id = `P${pNumber}-${skillName}-${timestamp}`;
 
     patterns.push({
       id,
@@ -330,10 +320,10 @@ function extractPNSections(content: string, agentType: AgentType): SkillTemplate
       trigger,
       steps,
       expectedOutput,
-      status: "trial",
+      status: "trial" as const,
       adoptionCount: 0,
       rejectionCount: 0,
-      discoveredBy: "mona-pattern-scan",
+      discoveredBy: "file-scanner-pattern",
       createdAt: timestamp,
     });
   }
@@ -342,64 +332,72 @@ function extractPNSections(content: string, agentType: AgentType): SkillTemplate
 }
 
 /**
- * 从 Markdown 正文提取 "## 模式 N：名称" 格式段落。
+ * 从 Markdown 中提取 "## 模式 N：名称" 格式的章节。
+ * 这些是审查文档中的模式描述。
  */
 function extractPatternSections(content: string, agentType: AgentType): SkillTemplate[] {
   const patterns: SkillTemplate[] = [];
   const timestamp = Date.now();
 
-  // 匹配 "### 模式 N：XXX" 或 "## 模式 N：XXX"
-  const sectionRegex = /(?:^|\n)#{2,3}\s*模式\s*\d+\s*[：:]\s*(.+?)(?:\n|$)/g;
+  // 匹配 "## 模式 N：名称" 或 "## 模式 N: 名称"
+  const sectionRegex = /(?:^|\n)#{2}\s*模式\s*(\d+)\s*[：:]\s*(.+?)(?:\n|$)/g;
   let match: RegExpExecArray | null;
 
   while ((match = sectionRegex.exec(content)) !== null) {
-    const name = match[1].trim();
+    const patternNumber = match[1];
+    const name = match[2].trim();
     const sectionStart = match.index + match[0].length;
 
-    // 提取到下一个同级标题或文件末尾的内容
-    const nextSection = content.slice(sectionStart).search(/\n#{2,3}\s/);
+    // 找下一个章节或到文件末尾
+    const nextSection = content.slice(sectionStart).search(/\n#{2,}\s/);
     const sectionContent = nextSection === -1
       ? content.slice(sectionStart)
       : content.slice(sectionStart, sectionStart + nextSection);
 
-    // 提取触发条件
-    const triggerMatch = sectionContent.match(/(?:触发条件|适用场景)[：:]\s*(.+?)(?:\n|$)/);
-    const trigger = triggerMatch ? triggerMatch[1].trim() : `当匹配标签 ${agentType} 时触发`;
-
-    // 提取标签
-    const tagsMatch = sectionContent.match(/tags\s*[=：:]\s*\[(.+?)\]/);
+    // 提取 triggerTags
+    const tagsMatch = sectionContent.match(/标签[：:]\s*(.+)/);
     const triggerTags: Tag[] = tagsMatch
-      ? tagsMatch[1].split(",").map((t) => t.trim().replace(/["']/g, "")) as Tag[]
-      : [agentType.toLowerCase() as Tag];
+      ? (tagsMatch[1].split(/[，,、\s]+/).filter(Boolean) as Tag[])
+      : ([] as unknown as Tag[]);
+
+    // 提取 trigger
+    const triggerMatch = sectionContent.match(/触发条件[：:]\s*(.+)/);
+    const trigger = triggerMatch
+      ? triggerMatch[1].trim()
+      : `模式${patternNumber}:${agentType}`;
 
     // 提取步骤
-    const stepsMatch = sectionContent.match(/(?:步骤序列|steps)[：:]\s*\n((?:\s*\d+\..+\n?)+)/);
-    let steps: string[];
-    if (stepsMatch) {
-      steps = stepsMatch[1]
-        .split("\n")
-        .map((s) => s.replace(/^\s*\d+\.\s*/, "").trim())
-        .filter(Boolean);
-    } else {
-      steps = ["分析相关代码模式", "遵循已建立的架构约定"];
-    }
+    const stepLines =
+      sectionContent.match(/步骤[：:]\s*([\s\S]*?)(?=\n#{2,}|\n---|\n$)/) ||
+      sectionContent.match(/做法[：:]\s*([\s\S]*?)(?=\n#{2,}|\n---|\n$)/) ||
+      sectionContent.match(/流程[：:]\s*([\s\S]*?)(?=\n#{2,}|\n---|\n$)/);
 
-    // 提取预期产出
-    const outputMatch = sectionContent.match(/(?:预期产出|expectedOutput)[：:]\s*(.+?)(?:\n|$)/);
-    const expectedOutput = outputMatch ? outputMatch[1].trim() : "";
+    const steps: string[] = stepLines
+      ? stepLines[1].split("\n").map((s) => s.trim()).filter(Boolean)
+      : ["参考文档中的模式描述"];
+
+    // 提取预期输出
+    const outputMatch = sectionContent.match(/预期输出[：:]\s*(.+)/);
+    const expectedOutput = outputMatch
+      ? outputMatch[1].trim()
+      : `模式${patternNumber}: ${name}`;
+
+    // 生成技能名
+    const skillName = name.replace(/\s+/g, "-").toLowerCase();
+    const id = `pattern-${patternNumber}-${skillName}-${timestamp}`;
 
     patterns.push({
-      id: `skill-pattern-${name.replace(/\s+/g, "-").toLowerCase()}-${timestamp}`,
+      id,
       agentType,
-      name,
+      name: `模式${patternNumber}: ${name}`,
       triggerTags,
       trigger,
       steps,
       expectedOutput,
-      status: "trial",
+      status: "trial" as const,
       adoptionCount: 0,
       rejectionCount: 0,
-      discoveredBy: "file-scanner",
+      discoveredBy: "file-scanner-pattern",
       createdAt: timestamp,
     });
   }

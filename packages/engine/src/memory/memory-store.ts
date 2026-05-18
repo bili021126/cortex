@@ -17,14 +17,14 @@ import { MemoryLifecycle } from "./lifecycle.js";
 import { MemoryQueryEngine } from "./query.js";
 import { SemiFinishedMgr } from "./semi-finished.js";
 
-// MemoryWriteInput 已迁移至 @cortex/shared —— 从 shared import 即可
-// 迁移原因（艾尔海森 P0）：任何包只要想写入记忆条目就必须构造此接口，
-// 定义在 shared 中可避免各包自行重复定义。
+// MemoryWriteInput 已迁移至 @cortex/shared —— shared import 即可
+// 迁移原因（艾尔海森 P0）：任何包只要想写入记忆条目就必须构造此接口
+// 定义在 shared 中可避免各包自行重复定义
 
 /**
  * MemoryStore —— 内存级记忆存储 + better-sqlite3 持久化（Facade）。
  *
- * @contract 模块边界契约（久岐忍 P1-5：模块边界缺少显式契约化定义 → 已闭合）
+ * @contract 模块边界契约（久岐忍 P1-5：模块边界缺少显式契约化定义 —— 已闭合）
  *
  * @depends  memory/persistence.ts（SQLite 持久化，WAL 模式，write-through）
  * @depends  memory/storage.ts（Map 内存存储 + 反序列化 + peek 冻结副本）
@@ -32,59 +32,41 @@ import { SemiFinishedMgr } from "./semi-finished.js";
  * @depends  memory/query.ts（内存扫描 + BFS 图遍历 + 向量召回）
  * @depends  @cortex/shared（MemoryEntry, MemoryState, MemoryQuery, LinkType 等类型）
  * @dataflow write(input) → MemoryStorage.insert → MemoryPersistence.run (write-through)
- *          → scheduleFlush (防抖) → flush (WAL checkpoint)
- *          read(query) → MemoryQueryEngine.memScanRead/vectorRecall/bfsExpand
- *          → 排序+限量 → MemoryEntry[]
+ *           → scheduleFlush (防抖) → flush (WAL checkpoint)
+ *           read(query) → MemoryQueryEngine.memScanRead/vectorRecall/bfsExpand
+ *           → 排序+限量 → MemoryEntry[]
  *          异常路径：DB 失败回滚内存（假阳性禁止），SQL 失败退化至内存扫描
  *
  *   ┌─ MemoryStore (Facade) ────────────────────────────────────┐
- *   │  write()/read()/link()/cas()/archive()/freeze()/obliterate() │
- *   │  init()/close()/flush()                                     │
+ *   │ write()/read()/link()/cas()/archive()/freeze()/obliterate() │
+ *   │ init()/close()/flush()                                     │
  *   ├───────────────────────────────────────────────────────────┤
- *   │  ┌─ MemoryStorage ──────┐  ┌─ MemoryPersistence ──────┐   │
- *   │  │ Map 内存存储          │  │ SQLite WAL 持久化         │   │
- *   │  │ insert/delete/get     │  │ init/close/run/runBatch   │   │
- *   │  │ peek (冻结副本)       │  │ sqlRead/flush/scheduleFlush│  │
- *   │  │ deserializeRow        │  │ updateAccessTracking      │   │
- *   │  └──────────────────────┘  └───────────────────────────┘   │
- *   │  ┌─ MemoryLifecycle ────┐  ┌─ MemoryQueryEngine ──────┐   │
- *   │  │ 四态状态机 CAS        │  │ 内存扫描 + BFS 图遍历     │   │
- *   │  │ archive/freeze/       │  │ 向量召回                  │   │
- *   │  │ obliterate            │  │                           │   │
- *   │  └──────────────────────┘  └───────────────────────────┘   │
- *   └───────────────────────────────────────────────────────────┘
- *
- * 委托组件：
- * - MemoryStorage    —— Map 存储 + 反序列化
- * - MemoryPersistence —— SQLite 持久化（WAL 模式）
- * - MemoryLifecycle  —— 四态状态机（CAS / archive / freeze / obliterate）
- * - MemoryQueryEngine —— 内存扫描 + BFS 图遍历展开
- *
- * - 不调 init()：纯内存（向后兼容，测试用）
- * - 调 init(dbPath)：SQLite WAL 持久化，实时 write-through，重启不丢
- *
- * 30 天 TTL：标记但不真删。read() 自动过滤过期 ACTIVE 记忆。
- *
- *   异常语义（跨模块契约）：
- *   - write()：DB 失败回滚内存 delete(id)，抛出异常（非静默吞错）
- *   - read()：SQL 查询失败自动退化至内存扫描（MemorySqlDegraded）
- *   - cas()：持久化失败回滚 state（Persist-False-Positive 判例）
- *   - link()：DB 失败回滚内存 pop()
- *   - close()：仅 active 态执行，先 flush 再关闭
- *
- * @fix D3 — read() 添加关闭保护，与 write() 一致
- * @fix D5 — link() 移除未使用的 _creatorId 参数
+ *   │ ┌─ MemoryStorage ──────┐ ┌─ MemoryPersistence ──────┐  │
+ *   │ │ Map 内存存储          │ │ SQLite WAL 持久化         │  │
+ *   │ │ insert/delete/get     │ │ init/close/run/runBatch   │  │
+ *   │ │ peek (冻结副本)       │ │ sqlRead/flush/scheduleFlush│  │
+ *   │ │ deserializeRow        │ │ updateAccessTracking      │  │
+ *   │ └──────────────────────┘ └───────────────────────────┘  │
+ *   │ ┌─ MemoryLifecycle ────┐ ┌─ MemoryQueryEngine ──────┐  │
+ *   │ │ CAS 状态机            │ │ memScanRead               │  │
+ *   │ │ archive/freeze/       │ │ vectorRecall              │  │
+ *   │ │ obliterate            │ │ bfsExpand                 │  │
+ *   │ └──────────────────────┘ └───────────────────────────┘  │
+ *   │ ┌─ SemiFinishedMgr ────┐                               │
+ *   │ │ writePending/commit   │                               │
+ *   │ └──────────────────────┘                               │
+ *   └─────────────────────────────────────────────────────────┘
  */
 export class MemoryStore {
   private _storage: MemoryStorage;
   private _persistence: MemoryPersistence;
   private _lifecycle: MemoryLifecycle;
   private _queryEngine: MemoryQueryEngine;
-  /** P0-六层防御：两阶段提交管理器 */
+  /** P0 — 半成品管理 */
   private _semiFinished: SemiFinishedMgr;
   private _observer?: PipelineObserver;
 
-  /** 持久化模式版本——变更时需编写迁移逻辑（委托自 schema.ts） */
+  /** 公开 schema 版本常量，供外部校验 */
   static readonly SCHEMA_VERSION = SCHEMA_VERSION;
 
   constructor(observer?: PipelineObserver) {
@@ -97,8 +79,8 @@ export class MemoryStore {
   }
 
   /**
-   * 启用 SQLite 持久化。
-   * 不调用则纯内存运行。
+   * 初始化持久化层（SQLite 建表 + 加载数据）
+   * @fix D4 — 防止两次 init() 导致 DB 连接泄漏
    */
   async init(dbPath: string): Promise<void> {
     await this._persistence.init(dbPath, this._storage);
@@ -109,18 +91,22 @@ export class MemoryStore {
     return this._persistence.isEnabled;
   }
 
-  // ── 写入 ────────────────────────────────────────
-
-  /** 写入一条记忆。返回生成的 id。 */
+  /**
+   * 写入一条记忆（内存 + DB write-through）
+   *
+   * 流程：Storage.insert → Persistence.run → scheduleFlush
+   * 异常路径：DB 失败时回滚内存（假阳性禁止原则）
+   */
   write(input: MemoryWriteInput): string {
+    // M3: 关闭保护 — 非 active 态拒绝写入
     if (this._persistence.lifecycle !== "active") {
-      throw new Error(`MemoryStore 已关闭 (状态: ${this._persistence.lifecycle})，拒绝写入`);
+      throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝写入`);
     }
 
-    // M3: 校验 embedding 维度
+    // embedding 维度校验（Xiaofei P0）
     if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
       throw new Error(
-        `embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`,
+        `Embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`
       );
     }
 
@@ -130,31 +116,30 @@ export class MemoryStore {
     if (this._persistence.isEnabled) {
       try {
         this._persistence.run(
-          `INSERT INTO memories (id, memory_type, state, content, summary, agent_type, creator_id, created_at, last_accessed_at, access_count, weight, project_fingerprint, metadata, is_private, embedding)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO memories (id, memory_type, state, sub_type, content, summary, agent_type, creator_id, created_at, updated_at, last_accessed_at, access_count, weight, metadata, embedding, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             entry.id,
             entry.memoryType,
             entry.state,
-            JSON.stringify(entry.content),
+            entry.subType ?? null,
+            entry.content ? JSON.stringify(entry.content) : null,
             entry.summary,
             entry.agentType,
             entry.creatorId,
             entry.createdAt,
+            entry.createdAt, // updated_at 初始值同 created_at
             entry.lastAccessedAt,
             entry.accessCount,
             entry.weight,
-            entry.projectFingerprint ?? null,
-            entry.metadata ? JSON.stringify(entry.metadata) : null,
+            entry.metadata ? JSON.stringify(entry.metadata) : "{}",
+            entry.embedding ? JSON.stringify(entry.embedding) : null,
             entry.isPrivate ? 1 : 0,
-            entry.embedding ? Buffer.from(new Float32Array(entry.embedding).buffer) : null,
           ],
-          "write",
+          "write"
         );
         this._persistence.scheduleFlush();
       } catch (e) {
-        // 假阳性禁止原则：DB 失败回滚内存
-        this._storage.delete(id);
+        this._storage.memories.delete(id);
         throw e;
       }
     }
@@ -162,59 +147,72 @@ export class MemoryStore {
     return id;
   }
 
-  // ── 读取 ────────────────────────────────────────
-
+  /**
+   * 读取记忆（SQLite 优先 → 内存保底）
+   *
+   * 返回按 weight 排序的 MemoryEntry 列表
+   */
   read(query: MemoryQuery): MemoryEntry[] {
-    // D3: 关闭保护 —— read() 在非 active 态时抛出异常，与 write() 一致
+    // D3: 关闭保护 — read() 在非 active 态时抛出异常，与 write() 一致
     if (this._persistence.lifecycle !== "active") {
-      throw new Error(`MemoryStore 已关闭 (状态: ${this._persistence.lifecycle})，拒绝读取`);
+      throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝读取`);
     }
 
     const now = Date.now();
-
-    const mode = query.queryMode ?? 'csa';
-    const resolvedBfsDepth = query.bfsDepth ?? (mode === 'hca' ? 1 : 2);
+    const mode = query.queryMode ?? "csa";
+    const resolvedBfsDepth = query.bfsDepth ?? (mode === "hca" ? 1 : 2);
     const resolvedBfsMaxNodes = query.bfsMaxNodes ?? 20;
-    const resolvedTrackAccess = query.trackAccess ?? (mode === 'csa');
-    const resolvedLimit = query.limit ?? (mode === 'hca' ? 10 : 3);
+    const resolvedTrackAccess = query.trackAccess ?? (mode === "csa");
+    const resolvedLimit = query.limit ?? (mode === "hca" ? 10 : 3);
 
-    // 阶段 1：获取候选集
-    let results: MemoryEntry[];
+    let results: MemoryEntry[] = [];
+
     if (this._persistence.isEnabled) {
       results = this._persistenceRead(query, now);
     } else {
       results = this._queryEngine.memScanRead(this._storage, query, now);
     }
 
-    // 阶段 1.5：向量粗召（仅在 query.queryEmbedding 提供时运行）
+    // 向量召回（如果 query 提供了 embedding）
     if (query.queryEmbedding && results.length > 0) {
       const topK = query.vectorTopK ?? 50;
       results = this._queryEngine.vectorRecall(query.queryEmbedding, results, topK);
     }
 
-    // 阶段 2：BFS 图遍历
+    // BFS 链路展开
     if (resolvedBfsDepth > 0 && results.length > 0) {
-      const resolvedBfsDirection = query.bfsDirection ?? 'outbound';
-      results = this._queryEngine.bfsExpand(this._storage, results, resolvedBfsDepth, resolvedBfsMaxNodes, query.linkTypes, resolvedBfsDirection);
+      const resolvedBfsDirection = query.bfsDirection ?? "outbound";
+      results = this._queryEngine.bfsExpand(
+        this._storage,
+        results,
+        resolvedBfsDepth,
+        resolvedBfsMaxNodes,
+        query.linkTypes,
+        resolvedBfsDirection
+      );
     }
 
-    // 阶段 3：访问统计刷新
+    // 追踪访问（csa 模式下记录 accessCount + lastAccessedAt）
     if (resolvedTrackAccess) {
-      // M5: 使用更安全的原始值保存方式
-      const originals = new Map(results.map(m => [m.id, { accessCount: m.accessCount, lastAccessedAt: m.lastAccessedAt }]));
+      // 记录变更前的值，用于持久化
+      const originals = new Map(results.map((m) => [m.id, { accessCount: m.accessCount, lastAccessedAt: m.lastAccessedAt }]));
 
       for (const m of results) {
         m.accessCount++;
         m.lastAccessedAt = now;
       }
+
+      // 持久化访问追踪（DB 失败不阻塞读取，降级忽略）
       if (this._persistence.isEnabled && results.length > 0) {
         try {
-          this._persistence.updateAccessTracking(
-            results.map((m) => ({ id: m.id, accessCount: m.accessCount, lastAccessedAt: m.lastAccessedAt })),
+          this._persistence.runBatch(
+            "UPDATE memories SET access_count = ?, last_accessed_at = ? WHERE id = ?",
+            results.map((m) => [m.accessCount, m.lastAccessedAt, m.id]),
+            "read.trackAccess"
           );
-          void this._persistence.scheduleFlush();
+          this._persistence.scheduleFlush();
         } catch (e) {
-          // 回滚：从 originals Map 恢复原始值
+          // 访问追踪失败 → 回滚内存中的 accessCount 和 lastAccessedAt
           for (const m of results) {
             const orig = originals.get(m.id);
             if (orig) {
@@ -222,30 +220,23 @@ export class MemoryStore {
               m.lastAccessedAt = orig.lastAccessedAt;
             }
           }
+          // DB 读取降级：若 observer 存在则发射 sql_degraded 事件
           if (this._observer) {
             this._observer.emit({
-              type: PipelineEventType.MemoryDbWriteFailed,
-              priority: PipelinePriority.CRITICAL,
-              payload: { opName: "read.access_tracking", error: String(e).slice(0, 300) },
+              type: PipelineEventType.MemorySqlDegraded,
+              priority: PipelinePriority.NORMAL,
+              payload: { operation: "trackAccess", detail: String(e).slice(0, 200) },
               timestamp: Date.now(),
-              notificationType: "WARNING",
             });
           }
         }
       }
     }
 
-    // 阶段 3.5：时间衰减 weight——越旧的记忆权重越低
-    // 衰减公式：weight_new = weight_old * max(0.1, 1 - ageDays / 30)
-    // 30 天后记忆降至原始权重的 10%（硬地板），保证老旧记忆不会完全消失
-    for (const m of results) {
-      const ageDays = (now - m.createdAt) / (1000 * 60 * 60 * 24);
-      const decayFactor = Math.max(0.1, 1 - ageDays / 30);
-      m.weight = +(m.weight * decayFactor).toFixed(4);
-    }
-
-    // 阶段 4：排序 + 限量
+    // 按 weight 降序排列
     results.sort((a, b) => b.weight - a.weight);
+
+    // 截取
     if (resolvedLimit > 0) {
       results = results.slice(0, resolvedLimit);
     }
@@ -253,9 +244,18 @@ export class MemoryStore {
     return results;
   }
 
-  // ── 关联 ────────────────────────────────────────
-
+  /**
+   * 在两条记忆之间建立关联（内存 + DB write-through）
+   *
+   * 流程：内存写入 → Persistence.run → scheduleFlush
+   * 异常路径：DB 失败时回滚内存（existing.pop）
+   */
   link(sourceId: string, targetId: string, linkType: LinkType): MemoryLink | null {
+    // 生命周期守卫 — 与 write()/writePending() 一致
+    if (this._persistence.lifecycle !== "active") {
+      throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝写入`);
+    }
+
     const source = this._storage.memories.get(sourceId);
     const target = this._storage.memories.get(targetId);
     if (!source || !target) return null;
@@ -267,16 +267,14 @@ export class MemoryStore {
       this._storage.links.set(sourceId, existing);
     }
 
-    // 幂等去重
+    // 幂等去重（AccessedDuring 是特殊 linkType，允许重复）
     if (linkType !== LinkType.AccessedDuring) {
-      if (existing.some((l) => l.targetId === targetId && l.linkType === linkType)) {
-        return null;
-      }
+      if (existing.some(l => l.targetId === targetId && l.linkType === linkType)) return null;
     }
 
     const now = Date.now();
     const link: MemoryLink = {
-      id: `link-${crypto.randomUUID()}`,
+      id: `link_${crypto.randomUUID()}`,
       sourceId,
       targetId,
       linkType,
@@ -284,16 +282,14 @@ export class MemoryStore {
       targetState: target.state,
       lastAccessedAt: now,
     };
-
     existing.push(link);
 
     if (this._persistence.isEnabled) {
       try {
         this._persistence.run(
-          `INSERT INTO links (id, source_id, target_id, link_type, weight, target_state, last_accessed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [link.id, link.sourceId, link.targetId, link.linkType, link.weight, link.targetState, link.lastAccessedAt],
-          "link",
+          `INSERT INTO links (id, source_id, target_id, link_type, weight, target_state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [link.id, link.sourceId, link.targetId, link.linkType, link.weight, link.targetState, now],
+          "link"
         );
         this._persistence.scheduleFlush();
       } catch (e) {
@@ -309,12 +305,15 @@ export class MemoryStore {
     return this._storage.links.get(sourceId) ?? [];
   }
 
-  // ── 四态状态机 ────────────────────────────────
-
   has(memoryId: string): boolean {
     return this._storage.memories.has(memoryId);
   }
 
+  /**
+   * CAS 状态变更 — 委托 MemoryLifecycle
+   *
+   * @fix Core-1 CAS 封闭：所有状态变更必须经过此处，不允许外部直接修改 state
+   */
   cas(memoryId: string, expected: MemoryState, newState: MemoryState): boolean {
     return this._lifecycle.cas(
       this._storage, memoryId, expected, newState,
@@ -334,11 +333,11 @@ export class MemoryStore {
     return this._lifecycle.obliterate(this._storage, memoryId, this._statePersistFn("obliterate"));
   }
 
-  // ── P0-六层防御：两阶段提交 ──────────────────
-
   /**
-   * 写入一条半成品记忆（Pending 状态，subType=Intent）。
-   * Agent pipeline 产出后先走此路径，经验证再 commit。
+   * 写入一条半成品记忆（semifinished — Pending 状态）
+   *
+   * 流程：SemiFinishedMgr.writePending → Persistence.run → scheduleFlush
+   * 异常路径：DB 失败时回滚内存（假阳性禁止原则）
    */
   writePending(input: MemoryWriteInput): string {
     if (this._persistence.lifecycle !== "active") {
@@ -347,7 +346,7 @@ export class MemoryStore {
 
     if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
       throw new Error(
-        `embedding 维度不匹配，期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`,
+        `Embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`
       );
     }
 
@@ -359,21 +358,24 @@ export class MemoryStore {
       if (entry) {
         try {
           this._persistence.run(
-            `INSERT INTO memories (id, memory_type, state, sub_type, content, summary, agent_type, creator_id, created_at, last_accessed_at, access_count, weight, project_fingerprint, metadata, is_private, embedding)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO memories (id, memory_type, state, sub_type, content, summary, agent_type, creator_id, created_at, updated_at, last_accessed_at, access_count, weight, metadata, embedding, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              entry.id, entry.memoryType, entry.state, entry.subType,
-              JSON.stringify(entry.content), entry.summary ?? "", entry.agentType, entry.creatorId,
-              entry.createdAt, entry.lastAccessedAt, entry.accessCount, entry.weight,
-              entry.projectFingerprint ?? null, entry.metadata ? JSON.stringify(entry.metadata) : null,
+              entry.id, entry.memoryType, entry.state,
+              entry.subType ?? null,
+              entry.content ? JSON.stringify(entry.content) : null,
+              entry.summary, entry.agentType, entry.creatorId,
+              entry.createdAt, entry.createdAt, // updated_at = created_at
+              entry.lastAccessedAt, entry.accessCount,
+              entry.weight,
+              entry.metadata ? JSON.stringify(entry.metadata) : "{}",
+              entry.embedding ? JSON.stringify(entry.embedding) : null,
               entry.isPrivate ? 1 : 0,
-              entry.embedding ? Buffer.from(new Float32Array(entry.embedding).buffer) : null,
             ],
-            "writePending",
+            "writePending"
           );
-          void this._persistence.scheduleFlush();
+          this._persistence.scheduleFlush();
         } catch (e) {
-          this._storage.delete(id);
+          this._storage.memories.delete(id);
           throw e;
         }
       }
@@ -383,7 +385,10 @@ export class MemoryStore {
   }
 
   /**
-   * 提交半成品记忆：Pending → Active，subType 翻转 Intent→Fact。
+   * 提交半成品 → Active
+   *
+   * 委托 SemiFinishedMgr.commit，其内部使用 _statePersistFn 持久化状态变更。
+   * isEnabled 为 true 时传入回调 persister，否则为 undefined（纯内存操作）。
    */
   commitMemory(memoryId: string): boolean {
     const ok = this._semiFinished.commit(
@@ -392,24 +397,21 @@ export class MemoryStore {
       this._persistence.isEnabled
         ? (id: string, subType: MemorySubType) => {
             this._persistence.run(
-              "UPDATE memories SET sub_type = ? WHERE id = ?",
+              `UPDATE memories SET state = 'ACTIVE', sub_type = ? WHERE id = ?`,
               [subType, id],
-              "commitMemory-subType",
+              "commitMemory"
             );
-            void this._persistence.scheduleFlush();
+            this._persistence.scheduleFlush();
           }
-        : undefined,
+        : undefined
     );
-
     return ok;
   }
 
-  /** 获取所有 Pending 状态记忆 */
   getPending(): MemoryEntry[] {
     return this._semiFinished.getPending(this._storage);
   }
 
-  /** 是否有 Pending 记忆 */
   hasPending(): boolean {
     return this._semiFinished.hasPending(this._storage);
   }
@@ -430,20 +432,24 @@ export class MemoryStore {
     await this._persistence.close();
   }
 
-  // ── 内部：持久化回调工厂  ─────────────────────
-
-  /** 生成状态变更持久化回调（供 MemoryLifecycle 使用） */
+  /**
+   * 生成状态持久化回调（供 MemoryLifecycle 使用）
+   *
+   * 返回一个函数，调用 persistence.run() 写入状态变更 + scheduleFlush
+   */
   private _statePersistFn(opName: string): ((id: string, state: MemoryState) => void) | undefined {
     if (!this._persistence.isEnabled) return undefined;
     return (id: string, state: MemoryState) => {
       this._persistence.run("UPDATE memories SET state = ? WHERE id = ?", [state, id], opName);
-      void this._persistence.scheduleFlush();
+      this._persistence.scheduleFlush();
     };
   }
 
-  // ── 内部：查询委托 ─────────────────────────────
-
-  /** 通过 Persistence 层 SQL 查询，反序列化为 MemoryEntry[] */
+  /**
+   * SQLite 读取 → 反序列化
+   *
+   * DB 异常时降级至内存扫描（memScanRead + 日志警告）
+   */
   private _persistenceRead(query: MemoryQuery, now: number): MemoryEntry[] {
     try {
       const rawRows = this._persistence.sqlRead(query, now);
@@ -452,31 +458,28 @@ export class MemoryStore {
         const entry = this._storage.deserializeRow(raw);
         if (entry) rows.push(entry);
       }
-      // metadata 过滤（SQL 层不做 JSON 子串匹配）
+
       if (query.metadataFilter && Object.keys(query.metadataFilter).length > 0) {
         return rows.filter((m) => {
           if (!m.metadata) return false;
-          return Object.entries(query.metadataFilter!).every(
-            ([k, v]) => m.metadata![k] === v,
-          );
+          return Object.entries(query.metadataFilter!).every(([k, v]) => m.metadata![k] === v);
         });
       }
+
       return rows;
     } catch (e) {
-      // SQL 出错时退回内存扫描
+      // 上报异常
       if (this._observer) {
         this._observer.emit({
           type: PipelineEventType.MemorySqlDegraded,
-          priority: PipelinePriority.HIGH,
-          payload: { error: String(e).slice(0, 200) },
+          priority: PipelinePriority.NORMAL,
+          payload: { operation: "sqlRead", detail: String(e).slice(0, 200) },
           timestamp: Date.now(),
-          notificationType: "WARNING",
         });
       } else {
-        console.warn(`[MemoryStore] SQL 查询退化至内存扫描: ${String(e).slice(0, 200)}`);
+        console.warn(`[MemoryStore] SQLite 读取失败，降级至内存扫描: ${e}`);
       }
       return this._queryEngine.memScanRead(this._storage, query, now);
     }
   }
-
 }

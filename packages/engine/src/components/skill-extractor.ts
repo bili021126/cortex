@@ -1,5 +1,5 @@
 import type { SkillTemplate, Tag } from "@cortex/shared";
-import { AgentType, TAG_VOCABULARY } from "@cortex/shared";
+import { AgentType, getTagVocabulary } from "@cortex/shared";
 
 /** 提取结果：成功提取的技能 + 解析诊断信息 */
 export interface SkillExtractResult {
@@ -214,7 +214,7 @@ function normalizeTriggerTags(
     diagnostics.push(`技能 ${skillId} triggerTags 不是数组，设为空`);
     return [];
   }
-  const vocabSet = new Set<string>(TAG_VOCABULARY);
+  const vocabSet = new Set<string>(getTagVocabulary());
   const tags = raw
     .filter((t): t is string => typeof t === "string")
     .filter((t) => {

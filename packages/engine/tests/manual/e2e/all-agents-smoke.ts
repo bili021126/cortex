@@ -19,17 +19,18 @@ import { PipelineEventType, PipelinePriority, type TaskNode, type SafeErrorRepor
 import { LlmAdapter } from "@cortex/llm";
 
 // ── Agent 导入 ──
-import { CodeAgent } from "../../../src/agents/code-agent.js";
-import { ReviewAgent } from "../../../src/agents/review-agent.js";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent.js";
-import { OpsAgent } from "../../../src/agents/ops-agent.js";
-import { LoopAgent } from "../../../src/agents/loop-agent.js";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent.js";
-import { ApiAgent } from "../../../src/agents/api-agent.js";
-import { DataAgent } from "../../../src/agents/data-agent.js";
-import { FixAgent } from "../../../src/agents/fix-agent.js";
-import { InspectorAgent } from "../../../src/agents/inspector-agent.js";
-import { BrowserAgent } from "../../../src/agents/browser-agent.js";
+import { createAgent } from "../../../src/components/agent-factory.js";
+import { codeAgentConfig } from "../../../src/agents/code-agent.js";
+import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
+import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
+import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
+import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
+import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
+import { apiAgentConfig } from "../../../src/agents/api-agent.js";
+import { dataAgentConfig } from "../../../src/agents/data-agent.js";
+import { fixAgentConfig } from "../../../src/agents/fix-agent.js";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { createBrowserAgent } from "../../../src/agents/browser-agent.js";
 import { ButlerAgent } from "../../../src/agents/butler-agent.js";
 
 // ── 基础设施 ──
@@ -316,7 +317,7 @@ async function main() {
       case "code": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new CodeAgent(adapter, tk, memory);
+        const agent = createAgent(codeAgentConfig(), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("CodeAgent (阿贝多)", () => ({ agent, node }));
         break;
@@ -324,7 +325,7 @@ async function main() {
       case "review": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new ReviewAgent(adapter, tk, memory);
+        const agent = createAgent(reviewAgentConfig(), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("ReviewAgent (刻晴)", () => ({ agent, node }));
         break;
@@ -332,7 +333,7 @@ async function main() {
       case "analysis": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new AnalysisAgent(adapter, tk, memory);
+        const agent = createAgent(analysisAgentConfig(), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("AnalysisAgent (纳西妲)", () => ({ agent, node }));
         break;
@@ -340,7 +341,7 @@ async function main() {
       case "ops": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new OpsAgent(adapter, tk);
+        const agent = createAgent(opsAgentConfig(), adapter, tk);
         agent.setSafeReporter(safeReporter);
         await testAgent("OpsAgent (北斗)", () => ({ agent, node }));
         break;
@@ -348,7 +349,7 @@ async function main() {
       case "loop": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new LoopAgent(adapter, tk);
+        const agent = createAgent(loopAgentConfig(), adapter, tk);
         agent.setSafeReporter(safeReporter);
         await testAgent("LoopAgent (莫娜)", () => ({ agent, node }));
         break;
@@ -356,7 +357,7 @@ async function main() {
       case "docGovern": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new DocGovernAgent(adapter, tk, memory);
+        const agent = createAgent(docGovernAgentConfig(), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("DocGovernAgent (凝光)", () => ({ agent, node }));
         break;
@@ -364,7 +365,7 @@ async function main() {
       case "api": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new ApiAgent(adapter, tk, memory);
+        const agent = createAgent(apiAgentConfig(), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("ApiAgent (久岐忍)", () => ({ agent, node }));
         break;
@@ -372,7 +373,7 @@ async function main() {
       case "data": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new DataAgent(adapter, tk, memory);
+        const agent = createAgent(dataAgentConfig(), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("DataAgent (艾尔海森)", () => ({ agent, node }));
         break;
@@ -380,7 +381,7 @@ async function main() {
       case "fix": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new FixAgent(adapter, tk, memory);
+        const agent = createAgent(fixAgentConfig(), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("FixAgent (希格雯)", () => ({ agent, node }));
         break;
@@ -388,7 +389,7 @@ async function main() {
       case "inspector": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = new InspectorAgent(adapter, tk);
+        const agent = createInspectorAgent(adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         agent.setWorkspaceRoot(WORKSPACE);
         await testAgent("InspectorAgent (安柏)", () => ({ agent, node }));
@@ -404,7 +405,7 @@ async function main() {
     console.log(`  🟡 ${label} 生命周期验证...`);
     try {
       const browserTk = new Toolkit(gate);
-      const browserAgent = new BrowserAgent(adapter, browserTk);
+      const browserAgent = createBrowserAgent(adapter, browserTk, memory);
       await browserAgent.wakeup();
       const statusOk = browserAgent.status === AS.Awake;
       await browserAgent.shutdown();

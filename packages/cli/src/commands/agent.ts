@@ -9,7 +9,7 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
-import { AgentType, AgentStatus, AGENT_TAGS, AGENT_TOOL_PERMISSIONS } from "@cortex/shared";
+import { AgentType, AgentStatus, getAgentTags, getAgentToolPermissions } from "@cortex/shared";
 
 export function createAgentHandler(bridge: EngineBridge): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
@@ -109,7 +109,7 @@ async function handleAgentList(
     const count = p.count(type);
     const statuses = p.getStatuses(type);
     const hasAwake = p.hasAwake(type);
-    const tags = AGENT_TAGS[type as AgentType] ?? [];
+    const tags = getAgentTags()[type as AgentType] ?? [];
 
     const displayStatus = statuses.length > 0 ? statuses[0] : (count > 0 ? "awake" : "-");
 
@@ -120,7 +120,7 @@ async function handleAgentList(
     const instanceStr = String(count);
 
     if (verbose) {
-      const permissions = (AGENT_TOOL_PERMISSIONS[type as AgentType] ?? []).join(", ");
+      const permissions = (getAgentToolPermissions()[type as AgentType] ?? []).join(", ");
       rows.push([type, statusStr, instanceStr, tags.join(", "), permissions || "(无)"]);
     } else {
       rows.push([type, statusStr, instanceStr, tags.join(", ")]);
@@ -163,8 +163,8 @@ async function handleAgentInspect(
   const agentType = typeName as AgentType;
   const count = p.count(agentType);
   const statuses = p.getStatuses(agentType);
-  const tags = AGENT_TAGS[agentType as AgentType] ?? [];
-  const permissions = AGENT_TOOL_PERMISSIONS[agentType as AgentType] ?? [];
+  const tags = getAgentTags()[agentType as AgentType] ?? [];
+  const permissions = getAgentToolPermissions()[agentType as AgentType] ?? [];
 
   return {
     success: true,

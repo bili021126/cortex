@@ -63,6 +63,12 @@ export class ConsistencyLayer {
         "InitVerifier 已静默禁用。记忆-现实一致性校验（六层防御第一道防线）将不生效。",
       );
     }
+    if (!this._config.enableInitVerifier) {
+      console.warn(
+        "[ConsistencyLayer] InitVerifier 已显式禁用 (enableInitVerifier=false)。" +
+        "记忆-现实一致性校验（六层防御第一道防线）将不生效。",
+      );
+    }
     this._initVerifier = this._config.enableInitVerifier && this._config.fs
       ? new InitVerifier(memory, this._config.fs, this._config.projectRoot, this._config.failThreshold)
       : null;

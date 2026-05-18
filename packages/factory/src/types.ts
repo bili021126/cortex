@@ -1,0 +1,157 @@
+// ============================================================
+// @cortex/factory — 配置引擎类型域
+//
+// factory 包是 Cortex 的唯一配置读取入口。
+// 所有运行时配置经此加载、校验、组装。
+// ============================================================
+
+import type { AgentType } from "@cortex/shared";
+import type { RouteTableMap, MergeRule } from "@cortex/notification";
+
+// ─── cortex-agents.json 类型 ─────────────────────────
+
+/** 单个 Agent 定义 */
+export interface AgentDefinition {
+  /** Agent 标识（如 "ganyu", "albedo"） */
+  id: string;
+  /** Agent 类型 */
+  type: AgentType;
+  /** 角色名（人类可读） */
+  role: string;
+  /** 系统提示词 */
+  systemPrompt: string;
+  /** 生产的事件类型列表 */
+  produces: string[];
+  /** 使用的模型 */
+  model: string;
+  /** API key 分组 */
+  key: string;
+  /** 最大实例数（默认 1） */
+  maxInstances?: number;
+  /** 认领标签（用于 Scheduler 匹配分发） */
+  tags?: string[];
+  /** 工具权限列表（用于 Toolkit 权限校验） */
+  toolPermissions?: string[];
+  /** 记忆查询策略名（如 "code", "review", "analysis"，用于 MemoryStore 检索） */
+  memoryQueryStrategy?: string;
+  /** 规划系统提示词（仅 meta agent 使用） */
+  planningPrompt?: string;
+  /** 重规划系统提示词（仅 meta agent 使用） */
+  replanPrompt?: string;
+}
+
+/** 事件路由配置 */
+export interface EventRoutingConfig {
+  /** 路由表——eventType → channel + ackRequired */
+  routeTable: RouteTableMap;
+  /** 通道配置覆盖 */
+  channels?: Record<string, unknown>;
+  /** 归并规则 */
+  mergeRules?: MergeRule[];
+  /** 委员会召集规则 */
+  committeeRules?: CommitteeRule[];
+}
+
+/** 委员会召集规则 */
+export interface CommitteeRule {
+  /** 规则 ID */
+  id: string;
+  /** 触发事件类型 */
+  triggerEvent: string;
+  /** 参与的 Agent 类型列表 */
+  members: AgentType[];
+  /** 是否紧急召集（跳过议程队列） */
+  urgent: boolean;
+}
+
+/** 圆桌会议模板 */
+export interface RoundtableTemplate {
+  /** 模板名称（用于 `cortex roundtable start <name>`） */
+  name: string;
+  /** 人类可读描述 */
+  description: string;
+  /** 参与 Persona 数 */
+  personas: number;
+  /** 轮次数 */
+  rounds: number;
+  /** 参与的 Agent Persona 名列表 */
+  agents: string[];
+}
+
+/** cortex-agents.json 顶层结构 */
+export interface CortexAgentsConfig {
+  agents: Record<string, AgentDefinition>;
+  eventRouting: EventRoutingConfig;
+  /** 圆桌会议模板（可选） */
+  roundtableTemplates?: RoundtableTemplate[];
+}
+
+// ─── cortex-cognition.json 类型 ──────────────────────
+
+/** 激活矩阵项 */
+export interface ActivationEntry {
+  /** Agent 类型 */
+  agentType: AgentType;
+  /** 默认是否激活 */
+  active: boolean;
+  /** 取向覆写 */
+  orientation?: string;
+}
+
+/** 注意力策略 */
+export interface AttentionStrategy {
+  /** HCA 权重（近期上下文注意力） */
+  hcaWeight: number;
+  /** CSA 权重（压缩语义注意力） */
+  csaWeight: number;
+  /** 最大记忆条数 */
+  maxMemoryItems: number;
+}
+
+/** cortex-cognition.json 顶层结构 */
+export interface CortexCognitionConfig {
+  /** 激活矩阵 */
+  activationMatrix: ActivationEntry[];
+  /** 注意力策略 */
+  attention: AttentionStrategy;
+}
+
+// ─── cortex-docs.json 类型 ───────────────────────────
+
+/** 文档注册项 */
+export interface DocEntry {
+  /** 文档路径（相对项目根） */
+  path: string;
+  /** 文档类型 */
+  type: "constitution" | "design" | "audit" | "review" | "governance";
+  /** 版本 */
+  version: string;
+  /** 是否正史文档 */
+  canonical: boolean;
+}
+
+/** cortex-docs.json 顶层结构 */
+export interface CortexDocsConfig {
+  /** 宪法路径 */
+  constitutionPath: string;
+  /** 文档注册表 */
+  docRegistry: DocEntry[];
+}
+
+// ─── Bootstrap 结果 ─────────────────────────────────
+
+/** Bootstrap 完整结果——所有组装好的运行时对象 */
+export interface BootstrapResult {
+  /** Agent 定义列表（供 Scheduler 注册） */
+  agentDefinitions: AgentDefinition[];
+  /** 事件路由配置（供 NotificationPipe 加载） */
+  eventRouting: EventRoutingConfig;
+  /** 认知配置（供激活矩阵加载） */
+  cognition: CortexCognitionConfig;
+  /** 文档配置（供 DocRegistry 加载） */
+  docs: CortexDocsConfig;
+  /** 圆桌会议模板（供 roundtable 命令加载） */
+  roundtableTemplates: RoundtableTemplate[];
+  /** 校验警告 */
+  warnings: string[];
+}

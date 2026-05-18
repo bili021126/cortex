@@ -1,42 +1,43 @@
 /**
- * 计算器系�?—�?专家协作闭环 E2E
+ * 计算器系统 —— 专家协作闭环 E2E
  *
  * 用法: npx tsx tests/manual/calculator-e2e.ts
- * 前提: 项目根目�?.env 已配�?DEEPSEEK_API_KEY
+ * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY
  *
- * 场景：阿贝多写计算器代码 �?阿贝多写测试 �?安柏编译测试 �?刻晴审查 �?阿贝多修�?
- * 这不�?Mock，所有工具调用都是真实的。编译输出、测试结果、计算答案——全都是真的�?
+ * 场景：阿贝多写计算器代码 →阿贝多写测试 →安柏编译测试 →刻晴审查 →阿贝多修复
+ * 这不是 Mock，所有工具调用都是真实的。编译输出、测试结果、计算答案——全都是真的。
  *
  * 三位专家的灵魂：
- *   CodeAgent (阿贝�?   �?�?PRODUCED_BY/REFACTORED_FROM 记忆 �?工人视角
- *   InspectorAgent (安柏) �?前置 child_process 采集 tsc/vitest �?确定性事�?
- *   ReviewAgent (刻晴)    �?�?CITED_IN_COMMITTEE/REFACTORED_FROM 记忆 �?历史审视
+ *   CodeAgent (阿贝多)   —— PRODUCED_BY/REFACTORED_FROM 记忆 —— 工人视角
+ *   InspectorAgent (安柏) —— 前置 child_process 采集 tsc/vitest —— 确定性事实
+ *   ReviewAgent (刻晴)    —— CITED_IN_COMMITTEE/REFACTORED_FROM 记忆 —— 历史审视
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, MemoryType, LinkType, PipelinePriority, type TaskNode } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { TaskBoard } from "../../../src/task-board";
-import { AgentPool } from "../../../src/agent-pool";
-import { CodeAgent } from "../../../src/agents/code-agent";
-import { ReviewAgent } from "../../../src/agents/review-agent";
-import { InspectorAgent } from "../../../src/agents/inspector-agent";
-import { Scheduler } from "../../../src/scheduler";
-import { PipelineObserver } from "../../../src/pipeline-observer";
-import { ConfirmGate } from "../../../src/confirm-gate";
-import { Toolkit } from "../../../src/toolkit";
-import { MemoryStore } from "../../../src/memory-store";
-import { MetaAgent } from "../../../src/meta-agent";
+import { TaskBoard } from "../../../src/task-board.js";
+import { AgentPool } from "../../../src/agent-pool.js";
+import { createAgent } from "../../../src/components/agent-factory.js";
+import { codeAgentConfig } from "../../../src/agents/code-agent.js";
+import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { Scheduler } from "../../../src/scheduler.js";
+import { PipelineObserver } from "../../../src/pipeline-observer.js";
+import { ConfirmGate } from "../../../src/confirm-gate.js";
+import { Toolkit } from "../../../src/toolkit.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
+import { MetaAgent } from "../../../src/meta-agent.js";
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 1. 环境变量
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
   if (!fs.existsSync(envPath)) {
-    console.error("�?.env 文件不存�?);
+    console.error("❌ .env 文件不存在");
     process.exit(1);
   }
   const lines = fs.readFileSync(envPath, "utf-8").split("\n");
@@ -47,9 +48,9 @@ function loadEnv() {
   }
 }
 
-// ══════════════════════════════════════════════�?
-// 2. 真实工具 �?限定 projects/calculator/
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
+// 2. 真实工具 —— 限定 projects/calculator/
+// ═══════════════════════════════════════════════
 
 function registerCalculatorTools(toolkit: Toolkit, projectRoot: string) {
   const resolve = (p: string) => path.resolve(projectRoot, p);
@@ -113,7 +114,7 @@ function registerCalculatorTools(toolkit: Toolkit, projectRoot: string) {
   toolkit.register("write_file", async (params) => {
     const fp = resolve(params.file_path as string);
     if (!fp.startsWith(projectRoot + path.sep)) {
-      return { success: false, error: `write_file denied: 路径越界 �?${fp} 不在 calculator 项目内` };
+      return { success: false, error: `write_file denied: 路径越界 —— ${fp} 不在 calculator 项目内` };
     }
     try {
       const dir = path.dirname(fp);
@@ -130,7 +131,7 @@ function registerCalculatorTools(toolkit: Toolkit, projectRoot: string) {
     const cmd = (params.command ?? "") as string;
     if (!cmd) return { success: false, error: "run_shell: 缺少 command 参数" };
     if (DANGEROUS.test(cmd)) {
-      return { success: false, error: `run_shell denied: 危险命令已拦�?�?"${cmd.slice(0, 60)}"` };
+      return { success: false, error: `run_shell denied: 危险命令已拦截 —— "${cmd.slice(0, 60)}"` };
     }
     try {
       const { execSync } = await import("node:child_process");
@@ -150,9 +151,9 @@ function registerCalculatorTools(toolkit: Toolkit, projectRoot: string) {
   });
 }
 
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 // 3. 种子记忆
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
 
 function seedMemories(memory: MemoryStore, agentType: string): { lessonId: string; reviewId: string } {
   // 先查后写，防止重复播种导致记忆膨胀
@@ -166,10 +167,10 @@ function seedMemories(memory: MemoryStore, agentType: string): { lessonId: strin
         content: {
           taskType: "code",
           entities: ["math", "calculator", "arithmetic"],
-          decision: "上次实现 math-utils 时忘�?mock 依赖导致 CI 红了一下午。教训：写模块前先确认依赖路径，写完立即跑测试验证�?,
+          decision: "上次实现 math-utils 时忘了 mock 依赖导致 CI 红了一下午。教训：写模块前先确认依赖路径，写完立即跑测试验证。",
           outcome: "fixed",
         },
-        summary: "【施工教训】写 math-utils 时忘�?mock 导致 CI 报错，排�?2 小时才发现依赖路径问题。新模块务必先确认依赖�?,
+        summary: "【施工教训】写 math-utils 时忘了 mock 导致 CI 报错，排查 2 小时才发现依赖路径问题。新模块务必先确认依赖。",
         agentType: agentType as any,
         creatorId: agentType,
         metadata: { taskId: "lesson-math-mock", module: "math" },
@@ -182,29 +183,29 @@ function seedMemories(memory: MemoryStore, agentType: string): { lessonId: strin
         content: {
           taskType: "review",
           entities: ["math", "calculator", "parser"],
-          decision: "审查 math-utils 时发现表达式解析和计算逻辑耦合在同一函数里，建议拆分 Parser �?Calculator。另外错误处理不完整，除以零未处理�?,
+          decision: "审查 math-utils 时发现表达式解析和计算逻辑耦合在同一函数里，建议拆分 Parser 和 Calculator。另外错误处理不完整，除以零未处理。",
           outcome: "needs_fix",
         },
-        summary: "【审查档案】math-utils 审查结论：表达式解析和计算逻辑耦合，错误处理不完整（除以零/非法字符）。建议拆分模块�?,
+        summary: "【审查档案】math-utils 审查结论：表达式解析和计算逻辑耦合，错误处理不完整（除以零/非法字符）。建议拆分模块。",
         agentType: agentType as any,
         creatorId: agentType,
         metadata: { taskId: "review-math-coupling", module: "math" },
       });
 
-  memory.link(reviewId, lessonId, LinkType.RefactoredFrom, agentType);
-  memory.link(lessonId, reviewId, LinkType.CitedInCommittee, agentType);
+  memory.link(reviewId, lessonId, LinkType.RefactoredFrom);
+  memory.link(lessonId, reviewId, LinkType.CitedInCommittee);
 
   return { lessonId, reviewId };
 }
 
-// ══════════════════════════════════════════════�?
-// 4. 主流�?
-// ══════════════════════════════════════════════�?
+// ═══════════════════════════════════════════════
+// 4. 主流程
+// ═══════════════════════════════════════════════
 
 async function main() {
   loadEnv();
   const API_KEY = process.env.DEEPSEEK_API_KEY;
-  if (!API_KEY) { console.error("�?DEEPSEEK_API_KEY 未设�?); process.exit(1); }
+  if (!API_KEY) { console.error("❌ DEEPSEEK_API_KEY 未设置"); process.exit(1); }
 
   const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
   const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner";
@@ -218,7 +219,7 @@ async function main() {
   for (const d of [CALC_DIR, SRC_DIR, TEST_DIR]) {
     if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
   }
-  // 确保 tsconfig.json 存在，Inspector �?tsc --noEmit 需�?
+  // 确保 tsconfig.json 存在，Inspector 用 tsc --noEmit 需要
   const tsconfigPath = path.join(CALC_DIR, "tsconfig.json");
   if (!fs.existsSync(tsconfigPath)) {
     fs.writeFileSync(tsconfigPath, JSON.stringify({
@@ -228,14 +229,14 @@ async function main() {
   }
 
   console.log("╔══════════════════════════════════════════════════╗");
-  console.log("�?  🧪 计算器系�?�?专家协作闭环                      �?);
+  console.log("║  🧪 计算器系统 —— 专家协作闭环                      ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
   console.log(`  项目路径: ${CALC_DIR}`);
   console.log(`  Model:    ${CHAT_MODEL}`);
   console.log(`  Base:     ${BASE_URL}\n`);
 
-  // ── 初始化组�?──
-  console.log("🟢 [Phase 1] 初始化组�?..");
+  // ── 初始化组件 ──
+  console.log("🟢 [Phase 1] 初始化组件...");
 
   const adapter = new LlmAdapter({
     apiKey: API_KEY,
@@ -256,55 +257,55 @@ async function main() {
   const memory = new MemoryStore();
   const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", "memory-calc.db");
   await memory.init(MEMORY_DB);
-  console.log(`   �?MemoryStore: ${MEMORY_DB}`);
+  console.log(`   ✅ MemoryStore: ${MEMORY_DB}`);
 
   // ── 预置种子记忆 ──
   const seeds = seedMemories(memory, AgentType.Code);
-  console.log(`   �?种子记忆: lesson=${seeds.lessonId.slice(0, 20)}...  review=${seeds.reviewId.slice(0, 20)}...`);
+  console.log(`   ✅ 种子记忆: lesson=${seeds.lessonId.slice(0, 20)}...  review=${seeds.reviewId.slice(0, 20)}...`);
 
-  // ── Agent 池注�?──
+  // ── Agent 池注册 ──
   pool.register({ type: AgentType.Code, maxInstances: 3 });
   pool.register({ type: AgentType.Review, maxInstances: 2 });
   pool.register({ type: AgentType.Inspector, maxInstances: 2 });
 
   const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
 
-  // ── 注册 Agent（真实工�?+ 记忆）──
-  console.log("🟢 [Phase 2] 注册 Agent �?真实工具 + 记忆...");
+  // ── 注册 Agent（真实工具 + 记忆）──
+  console.log("🟢 [Phase 2] 注册 Agent —— 真实工具 + 记忆...");
 
   const codeToolkit = new Toolkit(gate);
   registerCalculatorTools(codeToolkit, CALC_DIR);
-  const codeAgent = new CodeAgent(adapter, codeToolkit, memory);
+  const codeAgent = createAgent(codeAgentConfig(), adapter, codeToolkit, memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
 
   const inspectorToolkit = new Toolkit(gate);
   registerCalculatorTools(inspectorToolkit, CALC_DIR);
-  const inspectorAgent = new InspectorAgent(adapter, inspectorToolkit);
+  const inspectorAgent = createInspectorAgent(adapter, inspectorToolkit, memory);
   inspectorAgent.setWorkspaceRoot(CALC_DIR);
   await inspectorAgent.wakeup();
   scheduler.register(AgentType.Inspector, inspectorAgent, CHAT_MODEL);
 
   const reviewToolkit = new Toolkit(gate);
   registerCalculatorTools(reviewToolkit, CALC_DIR);
-  const reviewAgent = new ReviewAgent(adapter, reviewToolkit, memory);
+  const reviewAgent = createAgent(reviewAgentConfig(), adapter, reviewToolkit, memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
 
-  console.log("   �?3 位专家就�?(阿贝�?安柏/刻晴)\n");
+  console.log("   ✅ 3 位专家就绪 (阿贝多/安柏/刻晴)\n");
 
   // ── 手动任务图（Scheduler 按入板顺序执行）──
-  console.log("🟢 [Phase 3] 构建任务�?(5 节点，顺序执�?...");
+  console.log("🟢 [Phase 3] 构建任务图 (5 节点，顺序执行)...");
 
   const taskContext = [
-    "你工作在 projects/calculator/ 下。所有文件读写限定在此目录�?,
+    "你工作在 projects/calculator/ 下。所有文件读写限定在此目录。",
     "",
-    "计算器系统：实现 Calculator 类，接收字符串表达式(�?\"2+3*4\")，支�?-*/、括号、优先级�?,
-    "除以零返�?NaN，非法字符抛 Error�?,
+    "计算器系统：实现 Calculator 类，接收字符串表达式(如 \"2+3*4\")，支持+-*/、括号、优先级。",
+    "除以零返回 NaN，非法字符抛 Error。",
   ].join("\n");
 
   const now = Date.now();
-  // Scheduler �?parentId 做拓扑分�?�?严格串行
+  // Scheduler 用 parentId 做拓扑分层——严格串行
   const nodes: TaskNode[] = [
     {
       id: "task-1-write-calculator",
@@ -312,7 +313,7 @@ async function main() {
       tags: ["implementation"],
       needsMultiPerspective: false,
       claimedBy: [],
-      payload: `${taskContext}\n\nTASK 1: �?src/calculator.ts 实现 Calculator 类。接收字符串表达式，返回 number。支�?-*/、括号、优先级。除以零→NaN，非法字符→throw Error。只写这一个文件，写完立即给出最终答案。`,
+      payload: `${taskContext}\n\nTASK 1: 在 src/calculator.ts 实现 Calculator 类。接收字符串表达式，返回 number。支持+-*/、括号、优先级。除以零→NaN，非法字符→throw Error。只写这一个文件，写完立即给出最终答案。`,
       status: "pending",
       results: [],
       createdAt: now + 1,
@@ -324,7 +325,7 @@ async function main() {
       tags: ["test"],
       needsMultiPerspective: false,
       claimedBy: [],
-      payload: `${taskContext}\n\nTASK 2: 读取 src/calculator.ts，写 test/calculator.test.ts。\n测试+-*/、括号、优先级、除以零(=NaN)、非法字�?=throw)。用�?assert(无外部框�?。Import 使用 '../src/calculator.js'（Node ESM 必须�?.js 扩展名）。写完给出最终答案。`,
+      payload: `${taskContext}\n\nTASK 2: 读取 src/calculator.ts，写 test/calculator.test.ts。\n测试+-*/、括号、优先级、除以零(=NaN)、非法字符(=throw)。用 assert(无外部框架)。Import 使用 '../src/calculator.js'（Node ESM 必须用 .js 扩展名）。写完给出最终答案。`,
       status: "pending",
       results: [],
       createdAt: now + 2,
@@ -336,7 +337,7 @@ async function main() {
       tags: ["inspect"],
       needsMultiPerspective: false,
       claimedBy: [],
-      payload: `${taskContext}\n\nTASK 3: 勘察报告。\n系统已自动采�?tsc 编译�?vitest 测试结果（见下方[系统自动采集的编译事实]）。\n1. 读取 src/calculator.ts �?test/calculator.test.ts\n2. 结合编译/测试事实，逐条列出通过/失败/文件状态\n只报告事实，不推断。如果发现编译或测试失败，明确写出失败原因。`,
+      payload: `${taskContext}\n\nTASK 3: 勘察报告。\n系统已自动采集 tsc 编译和 vitest 测试结果（见下方[系统自动采集的编译事实]）。\n1. 读取 src/calculator.ts 和 test/calculator.test.ts\n2. 结合编译/测试事实，逐条列出通过/失败/文件状态\n只报告事实，不推断。如果发现编译或测试失败，明确写出失败原因。`,
       status: "pending",
       results: [],
       createdAt: now + 3,
@@ -348,7 +349,7 @@ async function main() {
       tags: ["review"],
       needsMultiPerspective: false,
       claimedBy: [],
-      payload: `${taskContext}\n\nTASK 4: 审查 src/calculator.ts �?test/calculator.test.ts。\n关注：代码质量、错误处理、测试覆盖、模块拆分建议。\n给结构化审查意见（严重度+位置+建议）。`,
+      payload: `${taskContext}\n\nTASK 4: 审查 src/calculator.ts 和 test/calculator.test.ts。\n关注：代码质量、错误处理、测试覆盖、模块拆分建议。\n给结构化审查意见（严重度+位置+建议）。`,
       status: "pending",
       results: [],
       createdAt: now + 4,
@@ -360,7 +361,7 @@ async function main() {
       tags: ["bugfix"],
       needsMultiPerspective: false,
       claimedBy: [],
-      payload: `${taskContext}\n\nTASK 5: 如果 task-4 审查发现有需修复的问题，读取审查意见后修�?src/calculator.ts �?test/calculator.test.ts。修复完后读取改动的文件确认。只修复审查指出的问题，不多改。`,
+      payload: `${taskContext}\n\nTASK 5: 如果 task-4 审查发现有需修复的问题，读取审查意见后修复 src/calculator.ts 和 test/calculator.test.ts。修复完后读取改动的文件确认。只修复审查指出的问题，不多改。`,
       status: "pending",
       results: [],
       createdAt: now + 5,
@@ -368,9 +369,9 @@ async function main() {
   ];
 
   for (const n of nodes) board.addNode(n);
-  console.log(`   �?${nodes.length} 个任务节点入�?(parentId 链式拓扑，逐层串行)`);
+  console.log(`   ✅ ${nodes.length} 个任务节点入板 (parentId 链式拓扑，逐层串行)`);
   for (const n of nodes) {
-    const parent = n.parentId ? ` �?child of [${n.parentId.slice(0, 16)}]` : " �?root";
+    const parent = n.parentId ? ` → child of [${n.parentId.slice(0, 16)}]` : " → root";
     console.log(`     [${n.type}] ${n.id}${parent}  tags: [${n.tags.join(", ")}]`);
   }
   console.log();
@@ -384,7 +385,7 @@ async function main() {
   });
 
   // ── 执行 ──
-  console.log("🟢 [Phase 4] Scheduler 执行 �?三位专家开始协�?..\n");
+  console.log("🟢 [Phase 4] Scheduler 执行 —— 三位专家开始协作...\n");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
   const execStart = Date.now();
@@ -393,35 +394,35 @@ async function main() {
 
   // ── 结果 ──
   console.log("\n╔══════════════════════════════════════════════════╗");
-  console.log("�?  📊 执行结果                                     �?);
+  console.log("║  📊 执行结果                                     ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
   console.log(`   完成: ${report.completed}  失败: ${report.failed}  耗时: ${execDuration}ms`);
   console.log();
 
   const allNodes = board.getAllNodes();
   for (const n of allNodes) {
-    const status = n.status === "done" ? "�? : n.status === "failed" ? "�? : "�?;
+    const status = n.status === "done" ? "✅" : n.status === "failed" ? "❌" : "⏳";
     console.log(`   ${status} [${n.type}] ${n.id} (${n.status})`);
     for (const r of n.results) {
       const preview = (r.output ?? r.error ?? "?").slice(0, 160);
-      console.log(`      ${r.success ? "�? : "�?} ${preview}`);
+      console.log(`      ${r.success ? "✅" : "❌"} ${preview}`);
     }
   }
   console.log();
 
-  // ── 产出文件检�?──
+  // ── 产出文件检查 ──
   console.log("── 产出文件 ──");
   const checkFiles = ["src/calculator.ts", "test/calculator.test.ts"];
   for (const rel of checkFiles) {
     const fp = path.join(CALC_DIR, rel);
     const exists = fs.existsSync(fp);
     const size = exists ? fs.statSync(fp).size : 0;
-    console.log(`   ${exists ? "�? : "�?} ${rel}  ${exists ? `(${size} bytes)` : "(未生�?"}`);
+    console.log(`   ${exists ? "✅" : "❌"} ${rel}  ${exists ? `(${size} bytes)` : "(未生成)"}`);
   }
   console.log();
 
   // ── 验证计算器是否真的能运行 ──
-  console.log("── 验证：用 npx tsx 运行计算器测�?──");
+  console.log("── 验证：用 npx tsx 运行计算器测试 ──");
   try {
     const { execSync } = await import("node:child_process");
     const testOutput = execSync("npx tsx test/calculator.test.ts", {
@@ -430,35 +431,35 @@ async function main() {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-    console.log(`   �?计算器测试全部通过:\n${testOutput.slice(0, 500)}`);
+    console.log(`   ✅ 计算器测试全部通过:\n${testOutput.slice(0, 500)}`);
   } catch (e: any) {
     const stdout = e.stdout?.toString() ?? "";
     const stderr = e.stderr?.toString() ?? "";
-    console.log(`   �?计算器测试失�?(exit ${e.status ?? "?"})`);
+    console.log(`   ❌ 计算器测试失败 (exit ${e.status ?? "?"})`);
     if (stdout) console.log(`   stdout:\n${stdout.slice(0, 400)}`);
     if (stderr) console.log(`   stderr:\n${stderr.slice(0, 400)}`);
   }
 
-  // ── 灵魂观察�?──
+  // ── 灵魂观察者 ──
   console.log("\n╔══════════════════════════════════════════════════╗");
-  console.log("�?  🎭 专家灵魂观察�?                              �?);
+  console.log("║  🎭 专家灵魂观察者                              ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
-  console.log("   1. 阿贝多（CodeAgent）在 think 阶段有没有引�?);
-  console.log("      「施工教训」「忘�?mock」「依赖路径」？");
-  console.log("   2. 安柏（InspectorAgent）的勘察报告里编�?测试");
-  console.log("      结果是真实的 tsc/vitest 输出，还�?LLM 编的�?);
+  console.log("   1. 阿贝多（CodeAgent）在 think 阶段有没有引用");
+  console.log("      「施工教训」「忘了 mock」「依赖路径」？");
+  console.log("   2. 安柏（InspectorAgent）的勘察报告里编译/测试");
+  console.log("      结果是真实的 tsc/vitest 输出，还是 LLM 编的？");
   console.log("   3. 刻晴（ReviewAgent）审查时有没有翻出历史评论：");
   console.log("      「耦合度太高」「需拆分 Parser/Calculator」？");
   console.log();
   console.log("   如果三点全中——你的专家就不是换皮 bot，而是");
-  console.log("   带着记忆和工具、以完全不同方式干活的专业人士�?);
+  console.log("   带着记忆和工具、以完全不同方式干活的专业人士。");
   console.log();
 
   // ── 记忆系统诊断 ──
   console.log("── 记忆系统诊断 ──");
   const allMemories = memory.read({});
   const accessed = allMemories.filter((m) => m.lastAccessedAt > m.createdAt + 1000);
-  console.log(`   总记�? ${allMemories.length}  被访问过: ${accessed.length}`);
+  console.log(`   总记忆: ${allMemories.length}  被访问过: ${accessed.length}`);
   for (const m of accessed) {
     console.log(`     📖 ${m.summary.slice(0, 100)}`);
   }
@@ -468,6 +469,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("�?计算�?E2E 失败:", err);
+  console.error("❌ 计算器 E2E 失败:", err);
   process.exit(1);
 });

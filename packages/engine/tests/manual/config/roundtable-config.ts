@@ -11,7 +11,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { AgentType, LinkType, MemoryType } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import { MemoryStore } from "../../../src/memory-store";
+import { MemoryStore } from "../../../src/memory/memory-store";
 import personaPrompts from "./persona-prompts.json" assert { type: "json" };
 
 // ═══════════════════════════════════════════════
@@ -1051,7 +1051,7 @@ export async function runMeeting(
             });
             // FSA 反馈：共识产出链接到凝光的收束发言
             if (lastSpeech) {
-              memory.link(memId, (lastSpeech as any).id, LinkType.DerivedFrom, "system");
+              memory.link(memId, (lastSpeech as any).id, LinkType.DerivedFrom);
             }
             // 链接到全体参会 Agent 的最后一轮实质发言（ConfirmedUseful）
             const lastRoundEpisodic = allMems.filter(
@@ -1061,7 +1061,7 @@ export async function runMeeting(
                 String(m.content?.speech ?? "").length > 40
             );
             for (const epiMem of lastRoundEpisodic.slice(0, 10)) {
-              memory.link(memId, (epiMem as any).id, LinkType.ConfirmedUseful, "system");
+              memory.link(memId, (epiMem as any).id, LinkType.ConfirmedUseful);
             }
           }
         }

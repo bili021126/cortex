@@ -11,36 +11,60 @@ import type { CommandHandler, CommandResult, CommandContext } from "../types.js"
 import type { EngineBridge } from "../services/engine-bridge.js";
 import type { DocRegistry } from "@cortex/engine";
 
+/** 圆桌会议模板（与 @cortex/factory RoundtableTemplate 同构） */
+interface RoundtableTemplate {
+  name: string;
+  description: string;
+  personas: number;
+  rounds: number;
+  agents: string[];
+}
+
 export function createRoundtableHandler(bridge: EngineBridge, docRegistry: DocRegistry): CommandHandler {
+  /** 从配置获取圆桌会议模板（若无则退化为空数组） */
+  async function _getTemplates(): Promise<RoundtableTemplate[]> {
+    try {
+      const ctx = await bridge.ensureBootstrapped();
+      return ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
+    } catch {
+      return [];
+    }
+  }
+
   return async (args, options, context): Promise<CommandResult> => {
     if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
+      const templates = await _getTemplates();
+      const helpLines = [
+        "用法: cortex roundtable <子命令> [选项]",
+        "",
+        "子命令:",
+        "  start <name>          启动圆桌会议",
+        "  list                  列出可用会议模板",
+        "  status                查看会议状态",
+        "  join <id>             加入进行中的会议",
+      ];
+      if (templates.length > 0) {
+        helpLines.push("");
+        helpLines.push("可用模板:");
+        for (const t of templates) {
+          helpLines.push(`  ${t.name.padEnd(20)} ${t.description}（${t.rounds} 轮，${t.personas} Persona）`);
+        }
+      }
+      helpLines.push(
+        "",
+        "选项:",
+        "  --config, -c <file>   自定义会议配置文件",
+        "  --topic, -t <text>    覆盖议题描述",
+        "  --persona, -p <list>  指定参与 Agent",
+        "  --model <m>           指定 LLM 模型",
+        "  --rounds <n>          指定轮次数",
+        "  --dry-run             模拟运行",
+        "  --output, -o <path>   共识输出路径（通过 DocRegistry 归档）",
+        "  --wait                阻塞等待会议结束",
+      );
       return {
         success: true,
-        output: [
-          "用法: cortex roundtable <子命令> [选项]",
-          "",
-          "子命令:",
-          "  start <name>          启动圆桌会议",
-          "  list                  列出可用会议模板",
-          "  status                查看会议状态",
-          "  join <id>             加入进行中的会议",
-          "",
-          "内置模板:",
-          "  review                审视共识会议（4 轮，4 Persona）",
-          "  code-review           三轮代码审阅（3 轮，10 Persona）",
-          "  soft-consensus        软约束共识（1 轮合并，9 Persona）",
-          "  attribution           归因分析（1 轮开放，10 Persona）",
-          "",
-          "选项:",
-          "  --config, -c <file>   自定义会议配置文件",
-          "  --topic, -t <text>    覆盖议题描述",
-          "  --persona, -p <list>  指定参与 Agent",
-          "  --model <m>           指定 LLM 模型",
-          "  --rounds <n>          指定轮次数",
-          "  --dry-run             模拟运行",
-          "  --output, -o <path>   共识输出路径（通过 DocRegistry 归档）",
-          "  --wait                阻塞等待会议结束",
-        ].join("\n"),
+        output: helpLines.join("\n"),
         exitCode: 0,
       };
     }
@@ -49,11 +73,11 @@ export function createRoundtableHandler(bridge: EngineBridge, docRegistry: DocRe
 
     switch (subcommand) {
       case "start":
-        return handleRoundtableStart(args[1], options, context, docRegistry);
+        return handleRoundtableStart(args[1], options, context, docRegistry, bridge);
       case "list":
-        return handleRoundtableList(options, context);
+        return handleRoundtableList(options, context, bridge);
       case "status":
-        return handleRoundtableStatus(options, context);
+        return handleRoundtableStatus(options, context, bridge);
       case "join":
         return handleRoundtableJoin(args[1], options, context);
       default:
@@ -66,52 +90,24 @@ export function createRoundtableHandler(bridge: EngineBridge, docRegistry: DocRe
   };
 }
 
-const BUILTIN_TEMPLATES = [
-  {
-    name: "review",
-    description: "审视共识会议",
-    personas: 4,
-    rounds: 4,
-    agents: ["刻晴", "纳西妲", "阿贝多", "凝光"],
-  },
-  {
-    name: "code-review",
-    description: "三轮代码审阅",
-    personas: 10,
-    rounds: 3,
-    agents: ["刻晴", "甘雨", "纳西妲", "阿贝多", "钟离", "北斗", "久岐忍", "艾尔海森", "安柏", "凝光"],
-  },
-  {
-    name: "soft-consensus",
-    description: "软约束共识",
-    personas: 9,
-    rounds: 1,
-    agents: ["刻晴", "甘雨", "纳西妲", "阿贝多", "钟离", "北斗", "久岐忍", "艾尔海森", "凝光"],
-  },
-  {
-    name: "attribution",
-    description: "归因分析",
-    personas: 10,
-    rounds: 1,
-    agents: ["刻晴", "甘雨", "纳西妲", "阿贝多", "钟离", "北斗", "久岐忍", "艾尔海森", "安柏", "凝光"],
-  },
-];
-
 async function handleRoundtableStart(
   templateName: string | undefined,
   options: Record<string, unknown>,
   context: CommandContext,
   docRegistry: DocRegistry,
+  bridge: EngineBridge,
 ): Promise<CommandResult> {
   if (!templateName) {
     return { success: false, error: "请指定会议模板。用法: cortex roundtable start <name>", exitCode: 1 };
   }
 
-  const template = BUILTIN_TEMPLATES.find((t) => t.name === templateName);
+  const ctx = await bridge.ensureBootstrapped();
+  const templates = ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
+  const template = templates.find((t: RoundtableTemplate) => t.name === templateName);
   if (!template) {
     return {
       success: false,
-      error: `未知模板: "${templateName}"。可用模板: ${BUILTIN_TEMPLATES.map((t) => t.name).join(", ")}`,
+      error: `未知模板: "${templateName}"。可用模板: ${templates.map((t: RoundtableTemplate) => t.name).join(", ")}`,
       exitCode: 1,
     };
   }
@@ -199,10 +195,13 @@ async function handleRoundtableStart(
 async function handleRoundtableList(
   options: Record<string, unknown>,
   context: CommandContext,
+  bridge: EngineBridge,
 ): Promise<CommandResult> {
   const detail = options["detail"] || options["d"];
 
-  const templates = BUILTIN_TEMPLATES.map((t) => ({
+  const ctx = await bridge.ensureBootstrapped();
+  const templates = ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
+  const listed = templates.map((t: RoundtableTemplate) => ({
     name: t.name,
     description: t.description,
     personas: t.personas,
@@ -212,8 +211,8 @@ async function handleRoundtableList(
 
   return {
     success: true,
-    data: templates,
-    output: templates.map((t) =>
+    data: listed,
+    output: listed.map((t) =>
       `  ${t.name.padEnd(16)} ${t.description} (${t.personas} Persona, ${t.rounds} 轮)`
     ).join("\n"),
     exitCode: 0,
@@ -223,13 +222,17 @@ async function handleRoundtableList(
 async function handleRoundtableStatus(
   options: Record<string, unknown>,
   context: CommandContext,
+  bridge: EngineBridge,
 ): Promise<CommandResult> {
   const verbose = options["verbose"] || options["v"];
+
+  const ctx = await bridge.ensureBootstrapped();
+  const templates = ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
 
   const status = {
     active: false,
     lastSession: null,
-    templates: BUILTIN_TEMPLATES.length,
+    templates: templates.length,
   };
 
   return {

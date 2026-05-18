@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  tree-sitter@0.25.0:
+    hash: sz5xm2zivswrqbsvz4a33knkau
+    path: patches/tree-sitter@0.25.0.patch
+
 importers:
 
   .:
@@ -67,6 +72,9 @@ importers:
 
   packages/engine:
     dependencies:
+      '@cortex/factory':
+        specifier: workspace:*
+        version: link:../factory
       '@cortex/llm':
         specifier: workspace:*
         version: link:../llm
@@ -95,6 +103,31 @@ importers:
       playwright:
         specifier: ^1.59.1
         version: 1.59.1
+      tree-sitter:
+        specifier: ^0.25.0
+        version: 0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau)
+      tree-sitter-typescript:
+        specifier: ^0.23.2
+        version: 0.23.2(tree-sitter@0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau))
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/factory:
+    dependencies:
+      '@cortex/notification':
+        specifier: workspace:*
+        version: link:../notification
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -114,6 +147,22 @@ importers:
       eslint:
         specifier: ^10.3.0
         version: 10.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/notification:
+    dependencies:
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -1244,6 +1293,14 @@ packages:
   node-addon-api@6.1.0:
     resolution: {integrity: sha512-+eawOlIgy680F0kBzPUNFhMZGtJ1YmqM6l4+Crf4IkImjYrO/mqPwRMh352g23uIaQKFItcQ64I7KMaJxHgAVA==}
 
+  node-addon-api@8.7.0:
+    resolution: {integrity: sha512-9MdFxmkKaOYVTV+XVRG8ArDwwQ77XIgIPyKASB1k3JPq3M8fGQQQE3YpMOrKm6g//Ktx8ivZr8xo1Qmtqub+GA==}
+    engines: {node: ^18 || ^20 || >= 21}
+
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
+
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
@@ -1448,6 +1505,25 @@ packages:
   tinyspy@3.0.2:
     resolution: {integrity: sha512-n1cw8k1k0x4pgA2+9XrOkFydTerNcJ1zWCO5Nn9scWHTD+5tp8dghT2x1uduQePZTZgd3Tupf+x9BxJjeJi77Q==}
     engines: {node: '>=14.0.0'}
+
+  tree-sitter-javascript@0.23.1:
+    resolution: {integrity: sha512-/bnhbrTD9frUYHQTiYnPcxyHORIw157ERBa6dqzaKxvR/x3PC4Yzd+D1pZIMS6zNg2v3a8BZ0oK7jHqsQo9fWA==}
+    peerDependencies:
+      tree-sitter: ^0.21.1
+    peerDependenciesMeta:
+      tree-sitter:
+        optional: true
+
+  tree-sitter-typescript@0.23.2:
+    resolution: {integrity: sha512-e04JUUKxTT53/x3Uq1zIL45DoYKVfHH4CZqwgZhPg5qYROl5nQjV+85ruFzFGZxu+QeFVbRTPDRnqL9UbU4VeA==}
+    peerDependencies:
+      tree-sitter: ^0.21.0
+    peerDependenciesMeta:
+      tree-sitter:
+        optional: true
+
+  tree-sitter@0.25.0:
+    resolution: {integrity: sha512-PGZZzFW63eElZJDe/b/R/LbsjDDYJa5UEjLZJB59RQsMX+fo0j54fqBPn1MGKav/QNa0JR0zBiVaikYDWCj5KQ==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -2442,6 +2518,10 @@ snapshots:
 
   node-addon-api@6.1.0: {}
 
+  node-addon-api@8.7.0: {}
+
+  node-gyp-build@4.8.4: {}
+
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
@@ -2732,6 +2812,26 @@ snapshots:
   tinyrainbow@1.2.0: {}
 
   tinyspy@3.0.2: {}
+
+  tree-sitter-javascript@0.23.1(tree-sitter@0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau)):
+    dependencies:
+      node-addon-api: 8.7.0
+      node-gyp-build: 4.8.4
+    optionalDependencies:
+      tree-sitter: 0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau)
+
+  tree-sitter-typescript@0.23.2(tree-sitter@0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau)):
+    dependencies:
+      node-addon-api: 8.7.0
+      node-gyp-build: 4.8.4
+      tree-sitter-javascript: 0.23.1(tree-sitter@0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau))
+    optionalDependencies:
+      tree-sitter: 0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau)
+
+  tree-sitter@0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau):
+    dependencies:
+      node-addon-api: 8.7.0
+      node-gyp-build: 4.8.4
 
   ts-api-utils@2.5.0(typescript@5.9.3):
     dependencies:

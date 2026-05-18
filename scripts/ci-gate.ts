@@ -18,7 +18,7 @@
  *   // @ci: manual       人工触发，永远不自动跑
  */
 
-import { execFileSync } from "node:child_process";
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
@@ -54,15 +54,17 @@ const ROOT = resolve(__dirname, "..");
 
 /** 需要构建和类型检查的包（按依赖顺序） */
 const PACKAGES: PackageInfo[] = [
-  { name: "shared",  dir: join(ROOT, "packages", "shared"),  filter: "@cortex/shared" },
-  { name: "parser",  dir: join(ROOT, "packages", "parser"),  filter: "@cortex/parser" },
-  { name: "pm",      dir: join(ROOT, "packages", "pm"),      filter: "@cortex/pm" },
-  { name: "data",    dir: join(ROOT, "packages", "data"),    filter: "@cortex/data" },
-  { name: "tools",   dir: join(ROOT, "packages", "tools"),   filter: "@cortex/tools" },
-  { name: "llm",     dir: join(ROOT, "packages", "llm"),     filter: "@cortex/llm" },
-  { name: "testing", dir: join(ROOT, "packages", "testing"), filter: "@cortex/testing" },
-  { name: "engine",  dir: join(ROOT, "packages", "engine"),  filter: "@cortex/engine" },
-  { name: "cli",     dir: join(ROOT, "packages", "cli"),     filter: "@cortex/cli" },
+  { name: "shared",       dir: join(ROOT, "packages", "shared"),       filter: "@cortex/shared" },
+  { name: "notification", dir: join(ROOT, "packages", "notification"), filter: "@cortex/notification" },
+  { name: "factory",      dir: join(ROOT, "packages", "factory"),      filter: "@cortex/factory" },
+  { name: "parser",       dir: join(ROOT, "packages", "parser"),       filter: "@cortex/parser" },
+  { name: "pm",           dir: join(ROOT, "packages", "pm"),           filter: "@cortex/pm" },
+  { name: "data",         dir: join(ROOT, "packages", "data"),         filter: "@cortex/data" },
+  { name: "tools",        dir: join(ROOT, "packages", "tools"),        filter: "@cortex/tools" },
+  { name: "llm",          dir: join(ROOT, "packages", "llm"),          filter: "@cortex/llm" },
+  { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
+  { name: "engine",       dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine" },
+  { name: "cli",          dir: join(ROOT, "packages", "cli"),          filter: "@cortex/cli" },
 ];
 
 const TEST_FILE_PATTERN = /\.test\.ts$/;
@@ -79,13 +81,13 @@ function stripAnsi(s: string): string {
 
 function run(cmd: string, args: string[], cwd: string): { ok: boolean; stdout: string } {
   try {
-    const stdout = execFileSync(cmd, args, {
+    const fullCmd = [cmd, ...args].map(a => a.includes(" ") ? `"${a}"` : a).join(" ");
+    const stdout = execSync(fullCmd, {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
       timeout: 300_000, // 5 分钟超时
       windowsHide: true,
-      shell: process.platform === "win32", // Windows 需要 shell 解析 PATH 找到 pnpm
     });
     return { ok: true, stdout };
   } catch (e: any) {

@@ -42,13 +42,24 @@ export interface NodeResult {
 
 // ─── 重规划 ────────────────────────────────────────────────
 
-/** 影响范围：local 只换当前节点，subtree 连下游一起回收 */
+/**
+ * 影响范围：local 只换当前节点，subtree 连下游一起回收。
+ *
+ * @usedBy Scheduler._drainReplanQueue — 调度模块根据此值决定回收策略：
+ *   "local"   → 仅替换当前失败节点
+ *   "subtree" → 递归移除所有下游子节点后重新规划
+ */
 export type ImpactScope = "local" | "subtree";
 
 /** MetaAgent.requestReplan 的返回值 */
 export interface ReplanResult {
   nodes: TaskNode[];
   impactScope: ImpactScope;
+  /** 当 nodes 为空时，说明无替代方案的原因。
+   *   - "no_alternative": LLM 判定无法重规划
+   *   - "max_replan_reached": 已达到最大重规划次数
+   *   - undefined: 尚未调用或正常返回 */
+  error?: string;
 }
 
 // ─── 调度层 ────────────────────────────────────────────────

@@ -1,0 +1,22 @@
+diff --git a/binding.gyp b/binding.gyp
+index bb40aa7e8d41644ba690761e9064fc1d0f2dcd6b..5a6a4bb4b9e8c8384a08270d519ce383c0aa6858 100644
+--- a/binding.gyp
++++ b/binding.gyp
+@@ -25,7 +25,7 @@
+         "NAPI_VERSION=<(napi_build_version)",
+       ],
+       "cflags_cc": [
+-        "-std=c++17"
++        "-std=c++20"
+       ],
+       "conditions": [
+         ["OS=='mac'", {
+@@ -39,7 +39,7 @@
+           "msvs_settings": {
+             "VCCLCompilerTool": {
+               "AdditionalOptions": [
+-                "/std:c++17",
++                "/std:c++20",
+               ],
+               "RuntimeLibrary": 0,
+             },

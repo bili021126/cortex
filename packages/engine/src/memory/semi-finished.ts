@@ -81,8 +81,11 @@ export class SemiFinishedMgr {
         if (subTypePersistFn) {
           try {
             subTypePersistFn(id, MemorySubType.Fact);
-          } catch {
-            // subType 持久化失败不阻塞主流程（state 已持久化成功）
+          } catch (e) {
+            // subType 持久化失败不阻塞主流程（state 已持久化成功），
+            // 但必须回滚内存 subType 防止内存-DB 不一致。
+            m.subType = MemorySubType.Intent;
+            console.warn(`[SemiFinished] commit subType persist failed for ${id}: ${String(e).slice(0, 200)}`);
           }
         }
       }

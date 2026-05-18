@@ -17,7 +17,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AgentType, PipelinePriority, type TaskNode, AgentStatus as AS } from "@cortex/shared";
+import { AgentType, PipelinePriority, type TaskNode, type Agent, AgentStatus as AS } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { TaskBoard } from "../../../src/task-board.js";
 import { AgentPool } from "../../../src/agent-pool.js";
@@ -27,16 +27,17 @@ import { ConfirmGate } from "../../../src/confirm-gate.js";
 import { Toolkit } from "../../../src/toolkit.js";
 import { MemoryStore } from "../../../src/memory/memory-store.js";
 import { MetaAgent } from "../../../src/meta-agent.js";
-import { CodeAgent } from "../../../src/agents/code-agent.js";
-import { ReviewAgent } from "../../../src/agents/review-agent.js";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent.js";
-import { OpsAgent } from "../../../src/agents/ops-agent.js";
-import { LoopAgent } from "../../../src/agents/loop-agent.js";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent.js";
-import { ApiAgent } from "../../../src/agents/api-agent.js";
-import { DataAgent } from "../../../src/agents/data-agent.js";
-import { FixAgent } from "../../../src/agents/fix-agent.js";
-import { InspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { createAgent } from "../../../src/components/agent-factory.js";
+import { codeAgentConfig } from "../../../src/agents/code-agent.js";
+import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
+import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
+import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
+import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
+import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
+import { apiAgentConfig } from "../../../src/agents/api-agent.js";
+import { dataAgentConfig } from "../../../src/agents/data-agent.js";
+import { fixAgentConfig } from "../../../src/agents/fix-agent.js";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
 
 // ══════════════════════════════════════════════
 // 0. 环境变量
@@ -245,7 +246,7 @@ async function main() {
   interface AgentEntry {
     type: AgentType;
     label: string;
-    create: () => any;
+    create: () => Agent;
   }
 
   const agents: AgentEntry[] = [
@@ -255,7 +256,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new CodeAgent(adapter, tk, memory);
+        return createAgent(codeAgentConfig(), adapter, tk, memory);
       },
     },
     {
@@ -264,7 +265,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new ReviewAgent(adapter, tk, memory);
+        return createAgent(reviewAgentConfig(), adapter, tk, memory);
       },
     },
     {
@@ -273,7 +274,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new AnalysisAgent(adapter, tk, memory);
+        return createAgent(analysisAgentConfig(), adapter, tk, memory);
       },
     },
     {
@@ -282,7 +283,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new OpsAgent(adapter, tk);
+        return createAgent(opsAgentConfig(), adapter, tk);
       },
     },
     {
@@ -291,7 +292,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new LoopAgent(adapter, tk);
+        return createAgent(loopAgentConfig(), adapter, tk);
       },
     },
     {
@@ -300,7 +301,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new DocGovernAgent(adapter, tk, memory);
+        return createAgent(docGovernAgentConfig(), adapter, tk, memory);
       },
     },
     {
@@ -309,7 +310,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new ApiAgent(adapter, tk, memory);
+        return createAgent(apiAgentConfig(), adapter, tk, memory);
       },
     },
     {
@@ -318,7 +319,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new DataAgent(adapter, tk, memory);
+        return createAgent(dataAgentConfig(), adapter, tk, memory);
       },
     },
     {
@@ -327,7 +328,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return new FixAgent(adapter, tk, memory);
+        return createAgent(fixAgentConfig(), adapter, tk, memory);
       },
     },
     {
@@ -336,7 +337,7 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        const agent = new InspectorAgent(adapter, tk);
+        const agent = createInspectorAgent(adapter, tk, memory);
         agent.setWorkspaceRoot(PROJECT_DIR);
         return agent;
       },

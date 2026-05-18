@@ -12,24 +12,25 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, PipelinePriority, MemoryType, MemoryState, MemorySubType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { MetaAgent } from "../../../src/meta-agent";
-import { TaskBoard } from "../../../src/task-board";
-import { AgentPool } from "../../../src/agent-pool";
-import { CodeAgent } from "../../../src/agents/code-agent";
-import { ReviewAgent } from "../../../src/agents/review-agent";
-import { AnalysisAgent } from "../../../src/agents/analysis-agent";
-import { DocGovernAgent } from "../../../src/agents/doc-govern-agent";
-import { InspectorAgent } from "../../../src/agents/inspector-agent";
-import { OpsAgent } from "../../../src/agents/ops-agent";
-import { LoopAgent } from "../../../src/agents/loop-agent";
-import { Scheduler } from "../../../src/scheduler";
-import { PipelineObserver } from "../../../src/pipeline-observer";
-import { ConfirmGate } from "../../../src/confirm-gate";
-import { Toolkit } from "../../../src/toolkit";
-import { MemoryStore } from "../../../src/memory-store";
-import { CLIAdapter } from "../../../src/cli-adapter";
-import { ConsistencyLayer } from "../../../src/consistency/consistency-layer";
-import { NodeFileSystemAdapter } from "../../../src/node-fs-adapter";
+import { MetaAgent } from "../../../src/meta-agent.js";
+import { TaskBoard } from "../../../src/task-board.js";
+import { AgentPool } from "../../../src/agent-pool.js";
+import { createAgent } from "../../../src/components/agent-factory.js";
+import { codeAgentConfig } from "../../../src/agents/code-agent.js";
+import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
+import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
+import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
+import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
+import { Scheduler } from "../../../src/scheduler.js";
+import { PipelineObserver } from "../../../src/pipeline-observer.js";
+import { ConfirmGate } from "../../../src/confirm-gate.js";
+import { Toolkit } from "../../../src/toolkit.js";
+import { MemoryStore } from "../../../src/memory/memory-store.js";
+import { CLIAdapter } from "../../../src/cli-adapter.js";
+import { ConsistencyLayer } from "../../../src/consistency/consistency-layer.js";
+import { NodeFileSystemAdapter } from "../../../src/node-fs-adapter.js";
 
 // ═══════════════════════════════════════════════
 // 1. 环境变量
@@ -218,43 +219,43 @@ async function main() {
   // ── 注册 Agent ──
   const codeToolkit = new Toolkit(gate);
   registerRealTools(codeToolkit, WORKSPACE);
-  const codeAgent = new CodeAgent(adapter, codeToolkit, memory);
+  const codeAgent = createAgent(codeAgentConfig(), adapter, codeToolkit, memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
 
   const reviewToolkit = new Toolkit(gate);
   registerRealTools(reviewToolkit, WORKSPACE);
-  const reviewAgent = new ReviewAgent(adapter, reviewToolkit, memory);
+  const reviewAgent = createAgent(reviewAgentConfig(), adapter, reviewToolkit, memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
 
   const analysisToolkit = new Toolkit(gate);
   registerRealTools(analysisToolkit, WORKSPACE);
-  const analysisAgent = new AnalysisAgent(adapter, analysisToolkit, memory);
+  const analysisAgent = createAgent(analysisAgentConfig(), adapter, analysisToolkit, memory);
   await analysisAgent.wakeup();
   scheduler.register(AgentType.Analysis, analysisAgent, CHAT_MODEL);
 
   const docGovernToolkit = new Toolkit(gate);
   registerRealTools(docGovernToolkit, WORKSPACE);
-  const docGovernAgent = new DocGovernAgent(adapter, docGovernToolkit, memory);
+  const docGovernAgent = createAgent(docGovernAgentConfig(), adapter, docGovernToolkit, memory);
   await docGovernAgent.wakeup();
   scheduler.register(AgentType.DocGovern, docGovernAgent, CHAT_MODEL);
 
   const inspectorToolkit = new Toolkit(gate);
   registerRealTools(inspectorToolkit, WORKSPACE);
-  const inspectorAgent = new InspectorAgent(adapter, inspectorToolkit);
+  const inspectorAgent = createInspectorAgent(adapter, inspectorToolkit, memory);
   await inspectorAgent.wakeup();
   scheduler.register(AgentType.Inspector, inspectorAgent, CHAT_MODEL);
 
   const opsToolkit = new Toolkit(gate);
   registerRealTools(opsToolkit, WORKSPACE);
-  const opsAgent = new OpsAgent(adapter, opsToolkit);
+  const opsAgent = createAgent(opsAgentConfig(), adapter, opsToolkit);
   await opsAgent.wakeup();
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
 
   const loopToolkit = new Toolkit(gate);
   registerRealTools(loopToolkit, WORKSPACE);
-  const loopAgent = new LoopAgent(adapter, loopToolkit);
+  const loopAgent = createAgent(loopAgentConfig(), adapter, loopToolkit);
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
 

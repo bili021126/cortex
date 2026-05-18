@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/notification" },
+    { "path": "packages/factory" },
+    { "path": "packages/parser" },
+    { "path": "packages/pm" },
+    { "path": "packages/data" },
+    { "path": "packages/tools" },
+    { "path": "packages/llm" },
+    { "path": "packages/testing" },
+    { "path": "packages/engine" },
+    { "path": "packages/cli" }
+  ]
+}

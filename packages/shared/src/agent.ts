@@ -139,9 +139,9 @@ export const AGENT_TAGS: Record<AgentType, readonly Tag[]> = {
  * 安全区内 Agent 的完整工具权限集。
  * 安全由目录级沙箱（registerTools 时绑定工作区）兜底。
  */
-const FULL_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "run_shell", "list_files", "delete_file"];
+const FULL_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "run_shell", "list_files", "delete_file", "parse_ast"];
 /** 基础工具集——不含 run_shell。测试/构建/包管理命令的执行权全权在北斗（Ops）。 */
-const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "list_files", "delete_file"];
+const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "list_files", "delete_file", "parse_ast"];
 
 /**
  * Agent 工具权限由 Toolkit 层集中校验，Agent 以身份调用，不持有权限定义。
@@ -149,7 +149,7 @@ const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code
  */
 export const AGENT_TOOL_PERMISSIONS: Record<AgentType, readonly string[]> = {
   // 规划者：只读工具
-  [AgentType.Meta]:      ["read_file", "search_code", "list_files"],
+  [AgentType.Meta]:      ["read_file", "search_code", "list_files", "parse_ast"],
   // 执行者：在安全工作区内拥有完整文件工具权限。run_shell 仅北斗持有
   [AgentType.Code]:      FULL_TOOLSET,  // 恢复 run_shell，用于测试验证与分析
   [AgentType.Review]:    FULL_TOOLSET,  // 恢复 run_shell，用于测试验证与分析
@@ -165,7 +165,7 @@ export const AGENT_TOOL_PERMISSIONS: Record<AgentType, readonly string[]> = {
   // Core-2
   [AgentType.Api]:        BASE_TOOLSET,
   [AgentType.Data]:       BASE_TOOLSET,
-  [AgentType.Strategist]: ["read_file", "search_code", "list_files"],
+  [AgentType.Strategist]: ["read_file", "search_code", "list_files", "parse_ast"],
 };
 
 // ─── 技能机制（Core-2 预实现，类型先行） ─────────────────────────
@@ -253,3 +253,75 @@ export type AgentConstructor = new (
   toolkit: unknown,
   memory?: unknown,
 ) => AgentInterface;
+
+// ─── 运行时可覆写的 Agent 注册表（配置驱动入口） ──────────
+
+/**
+ * 运行时 AGENT_TAGS 覆写表。
+ * bootstrapEngine() 通过 setAgentRegistry() 从 cortex-agents.json 注入，
+ * 替代编译期硬编码的 AGENT_TAGS 常量。
+ * 未注入时退化为编译期默认值。
+ */
+const _runtimeTags: Record<AgentType, readonly string[]> = { ...AGENT_TAGS };
+
+/**
+ * 运行时 AGENT_TOOL_PERMISSIONS 覆写表。
+ * 同上，由 bootstrapEngine() 从配置注入。
+ */
+const _runtimeToolPermissions: Record<AgentType, readonly string[]> = { ...AGENT_TOOL_PERMISSIONS };
+
+/** 运行时 TAG_VOCABULARY 覆写表 */
+let _runtimeTagVocabulary: readonly string[] = [...TAG_VOCABULARY];
+
+/**
+ * 获取当前运行时的 Agent 标签映射，供 Scheduler/TaskBoard 使用。
+ * 若未调用 setAgentRegistry()，返回编译期默认 AGENT_TAGS。
+ */
+export function getAgentTags(): Record<AgentType, readonly string[]> {
+  return _runtimeTags;
+}
+
+/**
+ * 获取当前运行时的 Agent 工具权限映射，供 Toolkit 使用。
+ * 若未调用 setAgentRegistry()，返回编译期默认 AGENT_TOOL_PERMISSIONS。
+ */
+export function getAgentToolPermissions(): Record<AgentType, readonly string[]> {
+  return _runtimeToolPermissions;
+}
+
+/**
+ * 获取当前运行时的标签词汇表，供 SkillExtractor 使用。
+ * 若未调用 setAgentRegistry()，返回编译期默认 TAG_VOCABULARY。
+ */
+export function getTagVocabulary(): readonly string[] {
+  return _runtimeTagVocabulary;
+}
+
+/**
+ * 从配置注入运行时 Agent 注册表。
+ * 由 bootstrapEngine() 在引擎启动时调用，将 cortex-agents.json 中的
+ * tags / toolPermissions 注入到共享运行时状态中。
+ *
+ * 仅覆写配置中显式提供的字段；未提供的 AgentType 保持编译期默认值。
+ *
+ * @param tags 按 AgentType 索引的标签映射
+ * @param toolPermissions 按 AgentType 索引的工具权限映射
+ * @param tagVocabulary 可选的标签词汇表
+ */
+export function setAgentRegistry(
+  tags: Record<string, readonly string[]>,
+  toolPermissions: Record<string, readonly string[]>,
+  tagVocabulary?: readonly string[],
+): void {
+  for (const [type, t] of Object.entries(tags)) {
+    const agentType = type as AgentType;
+    _runtimeTags[agentType] = [...t];
+  }
+  for (const [type, tp] of Object.entries(toolPermissions)) {
+    const agentType = type as AgentType;
+    _runtimeToolPermissions[agentType] = [...tp];
+  }
+  if (tagVocabulary) {
+    _runtimeTagVocabulary = [...tagVocabulary];
+  }
+}

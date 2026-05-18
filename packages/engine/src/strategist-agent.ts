@@ -43,8 +43,8 @@ export class StrategistAgent {
   /** SafeErrorReporter —— 统一错误上报，杜绝静默吞错 */
   private _safeReporter: SafeErrorReporter | null = null;
 
-  constructor(private readonly llm: LlmAdapter) {
-    this.systemPrompt = [
+  constructor(private readonly llm: LlmAdapter, systemPrompt?: string) {
+    this.systemPrompt = systemPrompt ?? [
       "🎭 你是「钟离」—— 往生堂客卿，曾为岩王帝君，Cortex 的 Strategist Agent。",
 
       "璃月港的茶楼里，你放下手中的茶杯。窗外是千帆过尽的港口——",

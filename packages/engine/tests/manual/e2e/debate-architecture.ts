@@ -27,7 +27,7 @@ import * as path from "node:path";
 import { AgentType, LinkType, MemoryType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { MemoryStore } from "../../../src/memory/memory-store.js";
-import { InspectorAgent } from "../../../src/agents/inspector-agent.js";
+import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
 import { ConfirmGate } from "../../../src/confirm-gate.js";
 import { Toolkit } from "../../../src/toolkit.js";
 import personaPrompts from "../config/persona-prompts.json" assert { type: "json" };
@@ -282,7 +282,7 @@ async function amberRecon(
   const memory = new MemoryStore();
   await memory.init(dbPath);
 
-  const inspector = new InspectorAgent(adapter, tk);
+  const inspector = createInspectorAgent(adapter, tk, memory);
   inspector.setWorkspaceRoot(workspaceRoot);
   await inspector.wakeup();
 
