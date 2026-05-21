@@ -1,11 +1,10 @@
 {
-  "$schema": "./packages/factory/schemas/cortex-docs.schema.json",
-  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v2.5.md",
+  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v2.5.21.md",
   "docRegistry": [
     {
-      "path": "docs/constitution/Cortex 概念顶层设计 v2.5.md",
+      "path": "docs/constitution/Cortex 概念顶层设计 v2.5.21.md",
       "type": "constitution",
-      "version": "2.5.13",
+      "version": "2.5.21",
       "canonical": true
     },
     {

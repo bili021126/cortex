@@ -10,10 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { convert, convertToDocument } from '@cortex/parser';
-import { CommandRegistry } from '../src/commands/index.js';
-import { ConfigManager } from '../src/services/config-manager.js';
-import { getFormatter, detectDefaultFormat } from '../src/formatters/index.js';
-import { CORTEX_VERSION } from '../src/commands/version.js';
+import { CommandRegistry, ConfigManager, getFormatter, detectDefaultFormat, CORTEX_VERSION } from "@cortex/cli";
 
 // ── 向后兼容 ──────────────────────────────────────
 

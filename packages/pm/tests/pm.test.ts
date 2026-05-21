@@ -4,10 +4,13 @@
  * 验证加密、解密、存储基础功能
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { encrypt, decrypt } from '../src/crypto.js';
 
 describe('@cortex/pm', () => {
+  beforeAll(() => {
+    process.env.PM_MASTER_KEY = 'test-master-key-for-unit-tests';
+  });
   describe('crypto', () => {
     it('encrypt 返回 base64 字符串', () => {
       const result = encrypt('hello world');

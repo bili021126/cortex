@@ -2,20 +2,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, MemoryType, MemoryState, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import { TaskBoard } from "../src/task-board";
-import { AgentPool } from "../src/agent-pool";
-import { PipelineObserver } from "../src/pipeline-observer";
-import { ConfirmGate } from "../src/confirm-gate";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, createInspectorAgent, Scheduler } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit } from "../src/toolkit";
-import { createAgent } from "../src/components/agent-factory";
-import { codeAgentConfig } from "../src/agents/code-agent";
-import { reviewAgentConfig } from "../src/agents/review-agent";
-import { analysisAgentConfig } from "../src/agents/analysis-agent";
-import { MemoryStore } from "../src/memory/memory-store.js";
-import { MetaAgent } from "../src/meta-agent";
-import { createInspectorAgent } from "../src/agents/inspector-agent";
-import { Scheduler } from "../src/scheduler";
 
 // ─── Mock helpers ────────────────────────────────
 

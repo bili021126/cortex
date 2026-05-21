@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentType } from "@cortex/shared";
-import { Toolkit } from "../src/toolkit.js";
+import { Toolkit } from "@cortex/engine";
 
 describe("Toolkit sandbox", () => {
   let tk: Toolkit;

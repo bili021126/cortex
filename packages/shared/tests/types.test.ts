@@ -80,19 +80,20 @@ describe("@cortex/shared v2.0 types", () => {
     expect(states).toHaveLength(4);
   });
 
-  it("LinkType includes 7 association types for BFS graph traversal", () => {
+  it("LinkType includes 9 association types for BFS graph traversal", () => {
     const types: LinkType[] = [
-      LinkType.RelatesTo, LinkType.DependsOn, LinkType.DependedBy,
-      LinkType.CausedBy, LinkType.Triggers, LinkType.SimilarTo,
-      LinkType.References,
+      LinkType.AccessedDuring, LinkType.ProducedBy, LinkType.DerivedFrom,
+      LinkType.DependsOn, LinkType.RefactoredFrom, LinkType.CitedInCommittee,
+      LinkType.CascadeTo, LinkType.ConfirmedUseful, LinkType.ConfirmedNoise,
     ];
-    expect(types).toHaveLength(7);
+    expect(types).toHaveLength(9);
   });
 
   it("TaskNode has required fields for scheduler dispatch", () => {
     const node: TaskNode = {
       id: "t1", type: "audit", tags: ["audit"],
-      priority: 0, status: "pending",
+      needsMultiPerspective: false, status: "pending",
+      claimedBy: [], payload: "", results: [], createdAt: Date.now(),
     };
     expect(node.id).toBe("t1");
     expect(node.status).toBe("pending");
@@ -107,21 +108,26 @@ describe("@cortex/shared v2.0 types", () => {
 
   it("MemoryEntry supports metadata and project fingerprint", () => {
     const entry: MemoryEntry = {
-      id: "mem-1", type: MemoryType.Episodic,
-      content: "test", tags: ["test"],
-      project: "cortex", timestamp: Date.now(),
+      id: "mem-1", memoryType: MemoryType.Episodic,
+      state: MemoryState.Active,
+      content: { text: "test" },
+      summary: "test memory", agentType: AgentType.Code,
+      creatorId: "test-creator",
+      createdAt: Date.now(), lastAccessedAt: Date.now(),
+      accessCount: 0, weight: 1.0, isPrivate: false,
+      projectFingerprint: "cortex",
     };
     expect(entry.id).toBe("mem-1");
-    expect(entry.project).toBe("cortex");
+    expect(entry.projectFingerprint).toBe("cortex");
   });
 
   it("MemoryQuery supports keywords, BFS graph, and metadata filtering", () => {
     const query: MemoryQuery = {
-      keywords: ["test"], linkTypes: [LinkType.RelatesTo],
-      maxDepth: 2, minSimilarity: 0.8,
+      keywords: ["test"], linkTypes: [LinkType.DependsOn],
+      bfsDepth: 2,
     };
     expect(query.keywords).toContain("test");
-    expect(query.maxDepth).toBe(2);
+    expect(query.bfsDepth).toBe(2);
   });
 
   it("ExecutionReport tracks total/completed/failed/duration", () => {
@@ -133,9 +139,9 @@ describe("@cortex/shared v2.0 types", () => {
     expect(report.failed).toBeLessThanOrEqual(report.totalNodes);
   });
 
-  it("TAG_VOCABULARY includes inspect, doc_govern, browser, and self-examination tags", () => {
+  it("TAG_VOCABULARY includes inspect, doc-govern, browser, and self-examination tags", () => {
     expect(TAG_VOCABULARY).toContain("inspect");
-    expect(TAG_VOCABULARY).toContain("doc_govern");
+    expect(TAG_VOCABULARY).toContain("doc-govern");
     expect(TAG_VOCABULARY).toContain("browser");
     expect(TAG_VOCABULARY).toContain("audit");
     expect(TAG_VOCABULARY).toContain("review");
@@ -155,15 +161,15 @@ describe("@cortex/shared v2.0 types", () => {
   });
 
   it("AGENT_TAGS maps Inspector to inspect, Browser to browser+ui_verify", () => {
-    expect(AGENT_TAGS.Inspector).toContain("inspect");
-    expect(AGENT_TAGS.Browser).toContain("browser");
-    expect(AGENT_TAGS.Browser).toContain("ui_verify");
+    expect(AGENT_TAGS[AgentType.Inspector]).toContain("inspect");
+    expect(AGENT_TAGS[AgentType.Browser]).toContain("browser");
+    expect(AGENT_TAGS[AgentType.Browser]).toContain("ui_verify");
   });
 
   it("AGENT_TOOL_PERMISSIONS grants run_shell to Code/Review/Ops for test analysis", () => {
-    expect(AGENT_TOOL_PERMISSIONS.Code).toContain("run_shell");
-    expect(AGENT_TOOL_PERMISSIONS.Review).toContain("run_shell");
-    expect(AGENT_TOOL_PERMISSIONS.Ops).toContain("run_shell");
+    expect(AGENT_TOOL_PERMISSIONS[AgentType.Code]).toContain("run_shell");
+    expect(AGENT_TOOL_PERMISSIONS[AgentType.Review]).toContain("run_shell");
+    expect(AGENT_TOOL_PERMISSIONS[AgentType.Ops]).toContain("run_shell");
   });
 
   it("PipelinePriority CRITICAL < HIGH < NORMAL", () => {
@@ -173,8 +179,8 @@ describe("@cortex/shared v2.0 types", () => {
   });
 
   it("ReversibilityLevel L0 read-only, L3 irreversible", () => {
-    expect(ReversibilityLevel.L0).toBe(0);
-    expect(ReversibilityLevel.L3).toBe(3);
+    expect(ReversibilityLevel.L0).toBe("L0");
+    expect(ReversibilityLevel.L3).toBe("L3");
   });
 
   it("PlatformKind distinguishes CLI from Electron", () => {
@@ -188,16 +194,15 @@ describe("@cortex/shared v2.0 types", () => {
   });
 
   it("RiskDomain covers file_write/shell_exec/network/config_change", () => {
-    expect(RiskDomain.FileWrite).toBe("file_write");
-    expect(RiskDomain.ShellExec).toBe("shell_exec");
-    expect(RiskDomain.Network).toBe("network");
-    expect(RiskDomain.ConfigChange).toBe("config_change");
+    const domains: RiskDomain[] = ["file_write", "shell_exec", "network", "config_change"];
+    expect(domains).toHaveLength(4);
   });
 
   it("MemoryLink references source-target with link type and weight", () => {
     const link: MemoryLink = {
-      sourceId: "a", targetId: "b",
+      id: "link-1", sourceId: "a", targetId: "b",
       linkType: LinkType.DependsOn, weight: 1.0,
+      targetState: MemoryState.Active, lastAccessedAt: Date.now(),
     };
     expect(link.sourceId).toBe("a");
     expect(link.linkType).toBe(LinkType.DependsOn);

@@ -5,6 +5,12 @@
 // 本文档是 @cortex/shared 的桶导出，定义跨包的类型契约。所有 export *
 // 将对应域的完整类型/枚举/常量暴露给 @cortex/engine 和 @cortex/llm。
 //
+// @module-convention 模块化铁律（昔涟 v2.6 入宪）
+// 1. 凡 src/ 下新增公开类型/枚举/常量，必须在本文件追加 export * 行。
+// 2. 测试文件禁止 ../src/ 相对导入——只用 @cortex/shared 包名导入。
+// 3. 收益：文件合并/拆分/重命名——只要 barrel 出口不变，所有引用方无感。
+// 违反者：导入路径越写越长，终至不可维护。
+//
 // @contract 类型中枢契约
 // - agent.ts: AgentType 枚举、AGENT_TAGS 标签词汇表、状态机、工具权限、
 //   技能模板接口、能力协议——是整个 Agent 体系的类型脊梁

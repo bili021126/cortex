@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { PipelineObserver } from "../src/pipeline-observer";
+import { PipelineObserver } from "@cortex/engine";
 import { PipelinePriority } from "@cortex/shared";
 import type { SafeErrorContext } from "@cortex/shared";
 

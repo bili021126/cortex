@@ -2,7 +2,7 @@ import type { MemoryQuery, AgentType } from "@cortex/shared";
 import { AgentType as AT, MemoryType, LinkType } from "@cortex/shared";
 import type { TaskNode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../toolkit.js";
+import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
 import { BaseAgent } from "../base-agent.js";
 import { type AgentFactoryConfig } from "../components/agent-factory.js";

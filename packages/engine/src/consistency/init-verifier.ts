@@ -116,7 +116,7 @@ export class InitVerifier {
     const timestamp = Date.now();
 
     // 获取全部 Active 记忆（limit=0 不限量，trackAccess=false 避免校验扫描污染访问统计）
-    const activeMemories = this._memory.read({
+    const activeMemories = await this._memory.read({
       states: [MemoryState.Active],
       limit: 0,
       includePrivate: true,

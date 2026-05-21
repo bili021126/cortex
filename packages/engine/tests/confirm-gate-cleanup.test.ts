@@ -7,7 +7,7 @@
  * 3. hasPending() 在 timeout 后返回 false
  */
 import { describe, it, expect } from "vitest";
-import { ConfirmGate } from "../src/confirm-gate.js";
+import { ConfirmGate } from "@cortex/engine";
 import { ReversibilityLevel as RL } from "@cortex/shared";
 
 describe("M1: ConfirmGate handleTimeout 回收 pending", () => {

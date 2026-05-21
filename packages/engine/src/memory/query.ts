@@ -1,7 +1,7 @@
 import type { MemoryEntry, MemoryQuery } from "@cortex/shared";
 import { MemoryState, type LinkType } from "@cortex/shared";
 import type { MemoryStorage } from "./storage.js";
-import { THIRTY_DAYS_MS, EMBEDDING_DIM } from "./schema.js";
+import { THIRTY_DAYS_MS, EMBEDDING_DIM, BFS_WEIGHT_THRESHOLD, MAX_LINKS_PER_NODE } from "./schema.js";
 
 /**
  * MemoryQueryEngine —— 内存扫描 + BFS 图遍历查询引擎。
@@ -78,6 +78,8 @@ export class MemoryQueryEngine {
    * 从 seeds 出发，沿出边 +（可选）入边广度遍历，每条边 decay=0.7^depth，
    * 将发现的邻居记忆追加到结果。
    *
+   * @fix 语义卫生 — BFS 噪声门限：weight 截断 + 每节点出边数上限
+   *
    * @param bfsDirection 'both' = 出边+入边（兼容旧行为），'outbound' = 仅出边（抗噪音，默认）
    *
    * 参考 cortex 记忆系统设计 V2: "Search & Retrieval" 节 BFS Spread Activation 算法。
@@ -104,20 +106,27 @@ export class MemoryQueryEngine {
       for (const id of frontier) {
         if (visited.size >= maxNodes) break;
 
-        // 出边
-        const outLinks = storage.links.get(id) ?? [];
+        // 出边 — 按 weight 降序截断，限制考察数量
+        const rawLinks = storage.links.get(id) ?? [];
+        const outLinks = rawLinks
+          .sort((a, b) => b.weight - a.weight)
+          .slice(0, MAX_LINKS_PER_NODE);
+
         for (const link of outLinks) {
           if (visited.size >= maxNodes) break;
           if (linkTypes && linkTypes.length > 0 && !linkTypes.includes(link.linkType)) continue;
-          if (!visited.has(link.targetId)) {
-            const target = storage.memories.get(link.targetId);
-            if (target && target.state !== MemoryState.Obliterated) {
-              visited.add(link.targetId);
-              nextFrontier.push(link.targetId);
-              if (!seedIds.has(link.targetId)) {
-                discovered.set(link.targetId, { ...target, weight: +(target.weight * decay).toFixed(4) });
-              }
-            }
+          if (visited.has(link.targetId)) continue;
+
+          const target = storage.memories.get(link.targetId);
+          if (!target || target.state === MemoryState.Obliterated) continue;
+
+          const decayedWeight = target.weight * decay;
+          if (decayedWeight < BFS_WEIGHT_THRESHOLD) continue;
+
+          visited.add(link.targetId);
+          nextFrontier.push(link.targetId);
+          if (!seedIds.has(link.targetId)) {
+            discovered.set(link.targetId, { ...target, weight: +decayedWeight.toFixed(4) });
           }
         }
 
@@ -127,15 +136,18 @@ export class MemoryQueryEngine {
           if (incoming) {
             for (const sourceId of incoming) {
               if (visited.size >= maxNodes) break;
-              if (!visited.has(sourceId)) {
-                const source = storage.memories.get(sourceId);
-                if (source && source.state !== MemoryState.Obliterated) {
-                  visited.add(sourceId);
-                  nextFrontier.push(sourceId);
-                  if (!seedIds.has(sourceId)) {
-                    discovered.set(sourceId, { ...source, weight: +(source.weight * decay).toFixed(4) });
-                  }
-                }
+              if (visited.has(sourceId)) continue;
+
+              const source = storage.memories.get(sourceId);
+              if (!source || source.state === MemoryState.Obliterated) continue;
+
+              const decayedWeight = source.weight * decay;
+              if (decayedWeight < BFS_WEIGHT_THRESHOLD) continue;
+
+              visited.add(sourceId);
+              nextFrontier.push(sourceId);
+              if (!seedIds.has(sourceId)) {
+                discovered.set(sourceId, { ...source, weight: +decayedWeight.toFixed(4) });
               }
             }
           }

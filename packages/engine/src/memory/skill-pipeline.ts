@@ -12,8 +12,8 @@
  *   SkillRegistry 类的实现已从 shared 移入 engine，shared 仅保留 SerializedSkillRegistry 类型。
  */
 import type { SkillTemplate, AgentType } from "@cortex/shared";
-import type { PipelineObserver } from "../pipeline-observer.js";
-import type { SkillRegistry } from "../skill-registry.js";
+import type { PipelineObserver } from "../core/pipeline-observer.js";
+import type { SkillRegistry } from "../registry/skill-registry.js";
 import type { MemoryStore } from "./memory-store.js";
 import { extractSkillsFromOutput } from "../components/index.js";
 import { persistSkillsToMemory } from "../components/index.js";

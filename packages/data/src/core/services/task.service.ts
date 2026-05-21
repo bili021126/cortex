@@ -9,7 +9,7 @@
 
 import { Task, TaskUpdateData } from '../models/task.js';
 import { TaskStatus } from '../models/status.js';
-import { Priority } from '../models/priority.js';
+import { Priority, VALID_PRIORITIES } from '../models/priority.js';
 import { TaskRepository, TaskFilter } from '../../storage/interfaces/task.repository.js';
 import { TaskNotFoundError, TaskDeletedError } from '../../storage/errors.js';
 
@@ -86,12 +86,16 @@ export class TaskService {
   async stats(): Promise<TaskStats> {
     const all = await this.repository.findAll({ includeDeleted: false });
 
+    const byPriority = Object.fromEntries(
+      VALID_PRIORITIES.map((p) => [p, 0]),
+    ) as Record<number, number>;
+
     const stats: TaskStats = {
       total: all.length,
       todo: 0,
       inProgress: 0,
       done: 0,
-      byPriority: { 0: 0, 1: 0, 2: 0, 3: 0 },
+      byPriority,
     };
 
     for (const task of all) {

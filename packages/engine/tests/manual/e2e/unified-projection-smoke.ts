@@ -12,7 +12,7 @@
  *   Fix 6: _fusionScore 分离于 weight，阶段 5 统一应用
  */
 import { AgentType, MemoryType } from "@cortex/shared";
-import { MemoryStore } from "../../../src/memory/memory-store.js";
+import { MemoryStore } from "@cortex/engine";
 
 // 384 维假 embedding（模拟 all-MiniLM-L6-v2）
 function makeFakeEmbed(seed: number): number[] {
@@ -106,8 +106,9 @@ async function main() {
   });
 
   // 建立关联
-  memory.link(idA, idB, "DERIVED_FROM" as any, "刻晴");
-  memory.link(idB, idC, "CITED_IN_COMMITTEE" as any, "纳西妲");
+  const m = memory as any;
+  m.link(idA, idB, "DERIVED_FROM" as any, "刻晴");
+  m.link(idB, idC, "CITED_IN_COMMITTEE" as any, "纳西妲");
 
   console.log(`   写入 ${memory.size} 条记忆 + 2 条关联\n`);
 
@@ -116,7 +117,7 @@ async function main() {
   // ════════════════════════════════════════════════
   console.log("── 1. forAgent() 动态投影 ──");
 
-  const codeQuery = memory.forAgent({
+  const codeQuery = m.forAgent({
     agentType: AgentType.Code,
     taskPhase: "execution",
     context: "重构记忆检索 FTS5 索引",
@@ -127,7 +128,7 @@ async function main() {
   assert(codeQuery.trackAccess === true, "csa 模式 → trackAccess=true");
   assert(codeQuery.keywords!.length > 0, "context 提取出关键词");
 
-  const metaQuery = memory.forAgent({
+  const metaQuery = m.forAgent({
     agentType: AgentType.Meta,
     taskPhase: "planning",
     context: "规划下一阶段开发",
@@ -137,7 +138,7 @@ async function main() {
   assert(metaQuery.limit === 10, "hca 模式 → limit=10");
   assert(metaQuery.trackAccess === false, "hca 模式 → trackAccess=false");
 
-  const reviewQuery = memory.forAgent({
+  const reviewQuery = m.forAgent({
     agentType: AgentType.Review,
     taskPhase: "review",
   });
@@ -281,24 +282,24 @@ async function main() {
   // ════════════════════════════════════════════════
   console.log("── 7. 通道权重调整 + 归一化 ──");
 
-  const w0 = memory.channelWeights;
+  const w0 = m.channelWeights;
   const sum0 = +(w0.fts5 + w0.vector + w0.bfs).toFixed(4);
   assert(Math.abs(sum0 - 1) < 0.001, `初始权重和=${sum0} ≈ 1`);
 
-  memory.adjustChannelWeight('vector', 0.1);
-  const w1 = memory.channelWeights;
+  m.adjustChannelWeight('vector', 0.1);
+  const w1 = m.channelWeights;
   const sum1 = +(w1.fts5 + w1.vector + w1.bfs).toFixed(4);
   assert(Math.abs(sum1 - 1) < 0.001, `调整后权重和=${sum1} ≈ 1`);
   assert(w1.vector > w0.vector, "向量通道权重增加");
 
   // 边界：不能低于 0.05
-  memory.adjustChannelWeight('bfs', -0.9);
-  const w2 = memory.channelWeights;
+  m.adjustChannelWeight('bfs', -0.9);
+  const w2 = m.channelWeights;
   assert(w2.bfs >= 0.045, `bfs 权重=${w2.bfs.toFixed(3)} ≥ 0.05（下限保护）`);
 
   // 不能高于 0.9
-  memory.adjustChannelWeight('fts5', 2.0);
-  const w3 = memory.channelWeights;
+  m.adjustChannelWeight('fts5', 2.0);
+  const w3 = m.channelWeights;
   assert(w3.fts5 <= 0.91, `fts5 权重=${w3.fts5.toFixed(3)} ≤ 0.9（上限保护）`);
   console.log("");
 
@@ -322,9 +323,10 @@ async function main() {
 
   // 第一次探索：50 轮触发
   for (let i = 0; i < 49; i++) memory2.read({ limit: 1 });
-  const wPreExp1 = memory2.channelWeights;
+  const m2 = memory2 as any;
+  const wPreExp1 = m2.channelWeights;
   memory2.read({ limit: 1 }); // 第 50 次触发
-  const wPostExp1 = memory2.channelWeights;
+  const wPostExp1 = m2.channelWeights;
   const changed1 = wPreExp1.fts5 !== wPostExp1.fts5
     || wPreExp1.vector !== wPostExp1.vector
     || wPreExp1.bfs !== wPostExp1.bfs;
@@ -332,7 +334,7 @@ async function main() {
 
   // 完成 10 轮观察 → 回滚
   for (let i = 0; i < 10; i++) memory2.read({ limit: 1 });
-  const wAfterRollback = memory2.channelWeights;
+  const wAfterRollback = m2.channelWeights;
   const rolledBack = Math.abs(wAfterRollback.fts5 - wPreExp1.fts5) < 0.001
     && Math.abs(wAfterRollback.vector - wPreExp1.vector) < 0.001
     && Math.abs(wAfterRollback.bfs - wPreExp1.bfs) < 0.001;
@@ -342,9 +344,9 @@ async function main() {
   // 目前已读 50+10=60 次，还需要 40 次
   for (let i = 0; i < 39; i++) memory2.read({ limit: 1 });
   // 第 100 次 read
-  const wPreExp2 = memory2.channelWeights;
+  const wPreExp2 = m2.channelWeights;
   memory2.read({ limit: 1 });
-  const wPostExp2 = memory2.channelWeights;
+  const wPostExp2 = m2.channelWeights;
   const changed2 = wPreExp2.fts5 !== wPostExp2.fts5
     || wPreExp2.vector !== wPostExp2.vector
     || wPreExp2.bfs !== wPostExp2.bfs;
@@ -370,16 +372,17 @@ async function main() {
 
   // 触发探索
   for (let i = 0; i < 50; i++) memory3.read({ limit: 1 });
-  const wSnap = memory3.channelWeights; // 探索后的权重
+  const m3 = memory3 as any;
+  const wSnap = m3.channelWeights; // 探索后的权重
   assert(wSnap.fts5 !== 1/3 || wSnap.vector !== 1/3 || wSnap.bfs !== 1/3,
     "探索契约改变了权重");
 
   // 在观察窗口内手动调权
-  memory3.adjustChannelWeight('bfs', 0.15);
+  m3.adjustChannelWeight('bfs', 0.15);
 
   // 完成 10 轮观察 → 回滚合并
   for (let i = 0; i < 10; i++) memory3.read({ limit: 1 });
-  const wAfterMerge = memory3.channelWeights;
+  const wAfterMerge = m3.channelWeights;
 
   // 合并后权重应介于快照和快照+手动调整之间（取均值）
   // 不是完全回滚到探索前，也不是完全保留手动调整

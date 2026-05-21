@@ -1,9 +1,10 @@
 import type { TaskNode, NodeResult, AgentType, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../toolkit.js";
+import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
+import { DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
 
-const DEFAULT_MAX_LOOPS = 64;
+const DEFAULT_MAX_LOOPS = DEFAULT_ENGINE_CONFIG.defaultMaxLoops;
 
 /**
  * ReAct 循环上下文——解耦 BaseAgent 继承链。

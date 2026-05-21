@@ -53,6 +53,57 @@ export enum AgentStatus {
   Destroyed = "destroyed",
 }
 
+// ─── Agent 标签词汇表 ───────────────────────────────────
+
+/**
+ * AgentType → 中文角色名映射。
+ * 用于 CLI 显示（agent list）和中文名输入解析。
+ *
+ * 注意：strategist 类型映射到两个 Agents（钟离+霜凝），
+ * CLI 层需从 bootstrapResult.strategists 分别查询。
+ */
+export const AGENT_CHINESE_ROLE: Record<AgentType, string> = {
+  [AgentType.Meta]:      "甘雨",
+  [AgentType.Code]:      "阿贝多",
+  [AgentType.Review]:    "刻晴",
+  [AgentType.Analysis]:  "纳西妲",
+  [AgentType.Ops]:       "北斗",
+  [AgentType.Loop]:      "莫娜",
+  [AgentType.DocGovern]: "凝光",
+  [AgentType.Butler]:    "托马",
+  [AgentType.Inspector]: "安柏",
+  [AgentType.Fix]:       "希格雯",
+  [AgentType.Api]:       "久岐忍",
+  [AgentType.Browser]:   "宵宫",
+  [AgentType.Data]:      "艾尔海森",
+  [AgentType.Strategist]: "钟离",
+};
+
+/**
+ * 中文名 → AgentType 反向映射。
+ * 用于 CLI 命令输入（agent inspect 钟离 等）。
+ *
+ * 注意：钟离和霜凝共享 AgentType.Strategist，反向映射返回同一个 type。
+ * CLI 层的 inspect 需额外查 bootstrapResult.strategists 区分实例。
+ */
+export const CHINESE_NAME_TO_TYPE: Record<string, AgentType> = {
+  "甘雨":   AgentType.Meta,
+  "阿贝多": AgentType.Code,
+  "刻晴":   AgentType.Review,
+  "纳西妲": AgentType.Analysis,
+  "北斗":   AgentType.Ops,
+  "莫娜":   AgentType.Loop,
+  "凝光":   AgentType.DocGovern,
+  "托马":   AgentType.Butler,
+  "安柏":   AgentType.Inspector,
+  "希格雯": AgentType.Fix,
+  "久岐忍": AgentType.Api,
+  "宵宫":   AgentType.Browser,
+  "艾尔海森": AgentType.Data,
+  "钟离":   AgentType.Strategist,
+  "霜凝":   AgentType.Strategist,
+};
+
 // ─── 标签词汇表（封闭集合） ─────────────────────────────────
 
 export const TAG_VOCABULARY = [
@@ -78,7 +129,6 @@ export const TAG_VOCABULARY = [
   "inspector",
   "inspect",
   "doc-govern",
-  "doc_govern",
   "browser",
   "ui_verify",
   "fix",
@@ -97,6 +147,8 @@ export const TAG_VOCABULARY = [
   "schema",
   "strategy",
   "strategist",
+  "contract",
+  "direction",
 ] as const;
 
 export type Tag = (typeof TAG_VOCABULARY)[number];
@@ -122,7 +174,7 @@ export const AGENT_TAGS: Record<AgentType, readonly Tag[]> = {
   [AgentType.Analysis]:  ["analysis", "research"],
   [AgentType.Ops]:       ["ops", "deploy", "test"],
   [AgentType.Loop]:      ["loop", "pattern_scan", "skill_precipitate"],
-  [AgentType.DocGovern]: ["doc-govern", "doc_govern", "audit", "plan_review", "doc_audit", "constitution_check", "constitution_propose"],
+  [AgentType.DocGovern]: ["doc-govern", "audit", "plan_review", "doc_audit", "constitution_check", "constitution_propose"],
   [AgentType.Butler]:    [],
   [AgentType.Inspector]: ["inspector", "inspect"],
   [AgentType.Browser]:   ["browser", "ui_verify"],
@@ -130,7 +182,7 @@ export const AGENT_TAGS: Record<AgentType, readonly Tag[]> = {
   // Core-2 预埋
   [AgentType.Api]:        ["api", "api_design", "api_integration", "endpoint", "review", "research", "analysis"],
   [AgentType.Data]:       ["data", "data_model", "migration", "storage", "schema", "review", "research", "analysis"],
-  [AgentType.Strategist]: ["strategy", "strategist"],
+  [AgentType.Strategist]: ["strategy", "contract"],
 };
 
 // ─── Toolkit 集中权限表 ─────────────────────────────────────
@@ -139,9 +191,9 @@ export const AGENT_TAGS: Record<AgentType, readonly Tag[]> = {
  * 安全区内 Agent 的完整工具权限集。
  * 安全由目录级沙箱（registerTools 时绑定工作区）兜底。
  */
-const FULL_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "run_shell", "list_files", "delete_file", "parse_ast"];
+const FULL_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "web_search", "run_shell", "list_files", "delete_file", "parse_ast"];
 /** 基础工具集——不含 run_shell。测试/构建/包管理命令的执行权全权在北斗（Ops）。 */
-const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "list_files", "delete_file", "parse_ast"];
+const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "web_search", "list_files", "delete_file", "parse_ast"];
 
 /**
  * Agent 工具权限由 Toolkit 层集中校验，Agent 以身份调用，不持有权限定义。
@@ -149,7 +201,7 @@ const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code
  */
 export const AGENT_TOOL_PERMISSIONS: Record<AgentType, readonly string[]> = {
   // 规划者：只读工具
-  [AgentType.Meta]:      ["read_file", "search_code", "list_files", "parse_ast"],
+  [AgentType.Meta]:      ["read_file", "search_code", "web_search", "list_files", "parse_ast"],
   // 执行者：在安全工作区内拥有完整文件工具权限。run_shell 仅北斗持有
   [AgentType.Code]:      FULL_TOOLSET,  // 恢复 run_shell，用于测试验证与分析
   [AgentType.Review]:    FULL_TOOLSET,  // 恢复 run_shell，用于测试验证与分析
@@ -161,11 +213,11 @@ export const AGENT_TOOL_PERMISSIONS: Record<AgentType, readonly string[]> = {
   [AgentType.Browser]:   [...BASE_TOOLSET, "browser_do"],
   [AgentType.Fix]:       FULL_TOOLSET,
   // 管家：不调用工具
-  [AgentType.Butler]:    [],
+  [AgentType.Butler]:    ["web_search"],
   // Core-2
   [AgentType.Api]:        BASE_TOOLSET,
   [AgentType.Data]:       BASE_TOOLSET,
-  [AgentType.Strategist]: ["read_file", "search_code", "list_files", "parse_ast"],
+  [AgentType.Strategist]: ["read_file", "search_code", "web_search", "list_files", "parse_ast"],
 };
 
 // ─── 技能机制（Core-2 预实现，类型先行） ─────────────────────────

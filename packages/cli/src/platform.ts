@@ -17,7 +17,7 @@ export function getPlatformBridge(): PlatformBridge {
   if (!_bridge) {
     _bridge = new CLIAdapter();
   }
-  return _bridge;
+  return _bridge!;
 }
 
 /** 关闭 PlatformBridge（释放 stdin） */

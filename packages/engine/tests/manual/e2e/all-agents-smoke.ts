@@ -18,27 +18,27 @@ import * as path from "node:path";
 import { PipelineEventType, PipelinePriority, type TaskNode, type SafeErrorReporter, AgentStatus as AS } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 
-// ── Agent 导入 ──
-import { createAgent } from "../../../src/components/agent-factory.js";
-import { codeAgentConfig } from "../../../src/agents/code-agent.js";
-import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
-import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
-import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
-import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
-import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
-import { apiAgentConfig } from "../../../src/agents/api-agent.js";
-import { dataAgentConfig } from "../../../src/agents/data-agent.js";
-import { fixAgentConfig } from "../../../src/agents/fix-agent.js";
-import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
-import { createBrowserAgent } from "../../../src/agents/browser-agent.js";
-import { ButlerAgent } from "../../../src/agents/butler-agent.js";
-
-// ── 基础设施 ──
-import { Toolkit } from "../../../src/toolkit.js";
-import { MemoryStore } from "../../../src/memory/memory-store.js";
-import { PipelineObserver } from "../../../src/pipeline-observer.js";
-import { ConfirmGate } from "../../../src/confirm-gate.js";
-import { CLIAdapter } from "../../../src/cli-adapter.js";
+import {
+  createAgent,
+  codeAgentConfig,
+  reviewAgentConfig,
+  analysisAgentConfig,
+  opsAgentConfig,
+  loopAgentConfig,
+  docGovernAgentConfig,
+  apiAgentConfig,
+  dataAgentConfig,
+  fixAgentConfig,
+  createInspectorAgent,
+  createBrowserAgent,
+  ButlerAgent,
+  Toolkit,
+  MemoryStore,
+  PipelineObserver,
+  ConfirmGate,
+  CLIAdapter,
+} from "@cortex/engine";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ══════════════════════════════════════════════
 // 0. 类型 & 常量
@@ -246,8 +246,9 @@ async function main() {
     process.exit(1);
   }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner";
+  const llmCfg = resolveLlmConfig();
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel;
   const WORKSPACE = process.cwd();
 
   console.log("╔══════════════════════════════════════╗");

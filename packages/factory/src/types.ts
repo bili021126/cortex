@@ -16,10 +16,14 @@ export interface AgentDefinition {
   id: string;
   /** Agent 类型 */
   type: AgentType;
-  /** 角色名（人类可读） */
+  /** 角色名（人类可读，格式："短名 — 头衔"） */
   role: string;
   /** 系统提示词 */
   systemPrompt: string;
+  /** 展示信息——统一的 emoji + 短名 + 头衔（收敛自 agent-registry.json） */
+  display?: AgentDisplay;
+  /** 圆桌会议 Persona——仅参与圆桌的 Agent 有此字段（收敛自 persona-prompts.json） */
+  roundtable?: AgentRoundtable;
   /** 生产的事件类型列表 */
   produces: string[];
   /** 使用的模型 */
@@ -38,6 +42,19 @@ export interface AgentDefinition {
   planningPrompt?: string;
   /** 重规划系统提示词（仅 meta agent 使用） */
   replanPrompt?: string;
+}
+
+/** Agent 展示信息（统一收敛自此） */
+export interface AgentDisplay {
+  emoji: string;
+  shortName: string;
+  title: string;
+}
+
+/** Agent 圆桌会议 Persona */
+export interface AgentRoundtable {
+  personaPrompt: string;
+  roundtableTitle: string;
 }
 
 /** 事件路由配置 */
@@ -82,8 +99,105 @@ export interface RoundtableTemplate {
 export interface CortexAgentsConfig {
   agents: Record<string, AgentDefinition>;
   eventRouting: EventRoutingConfig;
-  /** 圆桌会议模板（可选） */
+  /** 圆桌会议模板 */
   roundtableTemplates?: RoundtableTemplate[];
+  /** 搜索提供商配置 */
+  searchProviders?: SearchProvidersConfig;
+  /** 自审视脚本配置（收敛自 self-examination-config.json） */
+  selfExamination?: SelfExaminationConfig;
+  /** 交叉验证配对表（收敛自 cross-verification-pairs.json） */
+  crossVerification?: CrossVerificationConfig;
+  /** 种子记忆（收敛自 seed-memories.json） */
+  seedMemories?: SeedMemoriesConfig;
+  /** 治理管线配置 */
+  governancePipeline?: GovernancePipelineConfig;
+}
+
+/** 自审视脚本配置 */
+export interface SelfExaminationConfig {
+  description: string;
+  agents: {
+    hard: string[];
+    soft: string[];
+  };
+  consensusAgents: string[];
+  agentTypes: {
+    hard: string[];
+    soft: string[];
+  };
+  outputDir: {
+    hard: string;
+    soft: string;
+  };
+  consensusOutput: string;
+  archiveBase: string;
+  cleanupFiles: string[];
+  templates: {
+    hard: string;
+    soft: string;
+  };
+  reportMaxCharsDefault: number;
+}
+
+/** 交叉验证配对 */
+export interface CrossVerificationPair {
+  reporterKey: string;
+  reporterName: string;
+  reporterEmoji: string;
+  verifierKey: string;
+  verifierName: string;
+  verifierEmoji: string;
+  reportFilePattern: string;
+}
+
+/** 交叉验证配置 */
+export interface CrossVerificationConfig {
+  description: string;
+  pairs: CrossVerificationPair[];
+}
+
+/** 种子记忆配置 */
+export interface SeedMemoriesConfig {
+  description: string;
+  entries: Array<{
+    taskId: string;
+    memoryType: string;
+    agentType: string;
+    content: unknown;
+    summary: string;
+    linkTo?: string;
+  }>;
+}
+
+/** 搜索提供商配置 */
+export interface SearchProvidersConfig {
+  backends: Array<{
+    id: string;
+    command: string;
+    args: string[];
+    enabled: boolean;
+  }>;
+  aggregation: {
+    deduplicateBy: string;
+    resultTimeout: number;
+    minBackends: number;
+  };
+}
+
+/** 治理管线配置 */
+export interface GovernancePipelineConfig {
+  enabled: boolean;
+  stages: string[];
+  ciGate: {
+    script: string;
+    timeoutMs: number;
+    blockOnFailure: boolean;
+  };
+  triggers: {
+    onAmendmentProposed: boolean;
+    onSchedule: boolean;
+    onCommit: boolean;
+  };
 }
 
 // ─── cortex-cognition.json 类型 ──────────────────────

@@ -1,15 +1,16 @@
 import type {
   Agent, TaskNode, NodeResult, AgentType, MemoryQuery,
-  SafeErrorReporter, AgentStatus,
+  SafeErrorReporter, AgentStatus, MemoryEntry,
 } from "@cortex/shared";
 import { AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../toolkit.js";
+import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
-import type { AgentPool } from "../agent-pool.js";
-import { PoolAwareState } from "../pool-aware.js";
+import type { AgentPool } from "../core/agent-pool.js";
+import { PoolAwareState } from "./pool-aware.js";
 import { type ReActContext } from "./react-loop.js";
 import { executeWithMemoryPipeline } from "../memory/pipeline.js";
+import { DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
 
 /**
  * Agent 工厂配置——组合式替代 BaseAgent 继承。
@@ -36,6 +37,8 @@ export interface AgentFactoryConfig {
   memoryBfsDepth?: number;
   /** 记忆检索条数覆写——不提供则由 getMemoryQuery 决定 */
   memoryLimit?: number;
+  /** P0-六层防御：读路径 Intent 过滤回调 */
+  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[];
 }
 
 /**
@@ -63,7 +66,7 @@ export function createAgent(
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
 } {
-  const maxLoops = config.maxLoops ?? 64;
+  const maxLoops = config.maxLoops ?? DEFAULT_ENGINE_CONFIG.defaultMaxLoops;
   const state = new PoolAwareState(config.type);
   let safeReporter: SafeErrorReporter | null = null;
 
@@ -102,11 +105,13 @@ export function createAgent(
               ctx, enrichedNode, model,
               config.getMemoryQuery,
               safeReporter ?? undefined,
+              config.filterRead,
             )
           : await executeWithMemoryPipeline(
               ctx, enrichedNode, model,
               undefined,
               safeReporter ?? undefined,
+              config.filterRead,
             );
         return result;
       } finally {

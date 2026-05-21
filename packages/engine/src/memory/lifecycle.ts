@@ -103,7 +103,8 @@ export class MemoryLifecycle {
     return this.cas(storage, id, MemoryState.Pending, MemoryState.Active, persistFn);
   }
 
-  /** freeze: 任意状态 → Frozen（Obliterated 除外） */
+  /** freeze: 任意状态 → Frozen（Obliterated 除外）。
+   * @fix SM-4 — 增加幂等短路：已是 Frozen 则直接返回 true，与 obliterate() 对称。 */
   freeze(
     storage: MemoryStorage,
     id: string,
@@ -111,6 +112,7 @@ export class MemoryLifecycle {
   ): boolean {
     const m = storage.memories.get(id);
     if (!m) return false;
+    if (m.state === MemoryState.Frozen) return true;
     return this.cas(storage, id, m.state, MemoryState.Frozen, persistFn);
   }
 

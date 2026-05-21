@@ -1,6 +1,6 @@
 import type { MemoryQuery, MemoryLink, MemoryState, MemoryType, AgentType } from "@cortex/shared";
 import { LinkType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../pipeline-observer.js";
+import type { PipelineObserver } from "../core/pipeline-observer.js";
 import { MemoryStorage } from "./storage.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -52,7 +52,7 @@ export class MemoryPersistence {
     return this._lifecycle;
   }
 
-  /** 标记为 closing 状态，阻止新写入 */
+  /** 标记生命周期为 closing（由 MemoryStore 调用） */
   markClosing(): void {
     if (this._lifecycle === "active") this._lifecycle = "closing";
   }
@@ -62,23 +62,22 @@ export class MemoryPersistence {
     return this._persistEnabled;
   }
 
-  /** 底层数据库连接（只读暴露，供 MemoryStore 直接读取） */
+  /** 暴露给 MemoryStore 的原始 db 引用（谨慎使用） */
   get db(): DatabaseType | undefined {
     return this._db;
   }
 
-  // ─── 生命周期 ─────────────────────────────────────────
+  // ─── 生命周期 ─────────────────────────────────────────────
 
   /**
-   * 初始化：打开/创建 SQLite 数据库（WAL 模式），建表，从 DB 加载数据到 storage。
+   * 初始化持久化层：打开/创建 DB 文件、建表、加载存量数据。
    *
-   * @param dbPath  - 数据库文件路径
-   * @param storage - 内存存储实例（从 DB 加载的数据会写入此 storage）
+   * @fix D4 — 入口检查 _db 是否已存在，防止重复 init() 导致 DB 连接泄漏
    */
   async init(dbPath: string, storage: MemoryStorage): Promise<void> {
     if (this._db) {
       throw new Error(
-        `MemoryPersistence already initialized (dbPath: ${this._dbPath}); call close() first.`,
+        `MemoryPersistence already initialized (dbPath: ${this._dbPath}); call close() first`,
       );
     }
 
@@ -92,12 +91,15 @@ export class MemoryPersistence {
     this._db = new Database(dbPath);
     this._db.pragma("journal_mode = WAL");
 
+    // 建表 + 加载存量数据
     this._createTables(storage);
     this._persistEnabled = true;
   }
 
   /**
-   * 关闭：刷新脏数据 → 关闭 DB 连接 → 标记 closed
+   * 关闭持久化层：取消待刷写定时器 → 立即刷写 → 关闭 DB 连接。
+   *
+   * 保证在 DB 关闭前所有脏数据已落盘。
    */
   async close(): Promise<void> {
     if (this._lifecycle !== "active") return;
@@ -119,14 +121,13 @@ export class MemoryPersistence {
     this._lifecycle = "closed";
   }
 
-  // ─── 写入 ─────────────────────────────────────────────
+  // ─── 写入 ────────────────────────────────────────────────
 
   /**
-   * 单条 SQL 写入（INSERT / UPDATE / DELETE），带生命周期守卫和错误上报。
+   * 单条写入（write-through）。
    *
-   * @param sql     - SQL 语句（含 ? 占位符）
-   * @param params  - 参数数组
-   * @param opName  - 操作名称（用于日志和错误消息）
+   * 异常时通过 observer / console.error 上报，然后 rethrow。
+   * 调用方（MemoryStore）负责在 DB 失败时回滚内存状态——假阳性禁止。
    */
   run(sql: string, params: unknown[], opName: string): void {
     if (!this._db) {
@@ -135,44 +136,47 @@ export class MemoryPersistence {
     if (this._lifecycle !== "active") {
       if (this._observer) {
         this._observer.emit({
-          type: PipelineEventType.MemoryWriteBlocked,
-          priority: PipelinePriority.NORMAL,
-          payload: { op: opName, lifecycle: this._lifecycle },
+          type: PipelineEventType.MemoryFlushSkipped,
+          priority: PipelinePriority.HIGH,
+          payload: {
+            source: "MemoryPersistence",
+            detail: `run() 跳过 (lifecycle=${this._lifecycle})：${opName}`,
+          },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
       } else {
-        console.warn(`[MemoryPersistence] 写入被拒：${this._lifecycle} 状态 (op: ${opName})`);
+        console.warn(`[MemoryPersistence] run() 跳过 (lifecycle=${this._lifecycle})：${opName}`);
       }
-      throw new Error(
-        `[MemoryPersistence] 无法写入：lifecycle=${this._lifecycle} (op: ${opName})。调用方应检查 lifecycle 或 isEnabled。`,
-      );
+      throw new Error(`[MemoryPersistence] 生命周期非 active（${this._lifecycle}），拒绝写入 (op: ${opName})`);
     }
 
     try {
-      this._db.prepare(sql).run(...(params as (string | number | null)[]));
+      this._db.prepare(sql).run(...(params as unknown[]));
     } catch (e) {
       if (this._observer) {
         this._observer.emit({
           type: PipelineEventType.MemoryDbWriteFailed,
-          priority: PipelinePriority.NORMAL,
-          payload: { op: opName, sql },
+          priority: PipelinePriority.CRITICAL,
+          payload: {
+            source: "MemoryPersistence",
+            operation: opName,
+            error: e instanceof Error ? e.message : String(e),
+          },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
       } else {
-        console.warn(`[MemoryPersistence] DB 写入失败 (op: ${opName}): ${e instanceof Error ? e.message : String(e)}`);
+        console.error(`[MemoryPersistence] ${opName} 失败:`, e);
       }
       throw e;
     }
   }
 
   /**
-   * 批量 SQL 写入（使用 better-sqlite3 transaction API 实现真实批量）。
+   * 批量写入（使用 better-sqlite3 transaction API）。
    *
-   * @param sql     - SQL 语句（含 ? 占位符）
-   * @param rows    - 多行参数数组
-   * @param opName  - 操作名称（用于日志和错误消息）
+   * @fix M2 — 使用真实 transaction 而非逐条 prepare/run
    */
   runBatch(sql: string, rows: Array<(string | number | null)[]>, opName: string): void {
     if (!this._db) {
@@ -181,18 +185,19 @@ export class MemoryPersistence {
     if (this._lifecycle !== "active") {
       if (this._observer) {
         this._observer.emit({
-          type: PipelineEventType.MemoryWriteBlocked,
-          priority: PipelinePriority.NORMAL,
-          payload: { op: opName, lifecycle: this._lifecycle },
+          type: PipelineEventType.MemoryFlushSkipped,
+          priority: PipelinePriority.HIGH,
+          payload: {
+            source: "MemoryPersistence",
+            detail: `runBatch() 跳过 (lifecycle=${this._lifecycle})：${opName}`,
+          },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
       } else {
-        console.warn(`[MemoryPersistence] 批量写入被拒：${this._lifecycle} 状态 (op: ${opName})`);
+        console.warn(`[MemoryPersistence] runBatch() 跳过 (lifecycle=${this._lifecycle})：${opName}`);
       }
-      throw new Error(
-        `[MemoryPersistence] 无法批量写入：lifecycle=${this._lifecycle} (op: ${opName})。调用方应检查 lifecycle 或 isEnabled。`,
-      );
+      throw new Error(`[MemoryPersistence] 生命周期非 active（${this._lifecycle}），拒绝批量写入 (op: ${opName})`);
     }
 
     try {
@@ -207,31 +212,39 @@ export class MemoryPersistence {
       if (this._observer) {
         this._observer.emit({
           type: PipelineEventType.MemoryDbWriteFailed,
-          priority: PipelinePriority.NORMAL,
-          payload: { op: opName, sql },
+          priority: PipelinePriority.CRITICAL,
+          payload: {
+            source: "MemoryPersistence",
+            operation: opName,
+            error: e instanceof Error ? e.message : String(e),
+          },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
       } else {
-        console.warn(`[MemoryPersistence] 批量 DB 写入失败 (op: ${opName}): ${e instanceof Error ? e.message : String(e)}`);
+        console.error(`[MemoryPersistence] ${opName} 批量写入失败:`, e);
       }
       throw e;
     }
   }
 
-  // ─── 防抖写盘 ─────────────────────────────────────────
+  // ─── 刷写 ────────────────────────────────────────────────
 
   /**
-   * 调度一次防抖 flush：标记脏数据 → 延迟后执行 flush。
-   * 若生命周期非 active，跳过并 emit MemoryFlushSkipped。
+   * 调度一次防抖刷写。
+   *
+   * 防抖窗口 = _flushDebounceMs（正常）或 _flushDebounceMs × 2^failStreak（指数退避）。
    */
   scheduleFlush(): void {
     if (this._lifecycle !== "active") {
       if (this._dirty && this._observer) {
         this._observer.emit({
           type: PipelineEventType.MemoryFlushSkipped,
-          priority: PipelinePriority.NORMAL,
-          payload: { lifecycle: this._lifecycle },
+          priority: PipelinePriority.HIGH,
+          payload: {
+            source: "MemoryPersistence",
+            detail: `scheduleFlush() 跳过 (lifecycle=${this._lifecycle})，脏数据未落盘`,
+          },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
@@ -247,7 +260,7 @@ export class MemoryPersistence {
 
     const delay =
       this._flushFailStreak > 0
-        ? this._flushDebounceMs * Math.pow(2, Math.min(this._flushFailStreak, 4))
+        ? this._flushDebounceMs * Math.pow(2, Math.min(this._flushFailStreak, MAX_FLUSH_FAIL_STREAK))
         : this._flushDebounceMs;
 
     this._flushTimer = setTimeout(() => {
@@ -255,13 +268,19 @@ export class MemoryPersistence {
       this._flushing = true;
       void this.flush().finally(() => {
         this._flushing = false;
+        // @fix ADR-02 — flush 完成后若仍有脏数据（flush 期间新写入产生），
+        //   自动重新调度下次 flush，防止脏数据无限期滞留内存。
+        if (this._dirty) {
+          this.scheduleFlush();
+        }
       });
     }, delay);
   }
 
   /**
-   * 立即执行 flush：WAL checkpoint + 重置脏标记。
-   * 失败时递增 _flushFailStreak 并清除 _dirty（M8 修复）。
+   * 立即刷写：执行 WAL checkpoint 并清除脏标记。
+   *
+   * @fix M8 — 即使 wal_checkpoint 失败也清除 _dirty，避免脏标记死锁
    */
   async flush(): Promise<void> {
     if (this._flushTimer) {
@@ -283,29 +302,33 @@ export class MemoryPersistence {
       this._flushFailStreak = 0;
       this._dirty = false;
     } catch (e) {
-      this._flushFailStreak = Math.min(this._flushFailStreak + 1, MAX_FLUSH_FAIL_STREAK + 1);
-      const errMsg = `[MemoryPersistence] WAL checkpoint 失败 (第 ${this._flushFailStreak} 次): ${e instanceof Error ? e.message : String(e)}`;
+      this._flushFailStreak = Math.min(this._flushFailStreak + 1, MAX_FLUSH_FAIL_STREAK);
+      const errMsg = `[MemoryPersistence] flush() WAL checkpoint 失败 (第${this._flushFailStreak}次): ${e instanceof Error ? e.message : String(e)}`;
       if (this._observer) {
         this._observer.emit({
           type: PipelineEventType.MemoryPersistFailed,
-          priority: PipelinePriority.NORMAL,
-          payload: { failStreak: this._flushFailStreak, dbPath: this._dbPath },
+          priority: PipelinePriority.CRITICAL,
+          payload: {
+            source: "MemoryPersistence",
+            detail: errMsg,
+          },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
       } else {
         console.error(errMsg);
       }
+      // @fix M8 — 失败也清除脏标记，防止死锁
       this._dirty = false;
       throw e;
     }
   }
 
-  // ─── 建表 + 迁移 ──────────────────────────────────────
+  // ─── 建表 ────────────────────────────────────────────────
 
   /**
    * 创建核心表（memories / links / __meta）及索引。
-   * 包含 schema_version 写入和 sub_type 迁移。
+   * 从 SQLite 加载存量数据到 MemoryStorage。
    */
   private _createTables(storage: MemoryStorage): void {
     if (!this._db) return;
@@ -315,142 +338,222 @@ export class MemoryPersistence {
       try {
         db.prepare(sql).run();
       } catch (e) {
-        if (this._observer) {
-          this._observer.emit({
-            type: PipelineEventType.MemoryDbWriteFailed,
-            priority: PipelinePriority.NORMAL,
-            payload: { op: opName, sql: sql.slice(0, 80) },
-            timestamp: Date.now(),
-            notificationType: "WARNING",
-          });
-        } else {
-          console.warn(`[MemoryPersistence] SQL 执行失败 (${opName}): ${e instanceof Error ? e.message : String(e)}`);
-        }
+        console.error(`[MemoryPersistence] ${opName} 建表失败:`, e);
         throw e;
       }
     };
 
+    // memories 表
     runSQL(
       `CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
-        memory_type TEXT NOT NULL,
-        sub_type TEXT,
-        content TEXT NOT NULL,
-        summary TEXT NOT NULL DEFAULT '',
-        agent_type TEXT NOT NULL,
-        creator_id TEXT NOT NULL DEFAULT '',
         state TEXT NOT NULL DEFAULT 'ACTIVE',
-        weight INTEGER NOT NULL DEFAULT 5,
+        memory_type TEXT NOT NULL DEFAULT 'EPISODIC',
+        sub_type TEXT,
+        agent_type TEXT,
+        summary TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL DEFAULT '',
+        embedding BLOB,
+        weight REAL NOT NULL DEFAULT 1.0,
+        creator_id TEXT,
         is_private INTEGER NOT NULL DEFAULT 0,
         access_count INTEGER NOT NULL DEFAULT 0,
-        embedding BLOB,
-        metadata TEXT NOT NULL DEFAULT '{}',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        last_accessed_at INTEGER NOT NULL DEFAULT 0,
+        last_accessed_at INTEGER NOT NULL,
+        metadata TEXT,
+        project_fingerprint TEXT,
+        archived_at INTEGER,
+        frozen_at INTEGER,
         expires_at INTEGER
       )`,
       "create_tables.memories",
     );
 
+    // links 表
     runSQL(
       `CREATE TABLE IF NOT EXISTS links (
+        id TEXT PRIMARY KEY,
         source_id TEXT NOT NULL,
         target_id TEXT NOT NULL,
         link_type TEXT NOT NULL,
         weight REAL NOT NULL DEFAULT 1.0,
         target_state TEXT NOT NULL DEFAULT 'ACTIVE',
-        last_accessed_at INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (source_id, target_id)
+        last_accessed_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+        created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
       )`,
       "create_tables.links",
     );
 
-
-    
+    runSQL(
+      "CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id)",
+      "create_tables.links_index_source",
+    );
+    runSQL(
+      "CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_id)",
+      "create_tables.links_index_target",
+    );
 
     // 读取模式版本（首次启动时 __meta 表可能无数据，属正常）
     try {
-      const metaRow = this._db.prepare("SELECT value FROM __meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
+      const metaRow = db.prepare("SELECT value FROM __meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
       if (metaRow) {
-        const storedVer = parseInt(metaRow.value, 10);
-        if (storedVer !== SCHEMA_VERSION) {
+        const storedVer = Number(metaRow.value);
+        if (storedVer < SCHEMA_VERSION) {
           console.warn(
-            `[MemoryPersistence] schema_version 不匹配：存储=${storedVer}，期望=${SCHEMA_VERSION}。可能出现兼容性问题。`,
+            `[MemoryPersistence] schema_version 不匹配：存储=${storedVer}，期望=${SCHEMA_VERSION}。`,
           );
+          // 尝试 v1→v2 兼容迁移：添加 links 表缺失列
+          if (storedVer === 1 && SCHEMA_VERSION === 2) {
+            try {
+              db.prepare("ALTER TABLE links ADD COLUMN last_accessed_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)").run();
+              console.log("[MemoryPersistence] links 表已迁移：添加 last_accessed_at 列");
+            } catch (alterErr) {
+              // 列可能已存在（CREATE TABLE IF NOT EXISTS 已包含），安全忽略
+              if (this._observer) {
+                this._observer.emit({
+                  type: PipelineEventType.MemorySqlDegraded,
+                  priority: PipelinePriority.NORMAL,
+                  payload: {
+                    source: "MemoryPersistence",
+                    detail: `links 表迁移跳过: ${alterErr instanceof Error ? alterErr.message : String(alterErr)}`,
+                  },
+                  timestamp: Date.now(),
+                });
+              }
+            }
+          }
+          // 更新 schema_version
+          db.prepare("INSERT OR REPLACE INTO __meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
         }
+      } else {
+        // __meta 表存在但无 schema_version 记录 — 旧 DB，写当前版本号
+        db.prepare("INSERT OR REPLACE INTO __meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
       }
     } catch (e) {
-      // __meta 表尚未创建（首次运行时），静默忽略
+      // __meta 表尚未创建（首次运行时），属正常预期行为
+      if (this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.MemorySqlDegraded,
+          priority: PipelinePriority.NORMAL,
+          payload: {
+            source: "MemoryPersistence",
+            detail: "首次启动：__meta 表不存在，schema_version 检查跳过",
+          },
+          timestamp: Date.now(),
+        });
+      }
     }
 
-    const memRows = this._db.prepare("SELECT * FROM memories").all() as Record<string, unknown>[];
+    // ── Column-level migration：旧 DB 可能缺列，逐一检查并 ALTER ──
+    const ensureColumn = (table: string, col: string, colDef: string) => {
+      try {
+        const exists = db.prepare(
+          `SELECT COUNT(*) as cnt FROM pragma_table_info('${table}') WHERE name = '${col}'`
+        ).get() as { cnt: number } | undefined;
+        if (!exists || exists.cnt === 0) {
+          db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${colDef}`).run();
+          console.log(`[MemoryPersistence] ${table} 表已迁移：添加 ${col} 列`);
+        }
+      } catch (alterErr) {
+        // 列可能已存在，安全忽略
+      }
+    };
+    ensureColumn("memories", "updated_at", "INTEGER NOT NULL DEFAULT (unixepoch() * 1000)");
+    ensureColumn("memories", "sub_type", "TEXT");
+    ensureColumn("memories", "creator_id", "TEXT");
+    ensureColumn("memories", "access_count", "INTEGER NOT NULL DEFAULT 0");
+    ensureColumn("memories", "metadata", "TEXT");
+    ensureColumn("memories", "project_fingerprint", "TEXT");
+    ensureColumn("memories", "archived_at", "INTEGER");
+    ensureColumn("memories", "frozen_at", "INTEGER");
+    ensureColumn("memories", "expires_at", "INTEGER");
 
+    // 从 SQLite 加载存量数据到 MemoryStorage
+    const memRows = db.prepare("SELECT * FROM memories").all() as Record<string, unknown>[];
     for (const raw of memRows) {
       const entry = storage.deserializeRow(raw);
       if (!entry) continue;
       storage.memories.set(entry.id, entry);
     }
 
-    const linkRows = this._db.prepare("SELECT * FROM links").all() as Record<string, unknown>[];
-
+    const linkRows = db.prepare("SELECT * FROM links").all() as Record<string, unknown>[];
     for (const raw of linkRows) {
       const link: MemoryLink = {
-        id: raw.id as string,
-        sourceId: raw.source_id as string,
-        targetId: raw.target_id as string,
-        linkType: raw.link_type as LinkType,
-        weight: raw.weight as number,
-        targetState: raw.target_state as MemoryState,
-        lastAccessedAt: raw.last_accessed_at as number,
+        id: String(raw.id),
+        sourceId: String(raw.source_id),
+        targetId: String(raw.target_id),
+        linkType: String(raw.link_type) as LinkType,
+        weight: Number(raw.weight),
+        targetState: String(raw.target_state) as MemoryState,
+        lastAccessedAt: Number(raw.last_accessed_at ?? raw.created_at),
       };
-      const existing = storage.links.get(link.sourceId);
-      if (!existing) {
-        storage.links.set(link.sourceId, [link]);
-      } else {
-        existing.push(link);
-      }
+      storage.addLink(link.sourceId, link);
     }
   }
 
-  // ─── SQL 查询 ──────────────────────────────────────────
+  // ─── 查询 ────────────────────────────────────────────────
 
   /**
-   * 执行带条件的 SQL SELECT 查询。
-   * 由 MemoryQueryEngine 调用，返回原始行（反序列化由调用方负责）。
+   * SQL 查询（仅返回原始行，反序列化由调用方负责）。
+   *
+   * 若 DB 未初始化或查询失败，返回空数组（降级至内存扫描）。
+   *
+   * @fix IN 子句分片 — SQLite SQLITE_MAX_EXPR_DEPTH 默认 1000，
+   *  大数组的 IN (?,?,...) 会因 OR 展开导致表达式树过深。
+   *  将超过 50 个值的 IN 子句拆为多段 OR，每段 ≤ 50 个占位符。
    */
   sqlRead(query: MemoryQuery, now: number): Record<string, unknown>[] {
     if (!this._db) return [];
 
+    const MAX_IN = 50; // 每个 IN 子句最多 50 个值
     const clauses: string[] = [];
     const params: (string | number)[] = [];
 
+    // ── 辅助：安全 IN 子句构建（自动分片）──
+    const safeIn = (col: string, values: string[]): void => {
+      if (values.length === 0) return;
+      if (values.length <= MAX_IN) {
+        clauses.push(`${col} IN (${values.map(() => "?").join(",")})`);
+        params.push(...values);
+      } else {
+        // 分片: col IN (50个) OR col IN (50个) OR ...
+        const chunks: string[] = [];
+        for (let i = 0; i < values.length; i += MAX_IN) {
+          const chunk = values.slice(i, i + MAX_IN);
+          chunks.push(`${col} IN (${chunk.map(() => "?").join(",")})`);
+          params.push(...chunk);
+        }
+        clauses.push(`(${chunks.join(" OR ")})`);
+      }
+    };
+
     // 状态
     if (query.states && query.states.length > 0) {
-      clauses.push(`state IN (${query.states.map(() => "?").join(",")})`);
-      params.push(...query.states);
+      safeIn("state", query.states);
     } else {
       clauses.push("state = ?");
       params.push("ACTIVE");
     }
 
+    // 时效衰减：只返回 30 天内的记忆
     const cutoff = now - THIRTY_DAYS_MS;
     clauses.push("created_at > ?");
     params.push(cutoff);
 
+    // 隐私
     if (!query.includePrivate) {
       clauses.push("is_private = 0");
     }
 
-    // 类型过滤
+    // 记忆类型
     if (query.memoryTypes && query.memoryTypes.length > 0) {
-      clauses.push(`memory_type IN (${query.memoryTypes.map(() => "?").join(",")})`);
-      params.push(...query.memoryTypes);
+      safeIn("memory_type", query.memoryTypes);
     }
 
+    // Agent 类型
     if (query.agentTypes && query.agentTypes.length > 0) {
-      clauses.push(`agent_type IN (${query.agentTypes.map(() => "?").join(",")})`);
-      params.push(...query.agentTypes);
+      safeIn("agent_type", query.agentTypes);
     }
 
     // 时间范围
@@ -461,13 +564,14 @@ export class MemoryPersistence {
 
     // 子类型
     if (query.subTypes && query.subTypes.length > 0) {
-      clauses.push(`sub_type IN (${query.subTypes.map(() => "?").join(",")})`);
-      params.push(...query.subTypes);
+      safeIn("sub_type", query.subTypes);
     }
 
-    // 关键词（LIKE 搜索）
+    // 关键词（每词 2 LIKE，关键词数也限制）
     if (query.keywords && query.keywords.length > 0) {
-      for (const kw of query.keywords) {
+      const kwLimit = Math.min(query.keywords.length, 50); // 最多 50 个关键词
+      for (let i = 0; i < kwLimit; i++) {
+        const kw = query.keywords[i];
         clauses.push("(summary LIKE ? OR content LIKE ?)");
         params.push(`%${kw}%`, `%${kw}%`);
       }
@@ -480,31 +584,33 @@ export class MemoryPersistence {
     } catch (e) {
       if (this._observer) {
         this._observer.emit({
-          type: PipelineEventType.MemoryDbWriteFailed,
+          type: PipelineEventType.MemorySqlDegraded,
           priority: PipelinePriority.NORMAL,
-          payload: { op: "sqlRead", sql: sql.slice(0, 120) },
+          payload: {
+            source: "MemoryPersistence",
+            detail: `sqlRead 查询失败: ${e instanceof Error ? e.message : String(e)}`,
+          },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
       } else {
-        console.warn(`[MemoryPersistence] SQL 查询失败: ${e instanceof Error ? e.message : String(e)}`);
+        console.error("[MemoryPersistence] sqlRead 查询失败:", e);
       }
       throw e;
     }
   }
 
-  // ─── 访问追踪 ──────────────────────────────────────────
+  // ─── 访问追踪 ────────────────────────────────────────────
 
   /**
-   * 批量更新记忆的访问计数和最后访问时间。
-   * 使用 transaction 保证原子性。
+   * 批量更新访问计数（使用 transaction API 确保原子性）。
    */
   updateAccessTracking(updates: Array<{ id: string; accessCount: number; lastAccessedAt: number }>): void {
     if (!this._db) return;
     const stmt = this._db.prepare(
       "UPDATE memories SET access_count = ?, last_accessed_at = ? WHERE id = ?",
     );
-    const batchUpdate = this._db.transaction((rows: Array<{ id: string; accessCount: number; lastAccessedAt: number }>) => {
+    const batchUpdate = this._db.transaction((rows: typeof updates) => {
       for (const row of rows) {
         stmt.run(row.accessCount, row.lastAccessedAt, row.id);
       }

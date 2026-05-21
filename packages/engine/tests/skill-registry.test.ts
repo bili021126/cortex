@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { SkillRegistry } from "../src/skill-registry.js";
+import { SkillRegistry } from "@cortex/engine";
 import { AgentType } from "@cortex/shared";
 import type { Tag } from "@cortex/shared";
 import * as fs from "node:fs";

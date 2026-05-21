@@ -1,7 +1,7 @@
-import type { TaskNode, NodeResult, MemoryQuery, AgentType, SafeErrorReporter } from "@cortex/shared";
+import type { TaskNode, NodeResult, MemoryQuery, AgentType, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
 import { MemoryType, LinkType, MemoryState, MemorySubType } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../toolkit.js";
+import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "./memory-store.js";
 import { runReActLoop, type ReActContext } from "../components/react-loop.js";
 
@@ -82,6 +82,7 @@ export function makeMemoryQuery(
  * @param model LLM 模型
  * @param memoryQuery 自定义记忆检索策略（可选，默认 CJK bigram）
  * @param safeReporter 错误上报器
+ * @param filterRead 读路径 Intent 过滤回调（可选，P0-六层防御）
  */
 export async function executeWithMemoryPipeline(
   ctx: ReActContext,
@@ -89,6 +90,7 @@ export async function executeWithMemoryPipeline(
   model: string,
   memoryQuery?: (node: TaskNode) => MemoryQuery,
   safeReporter?: SafeErrorReporter,
+  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[],
 ): Promise<NodeResult> {
   const { memory, agentType } = ctx;
 
@@ -97,9 +99,11 @@ export async function executeWithMemoryPipeline(
   if (memory) {
     const query = memoryQuery ? memoryQuery(node) : defaultMemoryQuery(node);
     try {
-      const ctxRecords = memory.read(query);
-      if (ctxRecords.length > 0) {
-        const ctxSummary = ctxRecords.map((m) => `[记忆] ${m.summary}`).join("\n");
+      const ctxRecords = await memory.read(query);
+      // P0-六层防御：读路径 Intent 过滤（CSA 模式排除 Intent 半成品记忆）
+      const filtered = filterRead ? filterRead(ctxRecords, query.queryMode ?? "csa") : ctxRecords;
+      if (filtered.length > 0) {
+        const ctxSummary = filtered.map((m) => `[记忆] ${m.summary}`).join("\n");
         enrichedNode = {
           ...node,
           payload: `上下文记忆：\n${ctxSummary}\n\n任务：${node.payload}`,
@@ -194,7 +198,7 @@ async function _rememberResult(
     memory.link(memId, ctxMemId, LinkType.ProducedBy);
 
     if (isFix && node.parentId) {
-      const parentMemories = memory.read({
+      const parentMemories = await memory.read({
         metadataFilter: { taskId: node.parentId },
         limit: 1,
       });

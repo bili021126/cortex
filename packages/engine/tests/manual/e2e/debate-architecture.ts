@@ -26,11 +26,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, LinkType, MemoryType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { MemoryStore } from "../../../src/memory/memory-store.js";
-import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
-import { ConfirmGate } from "../../../src/confirm-gate.js";
-import { Toolkit } from "../../../src/toolkit.js";
-import personaPrompts from "../config/persona-prompts.json" assert { type: "json" };
+import {
+  MemoryStore,
+  createInspectorAgent,
+  ConfirmGate,
+  Toolkit,
+} from "@cortex/engine";
+import { getPersonaPrompts } from "../config/roundtable-config";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ══════════════════════════════════════════════
 // 0. 环境变量
@@ -135,7 +138,7 @@ interface Debater {
 }
 
 function buildDebaters(): Debater[] {
-  const raw = personaPrompts as Record<string, { emoji: string; name: string; title: string; systemPrompt: string } | string>;
+  const raw = getPersonaPrompts();
 
   const TYPE_MAP: Record<string, AgentType> = {
     nahida: AgentType.Analysis,
@@ -842,8 +845,9 @@ async function main() {
   const API_KEY = process.env.DEEPSEEK_API_KEY;
   if (!API_KEY) { console.error("❌ DEEPSEEK_API_KEY 未设置"); process.exit(1); }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner";
+  const llmCfg = resolveLlmConfig();
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel;
   const WORKSPACE = process.cwd();
 
   console.log("╔══════════════════════════════════════════════════╗");
@@ -862,7 +866,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: CHAT_MODEL,
-    reasoningEffort: "high",
+    reasoningEffort: llmCfg.reasoningEffort as "high" | "max",
   });
   adapter.setCacheEnabled(true);
 

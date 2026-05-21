@@ -50,7 +50,7 @@ interface GateResult {
 
 // ─── 配置 ────────────────────────────────────────────────
 
-const ROOT = resolve(__dirname, "..");
+const ROOT = resolve(import.meta.dirname, "..");
 
 /** 需要构建和类型检查的包（按依赖顺序） */
 const PACKAGES: PackageInfo[] = [
@@ -285,6 +285,9 @@ function runLint(): boolean {
 // ─── 入口 ────────────────────────────────────────────────
 
 async function main() {
+  // 修复 Windows PowerShell 中文/emoji 乱码：设置控制台输出代码页为 UTF-8
+  try { execSync("chcp 65001", { stdio: "pipe" }); } catch { /* 非 Windows 环境忽略 */ }
+
   const args = process.argv.slice(2);
   const runAll = args.includes("--all");
   const dryRun = args.includes("--dry-run");

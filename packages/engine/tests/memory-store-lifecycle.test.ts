@@ -23,8 +23,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
-import { MemoryStore } from "../src/memory/memory-store.js";
-import { PipelineObserver } from "../src/pipeline-observer";
+import { MemoryStore, PipelineObserver } from "@cortex/engine";
 
 describe("MemoryStore 生命周期状态机", () => {
   let store: MemoryStore;
@@ -95,7 +94,7 @@ describe("MemoryStore 生命周期状态机", () => {
     // Assert: 应有 memory.db_write_failed 事件
     const dbFailedEvents = emitted.filter((e) => e.type === "memory.db_write_failed");
     expect(dbFailedEvents.length).toBeGreaterThanOrEqual(1);
-    expect(dbFailedEvents[0].payload.opName).toBe("write");
+    expect(dbFailedEvents[0].payload.operation).toBe("write");
 
     await store.close();
   });
@@ -244,13 +243,13 @@ describe("MemoryStore 生命周期状态机", () => {
     // Act: 直接调用 _persistence.run——应抛错（治理判例 NG-2026-0509-Persist-False-Positive）
     expect(() => {
       (store as any)._persistence.run("INSERT INTO memories (id) VALUES (?)", ["x"], "write");
-    }).toThrow(/已 closing，拒绝写入/);
+    }).toThrow(/生命周期非 active.*拒绝写入/);
 
-    // Assert: observer 在抛错前已收到 memory.write_blocked 事件
-    const blockedEvents = emitted.filter((e) => e.type === "memory.write_blocked");
+    // Assert: observer 在抛错前已收到 memory.flush_skipped 事件
+    const blockedEvents = emitted.filter((e) => e.type === "memory.flush_skipped");
     expect(blockedEvents.length).toBe(1);
-    expect(blockedEvents[0].payload.opName).toBe("write");
-    expect(blockedEvents[0].payload.lifecycle).toBe("closing");
+    expect(blockedEvents[0].payload.source).toBe("MemoryPersistence");
+    expect(blockedEvents[0].payload.detail).toContain("write");
 
     // 恢复 lifecycle 以避免 close() 被跳过
     (store as any)._persistence._lifecycle = "active";
@@ -268,10 +267,10 @@ describe("MemoryStore 生命周期状态机", () => {
     // Act: 应抛错（治理判例 NG-2026-0509-Persist-False-Positive），且抛错前 console.warn 已触发
     expect(() => {
       (noObsStore as any)._persistence.run("INSERT INTO memories (id) VALUES (?)", ["y"], "write");
-    }).toThrow(/已 closing，拒绝写入/);
+    }).toThrow(/生命周期非 active.*拒绝写入/);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[MemoryStore] run 被拒")
+      expect.stringContaining("[MemoryPersistence] run() 跳过")
     );
 
     warnSpy.mockRestore();

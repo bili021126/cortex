@@ -13,7 +13,7 @@
 
 import {
   Scheduler, TaskBoard, AgentPool, PipelineObserver, ConfirmGate,
-  CLIAdapter, MemoryStore, bootstrapEngine,
+  CLIAdapter, MemoryStore, bootstrapEngine, StrategistAgent,
 } from "@cortex/engine";
 import type { EngineConfig, BootstrapEngineResult } from "@cortex/engine";
 import type { AgentConfig } from "@cortex/shared";
@@ -220,6 +220,11 @@ export class EngineBridge {
     return this.ctx;
   }
 
+  /** 是否已设置 Bootstrap 配置（用于按需选择初始化模式） */
+  get isBootstrapConfigured(): boolean {
+    return this._bootstrapConfig !== undefined;
+  }
+
   /** 获取 AgentPool（轻量模式使用 MiniAgentPool，配置驱动模式使用真实 AgentPool） */
   get agentPool(): MiniAgentPool | AgentPool {
     if (this.ctx.bootstrapped && this.ctx.bootstrapResult) {
@@ -251,6 +256,23 @@ export class EngineBridge {
   async getConfirmGate(): Promise<ConfirmGate> {
     const ctx = await this.ensureInitialized();
     return ctx.confirmGate!;
+  }
+
+  /** 获取 MetaAgent（甘雨）—— 用于 Plan Mode 生成任务计划 */
+  async getMetaAgent(): Promise<import("@cortex/engine").MetaAgent | undefined> {
+    if (this.ctx.bootstrapped && this.ctx.bootstrapResult) {
+      return this.ctx.bootstrapResult.metaAgent;
+    }
+    // 轻量模式没有 MetaAgent
+    return undefined;
+  }
+
+  /** 获取 Strategist Agent 集合（钟离+霜凝）—— 用于 agent list 等查询 */
+  getStrategists(): Map<string, StrategistAgent> | undefined {
+    if (this.ctx.bootstrapped && this.ctx.bootstrapResult) {
+      return this.ctx.bootstrapResult.strategists;
+    }
+    return undefined;
   }
 
   async shutdown(): Promise<void> {

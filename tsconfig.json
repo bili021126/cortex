@@ -11,6 +11,8 @@
     { "path": "packages/llm" },
     { "path": "packages/testing" },
     { "path": "packages/engine" },
-    { "path": "packages/cli" }
+    { "path": "packages/cli" },
+    { "path": "scripts" }
+  
   ]
 }

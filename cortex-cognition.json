@@ -1,5 +1,4 @@
 {
-  "$schema": "./packages/factory/schemas/cortex-cognition.schema.json",
   "activationMatrix": [
     { "agentType": "code", "active": true, "orientation": "implementation" },
     { "agentType": "review", "active": true, "orientation": "quality_assurance" },

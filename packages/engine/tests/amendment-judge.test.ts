@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { evaluateAmendment } from "../src/amendment-judge.js";
+import { evaluateAmendment } from "@cortex/engine";
 import type { AmendmentProposal } from "@cortex/shared";
 
 // ── 微型宪法 fixture ─────────────────────────────

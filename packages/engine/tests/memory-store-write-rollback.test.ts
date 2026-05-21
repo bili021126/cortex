@@ -24,8 +24,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
-import { MemoryStore } from "../src/memory/memory-store.js";
-import { PipelineObserver } from "../src/pipeline-observer";
+import { MemoryStore, PipelineObserver } from "@cortex/engine";
 
 describe("MemoryStore 写路径 DB 失败回滚", () => {
   let store: MemoryStore;

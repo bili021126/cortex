@@ -45,6 +45,19 @@ export enum ReversibilityLevel {
   L3 = "L3", // 不可恢复，永远确认
 }
 
+/**
+ * ReversibilityLevel → modification-record 中 ReversibilityClass 的显式映射。
+ * @fix 艾尔海森 P0-1 — 两套枚举描述同一域但无映射，消费方需自己推断。
+ */
+export function toReversibilityClass(level: ReversibilityLevel): "reversible" | "irreversible" | "meta" {
+  switch (level) {
+    case ReversibilityLevel.L0: return "meta";
+    case ReversibilityLevel.L1: return "reversible";
+    case ReversibilityLevel.L2:
+    case ReversibilityLevel.L3: return "irreversible";
+  }
+}
+
 // ─── 确认门 ────────────────────────────────────────────────
 
 export interface ConfirmationRequest {

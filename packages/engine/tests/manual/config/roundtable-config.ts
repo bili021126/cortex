@@ -11,8 +11,8 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { AgentType, LinkType, MemoryType } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import { MemoryStore } from "../../../src/memory/memory-store";
-import personaPrompts from "./persona-prompts.json" assert { type: "json" };
+import { MemoryStore } from "@cortex/engine";
+import cortexConfig from "../../../../../cortex-agents.json" assert { type: "json" };
 
 // ═══════════════════════════════════════════════
 // JSON → Persona 类型映射（agent key → AgentType）
@@ -33,6 +33,23 @@ const PERSONA_TYPE_MAP: Record<string, AgentType> = {
   kuki: AgentType.Api,
   alhaitham: AgentType.Data,
 };
+
+/** 从 cortex-agents.json 提取圆桌 Persona 数据，转换为旧 persona-prompts.json 格式 */
+export function getPersonaPrompts(): Record<string, { emoji: string; name: string; title: string; systemPrompt: string }> {
+  const result: Record<string, { emoji: string; name: string; title: string; systemPrompt: string }> = {};
+  for (const [key, agent] of Object.entries(cortexConfig.agents)) {
+    const a = agent as { display?: { emoji: string; shortName: string }; roundtable?: { personaPrompt: string; roundtableTitle: string } };
+    if (a.roundtable && a.display) {
+      result[key] = {
+        emoji: a.display.emoji,
+        name: a.display.shortName,
+        title: a.roundtable.roundtableTitle,
+        systemPrompt: a.roundtable.personaPrompt,
+      };
+    }
+  }
+  return result;
+}
 
 function buildPersonas(prompts: Record<string, { emoji: string; name: string; title: string; systemPrompt: string } | string>): Persona[] {
   return Object.entries(prompts)
@@ -317,7 +334,7 @@ export const SHENSHI_CONFIG: MeetingConfig = {
     },
   ],
 
-  personas: buildPersonas(personaPrompts),
+  personas: buildPersonas(getPersonaPrompts()),
 };
 
 // ═══════════════════════════════════════════════
@@ -442,7 +459,7 @@ DeepSeek 4.1 多模态预留（2026-06 发布）
     },
   ],
 
-  personas: buildPersonas(personaPrompts),
+  personas: buildPersonas(getPersonaPrompts()),
 };
 
 // ═══════════════════════════════════════════════
@@ -534,7 +551,7 @@ Cortex 刚刚完成了软约束自由审视——9 位 Agent 在代码库中自�
     },
   ],
 
-  personas: buildPersonas(personaPrompts).filter((p) => p.type !== AgentType.Browser),
+  personas: buildPersonas(getPersonaPrompts()).filter((p) => p.type !== AgentType.Browser),
 };
 
 // ═══════════════════════════════════════════════
@@ -611,7 +628,7 @@ export const ATTRIBUTION_ROUNDTABLE: MeetingConfig = {
     },
   ],
 
-  personas: buildPersonas(personaPrompts),
+  personas: buildPersonas(getPersonaPrompts()),
 };
 
 // ═══════════════════════════════════════════════

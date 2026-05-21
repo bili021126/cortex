@@ -29,5 +29,5 @@
     "agent": "DocGovernAgent",
     "trace": "凝光三项审计 2026-06-06——审计发现2-A（DECISION_REQUIRED回退机制缺失）：§8.2定义DECISION_REQUIRED为『打断当前UI→弹出决策界面→阻塞等待用户响应』，但未定义超时阈值、默认行为、防抖策略、离线处理策略。详见审计报告 docs/auditing/2026-06-06-constitution-audit.md。"
   },
-  "status": "proposed"
+  "status": "superseded"
 }

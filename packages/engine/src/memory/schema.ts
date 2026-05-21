@@ -12,7 +12,7 @@ export const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 // ── 持久化 ─────────────────────────────────────
 
 /** 当前持久化模式版本——变更时需编写迁移逻辑 */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** 防抖写盘间隔（毫秒）。200ms 内的多次变更合并为一次写盘 */
 export const FLUSH_DEBOUNCE_MS = 200;
@@ -36,3 +36,29 @@ export const LINK_WEIGHTS: Record<string, number> = {
   CITED_IN_COMMITTEE: 0.7,
   CASCADE_TO: 1.0,
 };
+
+// ── 内容去重 ──────────────────────────────────
+
+/** SHA256 哈希算法标识 */
+export const CONTENT_HASH_ALGO = "sha256";
+
+/** 向量相似度 ≥ 此值视为语义重复（余弦相似度，归一化向量下等价于点积） */
+export const VECTOR_DEDUP_THRESHOLD = 0.95;
+
+// ── BFS 噪声门限 ──────────────────────────────
+
+/** BFS 展开时，decay 后权重低于此值的节点不加入结果 */
+export const BFS_WEIGHT_THRESHOLD = 0.1;
+
+/** BFS 每节点最多考察的出边数（按 link.weight 降序取前 N） */
+export const MAX_LINKS_PER_NODE = 10;
+
+// ── 权重老化 ──────────────────────────────────
+
+/** 权重老化因子：每 7 天未访问衰减 5%（0.95^(daysSinceAccess/7)） */
+export const WEIGHT_AGING_FACTOR = 0.95;
+
+// ── 总量控制 ──────────────────────────────────
+
+/** 内存记忆条目软上限，超出时按 lastAccessedAt 升序 archive 最久未访问的记忆 */
+export const MAX_TOTAL_MEMORIES = 10000;

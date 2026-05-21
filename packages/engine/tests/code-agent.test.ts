@@ -2,9 +2,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { AgentType, type Agent } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit } from "../src/toolkit";
-import { createAgent } from "../src/components/agent-factory";
-import { codeAgentConfig } from "../src/agents/code-agent";
+import { Toolkit, createAgent, codeAgentConfig } from "@cortex/engine";
 
 function mockLlamaAdapter() {
   const adapter = new LlmAdapter({

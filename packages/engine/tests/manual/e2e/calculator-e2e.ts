@@ -17,18 +17,21 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, MemoryType, LinkType, PipelinePriority, type TaskNode } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { TaskBoard } from "../../../src/task-board.js";
-import { AgentPool } from "../../../src/agent-pool.js";
-import { createAgent } from "../../../src/components/agent-factory.js";
-import { codeAgentConfig } from "../../../src/agents/code-agent.js";
-import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
-import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
-import { Scheduler } from "../../../src/scheduler.js";
-import { PipelineObserver } from "../../../src/pipeline-observer.js";
-import { ConfirmGate } from "../../../src/confirm-gate.js";
-import { Toolkit } from "../../../src/toolkit.js";
-import { MemoryStore } from "../../../src/memory/memory-store.js";
-import { MetaAgent } from "../../../src/meta-agent.js";
+import {
+  TaskBoard,
+  AgentPool,
+  createAgent,
+  codeAgentConfig,
+  reviewAgentConfig,
+  createInspectorAgent,
+  Scheduler,
+  PipelineObserver,
+  ConfirmGate,
+  Toolkit,
+  MemoryStore,
+  MetaAgent,
+} from "@cortex/engine";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
 // 1. 环境变量
@@ -207,9 +210,10 @@ async function main() {
   const API_KEY = process.env.DEEPSEEK_API_KEY;
   if (!API_KEY) { console.error("❌ DEEPSEEK_API_KEY 未设置"); process.exit(1); }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner";
-  const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-pro";
+  const llmCfg = resolveLlmConfig();
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel;
+  const REASONER_MODEL = llmCfg.reasonerModel;
   const WORKSPACE = process.cwd();
 
   const CALC_DIR = path.resolve(WORKSPACE, "projects", "calculator");
@@ -243,7 +247,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: "high",
+    reasoningEffort: llmCfg.reasoningEffort as "high" | "max",
   });
   adapter.setCacheEnabled(true);
 

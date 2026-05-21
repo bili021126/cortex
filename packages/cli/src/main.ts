@@ -18,6 +18,7 @@
 
 import { CommandRegistry } from "./commands/index.js";
 import { createRunHandler } from "./commands/run.js";
+import { execSync } from "node:child_process";
 import { createAgentHandler } from "./commands/agent.js";
 import { createTaskHandler } from "./commands/task.js";
 import { createMemoryHandler } from "./commands/memory.js";
@@ -28,18 +29,111 @@ import { createHelpHandler } from "./commands/help.js";
 import { createReplHandler } from "./commands/repl.js";
 import { createScheduleHandler } from "./commands/schedule.js";
 import { createRoundtableHandler } from "./commands/roundtable.js";
+import { createSetupHandler } from "./commands/setup.js";
 import { createInspectHandler } from "./commands/inspect.js";
 import { createConfirmHandler } from "./commands/confirm.js";
 import { ConfigManager } from "./services/config-manager.js";
 import { EngineBridge } from "./services/engine-bridge.js";
-import { DocRegistry, NodeFileSystemAdapter } from "@cortex/engine";
+import { DocRegistry, NodeFileSystemAdapter, Toolkit, SearchAggregator, McpSearchBackend, DdgSearchBackend } from "@cortex/engine";
+import type { McpServerConfig } from "@cortex/engine";
+import { LlmAdapter } from "@cortex/llm";
 import { getFormatter, detectDefaultFormat } from "./formatters/index.js";
 import type { OutputFormat, CommandContext, CommandResult } from "./types.js";
+import * as nodeFs from "node:fs";
+import * as nodePath from "node:path";
+
+// ── .env 加载 ────────────────────────────────────
+
+function loadEnv(projectRoot: string): void {
+  const envPath = nodePath.join(projectRoot, ".env");
+  if (!nodeFs.existsSync(envPath)) return;
+  const content = nodeFs.readFileSync(envPath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let value = trimmed.slice(eqIdx + 1).trim();
+    // 去除外层引号（单引号或双引号）
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
+
+loadEnv(process.cwd());
 
 // ── 全局配置与桥接 ──────────────────────────────────
 
 const configManager = new ConfigManager();
 const engineBridge = new EngineBridge(configManager);
+
+// ── LLM 配置（若 .env 中存在 API Key 则走配置驱动模式）──
+
+if (process.env.DEEPSEEK_API_KEY) {
+  const llm = new LlmAdapter({
+    apiKey: process.env.DEEPSEEK_API_KEY,
+    baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
+    chatModel: process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat",
+    reasonerModel: process.env.DEEPSEEK_REASONER_MODEL || "deepseek-reasoner",
+    reasoningEffort: (process.env.DEEPSEEK_REASONING_EFFORT as "high" | "max") || undefined,
+  });
+  const toolkit = new Toolkit();
+
+  // ── 搜索后端集成（从 cortex-agents.json 读取 MCP 后端配置）──
+  // 设置 CORTEX_NO_SEARCH=1 可跳过搜索后端启动
+  if (process.env.CORTEX_NO_SEARCH === "1") {
+    // 搜索后端已通过环境变量禁用
+  } else try {
+    const configPath = nodePath.join(process.cwd(), "cortex-agents.json");
+    if (nodeFs.existsSync(configPath)) {
+      const raw = JSON.parse(nodeFs.readFileSync(configPath, "utf-8"));
+      const searchProviders = raw?.searchProviders;
+      if (searchProviders?.backends && Array.isArray(searchProviders.backends)) {
+        const mcpBackends = (searchProviders.backends as McpServerConfig[])
+          .filter((b) => b.enabled);
+
+        if (mcpBackends.length > 0) {
+          const ddgBackend = new DdgSearchBackend();
+          const started: McpSearchBackend[] = [];
+
+          for (const cfg of mcpBackends) {
+            // 从 process.env 注入配置（如需）
+            const env: Record<string, string> = {};
+
+            const backend = new McpSearchBackend({ ...cfg, env });
+            try {
+              await backend.start();
+              started.push(backend);
+              if (!process.env.VITEST) console.log(`[bootstrap] 搜索后端已连接: ${cfg.id} (${backend.serverName ?? cfg.id})`);
+            } catch (e) {
+              if (!process.env.VITEST) console.warn(`[bootstrap] 搜索后端启动失败: ${cfg.id} — ${String(e)}`);
+            }
+          }
+
+          if (started.length > 0) {
+            const aggregator = new SearchAggregator({
+              backends: [...started, ddgBackend],
+            });
+            toolkit.setSearchAggregator(aggregator);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    if (!process.env.VITEST) console.warn(`[bootstrap] 搜索后端配置加载失败: ${String(e)}`);
+  }
+
+  engineBridge.setBootstrapConfig({
+    llm,
+    toolkit,
+    projectRoot: process.cwd(),
+  });
+}
 const fs = new NodeFileSystemAdapter();
 const docRegistry = new DocRegistry(fs, process.cwd());
 
@@ -108,9 +202,15 @@ registry.registerAll([
     handler: createConfirmHandler(engineBridge),
   },
   {
+    name: "setup",
+    alias: "su",
+    description: "交互式配置界面 — 管理 cortex-agents.json / cortex-cognition.json / cortex-docs.json",
+    handler: createSetupHandler(),
+  },
+  {
     name: "repl",
     alias: "re",
-    description: "进入 REPL 交互模式",
+    description: "进入 REPL 交互模式（--mode command|chat 指定模式）",
     handler: createReplHandler(registry, engineBridge),
   },
   {
@@ -130,14 +230,30 @@ registry.registerAll([
 // ── 参数解析与执行 ──────────────────────────────────
 
 export async function main(): Promise<number> {
+  // 修复 Windows PowerShell 中文/emoji 乱码
+  try { execSync("chcp 65001", { stdio: "pipe" }); } catch { /* 非 Windows 环境忽略 */ }
+
   const argv = process.argv.slice(2);
 
-  // cortex --version
-  if (argv.length === 0 || argv[0] === "--version" || argv[0] === "-V") {
+  // cortex --version / -V
+  if (argv[0] === "--version" || argv[0] === "-V") {
     const handler = createVersionHandler();
     const result = await handler([], {}, createDefaultContext());
     outputResult(result, detectDefaultFormat());
     return result.exitCode;
+  }
+
+  // bare cortex → 直接进入 REPL 交互模式（默认 chat）
+  if (argv.length === 0) {
+    // 无 API Key 时先打一个轻量提示，不阻塞进入 REPL
+    if (!process.env.DEEPSEEK_API_KEY) {
+      console.log("💡 未检测到 DEEPSEEK_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
+      console.log("   在 .env 中配置 DEEPSEEK_API_KEY 后重启即可。");
+      console.log("   command 模式无需 Key——输入 .mode command 切换。\n");
+    }
+    const replHandler = createReplHandler(registry, engineBridge);
+    await replHandler([], {}, createDefaultContext());
+    return 0;
   }
 
   // cortex --help / -h
@@ -229,10 +345,15 @@ function outputResult(result: CommandResult, format: OutputFormat): void {
 }
 
 // ── 启动 ───────────────────────────────────────────
-
-main().then((code) => {
-  process.exit(code);
-}).catch((err) => {
-  console.error(`✗ 致命错误: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(8);
-});
+// 仅在直接运行时自启动；被 @cortex/cli barrel 导入时跳过，避免测试中触发 process.exit
+const isDirectRun = process.argv[1]?.replaceAll("\\", "/").endsWith("/src/main.ts")
+  || process.argv[1]?.replaceAll("\\", "/").endsWith("/src/main.js")
+  || process.argv[1]?.replaceAll("\\", "/").endsWith("/dist/main.js");
+if (isDirectRun) {
+  main().then((code) => {
+    process.exit(code);
+  }).catch((err) => {
+    console.error(`✗ 致命错误: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(8);
+  });
+}

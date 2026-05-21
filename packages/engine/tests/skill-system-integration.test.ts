@@ -1,9 +1,8 @@
 // @ci: integration
 import { describe, it, expect, beforeEach } from "vitest";
-import { SkillRegistry } from "../src/skill-registry.js";
+import { SkillRegistry, extractSkillsFromOutput } from "@cortex/engine";
 import { AgentType } from "@cortex/shared";
 import type { SkillTemplate, Tag } from "@cortex/shared";
-import { extractSkillsFromOutput } from "../src/components/skill-extractor.js";
 
 /** 模拟 LoopAgent 输出：模式提炼 + SkillTemplate JSON */
 function mockLoopAgentOutput(skills: Record<string, unknown>[]): string {

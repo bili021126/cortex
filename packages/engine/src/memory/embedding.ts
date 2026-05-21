@@ -30,7 +30,14 @@ async function _ensurePipeline(): Promise<EmbeddingPipeline> {
   if (_loading) return _loading;
 
   _loading = (async (): Promise<EmbeddingPipeline> => {
-    const { pipeline } = await import("@xenova/transformers");
+    const { pipeline, env } = await import("@xenova/transformers");
+
+    // 支持镜像：HF_ENDPOINT 环境变量（如 https://hf-mirror.com）
+    const mirror = process.env.HF_ENDPOINT;
+    if (mirror && env.remoteHost !== mirror) {
+      env.remoteHost = mirror;
+    }
+
     const extractor = await pipeline(
       "feature-extraction",
       "Xenova/all-MiniLM-L6-v2",
@@ -87,6 +94,8 @@ export async function embedBatch(texts: string[]): Promise<number[][]> {
     const vec = await pipe(text);
     if (vec.length === EMBEDDING_DIM) {
       results.push(vec);
+    } else {
+      console.warn(`[embedBatch] 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${vec.length}，跳过第 ${results.length} 条文本`);
     }
   }
   return results;

@@ -7,15 +7,16 @@ import type {
   AgentType,
 } from "@cortex/shared";
 import { MemoryState, MemorySubType, LinkType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../pipeline-observer.js";
+import type { PipelineObserver } from "../core/pipeline-observer.js";
 import * as crypto from "node:crypto";
 
-import { SCHEMA_VERSION, EMBEDDING_DIM, LINK_WEIGHTS } from "./schema.js";
+import { SCHEMA_VERSION, EMBEDDING_DIM, LINK_WEIGHTS, CONTENT_HASH_ALGO, VECTOR_DEDUP_THRESHOLD, BFS_WEIGHT_THRESHOLD, MAX_LINKS_PER_NODE, WEIGHT_AGING_FACTOR, MAX_TOTAL_MEMORIES } from "./schema.js";
 import { MemoryStorage } from "./storage.js";
 import { MemoryPersistence } from "./persistence.js";
 import { MemoryLifecycle } from "./lifecycle.js";
 import { MemoryQueryEngine } from "./query.js";
 import { SemiFinishedMgr } from "./semi-finished.js";
+import { embedText } from "./embedding.js";
 
 // MemoryWriteInput 已迁移至 @cortex/shared —— shared import 即可
 // 迁移原因（艾尔海森 P0）：任何包只要想写入记忆条目就必须构造此接口
@@ -94,23 +95,84 @@ export class MemoryStore {
   /**
    * 写入一条记忆（内存 + DB write-through）
    *
-   * 流程：Storage.insert → Persistence.run → scheduleFlush
-   * 异常路径：DB 失败时回滚内存（假阳性禁止原则）
+   * 流程：embedding 生成 → 内容去重（SHA256 + 向量相似） → Storage.insert → Persistence.run → scheduleFlush
+   * 异常路径：DB 失败时回滚内存（假阳性禁止原则），embedding 失败静默降级
+   *
+   * @fix 语义卫生 — async embedding 生成 + SHA256 精确去重 + 向量相似去重 + 总量上限
    */
-  write(input: MemoryWriteInput): string {
+  async write(input: MemoryWriteInput): Promise<string> {
     // M3: 关闭保护 — 非 active 态拒绝写入
     if (this._persistence.lifecycle !== "active") {
       throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝写入`);
     }
 
-    // embedding 维度校验（Xiaofei P0）
+    // ── embedding 生成（静默降级：失败不阻塞写入） ──
+    if (input.embedding === undefined) {
+      try {
+        const text = input.summary || JSON.stringify(input.content).slice(0, 2000);
+        input.embedding = await embedText(text);
+      } catch {
+        // embedding 生成失败——记录但继续写入
+        if (this._observer) {
+          this._observer.emit({
+            type: PipelineEventType.MemorySqlDegraded,
+            priority: PipelinePriority.NORMAL,
+            payload: { operation: "embedding", detail: "embedding 生成失败，已降级跳过" },
+            timestamp: Date.now(),
+          });
+        }
+      }
+    }
+
+    // embedding 维度校验
     if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
       throw new Error(
         `Embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`
       );
     }
 
-    const entry = this._storage.insert(input);
+    // ── 内容去重：SHA256 精确匹配 ──
+    const contentHash = crypto.createHash(CONTENT_HASH_ALGO)
+      .update(input.summary + JSON.stringify(input.content))
+      .digest("hex");
+    const exactDup = this._storage.findByContentHash(contentHash);
+    if (exactDup) {
+      exactDup.accessCount++;
+      exactDup.lastAccessedAt = Date.now();
+      if (this._persistence.isEnabled) {
+        try {
+          this._persistence.run(
+            "UPDATE memories SET access_count = ?, last_accessed_at = ? WHERE id = ?",
+            [exactDup.accessCount, exactDup.lastAccessedAt, exactDup.id],
+            "write.dedup"
+          );
+          this._persistence.scheduleFlush();
+        } catch { /* DB 更新失败静默降级 */ }
+      }
+      return exactDup.id;
+    }
+
+    // ── 内容去重：向量相似匹配 ──
+    if (input.embedding) {
+      const similar = this._storage.findBySimilarity(input.embedding, VECTOR_DEDUP_THRESHOLD);
+      if (similar) {
+        similar.accessCount++;
+        similar.lastAccessedAt = Date.now();
+        if (this._persistence.isEnabled) {
+          try {
+            this._persistence.run(
+              "UPDATE memories SET access_count = ?, last_accessed_at = ? WHERE id = ?",
+              [similar.accessCount, similar.lastAccessedAt, similar.id],
+              "write.vector-dedup"
+            );
+            this._persistence.scheduleFlush();
+          } catch { /* DB 更新失败静默降级 */ }
+        }
+        return similar.id;
+      }
+    }
+
+    const entry = this._storage.insert(input, contentHash);
     const id = entry.id;
 
     if (this._persistence.isEnabled) {
@@ -127,7 +189,7 @@ export class MemoryStore {
             entry.agentType,
             entry.creatorId,
             entry.createdAt,
-            entry.createdAt, // updated_at 初始值同 created_at
+            entry.createdAt,
             entry.lastAccessedAt,
             entry.accessCount,
             entry.weight,
@@ -144,6 +206,27 @@ export class MemoryStore {
       }
     }
 
+    // ── 总量上限：超出时 archive 最久未访问的记忆 ──
+    if (this._storage.memories.size > MAX_TOTAL_MEMORIES) {
+      const excess = this._storage.memories.size - MAX_TOTAL_MEMORIES;
+      const candidates = Array.from(this._storage.memories.values())
+        .filter((m) => m.state === MemoryState.Active)
+        .sort((a, b) => a.lastAccessedAt - b.lastAccessedAt)
+        .slice(0, excess);
+      for (const m of candidates) {
+        this._lifecycle.archive(this._storage, m.id, this._statePersistFn("auto-archive"));
+      }
+      if (candidates.length > 0 && this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.MemorySqlDegraded,
+          priority: PipelinePriority.NORMAL,
+          payload: { operation: "auto-archive", detail: `已自动归档 ${candidates.length} 条最久未访问记忆（总量超 ${MAX_TOTAL_MEMORIES} 上限）` },
+          timestamp: Date.now(),
+          notificationType: "FYI",
+        });
+      }
+    }
+
     return id;
   }
 
@@ -151,11 +234,20 @@ export class MemoryStore {
    * 读取记忆（SQLite 优先 → 内存保底）
    *
    * 返回按 weight 排序的 MemoryEntry 列表
+   *
+   * @fix 语义卫生 — 自动 query embedding 生成 + 向量召回 + 权重自然老化
    */
-  read(query: MemoryQuery): MemoryEntry[] {
+  async read(query: MemoryQuery): Promise<MemoryEntry[]> {
     // D3: 关闭保护 — read() 在非 active 态时抛出异常，与 write() 一致
     if (this._persistence.lifecycle !== "active") {
       throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝读取`);
+    }
+
+    // ── 自动生成 query embedding（若未提供且有 keywords） ──
+    if (!query.queryEmbedding && query.keywords && query.keywords.length > 0) {
+      try {
+        query.queryEmbedding = await embedText(query.keywords.join(" "));
+      } catch { /* 降级跳过向量检索 */ }
     }
 
     const now = Date.now();
@@ -165,7 +257,7 @@ export class MemoryStore {
     const resolvedTrackAccess = query.trackAccess ?? (mode === "csa");
     const resolvedLimit = query.limit ?? (mode === "hca" ? 10 : 3);
 
-    let results: MemoryEntry[] = [];
+    let results: MemoryEntry[];
 
     if (this._persistence.isEnabled) {
       results = this._persistenceRead(query, now);
@@ -190,6 +282,31 @@ export class MemoryStore {
         query.linkTypes,
         resolvedBfsDirection
       );
+    }
+
+    // ── 权重自然老化：每 7 天未访问衰减 5% ──
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const agedEntries: Array<{ id: string; oldWeight: number; newWeight: number }> = [];
+    for (const m of results) {
+      const daysSinceAccess = (now - m.lastAccessedAt) / MS_PER_DAY;
+      if (daysSinceAccess > 0) {
+        const aged = m.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
+        if (Math.abs(aged - m.weight) > 0.0001) {
+          agedEntries.push({ id: m.id, oldWeight: m.weight, newWeight: aged });
+          m.weight = aged;
+        }
+      }
+    }
+    // 老化权重持久化（失败静默降级）
+    if (agedEntries.length > 0 && this._persistence.isEnabled) {
+      try {
+        this._persistence.runBatch(
+          "UPDATE memories SET weight = ? WHERE id = ?",
+          agedEntries.map((e) => [e.newWeight, e.id]),
+          "read.weightAging"
+        );
+        this._persistence.scheduleFlush();
+      } catch { /* 权重老化持久化失败静默降级 */ }
     }
 
     // 追踪访问（csa 模式下记录 accessCount + lastAccessedAt）
@@ -428,8 +545,13 @@ export class MemoryStore {
     await this._persistence.flush();
   }
 
+  /**
+   * 关闭持久化层并清理 observer 资源。
+   * @fix P0-3 — 清理 _observer 引用防止重新 init() 后 handler 残留
+   */
   async close(): Promise<void> {
     await this._persistence.close();
+    this._observer = undefined;
   }
 
   /**

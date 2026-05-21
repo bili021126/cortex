@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { CLIAdapter } from "../src/cli-adapter.js";
+import { CLIAdapter } from "@cortex/engine";
 import type { ConfirmationRequest } from "@cortex/shared";
 import { ReversibilityLevel } from "@cortex/shared";
 

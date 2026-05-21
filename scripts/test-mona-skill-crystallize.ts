@@ -13,14 +13,14 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { MemoryStore } from "../packages/engine/dist/memory/memory-store.js";
-import { SkillRegistry } from "../packages/shared/dist/skill-registry.js";
-import { MemoryType, MemorySubType, AgentType } from "../packages/shared/dist/index.js";
+import { execSync } from "node:child_process";
+import { MemoryStore, SkillRegistry } from "@cortex/engine";
 import {
   scanOutputFilesForSkills,
   loadSkillsFromMemory,
   persistSkillsToMemory,
-} from "../packages/engine/dist/components/skill-persister.js";
+} from "@cortex/engine";
+import { MemoryType, MemorySubType, AgentType, SkillTemplate } from "@cortex/shared";
 
 // ══════════════════════════════════════════════
 // 0. 收集所有 pattern.md 文件
@@ -59,6 +59,7 @@ function collectPatternFiles(root: string): string[] {
 // ══════════════════════════════════════════════
 
 async function main() {
+  try { execSync("chcp 65001", { stdio: "pipe" }); } catch { /* 非 Windows 环境忽略 */ }
   console.log("╔══════════════════════════════════════════════════╗");
   console.log("║   🔮 莫娜技能沉淀 —— pattern.md → Skill 记忆闭环  ║");
   console.log("╚══════════════════════════════════════════════════╝\n");

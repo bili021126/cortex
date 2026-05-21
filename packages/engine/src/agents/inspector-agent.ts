@@ -1,12 +1,12 @@
-import type { TaskNode, Agent, SafeErrorReporter } from "@cortex/shared";
+import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
 import { AgentType as AT } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../toolkit.js";
+import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
-import type { AgentPool } from "../agent-pool.js";
+import type { AgentPool } from "../core/agent-pool.js";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
 import { execSync } from "node:child_process";
-import { type EngineConfig, resolveConfig } from "../config.js";
+import { type EngineConfig, resolveConfig, DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
 
 export const SYSTEM_PROMPT = [
   "🎭 你是「安柏」—— 西风骑士团侦察骑士，Cortex 的 Inspector Agent。",
@@ -138,6 +138,7 @@ export function createInspectorAgent(
   memory?: MemoryStore,
   engineConfig?: EngineConfig,
   systemPrompt?: string,
+  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[],
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -150,8 +151,9 @@ export function createInspectorAgent(
   const config: AgentFactoryConfig = {
     type: AT.Inspector,
     systemPrompt: systemPrompt ?? SYSTEM_PROMPT,
-    maxLoops: 24,
+    maxLoops: DEFAULT_ENGINE_CONFIG.inspectorMaxLoops,
     memoryEnabled: true,
+    filterRead,
     preExecuteHook: (node: TaskNode): TaskNode => {
       if (!workspaceRoot) return node;
       const facts = collectFacts(workspaceRoot, safeReporterRef ?? undefined, resolved.inspector);

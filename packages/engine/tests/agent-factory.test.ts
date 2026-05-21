@@ -2,10 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { AgentType, AgentStatus as AS } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit } from "../src/toolkit";
-import { createAgent, type AgentFactoryConfig } from "../src/components/agent-factory";
-import { PoolAwareState } from "../src/pool-aware";
-import type { AgentPool } from "../src/agent-pool";
+import { Toolkit, createAgent, type AgentFactoryConfig, PoolAwareState, AgentPool } from "@cortex/engine";
 
 function mockLlm() {
   const adapter = new LlmAdapter({

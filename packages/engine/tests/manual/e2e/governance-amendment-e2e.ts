@@ -19,16 +19,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { execSync } from "node:child_process";
-import { evaluateAmendment } from "../../../src/amendment-judge.js";
-import { applyAmendment } from "../../../src/amendment-applier.js";
 import {
+  evaluateAmendment,
+  applyAmendment,
   loadPendingProposals,
   saveProposal,
   updateProposalStatus,
   judgeProposals,
   applyApproved,
   summarizeGovernance,
-} from "../../../src/governance-loop.js";
+} from "@cortex/engine";
 import type { AmendmentProposal, JudgmentResult } from "@cortex/shared";
 
 // ══════════════════════════════════════════════

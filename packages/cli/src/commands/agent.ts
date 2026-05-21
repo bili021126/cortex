@@ -9,7 +9,24 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
-import { AgentType, AgentStatus, getAgentTags, getAgentToolPermissions } from "@cortex/shared";
+import { AgentType, AgentStatus, getAgentTags, getAgentToolPermissions, AGENT_CHINESE_ROLE, CHINESE_NAME_TO_TYPE } from "@cortex/shared";
+
+/**
+ * 解析输入——支持英文 type 名和中文角色名。
+ * 返回 AgentType 或 undefined（无效输入）。
+ */
+function resolveAgentType(input: string): AgentType | undefined {
+  // 1. 直接匹配英文 type 名
+  const byType = Object.values(AgentType).find((t) => t === input);
+  if (byType) return byType;
+  // 2. 中文名 → AgentType
+  return CHINESE_NAME_TO_TYPE[input];
+}
+
+/** 获取中文角色名（AgentType → 中文名，strategist 返回 "钟离/霜凝"） */
+function getChineseRole(type: AgentType): string {
+  return AGENT_CHINESE_ROLE[type] ?? type;
+}
 
 export function createAgentHandler(bridge: EngineBridge): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
@@ -39,15 +56,19 @@ export function createAgentHandler(bridge: EngineBridge): CommandHandler {
     const subcommand = args[0];
 
     try {
-      // 确保引擎已初始化（lazy init）
-      await bridge.ensureInitialized();
+      // 优先走配置驱动模式（有 API key 时），回退轻量模式
+      if (bridge.isBootstrapConfigured) {
+        await bridge.ensureBootstrapped();
+      } else {
+        await bridge.ensureInitialized();
+      }
       const pool = bridge.agentPool;
 
       switch (subcommand) {
         case "list":
-          return await handleAgentList(pool, options, context);
+          return await handleAgentList(pool, options, context, bridge);
         case "inspect":
-          return await handleAgentInspect(pool, args[1], options, context);
+          return await handleAgentInspect(pool, args[1], options, context, bridge);
         case "spawn":
           return await handleAgentSpawn(pool, args[1], options, context);
         case "destroy":
@@ -95,6 +116,7 @@ async function handleAgentList(
   pool: any,
   options: Record<string, unknown>,
   context: CommandContext,
+  bridge: EngineBridge,
 ): Promise<CommandResult> {
   const p = safePool(pool);
   const statusFilter = options["status"] as string | undefined;
@@ -105,7 +127,10 @@ async function handleAgentList(
   let totalInstances = 0;
   let totalAwake = 0;
 
+  // ── 常规 Agent（从 AgentPool 查询）──
   for (const type of agentTypes) {
+    // strategist 不走 AgentPool，单独查询（见下方）
+    if (type === AgentType.Strategist) continue;
     const count = p.count(type);
     const statuses = p.getStatuses(type);
     const hasAwake = p.hasAwake(type);
@@ -118,16 +143,44 @@ async function handleAgentList(
 
     const statusStr = count > 0 ? String(displayStatus) : "-";
     const instanceStr = String(count);
+    const role = getChineseRole(type);
 
     if (verbose) {
       const permissions = (getAgentToolPermissions()[type as AgentType] ?? []).join(", ");
-      rows.push([type, statusStr, instanceStr, tags.join(", "), permissions || "(无)"]);
+      rows.push([type, role, statusStr, instanceStr, tags.join(", "), permissions || "(无)"]);
     } else {
-      rows.push([type, statusStr, instanceStr, tags.join(", ")]);
+      rows.push([type, role, statusStr, instanceStr, tags.join(", ")]);
     }
 
     totalInstances += count;
     if (hasAwake) totalAwake++;
+  }
+
+  // ── Strategist Agent（从 bootstrapResult 查询，不注册 AgentPool）──
+  const strategists = bridge.getStrategists();
+  if (strategists && strategists.size > 0) {
+    for (const [id, agent] of strategists) {
+      const type = "strategist";
+      const statusStr = agent.status === AgentStatus.Awake ? "awake" : String(agent.status);
+      const tags = getAgentTags()[AgentType.Strategist] ?? [];
+
+      if (statusFilter && statusStr !== statusFilter) continue;
+
+      if (verbose) {
+        const permissions = (getAgentToolPermissions()[AgentType.Strategist] ?? []).join(", ");
+        const role = id === "zhongli" ? "契约守护者" : id === "shuangning" ? "方向监理" : id;
+        const idTags = id === "zhongli" ? "strategy, contract" : id === "shuangning" ? "strategy, direction" : tags.join(", ");
+        rows.push([`${type}:${id}`, role, statusStr, "1", idTags, permissions || "(无)"]);
+      } else {
+        const displayType = id === "zhongli" ? "钟离" : id === "shuangning" ? "霜凝" : id;
+        const role = id === "zhongli" ? "契约守护者" : "方向监理";
+        const idTags = id === "zhongli" ? "strategy, contract" : "strategy, direction";
+        rows.push([displayType, role, statusStr, "1", idTags]);
+      }
+
+      totalInstances += 1;
+      if (statusStr === "awake") totalAwake++;
+    }
   }
 
   return {
@@ -135,12 +188,13 @@ async function handleAgentList(
     data: {
       agents: rows.map((r) => ({
         type: r[0],
-        status: r[1],
-        instances: parseInt(r[2], 10),
-        tags: r[3],
-        ...(verbose ? { permissions: r[4] } : {}),
+        role: r[1],
+        status: r[2],
+        instances: parseInt(r[3], 10),
+        tags: r[4],
+        ...(verbose ? { permissions: r[5] } : {}),
       })),
-      total: agentTypes.length,
+      total: rows.length,
       awake: totalAwake,
       instances: totalInstances,
     },
@@ -154,29 +208,61 @@ async function handleAgentInspect(
   typeName: string | undefined,
   options: Record<string, unknown>,
   context: CommandContext,
+  bridge: EngineBridge,
 ): Promise<CommandResult> {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent inspect <type>", exitCode: 1 };
   }
 
-  const p = safePool(pool);
-  const agentType = typeName as AgentType;
-  const count = p.count(agentType);
-  const statuses = p.getStatuses(agentType);
-  const tags = getAgentTags()[agentType as AgentType] ?? [];
-  const permissions = getAgentToolPermissions()[agentType as AgentType] ?? [];
+  const agentType = resolveAgentType(typeName);
+  if (!agentType) {
+    return { success: false, error: `未知 Agent 类型或名称: "${typeName}"。可用英文字类型名或中文名（如 甘雨/阿贝多/刻晴...）`, exitCode: 1 };
+  }
+
+  // Strategist 特殊处理：按 ID 区分 钟离/霜凝
+  let role: string;
+  let tags: readonly string[];
+  let count: number;
+  let statuses: readonly string[];
+  let permissions: readonly string[];
+
+  if (agentType === AgentType.Strategist) {
+    const strategists = bridge.getStrategists();
+    const id = typeName === "钟离" || typeName === "zhongli" ? "zhongli" : "shuangning";
+    const strategist = strategists?.get(id);
+
+    if (strategist) {
+      count = 1;
+      statuses = [strategist.status === AgentStatus.Awake ? "awake" : String(strategist.status)];
+    } else {
+      count = 0;
+      statuses = [];
+    }
+
+    role = id === "zhongli" ? "契约守护者" : "方向监理";
+    tags = id === "zhongli" ? ["strategy", "contract"] : ["strategy", "direction"];
+    permissions = getAgentToolPermissions()[AgentType.Strategist] ?? [];
+  } else {
+    const p = safePool(pool);
+    count = p.count(agentType);
+    statuses = p.getStatuses(agentType);
+    tags = getAgentTags()[agentType as AgentType] ?? [];
+    permissions = getAgentToolPermissions()[agentType as AgentType] ?? [];
+    role = getChineseRole(agentType);
+  }
 
   return {
     success: true,
     data: {
       type: agentType,
+      role,
       instances: count,
       statuses,
       tags,
       permissions,
     },
     output: [
-      `Agent: ${agentType}`,
+      `Agent: ${agentType}（${role}）`,
       `实例数: ${count}`,
       `状态: ${statuses.join(", ") || "未注册"}`,
       `标签: ${tags.join(", ")}`,
@@ -198,7 +284,10 @@ async function handleAgentSpawn(
 
   const p = safePool(pool);
   const count = parseInt(String(options["count"] ?? "1"), 10);
-  const agentType = typeName as AgentType;
+  const agentType = resolveAgentType(typeName);
+  if (!agentType) {
+    return { success: false, error: `未知 Agent 类型或名称: "${typeName}"`, exitCode: 1 };
+  }
   let spawned = 0;
 
   for (let i = 0; i < count; i++) {
@@ -227,9 +316,13 @@ async function handleAgentDestroy(
 
   const p = safePool(pool);
   const instanceId = options["id"] as string | undefined;
+  const agentType = resolveAgentType(typeName);
+  if (!agentType) {
+    return { success: false, error: `未知 Agent 类型或名称: "${typeName}"`, exitCode: 1 };
+  }
 
   if (instanceId) {
-    p.destroy(typeName as AgentType, instanceId);
+    p.destroy(agentType, instanceId);
     return {
       success: true,
       output: `✓ 已回收实例 ${instanceId}`,

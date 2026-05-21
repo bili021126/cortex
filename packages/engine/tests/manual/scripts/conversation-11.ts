@@ -18,10 +18,10 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { AgentType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { SHENSHI_CONFIG, runMeeting } from "../config/roundtable-config";
+import { SHENSHI_CONFIG, runMeeting, getPersonaPrompts } from "../config/roundtable-config";
 import { loadAuditContext, enhancePersonasWithAudit, printAuditSummary } from "../config/audit-loader";
-import personaPrompts from "../config/persona-prompts.json" assert { type: "json" };
 import type { MeetingConfig } from "../config/roundtable-config";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
 // ENV
@@ -48,9 +48,10 @@ async function main() {
 
   loadEnv();
   const API_KEY = process.env.DEEPSEEK_API_KEY!;
-  const BASE = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner";
-  const REASONER = process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-pro";
+  const llmCfg = resolveLlmConfig();
+  const BASE = llmCfg.baseUrl;
+  const CHAT = llmCfg.chatModel;
+  const REASONER = llmCfg.reasonerModel;
 
   // 使用 import.meta.url 推导项目根目录，避免 cd 到不同目录导致路径解析错误
   const __filename = fileURLToPath(import.meta.url);
@@ -82,8 +83,8 @@ async function main() {
   const auditCtx = loadAuditContext(AUDIT_DIR);
   printAuditSummary(auditCtx);
 
-  // 用最新审计数据增强 Persona systemPrompts
-  const enhancedPersonas = enhancePersonasWithAudit(personaPrompts as unknown as Record<string, { emoji: string; name: string; title: string; systemPrompt: string }>, auditCtx);
+  const personaPrompts = getPersonaPrompts();
+  const enhancedPersonas = enhancePersonasWithAudit(personaPrompts, auditCtx);
   const enhancedConfig: MeetingConfig = {
     ...SHENSHI_CONFIG,
     personas: enhancedPersonas.map((p, i) => ({

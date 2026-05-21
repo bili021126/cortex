@@ -88,7 +88,7 @@ export type EventPayloadMap = {
   [PipelineEventType.PoolDestroyFailed]: { agentType: AgentType; instanceId: string; error: string };
   [PipelineEventType.MemoryDbWriteFailed]: { operation: string; error: string };
   [PipelineEventType.MemoryWriteBlocked]: { reason: string };
-  [PipelineEventType.MemoryFlushSkipped]: { frameStart: number; spentMs: number };
+  [PipelineEventType.MemoryFlushSkipped]: { source: string; detail: string };
   [PipelineEventType.MemoryPersistFailed]: { operation: string; error: string };
   [PipelineEventType.MemorySqlDegraded]: { operation: string; detail: string };
   [PipelineEventType.MemoryDeserializeFailed]: { rowId: string; error: string };
@@ -206,6 +206,13 @@ export interface LlmResponse {
   reasoning_content?: string; // V4-Flash 思考模式：需在下一轮 assistant 消息中回传
 }
 
+/**
+ * LLM function calling 用工具定义。
+ * @fix 艾尔海森 P0-2 — 与 toolkit.ts 中 ToolDefinition 语义重叠，
+ *   此处保留为 ToolDefinition 的精简别名。消费方优先使用 ToolDefinition。
+ *
+ * @deprecated 新代码请使用 ToolDefinition（来自 toolkit.ts），功能更完整。
+ */
 export interface ToolDef {
   name: string;
   description: string;
@@ -229,10 +236,12 @@ export interface Agent {
   wakeup(): Promise<void>;
   execute(node: TaskNode, model: string): Promise<NodeResult>;
   shutdown(): Promise<void>;
-  /** 方案B：注入 Pool 引用（Scheduler spawn 时调用） */
-  setPool?(pool: any, instanceId: string): void;
+  /** 方案B：注入 Pool 引用（Scheduler spawn 时调用）。
+   *  类型擦除为 unknown 以避免 shared↔engine 循环依赖。
+   *  调用方通过 AgentPool.setPool 传入具体实现。 */
+  setPool?(pool: unknown, instanceId: string): void;
   /** 注入 SafeErrorReporter */
-  setSafeReporter?(reporter: any): void;
+  setSafeReporter?(reporter: SafeErrorReporter): void;
 }
 
 /** Agent 配置（权限由 Toolkit 层 AGENT_TOOL_PERMISSIONS 管理） */

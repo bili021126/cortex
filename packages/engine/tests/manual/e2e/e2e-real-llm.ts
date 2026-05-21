@@ -14,23 +14,26 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { MetaAgent } from "../../../src/meta-agent.js";
-import { TaskBoard } from "../../../src/task-board.js";
-import { AgentPool } from "../../../src/agent-pool.js";
-import { createAgent } from "../../../src/components/agent-factory.js";
-import { codeAgentConfig } from "../../../src/agents/code-agent.js";
-import { reviewAgentConfig } from "../../../src/agents/review-agent.js";
-import { analysisAgentConfig } from "../../../src/agents/analysis-agent.js";
-import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent.js";
-import { createInspectorAgent } from "../../../src/agents/inspector-agent.js";
-import { opsAgentConfig } from "../../../src/agents/ops-agent.js";
-import { loopAgentConfig } from "../../../src/agents/loop-agent.js";
-import { Scheduler } from "../../../src/scheduler.js";
-import { PipelineObserver } from "../../../src/pipeline-observer.js";
-import { ConfirmGate } from "../../../src/confirm-gate.js";
-import { Toolkit } from "../../../src/toolkit.js";
-import { MemoryStore } from "../../../src/memory/memory-store.js";
-import { CLIAdapter } from "../../../src/cli-adapter.js";
+import {
+  MetaAgent,
+  TaskBoard,
+  AgentPool,
+  createAgent,
+  codeAgentConfig,
+  reviewAgentConfig,
+  analysisAgentConfig,
+  docGovernAgentConfig,
+  createInspectorAgent,
+  opsAgentConfig,
+  loopAgentConfig,
+  Scheduler,
+  PipelineObserver,
+  ConfirmGate,
+  Toolkit,
+  MemoryStore,
+  CLIAdapter,
+} from "@cortex/engine";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
 // 1. 加载环境变量
@@ -178,9 +181,10 @@ async function main() {
   const API_KEY = process.env.DEEPSEEK_API_KEY;
   if (!API_KEY) { console.error("❌ DEEPSEEK_API_KEY 未设置"); process.exit(1); }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner"; // V4-Flash 思考模型，所有 Agent 用
-  const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-pro"; // MetaAgent 独享旗舰
+  const llmCfg = resolveLlmConfig();
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel; // V4-Flash 思考模型，所有 Agent 用
+  const REASONER_MODEL = llmCfg.reasonerModel; // MetaAgent 独享旗舰
   const WORKSPACE = process.cwd();
 
   console.log("╔══════════════════════════════════════╗");
@@ -198,7 +202,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: "high", // MetaAgent 按标签智能分配 max，其他 high 提速 2-3x
+    reasoningEffort: llmCfg.reasoningEffort as "high" | "max", // MetaAgent 按标签智能分配 max，其他 high 提速 2-3x
   });
   adapter.setCacheEnabled(true); // 测试省钱：缓存相同 LLM 请求
 

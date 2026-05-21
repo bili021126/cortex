@@ -3,8 +3,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { AgentType, AgentStatus } from "@cortex/shared";
 import type { Agent } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit } from "../src/toolkit";
-import { createInspectorAgent } from "../src/agents/inspector-agent";
+import { Toolkit, createInspectorAgent } from "@cortex/engine";
 
 function mockInspectAdapter() {
   const adapter = new LlmAdapter({

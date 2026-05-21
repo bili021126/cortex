@@ -10,14 +10,15 @@
  * 用法: npx tsx scripts/test-doc-registry.ts
  */
 
-import { DocRegistry } from "../packages/engine/dist/doc-registry.js";
-import { NodeFileSystemAdapter } from "../packages/engine/dist/node-fs-adapter.js";
+import { DocRegistry, NodeFileSystemAdapter } from "@cortex/engine";
 import * as path from "node:path";
+import { execSync } from "node:child_process";
 
 const WORKSPACE = path.resolve(process.cwd());
 const fs = new NodeFileSystemAdapter();
 
 async function main() {
+  try { execSync("chcp 65001", { stdio: "pipe" }); } catch { /* 非 Windows 环境忽略 */ }
   console.log("═══════════════════════════════════════");
   console.log("  DocRegistry E2E 验证");
   console.log("═══════════════════════════════════════\n");

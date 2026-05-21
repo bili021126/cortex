@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { AgentType, PipelinePriority, type TaskNode } from "@cortex/shared";
 import { MemorySubType, MemoryState, MemoryType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { loadSkillsFromMemory, scanOutputFilesForSkills } from "../../../src/components/skill-persister.js";
+import { loadSkillsFromMemory, scanOutputFilesForSkills } from "@cortex/engine";
 import {
   TaskBoard,
   AgentPool,
@@ -46,8 +46,9 @@ import {
   dataAgentConfig,
   fixAgentConfig,
   createInspectorAgent,
+  MemoryStore,
 } from "@cortex/engine";
-import { MemoryStore } from "../../../src/memory/memory-store.js";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ══════════════════════════════════════════════
 // 0. 环境变量
@@ -273,9 +274,10 @@ async function main() {
   const API_KEY = process.env.DEEPSEEK_API_KEY;
   if (!API_KEY) { console.error("❌ DEEPSEEK_API_KEY 未设置"); process.exit(1); }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner";
-  const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-pro";
+  const llmCfg = resolveLlmConfig();
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel;
+  const REASONER_MODEL = llmCfg.reasonerModel;
   const WORKSPACE = process.cwd();
   const PACKAGES_ROOT = path.resolve(WORKSPACE, "packages");
 
@@ -305,7 +307,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: "high",
+    reasoningEffort: llmCfg.reasoningEffort as "high" | "max",
   });
   adapter.setCacheEnabled(true);
 

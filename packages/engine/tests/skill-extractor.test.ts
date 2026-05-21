@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { extractSkillsFromOutput } from "../src/components/skill-extractor.js";
+import { extractSkillsFromOutput } from "@cortex/engine";
 
 /** 构造完整的 SkillTemplate JSON 输出 */
 function skillOutput(skill: Record<string, unknown> | Record<string, unknown>[]): string {

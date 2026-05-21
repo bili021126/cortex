@@ -3,6 +3,13 @@
  *
  * 导出 Cortex CLI 的统一前端 API。
  * 保留向后兼容的文档转换功能。
+ *
+ * @module-convention 模块化铁律（昔涟 v2.6 入宪）
+ * 1. 凡 src/ 下新增公开符号，必须在本文件追加对应的 export 语句。
+ * 2. 测试文件禁止 ../src/ 相对导入——只用 @cortex/cli 包名导入。
+ * 3. 新增子模块（如 commands/xxx.ts、services/xxx.ts）同步更新。
+ * 4. 收益：文件合并/拆分/重命名——只要 barrel 出口不变，所有引用方无感。
+ * 违反者：导入路径越写越长，终至不可维护。
  */
 
 // ── 文档转换（向后兼容） ────────────────────────────
@@ -14,12 +21,24 @@ export type { CommandContext, CommandResult, OutputFormat } from "./types.js";
 
 // ── 命令注册 ───────────────────────────────────────
 export { CommandRegistry } from "./commands/index.js";
+export { CORTEX_VERSION } from "./constants.js";
 export type { CommandDefinition, CommandHandler } from "./types.js";
 
 // ── 服务 ───────────────────────────────────────────
 export { ConfigManager } from "./services/config-manager.js";
 export type { CliConfig } from "./services/config-manager.js";
 export { EngineBridge } from "./services/engine-bridge.js";
+export type { BridgeContext } from "./services/engine-bridge.js";
+
+// ── 命令处理器工厂（集成测试用） ──────────────────
+export { createRunHandler } from "./commands/run.js";
+export { createAgentHandler } from "./commands/agent.js";
+export { createTaskHandler } from "./commands/task.js";
+export { createMemoryHandler } from "./commands/memory.js";
+export { createConfirmHandler } from "./commands/confirm.js";
+export { createScheduleHandler } from "./commands/schedule.js";
+export { createSetupHandler } from "./commands/setup.js";
+export { createHelpHandler } from "./commands/help.js";
 
 // ── 格式器 ─────────────────────────────────────────
 export { getFormatter, detectDefaultFormat } from "./formatters/index.js";

@@ -45,7 +45,8 @@ export interface NodeResult {
 /**
  * 影响范围：local 只换当前节点，subtree 连下游一起回收。
  *
- * @usedBy Scheduler._drainReplanQueue — 调度模块根据此值决定回收策略：
+ * @usedBy MetaAgent.requestReplan — MetaAgent 根据此值标记影响范围，
+ *   Scheduler 通过 ReplanResult.impactScope 间接消费：
  *   "local"   → 仅替换当前失败节点
  *   "subtree" → 递归移除所有下游子节点后重新规划
  */

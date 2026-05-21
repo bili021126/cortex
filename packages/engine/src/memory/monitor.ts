@@ -16,7 +16,7 @@
  */
 import type { ObservableEvent } from "@cortex/shared";
 import { PipelinePriority, PipelineEventType } from "@cortex/shared";
-import type { PipelineObserver } from "../pipeline-observer.js";
+import type { PipelineObserver } from "../core/pipeline-observer.js";
 
 export class MemoryStoreMonitor {
   /** 最近 N 秒内事件计数（用于阈值检测） */

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "projectFingerprint": "fp-3a7e2c1b",
   "createdAt": 1747700000000,
-  "updatedAt": 1747700000000,
+  "updatedAt": 1747771200000,
   "records": [
     {
       "id": "MOD-schema-enforce-001",
@@ -149,6 +149,97 @@
       ],
       "reversibility": "reversible",
       "schemaVersion": 1
+    },
+    {
+      "id": "MOD-hardcode-extract-001",
+      "runId": "hardcode-extract-core1",
+      "type": "file_modified",
+      "agentType": "FixAgent",
+      "description": "amendment-judge CHECK_ORDER 死代码清理——移除未使用的硬编码数组，替换为 BLOCKING_CHECK_IDS Set 注册表模式",
+      "filePaths": [
+        "packages/engine/src/governance/amendment-judge.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747771200000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-hardcode-extract-002",
+      "runId": "hardcode-extract-core1",
+      "type": "file_modified",
+      "agentType": "FixAgent",
+      "description": "pm 密码管理器 P0 安全修复——移除硬编码默认主密钥，PM_MASTER_KEY 未设置时抛出明确错误",
+      "filePaths": [
+        "packages/pm/src/crypto.ts",
+        "packages/pm/tests/pm.test.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747771200000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-hardcode-extract-003",
+      "runId": "hardcode-extract-core1",
+      "type": "file_modified",
+      "agentType": "FixAgent",
+      "description": "TaskService.stats() byPriority 硬编码 → VALID_PRIORITIES 动态初始化",
+      "filePaths": [
+        "packages/data/src/core/services/task.service.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747771200000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-hardcode-extract-004",
+      "runId": "hardcode-extract-core1",
+      "type": "file_modified",
+      "agentType": "FixAgent",
+      "description": "monorepo-analyzer layerMap 补全——从 4 包扩展到 11 包完整覆盖",
+      "filePaths": [
+        "packages/tools/src/monorepo-analyzer.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747771200000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-cli-e2e-expand-001",
+      "runId": "hardcode-extract-core1",
+      "type": "file_modified",
+      "agentType": "FixAgent",
+      "description": "CLI E2E 测试扩展——从 18 用例扩展到 49 用例，覆盖 Agent 纯函数/注册表边界/子命令路由/格式器/inspect 全子命令",
+      "filePaths": [
+        "packages/cli/tests/e2e/cli-e2e.test.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1747771200000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
     }
   ],
   "sessions": [
@@ -168,6 +259,21 @@
         "MOD-schema-enforce-006",
         "MOD-schema-enforce-007",
         "MOD-schema-enforce-008"
+      ]
+    },
+    {
+      "sessionId": "hardcode-extract-core1",
+      "startedAt": 1747771200000,
+      "agentTypes": ["FixAgent"],
+      "projectFingerprint": "fp-3a7e2c1b",
+      "startCommitHash": "HEAD",
+      "status": "completed",
+      "recordIds": [
+        "MOD-hardcode-extract-001",
+        "MOD-hardcode-extract-002",
+        "MOD-hardcode-extract-003",
+        "MOD-hardcode-extract-004",
+        "MOD-cli-e2e-expand-001"
       ]
     }
   ]

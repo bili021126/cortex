@@ -1,9 +1,9 @@
 import type { AgentStatus, ObservableEvent, SafeErrorReporter } from "@cortex/shared";
 import { AgentType as AT, AgentStatus as AS, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../pipeline-observer.js";
+import type { PipelineObserver } from "../core/pipeline-observer.js";
 import type { PlatformBridge } from "@cortex/shared";
-import type { AgentPool } from "../agent-pool.js";
-import { PoolAwareState } from "../pool-aware.js";
+import type { AgentPool } from "../core/agent-pool.js";
+import { PoolAwareState } from "../components/pool-aware.js";
 
 /**
  * ButlerAgent（托马）—— 神里家管，唯一用户交互出口。

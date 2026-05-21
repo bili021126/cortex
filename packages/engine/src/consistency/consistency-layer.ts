@@ -1,21 +1,23 @@
 import * as path from "node:path";
-import type { MemoryWriteInput } from "@cortex/shared";
+import type { MemoryEntry, MemoryWriteInput } from "@cortex/shared";
 import type { IFileSystemAdapter } from "@cortex/shared";
 import type { MemoryStore } from "../memory/memory-store.js";
 import { InitVerifier } from "./init-verifier.js";
 import type { ConsistencyReport } from "./init-verifier.js";
 import { SchemaEnforcer } from "./schema-enforcer.js";
 import type { ValidationResult } from "./schema-enforcer.js";
+import { IntentFactWall } from "./intent-fact-wall.js";
 
 /**
  * ConsistencyLayer —— 记忆-现实一致性校验层 Facade（P1-六层防御）。
  *
- * 作为 MemoryStore 的外部中间件，组合 InitVerifier + SchemaEnforcer，
- * 在关键入口点（启动校验、写入前校验）插入一致性检查。
+ * 作为 MemoryStore 的外部中间件，组合 InitVerifier + SchemaEnforcer + IntentFactWall，
+ * 在关键入口点（启动校验、写入前校验、读路径过滤）插入一致性检查。
  *
  * 核心原则：不修改 MemoryStore 内部实现。
  *
  * @since P1-六层防御
+ * @since P0 — IntentFactWall 集成（CSA 读路径 Intent 过滤）
  *
  * @fix D8 — 当 enableInitVerifier: true 但未提供 fs 时，通过 console.warn 显式告知用户
  *   InitVerifier 被静默禁用，避免用户误以为第一道防线已就绪。
@@ -43,6 +45,7 @@ export class ConsistencyLayer {
   private readonly _config: Omit<Required<ConsistencyLayerConfig>, 'fs'> & { fs: IFileSystemAdapter | undefined };
   private readonly _initVerifier: InitVerifier | null;
   private readonly _schemaEnforcer: SchemaEnforcer | null;
+  private readonly _intentFactWall: IntentFactWall;
 
   constructor(
     memory: MemoryStore,
@@ -76,6 +79,8 @@ export class ConsistencyLayer {
     this._schemaEnforcer = this._config.enableSchemaEnforcer
       ? new SchemaEnforcer()
       : null;
+
+    this._intentFactWall = new IntentFactWall();
   }
 
   // ── 生命周期 ────────────────────────────────
@@ -107,6 +112,30 @@ export class ConsistencyLayer {
   annotateInput(input: MemoryWriteInput): MemoryWriteInput {
     if (!this._schemaEnforcer) return input;
     return this._schemaEnforcer.annotate(input);
+  }
+
+  /**
+   * 读路径 Intent 过滤（P0-六层防御）。
+   *
+   * CSA 模式下排除 subType === Intent 的记忆，防"想做的事"污染 Agent 决策。
+   * HCA 模式下不过滤——MetaAgent 需要全局视图（含半成品意图）。
+   *
+   * @param entries 记忆列表
+   * @param queryMode 注意力模式（hca/csa）
+   * @returns 过滤后的记忆列表
+   */
+  filterRead(entries: MemoryEntry[], queryMode: "hca" | "csa" = "csa"): MemoryEntry[] {
+    return this._intentFactWall.filterRead(entries, queryMode);
+  }
+
+  /**
+   * 写前 subType 默认值注入（P0-六层防御）。
+   *
+   * 若未显式指定 subType，默认标记为 Fact。
+   * "说不清是意图还是事实的，按事实处理"——宁可漏标也不误标。
+   */
+  ensureSubType(input: MemoryWriteInput): MemoryWriteInput {
+    return this._intentFactWall.ensureSubType(input);
   }
 
   // ── 状态查询 ────────────────────────────────

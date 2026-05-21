@@ -212,10 +212,21 @@ function collectPackages(projectRoot: string): PkgInfo[] {
   if (!existsSync(packagesDir)) return packages;
 
   const layerMap: Record<string, number> = {
+    // Layer 0: 无内部依赖的基础包
     shared: 0,
+    parser: 0,
+    data: 0,
+    pm: 0,
+    // Layer 1: 仅依赖 shared
     llm: 1,
     testing: 1,
+    notification: 1,
+    // Layer 2: 依赖 shared + engine/layer-1 包
     engine: 2,
+    factory: 2,
+    tools: 2,
+    // Layer 3: 依赖 engine
+    cli: 3,
   };
 
   const subdirs = getSubdirs(packagesDir);

@@ -1,8 +1,7 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
-import { MemoryStore } from "../src/memory/memory-store.js";
-import { PipelineObserver } from "../src/pipeline-observer";
+import { MemoryStore, PipelineObserver } from "@cortex/engine";
 
 describe("MemoryStore", () => {
   let store: MemoryStore;
@@ -374,8 +373,8 @@ describe("MemoryStore", () => {
     expect(store.freeze(b)).toBe(true);
     expect(store.peek(b)!.state).toBe(MemoryState.Frozen);
 
-    // 已 Frozen 不可再 freeze
-    expect(store.freeze(a)).toBe(false);
+    // 已 Frozen 再 freeze 幂等返回 true（不抛错，状态不变）
+    expect(store.freeze(a)).toBe(true);
   });
 
   it("obliterate：任何非 Obliterated 态 → Obliterated", () => {
@@ -576,7 +575,7 @@ describe("MemoryStore", () => {
         creatorId: "a",
         embedding: invalidEmbedding,
       });
-    }).toThrow(/embedding 维度不匹配/);
+    }).toThrow(/embedding 维度不匹配/i);
   });
 
   it("M3: writePending() 也校验 embedding 维度", () => {
@@ -590,6 +589,6 @@ describe("MemoryStore", () => {
         creatorId: "a",
         embedding: invalidEmbedding,
       });
-    }).toThrow(/embedding 维度不匹配/);
+    }).toThrow(/embedding 维度不匹配/i);
   });
 });

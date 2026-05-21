@@ -1,7 +1,7 @@
 // @ci: llm
 import { describe, it, expect, vi } from "vitest";
 import { LlmAdapter } from "@cortex/llm";
-import { MetaAgent } from "../src/meta-agent";
+import { MetaAgent } from "@cortex/engine";
 import type { SafeErrorReporter } from "@cortex/shared";
 
 function mockMetaAgentLlm() {

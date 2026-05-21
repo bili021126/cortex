@@ -5,9 +5,12 @@
  * 写操作使用原子写入（写临时文件 → rename）。
  *
  * 原位于 .cortex/archive/.../solo-flight/src/storage/adapters/json-file.adapter.ts
+ *
+ * @fix P2-9 — 同步 I/O 置换为异步 fs.promises，避免阻塞事件循环
  */
 
-import * as fs from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
+import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Task, TaskJSON } from '../../core/models/task.js';
 import { TaskRepository, TaskFilter } from '../interfaces/task.repository.js';
@@ -17,31 +20,55 @@ export class JsonFileAdapter implements TaskRepository {
   private tasks: Map<string, Task> = new Map();
   private readonly filePath: string;
   private loaded: boolean = false;
+  private _loadPromise: Promise<void> | null = null;
 
   constructor(filePath: string) {
     this.filePath = path.resolve(filePath);
   }
 
+  /** ensureDir 仍使用同步版本——目录创建是轻量操作，避免在每个 I/O 前引入额外 await */
   private ensureDir(): void {
     const dir = path.dirname(this.filePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
     }
   }
 
-  private load(): void {
+  private async load(): Promise<void> {
     if (this.loaded) return;
+    // 防并发：多个请求同时触发 load 时，首个请求负责加载，后续请求等待
+    if (this._loadPromise) {
+      await this._loadPromise;
+      return;
+    }
 
+    this._loadPromise = this._doLoad();
+    try {
+      await this._loadPromise;
+    } finally {
+      this._loadPromise = null;
+    }
+  }
+
+  private async _doLoad(): Promise<void> {
     this.ensureDir();
 
-    if (!fs.existsSync(this.filePath)) {
+    let fileExists = false;
+    try {
+      await readFile(this.filePath, 'utf-8');
+      fileExists = true;
+    } catch {
+      fileExists = false;
+    }
+
+    if (!fileExists) {
       this.tasks = new Map();
       this.loaded = true;
       return;
     }
 
     try {
-      const raw = fs.readFileSync(this.filePath, 'utf-8');
+      const raw = await readFile(this.filePath, 'utf-8');
 
       if (!raw || raw.trim().length === 0) {
         this.tasks = new Map();
@@ -66,7 +93,7 @@ export class JsonFileAdapter implements TaskRepository {
     }
   }
 
-  private persist(): void {
+  private async persist(): Promise<void> {
     this.ensureDir();
 
     const data: { version: number; tasks: Record<string, TaskJSON> } = {
@@ -82,10 +109,10 @@ export class JsonFileAdapter implements TaskRepository {
     const tmpPath = this.filePath + '.tmp';
 
     try {
-      fs.writeFileSync(tmpPath, content, 'utf-8');
-      fs.renameSync(tmpPath, this.filePath);
+      await writeFile(tmpPath, content, 'utf-8');
+      await rename(tmpPath, this.filePath);
     } catch (err) {
-      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch { /* ignore */ }
+      try { await unlink(tmpPath); } catch { /* ignore */ }
       throw new StorageIOError(
         `无法写入任务数据文件: ${this.filePath}`,
         err instanceof Error ? err : undefined,
@@ -94,7 +121,7 @@ export class JsonFileAdapter implements TaskRepository {
   }
 
   async findAll(filter?: TaskFilter): Promise<Task[]> {
-    this.load();
+    await this.load();
 
     let result = Array.from(this.tasks.values());
 
@@ -130,23 +157,23 @@ export class JsonFileAdapter implements TaskRepository {
   }
 
   async findById(id: string): Promise<Task | null> {
-    this.load();
+    await this.load();
     return this.tasks.get(id) || null;
   }
 
   async save(task: Task): Promise<void> {
-    this.load();
+    await this.load();
     this.tasks.set(task.id, task);
-    this.persist();
+    await this.persist();
   }
 
   async delete(id: string): Promise<void> {
-    this.load();
+    await this.load();
     if (!this.tasks.has(id)) {
       throw new TaskNotFoundError(id);
     }
     this.tasks.delete(id);
-    this.persist();
+    await this.persist();
   }
 
   async count(filter?: TaskFilter): Promise<number> {

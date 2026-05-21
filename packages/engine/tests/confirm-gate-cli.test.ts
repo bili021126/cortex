@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { ConfirmGate } from "../src/confirm-gate.js";
+import { ConfirmGate } from "@cortex/engine";
 import type { PlatformBridge, ConfirmationRequest, ConfirmationResponse, PlatformContext } from "@cortex/shared";
 import { ReversibilityLevel, PlatformKind } from "@cortex/shared";
 

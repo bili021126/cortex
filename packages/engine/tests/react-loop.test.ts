@@ -2,8 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { AgentType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit } from "../src/toolkit";
-import { runReActLoop, type ReActContext } from "../src/components/react-loop";
+import { Toolkit, runReActLoop, type ReActContext } from "@cortex/engine";
 
 function mockLlm() {
   const adapter = new LlmAdapter({

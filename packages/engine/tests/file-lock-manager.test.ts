@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { FileLockManager } from "../src/file-lock-manager";
+import { FileLockManager } from "@cortex/engine";
 import { LockType } from "@cortex/shared";
 
 describe("FileLockManager", () => {

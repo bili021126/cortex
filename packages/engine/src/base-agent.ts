@@ -1,11 +1,12 @@
-import type { TaskNode, NodeResult, AgentType, MemoryQuery, SafeErrorReporter } from "@cortex/shared";
+import type { TaskNode, NodeResult, AgentType, MemoryQuery, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
 import { Agent, AgentStatus as AS, MemoryType } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "./toolkit.js";
+import type { Toolkit } from "./platform/toolkit.js";
 import type { MemoryStore } from "./memory/memory-store.js";
-import type { AgentPool } from "./agent-pool.js";
+import type { AgentPool } from "./core/agent-pool.js";
 import { executeWithMemoryPipeline } from "./memory/pipeline.js";
-import { PoolAwareState } from "./pool-aware.js";
+import { PoolAwareState } from "./components/pool-aware.js";
+import { DEFAULT_ENGINE_CONFIG } from "./engine-config.js";
 
 /**
  * BaseAgent —— 所有 Agent 的抽象基类。
@@ -26,12 +27,15 @@ export abstract class BaseAgent implements Agent {
   }
 
   /** ReAct 循环上限。子类可覆写（如 InspectorAgent 用 24 以降低幻觉风险）。 */
-  protected maxLoops = 64;
+  protected maxLoops = DEFAULT_ENGINE_CONFIG.defaultMaxLoops;
 
   /** SafeErrorReporter —— 统一错误上报，杜绝静默吞错
    *  注意：仅用于 executeWithMemoryPipeline 等非状态机的内部错误上报。
    *  状态机相关错误由 PoolAwareState 自行上报。 */
   protected _safeReporter: SafeErrorReporter | null = null;
+
+  /** P0-六层防御：读路径 Intent 过滤回调（由 bootstrap 层注入 ConsistencyLayer.filterRead） */
+  protected _filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[];
 
   constructor(
     protected readonly llm: LlmAdapter,
@@ -43,6 +47,11 @@ export abstract class BaseAgent implements Agent {
   setSafeReporter(reporter: SafeErrorReporter): void {
     this._safeReporter = reporter;
     this._state.setSafeReporter(reporter);
+  }
+
+  /** 注入读路径 Intent 过滤回调（P0-六层防御） */
+  setFilterRead(fn: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[]): void {
+    this._filterRead = fn;
   }
 
   /** 注入 AgentPool 引用（方案B：状态所有权归一） */
@@ -88,6 +97,7 @@ export abstract class BaseAgent implements Agent {
         model,
         this.memory ? (n) => this.getMemoryQuery(n) : undefined,
         this._safeReporter ?? undefined,
+        this._filterRead,
       );
       return result;
     } finally {

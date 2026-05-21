@@ -106,7 +106,7 @@ export function validateCrossField(config: CortexAgentsConfig): CrossFieldValida
     }
     // toolPermissions 内的值必须有效
     if (agent.toolPermissions) {
-      const validTools = ["read_file", "write_file", "search_code", "run_shell", "list_files", "delete_file", "parse_ast", "browser_do"];
+      const validTools = ["read_file", "write_file", "search_code", "web_search", "run_shell", "list_files", "delete_file", "parse_ast", "browser_do"];
       for (const tool of agent.toolPermissions) {
         if (!validTools.includes(tool)) {
           result.warnings.push(

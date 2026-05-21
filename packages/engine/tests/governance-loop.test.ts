@@ -21,7 +21,8 @@ import {
   judgeProposals,
   applyApproved,
   summarizeGovernance,
-} from "../src/governance-loop.js";
+  findConstitutionPath,
+} from "@cortex/engine";
 import type { AmendmentProposal } from "@cortex/shared";
 
 // ─── 辅助函数 ───────────────────────────────────
@@ -280,10 +281,12 @@ describe("GovernanceLoop", () => {
       const result = applyApproved(proposal, tmpDir);
       expect(result.success).toBe(true);
       expect(result.appliedVersion).toBe("v2.5.11");
-      expect(result.filePath).toBe(constitutionPath);
+      // 修后文件名会同步版本号：v2.5 → v2.5.11
+      expect(result.filePath).toContain("v2.5.11.md");
 
-      // 验证宪法文件已被修改
-      const content = fs.readFileSync(constitutionPath, "utf-8");
+      // 通过 findConstitutionPath 定位（模拟下次扫描）
+      const newPath = findConstitutionPath(tmpDir);
+      const content = fs.readFileSync(newPath, "utf-8");
       expect(content).toContain("## 二、七条不可变原则");
       expect(content).toContain("**原则七**");
       expect(content).toContain("**版本**：v2.5.11");
@@ -351,8 +354,8 @@ describe("GovernanceLoop", () => {
       const result = applyApproved(approvedProposal, tmpDir);
       expect(result.success).toBe(true);
 
-      // 5. 验证宪法包含新内容
-      const constitutionPath = path.join(tmpDir, "docs", "constitution", "Cortex 概念顶层设计 v2.5.md");
+      // 5. 验证宪法包含新内容（用 findConstitutionPath 定位重命名后的文件）
+      const constitutionPath = findConstitutionPath(tmpDir);
       const content = fs.readFileSync(constitutionPath, "utf-8");
       expect(content).toContain("七条不可变原则");
       expect(content).toContain("v2.5.11");

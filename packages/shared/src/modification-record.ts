@@ -9,6 +9,8 @@
 // 4. 每条记录必须关联一个 ModificationSession（对应一次 Agent 执行 run）
 // ============================================================
 
+import type { AgentType } from "./agent.js";
+
 /** 修改操作类型枚举 —— 封闭集合，禁止 Agent 自定义 */
 export enum ModificationType {
   FileCreated = "file_created",
@@ -53,7 +55,7 @@ export interface ModificationRecordItem {
   /** 操作类型（枚举） */
   type: ModificationType;
   /** 操作 Agent */
-  agentType: string;
+  agentType: AgentType;
   /** 操作描述（Agent 填写，与事实锚点交叉验证） */
   description: string;
   /** 涉及的文件路径（相对于 projectRoot） */
@@ -77,7 +79,7 @@ export interface ModificationSession {
   /** 结束时间 */
   completedAt?: number;
   /** Agent 类型列表 */
-  agentTypes: string[];
+  agentTypes: AgentType[];
   /** 项目指纹 */
   projectFingerprint: string;
   /** 起始 commit hash */

@@ -98,6 +98,20 @@ function handleInspectDir(
   };
 }
 
+function findMonorepoRoot(fromDir: string): string {
+  let dir = fromDir;
+  for (let i = 0; i < 10; i++) {
+    if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))
+      || fs.existsSync(path.join(dir, "lerna.json"))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return fromDir;
+}
+
 function handleInspectDeps(
   options: Record<string, unknown>,
   context: CommandContext,
@@ -106,7 +120,8 @@ function handleInspectDeps(
   const detectCycles = options["cycles"] as boolean;
 
   // 侦察 packages 间的依赖关系
-  const packagesDir = path.join(process.cwd(), "packages");
+  const root = findMonorepoRoot(process.cwd());
+  const packagesDir = path.join(root, "packages");
   const deps: Record<string, string[]> = {};
 
   if (fs.existsSync(packagesDir)) {

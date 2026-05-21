@@ -35,8 +35,8 @@ export { ButlerAgent } from "./butler-agent.js";
 // ════════════════════════════════════════════════════════════
 
 // MetaAgent / StrategistAgent 待单独重构
-export { MetaAgent } from "../meta-agent.js";
-export { StrategistAgent } from "../strategist-agent.js";
+export { MetaAgent } from "../core/meta-agent.js";
+export { StrategistAgent } from "./strategist-agent.js";
 
 // @experimental Core-2 预留
 export { ApiAgent } from "./api-agent.js";

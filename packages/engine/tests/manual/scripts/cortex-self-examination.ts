@@ -27,28 +27,35 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { AgentType, MemoryType, LinkType, PipelinePriority, PipelineEventType, type TaskNode, type SafeErrorReporter } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { TaskBoard } from "../../../src/task-board";
-import { AgentPool } from "../../../src/agent-pool";
-import { createAgent } from "../../../src/components/agent-factory";
-import { codeAgentConfig } from "../../../src/agents/code-agent";
-import { reviewAgentConfig } from "../../../src/agents/review-agent";
-import { createInspectorAgent } from "../../../src/agents/inspector-agent";
-import { createBrowserAgent } from "../../../src/agents/browser-agent";
-import { analysisAgentConfig } from "../../../src/agents/analysis-agent";
-import { docGovernAgentConfig } from "../../../src/agents/doc-govern-agent";
-import { loopAgentConfig } from "../../../src/agents/loop-agent";
-import { opsAgentConfig } from "../../../src/agents/ops-agent";
-import { apiAgentConfig } from "../../../src/agents/api-agent";
-import { dataAgentConfig } from "../../../src/agents/data-agent";
-import { Scheduler } from "../../../src/scheduler";
-import { PipelineObserver } from "../../../src/pipeline-observer";
-import { ConfirmGate } from "../../../src/confirm-gate";
-import { Toolkit } from "../../../src/toolkit";
-import { MemoryStore } from "../../../src/memory/memory-store";
-import { ButlerAgent } from "../../../src/agents/butler-agent";
-import { MetaAgent } from "../../../src/meta-agent";
-import { StrategistAgent } from "../../../src/strategist-agent";
+import {
+  TaskBoard,
+  AgentPool,
+  createAgent,
+  codeAgentConfig,
+  reviewAgentConfig,
+  createInspectorAgent,
+  createBrowserAgent,
+  analysisAgentConfig,
+  docGovernAgentConfig,
+  loopAgentConfig,
+  opsAgentConfig,
+  apiAgentConfig,
+  dataAgentConfig,
+  Scheduler,
+  PipelineObserver,
+  ConfirmGate,
+  Toolkit,
+  MemoryStore,
+  ButlerAgent,
+  MetaAgent,
+  StrategistAgent,
+} from "@cortex/engine";
 import { runMeeting, CODE_REVIEW_ROUNDTABLE, SOFT_CONSENSUS_ROUNDTABLE } from "../config/roundtable-config";
+import { runCrossVerification, loadCrossVerifyPairs, type VerifierAgent } from "./cross-verification";
+import { registerExaminationTools } from "./examination-toolkit";
+import { runStrategyAnalysis } from "./strategy-analysis";
+import { resolveLlmConfig } from "../config/llm-defaults";
+import cortexConfig from "../../../../../cortex-agents.json" assert { type: "json" };
 
 // ═══════════════════════════════════════════════
 // 1. 环境变量——从根目录 .env 加载
@@ -79,328 +86,31 @@ function loadEnv() {
 }
 
 // ═══════════════════════════════════════════════
-// 2. 审视工具集——只读 + 受限 write_file
+// 2. 种子记忆——帮委员会快速了解项目
 // ═══════════════════════════════════════════════
 
-function registerExaminationTools(
-  toolkit: Toolkit,
-  rootDir: string,
-  outputDir: string,
-  softMode: boolean = false,
-) {
-  const resolve = (p: string) => {
-    if (path.isAbsolute(p)) return p;
-    return path.resolve(rootDir, p);
-  };
-
-  // ── 只读工具 ──
-  // 注意：工具输出会通过 ReAct 循环逐轮回传给 LLM，长输出直接推高 token 消耗。
-  // 以下所有 read_file / search_code 均限制输出长度。
-  const MAX_OUTPUT_CHARS = 4000; // 单次工具调用的最大输出字符数
-
-  toolkit.register("read_file", async (params) => {
-    const fp = resolve(params.file_path as string);
-    if (!fs.existsSync(fp)) return { success: false, error: `File not found: ${fp}` };
-    if (fs.statSync(fp).isDirectory()) return { success: false, error: `Path is a directory: ${fp}` };
-    try {
-      const stat = fs.statSync(fp);
-      if (stat.size > 500 * 1024) {
-        return { success: false, error: `File too large (${(stat.size / 1024).toFixed(0)}KB > 500KB limit)` };
-      }
-      const content = fs.readFileSync(fp, "utf-8");
-      // Token 节流：超过上限截断，告知 Agent 可通过 search_code 定位具体行
-      if (content.length > MAX_OUTPUT_CHARS) {
-        const lines = content.split("\n");
-        const truncated = lines.slice(0, Math.ceil(MAX_OUTPUT_CHARS / 80)).join("\n");
-        return {
-          success: true,
-          output: truncated + `\n\n...(截断，全文 ${content.length} 字符 / ${lines.length} 行。用 search_code 搜索关键词定位具体行)`,
-        };
-      }
-      return { success: true, output: content };
-    } catch (e) {
-      return { success: false, error: String(e) };
-    }
-  });
-
-  toolkit.register("list_dir", async (params) => {
-    const fp = resolve(params.path as string);
-    if (!fs.existsSync(fp)) return { success: false, error: `Directory not found: ${fp}` };
-    try {
-      const entries = fs.readdirSync(fp, { withFileTypes: true });
-      const results: string[] = [];
-      for (const e of entries.slice(0, 100)) {
-        const suffix = e.isDirectory() ? "/" : "";
-        const size = e.isFile() ? ` (${fs.statSync(path.join(fp, e.name)).size} bytes)` : "";
-        results.push(`${e.name}${suffix}${size}`);
-      }
-      return { success: true, output: results.join("\n") || "(empty directory)" };
-    } catch (e) {
-      return { success: false, error: String(e) };
-    }
-  });
-
-  toolkit.register("search_code", async (params) => {
-    const query = (params.query ?? "") as string;
-    const dirParam = (params.directory as string) ?? rootDir;
-    const dir = resolve(dirParam);
-    if (!fs.existsSync(dir)) return { success: false, error: `Directory not found: ${dir}` };
-    try {
-      const results: string[] = [];
-      const walk = (d: string, depth: number) => {
-        if (depth > 4) return;
-        const entries = fs.readdirSync(d, { withFileTypes: true });
-        for (const e of entries) {
-          if (e.name === "node_modules" || e.name === ".git" || e.name === "dist") continue;
-          const full = path.join(d, e.name);
-          if (e.isDirectory()) { walk(full, depth + 1); continue; }
-          if (!/\.(ts|tsx|js|jsx|json|md|html|css)$/.test(e.name)) continue;
-          try {
-            const stat = fs.statSync(full);
-            if (stat.size > 200 * 1024) continue;
-            const content = fs.readFileSync(full, "utf-8");
-            const lines = content.split("\n");
-            for (let i = 0; i < lines.length; i++) {
-              if (lines[i].includes(query)) {
-                results.push(`${full}:${i + 1}: ${lines[i].trim().slice(0, 200)}`);
-                if (results.length >= 50) return;
-              }
-            }
-          } catch {
-            /* 跳过不可读文件 */
-          }
-        }
-      };
-      walk(dir, 0);
-      const output = results.slice(0, 30).join("\n") || "(no matches)";
-      return { success: true, output: output.slice(0, MAX_OUTPUT_CHARS) };
-    } catch (e) {
-      return { success: false, error: String(e) };
-    }
-  });
-
-  // ── 受限 write_file：仅允许写入输出目录 ──
-
-  toolkit.register("write_file", async (params) => {
-    const fp = resolve(params.file_path as string);
-    const content = (params.content ?? "") as string;
-    const normalizedFp = path.normalize(fp);
-    const normalizedOut = path.normalize(outputDir);
-    if (!normalizedFp.startsWith(normalizedOut + path.sep) && normalizedFp !== normalizedOut) {
-      return {
-        success: false,
-        error:
-          `写入被拒绝：审视实验中，所有写入操作仅限于 ${outputDir}/ 目录。\n` +
-          `你不能修改 packages/ 或 docs/ 下的任何文件。请将发现写入 ${outputDir}/ 目录下。`,
-      };
-    }
-    try {
-      const dir = path.dirname(fp);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fp, content, "utf-8");
-      return { success: true, output: `Wrote ${Buffer.byteLength(content)} bytes to ${fp}` };
-    } catch (e) {
-      return { success: false, error: String(e) };
-    }
-  });
-
-  // ── 软约束模式：移除 FORBIDDEN 占位，不向 LLM 暴露无法使用的工具定义 ──
-  // FORBIDDEN 工具仍占据 listDefinitions() 输出的 toolDefs，导致 LLM 可能尝试调用并浪费 token。
-  // 软约束模式下直接不注册这些工具——LLM 看不到就不会尝试。
-  if (!softMode) {
-    const FORBIDDEN = async () => ({
-      success: false,
-      error: "操作被禁止：审视实验中仅允许读取文件和将报告写入 test-output/self-examination/ 目录。",
-    });
-    toolkit.register("run_shell", FORBIDDEN);
-    toolkit.register("delete_file", FORBIDDEN);
-  } else {
-    // 软约束：注册真实 run_shell 和 delete_file
-    //
-    // ── OS 命令适配层 ──
-    // LLM 默认为 Unix 环境生成命令（grep/sed/head/wc/pwd 等），Windows 上需转译。
-    // 仅做透明映射——Agent 无感知，无需改 prompt。
-    const isWin = process.platform === "win32";
-    const UNIX_TO_WIN: Record<string, string | ((args: string, pipeIn?: boolean) => string)> = {
-      // 文件操作
-      pwd: "cd",
-      "cat ": "type ",
-      "head -": (args: string, pipeIn?: boolean) => {
-        const m = args.match(/^-n\s*(\d+)|-(\d+)/);
-        const n = m ? (m[1] ?? m[2]) : "10";
-        if (pipeIn) return `Select-Object -First ${n}`;
-        const file = args.replace(/^-n?\s*\d+\s*/, "").trim();
-        return file
-          ? `powershell -NoProfile -Command "Get-Content '${file}' -TotalCount ${n}"`
-          : `Select-Object -First ${n}`;
-      },
-      "ls -": (_args: string) => "Get-ChildItem", // ls -la / ls -l → Get-ChildItem
-      // 文本搜索
-      "grep -r": (args: string) => {
-        const parts = args.split(/\s+/);
-        const pattern = parts.find((p) => !p.startsWith("-") && !p.includes("/") && !p.includes("\\")) ?? parts[0] ?? "";
-        const dir = parts.find((p) => p.includes("/") || p.includes("\\") || p === ".") ?? ".";
-        return `powershell -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse -Include *.ts,*.js,*.json,*.md | Select-String -Pattern '${pattern}' | Select-Object -First 30"`;
-      },
-      "grep ": (args: string) => {
-        const parts = args.split(/\s+/);
-        const pattern = parts[0] ?? "";
-        const file = parts.slice(1).join(" ") || "";
-        return `powershell -NoProfile -Command "Select-String -Path '${file}' -Pattern '${pattern}' | Select-Object -First 30"`;
-      },
-      // 计数/统计
-      "wc -l": (args: string) => `powershell -NoProfile -Command "(Get-Content ${args.trim()}).Count"`,
-      "wc ": (args: string) => `powershell -NoProfile -Command "(Get-Content ${args.replace(/-[lwc]/g, '').trim()}).Count"`,
-      // 文本处理
-      sed: (args: string) => `powershell -NoProfile -Command "(Get-Content ${args.split(/\s+/).slice(1).join(' ').replace(/['\"]/g, '')}) -replace 'x', 'y'"`,
-      // shell 判断
-      "which ": (args: string) => `where ${args.trim()}`,
-      // 文件查找
-      "find ": (args: string) => {
-        const pattern = args.match(/-name\s+["']?([^"'\s]+)["']?/)?.[1];
-        const dir = args.split(/\s+/)[0] ?? ".";
-        if (pattern) return `powershell -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse -Filter '${pattern}' | Select-Object -First 50 FullName"`;
-        return `powershell -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse | Select-Object -First 50 FullName"`;
-      },
-    };
-
-    /** 翻译单个命令段（不含管道）。大小写不敏感匹配。 */
-    function adaptSegment(cmd: string, pipeIn: boolean): string {
-      if (!cmd) return cmd;
-      const lower = cmd.trim().toLowerCase();
-      // cd /d 是 CMD 语法，PowerShell 不认——翻译为 Set-Location
-      if (/^cd\s+\/d\s+/i.test(cmd)) {
-        return "Set-Location " + cmd.replace(/^cd\s+\/d\s+/i, "").trim();
-      }
-      for (const [unixCmd, winTransform] of Object.entries(UNIX_TO_WIN)) {
-        const keyLower = unixCmd.toLowerCase();
-        if (lower === keyLower || lower.startsWith(keyLower)) {
-          const leftover = cmd.slice(unixCmd.length).trim();
-          if (typeof winTransform === "function") {
-            const adapted = winTransform(leftover, pipeIn);
-            if (adapted !== cmd) return adapted;
-          } else {
-            return winTransform + leftover;
-          }
-          break;
-        }
-      }
-      return cmd;
-    }
-
-    function adaptCommand(raw: string): string {
-      if (!isWin) return raw;
-      // PowerShell 不支持 && / &——替换为 ;（自审视场景下语义等价）
-      let result = raw.trim().replace(/\s*&&\s*/g, "; ").replace(/\s+&\s+/g, "; ");
-      // 2>/dev/null 和 2>nul 在 PowerShell 中翻译为 2>$null
-      result = result.replace(/\s+2>\/dev\/null/g, " 2>$null");
-      result = result.replace(/\s+2>nul\b/g, " 2>$null");
-      // 拆分管道 | 或分号 ; 的复合命令，逐段翻译
-      const hasPipe = result.includes("|");
-      const hasSemi = result.includes(";");
-      if (hasPipe || hasSemi) {
-        // 统一用 ; 分割（管道内的 | 保持不变）
-        if (hasPipe && !hasSemi) {
-          const segments = result.split(/\s*\|\s*/).filter((s) => s.length > 0);
-          return segments.map((s, i) => adaptSegment(s, i > 0)).join(" | ");
-        }
-        // 有分号（可能兼有管道）：先按分号拆，每段内部再处理管道
-        const semiParts = result.split(/\s*;\s*/).filter((s) => s.length > 0);
-        return semiParts.map((part) => {
-          if (part.includes("|")) {
-            const pipeParts = part.split(/\s*\|\s*/).filter((s) => s.length > 0);
-            return pipeParts.map((s, i) => adaptSegment(s, i > 0)).join(" | ");
-          }
-          return adaptSegment(part, false);
-        }).join("; ");
-      }
-      return adaptSegment(result, false);
-    }
-
-    toolkit.register("run_shell", async (params) => {
-      const rawCommand = params.command as string;
-      if (!rawCommand) return { success: false, error: "run_shell 缺少 command 参数" };
-      const command = adaptCommand(rawCommand);
-      try {
-        const output = execSync(command, {
-          cwd: rootDir,
-          encoding: "utf-8",
-          timeout: 60_000,
-          maxBuffer: 5 * 1024 * 1024,
-          shell: isWin ? "powershell.exe" : "/bin/sh",
-        });
-        return { success: true, output: output.slice(0, MAX_OUTPUT_CHARS) };
-      } catch (e: any) {
-        const stderr = e.stderr ?? "";
-        const hint = command !== rawCommand ? `\n（已转译: ${rawCommand} → ${command}）` : "";
-        return {
-          success: false,
-          error: `命令执行失败: ${e.message?.slice(0, 300) ?? String(e)}${hint}${stderr ? `\nstderr: ${String(stderr).slice(0, 500)}` : ""}`,
-        };
-      }
-    });
-
-    toolkit.register("delete_file", async (params) => {
-      const fp = resolve(params.file_path as string);
-      if (!fs.existsSync(fp)) return { success: false, error: `文件不存在: ${fp}` };
-      try {
-        fs.unlinkSync(fp);
-        return { success: true, output: `已删除 ${fp}` };
-      } catch (e) {
-        return { success: false, error: `删除失败: ${String(e)}` };
-      }
-    });
-  }
-}
-
-// ═══════════════════════════════════════════════
-// 3. 种子记忆——帮委员会快速了解项目
-// ═══════════════════════════════════════════════
-
-function seedExaminationMemory(memory: MemoryStore): void {
-  const existing = memory.read({
-    metadataFilter: { taskId: "self-exam-constitution-index" },
+async function seedExaminationMemory(memory: MemoryStore): Promise<void> {
+  const existing = await memory.read({
+    metadataFilter: { taskId: cortexConfig.seedMemories.entries[0].taskId },
     limit: 1,
   });
   if (existing.length > 0) return;
 
-  // 项目入口指引
-  const indexId = memory.write({
-    memoryType: MemoryType.Conceptual,
-    content: {
-      taskType: "examination",
-      entities: ["cortex", "architecture", "constitution"],
-      decision:
-        "Cortex 项目结构：packages/shared/ 是类型协议层，packages/engine/ 是核心引擎（含 9 类 Agent + Scheduler + MemoryStore + Toolkit），" +
-        " packages/testing/ 是测试工具包。docs/constitution/ 存放宪法级架构约束，docs/issues/ 存放议题追踪。",
-      outcome: "guide",
-    },
-    summary:
-      "审视入口指引：shared（协议层）→ engine（核心引擎，含全部 Agent 与调度器）→ testing（测试层）。宪法在 docs/constitution/，议题在 docs/issues/。",
-    agentType: AgentType.Analysis as any,
-    creatorId: "system",
-    metadata: { taskId: "self-exam-constitution-index" },
-  });
-
-  // 宪法哲学提示
-  const philId = memory.write({
-    memoryType: MemoryType.Conceptual,
-    content: {
-      taskType: "examination",
-      entities: ["constitution", "design-philosophy"],
-      decision:
-        "Cortex 宪法从 v1.1 的「大脑隐喻」演进到 v2.3 的「工具链隐喻」。六条不可变原则约束架构演化方向：" +
-        " 每个组件可替换、可验证、职责清晰。Agent 体系并非静态集合，而是可演化生态。",
-      outcome: "context",
-    },
-    summary:
-      "设计哲学：Cortex 宪法经历了从大脑隐喻到工具链隐喻的演进。六条不可变原则是所有架构决策的锚点。",
-    agentType: AgentType.Analysis as any,
-    creatorId: "system",
-    metadata: { taskId: "self-exam-design-philosophy" },
-  });
-
-  memory.link(philId, indexId, LinkType.DerivedFrom);
+  let prevId: string | undefined;
+  for (const entry of cortexConfig.seedMemories.entries) {
+    const memId = await memory.write({
+      memoryType: MemoryType[entry.memoryType as keyof typeof MemoryType],
+      content: entry.content,
+      summary: entry.summary,
+      agentType: AgentType[entry.agentType as keyof typeof AgentType] as any,
+      creatorId: "system",
+      metadata: { taskId: entry.taskId },
+    });
+    if (prevId && (entry as any).linkTo) {
+      memory.link(memId, prevId, LinkType.DerivedFrom);
+    }
+    prevId = memId;
+  }
 }
 
 /**
@@ -409,11 +119,11 @@ function seedExaminationMemory(memory: MemoryStore): void {
  * 刻晴（questioning-authority）、纳西妲（trace-to-source）、凝光（rule-supremacy）。
  * 这是方案F「审计结论注入下一轮自审视」在脚本层的最小落地。
  */
-function seedPreviousReports(
+async function seedPreviousReports(
   memory: MemoryStore,
   outputDir: string,
   reportMaxChars: number,
-): void {
+): Promise<void> {
   const QUALITY_AGENTS: Record<string, { agentType: AgentType; label: string }> = {
     keqing: { agentType: AgentType.Review, label: "刻晴" },
     nahida: { agentType: AgentType.Analysis, label: "纳西妲" },
@@ -422,7 +132,7 @@ function seedPreviousReports(
 
   if (!fs.existsSync(outputDir)) return;
 
-  const existing = memory.read({
+  const existing = await memory.read({
     metadataFilter: { taskId: "self-exam-constitution-index" },
     limit: 1,
   });
@@ -430,7 +140,7 @@ function seedPreviousReports(
 
   for (const [key, { agentType, label }] of Object.entries(QUALITY_AGENTS)) {
     // 跳过已注入的报告（幂等）
-    const prevInjected = memory.read({
+    const prevInjected = await memory.read({
       metadataFilter: { taskId: `self-exam-prev-report-${key}` },
       limit: 1,
     });
@@ -456,7 +166,7 @@ function seedPreviousReports(
       : content;
 
     try {
-      const reportId = memory.write({
+      const reportId = await memory.write({
         memoryType: MemoryType.Conceptual,
         content: {
           taskType: "previous-examination-report",
@@ -579,17 +289,13 @@ function generateExaminationSummary(
   lines.push("| Agent | 报告文件 | 大小 | 标题 | ✅ | ❌ | ⚠️ |");
   lines.push("|-------|----------|------|------|----|----|-----|");
 
-  // key→显示名 映射（文件名匹配用英文 key，表格显示用中文名）
-  const agentKeys = ["keqing", "beidou", "nahida", "ningguang", "mona", "amber", "albedo"];
-  const agentDisplay: Record<string, { emoji: string; label: string }> = {
-    keqing: { emoji: "⚡", label: "刻晴" },
-    beidou: { emoji: "⚓", label: "北斗" },
-    nahida: { emoji: "🌿", label: "纳西妲" },
-    ningguang: { emoji: "💎", label: "凝光" },
-    mona: { emoji: "🔮", label: "莫娜" },
-    amber: { emoji: "🐰", label: "安柏" },
-    albedo: { emoji: "⚗️", label: "阿贝多" },
-  };
+  // key→显示名 映射（从 agent-registry.json 派生）
+  const agentKeys = cortexConfig.selfExamination.agents.hard;
+  const agentDisplay: Record<string, { emoji: string; label: string }> = {};
+  for (const key of agentKeys) {
+    const agent = (cortexConfig.agents as Record<string, { display?: { emoji: string; shortName: string } }>)[key];
+    if (agent?.display) agentDisplay[key] = { emoji: agent.display.emoji, label: agent.display.shortName };
+  }
 
   for (const key of agentKeys) {
     const meta = metas.find((m) => m.file.includes(key));
@@ -673,18 +379,11 @@ function writeExaminationSummary(
 // ═══════════════════════════════════════════════
 
 function agentName(type: string): string {
-  const map: Record<string, string> = {
-    code: "阿贝多 (Code)",
-    review: "刻晴 (Review)",
-    inspector: "安柏 (Inspector)",
-    browser: "宵宫 (Browser)",
-    analysis: "纳西妲 (Analysis)",
-    "doc-govern": "凝光 (DocGovern)",
-    loop: "莫娜 (Loop)",
-    butler: "托马 (Butler)",
-    ops: "北斗 (Ops)",
-  };
-  return map[type] ?? type;
+  // 从 cortex-agents.json 按 agentType 查 displayName
+  for (const [key, agent] of Object.entries(cortexConfig.agents)) {
+    if (agent.type === type) return `${agent.display?.shortName ?? key} (${key.charAt(0).toUpperCase() + key.slice(1)})`;
+  }
+  return type;
 }
 
 async function main() {
@@ -704,20 +403,19 @@ async function main() {
     process.exit(1);
   }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
-  const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
-  const REASONING_EFFORT = process.env.DEEPSEEK_REASONING_EFFORT ?? "high";
-  const REPORT_MAX_CHARS = parseInt(process.env.SE_REPORT_MAX_CHARS ?? "15000", 10);
+  const llmCfg = resolveLlmConfig({ chatModel: "deepseek-v4-flash" });
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel;
+  const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? llmCfg.chatModel;
+  const REASONING_EFFORT = llmCfg.reasoningEffort;
+  const REPORT_MAX_CHARS = parseInt(process.env.SE_REPORT_MAX_CHARS ?? String(cortexConfig.selfExamination.reportMaxCharsDefault), 10);
 
   // 使用 import.meta.url 推导路径，避免 cd 到不同目录导致路径解析错误
   const __filename = fileURLToPath(import.meta.url);
   const SCRIPTS_DIR = path.dirname(__filename);
   const ENGINE_DIR = path.resolve(SCRIPTS_DIR, "..", "..", "..");
   const ROOT = path.resolve(ENGINE_DIR, "..", "..");
-  const OUTPUT_DIR = SOFT_MODE
-    ? path.join(ROOT, "test-output", "self-examination-soft")
-    : path.join(ROOT, "test-output", "self-examination");
+  const OUTPUT_DIR = path.join(ROOT, SOFT_MODE ? cortexConfig.selfExamination.outputDir.soft : cortexConfig.selfExamination.outputDir.hard);
 
   if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
@@ -778,8 +476,8 @@ async function main() {
   const memory = new MemoryStore();
   const MEMORY_DB = path.join(ROOT, ".cortex", "memory-self-exam.db");
   await memory.init(MEMORY_DB);
-  seedExaminationMemory(memory);
-  seedPreviousReports(memory, OUTPUT_DIR, REPORT_MAX_CHARS);
+  await seedExaminationMemory(memory);
+  await seedPreviousReports(memory, OUTPUT_DIR, REPORT_MAX_CHARS);
   console.log(`   🧠 MemoryStore: ${MEMORY_DB}`);
   console.log(`   📖 种子记忆: 项目入口指引 + 设计哲学 + 上轮审视报告（刻晴/纳西妲/凝光）\n`);
 
@@ -1020,7 +718,7 @@ async function main() {
   // 每次自审视完成后更新 JSON，下一次规划时自动获益。
   // ═══════════════════════════════════════════════
 
-  const templatesFile = SOFT_MODE ? "verification-templates-soft.json" : "verification-templates.json";
+  const templatesFile = SOFT_MODE ? cortexConfig.selfExamination.templates.soft : cortexConfig.selfExamination.templates.hard;
   const templatesPath = path.join(SCRIPTS_DIR, "..", "config", templatesFile);
   let templatesLoaded = false;
   let templatesData: any = null;
@@ -1079,77 +777,16 @@ async function main() {
 
   if (SOFT_MODE) {
     // ═══ 软约束意图：自由探索 ═══
-    intentParts.push(
-      // 第一层：当前情境——没有目标，只有代码
-      "桌上没有「共识修复清单」。这一次，你不是来逐项打勾的。",
-      "整个 Cortex 项目的代码库向你完全敞开——packages/、docs/、config/，没有禁区。",
-      "九位专家不是「验证员」——他们是「侦察兵」。各自从自己最专业的角度出发，在代码中自由穿行。",
-      "",
-
-      // 第二层：身份与分寸——你是甘雨，分派但不规定方向
-      "你是甘雨。你的职责是把九位专家推入代码库，但不规定他们各自该看什么。",
-      "代码库本身会告诉每个人该关注什么——那是他们的专业直觉决定的事，不是你该替他们做的。",
-      "不设方向、不划边界、不定指标。深度比广度重要，一个真问题比十个假报告有价值。",
-      "如果某位专家报告「我仔细看了X，没有发现问题」——那也是重要的发现。",
-      "",
-
-      // 第三层：任务范围——九个独立根节点，全并行
-      "现在开始规划。为以下九位专家各建一个独立根节点（无 parentId，全并行）：",
-      "  · 刻晴（review）  · 北斗（ops）    · 纳西妲（analysis）",
-      "  · 凝光（doc-govern） · 莫娜（loop）    · 安柏（inspector）",
-      "  · 阿贝多（code）   · 久岐忍（api）      · 艾尔海森（data）",
-      "",
-
-      // 硬约束 type 不变
-      "【硬约束】type 必须使用以下九个精确值之一，不允许任何变体、缩写或同义词：",
-      "  type=\"review\"  → 刻晴    type=\"ops\"    → 北斗",
-      "  type=\"analysis\" → 纳西妲   type=\"doc-govern\" → 凝光",
-      "  type=\"loop\"     → 莫娜    type=\"inspector\" → 安柏",
-      "  type=\"code\"     → 阿贝多   type=\"api\"       → 久岐忍",
-      "  type=\"data\"     → 艾尔海森",
-      "如果你写出 type=\"implementation\"、type=\"inspect\"、type=\"reviewer\" 或任何不在上述九者中的值，",
-      "调度器将无法匹配到对应 Agent，导致那位专家坐在板凳上干等——这是你的失职。",
-      "",
-    );
+    const softIntentPath = path.join(SCRIPTS_DIR, "..", "config", "plan-intent-soft.txt");
+    if (fs.existsSync(softIntentPath)) {
+      intentParts.push(...fs.readFileSync(softIntentPath, "utf-8").split("\n"));
+    }
   } else {
     // ═══ 硬约束意图：逐项验证 ═══
-    intentParts.push(
-      // 第一层：当前情境——铺完整图景
-      "你面前放着一份「共识修复清单」，里面密密麻麻列着 P0 到 P3 四个优先级的三十项修复条目。",
-      "上一次圆桌会议上，六位专家已经逐项争论过——哪些真的修好了，哪些还差一口气，哪些根本没人碰。",
-      "现在需要你做的，不是你自己动手逐项查验——你是秘书，不是审查官。",
-      "",
-
-      // 第二层：身份位置——你是甘雨，不是万能审查官
-      "你的职责是「分派」，不是「包揽」。你手下有七位专家，各有各的专长：",
-      "  · 阿贝多（code）—— 炼金术士，最擅长逐行审查代码正确性，尤其 P0 阻断级问题",
-      "  · 刻晴（review）—— 玉衡星，对修复闭环有强迫症般的执着，适合验证 P1 高优先项",
-      "  · 北斗（ops）—— 船长，工程直觉一流，能一眼看出 P2 工程项是否真的落地了",
-      "  · 纳西妲（analysis）—— 草神，能从一棵树看见整片雨林，适合验证 P3 改善项并评估架构趋势",
-      "  · 凝光（doc-govern）—— 天权，擅长逐条比对清单与代码，看口号和现实之间有多少水分",
-      "  · 莫娜（loop）—— 占星术士，能从散落的修复点中看见隐藏的模式和趋势",
-      "  · 安柏（inspector）—— 侦察骑士，最适合做变更规模的现场调查，不评价只统计",
-      "",
-
-      // 第三层：分寸拿捏——一人扛不动，七人刚好
-      "如果你偷懒，把所有任务揉成一个「通用节点」——那等于让一个人审查整个项目。",
-      "他会超时、会卡死、会漏掉一大半。另外六位专家干坐着喝茶，看着队友被压垮。",
-      "这不是「优化」，这是「故障」。七个根节点，每个 type 精确对应一位专家——这是硬约束，不是建议。",
-      "",
-
-      // 第四层：任务范围——七个独立根节点，全并行
-      "现在开始规划。为以下七位专家各建一个独立根节点。",
-      "",
-
-      "【硬约束】type 必须使用以下七个精确值之一，不允许任何变体、缩写或同义词：",
-      "  type=\"review\"  → 刻晴    type=\"ops\"    → 北斗",
-      "  type=\"analysis\" → 纳西妲   type=\"doc-govern\" → 凝光",
-      "  type=\"loop\"     → 莫娜    type=\"inspector\" → 安柏",
-      "  type=\"code\"     → 阿贝多",
-      "如果你写出 type=\"implementation\"、type=\"inspect\"、type=\"reviewer\" 或任何不在上述七者中的值，",
-      "调度器将无法匹配到对应 Agent，导致那位专家坐在板凳上干等——这是你的失职。",
-      "",
-    );
+    const hardIntentPath = path.join(SCRIPTS_DIR, "..", "config", "plan-intent-hard.txt");
+    if (fs.existsSync(hardIntentPath)) {
+      intentParts.push(...fs.readFileSync(hardIntentPath, "utf-8").split("\n"));
+    }
   }
 
   // 第五层：具体任务信息——由技能模板注入（双模式共用）
@@ -1311,167 +948,54 @@ async function main() {
   console.log();
 
   // ═══════════════════════════════════════════════
-  // 4.5 钟离战略分析（仅软约束模式）
-  //   读取全部审视报告，从千年视角做架构方向判断、契约完整性评估、阶段跃迁判定。
-  //   钟离不翻代码——他读其他 Agent 的报告，做战略综合。
-  //   AGENT_TOOL_PERMISSIONS 中 Strategist 仅允许 read_file/search_code/list_files——
-  //   在此阶段：钟离通过 prompt 接收报告摘要，不自行调用工具探索。
+  // 4.25 交叉验证 Second-Pass（仅软约束模式）
+  //   在圆桌共识前，由互补专长的 Agent 对彼此报告中的可验证事实声明
+  //   做 search_code / read_file 级别的核查。将 LLM 推理与可验证事实分离。
   // ═══════════════════════════════════════════════
 
   if (SOFT_MODE) {
-    console.log("🟢 [第四阶段半] 钟离战略分析——读取审视报告，千年视角综合判断...\n");
+    console.log("🟢 [第四阶段·交叉验证] 互补专长 Agent 互相验证可验证事实声明...\n");
 
-    // 收集所有审视报告内容
-    let reportDigest = "";
-    if (fs.existsSync(OUTPUT_DIR)) {
-      const dirFiles = fs.readdirSync(OUTPUT_DIR) as string[];
-      for (const f of dirFiles.sort()) {
-        if (!f.endsWith(".md") || f.includes("summary") || f.includes("zhongli")) continue;
-        const fp = path.join(OUTPUT_DIR, f);
-        try {
-          const content = fs.readFileSync(fp, "utf-8");
-          // 每份报告取前 2500 字符
-          const excerpt = content.slice(0, 2500);
-          reportDigest += `\n\n### ${f}\n${excerpt}`;
-          if (content.length > 2500) reportDigest += `\n...(截断，全文 ${content.length} 字符)`;
-        } catch {
-          /* skip */
-        }
-      }
-    }
+    const crossVerifyPairs = loadCrossVerifyPairs(
+      path.join(SCRIPTS_DIR, "..", "config"),
+    );
 
-    if (reportDigest) {
-      const strategyPrompt = [
-        "以下是 Cortex 审视委员会专家的自由探索报告摘要。",
-        "你不逐行审查代码——那是他们的事。",
-        "你的任务是以千年视角，做出四个维度的战略判断：",
-        "",
-        "1. **架构方向评估**：当前架构的演进方向是否健康？",
-        "   有没有在朝错误的方向加速？有没有被短期修补绑架了长期路线？",
-        "2. **契约完整性**：各模块之间的接口契约有没有被破坏的迹象？",
-        "   有没有 Agent 在无意中越过了自己的职责边界？",
-        "3. **阶段跃迁判定**：Core-1→Core-2 的跃迁条件是否真的成熟？",
-        "   还有哪些隐藏的阻断项没有被报告覆盖？",
-        "4. **磨损预警**：哪些今天看起来「还好」的问题，",
-        "   如果不处理，会在 Core-3 或更远的将来变成不可逆的架构债务？",
-        "",
-        "输出格式：",
-        "- 每个维度一段话，不列清单、不画表、不写代码。",
-        "- 用碑文风格——每一句经得起时间考验。",
-        "- 如果某维度没有发现重大问题，说「未见结构性风险」即可。",
-        "- 最后给出一个整体阶段建议：",
-        "  「可以跃迁」/「可以跃迁，但需先处理以下 N 项」/「不建议跃迁」。",
-        "",
-        "─── 审视报告摘要 ───",
-        reportDigest,
-      ].join("\n");
-
-      const strategicNode: TaskNode = {
-        id: "zhongli-strategy",
-        type: "strategy_analysis",
-        status: "pending",
-        tags: ["strategy" as const, "strategist" as const],
-        needsMultiPerspective: false,
-        claimedBy: [],
-        payload: strategyPrompt,
-        results: [],
-        createdAt: Date.now(),
-      };
-
-      try {
-        const result = await strategistAgent.execute(strategicNode, CHAT_MODEL);
-        if (result.success && result.output) {
-          const STRATEGY_PATH = path.join(OUTPUT_DIR, "zhongli-strategy-assessment.md");
-          fs.writeFileSync(STRATEGY_PATH, result.output, "utf-8");
-          console.log(`   📄 zhongli-strategy-assessment.md (${result.output.length} 字符)`);
-
-          // 终端预览前 500 字符
-          console.log("\n   🗿 钟离战略判断 —— 预览:");
-          const preview = result.output.slice(0, 500);
-          for (const line of preview.split("\n")) {
-            console.log(`   │ ${line}`);
-          }
-          if (result.output.length > 500) {
-            console.log(`   │ ...(截断，全文见 ${STRATEGY_PATH})`);
-          }
-          console.log();
-        } else {
-          console.log("   ⚠️ 钟离战略分析未产出有效输出\n");
-        }
-      } catch (e) {
-        console.log(`   ❌ 钟离战略分析失败: ${String(e).slice(0, 200)}\n`);
-      }
-    // ── 霜凝方向监理分析 ──
-    //   霜凝不判契约、不判合规——她只看方向：系统实际演进是否偏离宪法定义的阶段目标，
-    //   各路判断之间有没有互相抵消的矛盾，三路事后验证（钟离+凝光+霜凝）是否自洽。
-    //   霜凝不做裁决、不替用户决策——仅指出矛盾、暴露分歧、打包呈报。
-    console.log("🟢 [第四阶段半] 霜凝方向监理——方向判断与矛盾暴露...\n");
-
-    const directionPrompt = [
-      "以下是 Cortex 审视委员会专家的自由探索报告摘要。",
-      "钟离已经做了战略分析（契约完整性+架构方向+阶段跃迁+磨损预警），",
-      "凝光会在后续圆桌中做合规审计。",
-      "",
-      "你的视角与钟离不同——你不是契约守护者，你是方向监理：",
-      "",
-      "1. **方向偏移判断**：从各路专家的报告中，能不能看出系统实际演进方向",
-      "   在偏离宪法定义的阶段目标？有没有在朝错误的方向加速？",
-      "2. **矛盾暴露**：不同专家的报告之间有没有互相矛盾或互相抵消的判断？",
-      "   可验证事实层和 LLM 推理层是否被混淆？",
-      "3. **监理自洽**：钟离的战略分析、凝光即将做的合规审计、你的方向判断——",
-      "   这三路判断之间有没有逻辑不自洽的地方？",
-      "",
-      "方向判断输入：",
-      "- 宪法阶段目标：Core-1（类型安全+工程基建+Agent基础能力）→ Core-2（治理层物理分离+多进程+Skill体系）",
-      "- 当前阶段：Core-1 收尾，向 Core-2 过渡",
-      "",
-      "输出格式：",
-      "- 每项一段话，不列清单、不画表、不写代码。",
-      "- 用监理报告风格——指出偏离、暴露矛盾、不做裁决。",
-      "- 如果未见方向偏离，说「方向未见结构性偏离」即可。",
-      "- 最后给出监理结论：「方向健康」/「方向存在 N 项偏离，需关注」/「方向严重偏离，建议暂停跃迁」。",
-      "",
-      "─── 审视报告摘要 ───",
-      reportDigest,
-    ].join("\n");
-
-    const directionNode: TaskNode = {
-      id: "shuangning-direction",
-      type: "direction_oversight",
-      status: "pending",
-      tags: ["strategy" as const, "strategist" as const],
-      needsMultiPerspective: false,
-      claimedBy: [],
-      payload: directionPrompt,
-      results: [],
-      createdAt: Date.now(),
+    const verifierAgents: Record<string, VerifierAgent> = {
+      keqing: reviewAgent,
+      nahida: analysisAgent,
+      amber: inspectorAgent,
+      beidou: opsAgent,
+      mona: loopAgent,
+      kuki: apiAgent,
+      alhaitham: dataAgent,
+      albedo: codeAgent,
     };
 
-    try {
-      const dirResult = await shuangningAgent.execute(directionNode, CHAT_MODEL);
-      if (dirResult.success && dirResult.output) {
-        const DIRECTION_PATH = path.join(OUTPUT_DIR, "shuangning-direction-assessment.md");
-        fs.writeFileSync(DIRECTION_PATH, dirResult.output, "utf-8");
-        console.log(`   📄 shuangning-direction-assessment.md (${dirResult.output.length} 字符)`);
+    const verifyFiles = await runCrossVerification(
+      OUTPUT_DIR,
+      crossVerifyPairs,
+      verifierAgents,
+      CHAT_MODEL,
+    );
 
-        console.log("\n   ❄️ 霜凝方向监理 —— 预览:");
-        const preview = dirResult.output.slice(0, 500);
-        for (const line of preview.split("\n")) {
-          console.log(`   │ ${line}`);
-        }
-        if (dirResult.output.length > 500) {
-          console.log(`   │ ...(截断，全文见 ${DIRECTION_PATH})`);
-        }
-        console.log();
-      } else {
-        console.log("   ⚠️ 霜凝方向监理未产出有效输出\n");
-      }
-    } catch (e) {
-      console.log(`   ❌ 霜凝方向监理失败: ${String(e).slice(0, 200)}\n`);
+    // 重新生成摘要以包含交叉验证产出
+    if (verifyFiles.length > 0) {
+      writeExaminationSummary(OUTPUT_DIR, report, execDuration, fixListLabel, SUMMARY_PATH, SOFT_MODE);
+      console.log();
     }
-    } else {
-      console.log("   ⚠️ 未找到审视报告，跳过战略分析\n");
-    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // 4.5 钟离战略分析 + 霜凝方向监理（仅软约束模式）
+  // ═══════════════════════════════════════════════
+
+  if (SOFT_MODE) {
+    await runStrategyAnalysis(
+      OUTPUT_DIR,
+      strategistAgent,
+      shuangningAgent,
+      CHAT_MODEL,
+    );
   }
 
   // ═══════════════════════════════════════════════
@@ -1491,22 +1015,17 @@ async function main() {
     console.log("   入席者: 刻晴 阿贝多 纳西妲 凝光 莫娜 安柏 北斗 久岐忍 艾尔海森");
     console.log("   制度: 单轮合并 · 每人 3-5 次发言 · 凝光收束签署 · 产出共识修复清单\n");
 
-    const CONSENSUS_OUTPUT = path.join(ROOT, "test-output", "self-examination", "consensus-fix-list.md");
+    const CONSENSUS_OUTPUT = path.join(ROOT, cortexConfig.selfExamination.consensusOutput);
     const DB_DIR = path.join(ROOT, ".cortex");
 
     // ── 1. 读取审视报告，构建摘要注入 topic ──
     let reportDigest = "";
-    const agentReportMap: Record<string, { key: string; label: string; emoji: string }> = {
-      keqing: { key: "keqing", label: "刻晴", emoji: "⚡" },
-      albedo: { key: "albedo", label: "阿贝多", emoji: "⚗️" },
-      nahida: { key: "nahida", label: "纳西妲", emoji: "🌿" },
-      ningguang: { key: "ningguang", label: "凝光", emoji: "💎" },
-      mona: { key: "mona", label: "莫娜", emoji: "🔮" },
-      amber: { key: "amber", label: "安柏", emoji: "🐰" },
-      beidou: { key: "beidou", label: "北斗", emoji: "⚓" },
-      kuki: { key: "kuki", label: "久岐忍", emoji: "😈" },
-      alhaitham: { key: "alhaitham", label: "艾尔海森", emoji: "📚" },
-    };
+    const consensusKeys = cortexConfig.selfExamination.consensusAgents;
+    const agentReportMap: Record<string, { key: string; label: string; emoji: string }> = {};
+    for (const k of consensusKeys) {
+      const agent = (cortexConfig.agents as Record<string, { display?: { emoji: string; shortName: string } }>)[k];
+      if (agent?.display) agentReportMap[k] = { key: k, label: agent.display.shortName, emoji: agent.display.emoji };
+    }
 
     if (fs.existsSync(OUTPUT_DIR)) {
       const files = fs.readdirSync(OUTPUT_DIR);
@@ -1555,7 +1074,7 @@ async function main() {
 
   // ── 记忆系统诊断 ──
   console.log("── 记忆系统诊断 ──");
-  const allMemories = memory.read({});
+  const allMemories = await memory.read({});
   const accessed = allMemories.filter((m) => m.lastAccessedAt > m.createdAt + 1000);
   console.log(`   总记忆: ${allMemories.length}  被访问过: ${accessed.length}`);
   if (accessed.length > 0) {
@@ -1578,11 +1097,7 @@ async function main() {
   console.log("── 清理与归档 ──");
 
   // 1. 删除本轮专属数据库
-  // DB 生命周期：
-  //   shared-meeting.db   — 旧版圆桌使用（v2.5.5 已迁移至 shared-consensus.db），保留清理以兼容旧数据
-  //   shared-consensus.db — runMeeting() 内部在会议开始时已清理，此处为兜底
-  //   memory-self-exam.db — 本脚本 MemoryStore 实例，每轮审视专用
-  const cleanupFiles = ["shared-meeting.db", "shared-consensus.db", "memory-self-exam.db"];
+  const cleanupFiles = cortexConfig.selfExamination.cleanupFiles;
   let cleanedCount = 0;
   for (const f of cleanupFiles) {
     const fp = path.join(ROOT, ".cortex", f);
@@ -1599,20 +1114,21 @@ async function main() {
   if (cleanedCount === 0) console.log("   ℹ️ 无待清理的临时数据库");
 
   // 2. 归档报告
-  const archiveBase = path.join(ROOT, "test-output", "archive");
+  const archiveBase = path.join(ROOT, cortexConfig.selfExamination.archiveBase);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const archiveDir = path.join(archiveBase, `self-examination-${timestamp}`);
   if (!fs.existsSync(archiveDir)) fs.mkdirSync(archiveDir, { recursive: true });
 
-  for (const dir of ["self-examination", "self-examination-soft"]) {
-    const src = path.join(ROOT, "test-output", dir);
+  for (const outputSubdir of [cortexConfig.selfExamination.outputDir.hard, cortexConfig.selfExamination.outputDir.soft]) {
+    const src = path.join(ROOT, outputSubdir);
+    const dirName = outputSubdir.split("/").pop()!;
     if (fs.existsSync(src)) {
       const files = fs.readdirSync(src);
       for (const f of files) {
         const srcFp = path.join(src, f);
         try {
           if (fs.statSync(srcFp).isFile()) {
-            const dstFp = path.join(archiveDir, `${dir}__${f}`);
+            const dstFp = path.join(archiveDir, `${dirName}__${f}`);
             fs.copyFileSync(srcFp, dstFp);
             fs.unlinkSync(srcFp);
           }

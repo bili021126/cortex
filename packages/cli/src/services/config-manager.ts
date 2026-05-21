@@ -14,6 +14,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { DEFAULT_OUTPUT_FORMAT, DEFAULT_AGENT_QUOTA } from "../constants.js";
 
 export interface CliConfig {
   version: string;
@@ -35,13 +36,13 @@ export interface CliConfig {
 const DEFAULT_CONFIG: CliConfig = {
   version: "0.2",
   cli: {
-    defaultFormat: "text",
+    defaultFormat: DEFAULT_OUTPUT_FORMAT,
     historyFile: "~/.cortex/repl-history",
     aliases: {},
   },
   engine: {
     dbPath: ".cortex/engine.db",
-    maxAgents: { default: 2, code: 4 },
+    maxAgents: DEFAULT_AGENT_QUOTA,
   },
   llm: {
     chatModel: "deepseek-v4-flash",

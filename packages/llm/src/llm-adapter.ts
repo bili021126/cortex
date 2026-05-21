@@ -129,6 +129,9 @@ export class LlmAdapter {
       if (hit) {
         if (Date.now() - hit.ts < LlmAdapter.CACHE_TTL_MS) {
           this._cacheHits++;
+          // @fix P2-8 — LRU: 命中时 touch 该条目，将其移至 Map 末尾（Map 按插入序，末尾=最近使用）
+          this._cache.delete(cacheKey);
+          this._cache.set(cacheKey, hit);
           return hit.response;
         }
         this._cache.delete(cacheKey);
@@ -202,9 +205,10 @@ export class LlmAdapter {
     };
 
     if (this._cacheEnabled) {
+      // @fix P2-8 — LRU 淘汰：删除 Map 首条（插入序最旧 = 最久未使用）
       if (this._cache.size >= LlmAdapter.MAX_CACHE) {
-        const first = this._cache.keys().next().value;
-        if (first) this._cache.delete(first);
+        const oldest = this._cache.keys().next().value;
+        if (oldest) this._cache.delete(oldest);
       }
       this._cache.set(cacheKey, { response, ts: Date.now() });
     }

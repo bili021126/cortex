@@ -30,5 +30,5 @@
     "agent": "DocGovernAgent",
     "trace": "凝光三项审计 2026-06-06——审计发现3-A（审计闭环缺失）：DocGovernAgent审计报告产出后无处理流程——整改责任人、验证流程、判例引用机制、门禁关联、关闭条件均未定义。治理层设计文档§2.4确认『审计报告目前写完磁盘即结束，用户不知情』。详见审计报告 docs/auditing/2026-06-06-constitution-audit.md。"
   },
-  "status": "proposed"
+  "status": "superseded"
 }

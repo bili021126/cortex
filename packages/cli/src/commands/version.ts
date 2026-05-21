@@ -5,9 +5,7 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-
-export const CORTEX_VERSION = "0.2.0";
-export const CORTEX_PHASE = "Core-1";
+import { CORTEX_VERSION, CORTEX_PHASE, DEPENDENCY_VERSIONS } from "../constants.js";
 
 export function createVersionHandler(): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
@@ -19,9 +17,7 @@ export function createVersionHandler(): CommandHandler {
 
     const versionInfo: Record<string, string> = {
       version: `${CORTEX_VERSION} (${CORTEX_PHASE})`,
-      engine: "@cortex/engine v2.1.0",
-      llm: "@cortex/llm v0.3.0",
-      shared: "@cortex/shared v2.0.0",
+      ...DEPENDENCY_VERSIONS,
       runtime: `Node.js ${nodeVersion}`,
       platform,
     };

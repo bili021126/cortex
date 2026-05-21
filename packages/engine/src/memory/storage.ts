@@ -1,6 +1,6 @@
 import type { MemoryEntry, MemoryLink, MemoryType, MemoryWriteInput, AgentType } from "@cortex/shared";
 import { MemoryState, MemorySubType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../pipeline-observer.js";
+import type { PipelineObserver } from "../core/pipeline-observer.js";
 import * as crypto from "node:crypto";
 import { EMBEDDING_DIM } from "./schema.js";
 
@@ -28,7 +28,7 @@ export class MemoryStorage {
   // ── 构造 ─────────────────────────────────────
 
   /** 从输入参数构造 MemoryEntry 并写入 Map。返回 entry。 */
-  insert(input: MemoryWriteInput): MemoryEntry {
+  insert(input: MemoryWriteInput, contentHash?: string): MemoryEntry {
     const now = Date.now();
     const id = `mem-${crypto.randomUUID()}`;
     const entry: MemoryEntry = {
@@ -49,8 +49,48 @@ export class MemoryStorage {
       isPrivate: input.isPrivate ?? false,
       embedding: input.embedding,
     };
+    if (contentHash) {
+      (entry as any)._contentHash = contentHash;
+    }
     this.memories.set(id, entry);
     return entry;
+  }
+
+  /**
+   * 按 SHA256 内容哈希查找 Active 态重复记忆。
+   * @fix 语义卫生 — 写入内容级去重
+   */
+  findByContentHash(hash: string): MemoryEntry | undefined {
+    for (const [, m] of this.memories) {
+      if ((m as any)._contentHash === hash && m.state === MemoryState.Active) {
+        return m;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * 按向量余弦相似度查找语义重复记忆。
+   * @param embedding 查询向量（384d）
+   * @param threshold 余弦相似度阈值（默认 0.95）
+   * @fix 语义卫生 — 向量去重
+   */
+  findBySimilarity(embedding: number[], threshold: number): MemoryEntry | undefined {
+    if (embedding.length !== EMBEDDING_DIM) return undefined;
+    const q = new Float32Array(embedding);
+    let best: MemoryEntry | undefined;
+    let bestScore = threshold;
+    for (const [, m] of this.memories) {
+      if (m.state !== MemoryState.Active || !m.embedding || m.embedding.length !== EMBEDDING_DIM) continue;
+      const e = new Float32Array(m.embedding);
+      let dot = 0;
+      for (let i = 0; i < EMBEDDING_DIM; i++) dot += q[i] * e[i];
+      if (dot >= bestScore) {
+        bestScore = dot;
+        best = m;
+      }
+    }
+    return best;
   }
 
   /** 从 DB 行反序列化为 MemoryEntry。损坏/非 JSON/null content 返回 null。 */

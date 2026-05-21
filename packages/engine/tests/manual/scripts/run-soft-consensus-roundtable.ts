@@ -15,6 +15,7 @@ import { execSync } from "node:child_process";
 import { AgentType, MemoryType, type SafeErrorReporter } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { runMeeting, SOFT_CONSENSUS_ROUNDTABLE, type SeedMemory } from "../config/roundtable-config";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
 // 1. 环境变量
@@ -60,9 +61,10 @@ async function main() {
     process.exit(1);
   }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
-  const REASONING_EFFORT = process.env.DEEPSEEK_REASONING_EFFORT ?? "high";
+  const llmCfg = resolveLlmConfig({ chatModel: "deepseek-v4-flash" });
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel;
+  const REASONING_EFFORT = llmCfg.reasoningEffort as "high" | "max";
 
   const __filename = fileURLToPath(import.meta.url);
   const SCRIPTS_DIR = path.dirname(__filename);

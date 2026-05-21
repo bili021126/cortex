@@ -9,11 +9,12 @@
 
 import type { Formatter } from "./index.js";
 import type { CommandResult } from "../types.js";
+import { CORTEX_VERSION } from "../constants.js";
 
 export class JsonFormatter implements Formatter {
   private _buildMeta(): Record<string, unknown> {
     return {
-      version: "0.2.0",
+      version: CORTEX_VERSION,
       timestamp: new Date().toISOString(),
       duration_ms: 0,
     };

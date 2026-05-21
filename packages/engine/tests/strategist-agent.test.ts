@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { AgentStatus as AS } from "@cortex/shared";
-import { StrategistAgent } from "../src/strategist-agent.js";
+import { StrategistAgent } from "@cortex/engine";
 
 /** Mock LlmAdapter */
 function createMockLlm() {

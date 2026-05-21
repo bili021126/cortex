@@ -21,20 +21,23 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { AgentType, MemoryType, LinkType, PipelinePriority, type TaskNode } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { TaskBoard } from "../../../src/task-board";
-import { AgentPool } from "../../../src/agent-pool";
-import { createAgent } from "../../../src/components/agent-factory";
-import { fixAgentConfig } from "../../../src/agents/fix-agent";
-import { reviewAgentConfig } from "../../../src/agents/review-agent";
-import { apiAgentConfig } from "../../../src/agents/api-agent";
-import { dataAgentConfig } from "../../../src/agents/data-agent";
-import { Scheduler } from "../../../src/scheduler";
-import { PipelineObserver } from "../../../src/pipeline-observer";
-import { ConfirmGate } from "../../../src/confirm-gate";
-import { Toolkit } from "../../../src/toolkit";
-import { MemoryStore } from "../../../src/memory/memory-store";
-import { MetaAgent } from "../../../src/meta-agent";
-import { StrategistAgent } from "../../../src/strategist-agent";
+import {
+  TaskBoard,
+  AgentPool,
+  createAgent,
+  fixAgentConfig,
+  reviewAgentConfig,
+  apiAgentConfig,
+  dataAgentConfig,
+  Scheduler,
+  PipelineObserver,
+  ConfirmGate,
+  Toolkit,
+  MemoryStore,
+  MetaAgent,
+  StrategistAgent,
+} from "@cortex/engine";
+import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
 // 1. 环境变量
@@ -310,10 +313,10 @@ async function main() {
     process.exit(1);
   }
 
-  const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
-  const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
-  const REASONING_EFFORT = (process.env.DEEPSEEK_REASONING_EFFORT ?? "high") as "high" | "max";
+  const llmCfg = resolveLlmConfig({ chatModel: "deepseek-v4-flash" });
+  const BASE_URL = llmCfg.baseUrl;
+  const CHAT_MODEL = llmCfg.chatModel;
+  const REASONER_MODEL = CHAT_MODEL;
 
   // 路径解析
   const __filename = fileURLToPath(import.meta.url);
@@ -353,7 +356,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: REASONING_EFFORT,
+    reasoningEffort: undefined,
   });
   adapter.setCacheEnabled(true);
 

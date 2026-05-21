@@ -22,14 +22,10 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { AgentPool } from "../src/agent-pool";
-import { PipelineObserver } from "../src/pipeline-observer";
-import { BaseAgent } from "../src/base-agent";
-import { ButlerAgent } from "../src/agents/butler-agent";
+import { AgentPool, PipelineObserver, BaseAgent, ButlerAgent, Toolkit } from "@cortex/engine";
 import type { TaskNode, NodeResult, AgentType as AT } from "@cortex/shared";
 import { AgentType, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../src/toolkit";
 
 // 测试用具体 Agent 子类
 class TestAgent extends BaseAgent {

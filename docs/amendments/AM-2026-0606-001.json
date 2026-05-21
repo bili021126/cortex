@@ -27,5 +27,5 @@
     "agent": "DocGovernAgent",
     "trace": "凝光三项审计 2026-06-06——审计发现1-A（原则七自反性缺口）：六项子约束未定义自身修改规则，违反子约束1的精神，导致宪法元规则层锁死。详见审计报告 docs/auditing/2026-06-06-constitution-audit.md。"
   },
-  "status": "proposed"
+  "status": "applied"
 }

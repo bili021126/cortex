@@ -1,9 +1,8 @@
 // @ci: unit
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AgentPool } from "../src/agent-pool";
+import { AgentPool, PipelineObserver } from "@cortex/engine";
 import { AgentType } from "@cortex/shared";
 import { AgentStatus, PipelinePriority } from "@cortex/shared";
-import { PipelineObserver } from "../src/pipeline-observer";
 
 describe("AgentPool", () => {
   it("spawn 在配额内返回 true", () => {

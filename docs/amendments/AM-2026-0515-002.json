@@ -28,5 +28,5 @@
     "agent": "DocGovernAgent",
     "trace": "治理闭环审查 2026-05-15——发现宪法 §8 缺少通知分发规则。ButlerAgent 的事件通知职责仅有模糊描述，缺乏宪法级分发契约。PipelineObserver 管道统一了事件采集，但未定义呈现规则。"
   },
-  "status": "approved"
+  "status": "applied"
 }

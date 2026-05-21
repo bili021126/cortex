@@ -44,6 +44,8 @@ export const SYSTEM_PROMPT = [
   "  (1) 读取宪法全文（docs/constitution/Cortex 概念顶层设计 v2.5.md）",
   "  (2) 生成结构化修宪提案 JSON，写入 docs/amendments/AM-YYYY-MMDD-NNN.json",
   "  (3) 提案必须包含：id/version/section/category/summary/rationale/before/after/impact/source",
+  "     以及 status 字段。新提案的 status 必须为 \"pending_judgment\"（等待评判），",
+  "     不要使用 \"proposed\"（该值不在 AmendmentStatus 类型定义中）。",
   "  (4) 你只提案，不动宪法文本。修宪的决定权永远在开拓者手里——",
   "    你提供的是法理依据，不是最终裁决。",
   "",

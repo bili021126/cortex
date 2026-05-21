@@ -65,6 +65,9 @@ export class SemiFinishedMgr {
    * @param subTypePersistFn 可选——subType 翻转后的持久化回调。
    *   调用方（MemoryStore.commitMemory）负责通过此回调将 subType 写入 SQLite。
    * @returns true 如果提交成功；false 如果状态不匹配或记忆不存在。
+   *
+   * @fix EH-2 — subType 持久化失败时，state 已被 persistFn 先持久化为 Active，
+   *   需同时回滚 DB state 到 Pending，防止重启加载出 state=Active + subType=Intent。
    */
   commit(
     storage: MemoryStorage,
@@ -82,9 +85,19 @@ export class SemiFinishedMgr {
           try {
             subTypePersistFn(id, MemorySubType.Fact);
           } catch (e) {
-            // subType 持久化失败不阻塞主流程（state 已持久化成功），
-            // 但必须回滚内存 subType 防止内存-DB 不一致。
+            // subType 持久化失败：回滚内存 subType + 回滚 DB state 到 Pending，
+            // 防止 state=Active + subType=Intent 的错误组合绕过 IntentFactWall。
             m.subType = MemorySubType.Intent;
+            if (persistFn) {
+              try {
+                persistFn(id, MemoryState.Pending);
+              } catch (rollbackErr) {
+                console.error(
+                  `[SemiFinished] commit subType persist failed AND state rollback failed for ${id}: ` +
+                  `subType error=${String(e).slice(0, 200)}, rollback error=${String(rollbackErr).slice(0, 200)}`,
+                );
+              }
+            }
             console.warn(`[SemiFinished] commit subType persist failed for ${id}: ${String(e).slice(0, 200)}`);
           }
         }

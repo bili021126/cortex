@@ -1,9 +1,9 @@
-import type { TaskNode, Agent, SafeErrorReporter } from "@cortex/shared";
+import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
 import { AgentType as AT, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../toolkit.js";
+import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
-import type { AgentPool } from "../agent-pool.js";
+import type { AgentPool } from "../core/agent-pool.js";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
 import { chromium, type Browser, type Page } from "playwright";
 
@@ -52,6 +52,7 @@ export function createBrowserAgent(
   toolkit: Toolkit,
   memory?: MemoryStore,
   systemPrompt?: string,
+  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[],
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -122,6 +123,7 @@ export function createBrowserAgent(
     type: AT.Browser,
     systemPrompt: systemPrompt ?? SYSTEM_PROMPT,
     memoryEnabled: true,
+    filterRead,
     preExecuteHook: (node: TaskNode): TaskNode => {
       if (!workspaceRoot) return node;
       return {

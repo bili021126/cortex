@@ -8,6 +8,7 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import { DEFAULT_TASK_TIMEOUT_SEC } from "../constants.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -97,7 +98,7 @@ async function handleTaskSubmit(
   const priority = (options["priority"] ?? "P2") as string;
   const label = options["label"] as string | undefined;
   const wait = options["wait"] || options["w"];
-  const timeout = parseInt(String(options["timeout"] ?? "300"), 10);
+  const timeout = parseInt(String(options["timeout"] ?? String(DEFAULT_TASK_TIMEOUT_SEC)), 10);
 
   const taskNode: any = {
     id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

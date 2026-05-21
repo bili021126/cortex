@@ -1,18 +1,8 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, MemoryType, PipelinePriority } from "@cortex/shared";
-import { TaskBoard } from "../src/task-board";
-import { AgentPool } from "../src/agent-pool";
-import { PipelineObserver } from "../src/pipeline-observer";
-import { ConfirmGate } from "../src/confirm-gate";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, Scheduler, topologicalSort } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit } from "../src/toolkit";
-import { createAgent } from "../src/components/agent-factory";
-import { codeAgentConfig } from "../src/agents/code-agent";
-import { reviewAgentConfig } from "../src/agents/review-agent";
-import { analysisAgentConfig } from "../src/agents/analysis-agent";
-import { MemoryStore } from "../src/memory/memory-store.js";
-import { Scheduler, topologicalSort } from "../src/scheduler";
 
 // ─── Mock Agent ────────────────────────────
 

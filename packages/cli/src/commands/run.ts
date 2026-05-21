@@ -93,7 +93,11 @@ export function createRunHandler(bridge: EngineBridge): CommandHandler {
 
     // ── Engine 调度路径 ──
     try {
-      await bridge.ensureInitialized();
+      if (bridge.isBootstrapConfigured) {
+        await bridge.ensureBootstrapped();
+      } else {
+        await bridge.ensureInitialized();
+      }
       const board = await bridge.getTaskBoard();
       const scheduler = await bridge.getScheduler();
 
@@ -128,9 +132,13 @@ export function createRunHandler(bridge: EngineBridge): CommandHandler {
         };
       }
 
+      const errorDetails = report.results
+        .filter((r) => !r.success)
+        .map((r) => `  [${r.nodeId}] ${r.error ?? "未知错误"}`)
+        .join("\n");
       return {
         success: false,
-        error: `执行失败: ${report.failed}/${report.totalNodes} 节点失败`,
+        error: `执行失败: ${report.failed}/${report.totalNodes} 节点失败\n${errorDetails}`,
         data: report,
         exitCode: 2,
       };

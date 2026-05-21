@@ -14,12 +14,17 @@ const TAG_LENGTH = 16;
 const SALT_LENGTH = 16;
 const KEYDERIV_OPTIONS = { N: 2 ** 14, r: 8, p: 1 };
 
+/** 从环境变量获取主密钥。未设置时抛出明确错误——拒绝使用硬编码默认值。 */
 function getMasterKey(): string {
   const envKey = process.env.PM_MASTER_KEY;
-  if (envKey && envKey.length >= 8) {
-    return envKey;
+  if (!envKey || envKey.length < 8) {
+    throw new Error(
+      "PM_MASTER_KEY 环境变量未设置或长度不足（需 ≥8 字符）。"
+      + "请设置环境变量 PM_MASTER_KEY 后再使用密码管理器功能。"
+      + "\n示例：export PM_MASTER_KEY=\"your-secure-random-string\"",
+    );
   }
-  return 'password-manager-default-master-key-2024';
+  return envKey;
 }
 
 function deriveKey(master: string, salt: Buffer): Buffer {
