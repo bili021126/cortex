@@ -31,6 +31,40 @@ bili_images/
 scripts/bili_images/
 StarRailData_repo/
 
+# 私密/非项目文件
+# 剧情文本
+3.4剧情.txt
+3.5剧情.txt
+3.6剧情.txt
+3.7剧情.txt
+3.4_昔涟台词_审核表.xlsx
+# B站数据
+bilibili_messages.csv
+BiliBiliCCSubtitle/
+# Python 多媒体脚本（音频分离/字幕OCR/语音分类等）
+scripts/*.py
+# 截图
+Tools/*.png
+tools/*.png
+tools/*.jpg
+tools/*.jpeg
+# 备份项目
+projects/
+# 编译错误日志
+tsc_check.txt
+tsc_engine.txt
+packages/skill-kit/err.txt
+# docs/core 私密文本
+docs/core/昔涟篇.txt
+docs/core/纳西妲.txt
+docs/core/缇宝偏.txt
+docs/core/[sxsy.org]*
+
+# 临时文件
+.tmp-*/
+.tmp-*.txt
+.tmp-*.zip
+
 # Cortex runtime artifacts
 .cortex/
 tmp/
