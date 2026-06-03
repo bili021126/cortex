@@ -19,7 +19,8 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { existsSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   type SkillDefinition,
@@ -40,7 +41,9 @@ import { SkillFactory } from "../src/factory.js";
 // 辅助函数
 // ============================================================
 
-const TMP_DIR = join(process.cwd(), "packages", "skill-kit", "tests", "skills", "tmp");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_DIR = join(__dirname, "..");
+const TMP_DIR = join(PACKAGE_DIR, "tests", "skills", "tmp");
 
 /** 确保临时目录存在 */
 function ensureTmpDir(): void {
@@ -157,7 +160,7 @@ describe("E2E: 完整闭环 —— 加载 → 校验 → 缓存 → 执行", () 
   let executor: PipelineExecutor;
 
   beforeEach(() => {
-    loader = new DynamicImportLoader({ baseDir: join(process.cwd(), "packages", "skill-kit") });
+    loader = new DynamicImportLoader({ baseDir: PACKAGE_DIR });
     validator = new SimpleSkillValidator({ strictVersion: true });
     cache = new DefaultSkillCache({ maxSize: 20, defaultTtlMs: 0 }); // TTL=0 永不过期
     executor = new PipelineExecutor({ defaultTimeout: 5_000 });
@@ -423,7 +426,7 @@ describe("E2E: SkillFactory 一站式执行", () => {
   let jsonFilePath: string;
 
   beforeEach(() => {
-    loader = new DynamicImportLoader({ baseDir: join(process.cwd(), "packages", "skill-kit") });
+    loader = new DynamicImportLoader({ baseDir: PACKAGE_DIR });
     factory = new SkillFactory({
       loader,
       validator: new SimpleSkillValidator({ strictVersion: true }),
