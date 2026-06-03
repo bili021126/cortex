@@ -28,7 +28,7 @@ interface RegistryInfoOutput {
     id: string;
     name: string;
     version: string;
-    category: string;
+    description: string;
     tags: string[];
   }>;
   detail?: {
@@ -37,7 +37,6 @@ interface RegistryInfoOutput {
     version: string;
     description: string;
     author?: string;
-    category: string;
     tags: string[];
     dependencies: string[];
     platforms?: string[];
@@ -83,7 +82,9 @@ export class RegistryInfoSkill extends BaseSkill<RegistryInfoInput, RegistryInfo
         const allMeta = Array.from(registry.getAll().values());
         const byCategory: Record<string, number> = {};
         for (const m of allMeta) {
-          byCategory[m.category] = (byCategory[m.category] || 0) + 1;
+          // SkillMeta 不含 category，按首个 tag 归类
+          const cat = m.tags[0] ?? 'uncategorized';
+          byCategory[cat] = (byCategory[cat] || 0) + 1;
         }
         return Promise.resolve({
           success: true,
@@ -105,7 +106,7 @@ export class RegistryInfoSkill extends BaseSkill<RegistryInfoInput, RegistryInfo
               id: s.id,
               name: s.name,
               version: s.version,
-              category: s.category,
+              description: s.description,
               tags: s.tags,
             })),
           },
@@ -141,7 +142,6 @@ export class RegistryInfoSkill extends BaseSkill<RegistryInfoInput, RegistryInfo
               version: meta.version,
               description: meta.description,
               author: meta.author,
-              category: meta.category,
               tags: meta.tags,
               dependencies: meta.dependencies,
               platforms: meta.platforms,

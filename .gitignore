@@ -24,6 +24,13 @@ packages/shared/dist/__tests__/
 .DS_Store
 Thumbs.db
 
+# 昔涟语音素材与星铁数据（大文件，不上传）
+bili_videos/
+bili_frames/
+bili_images/
+scripts/bili_images/
+StarRailData_repo/
+
 # Cortex runtime artifacts
 .cortex/
 tmp/

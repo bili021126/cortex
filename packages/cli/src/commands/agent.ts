@@ -11,6 +11,30 @@ import type { CommandHandler, CommandResult, CommandContext } from "../types.js"
 import type { ICortexApi } from "@cortex/shared";
 import { AgentType, AgentStatus, getAgentTags, getAgentToolPermissions, AGENT_CHINESE_ROLE, CHINESE_NAME_TO_TYPE } from "@cortex/shared";
 import type { IAgentPool, StrategistAgent } from "@cortex/engine";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+/** Agent 实例持久化文件（跨进程共享 spawn/list 状态） */
+const INSTANCES_FILE = path.join(process.cwd(), ".cortex", "agent-instances.json");
+
+interface PersistedInstances {
+  [agentType: string]: number;
+}
+
+function readPersistedInstances(): PersistedInstances {
+  try {
+    if (fs.existsSync(INSTANCES_FILE)) {
+      return JSON.parse(fs.readFileSync(INSTANCES_FILE, "utf-8"));
+    }
+  } catch { /* 文件损坏则忽略 */ }
+  return {};
+}
+
+function writePersistedInstances(instances: PersistedInstances): void {
+  const dir = path.dirname(INSTANCES_FILE);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(INSTANCES_FILE, JSON.stringify(instances, null, 2), "utf-8");
+}
 
 /**
  * 解析输入——支持英文 type 名和中文角色名。
@@ -57,7 +81,18 @@ export function createAgentHandler(bridge: ICortexApi): CommandHandler {
     const subcommand = args[0];
 
     try {
-      await bridge.ensureReady();
+      // list/inspect 走轻量模式；spawn/destroy 需要 bootstrap（注册 Agent config）
+      const needsBootstrap = subcommand === "spawn" || subcommand === "destroy";
+      if (needsBootstrap && bridge.bootstrapped === false) {
+        try {
+          await bridge.ensureBootstrapped();
+        } catch {
+          // 如果 bootstrap 不可用（无 API Key），回退轻量模式
+          await bridge.ensureReady();
+        }
+      } else {
+        await bridge.ensureReady();
+      }
       const pool = bridge.getAgentPool() as IAgentPool;
 
       switch (subcommand) {
@@ -118,18 +153,24 @@ async function handleAgentList(
   const statusFilter = options["status"] as string | undefined;
   const verbose = options["verbose"] || options["v"];
 
+  // 读取跨进程持久化的实例计数（spawn 写入，list 读取）
+  const persisted = readPersistedInstances();
+
   const agentTypes = Object.values(AgentType);
   const rows: string[][] = [];
   let totalInstances = 0;
   let totalAwake = 0;
 
-  // ── 常规 Agent（从 AgentPool 查询）──
+  // ── 常规 Agent（从 AgentPool + 持久化合并查询）──
   for (const type of agentTypes) {
     // strategist 不走 AgentPool，单独查询（见下方）
     if (type === AgentType.Strategist) continue;
-    const count = p.count(type);
+    const memCount = p.count(type);
+    const persistedCount = persisted[type] ?? 0;
+    // 合并：内存计数 + 持久化计数取最大值（持久化统计的是累计 spawn，内存统计当前进程）
+    const count = Math.max(memCount, persistedCount);
     const statuses = p.getStatuses(type);
-    const hasAwake = p.hasAwake(type);
+    const hasAwake = p.hasAwake(type) || persistedCount > 0;
     const tags = getAgentTags()[type as AgentType] ?? [];
 
     const displayStatus = statuses.length > 0 ? statuses[0] : (count > 0 ? "awake" : "-");
@@ -301,6 +342,11 @@ async function handleAgentSpawn(
     };
   }
 
+  // 持久化：写入跨进程共享的实例计数文件
+  const persisted = readPersistedInstances();
+  persisted[agentType] = (persisted[agentType] ?? 0) + spawned;
+  writePersistedInstances(persisted);
+
   return {
     success: true,
     output: `✓ 已启动 ${spawned}/${count} 个 ${typeName} 实例`,
@@ -328,6 +374,13 @@ async function handleAgentDestroy(
 
   if (instanceId) {
     p.destroy(agentType, instanceId);
+    // 持久化：递减计数
+    const persisted = readPersistedInstances();
+    if (persisted[agentType] && persisted[agentType] > 0) {
+      persisted[agentType]--;
+      if (persisted[agentType] === 0) delete persisted[agentType];
+      writePersistedInstances(persisted);
+    }
     return {
       success: true,
       output: `✓ 已回收实例 ${instanceId}`,

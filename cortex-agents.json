@@ -444,7 +444,7 @@
       "key": "DEEPSEEK_CYRENE",
       "maxInstances": 1,
       "tags": ["cli", "talk"],
-      "toolPermissions": ["read_file", "search_code", "list_dir"],
+      "toolPermissions": ["read_file", "search_code", "list_files"],
       "display": {
         "emoji": "🍀",
         "shortName": "昔涟",
