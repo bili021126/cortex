@@ -10,7 +10,7 @@
     { "path": "packages/tools" },
     { "path": "packages/llm" },
     { "path": "packages/testing" },
-    { "path": "packages/engine" },
+    { "path": "packages/engine/tsconfig.src.json" },
     { "path": "packages/cli" },
     { "path": "scripts" }
   

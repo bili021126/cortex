@@ -1,0 +1,24 @@
+{
+  "id": "skill-p27-monorepo-package-compliance-scanner",
+  "agentType": "ops",
+  "name": "P27: Monorepo 子包合规扫描器",
+  "triggerTags": ["audit", "compliance", "config", "monorepo"],
+  "trigger": "需要对 monorepo 中一个或多个子包执行合规性检查时触发。检查 package.json / tsconfig.json / 目录结构 / vitest 配置 / 依赖声明 五维度合规性。",
+  "steps": [
+    "用 list_files('packages/') 获取所有子包清单，确定审计范围（全部子包或指定子包）",
+    "对每个子包执行以下五维度扫描：",
+    "维度一 — package.json 合规：用 read_file 读取 package.json，检查以下字段是否存在且值正确：name（@cortex/<name> 格式）、version、private: true、type: 'module'、main（./dist/index.js）、types（./dist/index.d.ts）、exports（标准条件导出）、scripts（build/typecheck/test/lint）、dependencies（内部依赖使用 workspace:* 协议）",
+    "维度二 — tsconfig.json 合规：用 read_file 读取 tsconfig.json，检查：extends（../../tsconfig.base.json）、compilerOptions.outDir（'./dist'）、compilerOptions.rootDir（'./src'）、include（['src']）、references（与 dependencies 中的内部依赖一一对应）",
+    "维度三 — 目录结构检查：用 list_files 检查 src/（含 index.ts 入口）、tests/、dist/ 是否存在",
+    "维度四 — vitest 配置检查：用 list_files 检查是否存在 vitest.config.ts（本地开发配置）和/或 vitest.ci.config.ts（CI 配置）",
+    "维度五 — 依赖声明缺口检查：对照 scripts.lint 的值（如 'eslint src/'），检查 devDependencies 中是否声明了 eslint",
+    "对每个维度输出判定：✅ 合规 / ⚠️ 偏离 / ❌ 缺失，附偏离详情",
+    "输出汇总：各包综合评分（A/B/C/D）+ 所有偏离项按严重度排序"
+  ],
+  "expectedOutput": "合规扫描报告：N 包扫描完成 — 每包 5 维度评分表 + 偏离项明细 + 综合评分排序",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

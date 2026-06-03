@@ -9,24 +9,21 @@ function mockLlm() {
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
   return adapter;
 }
 
 describe("runReActLoop", () => {
   const baseCtx: Omit<ReActContext, "systemPrompt" | "maxLoops"> = {
-    agentType: AgentType.Code,
     llm: mockLlm(),
     toolkit: new Toolkit(),
-  };
+    reactLoopTimeoutMs: 10000};
 
   it("should return success on final answer (no tool calls)", async () => {
     const adapter = mockLlm();
     adapter.injectMock(async () => ({
       content: "All done!",
-      toolCalls: [],
-    }));
+      toolCalls: []}));
 
     const result = await runReActLoop(
       { ...baseCtx, llm: adapter, systemPrompt: "Test", maxLoops: 64 },
@@ -45,10 +42,9 @@ describe("runReActLoop", () => {
       if (callCount === 1) {
         return {
           content: "Reading file...",
-          toolCalls: [
+          tool_calls: [
             { id: "c1", name: "read_file", arguments: { file_path: "/test.txt" } },
-          ],
-        };
+          ]};
       }
       return { content: "File read successfully.", toolCalls: [] };
     });
@@ -56,8 +52,7 @@ describe("runReActLoop", () => {
     const tk = new Toolkit();
     tk.register("read_file", async ({ file_path }) => ({
       success: true,
-      output: `content of ${file_path}`,
-    }));
+      output: `content of ${file_path}`}));
 
     const result = await runReActLoop(
       { ...baseCtx, llm: adapter, toolkit: tk, systemPrompt: "Test", maxLoops: 64 },
@@ -86,10 +81,9 @@ describe("runReActLoop", () => {
     const adapter = mockLlm();
     adapter.injectMock(async () => ({
       content: "Still working...",
-      toolCalls: [
+      tool_calls: [
         { id: "c1", name: "search_code", arguments: { query: "test" } },
-      ],
-    }));
+      ]}));
 
     const tk = new Toolkit();
     tk.register("search_code", async () => ({ success: true, output: "no results" }));
@@ -108,7 +102,7 @@ describe("runReActLoop", () => {
     let lastUserContent = "";
     adapter.injectMock(async (messages) => {
       const last = messages[messages.length - 1];
-      if (last && last.role === "user") lastUserContent = last.content ?? "";
+      if (last && last.role === "user") lastUserContent = last.content_blob ?? "";
       return { content: "ok", toolCalls: [] };
     });
 

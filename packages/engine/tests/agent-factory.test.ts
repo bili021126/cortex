@@ -9,12 +9,10 @@ function mockLlm() {
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
   adapter.injectMock(async () => ({
     content: "Task completed.",
-    toolCalls: [],
-  }));
+    tool_calls: []}));
   return adapter;
 }
 
@@ -22,8 +20,7 @@ describe("createAgent (factory)", () => {
   const config: AgentFactoryConfig = {
     type: AgentType.Code,
     systemPrompt: "You are a test agent.",
-    memoryEnabled: false,
-  };
+    memoryEnabled: false};
 
   it("should create an agent with the correct type", () => {
     const agent = createAgent(config, mockLlm(), new Toolkit());
@@ -57,17 +54,15 @@ describe("createAgent (factory)", () => {
       apiKey: "mock",
       baseUrl: "mock",
       chatModel: "mock-chat",
-      reasonerModel: "mock-reasoner",
-    });
+      reasonerModel: "mock-reasoner"});
     let callCount = 0;
     infiniteMocker.injectMock(async () => {
       callCount++;
       return {
         content: `Loop ${callCount}`,
-        toolCalls: [
+        tool_calls: [
           { id: `c${callCount}`, name: "read_file", arguments: { file_path: "/test.txt" } },
-        ],
-      };
+        ]};
     });
 
     const tk = new Toolkit();

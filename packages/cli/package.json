@@ -22,10 +22,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@cortex/config": "workspace:*",
     "@cortex/engine": "workspace:*",
     "@cortex/llm": "workspace:*",
     "@cortex/parser": "workspace:*",
-    "@cortex/shared": "workspace:*"
+    "@cortex/pm": "workspace:*",
+    "@cortex/shared": "workspace:*",
+    "@cortex/tools": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -87,8 +87,7 @@ export async function runStrategyAnalysis(
     claimedBy: [],
     payload: strategyPrompt,
     results: [],
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 
   try {
     const result = await strategistAgent.execute(strategicNode, chatModel);
@@ -156,8 +155,7 @@ export async function runStrategyAnalysis(
     claimedBy: [],
     payload: directionPrompt,
     results: [],
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 
   try {
     const dirResult = await shuangningAgent.execute(directionNode, chatModel);

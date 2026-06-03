@@ -1,0 +1,22 @@
+{
+  "id": "skill-p29-agent-tags-overlap-detection",
+  "agentType": "review",
+  "name": "P29: AGENT_TAGS 标签重叠检测",
+  "triggerTags": ["audit", "scheduling", "agent", "tags"],
+  "trigger": "需要检测 AGENT_TAGS（packages/shared/src/agent.ts）中不同 AgentType 间的标签重叠情况。适用于 Agent 数量增加或标签调整后的调度风险评估。",
+  "steps": [
+    "用 read_file 读取 packages/shared/src/agent.ts 中的 AGENT_TAGS 定义",
+    "提取所有 AgentType 及其对应的 tags 数组",
+    "逐对比较任意两个 AgentType 的 tags 数组，计算交集（共同标签）",
+    "对每对重叠输出：AgentType A / AgentType B / 重叠标签列表 / 重叠标签数 / 每个 Agent 的总标签数",
+    "对调度影响做评估：若 Review Agent 的独占标签（review/audit）被 Code Agent 共享，且 Review 未注册时 → Code 会错误地匹配 review 标签的节点",
+    "按风险分级：\n  - 🔴 高：独占性标签被非专长 Agent 包含（如 review 在 Code/Api/Data 中）\n  - 🟠 中：通用标签被多处共享但未影响专长匹配（如 research/analysis）\n  - 🟡 低：非关键标签重叠",
+    "输出修复建议：从非专长 Agent 的 tags 中移除重叠的专有标签"
+  ],
+  "expectedOutput": "AGENT_TAGS 重叠检测报告：N 对重叠 / P0-P3 分级 / 调度风险评估 / 修复建议（移除的标签列表）",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

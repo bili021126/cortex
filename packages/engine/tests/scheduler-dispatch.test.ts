@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AgentType, AgentStatus, type TaskNode, type NodeResult, PipelinePriority, PipelineEventType } from "@cortex/shared";
 import type { Agent } from "@cortex/shared";
-import { Scheduler, TaskBoard, AgentPool, PipelineObserver, ConfirmGate } from "@cortex/engine";
+import { Scheduler, TaskBoard, AgentPool, PipelineObserver } from "@cortex/engine";
 
 function makeNode(overrides: Partial<TaskNode> = {}): TaskNode {
   return {
@@ -15,8 +15,7 @@ function makeNode(overrides: Partial<TaskNode> = {}): TaskNode {
     payload: "Test task",
     results: [],
     createdAt: Date.now(),
-    ...overrides,
-  };
+    ...overrides};
 }
 
 function makeMockAgent(status: AgentStatus = AgentStatus.Awake): Agent {
@@ -25,24 +24,20 @@ function makeMockAgent(status: AgentStatus = AgentStatus.Awake): Agent {
     status,
     wakeup: vi.fn().mockResolvedValue(undefined),
     execute: vi.fn().mockResolvedValue({ nodeId: "node-1", success: true, output: "ok" } as NodeResult),
-    shutdown: vi.fn().mockResolvedValue(undefined),
-  };
+    shutdown: vi.fn().mockResolvedValue(undefined)};
 }
 
 describe("Scheduler._dispatchNode", () => {
   let board: TaskBoard;
   let pool: AgentPool;
   let observer: PipelineObserver;
-  let gate: ConfirmGate;
   let scheduler: Scheduler;
 
   beforeEach(() => {
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
-    gate = new ConfirmGate();
-    gate.bypassAll();
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
     // 注册 pool 配置，否则 spawn 失败
     pool.register({ type: AgentType.Code, maxInstances: 3 });
   });
@@ -122,7 +117,6 @@ describe("Scheduler._findMatchingAgent 密度平局打破", () => {
   let board: TaskBoard;
   let pool: AgentPool;
   let observer: PipelineObserver;
-  let gate: ConfirmGate;
   let scheduler: Scheduler;
 
   function makeReviewAgent(): Agent {
@@ -131,8 +125,7 @@ describe("Scheduler._findMatchingAgent 密度平局打破", () => {
       status: AgentStatus.Awake,
       wakeup: vi.fn().mockResolvedValue(undefined),
       execute: vi.fn().mockResolvedValue({ nodeId: "", success: true, output: "reviewed" } as NodeResult),
-      shutdown: vi.fn().mockResolvedValue(undefined),
-    };
+      shutdown: vi.fn().mockResolvedValue(undefined)};
   }
 
   function makeCodeAgent(): Agent {
@@ -141,17 +134,14 @@ describe("Scheduler._findMatchingAgent 密度平局打破", () => {
       status: AgentStatus.Awake,
       wakeup: vi.fn().mockResolvedValue(undefined),
       execute: vi.fn().mockResolvedValue({ nodeId: "", success: true, output: "coded" } as NodeResult),
-      shutdown: vi.fn().mockResolvedValue(undefined),
-    };
+      shutdown: vi.fn().mockResolvedValue(undefined)};
   }
 
   beforeEach(() => {
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
-    gate = new ConfirmGate();
-    gate.bypassAll();
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
     pool.register({ type: AgentType.Review, maxInstances: 3 });
     pool.register({ type: AgentType.Code, maxInstances: 3 });
   });
@@ -169,8 +159,7 @@ describe("Scheduler._findMatchingAgent 密度平局打破", () => {
       claimedBy: [],
       payload: "review task",
       results: [],
-      createdAt: Date.now(),
-    };
+      createdAt: Date.now()};
     board.addNode(node);
 
     const reviewAgent = makeReviewAgent();

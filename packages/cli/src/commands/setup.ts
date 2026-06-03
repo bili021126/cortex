@@ -33,7 +33,7 @@ export function createSetupHandler(): CommandHandler {
       };
     }
 
-    return runScript("node", [scriptPath, "--mode", "setup", "--dir", projectRoot], projectRoot);
+    return await runScript("node", [scriptPath, "--mode", "setup", "--dir", projectRoot], projectRoot);
   };
 }
 

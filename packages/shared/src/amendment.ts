@@ -75,6 +75,8 @@ export interface JudgmentResult {
   verdict: JudgmentVerdict;
   /** 逐项检查结果 */
   checks: JudgmentCheck[];
+  /** 加权总分 0.0~1.0（加权平均，用于自主量化决策） */
+  weightedScore: number;
   /** 附条件通过时的注意事项 */
   caveats?: string[];
   /** 阻塞项详情——每项说明为什么阻塞 */
@@ -88,6 +90,8 @@ export interface JudgmentCheck {
   name: string;
   /** 是否通过 */
   passed: boolean;
+  /** 量化得分 0.0~1.0（0=完全失败, 1=完全通过）。用于加权总分判定 */
+  score: number;
   /** 详情说明——未通过时说明原因 */
   detail: string;
 }

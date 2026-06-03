@@ -8,5 +8,15 @@ export default defineConfig({
       DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
       DEEPSEEK_CHAT_MODEL: process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-chat",
     },
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "text-summary", "html"],
+      reportsDirectory: "./coverage",
+      include: ["src/**/*.ts"],
+      exclude: [
+        "src/index.ts",
+        "src/**/*.d.ts",
+      ],
+    },
   },
 });

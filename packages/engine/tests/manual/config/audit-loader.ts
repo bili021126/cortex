@@ -78,14 +78,12 @@ const AGENT_REPORT_MAP: Record<string, string[]> = {
   ningguang: ["ningguang-governance-audit.md"],
   mona: ["mona-pattern-discovery.md"],
   kuki: ["kuki-api-design.md"],
-  alhaitham: ["alhaitham-data-design.md"],
-};
+  alhaitham: ["alhaitham-data-design.md"]};
 
 const AGENT_NAME_MAP: Record<string, string> = {
   keqing: "刻晴", nahida: "纳西妲", albedo: "阿贝多",
   beidou: "北斗", amber: "安柏", ningguang: "凝光",
-  mona: "莫娜", kuki: "久岐忍", alhaitham: "艾尔海森",
-};
+  mona: "莫娜", kuki: "久岐忍", alhaitham: "艾尔海森"};
 
 // ═══════════════════════════════════════════════
 // 报告解析
@@ -135,8 +133,7 @@ function parseAgentReport(filePath: string, agentKey: string): AgentReportSummar
     title,
     overview: overview.slice(0, 500),
     verdicts: verdicts.slice(0, 8),
-    size: Buffer.byteLength(content, "utf-8"),
-  };
+    size: Buffer.byteLength(content, "utf-8")};
 }
 
 function parseFixList(filePath: string): FixListSnapshot {
@@ -315,8 +312,7 @@ export function enhancePersonasWithAudit(
     .filter(([key]) => key !== "_note")
     .map(([key, p]) => ({
       ...p,
-      systemPrompt: injectAuditContext(p.systemPrompt, key, ctx),
-    }));
+      systemPrompt: injectAuditContext(p.systemPrompt, key, ctx)}));
 }
 
 /**

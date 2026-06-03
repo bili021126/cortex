@@ -1,0 +1,22 @@
+{
+  "id": "skill-p25-event-payload-map-consistency-audit",
+  "agentType": "review",
+  "name": "P25: EventPayloadMap 类型契约一致性审计",
+  "triggerTags": ["audit", "type_safety", "review", "event"],
+  "trigger": "需要验证 PipelineObserver.emit() 调用的实际 payload 字段与 EventPayloadMap 类型声明是否一致时触发。适用于以下场景：\n- 新 Agent 或新组件添加了 emit() 调用后\n- 重构修改了 EventPayloadMap 后\n- 发现下游 consumer 读取 payload 字段返回 undefined 时",
+  "steps": [
+    "用 read_file 读取 packages/shared/src/infra.ts 中的 EventPayloadMap 类型定义，提取每个事件类型的 payload 接口（字段名 + 类型）",
+    "用 search_code 搜索 'observer\\.emit\\(' 或 '\\.emit\\('，找出所有 emit() 调用点，按文件归类",
+    "对每个 emit() 调用点：提取事件类型参数（第一个参数 type）和 payload 对象（第二个参数 payload），记录 payload 中实际传入的所有字段名",
+    "将实际 payload 字段名与 EventPayloadMap 中对应事件类型的声明字段名逐字段比对：记录字段名不一致（opName vs operation）、多余字段（存在 payload 中但不在声明中）、缺失字段（在声明中但不在 payload 中）",
+    "对每个 mismatch 输出：事件类型 → 声明字段 → 实际字段 → 影响评估（如下游 consumer 读取 undefined 的具体路径）",
+    "汇总统计：总 mismatch 数 / 文件分布 / 新增 mismatch（上次审计后新增的）",
+    "输出修复优先顺序：先修 compile-time 可检测的（字段名不一致：operation→opName）→ 再修 shape 完全不同的（MemoryFlushSkipped: frameStart/spentMs vs lifecycle/hint）"
+  ],
+  "expectedOutput": "EventPayloadMap 一致性审计报告：N 处 mismatch / M 个文件 / X 处新增。每处含事件类型、声明字段、实际字段、影响路径、建议修复方向。",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

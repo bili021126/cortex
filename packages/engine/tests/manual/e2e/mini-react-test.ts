@@ -47,8 +47,7 @@ import {
   ConfirmGate,
   Toolkit,
   MemoryStore,
-  CLIAdapter,
-} from "@cortex/engine";
+  CLIAdapter} from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
@@ -74,8 +73,7 @@ const AGENT_PERSONA: Record<string, { emoji: string; name: string; title: string
   "refactor":        { emoji: "⚗️", name: "阿贝多", title: "首席炼金术士" },
   "research":        { emoji: "🌿", name: "纳西妲", title: "草神" },
   "pattern_scan":    { emoji: "🔮", name: "莫娜",  title: "占星术士" },
-  "skill_precipitate": { emoji: "🔮", name: "莫娜",  title: "占星术士" },
-};
+  "skill_precipitate": { emoji: "🔮", name: "莫娜",  title: "占星术士" }};
 
 function personaLine(agentType: string, msg: string): string {
   const p = AGENT_PERSONA[agentType] ?? { emoji: "🤖", name: agentType, title: "" };
@@ -171,8 +169,8 @@ function registerRealTools(toolkit: Toolkit, workspaceRoot: string) {
     try {
       const dir = path.dirname(fp);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fp, params.content as string, "utf-8");
-      return { success: true, output: `Wrote ${Buffer.byteLength(params.content as string)} bytes to ${fp}` };
+      fs.writeFileSync(fp, params.content_blob as string, "utf-8");
+      return { success: true, output: `Wrote ${Buffer.byteLength(params.content_blob as string)} bytes to ${fp}` };
     } catch (e) {
       return { success: false, error: String(e) };
     }
@@ -228,8 +226,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: llmCfg.reasoningEffort as "high" | "max",
-  });
+    reasoningEffort: llmCfg.reasoningEffort as "high" | "max"});
   adapter.setCacheEnabled(true);
 
   const metaAgent = new MetaAgent(adapter);
@@ -255,22 +252,22 @@ async function main() {
   pool.register({ type: AgentType.Loop, maxInstances: 3 });
   pool.register({ type: AgentType.Ops, maxInstances: 3 });
 
-  const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+  const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
   // ── 注册全部 7 种可执行 Agent ──
-  const codeAgent = createAgent(codeAgentConfig(), adapter, new Toolkit(gate), memory);
+  const codeAgent = createAgent(codeAgentConfig("code"), adapter, new Toolkit(gate), memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
 
-  const reviewAgent = createAgent(reviewAgentConfig(), adapter, new Toolkit(gate), memory);
+  const reviewAgent = createAgent(reviewAgentConfig("review"), adapter, new Toolkit(gate), memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
 
-  const analysisAgent = createAgent(analysisAgentConfig(), adapter, new Toolkit(gate), memory);
+  const analysisAgent = createAgent(analysisAgentConfig("analysis"), adapter, new Toolkit(gate), memory);
   await analysisAgent.wakeup();
   scheduler.register(AgentType.Analysis, analysisAgent, CHAT_MODEL);
 
-  const docGovernAgent = createAgent(docGovernAgentConfig(), adapter, new Toolkit(gate), memory);
+  const docGovernAgent = createAgent(docGovernAgentConfig("doc-govern"), adapter, new Toolkit(gate), memory);
   await docGovernAgent.wakeup();
   scheduler.register(AgentType.DocGovern, docGovernAgent, CHAT_MODEL);
 
@@ -278,11 +275,11 @@ async function main() {
   await inspectorAgent.wakeup();
   scheduler.register(AgentType.Inspector, inspectorAgent, CHAT_MODEL);
 
-  const loopAgent = createAgent(loopAgentConfig(), adapter, new Toolkit(gate));
+  const loopAgent = createAgent(loopAgentConfig("loop"), adapter, new Toolkit(gate));
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
 
-  const opsAgent = createAgent(opsAgentConfig(), adapter, new Toolkit(gate));
+  const opsAgent = createAgent(opsAgentConfig("ops"), adapter, new Toolkit(gate));
   await opsAgent.wakeup();
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
 
@@ -340,8 +337,7 @@ async function main() {
   observer.on(PipelinePriority.HIGH, (e) => {
     events.push({
       type: e.type,
-      agentTypes: (e.payload as any)?.agentType ? [(e.payload as any).agentType] : undefined,
-    });
+      agentTypes: (e.payload as any)?.source.agentType ? [(e.payload as any).source.agentType] : undefined});
   });
 
   // ── 执行 ──
@@ -356,7 +352,7 @@ async function main() {
   console.log("  ══ 各兵种汇报 ══");
   const byType = new Map<string, typeof report.results>();
   for (const r of report.results) {
-    const key = r.agentType ?? "unknown";
+    const key = r.source.agentType ?? "unknown";
     if (!byType.has(key)) byType.set(key, []);
     byType.get(key)!.push(r);
   }
@@ -387,14 +383,14 @@ async function main() {
   const allNodes = board.getAllNodes();
   const completedNodes = allNodes.filter((n) => n.status === "done");
   const failedNodes = allNodes.filter((n) => n.status === "failed");
-  const memories = memory.read({});
+  const memories = await memory.read({});
 
   console.log("── 时序 ──");
   console.log(`  规划: ${planDuration}ms  |  执行: ${execDuration}ms  |  总计: ${planDuration + execDuration}ms`);
   console.log();
 
   console.log("── Agent 参与度 ──");
-  const participated = new Set(report.results.map((r) => r.agentType));
+  const participated = new Set(report.results.map((r) => r.source.agentType));
   const ALL_AGENTS: Array<{ type: AgentType; persona: typeof AGENT_PERSONA[string] }> = [
     { type: AgentType.Inspector, persona: AGENT_PERSONA.inspector },
     { type: AgentType.Analysis, persona: AGENT_PERSONA.analysis },
@@ -430,7 +426,7 @@ async function main() {
   // 按 Agent 类型统计记忆
   const memByAgent = new Map<string, number>();
   for (const m of memories) {
-    const key = m.agentType ?? "unknown";
+    const key = m.source.agentType ?? "unknown";
     memByAgent.set(key, (memByAgent.get(key) ?? 0) + 1);
   }
   memByAgent.forEach((count, at) => {

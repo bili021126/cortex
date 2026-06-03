@@ -3,6 +3,8 @@
  *
  * 使用 AES-256-GCM 加密存储密码条目。
  * 原位于 projects/solo-flight/src/store.ts
+ *
+ * @fix N-07 — 解密失败时抛出带详细信息的错误，防止静默返回空 store 导致 saveStore 覆盖加密数据
  */
 
 import fs from 'node:fs';
@@ -55,9 +57,15 @@ function loadStore(): StoreData {
     }
     const raw = decrypt(encrypted);
     return JSON.parse(raw) as StoreData;
-  } catch {
-    console.error('警告：存储文件读取失败，可能密钥已变更或文件已损坏');
-    return { version: 1, entries: [] };
+  } catch (e) {
+    // @fix N-07 — 抛出错误而非返回空 store，防止 saveStore 不可逆覆盖原加密数据
+    throw new Error(
+      `密码存储文件解密失败：密钥可能已变更或文件已损坏。\n` +
+      `文件路径: ${storePath}\n` +
+      `原错误: ${(e as Error).message}\n` +
+      `提示：如果已更换 PM_MASTER_KEY，请先使用旧密钥导出数据。`,
+      { cause: e },
+    );
   }
 }
 

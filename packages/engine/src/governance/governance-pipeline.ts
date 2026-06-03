@@ -15,9 +15,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AmendmentProposal, JudgmentResult } from "@cortex/shared";
 import {
-  loadPendingProposals,
   saveProposal,
   judgeProposals,
   applyApproved,
@@ -255,9 +253,9 @@ async function stageApply(ctx: PipelineContext): Promise<StageResult> {
   };
 }
 
-/** 阶段：CI 门禁验证——修宪写入后触发 build + typecheck + test */
+/** 阶段：CI 门禁验证——修宪写入后触发 build + typecheck + test + lint，结果回写 artifacts */
 async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
-  const applyResult = ctx.stageResults.find((r) => r.stage === "apply");
+  const _applyResult = ctx.stageResults.find((r) => r.stage === "apply");
 
   // 仅当宪法被实际修改时才触发 CI
   const decisions = ctx.artifacts.get("ruler_decision") as BatchJudgment[] | undefined;
@@ -286,29 +284,74 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
       };
     }
 
-    const output = execSync(`npx tsx "${ciScript}"`, {
+    // --json 模式输出结构化结果，从混合输出中提取 JSON
+    const output = execSync(`npx tsx "${ciScript}" --json`, {
       cwd: ctx.rootDir,
       encoding: "utf-8",
-      timeout: 300_000, // 5 分钟超时
-      stdio: "pipe",
+      timeout: 600_000, // 10 分钟超时（包含构建+测试）
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
-    const passed = !output.includes("FAIL") && !output.includes("Error");
+    // 从混合输出中提取 JSON 行（ci-gate --json 最后一行非空输出为 JSON）
+    const lines = output.trim().split("\n");
+    let jsonLine: string | undefined;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].startsWith("{")) { jsonLine = lines[i]; break; }
+    }
+
+    if (!jsonLine) {
+      ctx.artifacts.set("ci_verify", output.slice(-2000));
+      return {
+        stage: "ci_verify",
+        success: false,
+        message: "CI 门禁输出解析失败：未找到 JSON 结果",
+        blocking: false,
+      };
+    }
+
+    const ciResult = JSON.parse(jsonLine) as {
+      configValid: boolean; build: boolean; typecheck: boolean; lint: boolean; test: boolean;
+      testDetails: { total: number; passed: number; skipped: number }; allPassed: boolean;
+    };
+
+    // 回写 CI 结果到 artifacts，供下游阶段（认知闭环、摘要生成）消费
+    ctx.artifacts.set("ci_verify", { structured: ciResult, raw: output.slice(-2000) });
+
+    const passed = ciResult.allPassed;
+
+    if (!passed) {
+      const failures: string[] = [];
+      if (!ciResult.configValid) failures.push("配置校验");
+      if (!ciResult.build) failures.push("构建");
+      if (!ciResult.typecheck) failures.push("类型检查");
+      if (!ciResult.lint) failures.push("Lint");
+      if (!ciResult.test) failures.push(`测试(${ciResult.testDetails.passed}/${ciResult.testDetails.total})`);
+      return {
+        stage: "ci_verify",
+        success: false,
+        message: `CI 门禁失败: ${failures.join("、")}`,
+        data: ciResult,
+        blocking: false,
+      };
+    }
 
     return {
       stage: "ci_verify",
-      success: passed,
-      message: passed
-        ? `CI 门禁通过 ✅`
-        : `CI 门禁发现问题 ⚠️\n${output.slice(0, 500)}`,
-      data: output,
-      blocking: false, // 不阻断，但标记失败
+      success: true,
+      message: `CI 门禁通过 ✅ (build ✅ typecheck ✅ test ${ciResult.testDetails.passed}/${ciResult.testDetails.total} ✅ lint ✅)`,
+      data: ciResult,
+      blocking: false,
     };
-  } catch (e) {
+  } catch (e: unknown) {
+    const execErr = e as { stderr?: string; stdout?: string; message?: string };
+    const stderr = execErr.stderr ?? "";
+    const stdout = execErr.stdout ?? "";
+    ctx.artifacts.set("ci_verify", (stdout + "\n" + stderr).slice(-2000));
+
     return {
       stage: "ci_verify",
       success: false,
-      message: `CI 门禁执行异常: ${String(e).slice(0, 300)}`,
+      message: `CI 门禁执行异常: ${stderr.slice(-300) || String(e).slice(0, 300)}`,
       blocking: false,
     };
   }

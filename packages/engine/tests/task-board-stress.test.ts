@@ -5,7 +5,7 @@
  * 多视角完成竞态、CircuitBreaker 熔断、部分层失败处理
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentType, PipelinePriority, MemoryState } from "@cortex/shared";
+import { AgentType, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, Scheduler, topologicalSort } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
@@ -26,14 +26,12 @@ function makeNode(overrides: Partial<{
     claimedBy: [] as never[],
     payload: overrides.payload ?? "do something",
     results: [] as never[],
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 }
 
 function mockAdapter(output: string) {
   const adapter = new LlmAdapter({
-    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-  });
+    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
   adapter.injectMock(async () => ({ content: output, toolCalls: [] }));
   return adapter;
 }
@@ -56,8 +54,8 @@ describe("暗雷 R1：并发 claim 安全性", () => {
     board.addNode(makeNode({ id: "n2", tags: ["implementation"], payload: "Task 2" }));
     board.addNode(makeNode({ id: "n3", tags: ["implementation"], payload: "Task 3" }));
 
-    const scheduler = new Scheduler(board, pool, observer, gate);
-    const agent = createAgent(codeAgentConfig(),mockAdapter("done"), new Toolkit());
+    const scheduler = new Scheduler(board, pool, observer);
+    const agent = createAgent(codeAgentConfig("test"),mockAdapter("done"), new Toolkit());
     await agent.wakeup();
     scheduler.register(AgentType.Code, agent, "mock");
 
@@ -86,11 +84,11 @@ describe("暗雷 R1：并发 claim 安全性", () => {
     board.addNode(makeNode({ id: "code-1", tags: ["implementation"], payload: "Code task" }));
     board.addNode(makeNode({ id: "review-1", tags: ["review"], payload: "Review task" }));
 
-    const scheduler = new Scheduler(board, pool, observer, gate);
+    const scheduler = new Scheduler(board, pool, observer);
 
-    const codeAgent = createAgent(codeAgentConfig(),mockAdapter("code done"), new Toolkit());
+    const codeAgent = createAgent(codeAgentConfig("test"),mockAdapter("code done"), new Toolkit());
     await codeAgent.wakeup();
-    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("review done"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig("test"),mockAdapter("review done"), new Toolkit());
     await reviewAgent.wakeup();
 
     scheduler.register(AgentType.Code, codeAgent, "mock");
@@ -123,23 +121,21 @@ describe("暗雷 R2：父节点失败 → 子节点级联", () => {
       id: "orphan-child",
       parentId: "bad-parent",
       tags: ["review"],
-      payload: "Review something",
-    }));
+      payload: "Review something"}));
 
     // 父节点的 Agent 会失败
     const failAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     failAdapter.injectMock(async () => {
       throw new Error("BOOM");
     });
-    const failCode = createAgent(codeAgentConfig(),failAdapter, new Toolkit());
+    const failCode = createAgent(codeAgentConfig("test"),failAdapter, new Toolkit());
     await failCode.wakeup();
 
-    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("review ok"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig("test"),mockAdapter("review ok"), new Toolkit());
     await reviewAgent.wakeup();
 
-    const scheduler = new Scheduler(board, pool, observer, gate);
+    const scheduler = new Scheduler(board, pool, observer);
     scheduler.register(AgentType.Code, failCode, "mock");
     scheduler.register(AgentType.Review, reviewAgent, "mock");
 
@@ -176,25 +172,22 @@ describe("暗雷 R3：重规划节点插入运行中层", () => {
     board.addNode(makeNode({
       id: "fail-node",
       tags: ["implementation"],
-      payload: "Impossible implementation",
-    }));
+      payload: "Impossible implementation"}));
 
     // MetaAgent → 重规划为 research 类型
     const metaAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     metaAdapter.injectMock(async () => ({
       content: JSON.stringify([
         { task: "Research alternatives", type: "research", tags: ["research"], needsMultiPerspective: false },
       ]),
-      toolCalls: [],
-    }));
+      toolCalls: []}));
 
     const metaAgent = new MetaAgent(metaAdapter);
-    const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+    const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
     // 注册 Analysis agent 执行重规划产出的 research 节点
-    const analysisAgent = createAgent(analysisAgentConfig(),mockAdapter("Research complete"), new Toolkit());
+    const analysisAgent = createAgent(analysisAgentConfig("test"),mockAdapter("Research complete"), new Toolkit());
     await analysisAgent.wakeup();
     scheduler.register(AgentType.Analysis, analysisAgent, "mock");
 
@@ -224,29 +217,26 @@ describe("暗雷 R3：重规划节点插入运行中层", () => {
 
     // MetaAgent 重规划
     const metaAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     metaAdapter.injectMock(async () => ({
       content: JSON.stringify([
         { task: "Simplified approach", type: "implementation", tags: ["implementation"], needsMultiPerspective: false },
       ]),
-      toolCalls: [],
-    }));
+      toolCalls: []}));
     const metaAgent = new MetaAgent(metaAdapter);
 
-    const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+    const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
     // 第一个调用成功，第二个失败
     let callCount = 0;
     const dualAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     dualAdapter.injectMock(async () => {
       callCount++;
       if (callCount === 1) return { content: "done", toolCalls: [] };
       throw new Error("Fail on second node");
     });
-    const codeAgent = createAgent(codeAgentConfig(),dualAdapter, new Toolkit());
+    const codeAgent = createAgent(codeAgentConfig("test"),dualAdapter, new Toolkit());
     await codeAgent.wakeup();
 
     scheduler.register(AgentType.Code, codeAgent, "mock");
@@ -280,25 +270,22 @@ describe("暗雷 R5：CircuitBreaker 熔断机制", () => {
     board.addNode(makeNode({
       id: "doomed",
       tags: ["implementation"],
-      payload: "Solve P = NP",
-    }));
+      payload: "Solve P = NP"}));
 
     // MetaAgent → 每次重规划都返回同类型 implementation（死循环模拟）
     const metaAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     metaAdapter.injectMock(async () => ({
       content: JSON.stringify([
         { task: "Attempt another approach", type: "implementation", tags: ["implementation"], needsMultiPerspective: false },
       ]),
-      toolCalls: [],
-    }));
+      toolCalls: []}));
     const metaAgent = new MetaAgent(metaAdapter);
 
-    const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+    const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
     // 只注册 Analysis（不匹配 implementation → 重规划节点持续失败）
-    const analysisAgent = createAgent(analysisAgentConfig(),mockAdapter("irrelevant"), new Toolkit());
+    const analysisAgent = createAgent(analysisAgentConfig("test"),mockAdapter("irrelevant"), new Toolkit());
     await analysisAgent.wakeup();
     scheduler.register(AgentType.Analysis, analysisAgent, "mock");
 
@@ -348,25 +335,23 @@ describe("暗雷 R6：部分层失败处理", () => {
       id: "L1-review",
       parentId: "L0-ok",
       tags: ["review"],
-      payload: "Review results",
-    }));
+      payload: "Review results"}));
 
-    const scheduler = new Scheduler(board, pool, observer, gate);
+    const scheduler = new Scheduler(board, pool, observer);
 
     // Code agent: 第一次调用 OK，第二次抛异常
     let callCount = 0;
     const codeAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     codeAdapter.injectMock(async () => {
       callCount++;
       if (callCount === 1) return { content: "OK", toolCalls: [] };
       throw new Error("Fail");
     });
-    const codeAgent = createAgent(codeAgentConfig(),codeAdapter, new Toolkit());
+    const codeAgent = createAgent(codeAgentConfig("test"),codeAdapter, new Toolkit());
     await codeAgent.wakeup();
 
-    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("review OK"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig("test"),mockAdapter("review OK"), new Toolkit());
     await reviewAgent.wakeup();
 
     scheduler.register(AgentType.Code, codeAgent, "mock");
@@ -396,14 +381,13 @@ describe("暗雷 R6：部分层失败处理", () => {
     board.addNode(makeNode({ id: "fail-1", tags: ["implementation"], payload: "Fail 1" }));
     board.addNode(makeNode({ id: "fail-2", tags: ["implementation"], payload: "Fail 2" }));
 
-    const scheduler = new Scheduler(board, pool, observer, gate);
+    const scheduler = new Scheduler(board, pool, observer);
 
     // 所有调用都抛异常
     const allFail = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     allFail.injectMock(async () => { throw new Error("Everything fails"); });
-    const failAgent = createAgent(codeAgentConfig(),allFail, new Toolkit());
+    const failAgent = createAgent(codeAgentConfig("test"),allFail, new Toolkit());
     await failAgent.wakeup();
 
     scheduler.register(AgentType.Code, failAgent, "mock");
@@ -443,14 +427,13 @@ describe("暗雷 R7：多视角 spawn 失败自愈", () => {
       id: "mp-heal",
       tags: ["review", "research"],
       needsMultiPerspective: true,
-      payload: "Code review + architecture analysis",
-    }));
+      payload: "Code review + architecture analysis"}));
 
-    const scheduler = new Scheduler(board, pool, observer, gate);
+    const scheduler = new Scheduler(board, pool, observer);
 
-    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("代码审查通过: 无严重缺陷"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig("test"),mockAdapter("代码审查通过: 无严重缺陷"), new Toolkit());
     await reviewAgent.wakeup();
-    const analysisAgent = createAgent(analysisAgentConfig(),mockAdapter("架构分析: 符合设计"), new Toolkit());
+    const analysisAgent = createAgent(analysisAgentConfig("test"),mockAdapter("架构分析: 符合设计"), new Toolkit());
     await analysisAgent.wakeup();
 
     scheduler.register(AgentType.Review, reviewAgent, "mock");
@@ -491,12 +474,11 @@ describe("暗雷 R7：多视角 spawn 失败自愈", () => {
       id: "mp-all-fail",
       tags: ["review"],
       needsMultiPerspective: true,
-      payload: "All agents fail",
-    }));
+      payload: "All agents fail"}));
 
-    const scheduler = new Scheduler(board, pool, observer, gate);
+    const scheduler = new Scheduler(board, pool, observer);
 
-    const reviewAgent = createAgent(reviewAgentConfig(),mockAdapter("unreachable"), new Toolkit());
+    const reviewAgent = createAgent(reviewAgentConfig("test"),mockAdapter("unreachable"), new Toolkit());
     await reviewAgent.wakeup();
     scheduler.register(AgentType.Review, reviewAgent, "mock");
 
@@ -581,80 +563,80 @@ describe("暗雷 R8：claim-release 竞态压测", () => {
 // ═══════════════════════════════════════════════════
 
 describe("暗雷 R9：MemoryStore CAS 并发防改写", () => {
-  it("peek() 返回冻结副本——修改抛 TypeError", () => {
+  it("peek() 返回冻结副本——修改抛 TypeError", async () => {
     const store = new MemoryStore();
-    const id = store.write({
-      memoryType: "episodic" as any,
-      content: { key: "original" },
+    const id = await store.write({
+      kind: "episodic" as any,
+      content_blob: { key: "original" },
       summary: "test",
-      agentType: AgentType.Code,
-      creatorId: "test",
-    });
+      semantic_gist: "test",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     const snap = store.peek(id)!;
     expect(() => {
-      (snap as any).state = MemoryState.Archived;
+      (snap as any).semantic_state = "Archived";
     }).toThrow();
 
     const internal = store.peek(id)!;
-    expect((internal as any).state).toBe(MemoryState.Active);
+    expect((internal as any).semantic_state).toBe("Active");
   });
 
-  it("peek() content 冻结——嵌套对象不可改", () => {
+  it("peek() content 冻结——嵌套对象不可改", async () => {
     const store = new MemoryStore();
-    const id = store.write({
-      memoryType: "episodic" as any,
-      content: { key: "a", nested: { deep: true } },
+    const id = await store.write({
+      kind: "episodic" as any,
+      content_blob: { key: "a", nested: { deep: true } },
       summary: "freeze test",
-      agentType: AgentType.Code,
-      creatorId: "test",
-    });
+      semantic_gist: "freeze test",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     const snap = store.peek(id)!;
     expect(() => {
-      (snap.content as any).key = "modified";
+      (snap.content_blob as any).key = "modified";
     }).toThrow();
 
     const internal = store.peek(id)!;
-    expect(internal.content.key).toBe("a");
+    expect(internal.content_blob.key).toBe("a");
   });
 
-  it("CAS 是唯一状态变更路径", () => {
+  it("CAS 是唯一状态变更路径", async () => {
     const store = new MemoryStore();
-    const id = store.write({
-      memoryType: "episodic" as any,
-      content: {},
+    const id = await store.write({
+      kind: "episodic" as any,
+      content_blob: {},
       summary: "cas only",
-      agentType: AgentType.Code,
-      creatorId: "test",
-    });
+      semantic_gist: "cas only",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     const snap = store.peek(id)!;
     expect(Object.isFrozen(snap)).toBe(true);
 
-    expect(store.cas(id, MemoryState.Active, MemoryState.Archived)).toBe(true);
-    expect((store.peek(id)! as any).state).toBe(MemoryState.Archived);
+    expect(store.cas(id, "Active", "Archived")).toBe(true);
+    expect((store.peek(id)! as any).semantic_state).toBe("Archived");
 
     store.obliterate(id);
-    expect(store.cas(id, MemoryState.Obliterated, MemoryState.Active)).toBe(false);
-    expect((store.peek(id)! as any).state).toBe(MemoryState.Obliterated);
+    expect(store.cas(id, "Obliterated", "Active")).toBe(false);
+    expect((store.peek(id)! as any).semantic_state).toBe("Obliterated");
   });
 
-  it("concurrent CAS 竞态——expected 不匹配则失败", () => {
+  it("concurrent CAS 竞态——expected 不匹配则失败", async () => {
     const store = new MemoryStore();
-    const id = store.write({
-      memoryType: "episodic" as any,
-      content: {},
+    const id = await store.write({
+      kind: "episodic" as any,
+      content_blob: {},
       summary: "race test",
-      agentType: AgentType.Code,
-      creatorId: "test",
-    });
+      semantic_gist: "race test",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     const snap1 = store.peek(id)!;
     const snap2 = store.peek(id)!;
 
-    expect(store.cas(id, snap1.state, MemoryState.Archived)).toBe(true);
-    expect(store.cas(id, snap2.state, MemoryState.Frozen)).toBe(false);
-    expect((store.peek(id)! as any).state).toBe(MemoryState.Archived);
+    expect(store.cas(id, snap1.semantic_state, "Archived")).toBe(true);
+    expect(store.cas(id, snap2.semantic_state, "")).toBe(false);
+    expect((store.peek(id)! as any).semantic_state).toBe("Archived");
   });
 });

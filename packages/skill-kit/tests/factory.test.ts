@@ -1,0 +1,77 @@
+// @ci: unit
+// ============================================================
+// @cortex/skill-kit — SkillFactory 单元测试
+// ============================================================
+
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  type SkillDefinition,
+  SkillCategory,
+} from "../src/types.js";
+import { SkillFactory } from "../src/factory.js";
+import { DynamicImportLoader } from "../src/loader.js";
+import { SimpleSkillValidator } from "../src/validator.js";
+import { PipelineExecutor } from "../src/executor.js";
+import { DefaultSkillCache } from "../src/cache.js";
+
+describe("SkillFactory", () => {
+  let factory: SkillFactory;
+  let loader: DynamicImportLoader;
+
+  beforeEach(() => {
+    loader = new DynamicImportLoader({ baseDir: process.cwd() });
+    factory = new SkillFactory({
+      loader,
+    });
+  });
+
+  it("构造时不抛出错误", () => {
+    expect(factory).toBeDefined();
+  });
+
+  it("getLoader() 返回加载器", () => {
+    expect(factory.getLoader()).toBe(loader);
+  });
+
+  it("getCache() 返回缓存实例", () => {
+    const cache = factory.getCache();
+    expect(cache).toBeDefined();
+    expect(cache.stats).toBeDefined();
+  });
+
+  it("register() 委托给加载器", () => {
+    factory.register("test", "./path/to/skill.ts");
+    expect(factory.getLoader()).toBe(loader);
+    expect(loader.getRegisteredIds()).toContain("test");
+  });
+
+  it("registerMany() 批量注册", () => {
+    factory.registerMany([
+      { id: "a", path: "./a.ts" },
+      { id: "b", path: "./b.ts" },
+    ]);
+    expect(loader.getRegisteredIds()).toContain("a");
+    expect(loader.getRegisteredIds()).toContain("b");
+  });
+
+  it("validate() 返回校验结果（技能未注册）", async () => {
+    const result = await factory.validate("nonexistent");
+    expect(result.valid).toBe(false);
+  });
+
+  it("dispose() 不抛出错误", async () => {
+    await expect(factory.dispose()).resolves.toBeUndefined();
+  });
+});
+
+describe("SkillFactory — 使用自定义组件", () => {
+  it("接受自定义 validator / executor / cache", () => {
+    const factory = new SkillFactory({
+      loader: new DynamicImportLoader(),
+      validator: new SimpleSkillValidator({ strictVersion: false }),
+      executor: new PipelineExecutor({ defaultTimeout: 10_000 }),
+      cache: new DefaultSkillCache({ maxSize: 50 }),
+    });
+    expect(factory).toBeDefined();
+  });
+});

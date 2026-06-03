@@ -17,8 +17,7 @@ import { StrategistAgent } from "@cortex/engine";
 /** Mock LlmAdapter */
 function createMockLlm() {
   return {
-    chat: vi.fn().mockResolvedValue({ content: "strategy report", toolCalls: [] }),
-  } as any;
+    chat: vi.fn().mockResolvedValue({ content: "strategy report", toolCalls: [] })} as any;
 }
 
 describe("StrategistAgent（D1: PoolAwareState 复用）", () => {
@@ -55,8 +54,7 @@ describe("StrategistAgent（D1: PoolAwareState 复用）", () => {
     const agent = new StrategistAgent(createMockLlm());
     const mockPool = {
       getStatus: vi.fn().mockReturnValue(AS.Awake),
-      setStatus: vi.fn().mockReturnValue(true),
-    } as any;
+      setStatus: vi.fn().mockReturnValue(true)} as any;
 
     agent.setPool(mockPool, "instance-1");
     await agent.wakeup();

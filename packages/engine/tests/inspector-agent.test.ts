@@ -1,5 +1,5 @@
 // @ci: llm
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { AgentType, AgentStatus } from "@cortex/shared";
 import type { Agent } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
@@ -10,8 +10,7 @@ function mockInspectAdapter() {
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
 
   let callCount = 0;
   adapter.injectMock(async () => {
@@ -19,18 +18,16 @@ function mockInspectAdapter() {
     if (callCount === 1) {
       return {
         content: "Gathering file information...",
-        toolCalls: [
+        tool_calls: [
           { id: "c1", name: "read_file", arguments: { file_path: "/proj/src/userService.ts" } },
-        ],
-      };
+        ]};
     }
     if (callCount === 2) {
       return {
         content: "Searching for references...",
-        toolCalls: [
+        tool_calls: [
           { id: "c2", name: "search_code", arguments: { query: "userService" } },
-        ],
-      };
+        ]};
     }
     // 第三轮：仅格式化，不调工具，裸输出事实
     return {
@@ -42,8 +39,7 @@ function mockInspectAdapter() {
         "- 没有发现循环依赖",
         "- `tsc --noEmit` 通过，零类型错误",
       ].join("\n"),
-      toolCalls: [],
-    };
+      tool_calls: []};
   });
 
   return adapter;
@@ -54,7 +50,7 @@ describe("InspectorAgent", () => {
   let toolkit: Toolkit;
   let agent: Agent & { setWorkspaceRoot?: (root: string) => void };
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     adapter = mockInspectAdapter();
     toolkit = new Toolkit();
     agent = createInspectorAgent(adapter, toolkit);
@@ -89,8 +85,7 @@ describe("InspectorAgent", () => {
         claimedBy: [AgentType.Inspector],
         payload: "分析 userService 的依赖关系",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
 
@@ -108,7 +103,23 @@ describe("InspectorAgent", () => {
   // ── 执行验证 ────────────────────────────────
 
   it("执行检查任务：允许的工具 → 采集 → 输出纯事实报告", async () => {
-    const result = await agent.execute(
+    // 使用独立 adapter——返回纯事实、无工具调用，避免依赖共享 adapter 的 callCount 状态
+    const factsAdapter = new LlmAdapter({
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock-chat", reasonerModel: "mock"});
+    factsAdapter.injectMock(async () => ({
+      content: [
+        "## 事实报告",
+        "",
+        "- `/proj/src/userService.ts` 导出了 `createUser`, `getUser`, `updateUser` 三个函数",
+        "- `userService` 被 14 个文件引用",
+        "- 没有发现循环依赖",
+        "- `tsc --noEmit` 通过，零类型错误",
+      ].join("\n"),
+      tool_calls: []}));
+    const factsAgent = createInspectorAgent(factsAdapter, new Toolkit());
+    await factsAgent.wakeup();
+
+    const result = await factsAgent.execute(
       {
         id: "node-2",
         type: "inspect",
@@ -118,8 +129,7 @@ describe("InspectorAgent", () => {
         claimedBy: [AgentType.Inspector],
         payload: "分析 userService 的依赖关系",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
 
@@ -132,12 +142,10 @@ describe("InspectorAgent", () => {
 
   it("Inspector 无权调用 write_file——Toolkit 权限层拦截", async () => {
     const badAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     badAdapter.injectMock(async () => ({
       content: "Let me write something...",
-      toolCalls: [{ id: "w1", name: "write_file", arguments: { file_path: "/x", content: "bad" } }],
-    }));
+      tool_calls: [{ id: "w1", name: "write_file", arguments: { file_path: "/x", content: "bad" } }]}));
 
     const badAgent = createInspectorAgent(badAdapter, new Toolkit());
     await badAgent.wakeup();
@@ -151,8 +159,7 @@ describe("InspectorAgent", () => {
         claimedBy: [AgentType.Inspector],
         payload: "Try to write",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
 
@@ -162,12 +169,10 @@ describe("InspectorAgent", () => {
 
   it("最多 5 轮循环——超限返回失败", async () => {
     const stuck = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     stuck.injectMock(async () => ({
       content: "Need more data...",
-      toolCalls: [{ id: "loop", name: "search_code", arguments: { query: "endless" } }],
-    }));
+      tool_calls: [{ id: "loop", name: "search_code", arguments: { query: "endless" } }]}));
 
     const stuckAgent = createInspectorAgent(stuck, new Toolkit());
     await stuckAgent.wakeup();
@@ -181,8 +186,7 @@ describe("InspectorAgent", () => {
         claimedBy: [AgentType.Inspector],
         payload: "永不完成的任务",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
 
@@ -191,8 +195,23 @@ describe("InspectorAgent", () => {
   });
 
   it("输出不含评价和建议——纯事实格式", async () => {
-    // 验证 mock 适配器的输出确实只是事实罗列，不含推断
-    const result = await agent.execute(
+    // 使用独立 adapter——返回纯事实、无工具调用
+    const factsAdapter = new LlmAdapter({
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock-chat", reasonerModel: "mock"});
+    factsAdapter.injectMock(async () => ({
+      content: [
+        "## 事实报告",
+        "",
+        "- `/proj/src/userService.ts` 包含 3 个导出函数",
+        "- 被 14 个文件引用",
+        "- 没有循环依赖",
+        "- `tsc --noEmit` 通过",
+      ].join("\n"),
+      tool_calls: []}));
+    const factsAgent = createInspectorAgent(factsAdapter, new Toolkit());
+    await factsAgent.wakeup();
+
+    const result = await factsAgent.execute(
       {
         id: "node-5",
         type: "inspect",
@@ -202,8 +221,7 @@ describe("InspectorAgent", () => {
         claimedBy: [AgentType.Inspector],
         payload: "检查 userService",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
 

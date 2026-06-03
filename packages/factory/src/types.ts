@@ -18,8 +18,10 @@ export interface AgentDefinition {
   type: AgentType;
   /** 角色名（人类可读，格式："短名 — 头衔"） */
   role: string;
-  /** 系统提示词 */
-  systemPrompt: string;
+  /** 系统提示词（内联字符串，与 systemPromptFile 二选一） */
+  systemPrompt?: string;
+  /** 系统提示词文件路径（相对项目根，与 systemPrompt 二选一） */
+  systemPromptFile?: string;
   /** 展示信息——统一的 emoji + 短名 + 头衔（收敛自 agent-registry.json） */
   display?: AgentDisplay;
   /** 圆桌会议 Persona——仅参与圆桌的 Agent 有此字段（收敛自 persona-prompts.json） */
@@ -38,10 +40,14 @@ export interface AgentDefinition {
   toolPermissions?: string[];
   /** 记忆查询策略名（如 "code", "review", "analysis"，用于 MemoryStore 检索） */
   memoryQueryStrategy?: string;
-  /** 规划系统提示词（仅 meta agent 使用） */
+  /** 规划系统提示词（仅 meta agent 使用，与 planningPromptFile 二选一） */
   planningPrompt?: string;
-  /** 重规划系统提示词（仅 meta agent 使用） */
+  /** 规划系统提示词文件路径（相对项目根） */
+  planningPromptFile?: string;
+  /** 重规划系统提示词（仅 meta agent 使用，与 replanPromptFile 二选一） */
   replanPrompt?: string;
+  /** 重规划系统提示词文件路径（相对项目根） */
+  replanPromptFile?: string;
 }
 
 /** Agent 展示信息（统一收敛自此） */
@@ -53,7 +59,10 @@ export interface AgentDisplay {
 
 /** Agent 圆桌会议 Persona */
 export interface AgentRoundtable {
-  personaPrompt: string;
+  /** 圆桌 persona 提示词（内联字符串，与 personaPromptFile 二选一） */
+  personaPrompt?: string;
+  /** 圆桌 persona 提示词文件路径（相对项目根） */
+  personaPromptFile?: string;
   roundtableTitle: string;
 }
 
@@ -93,6 +102,8 @@ export interface RoundtableTemplate {
   rounds: number;
   /** 参与的 Agent Persona 名列表 */
   agents: string[];
+  /** 自定义规则（追加在通用规则之后） */
+  rules?: string[];
 }
 
 /** cortex-agents.json 顶层结构 */
@@ -111,6 +122,8 @@ export interface CortexAgentsConfig {
   seedMemories?: SeedMemoriesConfig;
   /** 治理管线配置 */
   governancePipeline?: GovernancePipelineConfig;
+  /** 工具元数据定义（供 Toolkit.setToolMeta() 注入） */
+  tools?: Record<string, unknown>;
 }
 
 /** 自审视脚本配置 */
@@ -266,6 +279,8 @@ export interface BootstrapResult {
   docs: CortexDocsConfig;
   /** 圆桌会议模板（供 roundtable 命令加载） */
   roundtableTemplates: RoundtableTemplate[];
+  /** 工具元数据（供 Toolkit.setToolMeta() 注入） */
+  tools?: Record<string, unknown>;
   /** 校验警告 */
   warnings: string[];
 }

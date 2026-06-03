@@ -1,6 +1,6 @@
-import type { MemoryQuery, MemoryLink, MemoryState, MemoryType, AgentType } from "@cortex/shared";
+import type { MemoryQuery, MemoryLink, SemanticState } from "@cortex/shared";
 import { LinkType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import type { IPipelineObserver } from "@cortex/shared";
 import { MemoryStorage } from "./storage.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -41,9 +41,9 @@ export class MemoryPersistence {
   private _flushFailStreak = 0;
   private readonly _flushDebounceMs = FLUSH_DEBOUNCE_MS;
 
-  private _observer?: PipelineObserver;
+  private _observer?: IPipelineObserver;
 
-  constructor(observer?: PipelineObserver) {
+  constructor(observer?: IPipelineObserver) {
     this._observer = observer;
   }
 
@@ -338,33 +338,42 @@ export class MemoryPersistence {
       try {
         db.prepare(sql).run();
       } catch (e) {
-        console.error(`[MemoryPersistence] ${opName} 建表失败:`, e);
+        // @fix P0-4 — 建表失败通过 observer 管道上报，console 仅兜底（原则五）
+        if (this._observer) {
+          this._observer.emit({
+            type: PipelineEventType.MemoryDbWriteFailed,
+            priority: PipelinePriority.CRITICAL,
+            payload: {
+              source: "MemoryPersistence",
+              operation: opName,
+              error: e instanceof Error ? e.message : String(e),
+            },
+            timestamp: Date.now(),
+            notificationType: "WARNING",
+          });
+        } else {
+          console.error(`[MemoryPersistence] ${opName} 建表失败:`, e);
+        }
         throw e;
       }
     };
 
-    // memories 表
+    // memories 表 (v3 schema)
     runSQL(
       `CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
-        state TEXT NOT NULL DEFAULT 'ACTIVE',
-        memory_type TEXT NOT NULL DEFAULT 'EPISODIC',
-        sub_type TEXT,
-        agent_type TEXT,
+        semantic_state TEXT NOT NULL DEFAULT 'Active',
+        kind TEXT NOT NULL DEFAULT 'TaskLog',
+        source TEXT NOT NULL DEFAULT '{}',
         summary TEXT NOT NULL DEFAULT '',
-        content TEXT NOT NULL DEFAULT '',
+        semantic_gist TEXT NOT NULL DEFAULT '',
+        content_blob TEXT NOT NULL DEFAULT '',
+        content_hash TEXT NOT NULL DEFAULT '',
         embedding BLOB,
         weight REAL NOT NULL DEFAULT 1.0,
-        creator_id TEXT,
-        is_private INTEGER NOT NULL DEFAULT 0,
         access_count INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
         last_accessed_at INTEGER NOT NULL,
-        metadata TEXT,
-        project_fingerprint TEXT,
-        archived_at INTEGER,
-        frozen_at INTEGER,
         expires_at INTEGER
       )`,
       "create_tables.memories",
@@ -378,7 +387,7 @@ export class MemoryPersistence {
         target_id TEXT NOT NULL,
         link_type TEXT NOT NULL,
         weight REAL NOT NULL DEFAULT 1.0,
-        target_state TEXT NOT NULL DEFAULT 'ACTIVE',
+        target_state TEXT NOT NULL DEFAULT 'Active',
         last_accessed_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
         created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
       )`,
@@ -394,30 +403,93 @@ export class MemoryPersistence {
       "create_tables.links_index_target",
     );
 
+    // FTS5 全文索引——从 summary + semantic_gist 生成
+    runSQL(
+      `CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+        summary,
+        semantic_gist,
+        content=memories,
+        content_rowid=rowid
+      )`,
+      "create_tables.fts5",
+    );
+
+    // FTS5 同步触发器
+    runSQL(
+      `CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+        INSERT INTO memories_fts(rowid, summary, semantic_gist) VALUES (new.rowid, new.summary, new.semantic_gist);
+      END`,
+      "create_tables.fts5_trigger_ai",
+    );
+    runSQL(
+      `CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, summary, semantic_gist) VALUES('delete', old.rowid, old.summary, old.semantic_gist);
+      END`,
+      "create_tables.fts5_trigger_ad",
+    );
+    runSQL(
+      `CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, summary, semantic_gist) VALUES('delete', old.rowid, old.summary, old.semantic_gist);
+        INSERT INTO memories_fts(rowid, summary, semantic_gist) VALUES (new.rowid, new.summary, new.semantic_gist);
+      END`,
+      "create_tables.fts5_trigger_au",
+    );
+
     // 读取模式版本（首次启动时 __meta 表可能无数据，属正常）
     try {
       const metaRow = db.prepare("SELECT value FROM __meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
       if (metaRow) {
         const storedVer = Number(metaRow.value);
         if (storedVer < SCHEMA_VERSION) {
-          console.warn(
-            `[MemoryPersistence] schema_version 不匹配：存储=${storedVer}，期望=${SCHEMA_VERSION}。`,
-          );
-          // 尝试 v1→v2 兼容迁移：添加 links 表缺失列
-          if (storedVer === 1 && SCHEMA_VERSION === 2) {
+          if (this._observer) {
+            this._observer.emit({
+              type: PipelineEventType.MemorySqlDegraded,
+              priority: PipelinePriority.NORMAL,
+              payload: { source: "MemoryPersistence", detail: `schema_version 不匹配: ${storedVer}->${SCHEMA_VERSION}` },
+              timestamp: Date.now(),
+            });
+          } else {
+            console.warn(
+              `[MemoryPersistence] schema_version 不匹配：存储=${storedVer}，期望=${SCHEMA_VERSION}。`,
+            );
+          }
+          // v4->v5 迁移：添加新列并映射旧数据
+          if (storedVer <= 4 && SCHEMA_VERSION >= 5) {
             try {
-              db.prepare("ALTER TABLE links ADD COLUMN last_accessed_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)").run();
-              console.log("[MemoryPersistence] links 表已迁移：添加 last_accessed_at 列");
-            } catch (alterErr) {
-              // 列可能已存在（CREATE TABLE IF NOT EXISTS 已包含），安全忽略
+              const colNames = db.prepare("SELECT name FROM pragma_table_info('memories')").all() as { name: string }[];
+              const hasCol = (name: string) => colNames.some((c) => c.name === name);
+
+              // 新表已创建（含新列），旧表可能还缺列——用 ensureColumn 补
+              // 填充 semantic_gist = summary, content_blob = content, semantic_state = state, kind = memory_type, source = agent_type
+              if (hasCol("summary") && hasCol("semantic_gist")) {
+                db.prepare("UPDATE memories SET semantic_gist = summary WHERE semantic_gist = ''").run();
+              }
+              if (hasCol("content") && hasCol("content_blob")) {
+                db.prepare("UPDATE memories SET content_blob = content WHERE content_blob = ''").run();
+              }
+              if (hasCol("state") && hasCol("semantic_state")) {
+                db.prepare("UPDATE memories SET semantic_state = state WHERE semantic_state = 'Active' AND state != 'ACTIVE'").run();
+              }
+              if (hasCol("memory_type") && hasCol("kind")) {
+                db.prepare("UPDATE memories SET kind = memory_type WHERE kind = 'TaskLog' AND memory_type != 'EPISODIC'").run();
+              }
+              if (hasCol("agent_type") && hasCol("source")) {
+                db.prepare("UPDATE memories SET source = json_object('agentType', agent_type, 'taskId', id) WHERE source = '{}' AND agent_type IS NOT NULL").run();
+              }
               if (this._observer) {
                 this._observer.emit({
                   type: PipelineEventType.MemorySqlDegraded,
                   priority: PipelinePriority.NORMAL,
-                  payload: {
-                    source: "MemoryPersistence",
-                    detail: `links 表迁移跳过: ${alterErr instanceof Error ? alterErr.message : String(alterErr)}`,
-                  },
+                  payload: { source: "MemoryPersistence", detail: "v4->v5 迁移完成" },
+                  timestamp: Date.now(),
+                });
+              }
+            } catch (migrateErr) {
+              if (this._observer) {
+                this._observer.emit({
+                  type: PipelineEventType.MemorySqlDegraded,
+                  priority: PipelinePriority.NORMAL,
+                  payload: { source: "MemoryPersistence", detail: `v4->v5 迁移跳过: ${migrateErr instanceof Error ? migrateErr.message : String(migrateErr)}` },
                   timestamp: Date.now(),
                 });
               }
@@ -427,11 +499,9 @@ export class MemoryPersistence {
           db.prepare("INSERT OR REPLACE INTO __meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
         }
       } else {
-        // __meta 表存在但无 schema_version 记录 — 旧 DB，写当前版本号
         db.prepare("INSERT OR REPLACE INTO __meta (key, value) VALUES ('schema_version', ?)").run(String(SCHEMA_VERSION));
       }
-    } catch (e) {
-      // __meta 表尚未创建（首次运行时），属正常预期行为
+    } catch (_e) {
       if (this._observer) {
         this._observer.emit({
           type: PipelineEventType.MemorySqlDegraded,
@@ -445,7 +515,7 @@ export class MemoryPersistence {
       }
     }
 
-    // ── Column-level migration：旧 DB 可能缺列，逐一检查并 ALTER ──
+    // ── Column-level migration：旧 DB 列兼容 ──
     const ensureColumn = (table: string, col: string, colDef: string) => {
       try {
         const exists = db.prepare(
@@ -453,21 +523,28 @@ export class MemoryPersistence {
         ).get() as { cnt: number } | undefined;
         if (!exists || exists.cnt === 0) {
           db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${colDef}`).run();
-          console.log(`[MemoryPersistence] ${table} 表已迁移：添加 ${col} 列`);
+          if (this._observer) {
+            this._observer.emit({
+              type: PipelineEventType.MemorySqlDegraded,
+              priority: PipelinePriority.NORMAL,
+              payload: { source: "MemoryPersistence", detail: `${table} 表已迁移：添加 ${col} 列` },
+              timestamp: Date.now(),
+            });
+          }
         }
-      } catch (alterErr) {
+      } catch (_alterErr) {
         // 列可能已存在，安全忽略
       }
     };
-    ensureColumn("memories", "updated_at", "INTEGER NOT NULL DEFAULT (unixepoch() * 1000)");
-    ensureColumn("memories", "sub_type", "TEXT");
-    ensureColumn("memories", "creator_id", "TEXT");
-    ensureColumn("memories", "access_count", "INTEGER NOT NULL DEFAULT 0");
-    ensureColumn("memories", "metadata", "TEXT");
-    ensureColumn("memories", "project_fingerprint", "TEXT");
-    ensureColumn("memories", "archived_at", "INTEGER");
-    ensureColumn("memories", "frozen_at", "INTEGER");
+    // v3 新增列（旧 CREATE TABLE 可能缺这些）
+    ensureColumn("memories", "semantic_state", "TEXT NOT NULL DEFAULT 'Active'");
+    ensureColumn("memories", "kind", "TEXT NOT NULL DEFAULT 'TaskLog'");
+    ensureColumn("memories", "source", "TEXT NOT NULL DEFAULT '{}'");
+    ensureColumn("memories", "semantic_gist", "TEXT NOT NULL DEFAULT ''");
+    ensureColumn("memories", "content_blob", "TEXT NOT NULL DEFAULT ''");
+    ensureColumn("memories", "content_hash", "TEXT NOT NULL DEFAULT ''");
     ensureColumn("memories", "expires_at", "INTEGER");
+    ensureColumn("memories", "access_count", "INTEGER NOT NULL DEFAULT 0");
 
     // 从 SQLite 加载存量数据到 MemoryStorage
     const memRows = db.prepare("SELECT * FROM memories").all() as Record<string, unknown>[];
@@ -485,7 +562,7 @@ export class MemoryPersistence {
         targetId: String(raw.target_id),
         linkType: String(raw.link_type) as LinkType,
         weight: Number(raw.weight),
-        targetState: String(raw.target_state) as MemoryState,
+        targetState: String(raw.target_state) as SemanticState,
         lastAccessedAt: Number(raw.last_accessed_at ?? raw.created_at),
       };
       storage.addLink(link.sourceId, link);
@@ -528,32 +605,24 @@ export class MemoryPersistence {
       }
     };
 
-    // 状态
-    if (query.states && query.states.length > 0) {
-      safeIn("state", query.states);
-    } else {
-      clauses.push("state = ?");
-      params.push("ACTIVE");
-    }
+    // 语义态——默认只查 Active
+    clauses.push("semantic_state = ?");
+    params.push("Active");
 
     // 时效衰减：只返回 30 天内的记忆
     const cutoff = now - THIRTY_DAYS_MS;
     clauses.push("created_at > ?");
     params.push(cutoff);
 
-    // 隐私
-    if (!query.includePrivate) {
-      clauses.push("is_private = 0");
+    // 认知类别
+    if (query.kind) {
+      clauses.push("kind = ?");
+      params.push(query.kind);
     }
 
-    // 记忆类型
-    if (query.memoryTypes && query.memoryTypes.length > 0) {
-      safeIn("memory_type", query.memoryTypes);
-    }
-
-    // Agent 类型
+    // Agent 类型——存储为 source JSON 内字段
     if (query.agentTypes && query.agentTypes.length > 0) {
-      safeIn("agent_type", query.agentTypes);
+      safeIn("json_extract(source, '$.agentType')", query.agentTypes);
     }
 
     // 时间范围
@@ -562,22 +631,21 @@ export class MemoryPersistence {
       params.push(query.timeRange.start, query.timeRange.end);
     }
 
-    // 子类型
-    if (query.subTypes && query.subTypes.length > 0) {
-      safeIn("sub_type", query.subTypes);
+    // 关键词检索：优先 FTS5 全文索引（summary + semantic_gist），降级至 LIKE
+    // 当 queryEmbedding 存在时跳过关键词过滤——向量排序精度更高
+    if (!query.queryEmbedding && query.keywords && query.keywords.length > 0) {
+      const ftsQuery = query.keywords.slice(0, 50).map((kw) => {
+        return `"${kw.replace(/"/g, "")}"`;
+      }).join(" OR ");
+      clauses.push("rowid IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?)");
+      params.push(ftsQuery);
     }
 
-    // 关键词（每词 2 LIKE，关键词数也限制）
-    if (query.keywords && query.keywords.length > 0) {
-      const kwLimit = Math.min(query.keywords.length, 50); // 最多 50 个关键词
-      for (let i = 0; i < kwLimit; i++) {
-        const kw = query.keywords[i];
-        clauses.push("(summary LIKE ? OR content LIKE ?)");
-        params.push(`%${kw}%`, `%${kw}%`);
-      }
-    }
+    // 向量召回模式下放宽候选集上限，让 vectorRecall 有足够素材做语义排序
+    const vectorLimit = query.queryEmbedding ? 200 : 0;
 
-    const sql = `SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC`;
+    const sql = `SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY created_at DESC` +
+      (vectorLimit > 0 ? ` LIMIT ${vectorLimit}` : "");
 
     try {
       return this._db.prepare(sql).all(...params) as Record<string, unknown>[];

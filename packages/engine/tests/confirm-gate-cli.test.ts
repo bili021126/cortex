@@ -40,8 +40,7 @@ describe("ConfirmGate + PlatformBridge 集成", () => {
         id: "confirm-write-1",
         level: ReversibilityLevel.L2,
         toolName: "write_file",
-        summary: "Write to /tmp/test.txt",
-      });
+        summary: "Write to /tmp/test.txt"});
 
       const result = await gate.waitFor(reqId);
       expect(result).toBe(true);
@@ -59,8 +58,7 @@ describe("ConfirmGate + PlatformBridge 集成", () => {
         id: "confirm-shell-1",
         level: ReversibilityLevel.L3,
         toolName: "run_shell",
-        summary: "rm -rf /tmp/build",
-      });
+        summary: "rm -rf /tmp/build"});
 
       const result = await gate.waitFor(reqId);
       expect(result).toBe(false);
@@ -79,8 +77,7 @@ describe("ConfirmGate + PlatformBridge 集成", () => {
         id: "confirm-l2-1",
         level: ReversibilityLevel.L2,
         toolName: "write_file",
-        summary: "Create new config file",
-      });
+        summary: "Create new config file"});
 
       const approved = await gate.waitFor(reqId);
       expect(approved).toBe(true);
@@ -98,8 +95,7 @@ describe("ConfirmGate + PlatformBridge 集成", () => {
         id: "confirm-l3-1",
         level: ReversibilityLevel.L3,
         toolName: "run_shell",
-        summary: "Delete production database",
-      });
+        summary: "Delete production database"});
 
       const approved = await gate.waitFor(reqId);
       expect(approved).toBe(false);
@@ -115,8 +111,7 @@ describe("ConfirmGate + PlatformBridge 集成", () => {
         id: "no-bridge-1",
         level: ReversibilityLevel.L2,
         toolName: "write_file",
-        summary: "test",
-      });
+        summary: "test"});
 
       // 异步 resolve
       setTimeout(() => gate.resolve({ requestId: reqId, approved: true }), 5);
@@ -132,8 +127,7 @@ describe("ConfirmGate + PlatformBridge 集成", () => {
         id: "no-bridge-2",
         level: ReversibilityLevel.L2,
         toolName: "run_shell",
-        summary: "test",
-      });
+        summary: "test"});
 
       setTimeout(() => gate.resolve({ requestId: reqId, approved: false }), 5);
 

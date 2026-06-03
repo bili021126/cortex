@@ -51,8 +51,7 @@ export function registerExaminationTools(
         const truncated = lines.slice(0, Math.ceil(MAX_OUTPUT_CHARS / 80)).join("\n");
         return {
           success: true,
-          output: truncated + `\n\n...(截断，全文 ${content.length} 字符 / ${lines.length} 行。用 search_code 搜索关键词定位具体行)`,
-        };
+          output: truncated + `\n\n...(截断，全文 ${content.length} 字符 / ${lines.length} 行。用 search_code 搜索关键词定位具体行)`};
       }
       return { success: true, output: content };
     } catch (e) {
@@ -120,7 +119,7 @@ export function registerExaminationTools(
 
   toolkit.register("write_file", async (params) => {
     const fp = resolve(params.file_path as string);
-    const content = (params.content ?? "") as string;
+    const content = (params.content_blob ?? "") as string;
     const normalizedFp = path.normalize(fp);
     const normalizedOut = path.normalize(outputDir);
     if (!normalizedFp.startsWith(normalizedOut + path.sep) && normalizedFp !== normalizedOut) {
@@ -128,8 +127,7 @@ export function registerExaminationTools(
         success: false,
         error:
           `写入被拒绝：审视实验中，所有写入操作仅限于 ${outputDir}/ 目录。\n` +
-          `你不能修改 packages/ 或 docs/ 下的任何文件。请将发现写入 ${outputDir}/ 目录下。`,
-      };
+          `你不能修改 packages/ 或 docs/ 下的任何文件。请将发现写入 ${outputDir}/ 目录下。`};
     }
     try {
       const dir = path.dirname(fp);
@@ -147,8 +145,7 @@ export function registerExaminationTools(
   if (!softMode) {
     const FORBIDDEN = async () => ({
       success: false,
-      error: "操作被禁止：审视实验中仅允许读取文件和将报告写入 test-output/self-examination/ 目录。",
-    });
+      error: "操作被禁止：审视实验中仅允许读取文件和将报告写入 test-output/self-examination/ 目录。"});
     toolkit.register("run_shell", FORBIDDEN);
     toolkit.register("delete_file", FORBIDDEN);
   } else {
@@ -212,8 +209,7 @@ function registerSoftModeTools(
       const dir = args.split(/\s+/)[0] ?? ".";
       if (pattern) return `powershell -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse -Filter '${pattern}' | Select-Object -First 50 FullName"`;
       return `powershell -NoProfile -Command "Get-ChildItem -Path '${dir}' -Recurse | Select-Object -First 50 FullName"`;
-    },
-  };
+    }};
 
   /** 翻译单个命令段（不含管道）。大小写不敏感匹配。 */
   function adaptSegment(cmd: string, pipeIn: boolean): string {
@@ -272,16 +268,14 @@ function registerSoftModeTools(
         encoding: "utf-8",
         timeout: 60_000,
         maxBuffer: 5 * 1024 * 1024,
-        shell: isWin ? "powershell.exe" : "/bin/sh",
-      });
+        shell: isWin ? "powershell.exe" : "/bin/sh"});
       return { success: true, output: output.slice(0, maxOutputChars) };
     } catch (e: any) {
       const stderr = e.stderr ?? "";
       const hint = command !== rawCommand ? `\n（已转译: ${rawCommand} → ${command}）` : "";
       return {
         success: false,
-        error: `命令执行失败: ${e.message?.slice(0, 300) ?? String(e)}${hint}${stderr ? `\nstderr: ${String(stderr).slice(0, 500)}` : ""}`,
-      };
+        error: `命令执行失败: ${e.message?.slice(0, 300) ?? String(e)}${hint}${stderr ? `\nstderr: ${String(stderr).slice(0, 500)}` : ""}`};
     }
   });
 

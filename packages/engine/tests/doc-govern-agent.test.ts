@@ -1,14 +1,13 @@
 // @ci: unit
 import { describe, it, expect, beforeEach } from "vitest";
-import { AgentType, MemoryType, PipelinePriority } from "@cortex/shared";
+import { AgentType, PipelinePriority } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, MemoryStore, Scheduler } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 
 /** 创建 Mock Adapter */
 function mockAdapter(output: string) {
   const adapter = new LlmAdapter({
-    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-  });
+    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
   adapter.injectMock(async () => ({ content: output, toolCalls: [] }));
   return adapter;
 }
@@ -19,11 +18,11 @@ async function mockAgent(agentType: string, output: string) {
   const tk = new Toolkit();
   let agent;
   switch (agentType) {
-    case AgentType.Code: agent = createAgent(codeAgentConfig(), adapter, tk); break;
-    case AgentType.Review: agent = createAgent(reviewAgentConfig(), adapter, tk); break;
-    case AgentType.Analysis: agent = createAgent(analysisAgentConfig(), adapter, tk); break;
-    case AgentType.DocGovern: agent = createAgent(docGovernAgentConfig(), adapter, tk); break;
-    default: agent = createAgent(codeAgentConfig(), adapter, tk);
+    case AgentType.Code: agent = createAgent(codeAgentConfig("Test"), adapter, tk); break;
+    case AgentType.Review: agent = createAgent(reviewAgentConfig("Test"), adapter, tk); break;
+    case AgentType.Analysis: agent = createAgent(analysisAgentConfig("Test"), adapter, tk); break;
+    case AgentType.DocGovern: agent = createAgent(docGovernAgentConfig("Test"), adapter, tk); break;
+    default: agent = createAgent(codeAgentConfig("Test"), adapter, tk);
   }
   await agent.wakeup();
   return agent;
@@ -47,7 +46,7 @@ describe("DocGovernAgent 执行", () => {
       pool.register({ type: at, maxInstances: 3 });
     }
 
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
 
     const auditReport = [
       "## 审计报告",
@@ -77,8 +76,7 @@ describe("DocGovernAgent 执行", () => {
       claimedBy: [],
       payload: "审计 Core-1 重构计划文档的完整性与合规性",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const report = await scheduler.executeAll();
 
@@ -103,8 +101,7 @@ describe("DocGovernAgent 执行", () => {
       claimedBy: [],
       payload: "检查 v2.0 宪法修正附录与原始文档的一致性",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const report = await scheduler.executeAll();
 
@@ -124,8 +121,7 @@ describe("DocGovernAgent 执行", () => {
       claimedBy: [],
       payload: "审查 Core-1 Round 4 实施计划的可行性",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const report = await scheduler.executeAll();
 
@@ -138,15 +134,13 @@ describe("DocGovernAgent 执行", () => {
     const memory = new MemoryStore();
 
     const adapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     adapter.injectMock(async () => ({
       content: "审计通过：无违规项",
-      toolCalls: [],
-    }));
-    const agentWithMem = createAgent(docGovernAgentConfig(), adapter, new Toolkit(), memory);
+      toolCalls: []}));
+    const agentWithMem = createAgent(docGovernAgentConfig("Test"), adapter, new Toolkit(), memory);
 
-    const memScheduler = new Scheduler(board, pool, observer, gate);
+    const memScheduler = new Scheduler(board, pool, observer);
     await agentWithMem.wakeup();
     memScheduler.register(AgentType.DocGovern, agentWithMem, "mock");
 
@@ -159,14 +153,13 @@ describe("DocGovernAgent 执行", () => {
       claimedBy: [],
       payload: "审计记忆写入测试",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     await memScheduler.executeAll();
 
-    const mems = memory.read({ memoryTypes: [MemoryType.Episodic] });
+    const mems = await memory.read({ kind: "TaskLog" });
     expect(mems.length).toBeGreaterThanOrEqual(1);
-    expect(mems[0].agentType).toBe(AgentType.DocGovern);
+    expect(mems[0].source.agentType).toBe(AgentType.DocGovern);
   });
 
   it("DocGovernAgent 与其他 Agent 在串行链路中协作", async () => {
@@ -180,8 +173,7 @@ describe("DocGovernAgent 执行", () => {
       claimedBy: [],
       payload: "实现新功能",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
     board.addNode({
       id: "audit-child",
       parentId: "impl-root",
@@ -192,13 +184,12 @@ describe("DocGovernAgent 执行", () => {
       claimedBy: [],
       payload: "审计产出文档",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const events: string[] = [];
     observer.on(PipelinePriority.HIGH, (e: any) => {
       if (e.type === "node.complete") {
-        events.push(`${e.payload.nodeId}:${e.payload.agentType}`);
+        events.push(`${e.payload.nodeId}:${e.payload.source.agentType}`);
       }
     });
 

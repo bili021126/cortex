@@ -1,0 +1,17 @@
+{
+  "id": "skill-refactor-code",
+  "name": "Code Refactorer",
+  "description": "Applies code refactoring patterns to improve code quality",
+  "agentTypes": ["code", "reviewer"],
+  "triggerTags": ["refactor", "cleanup", "quality"],
+  "version": "0.5.0",
+  "author": "Cortex Team",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "pattern": { "type": "string", "enum": ["extract-method", "rename-variable", "inline-function"] },
+      "target": { "type": "string" }
+    },
+    "required": ["pattern", "target"]
+  }
+}

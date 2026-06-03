@@ -129,7 +129,7 @@ export class SearchAggregator {
     // 2. 恢复原始顺序 + 按来源分组
     const deduped: SearchResult[] = [];
     const sourceBuckets = new Map<string, SearchResult[]>();
-    for (const [urlKey, item] of seen) {
+    for (const [_urlKey, item] of seen) {
       const source = item.source;
       if (!sourceBuckets.has(source)) sourceBuckets.set(source, []);
       sourceBuckets.get(source)!.push(item);

@@ -18,8 +18,7 @@ describe("M1: ConfirmGate handleTimeout 回收 pending", () => {
       id: "test-1",
       level: RL.L0,
       toolName: "read_file",
-      summary: "test",
-    });
+      summary: "test"});
     expect(gate.hasPending()).toBe(true);
 
     const result = gate.handleTimeout(reqId, RL.L0);
@@ -33,8 +32,7 @@ describe("M1: ConfirmGate handleTimeout 回收 pending", () => {
       id: "test-2",
       level: RL.L1,
       toolName: "write_file",
-      summary: "test",
-    });
+      summary: "test"});
     expect(gate.hasPending()).toBe(true);
 
     const result = gate.handleTimeout(reqId, RL.L1);
@@ -48,8 +46,7 @@ describe("M1: ConfirmGate handleTimeout 回收 pending", () => {
       id: "test-3",
       level: RL.L2,
       toolName: "delete_file",
-      summary: "test",
-    });
+      summary: "test"});
     expect(gate.hasPending()).toBe(true);
 
     const result = gate.handleTimeout(reqId, RL.L2);
@@ -63,8 +60,7 @@ describe("M1: ConfirmGate handleTimeout 回收 pending", () => {
       id: "test-4",
       level: RL.L3,
       toolName: "run_shell",
-      summary: "test",
-    });
+      summary: "test"});
     expect(gate.hasPending()).toBe(true);
 
     const result = gate.handleTimeout(reqId, RL.L3);

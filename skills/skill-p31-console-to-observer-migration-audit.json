@@ -1,0 +1,21 @@
+{
+  "id": "skill-p31-console-to-observer-migration-audit",
+  "agentType": "audit",
+  "name": "P31: console.* → PipelineObserver 迁移审计",
+  "triggerTags": ["audit", "observability", "principle", "migration"],
+  "trigger": "需要审计代码库中 console.log/error/warn 的使用是否符合原则五（所有可观测事件走 PipelineObserver）时触发。适用于架构合规检查或降级路径清理。",
+  "steps": [
+    "用 search_code 搜索 'console\\.log\\(' 和 'console\\.error\\(' 和 'console\\.warn\\('，获取所有 console.* 调用位置",
+    "对每个 console.* 调用评估其归属：\n  - 🔴 违规：在 observable 事件路径中替代 PipelineObserver.emit()（如 catch 块中 console.error('✗ 错误') 代替 observer.emit）\n  - 🟡 边界：降级路径（observer 不可用时的 fallback console.error）\n  - ✅ 允许：CLI 用户输出（console.log 输出给用户看的信息）、调试脚本、测试输出",
+    "提取每个 🔴 违规项的上下文：文件路径 / 行号 / console.* 调用的附近是否有可用的 observer 实例 / 替代的 observer.emit 事件类型",
+    "按文件统计：console.* 总数 / 违规数 / 边界数 / 允许数",
+    "对每个违规项输出迁移方案：'将 console.error(xxx) 替换为 observer.emit({ type: PipelineEventType.xxx, payload: { ... }, notificationType: 'WARNING' })'",
+    "输出汇总：全库 N 处 console.* / M 处违规 / 建议优先迁移 catch 块中的 console.error"
+  ],
+  "expectedOutput": "console.* 迁移审计报告：N 处 console.* / M 处违规 / 每项违规含替换方案和 PipelineEventType 建议",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

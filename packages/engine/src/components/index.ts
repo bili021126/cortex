@@ -17,8 +17,9 @@ export { runReActLoop } from "./react-loop.js";
 export type { ReActContext } from "./react-loop.js";
 
 // ── 技能提取 ─────────────────────────────────────
-export { extractSkillsFromOutput } from "./skill-extractor.js";
+export { extractSkillsFromOutput, resolveOutputFile } from "./skill-extractor.js";
 export type { SkillExtractResult } from "./skill-extractor.js";
 
 // ── 技能持久化 ──────────────────────────────────
-export { persistSkillsToMemory, loadSkillsFromMemory, scanOutputFilesForSkills } from "./skill-persister.js";
+export { persistSkillsToMemory, loadSkillsFromMemory, scanOutputFilesForSkills, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence } from "./skill-persister.js";
+export type { CrystallizeOptions, CrystallizeResult, KnowledgeMetadata, ExternalSearcher, VerifyOptions, VerifyResult } from "./skill-persister.js";

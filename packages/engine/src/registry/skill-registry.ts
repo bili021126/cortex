@@ -8,7 +8,7 @@
  * LoopAgent 从已完成任务中提炼可复用工作流，写入注册表。
  *
  * 支持 JSON 序列化/反序列化持久化。
- * Core-2 完整 SkillExecutor（步骤执行引擎 + 反馈闭环）预留。
+ * SkillExecutor 已于 Core-1 完整落地（步骤执行引擎 + 反馈闭环）。
  *
  * @fix C5 — unregister 收集待删除 key 到数组后再统一删除，不在 for-of 中修改 Map。
  * @moved-from @cortex/shared/src/skill-registry.ts (久岐忍 P1-3：外部端点缺少统一契约文档 → 已闭合)
@@ -172,6 +172,9 @@ export class SkillRegistry {
   /**
    * 保存注册表到 JSON 文件。
    * 目录不存在时自动创建。
+   *
+   * @deprecated 自技能沉淀闭环 v2 起，MemoryStore 是唯一持久化源。
+   *             保留此方法仅用于测试和手动迁移，生产环境不再调用。
    */
   saveJson(filePath: string): void {
     const dir = path.dirname(filePath);
@@ -183,6 +186,9 @@ export class SkillRegistry {
   /**
    * 从 JSON 文件恢复注册表。
    * 文件不存在时返回空注册表。
+   *
+   * @deprecated 自技能沉淀闭环 v2 起，MemoryStore 是唯一持久化源。
+   *             保留此方法仅用于测试和冷启动迁移兜底，生产环境不再调用。
    */
   static loadJson(filePath: string): SkillRegistry {
     if (!fs.existsSync(filePath)) {

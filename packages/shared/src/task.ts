@@ -19,6 +19,12 @@ export interface TaskNode {
   createdAt: number;
   /** 推理深度。MetaAgent 规划时设定，Agent 执行时可用。默认 "high"。 */
   reasoningEffort?: "high" | "max";
+  /**
+   * 偏好循环策略。MetaAgent 规划时可根据任务复杂度设定。
+   * Agent 在 execute() 时据此选择对应策略；未设定时回退到默认 ReAct。
+   * @since Core-2
+   */
+  preferredStrategy?: "react" | "direct" | "decompose" | "jury";
 }
 
 /**

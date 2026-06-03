@@ -15,10 +15,12 @@
  *
  * 原位于 .cortex/archive/e2e-outputs/.../closed-loop-test/tools/configuration-drift.ts
  */
+/* eslint-disable no-console */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
-import { cwd, exit, argv } from 'node:process';
+import { join, relative, resolve } from 'node:path';
+import { cwd, argv } from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 /* ── 类型 ── */
 
@@ -67,12 +69,6 @@ export interface JsonReport {
   dependencies: Record<string, unknown>;
   drifts: DriftItem[];
 }
-
-/* ── 常量 ── */
-
-const ROOT_DIR = cwd();
-const PACKAGES_DIR = join(ROOT_DIR, 'packages');
-const ROOT_PKG_PATH = join(ROOT_DIR, 'package.json');
 
 /* ── 辅助函数 ── */
 
@@ -131,8 +127,8 @@ function compareVersions(a: string, b: string): number {
   return extractNum(b) - extractNum(a);
 }
 
-function getPkgId(filePath: string): string {
-  const rel = relative(ROOT_DIR, filePath);
+function getPkgId(filePath: string, projectRoot: string = cwd()): string {
+  const rel = relative(projectRoot, filePath);
   if (rel === 'package.json') return 'root';
   const match = rel.match(/packages[\\/]([^\\/]+)/);
   return match ? match[1] : rel;
@@ -147,14 +143,16 @@ function readPackageJson(filePath: string): PackageJson | null {
   }
 }
 
-function getPackageJsonPaths(): string[] {
+function getPackageJsonPaths(projectRoot: string = cwd()): string[] {
+  const packagesDir = join(projectRoot, 'packages');
+  const rootPkgPath = join(projectRoot, 'package.json');
   const paths: string[] = [];
-  if (existsSync(ROOT_PKG_PATH)) paths.push(ROOT_PKG_PATH);
-  if (existsSync(PACKAGES_DIR)) {
-    const dirs = readdirSync(PACKAGES_DIR, { withFileTypes: true });
+  if (existsSync(rootPkgPath)) paths.push(rootPkgPath);
+  if (existsSync(packagesDir)) {
+    const dirs = readdirSync(packagesDir, { withFileTypes: true });
     for (const dir of dirs) {
       if (dir.isDirectory()) {
-        const pkgPath = join(PACKAGES_DIR, dir.name, 'package.json');
+        const pkgPath = join(packagesDir, dir.name, 'package.json');
         if (existsSync(pkgPath)) paths.push(pkgPath);
       }
     }
@@ -164,15 +162,15 @@ function getPackageJsonPaths(): string[] {
 
 /* ── 核心扫描 ── */
 
-function collectDependencies(): DepEntry[] {
+export function collectDependencies(projectRoot: string = cwd()): DepEntry[] {
   const entries: DepEntry[] = [];
-  const files = getPackageJsonPaths();
+  const files = getPackageJsonPaths(projectRoot);
 
   for (const filePath of files) {
     const pkg = readPackageJson(filePath);
     if (!pkg) continue;
 
-    const pkgId = getPkgId(filePath);
+    const pkgId = getPkgId(filePath, projectRoot);
     const pkgName = pkg.name ?? pkgId;
 
     const sections: Array<'dependencies' | 'devDependencies'> = ['dependencies', 'devDependencies'];
@@ -198,7 +196,7 @@ function collectDependencies(): DepEntry[] {
   return entries;
 }
 
-function detectDrift(entries: DepEntry[]): DepGroup[] {
+export function detectDrift(entries: DepEntry[]): DepGroup[] {
   const groups = new Map<string, DepEntry[]>();
   for (const entry of entries) {
     const existing = groups.get(entry.depName);
@@ -229,7 +227,7 @@ function detectDrift(entries: DepEntry[]): DepGroup[] {
 
 /* ── 输出 ── */
 
-function printHumanReport(groups: DepGroup[], filesScanned: number, totalDeps: number): void {
+function printHumanReport(groups: DepGroup[], filesScanned: number, totalDeps: number, projectRoot: string = cwd()): void {
   const drifts = groups.filter((g) => g.hasDrift);
 
   console.log();
@@ -250,7 +248,7 @@ function printHumanReport(groups: DepGroup[], filesScanned: number, totalDeps: n
       for (const entry of drift.entries) {
         const marker = entry.version !== rec.version && !shouldSkipDrift(entry.version) ? '  ← 偏移' : '';
         const openTag = entry.isOpenVersion ? ' [开放版本]' : '';
-        const fileLabel = relative(ROOT_DIR, entry.filePath);
+        const fileLabel = relative(projectRoot, entry.filePath);
         console.log(`     ${entry.pkg}: ${(entry.version + openTag).padEnd(24)} ${fileLabel}${marker}`);
       }
       console.log(`     → 建议统一为 ${rec.version}（${rec.reason}）`);
@@ -303,20 +301,20 @@ function printJsonReport(groups: DepGroup[], filesScanned: number, totalDeps: nu
 
 /* ── 入口 ── */
 
-function main(): void {
+function main(): number {
   const isJson = argv.includes('--json');
 
   try {
-    const allEntries = collectDependencies();
-    const filesScanned = getPackageJsonPaths().length;
+    const allEntries = collectDependencies(cwd());
+    const filesScanned = getPackageJsonPaths(cwd()).length;
     const uniqueDepNames = new Set(allEntries.map((e) => e.depName));
     const groups = detectDrift(allEntries);
 
     if (isJson) printJsonReport(groups, filesScanned, uniqueDepNames.size);
-    else printHumanReport(groups, filesScanned, uniqueDepNames.size);
+    else printHumanReport(groups, filesScanned, uniqueDepNames.size, cwd());
 
     const hasRealDrift = groups.some((g) => g.hasDrift && !g.hasOpenVersion);
-    exit(hasRealDrift ? 1 : 0);
+    return hasRealDrift ? 1 : 0;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (isJson) {
@@ -329,8 +327,27 @@ function main(): void {
     } else {
       console.error('💥 扫描异常:', message);
     }
-    exit(2);
+    return 2;
   }
 }
 
-main();
+/**
+ * 检测当前模块是否作为 CLI 入口被直接运行。
+ * 使用 import.meta.url 与 process.argv[1] 的绝对路径比较，
+ * 兼容 tsx 等运行时下扩展名差异。
+ */
+function isCliEntry(): boolean {
+  const entryArg = process.argv[1];
+  if (!entryArg) return false;
+  const thisFile = fileURLToPath(import.meta.url);
+  const resolvedEntry = resolve(entryArg);
+  if (thisFile === resolvedEntry) return true;
+  const stripExt = (p: string) => p.replace(/\.(ts|js|mjs)$/, '');
+  if (stripExt(thisFile) === stripExt(resolvedEntry)) return true;
+  return false;
+}
+
+// 仅在直接运行时执行 CLI（而非作为库导入时）
+if (isCliEntry()) {
+  process.exit(main());
+}

@@ -37,6 +37,9 @@ const ESCAPE_MAP: Record<string, string> = {
 /**
  * 解析行内元素（强调、代码、链接、图片、转义）。
  * 使用单次扫描 + 正则匹配，按优先级依次处理。
+ *
+ * @fix N-08 — 在加粗检查前插入三级嵌套 `***text***` 检测，
+ *       防止加粗匹配误将 `***` 结尾的前两个 `*` 当作结束标记。
  */
 function parseInline(text: string): string {
   let result = '';
@@ -90,6 +93,18 @@ function parseInline(text: string): string {
           i = closeParen + 1;
           continue;
         }
+      }
+    }
+
+    // @fix N-08 — 三级嵌套 ***text*** → <strong><em>text</em></strong>
+    if ((text[i] === '*' && text[i + 1] === '*' && text[i + 2] === '*') ||
+        (text[i] === '_' && text[i + 1] === '_' && text[i + 2] === '_')) {
+      const marker = text.slice(i, i + 3);
+      const end = text.indexOf(marker, i + 3);
+      if (end !== -1) {
+        result += `<strong><em>${parseInline(text.slice(i + 3, end))}</em></strong>`;
+        i = end + 3;
+        continue;
       }
     }
 
@@ -315,26 +330,26 @@ export function convert(markdown: string): string {
       continue;
     }
 
-    // 段落 — 收集连续非空行
-    const paraLines: string[] = [];
+    // 段落
+    const paragraphLines: string[] = [];
     while (i < lines.length) {
-      const cur = lines[i];
-      if (cur.trim() === '') break;
-      if (isHeading(cur) || isThematicBreak(cur) || isFenceStart(cur.trimStart()) !== null) break;
-      if (isBlockquote(cur) !== null) break;
-      if (isUnorderedListItem(cur) !== null) break;
-      if (isOrderedListItem(cur) !== null) break;
-      paraLines.push(cur);
+      const l = lines[i];
+      if (l.trim() === '') break;
+      if (isHeading(l)) break;
+      if (isThematicBreak(l)) break;
+      if (l.trimStart().startsWith('```')) break;
+      if (isBlockquote(l) !== null) break;
+      if (isUnorderedListItem(l) !== null) break;
+      if (isOrderedListItem(l) !== null) break;
+      paragraphLines.push(l);
       i++;
     }
 
-    if (paraLines.length > 0) {
-      const content = paraLines
+    if (paragraphLines.length > 0) {
+      const paragraph = paragraphLines
         .map((l) => parseInline(l))
-        .join('<br>\n');
-      htmlParts.push(`<p>${content}</p>\n`);
-    } else {
-      i++;
+        .join('\n');
+      htmlParts.push(`<p>${paragraph}</p>\n`);
     }
   }
 
@@ -343,46 +358,33 @@ export function convert(markdown: string): string {
 
 /**
  * 将 Markdown 文本转换为完整的 HTML 文档。
+ * 包装 convert() 的输出，添加 DOCTYPE、head、title、基础样式和 body。
  *
  * @param markdown - 原始 Markdown 文本
- * @param title - 文档标题（可选）
+ * @param title - 可选文档标题，默认 "Document"
  * @returns 完整的 HTML 文档字符串
  */
 export function convertToDocument(markdown: string, title?: string): string {
-  const bodyContent = convert(markdown);
-  const docTitle = title || extractTitle(markdown) || 'Markdown';
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeAttr(docTitle)}</title>
-<style>
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 2em; line-height: 1.6; color: #333; }
-h1, h2, h3, h4, h5, h6 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 600; line-height: 1.25; }
-h1 { font-size: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-h2 { font-size: 1.5em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
-code { background: #f6f8fa; padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.9em; }
-pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto; }
-pre code { background: none; padding: 0; }
-blockquote { margin: 0; padding: 0 1em; border-left: 4px solid #dfe2e5; color: #6a737d; }
-ul, ol { padding-left: 2em; }
-a { color: #0366d6; text-decoration: none; }
-a:hover { text-decoration: underline; }
-img { max-width: 100%; }
-hr { border: 0; border-top: 1px solid #ddd; margin: 2em 0; }
-</style>
-</head>
-<body>
-${bodyContent}
-</body>
-</html>
-`;
-}
-
-/** 从 Markdown 中提取第一个标题作为文档标题 */
-function extractTitle(markdown: string): string | undefined {
-  const match = markdown.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : undefined;
+  const docTitle = title || 'Document';
+  const body = convert(markdown);
+  return [
+    '<!DOCTYPE html>',
+    '<html lang="zh-CN">',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+    `<title>${docTitle}</title>`,
+    '<style>',
+    'body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; line-height: 1.6; color: #333; }',
+    'pre { background: #f4f4f4; padding: 1rem; border-radius: 4px; overflow-x: auto; }',
+    'code { background: #f4f4f4; padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.9em; }',
+    'pre code { background: none; padding: 0; }',
+    'blockquote { border-left: 3px solid #ccc; margin: 0; padding: 0.5em 1em; color: #666; }',
+    '</style>',
+    '</head>',
+    '<body>',
+    body,
+    '</body>',
+    '</html>',
+  ].join('\n');
 }

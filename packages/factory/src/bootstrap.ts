@@ -77,17 +77,14 @@ export function bootstrap(projectRoot: string): BootstrapResult {
 
   // ── 第三阶段：assembleAll ───────────────────────
 
-  // Agent 组装
+  // @fix N-06 — assemble 返回值当前未被 BootstrapResult 直接使用，
+  // 原因：assemble 输出类型（AgentConfig[] / AssembledEventRouter / etc.）与
+  // BootstrapResult 字段类型（AgentDefinition[] / EventRoutingConfig / etc.）不匹配。
+  // 调用保留作为扩展预留——未来若 BootstrapResult 引入新字段可接入。
   const agentDefs: AgentDefinition[] = Object.values(agentsConfig.agents);
   void assembleAgents(agentDefs);
-
-  // 事件路由组装
   void assembleEventRouter(agentsConfig);
-
-  // 委员会组装
   void assembleCommittee(agentsConfig.eventRouting.committeeRules ?? []);
-
-  // 望远镜组装
   void assembleTelescope();
 
   // ── 第四阶段：返回结果（start 由调用方执行） ──
@@ -98,6 +95,7 @@ export function bootstrap(projectRoot: string): BootstrapResult {
     cognition: cognitionConfig,
     docs: docsConfig,
     roundtableTemplates: agentsConfig.roundtableTemplates ?? [],
+    tools: agentsConfig.tools,
     warnings,
   };
 

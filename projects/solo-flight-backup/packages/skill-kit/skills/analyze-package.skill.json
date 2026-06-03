@@ -1,0 +1,17 @@
+{
+  "id": "skill-analyze-package",
+  "name": "Package Analyzer",
+  "description": "Analyzes package dependencies and detects version drift",
+  "agentTypes": ["code", "architect"],
+  "triggerTags": ["analyze", "dependencies", "drift"],
+  "version": "1.0.0",
+  "author": "Cortex Team",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "packageName": { "type": "string" },
+      "deep": { "type": "boolean", "default": false }
+    }
+  },
+  "requiredContextFiles": ["package.json", "**/package.json"]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "skill-p26-targeted-python-fix-script-generator",
+  "agentType": "code",
+  "name": "P26: 单文件定位 Python 修复脚本生成模板",
+  "triggerTags": ["fix", "repair", "automation", "code_change"],
+  "trigger": "需要对一个源文件的特定代码块做精确替换修复时触发。适用场景：\n- 审查报告给出精确的旧代码/新代码对\n- 需要可复现、可验证的修复（而非手动编辑）\n- 同一模式在多个文件中出现需批量修复",
+  "steps": [
+    "用 read_file 读取目标源文件，确认上下文和修复目标",
+    "提取需替换的旧代码片段（old text）和新代码片段（new text），确保缩进和换行符完全匹配",
+    "计算 old text 在文件中的出现次数，预期应为 1（如果 >1 则需确认替换哪个匹配项）",
+    "生成 Python 修复脚本文件（fix_*.py），结构如下：\n  - 用 read_file 读取目标文件并用 path 变量声明路径\n  - 定义 old/new 字符串变量\n  - 用 content.count(old) 验证旧模式存在且次数正确\n  - 如 count === 0 → print('ERROR: pattern not found!') + sys.exit(1)\n  - content = content.replace(old, new, 1) 执行替换\n  - 用 write_file 写回\n  - 打印变更量：'OK: {original_len} -> {len(content)} bytes ({diff} added)'",
+    "运行修复脚本（python3 fix_*.py），确认输出 'OK' 和变更量",
+    "用 read_file 读取目标文件确认修复已写入",
+    "执行 pnpm build 或相关验证步骤确认编译通过"
+  ],
+  "expectedOutput": "修复脚本文件（fix_<id>.py）已生成并执行成功。目标文件变更确认 + 编译验证通过。",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

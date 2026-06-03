@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+ 
 
 /**
  * main.ts — Cortex CLI 统一入口
@@ -16,9 +17,18 @@
  * 旧 cli.ts 保留为 cortex doc convert 的后端。
  */
 
+// ── Node built-in ────────────────────────────────
+import { execSync } from "node:child_process";
+import * as nodeFs from "node:fs";
+import * as nodePath from "node:path";
+
+// ── Workspace packages ───────────────────────────
+import { DocRegistry, NodeFileSystemAdapter, Toolkit, SearchAggregator, McpSearchBackend, DdgSearchBackend, type McpServerConfig } from "@cortex/engine";
+import { LlmAdapter } from "@cortex/llm";
+
+// ── Local modules ────────────────────────────────
 import { CommandRegistry } from "./commands/index.js";
 import { createRunHandler } from "./commands/run.js";
-import { execSync } from "node:child_process";
 import { createAgentHandler } from "./commands/agent.js";
 import { createTaskHandler } from "./commands/task.js";
 import { createMemoryHandler } from "./commands/memory.js";
@@ -32,20 +42,35 @@ import { createRoundtableHandler } from "./commands/roundtable.js";
 import { createSetupHandler } from "./commands/setup.js";
 import { createInspectHandler } from "./commands/inspect.js";
 import { createConfirmHandler } from "./commands/confirm.js";
+import { createSkillHandler } from "./commands/skill.js";
 import { ConfigManager } from "./services/config-manager.js";
 import { EngineBridge } from "./services/engine-bridge.js";
-import { DocRegistry, NodeFileSystemAdapter, Toolkit, SearchAggregator, McpSearchBackend, DdgSearchBackend } from "@cortex/engine";
-import type { McpServerConfig } from "@cortex/engine";
-import { LlmAdapter } from "@cortex/llm";
 import { getFormatter, detectDefaultFormat } from "./formatters/index.js";
 import type { OutputFormat, CommandContext, CommandResult } from "./types.js";
-import * as nodeFs from "node:fs";
-import * as nodePath from "node:path";
+import {
+  FILE_DOTENV,
+  FILE_CORTEX_AGENTS_JSON,
+  ENV_CORTEX_API_AUDIT,
+  ENV_CORTEX_NO_SEARCH,
+  ENV_DEEPSEEK_BASE_URL,
+  ENV_DEEPSEEK_CHAT_MODEL,
+  ENV_DEEPSEEK_REASONER_MODEL,
+  ENV_DEEPSEEK_REASONING_EFFORT,
+  ENV_DEEPSEEK_API_KEY,
+  ENV_DEEPSEEK_CYRENE_API_KEY,
+  ENV_DEEPSEEK_CHAT_API_KEY,
+  ENV_DEEPSEEK_REASONER_API_KEY,
+  ENV_PM_MASTER_KEY,
+  ENV_VITEST,
+  DEFAULT_LLM_BASE_URL,
+  DEFAULT_LLM_CHAT_MODEL,
+  DEFAULT_LLM_REASONER_MODEL,
+} from "@cortex/config";
 
 // ── .env 加载 ────────────────────────────────────
 
 function loadEnv(projectRoot: string): void {
-  const envPath = nodePath.join(projectRoot, ".env");
+  const envPath = nodePath.join(projectRoot, FILE_DOTENV);
   if (!nodeFs.existsSync(envPath)) return;
   const content = nodeFs.readFileSync(envPath, "utf-8");
   for (const line of content.split("\n")) {
@@ -67,29 +92,101 @@ function loadEnv(projectRoot: string): void {
 
 loadEnv(process.cwd());
 
+// 启用 API 审计日志（环境变量 CORTEX_API_AUDIT=0 可关闭）
+if (process.env[ENV_CORTEX_API_AUDIT] !== "0") {
+  LlmAdapter.enableAudit();
+}
+
 // ── 全局配置与桥接 ──────────────────────────────────
 
 const configManager = new ConfigManager();
 const engineBridge = new EngineBridge(configManager);
 
 // ── LLM 配置（若 .env 中存在 API Key 则走配置驱动模式）──
+// Agent 配置独立化：3-Key 独立模式（昔涟 / Chat池 / Reasoner）
+// 密钥加载优先级：pm vault > DEEPSEEK_*_API_KEY > DEEPSEEK_API_KEY（兜底）
 
-if (process.env.DEEPSEEK_API_KEY) {
-  const llm = new LlmAdapter({
-    apiKey: process.env.DEEPSEEK_API_KEY,
-    baseUrl: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-    chatModel: process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat",
-    reasonerModel: process.env.DEEPSEEK_REASONER_MODEL || "deepseek-reasoner",
-    reasoningEffort: (process.env.DEEPSEEK_REASONING_EFFORT as "high" | "max") || undefined,
-  });
+// 共享的模型/URL 配置（Key 不同但模型和 endpoint 相同）
+const llmBaseUrl = process.env[ENV_DEEPSEEK_BASE_URL] || DEFAULT_LLM_BASE_URL;
+const llmChatModel = process.env[ENV_DEEPSEEK_CHAT_MODEL] || DEFAULT_LLM_CHAT_MODEL;
+const llmReasonerModel = process.env[ENV_DEEPSEEK_REASONER_MODEL] || DEFAULT_LLM_REASONER_MODEL;
+const llmReasoningEffort = (process.env[ENV_DEEPSEEK_REASONING_EFFORT] as "high" | "max") || undefined;
+
+const fallbackKey = process.env[ENV_DEEPSEEK_API_KEY];
+
+// 若设置了 PM_MASTER_KEY，尝试从 pm 加密 vault 加载密钥
+let pmStore: typeof import("@cortex/pm") | undefined;
+if (process.env[ENV_PM_MASTER_KEY]) {
+  try {
+    pmStore = await import("@cortex/pm");
+  } catch {
+    // @cortex/pm 不可用，静默回退到环境变量
+  }
+}
+
+/** 按优先级解析 API Key：vault → 专用环境变量 → DEEPSEEK_API_KEY 兜底 */
+function resolveKey(pmKey: string, envVarName: string): string | undefined {
+  if (pmStore) {
+    try {
+      const entry = pmStore.getEntry(pmKey);
+      if (entry) return entry.password;
+    } catch {
+      // vault 读取失败，继续回退
+    }
+  }
+  return process.env[envVarName] || fallbackKey || undefined;
+}
+
+const llms = new Map<string, LlmAdapter>();
+
+// 昔涟独立 Key
+const cyreneKey = resolveKey("DEEPSEEK_CYRENE", ENV_DEEPSEEK_CYRENE_API_KEY);
+if (cyreneKey) {
+  llms.set("DEEPSEEK_CYRENE", new LlmAdapter({
+    apiKey: cyreneKey,
+    baseUrl: llmBaseUrl,
+    chatModel: llmChatModel,
+    reasonerModel: llmReasonerModel,
+    reasoningEffort: llmReasoningEffort,
+    label: "cyrene",
+  }));
+}
+
+// Chat 池 Key
+const chatKey = resolveKey("DEEPSEEK_CHAT", ENV_DEEPSEEK_CHAT_API_KEY);
+if (chatKey) {
+  llms.set("DEEPSEEK_CHAT", new LlmAdapter({
+    apiKey: chatKey,
+    baseUrl: llmBaseUrl,
+    chatModel: llmChatModel,
+    reasonerModel: llmReasonerModel,
+    reasoningEffort: llmReasoningEffort,
+    label: "chat",
+  }));
+}
+
+// Reasoner Key
+const reasonerKey = resolveKey("DEEPSEEK_REASONER", ENV_DEEPSEEK_REASONER_API_KEY);
+if (reasonerKey) {
+  llms.set("DEEPSEEK_REASONER", new LlmAdapter({
+    apiKey: reasonerKey,
+    baseUrl: llmBaseUrl,
+    chatModel: llmChatModel,
+    reasonerModel: llmReasonerModel,
+    reasoningEffort: llmReasoningEffort,
+    label: "reasoner",
+  }));
+}
+
+if (llms.size > 0) {
   const toolkit = new Toolkit();
 
   // ── 搜索后端集成（从 cortex-agents.json 读取 MCP 后端配置）──
   // 设置 CORTEX_NO_SEARCH=1 可跳过搜索后端启动
-  if (process.env.CORTEX_NO_SEARCH === "1") {
+  if (process.env[ENV_CORTEX_NO_SEARCH] === "1") {
     // 搜索后端已通过环境变量禁用
   } else try {
-    const configPath = nodePath.join(process.cwd(), "cortex-agents.json");
+    const configPath = nodePath.join(process.cwd(), FILE_CORTEX_AGENTS_JSON);
     if (nodeFs.existsSync(configPath)) {
       const raw = JSON.parse(nodeFs.readFileSync(configPath, "utf-8"));
       const searchProviders = raw?.searchProviders;
@@ -109,9 +206,9 @@ if (process.env.DEEPSEEK_API_KEY) {
             try {
               await backend.start();
               started.push(backend);
-              if (!process.env.VITEST) console.log(`[bootstrap] 搜索后端已连接: ${cfg.id} (${backend.serverName ?? cfg.id})`);
+              if (!process.env[ENV_VITEST]) console.log(`[bootstrap] 搜索后端已连接: ${cfg.id} (${backend.serverName ?? cfg.id})`);
             } catch (e) {
-              if (!process.env.VITEST) console.warn(`[bootstrap] 搜索后端启动失败: ${cfg.id} — ${String(e)}`);
+              if (!process.env[ENV_VITEST]) console.warn(`[bootstrap] 搜索后端启动失败: ${cfg.id} — ${String(e)}`);
             }
           }
 
@@ -125,11 +222,11 @@ if (process.env.DEEPSEEK_API_KEY) {
       }
     }
   } catch (e) {
-    if (!process.env.VITEST) console.warn(`[bootstrap] 搜索后端配置加载失败: ${String(e)}`);
+    if (!process.env[ENV_VITEST]) console.warn(`[bootstrap] 搜索后端配置加载失败: ${String(e)}`);
   }
 
   engineBridge.setBootstrapConfig({
-    llm,
+    llms,
     toolkit,
     projectRoot: process.cwd(),
   });
@@ -202,6 +299,12 @@ registry.registerAll([
     handler: createConfirmHandler(engineBridge),
   },
   {
+    name: "skill",
+    alias: "sk",
+    description: "技能管理 — 注册、搜索、执行、安装技能",
+    handler: createSkillHandler(),
+  },
+  {
     name: "setup",
     alias: "su",
     description: "交互式配置界面 — 管理 cortex-agents.json / cortex-cognition.json / cortex-docs.json",
@@ -246,9 +349,9 @@ export async function main(): Promise<number> {
   // bare cortex → 直接进入 REPL 交互模式（默认 chat）
   if (argv.length === 0) {
     // 无 API Key 时先打一个轻量提示，不阻塞进入 REPL
-    if (!process.env.DEEPSEEK_API_KEY) {
-      console.log("💡 未检测到 DEEPSEEK_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
-      console.log("   在 .env 中配置 DEEPSEEK_API_KEY 后重启即可。");
+    if (!process.env[ENV_DEEPSEEK_API_KEY] && !process.env[ENV_DEEPSEEK_CYRENE_API_KEY] && !process.env[ENV_DEEPSEEK_CHAT_API_KEY] && !process.env[ENV_DEEPSEEK_REASONER_API_KEY]) {
+      console.log("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
+      console.log("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。");
       console.log("   command 模式无需 Key——输入 .mode command 切换。\n");
     }
     const replHandler = createReplHandler(registry, engineBridge);

@@ -1,7 +1,27 @@
 import type { AgentType, TaskNode, InvariantViolation, InvariantReporter } from "@cortex/shared";
 import { getAgentTags, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "./pipeline-observer.js";
-import { isTestEnv } from "../test-env.js";
+import type { IPipelineObserver } from "@cortex/shared";
+
+/**
+ * ITaskBoard —— TaskBoard 抽象接口。
+ *
+ * 解耦点：Scheduler 不再依赖具体 TaskBoard 类，而是通过此接口与任务板交互。
+ * 方便测试 mock 和未来扩展（如分布式任务板）。
+ *
+ * claim/release/complete 三方法构成 Scheduler 与 TaskBoard 之间的核心协议。
+ */
+export interface ITaskBoard {
+  addNode(node: TaskNode): void;
+  claim(nodeId: string, agentType: AgentType): TaskNode | null;
+  release(nodeId: string, agentType: AgentType): boolean;
+  complete(nodeId: string, agentType: AgentType, success: boolean, output?: string, error?: string): void;
+  failNode(nodeId: string): boolean;
+  getNode(nodeId: string): TaskNode | undefined;
+  getAllNodes(): TaskNode[];
+  getPendingNodes(): TaskNode[];
+  removeNode(nodeId: string): void;
+  removeSubtree(nodeId: string): void;
+}
 
 // InvariantViolation + InvariantReporter 已迁移至 @cortex/shared —— 从 shared import 即可
 // 迁移原因（艾尔海森 P1）：TaskBoard 和 AgentPool 共用同一套 invariant 上报签名，
@@ -37,10 +57,12 @@ import { isTestEnv } from "../test-env.js";
  *
  * @fix D6 — invariant 上报单通道收敛：_observer 实例优先于 onInvariant 静态字段，
  *   消除重复 emit 和维护负担。
+ * @fix N-07 — removeNode() 不再静默删除节点，而是 emit NodeRemoved 事件，
+ *   使下游 PipelineObserver 订阅者（ButlerAgent/Sentinel/MemoryStoreMonitor）可感知节点被移除。
  */
-export class TaskBoard {
+export class TaskBoard implements ITaskBoard {
   private nodes = new Map<string, TaskNode>();
-  private _observer?: PipelineObserver;
+  private _observer?: IPipelineObserver;
 
   /**
    * invariant 违规上报后端。
@@ -52,7 +74,7 @@ export class TaskBoard {
   static onInvariant: InvariantReporter | null = null;
 
   /** 注入 PipelineObserver（与 onInvariant 互补的双通道模式） */
-  setObserver(observer: PipelineObserver): void {
+  setObserver(observer: IPipelineObserver): void {
     this._observer = observer;
   }
 
@@ -147,6 +169,9 @@ export class TaskBoard {
    * Agent 产出结果。
    * needsMultiPerspective 节点：等所有匹配 Agent 类型全部产出后自动置为 done。
    * 普通节点：直接置 done/failed。
+   *
+   * @fix M-01 — 去重判断放在状态转移之后：多视角等齐后允许后续 Agent 结果写入，
+   *   防止等齐后抵达的失败结果被静默丢弃。done 态下追加的结果不改变终态。
    */
   complete(
     nodeId: string,
@@ -156,11 +181,29 @@ export class TaskBoard {
     error?: string,
   ): void {
     const node = this.nodes.get(nodeId);
-    if (!node || !node.claimedBy.includes(agentType)) return;
+    if (!node?.claimedBy.includes(agentType)) return;
 
-    // 去重：同 agentType 已在 results 中则跳过，防并发/重试导致的重复落盘
-    if (node.results.some((r) => r.agentType === agentType)) return;
+    // @fix M-01: 对于 multi-perspective 节点，去重检查放在状态转移之后。
+    // 先将结果写入，确保等齐判断使用完整 results 集；等齐后如有重复再跳过。
+    // 普通节点沿用原逻辑：去重在前，避免重复落盘。
+    if (!node.needsMultiPerspective) {
+      // 普通节点：去重在前
+      if (node.results.some((r) => r.agentType === agentType)) return;
 
+      node.results.push({
+        nodeId,
+        agentType,
+        success,
+        output,
+        error,
+      });
+
+      node.status = success ? "done" : "failed";
+      return;
+    }
+
+    // ── Multi-perspective 节点：先写入结果 ──
+    // 去重检查放在状态等齐判断之后
     node.results.push({
       nodeId,
       agentType,
@@ -176,15 +219,24 @@ export class TaskBoard {
       this._reportInvariant("TaskBoard.complete", msg, { nodeId, orphanTypes, claimedBy: node.claimedBy });
     }
 
-    if (node.needsMultiPerspective) {
-      // 用 claimedBy 而非 _expectedAgentTypes：只有实际认领的 Agent 才参与等齐判断
-      const claimed = new Set(node.claimedBy);
-      const done = new Set(node.results.map((r) => r.agentType));
-      if (claimed.size === done.size && [...claimed].every((t) => done.has(t))) {
-        node.status = "done";
+    // 用 claimedBy 而非 _expectedAgentTypes：只有实际认领的 Agent 才参与等齐判断
+    const claimed = new Set(node.claimedBy);
+    const done = new Set(node.results.map((r) => r.agentType));
+    if (claimed.size === done.size && [...claimed].every((t) => done.has(t))) {
+      node.status = "done";
+    }
+
+    // 等齐判断之后执行去重：移除重复结果（如有重入导致）
+    // 保留最后一个结果（通常信息更完整）
+    const seen = new Set<AgentType>();
+    for (let i = node.results.length - 1; i >= 0; i--) {
+      const at = node.results[i].agentType;
+      if (at === undefined) continue;
+      if (seen.has(at)) {
+        node.results.splice(i, 1);
+      } else {
+        seen.add(at);
       }
-    } else {
-      node.status = success ? "done" : "failed";
     }
   }
 
@@ -203,7 +255,7 @@ export class TaskBoard {
   /** 多视角节点是否已等齐全部认领 Agent */
   allPerspectivesComplete(nodeId: string): boolean {
     const node = this.nodes.get(nodeId);
-    if (!node || !node.needsMultiPerspective) return false;
+    if (!node?.needsMultiPerspective) return false;
     const claimed = new Set(node.claimedBy);
     const done = new Set(node.results.map((r) => r.agentType));
     return claimed.size === done.size && [...claimed].every((t) => done.has(t));
@@ -225,9 +277,72 @@ export class TaskBoard {
     );
   }
 
-  /** 移除单个节点 */
+  /**
+   * 移除单个节点。
+   * @fix N-07 — emit NodeRemoved 事件使下游 PipelineObserver 订阅者可感知移除。
+   */
   removeNode(nodeId: string): void {
     this.nodes.delete(nodeId);
+    if (this._observer) {
+      this._observer.emit({
+        type: PipelineEventType.NodeRemoved,
+        priority: PipelinePriority.NORMAL,
+        payload: { nodeId },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
+    }
+  }
+
+  /**
+   * 移除子树（节点及其所有子孙）。
+   * 使用 BFS 遍历收集后代节点后统一删除。
+   * 异步可选——无 await 点，纯同步操作。
+   */
+  removeSubtree(nodeId: string): void {
+    const toRemove: string[] = [nodeId];
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      for (const [id, node] of this.nodes) {
+        if (node.parentId === currentId) {
+          toRemove.push(id);
+          queue.push(id);
+        }
+      }
+    }
+
+    // 统计被移除节点中各状态的分布（用于 invariant 上报）
+    const statusCounts = new Map<string, number>();
+    for (const id of toRemove) {
+      const node = this.nodes.get(id);
+      if (node) {
+        statusCounts.set(node.status, (statusCounts.get(node.status) ?? 0) + 1);
+      }
+    }
+
+    for (const id of toRemove) {
+      this.nodes.delete(id);
+      if (this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.NodeRemoved,
+          priority: PipelinePriority.NORMAL,
+          payload: { nodeId: id },
+          timestamp: Date.now(),
+          notificationType: "FYI",
+        });
+      }
+    }
+
+    const statusSummary = [...statusCounts.entries()]
+      .map(([s, c]) => `${s}:${c}`)
+      .join(", ");
+    const msg = `removeSubtree(root=${nodeId}): removed ${toRemove.length} nodes (${statusSummary})`;
+    this._reportInvariant("TaskBoard.removeSubtree", msg, {
+      rootNodeId: nodeId,
+      removedCount: toRemove.length,
+      statusCounts: Object.fromEntries(statusCounts),
+    });
   }
 
   /**
@@ -238,79 +353,59 @@ export class TaskBoard {
   cancel(nodeId: string): boolean {
     const node = this.nodes.get(nodeId);
     if (!node) return false;
+
     if (node.status === "pending" || node.status === "claimed") {
       this.nodes.delete(nodeId);
-      this._reportInvariant("TaskBoard.cancel", `已取消节点 ${nodeId}（原状态: ${node.status}）`);
+      if (this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.NodeRemoved,
+          priority: PipelinePriority.NORMAL,
+          payload: { nodeId },
+          timestamp: Date.now(),
+          notificationType: "FYI",
+        });
+      }
+      this._reportInvariant("TaskBoard.cancel", `节点 ${nodeId} 被取消移除，原状态 ${node.status}`, {
+        nodeId,
+        originalStatus: node.status,
+      });
       return true;
     }
-    const msg = `cancel: 拒绝取消终态节点 ${nodeId} (${node.status})——终态不可逆`;
-    this._reportInvariant("TaskBoard.cancel", msg, { nodeId, status: node.status });
+
+    this._reportInvariant("TaskBoard.cancel", `节点 ${nodeId} 状态 ${node.status} 不可取消`, {
+      nodeId,
+      status: node.status,
+    });
     return false;
   }
 
-  /** 获取某节点的所有后代（BFS） */
-  getDescendants(nodeId: string): string[] {
-    const result: string[] = [];
-    const queue = [nodeId];
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const [id, n] of this.nodes) {
-        if (n.parentId === current && !result.includes(id)) {
-          result.push(id);
-          queue.push(id);
-        }
-      }
-    }
-    return result;
-  }
-
   /**
-   * 移除节点及其整个下游子树。
-   * 仅移除 pending/claimed 状态的节点。done/failed 节点不可逆，保留但记录警告。
+   * 上报 invariant 违规。
+   * 优先级：实例 _observer > 静态 onInvariant > console.error
    */
-  removeSubtree(nodeId: string): void {
-    const descendants = this.getDescendants(nodeId);
-    // 先删后代再删自身
-    for (const id of descendants) {
-      const n = this.nodes.get(id);
-      if (!n) continue;
-      if (n.status === "pending" || n.status === "claimed") {
-        this.nodes.delete(id);
-      } else {
-        // 终态节点无法安全删除（可能仍有外部引用），标记为孤儿并上报
-        n.parentId = undefined; // 断开悬空引用
-        const msg = `removeSubtree: 终态节点 ${id} (${n.status}) 已解除父节点引用——成为孤儿`;
-        this._reportInvariant("TaskBoard.removeSubtree", msg, { nodeId: id, status: n.status, originalParentId: nodeId });
-      }
-    }
-    const root = this.nodes.get(nodeId);
-    if (!root) return;
-    if (root.status === "pending" || root.status === "claimed") {
-      this.nodes.delete(nodeId);
-    } else {
-      const msg = `removeSubtree: 跳过终态根节点 ${nodeId} (${root.status})——将成为孤儿`;
-      this._reportInvariant("TaskBoard.removeSubtree", msg, { nodeId, status: root.status });
-    }
-  }
+  private _reportInvariant(
+    source: string,
+    message: string,
+    details?: unknown,
+  ): void {
+    const violation: InvariantViolation = { source, message, details };
 
-  /**
-   * 统一 invariant 上报通道。
-   * 优先级：_observer > onInvariant > console.error
-   * 单通道收敛，消除双路径重复 emit 风险。
-   */
-  private _reportInvariant(source: string, message: string, details?: unknown): void {
     if (this._observer) {
       this._observer.emit({
         type: PipelineEventType.TaskBoardInvariantViolation,
         priority: PipelinePriority.CRITICAL,
-        payload: { source, detail: JSON.stringify({ message, ...(details as Record<string, unknown> ?? {}) }) },
+        payload: { source, detail: message },
         timestamp: Date.now(),
         notificationType: "WARNING",
       });
-    } else if (TaskBoard.onInvariant) {
-      TaskBoard.onInvariant({ source, message, details });
-    } else if (!isTestEnv()) {
-      console.error(`[invariant] ${source}: ${message}`);
+      return;
     }
+
+    if (TaskBoard.onInvariant) {
+      TaskBoard.onInvariant(violation);
+      return;
+    }
+
+    console.error(`[TaskBoard] ${source}: ${message}`, details ?? "");
   }
 }

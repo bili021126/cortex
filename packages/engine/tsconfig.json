@@ -1,13 +1,7 @@
 {
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src"
-  },
-  "include": ["src"],
+  "files": [],
   "references": [
-    { "path": "../shared" },
-    { "path": "../llm" },
-    { "path": "../factory" }
+    { "path": "./tsconfig.src.json" },
+    { "path": "./tsconfig.test.json" }
   ]
 }

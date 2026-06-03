@@ -66,8 +66,7 @@ async function main() {
   const adapter = new LlmAdapter({
     apiKey: API_KEY, baseUrl: BASE,
     chatModel: CHAT, reasonerModel: REASONER,
-    reasoningEffort: "high",
-  });
+    reasoningEffort: "high"});
   adapter.setCacheEnabled(true);
   adapter.setCacheMode("fingerprint");
 
@@ -89,9 +88,7 @@ async function main() {
     ...SHENSHI_CONFIG,
     personas: enhancedPersonas.map((p, i) => ({
       type: SHENSHI_CONFIG.personas[i]?.type ?? AgentType.Code,
-      ...p,
-    })),
-  };
+      ...p}))};
 
   await runMeeting(enhancedConfig, adapter, CHAT, DB_DIR, CONSENSUS_OUTPUT);
   console.log(`完成  |  缓存命中: ${adapter.cacheStats.hits}/${adapter.cacheStats.hits + adapter.cacheStats.misses} (${adapter.cacheStats.rate})  |  缓存条目: ${adapter.cacheSize}`);

@@ -12,6 +12,8 @@
  *   import { analyzeMonorepo, detectCycles } from '@cortex/tools';
  */
 
+// ── 配置漂移探测器 ──
+export { collectDependencies, detectDrift } from './configuration-drift.js';
 export type {
   DepEntry,
   DepGroup,
@@ -20,6 +22,18 @@ export type {
   JsonReport as DriftJsonReport,
 } from './configuration-drift.js';
 
+// ── Monorepo 分析器 ──
+export {
+  findProjectRoot,
+  collectPackages,
+  collectDeps,
+  buildEdges,
+  detectCycles,
+  detectDrifts,
+  generateDot,
+  generateMermaid,
+  computeLayers,
+} from './monorepo-analyzer.js';
 export type {
   PkgInfo,
   Edge,

@@ -1,6 +1,6 @@
 import type { ConfirmationRequest, ConfirmationResponse, ReversibilityLevel, PlatformBridge } from "@cortex/shared";
 import { ReversibilityLevel as RL } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_NODE_ENV } from "@cortex/config";
 
 /**
  * 默认确认超时（毫秒）。
@@ -13,6 +13,17 @@ import { DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
 const DEFAULT_TIMEOUT_MS: number = DEFAULT_ENGINE_CONFIG.toolTimeouts.confirmWait ?? 120_000;
 
 /**
+ * 引擎关闭导致的 dispose 特殊标记。
+ * 上游 await gate.waitFor(id) 可通过 reject 区分"用户拒绝"和"引擎关闭"。
+ */
+class ConfirmGateDisposedError extends Error {
+  constructor(requestId: string) {
+    super(`ConfirmGate 已关闭，请求 ${requestId} 被终止`);
+    this.name = "ConfirmGateDisposedError";
+  }
+}
+
+/**
  * ConfirmGate —— 确认门
  * 基于可逆性等级拦截工具调用。L2/L3 永远确认，L1 视信任放行。
  * 用户交互通道由 PlatformBridge 提供（CLIAdapter / ElectronAdapter）。
@@ -20,10 +31,12 @@ const DEFAULT_TIMEOUT_MS: number = DEFAULT_ENGINE_CONFIG.toolTimeouts.confirmWai
  * @fix M1 — handleTimeout L2/L3 也会回收 pending 条目，防止内存泄漏。
  * @fix P2 — 超时默认值可配置：构造函数传入 timeoutMs，或通过
  *           环境变量 CONFIRM_GATE_TIMEOUT_MS 覆盖（优先级：构造参数 > 环境变量 > 代码默认值）。
+ * @fix M-04 — dispose() 改用 reject，上游可区分"用户拒绝了"和"引擎关闭了"
  */
 export class ConfirmGate {
   private pending = new Map<string, ConfirmationRequest>();
   private resolvers = new Map<string, (approved: boolean) => void>();
+  private rejecters = new Map<string, (reason: Error) => void>();
   private bridge?: PlatformBridge;
   private _bypass = false;
   private defaultTimeoutMs: number;
@@ -35,8 +48,8 @@ export class ConfirmGate {
   constructor(timeoutMs?: number) {
     if (timeoutMs !== undefined) {
       this.defaultTimeoutMs = timeoutMs;
-    } else if (typeof process !== "undefined" && process.env?.CONFIRM_GATE_TIMEOUT_MS) {
-      const parsed = Number(process.env.CONFIRM_GATE_TIMEOUT_MS);
+    } else if (typeof process !== "undefined" && process.env?.[ENV_CONFIRM_GATE_TIMEOUT_MS]) {
+      const parsed = Number(process.env[ENV_CONFIRM_GATE_TIMEOUT_MS]);
       this.defaultTimeoutMs = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_TIMEOUT_MS;
     } else {
       this.defaultTimeoutMs = DEFAULT_TIMEOUT_MS;
@@ -45,7 +58,7 @@ export class ConfirmGate {
 
   /** 测试模式：跳过所有确认，直接放行。生产过程调用将抛错。 */
   bypassAll(): void {
-    if (process.env.NODE_ENV === "production") {
+    if (process.env[ENV_NODE_ENV] === "production") {
       throw new Error("ConfirmGate.bypassAll() called in production — forbidden. Use setBridge() for real user interaction.");
     }
     this._bypass = true;
@@ -89,14 +102,18 @@ export class ConfirmGate {
     // 有 bridge 时走真实用户交互
     if (this.bridge) {
       const req = this.pending.get(requestId)!;
-      const response = await this.bridge.confirm(req);
-      this.pending.delete(requestId);
-      return response.approved;
+      try {
+        const response = await this.bridge.confirm(req);
+        return response.approved;
+      } finally {
+        this.pending.delete(requestId);
+      }
     }
 
-    // 无 bridge 时挂起 Promise，等待 resolve() 或超时
-    return new Promise<boolean>((resolve) => {
+    // 无 bridge 时挂起 Promise，等待 resolve()/reject() 或超时
+    return await new Promise<boolean>((resolve, reject) => {
       this.resolvers.set(requestId, resolve);
+      this.rejecters.set(requestId, reject);
       setTimeout(() => {
         this.handleTimeout(requestId, this.pending.get(requestId)?.level ?? RL.L2);
       }, effectiveTimeout);
@@ -115,6 +132,7 @@ export class ConfirmGate {
     const resolver = this.resolvers.get(response.requestId);
     if (resolver) {
       this.resolvers.delete(response.requestId);
+      this.rejecters.delete(response.requestId);
       resolver(response.approved);
     }
     return response.approved;
@@ -126,7 +144,7 @@ export class ConfirmGate {
    * 超时处理——对所有等级均清理 pending + resolvers。
    * @fix M1 — L2/L3 也会回收 pending 条目，防止内存泄漏。
    */
-  handleTimeout(requestId: string, level: ReversibilityLevel): boolean {
+  handleTimeout(requestId: string, _level: ReversibilityLevel): boolean {
     if (!this.pending.has(requestId)) return false;
     // M1: 所有等级统一清理 pending
     this.pending.delete(requestId);
@@ -134,6 +152,7 @@ export class ConfirmGate {
     const resolver = this.resolvers.get(requestId);
     if (resolver) {
       this.resolvers.delete(requestId);
+      this.rejecters.delete(requestId);
       resolver(false);
     }
     return false;
@@ -149,13 +168,15 @@ export class ConfirmGate {
   /**
    * 释放所有待处理请求和 resolver，防止内存泄漏。
    * @fix P1-5 — 引擎关闭时确保所有待处理的 Promise 被 reject，避免永久悬挂
+   * @fix M-04 — 改用 reject(ConfirmGateDisposedError)，上游可区分"用户拒绝了"和"引擎关闭了"
    */
   dispose(): void {
-    for (const [id, resolve] of this.resolvers) {
+    for (const [id, reject] of this.rejecters) {
       this.pending.delete(id);
-      resolve(false);
+      reject(new ConfirmGateDisposedError(id));
     }
     this.resolvers.clear();
+    this.rejecters.clear();
     this.pending.clear();
   }
 
@@ -165,10 +186,29 @@ export class ConfirmGate {
    * 批量确认一组节点（简化接口）。
    * bypass 或 无 bridge 时默认放行。
    */
-  async confirm(_nodes: { id: string; payload: string }[]): Promise<boolean> {
+  async confirm(nodes: { id: string; payload: string }[]): Promise<boolean> {
     if (this._bypass) return true;
     if (!this.bridge) return true; // 无交互通道时默认放行
-    // TODO: 有 bridge 时展示 pending nodes 给用户确认
+
+    // 有 bridge 时逐节点展示给用户确认
+    for (const node of nodes) {
+      const req: ConfirmationRequest = {
+        id: node.id,
+        level: RL.L2,
+        toolName: "task_confirm",
+        summary: node.payload,
+        detail: `节点 ${node.id}: ${node.payload}`,
+      };
+      try {
+        const response = await this.bridge.confirm(req);
+        if (!response.approved) {
+          return false; // 任一节点被拒绝则整体拒绝
+        }
+      } catch {
+        // bridge 异常时降级放行（先做后审原则）
+        return true;
+      }
+    }
     return true;
   }
 }

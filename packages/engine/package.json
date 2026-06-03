@@ -12,14 +12,17 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.src.json",
+    "dev": "tsc -p tsconfig.src.json --watch",
+    "typecheck": "tsc -p tsconfig.src.json --noEmit",
     "lint": "eslint src/",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "e2e:skill": "tsc --outDir dist/e2e --rootDir . --module nodenext --moduleResolution nodenext --target ES2022 --esModuleInterop --skipLibCheck tests/manual/e2e/skill-fix-e2e.ts ; node dist/e2e/tests/manual/e2e/skill-fix-e2e.js"
   },
   "dependencies": {
+    "@cortex/config": "workspace:*",
     "@cortex/factory": "workspace:*",
     "@cortex/llm": "workspace:*",
     "@cortex/shared": "workspace:*",
@@ -35,6 +38,7 @@
     "tree-sitter": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "@vitest/coverage-v8": "^2.1.0"
   }
 }

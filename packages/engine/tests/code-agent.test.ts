@@ -9,8 +9,7 @@ function mockLlamaAdapter() {
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
 
   let callCount = 0;
   adapter.injectMock(async () => {
@@ -18,23 +17,20 @@ function mockLlamaAdapter() {
     if (callCount === 1) {
       return {
         content: "Let me read the target file first.",
-        toolCalls: [
+        tool_calls: [
           { id: "c1", name: "read_file", arguments: { file_path: "/proj/src/app.ts" } },
-        ],
-      };
+        ]};
     }
     if (callCount === 2) {
       return {
         content: "Now I will apply the fix.",
-        toolCalls: [
+        tool_calls: [
           { id: "c2", name: "write_file", arguments: { file_path: "/proj/src/app.ts", content: "fixed" } },
-        ],
-      };
+        ]};
     }
     return {
       content: "任务完成：已修改 /proj/src/app.ts，添加了缺失的 import 语句。",
-      toolCalls: [],
-    };
+      toolCalls: []};
   });
 
   return adapter;
@@ -48,7 +44,7 @@ describe("CodeAgent", () => {
   beforeAll(async () => {
     adapter = mockLlamaAdapter();
     toolkit = new Toolkit();
-    agent = createAgent(codeAgentConfig(), adapter, toolkit);
+    agent = createAgent(codeAgentConfig("test"), adapter, toolkit);
     await agent.wakeup();
   });
 
@@ -63,8 +59,7 @@ describe("CodeAgent", () => {
         claimedBy: [AgentType.Code],
         payload: "修复 /proj/src/app.ts 中缺失的 import 语句",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
 
@@ -79,14 +74,12 @@ describe("CodeAgent", () => {
       apiKey: "mock",
       baseUrl: "mock",
       chatModel: "mock-chat",
-      reasonerModel: "mock-reasoner",
-    });
+      reasonerModel: "mock-reasoner"});
     stuck.injectMock(async () => ({
       content: "I need to read more...",
-      toolCalls: [{ id: "loop", name: "read_file", arguments: { file_path: "/x" } }],
-    }));
+      tool_calls: [{ id: "loop", name: "read_file", arguments: { file_path: "/x" } }]}));
 
-    const stuckAgent = createAgent(codeAgentConfig(), stuck, new Toolkit());
+    const stuckAgent = createAgent(codeAgentConfig("test"), stuck, new Toolkit());
     await stuckAgent.wakeup();
     const result = await stuckAgent.execute(
       {
@@ -98,8 +91,7 @@ describe("CodeAgent", () => {
         claimedBy: [AgentType.Code],
         payload: "某个永远不会完成的任务",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
 
@@ -108,7 +100,7 @@ describe("CodeAgent", () => {
   });
 
   it("状态机：Created → Awake → Active → Awake", async () => {
-    const a = createAgent(codeAgentConfig(), adapter, new Toolkit());
+    const a = createAgent(codeAgentConfig("test"), adapter, new Toolkit());
     expect(a.status).toBe("created");
 
     await a.wakeup();
@@ -125,8 +117,7 @@ describe("CodeAgent", () => {
         claimedBy: [AgentType.Code],
         payload: "简单任务",
         results: [],
-        createdAt: Date.now(),
-      },
+        createdAt: Date.now()},
       "mock-chat",
     );
     expect(a.status).toBe("awake");

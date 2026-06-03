@@ -61,8 +61,7 @@ describe("ConfirmGate", () => {
       id: "p2-2",
       level: ReversibilityLevel.L2,
       toolName: "write",
-      summary: "写文件",
-    });
+      summary: "写文件"});
     // 显式传入 timeoutMs，应优先于构造函数的默认值
     const promise = gate.waitFor(reqId, 60_000);
     const approved = gate.resolve({ requestId: reqId, approved: true });
@@ -77,8 +76,7 @@ describe("ConfirmGate", () => {
       id: "p2-3",
       level: ReversibilityLevel.L2,
       toolName: "write",
-      summary: "写文件",
-    });
+      summary: "写文件"});
     // 不传 timeoutMs，应使用构造函数传入的 10_000
     const promise = gate.waitFor(reqId);
     const approved = gate.resolve({ requestId: reqId, approved: true });

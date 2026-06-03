@@ -27,8 +27,7 @@ import {
   updateProposalStatus,
   judgeProposals,
   applyApproved,
-  summarizeGovernance,
-} from "@cortex/engine";
+  summarizeGovernance} from "@cortex/engine";
 import type { AmendmentProposal, JudgmentResult } from "@cortex/shared";
 
 // ══════════════════════════════════════════════
@@ -163,8 +162,7 @@ function judgePhase(): { ok: boolean; judged: JudgedProposal[]; blocked: string[
       APPROVED: "✅ 通过",
       APPROVED_WITH_CAVEATS: "⚠️ 附条件通过",
       BLOCKED: "🚫 阻塞",
-      NEEDS_CLARIFICATION: "❓ 需要澄清",
-    }[judgment.verdict];
+      NEEDS_CLARIFICATION: "❓ 需要澄清"}[judgment.verdict];
 
     console.log(`\n  📌 裁决: ${verdictLabel}`);
 
@@ -259,48 +257,38 @@ function verifyPhase(): VerificationResult[] {
     {
       label: "标题包含七条不可变原则",
       check: () => constitution.includes("七条不可变原则"),
-      detail: "应包含 '## 二、七条不可变原则'",
-    },
+      detail: "应包含 '## 二、七条不可变原则'"},
     {
       label: "包含原则七",
-      check: () => constitution.includes("**原则七**"),
-    },
+      check: () => constitution.includes("**原则七**")},
     {
       label: "包含六项子约束",
-      check: () => constitution.includes("### 原则七 六项子约束"),
-    },
+      check: () => constitution.includes("### 原则七 六项子约束")},
     {
       label: "包含首个判例 NG-2026-0515",
-      check: () => constitution.includes("NG-2026-0515-Self-Modification"),
-    },
+      check: () => constitution.includes("NG-2026-0515-Self-Modification")},
     {
       label: "包含 §8.2 通知管线",
-      check: () => constitution.includes("### 8.2 通知管线"),
-    },
+      check: () => constitution.includes("### 8.2 通知管线")},
     {
       label: "包含三轨语义分层",
-      check: () => constitution.includes("FYI") && constitution.includes("WARNING") && constitution.includes("DECISION_REQUIRED"),
-    },
+      check: () => constitution.includes("FYI") && constitution.includes("WARNING") && constitution.includes("DECISION_REQUIRED")},
     {
       label: "版本号为 v2.5.12",
       check: () => {
         const m = constitution.match(/\*\*版本\*\*[：:]\s*(v[\d.]+)/);
         return m?.[1] === "v2.5.12";
       },
-      detail: `当前版本: ${constitution.match(/\*\*版本\*\*[：:]\s*(v[\d.]+)/)?.[1] ?? "unknown"}`,
-    },
+      detail: `当前版本: ${constitution.match(/\*\*版本\*\*[：:]\s*(v[\d.]+)/)?.[1] ?? "unknown"}`},
     {
       label: "变更历史包含 AM-2026-0515-001",
-      check: () => constitution.includes("AM-2026-0515-001"),
-    },
+      check: () => constitution.includes("AM-2026-0515-001")},
     {
       label: "变更历史包含 AM-2026-0515-002",
-      check: () => constitution.includes("AM-2026-0515-002"),
-    },
+      check: () => constitution.includes("AM-2026-0515-002")},
     {
       label: "宪法结构完整（以 # 开头）",
-      check: () => constitution.startsWith("# "),
-    },
+      check: () => constitution.startsWith("# ")},
   ];
 
   for (const { label, check, detail } of contentChecks) {
@@ -321,8 +309,7 @@ function verifyPhase(): VerificationResult[] {
       cwd: ROOT_DIR,
       encoding: "utf-8",
       timeout: 120_000,
-      env: { ...process.env, FORCE_COLOR: "0" },
-    });
+      env: { ...process.env, FORCE_COLOR: "0" }});
 
     const buildOk = buildOutput.includes("packages/engine build: Done") &&
                     buildOutput.includes("packages/cli build: Done");
@@ -347,8 +334,7 @@ function verifyPhase(): VerificationResult[] {
       encoding: "utf-8",
       timeout: 300_000,
       stdio: "pipe",
-      env: { ...process.env, FORCE_COLOR: "0" },
-    });
+      env: { ...process.env, FORCE_COLOR: "0" }});
     passed("pnpm test 全部通过");
     results.push({ label: "Test", passed: true });
   } catch (e: any) {

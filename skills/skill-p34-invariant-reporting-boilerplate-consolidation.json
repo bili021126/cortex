@@ -1,0 +1,22 @@
+{
+  "id": "skill-p34-invariant-reporting-boilerplate-consolidation",
+  "agentType": "refactor",
+  "name": "P34: Invariant 上报三重 fallback 样板代码收敛",
+  "triggerTags": ["refactor", "code", "observability", "consolidation"],
+  "trigger": "多处（≥3）出现相同的三重 fallback 上报样板代码：优先用 this._observer.emit()，回退到 onInvariant 回调，最后 console.warn。典型场景：agent-pool.ts 和 task-board.ts 中 6 处重复的 invariant 上报代码。",
+  "steps": [
+    "用 search_code 搜索 'invariant' 和相关联的 observer/onInvariant/console 三重 fallback 模式——查找多次出现的相同 if-else 链",
+    "统计重复次数：记录每个文件中出现该模式的位置和行号",
+    "在类中或所在模块中提取统一方法（如 _reportInvariant(code, context)），封装三重 fallback 逻辑：observer.emit() 优先 → onInvariant 回调 → console.warn 兜底",
+    "将所有重复调用点替换为统一方法调用",
+    "若跨文件重复（如 agent-pool.ts + task-board.ts），将统一方法提升为模块级函数或在共享工具模块中定义",
+    "运行 pnpm test（engine 包）验证：invariant 上报行为不变，无测试回归"
+  ],
+  "expectedOutput": "N 处重复的三重 fallback 样板代码收敛为 1 个统一方法。每处减少 ~7 行样板代码。上报优先级链不变。",
+  "outputFile": "packages/engine/src/{affected-file}.ts",
+  "status": "trial",
+  "adoptionCount": 6,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

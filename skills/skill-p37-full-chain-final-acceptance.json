@@ -1,0 +1,23 @@
+{
+  "id": "skill-p37-full-chain-final-acceptance",
+  "agentType": "ops",
+  "name": "P37: 全链路最终验收——构建+测试+CLI 冒烟测试",
+  "triggerTags": ["ops", "deploy", "test", "verification", "ci"],
+  "trigger": "构建/修复完成后需要进行全链路验收，验证 build 通过、测试全绿、CLI 正常响应。适用于每次 CI 门禁或修复后的最终确认。",
+  "steps": [
+    "运行 'pnpm build' 检查全部 9 包 tsc 编译是否通过（shared/llm/engine/testing/data/pm/parser/tools/cli）",
+    "运行 'pnpm test' 检查所有测试文件是否全绿——预期 43+ 测试文件，385+ 测试用例全部通过",
+    "运行 'node packages/cli/dist/cli.js --help' 验证主 CLI 帮助信息正常输出（含 13 子命令）",
+    "运行 'node packages/cli/dist/cli.js version' 验证版本号输出（预期 v0.2.0 Core-1）",
+    "运行 'node packages/cli/dist/cli.js pm --help' 验证 pm 子命令帮助正常",
+    "运行 'node packages/cli/dist/cli.js doc --help' 验证 doc 子命令帮助正常",
+    "汇总结果输出至 final-acceptance.json，格式：{ timestamp, summary: { build, test, cli: { '--help', version, 'pm--help', 'doc--help' } }, fixes: [{ what, why, how }] }"
+  ],
+  "expectedOutput": "final-acceptance.json 验收报告：build 全✅，test 全✅（N 文件/M 用例），CLI 冒烟全✅。附带本轮修复清单。",
+  "outputFile": "test-output/final-acceptance.json",
+  "status": "trial",
+  "adoptionCount": 1,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

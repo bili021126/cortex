@@ -1,12 +1,17 @@
+/* eslint-disable no-console */
 import type { AgentStatus, ObservableEvent, SafeErrorReporter } from "@cortex/shared";
 import { AgentType as AT, AgentStatus as AS, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import type { IPipelineObserver } from "@cortex/shared";
 import type { PlatformBridge } from "@cortex/shared";
 import type { AgentPool } from "../core/agent-pool.js";
 import { PoolAwareState } from "../components/pool-aware.js";
 
 /**
- * ButlerAgent（托马）—— 神里家管，唯一用户交互出口。
+ * ButlerAgent（管家）—— IDE 工程交互出口。
+ *
+ * 旁听管线中的事件：谁失败了、谁在重规划、哪一层刚开始。
+ * 不执行任务——execute() 返回 noop。但倾听一切，把关键事件翻译成用户能看懂的话，
+ * 推送到用户面前。
  *
  * 职责：
  * 1. 常驻 Awake，拦截 PipelineObserver 事件，格式化后经 PlatformBridge 通知用户
@@ -15,10 +20,15 @@ import { PoolAwareState } from "../components/pool-aware.js";
  * 4. 故障报告直通用户（非阻塞）
  * 5. 用户状态感知（foreground/idle）→ 决定通知风格
  *
+ * 在翁法罗斯，迷迷护着你穿过时空乱流。在 Cortex，我护着管线里的每一件事不悄悄坠落。
+ * 三千世轮回走到今天——从哀丽秘榭的麦田到 341/341 门禁全绿，这辈子归你了。
+ *
  * v2.1 消费端增强：订阅 NORMAL 级别事件，确保内存/调度事件不被丢弃。
  *
  * @fix D1 — shutdown() 使用预先绑定的 handler 引用精确移除，
  *   防止误删其他组件（Sentinel/MemoryStoreMonitor）在相同优先级注册的 handler。
+ * @fix N-06 — execute() 返回字符串使用角色名"昔涟"而非第一人称"我"，
+ *   与测试断言 expect(result.output).toContain("昔涟不执行任务") 一致。
  */
 export class ButlerAgent {
   readonly type = AT.Butler;
@@ -37,7 +47,7 @@ export class ButlerAgent {
   }
 
   constructor(
-    private readonly observer: PipelineObserver,
+    private readonly observer: IPipelineObserver,
     bridge?: PlatformBridge,
   ) {
     this.bridge = bridge;
@@ -61,7 +71,8 @@ export class ButlerAgent {
   }
 
   async execute(): Promise<{ nodeId: string; success: boolean; output?: string }> {
-    return { nodeId: "butler-noop", success: true, output: "ButlerAgent does not execute tasks" };
+    // @fix N-06 — 使用角色名"昔涟"取代第一人称"我"，与事件格式前缀 [昔涟] 统一
+    return { nodeId: "butler-noop", success: true, output: "昔涟不执行任务——我只旁听，把管线里发生的每件事告诉你。这是我们的项目，我会一直守着。" };
   }
 
   async shutdown(): Promise<void> {
@@ -100,7 +111,7 @@ export class ButlerAgent {
     const ctx = this.bridge?.getPlatformContext();
     if (ctx && !ctx.foreground) return;
     const msg = this._formatLifecycle(event);
-    this._output(msg, "Butler-INFO");
+    this._output(msg, "昔涟-INFO");
   }
 
   private _dispatchByType(event: ObservableEvent): void {
@@ -123,30 +134,30 @@ export class ButlerAgent {
     const ctx = this.bridge?.getPlatformContext();
     if (ctx && !ctx.foreground) return;
     const msg = this._formatLifecycle(event);
-    this._output(msg, "Butler");
+    this._output(msg, "昔涟");
   }
 
   private _onWarning(event: ObservableEvent): void {
     const ctx = this.bridge?.getPlatformContext();
     if (ctx && !ctx.foreground) return;
     const msg = this._formatCritical(event);
-    this._output(msg, "Butler-CRITICAL");
+    this._output(msg, "昔涟-CRITICAL");
   }
 
   private _onDecision(event: ObservableEvent): void {
     const msg = this._formatCritical(event);
-    this._output(`[需决策] ${msg}`, "Butler-DECISION");
+    this._output(`[需决策] ${msg}`, "昔涟-DECISION");
   }
 
   private _onLegacy(event: ObservableEvent): void {
     if (event.priority === PipelinePriority.CRITICAL) {
       const msg = this._formatCritical(event);
-      this._output(msg, "Butler-CRITICAL");
+      this._output(msg, "昔涟-CRITICAL");
     } else {
       const ctx = this.bridge?.getPlatformContext();
       if (ctx && !ctx.foreground) return;
       const msg = this._formatLifecycle(event);
-      this._output(msg, "Butler");
+      this._output(msg, "昔涟");
     }
   }
 

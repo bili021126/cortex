@@ -1,12 +1,13 @@
-import type { TaskNode, NodeResult, AgentType, MemoryQuery, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
-import { Agent, AgentStatus as AS, MemoryType } from "@cortex/shared";
+import type { TaskNode, NodeResult, AgentType, MemoryQuery, SafeErrorReporter, MemoryEntry, ReadMode } from "@cortex/shared";
+import { Agent, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "./platform/toolkit.js";
 import type { MemoryStore } from "./memory/memory-store.js";
 import type { AgentPool } from "./core/agent-pool.js";
-import { executeWithMemoryPipeline } from "./memory/pipeline.js";
+import { executeWithMemoryPipeline, resolvePipeline } from "./memory/pipeline.js";
 import { PoolAwareState } from "./components/pool-aware.js";
-import { DEFAULT_ENGINE_CONFIG } from "./engine-config.js";
+import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
+import type { IStep } from "./core/pipeline-runner.js";
 
 /**
  * BaseAgent —— 所有 Agent 的抽象基类。
@@ -35,7 +36,7 @@ export abstract class BaseAgent implements Agent {
   protected _safeReporter: SafeErrorReporter | null = null;
 
   /** P0-六层防御：读路径 Intent 过滤回调（由 bootstrap 层注入 ConsistencyLayer.filterRead） */
-  protected _filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[];
+  protected _filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[];
 
   constructor(
     protected readonly llm: LlmAdapter,
@@ -50,7 +51,7 @@ export abstract class BaseAgent implements Agent {
   }
 
   /** 注入读路径 Intent 过滤回调（P0-六层防御） */
-  setFilterRead(fn: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[]): void {
+  setFilterRead(fn: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[]): void {
     this._filterRead = fn;
   }
 
@@ -84,6 +85,7 @@ export abstract class BaseAgent implements Agent {
     this._setStatus(AS.Active);
     try {
       const enrichedNode = await this.preExecuteHook(node);
+      const steps = this._selectPipeline(enrichedNode);
       const result = await executeWithMemoryPipeline(
         {
           agentType: this.type,
@@ -91,6 +93,7 @@ export abstract class BaseAgent implements Agent {
           toolkit: this.toolkit,
           systemPrompt: this.systemPrompt,
           maxLoops: this.maxLoops,
+          reactLoopTimeoutMs: DEFAULT_ENGINE_CONFIG.reactLoopTimeoutMs,
           memory: this.memory,
         },
         enrichedNode,
@@ -98,6 +101,7 @@ export abstract class BaseAgent implements Agent {
         this.memory ? (n) => this.getMemoryQuery(n) : undefined,
         this._safeReporter ?? undefined,
         this._filterRead,
+        steps,
       );
       return result;
     } finally {
@@ -110,7 +114,20 @@ export abstract class BaseAgent implements Agent {
     this._setStatus(AS.Destroyed);
   }
 
-  // ── 记忆检索策略模板方法 ──────────────────────
+  // ── 管道策略选择 ──────────────────────
+
+  /**
+   * 根据 TaskNode.preferredStrategy 解析对应的 Step 管道。
+   * 子类可覆写此方法定制策略选择逻辑。
+   *
+   * - "react"   → 默认 [MemoryRetrieval, ReActLoop, MemoryWrite]
+   * - "direct"  → [DirectStep, MemoryWrite]  跳过记忆检索和 ReAct
+   * - undefined  → 回退默认
+   * - "decompose" / "jury" → 未来扩展
+   */
+  protected _selectPipeline(node: TaskNode): IStep[] | undefined {
+    return resolvePipeline(node.preferredStrategy);
+  }
 
   /**
    * 记忆检索策略模板方法。
@@ -120,7 +137,8 @@ export abstract class BaseAgent implements Agent {
    * - DocGovernAgent: 优先 DEPENDS_ON + 含 Archived 态（审计追溯）
    * - AnalysisAgent: 优先 DERIVED_FROM（知识谱系）
    */
-  protected getMemoryQuery(node: TaskNode): MemoryQuery {
+  // 改为 public 以满足 Agent 接口契约（MemoryAware.getMemoryQuery 为 public）
+  getMemoryQuery(node: TaskNode): MemoryQuery {
     const payload = node.payload;
     const keywords: string[] = [];
 
@@ -136,7 +154,7 @@ export abstract class BaseAgent implements Agent {
 
     return {
       keywords,
-      memoryTypes: [MemoryType.Episodic],
+      kind: "TaskLog" as const,
       limit: 5,
     };
   }

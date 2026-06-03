@@ -125,6 +125,12 @@ function saveJson(filePath: string, data: unknown): boolean {
 // 委托执行（调用 cortex CLI）
 // ═══════════════════════════════════════════════════════════
 
+/** cortex CLI 编译入口（优先） */
+const CORTEX_MAIN_JS = path.join(ROOT, "packages", "cli", "dist", "main.js");
+
+/** 兜底：使用 pnpm exec cortex（需要 pnpm 可用） */
+const CORTEX_FALLBACK = ["pnpm", "exec", "cortex"];
+
 function delegate(rl: readline.Interface | null, cmd: string, ...args: string[]): Promise<void> {
   return new Promise((resolve) => {
     clear();
@@ -134,19 +140,28 @@ function delegate(rl: readline.Interface | null, cmd: string, ...args: string[])
     // 暂停 TUI readline，避免与子进程争抢 stdin
     rl?.pause();
 
-    // 拼接完整命令字符串传给 shell，避免 DEP0190 警告
-    const fullCmd = ["cortex", cmd, ...args].join(" ");
-    const child = spawn(fullCmd, [], {
+    // 优先直调编译产物，免全局安装
+    let spawnCmd: string;
+    let spawnArgs: string[] = [];
+    if (fs.existsSync(CORTEX_MAIN_JS)) {
+      spawnCmd = "node";
+      spawnArgs = [CORTEX_MAIN_JS, cmd, ...args];
+    } else {
+      // 回退：pnpm exec cortex
+      spawnCmd = CORTEX_FALLBACK[0];
+      spawnArgs = [...CORTEX_FALLBACK.slice(1), cmd, ...args];
+    }
+
+    const child = spawn(spawnCmd, spawnArgs, {
       cwd: ROOT,
       stdio: "inherit",
-      shell: true,
     });
     child.on("close", () => {
       rl?.resume();
       resolve();
     });
     child.on("error", () => {
-      console.log(`  \u2717 未找到 cortex 命令。请先安装: pnpm build`);
+      console.log(`  \u2717 未找到 cortex 命令。请先执行: pnpm build`);
       rl?.resume();
       resolve();
     });

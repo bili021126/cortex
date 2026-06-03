@@ -6,6 +6,7 @@
  */
 
 import crypto from 'node:crypto';
+import os from 'node:os';
 
 const ALGORITHM = 'aes-256-gcm';
 const KEY_LENGTH = 32;
@@ -13,6 +14,23 @@ const IV_LENGTH = 16;
 const TAG_LENGTH = 16;
 const SALT_LENGTH = 16;
 const KEYDERIV_OPTIONS = { N: 2 ** 14, r: 8, p: 1 };
+
+/** 派生机器指纹密钥——绑定当前设备，换机即失效。 */
+function deriveMachineKey(): Buffer {
+  const fingerprint = [
+    os.hostname(),
+    os.userInfo().username,
+    os.homedir(),
+    os.platform(),
+    os.arch(),
+  ].join('::');
+  return crypto.scryptSync(
+    fingerprint,
+    'cortex-machine-seal-v1',
+    KEY_LENGTH,
+    { N: 2 ** 12, r: 8, p: 1 },
+  );
+}
 
 /** 从环境变量获取主密钥。未设置时抛出明确错误——拒绝使用硬编码默认值。 */
 function getMasterKey(): string {
@@ -28,7 +46,14 @@ function getMasterKey(): string {
 }
 
 function deriveKey(master: string, salt: Buffer): Buffer {
-  return crypto.scryptSync(master, salt, KEY_LENGTH, KEYDERIV_OPTIONS);
+  const machineKey = deriveMachineKey();
+  // 主密钥与机器指纹异或后派生——双因子绑定，换机即不可逆
+  const combined = Buffer.alloc(KEY_LENGTH);
+  const rawMaster = crypto.scryptSync(master, salt, KEY_LENGTH, KEYDERIV_OPTIONS);
+  for (let i = 0; i < KEY_LENGTH; i++) {
+    combined[i] = rawMaster[i] ^ machineKey[i];
+  }
+  return crypto.scryptSync(combined, salt, KEY_LENGTH, { N: 2 ** 10, r: 8, p: 1 });
 }
 
 /**

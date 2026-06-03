@@ -259,7 +259,8 @@ export class NotificationPipe {
       const windowMs = rule?.windowMs ?? 300_000;
       const firstTimestamp = events[0].timestamp;
 
-      if (now - firstTimestamp >= windowMs || events.length > 0) {
+      // @fix N-04 — 移除 `events.length > 0` 恒真条件，仅依赖时间窗口 flush
+      if (now - firstTimestamp >= windowMs) {
         this._flushMergeKey(key);
       }
     }
@@ -279,26 +280,13 @@ export class NotificationPipe {
     };
 
     // 归并后的事件走 primary 的通道
-    const route = this.routeTable.resolve(merged.primary.type);
     const mergedEvent: NotificationEvent = {
-      requestId: merged.primary.requestId,
-      type: `MERGED:${merged.primary.type}`,
-      channel: route.channel,
-      ackRequired: route.ackRequired,
-      summary: `[归并 ${events.length} 条] ${merged.primary.summary}`,
-      detail: events.map((e) => `- [${e.sourceAgent ?? "unknown"}] ${e.summary}`).join("\n"),
-      sourceAgent: events.map((e) => e.sourceAgent).filter(Boolean).join(","),
-      mergeKey: key,
+      ...merged.primary,
       timestamp: Date.now(),
+      summary: `[归并] ${merged.events.length} 条 ${merged.primary.type} 事件`,
     };
+    this._routeToChannel(mergedEvent);
 
     this.mergeBuffer.delete(key);
-    this._routeToChannel(mergedEvent);
-  }
-
-  /** 销毁管线，清理资源 */
-  destroy(): void {
-    this.mergeBuffer.clear();
-    this.ackHandlers.length = 0;
   }
 }

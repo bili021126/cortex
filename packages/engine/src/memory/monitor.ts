@@ -16,7 +16,7 @@
  */
 import type { ObservableEvent } from "@cortex/shared";
 import { PipelinePriority, PipelineEventType } from "@cortex/shared";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import type { IPipelineObserver } from "@cortex/shared";
 
 export class MemoryStoreMonitor {
   /** 最近 N 秒内事件计数（用于阈值检测） */
@@ -38,7 +38,7 @@ export class MemoryStoreMonitor {
   private readonly _boundHandlers: Map<PipelinePriority, (event: ObservableEvent) => void> = new Map();
 
   constructor(
-    private readonly observer: PipelineObserver,
+    private readonly observer: IPipelineObserver,
     options: {
       windowMs?: number;
       threshold?: number;
@@ -100,7 +100,8 @@ export class MemoryStoreMonitor {
       this._persistAlert(event);
     }
 
-    // 日志输出
+    // @justification 原则五豁免——_logToStdout 是 monitor 的调试渲染通道，
+    //   monitor 是 PipelineObserver 的消费者，其职责就是将管道事件转化为可读输出。
     if (this._logToStdout) {
       console.warn(
         `[MemoryStoreMonitor] ${event.type} severity=${event.priority} ` +
@@ -110,6 +111,8 @@ export class MemoryStoreMonitor {
   }
 
   private _alert(msg: string, event: ObservableEvent): void {
+    // @justification 原则五豁免——MemoryStoreMonitor 是 PipelineObserver 的终端消费者，
+    //   其职责就是将管道事件渲染为可读输出。console 是它的合法渲染通道，不是绕过管道。
     console.error(`[MemoryStoreMonitor] ALERT: ${msg}`);
     console.error(
       `  最新事件: type=${event.type} priority=${event.priority} ` +

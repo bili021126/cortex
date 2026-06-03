@@ -1,0 +1,33 @@
+{
+  "id": "AM-2026-0708-001",
+  "version": "v2.5.22",
+  "section": "§2 不可变原则表 + §1 Cortex 是什么 + §5 Agent池 + AM-2026-0612-001.json",
+  "category": "modify",
+  "supersedes": null,
+  "summary": "修复修宪管线合规性违规——修正 AM-2026-0612-001.json 状态字段从「proposed」为「pending_judgment」，回滚宪法 §1/§5 未经裁决的 Agent 数量修改（13→11），待完整裁决后统一应用",
+  "rationale": "凝光于 2026-07-08 对宪法 v2.5.21 进行全量治理审计时发现发现1（P1）：AM-2026-0612-001.json（玉衡修宪提案）的 status 字段值为「proposed」，该值不在 AmendmentStatus 类型定义中（合法值：pending_judgment | applied | superseded | rejected）。同时，宪法 v2.5.21 文件内容已被部分手动修改以匹配该提案的提议——§1 从「11 种 Agent」改为「13 种 Agent」，§5 标题从「11 种执行单元」改为「13 种执行单元」——但该提案未经过完整的修宪流程（开拓者未裁决），违反原则七子约束5的裁决流程。\n\n此为宪法治理的根本性合规违规——修宪管线是宪法自我演进的法定通道，任何绕过管线的直接修改都动摇宪法治理的根基。本提案做两件事：(1) 修正 AM-2026-0612-001.json 的状态字段为合法值「pending_judgment」；(2) 回滚宪法文件中未经裁决的修改内容，恢复至 v2.5.20 的原始状态。待开拓者裁决 AM-2026-0612-001 后，若批准则统一应用全部修复内容；若驳回则保持现状。\n\n判例引用：NG-2026-0708-Status-Illegal",
+  "before": "【AM-2026-0612-001.json】\n  \"status\": \"proposed\"\n\n【§1 Cortex 是什么】\nCortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢，以 13 种 Agent 为执行单元\n\n【§5 标题】\n## 五、Agent 池——13 种执行单元\n\n【§3 系统架构图】\n├── Agent池 (13 Agent)",
+  "after": "【AM-2026-0612-001.json】\n  \"status\": \"pending_judgment\"\n\n【§1 Cortex 是什么】\nCortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢，以 11 种 Agent 为执行单元\n\n【§5 标题】\n## 五、Agent 池——11 种执行单元\n\n【§3 系统架构图】\n├── Agent池 (11 Agent)\n\n【§15 修正记录表】\n新增本提案条目：\"v2.5.21 → v2.5.22（AM-2026-0708-001：修复修宪管线合规性违规——回滚未经裁决的宪法修改，修正 AM-2026-0612-001 状态字段；2026-07-08；来源：凝光——全量治理审计 2026-07-08）\"",
+  "impact": {
+    "principles": [
+      "原则七——系统自我修改受宪法约束（修宪管线合规性）"
+    ],
+    "crossReferences": [
+      "§1 Cortex 是什么",
+      "§3 系统架构",
+      "§5 Agent 池",
+      "§15 宪法修正记录",
+      "AM-2026-0612-001.json"
+    ],
+    "agents": [
+      "DocGovernAgent"
+    ],
+    "breaking": false,
+    "rationale": "本次修宪为合规性修复，不改变任何原则保护力度、不改变 Agent 权限职责、不改变系统架构。回滚操作为数据一致性修复，修正状态字段为治理数据纠正。breaking=false。"
+  },
+  "source": {
+    "agent": "DocGovernAgent",
+    "trace": "凝光全量治理审计 2026-07-08——发现1（P1）：AM-2026-0612-001 状态字段非法且宪法内容被部分预执行。详见审计报告 docs/auditing/2026-07-08-constitution-v2.5.21-full-audit.md。"
+  },
+  "status": "superseded"
+}

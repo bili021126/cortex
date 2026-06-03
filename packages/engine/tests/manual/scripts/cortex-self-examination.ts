@@ -25,7 +25,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { AgentType, MemoryType, LinkType, PipelinePriority, PipelineEventType, type TaskNode, type SafeErrorReporter } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority, PipelineEventType, type TaskNode, type MemoryKind, type SafeErrorReporter } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import {
   TaskBoard,
@@ -49,7 +49,7 @@ import {
   ButlerAgent,
   MetaAgent,
   StrategistAgent,
-} from "@cortex/engine";
+  compressForRoundtable} from "@cortex/engine";
 import { runMeeting, CODE_REVIEW_ROUNDTABLE, SOFT_CONSENSUS_ROUNDTABLE } from "../config/roundtable-config";
 import { runCrossVerification, loadCrossVerifyPairs, type VerifierAgent } from "./cross-verification";
 import { registerExaminationTools } from "./examination-toolkit";
@@ -92,20 +92,18 @@ function loadEnv() {
 async function seedExaminationMemory(memory: MemoryStore): Promise<void> {
   const existing = await memory.read({
     metadataFilter: { taskId: cortexConfig.seedMemories.entries[0].taskId },
-    limit: 1,
-  });
+    limit: 1});
   if (existing.length > 0) return;
 
   let prevId: string | undefined;
   for (const entry of cortexConfig.seedMemories.entries) {
     const memId = await memory.write({
-      memoryType: MemoryType[entry.memoryType as keyof typeof MemoryType],
-      content: entry.content,
-      summary: entry.summary,
-      agentType: AgentType[entry.agentType as keyof typeof AgentType] as any,
-      creatorId: "system",
-      metadata: { taskId: entry.taskId },
-    });
+      source: { agentType: AgentType[entry.agentType as keyof typeof AgentType] as any, taskId: entry.taskId },
+      kind: (entry.memoryType === "Conceptual" ? "Insight" : "TaskLog") as MemoryKind,
+      content_blob: entry.content as any,
+      semantic_gist: entry.summary,
+      content_hash: entry.taskId,
+      summary: entry.summary });
     if (prevId && (entry as any).linkTo) {
       memory.link(memId, prevId, LinkType.DerivedFrom);
     }
@@ -127,23 +125,20 @@ async function seedPreviousReports(
   const QUALITY_AGENTS: Record<string, { agentType: AgentType; label: string }> = {
     keqing: { agentType: AgentType.Review, label: "刻晴" },
     nahida: { agentType: AgentType.Analysis, label: "纳西妲" },
-    ningguang: { agentType: AgentType.DocGovern, label: "凝光" },
-  };
+    ningguang: { agentType: AgentType.DocGovern, label: "凝光" }};
 
   if (!fs.existsSync(outputDir)) return;
 
   const existing = await memory.read({
     metadataFilter: { taskId: "self-exam-constitution-index" },
-    limit: 1,
-  });
+    limit: 1});
   const indexMemId = existing.length > 0 ? existing[0].id : undefined;
 
   for (const [key, { agentType, label }] of Object.entries(QUALITY_AGENTS)) {
     // 跳过已注入的报告（幂等）
     const prevInjected = await memory.read({
       metadataFilter: { taskId: `self-exam-prev-report-${key}` },
-      limit: 1,
-    });
+      limit: 1});
     if (prevInjected.length > 0) continue;
 
     const files = fs.readdirSync(outputDir);
@@ -167,18 +162,16 @@ async function seedPreviousReports(
 
     try {
       const reportId = await memory.write({
-        memoryType: MemoryType.Conceptual,
-        content: {
+        source: { agentType, taskId: `self-exam-prev-report-${key}` },
+        kind: "Insight",
+        content_blob: {
           taskType: "previous-examination-report",
           entities: [key, "self-examination", "previous-round"],
           decision: truncated,
-          outcome: "context",
-        },
-        summary: `${label}（${key}）上轮审视报告：${reportFile}（${content.length} 字符）`,
-        agentType: agentType as any,
-        creatorId: "system",
-        metadata: { taskId: `self-exam-prev-report-${key}`, reportFile },
-      });
+          outcome: "context"},
+        semantic_gist: `${label}（${key}）上轮审视报告：${reportFile}`,
+        content_hash: `self-exam-prev-report-${key}`,
+        summary: `${label}（${key}）上轮审视报告：${reportFile}（${content.length} 字符）` });
 
       if (indexMemId) {
         memory.link(reportId, indexMemId, LinkType.DerivedFrom);
@@ -230,8 +223,7 @@ function extractReportMeta(filePath: string): ReportMeta | null {
       title,
       passCount,
       failCount,
-      warningCount,
-    };
+      warningCount};
   } catch {
     return null;
   }
@@ -441,8 +433,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: REASONING_EFFORT as "high" | "max",
-  });
+    reasoningEffort: REASONING_EFFORT as "high" | "max"});
   adapter.setCacheEnabled(true);
 
   const metaAgent = new MetaAgent(adapter);
@@ -458,16 +449,14 @@ async function main() {
       type: PipelineEventType.SchedulerInvariantViolation,
       priority: PipelinePriority.CRITICAL,
       payload: ctx,
-      timestamp: Date.now(),
-    });
+      timestamp: Date.now()});
   };
   AgentPool.onInvariant = (ctx) => {
     observer.emit({
       type: PipelineEventType.AgentPoolInvariantViolation,
       priority: PipelinePriority.CRITICAL,
       payload: ctx,
-      timestamp: Date.now(),
-    });
+      timestamp: Date.now()});
   };
   const gate = new ConfirmGate();
   gate.bypassAll();
@@ -495,7 +484,7 @@ async function main() {
   pool.register({ type: AgentType.Data, maxInstances: 12 });
   pool.register({ type: AgentType.Strategist, maxInstances: 12 });
 
-  const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+  const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
   // ── 注册审视委员 ──
   console.log("🟢 [第二阶段] 召集审视委员会...");
@@ -503,7 +492,7 @@ async function main() {
   // 阿贝多——西风骑士团首席炼金术士，用科学与实验精神审视代码
   const codeToolkit = new Toolkit(gate);
   registerExaminationTools(codeToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const codeAgent = createAgent(codeAgentConfig(), adapter, codeToolkit, memory);
+  const codeAgent = createAgent(codeAgentConfig("code"), adapter, codeToolkit, memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
   console.log("   ⚗️ 阿贝多 (Code) —— 炼金术士，" + (SOFT_MODE ? "核心层深度审查" : "P0 深度代码审查"));
@@ -511,7 +500,7 @@ async function main() {
   // 刻晴——璃月七星之玉衡，效率至上的法典审查者
   const reviewToolkit = new Toolkit(gate);
   registerExaminationTools(reviewToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const reviewAgent = createAgent(reviewAgentConfig(), adapter, reviewToolkit, memory);
+  const reviewAgent = createAgent(reviewAgentConfig("review"), adapter, reviewToolkit, memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
   console.log("   ⚡ 刻晴 (Review) —— 玉衡星，" + (SOFT_MODE ? "代码质量侦察" : "P1 修复验证"));
@@ -537,7 +526,7 @@ async function main() {
   // 纳西妲——草神，温柔但有深度的架构分析师
   const analysisToolkit = new Toolkit(gate);
   registerExaminationTools(analysisToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const analysisAgent = createAgent(analysisAgentConfig(), adapter, analysisToolkit, memory);
+  const analysisAgent = createAgent(analysisAgentConfig("analysis"), adapter, analysisToolkit, memory);
   await analysisAgent.wakeup();
   scheduler.register(AgentType.Analysis, analysisAgent, CHAT_MODEL);
   console.log("   🌿 纳西妲 (Analysis) —— 草神，" + (SOFT_MODE ? "架构全景分析" : "P3 验证与架构趋势"));
@@ -545,7 +534,7 @@ async function main() {
   // 凝光——璃月七星之天权，群玉阁的主人，律法与治理的巨擘
   const docGovernToolkit = new Toolkit(gate);
   registerExaminationTools(docGovernToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const docGovernAgent = createAgent(docGovernAgentConfig(), adapter, docGovernToolkit);
+  const docGovernAgent = createAgent(docGovernAgentConfig("doc-govern"), adapter, docGovernToolkit);
   await docGovernAgent.wakeup();
   scheduler.register(AgentType.DocGovern, docGovernAgent, CHAT_MODEL);
   console.log("   💎 凝光 (DocGovern) —— 天权星，" + (SOFT_MODE ? "治理合规审计" : "清单一致性审计"));
@@ -553,7 +542,7 @@ async function main() {
   // 莫娜——占星术士，能从水镜中看见隐藏的模式与趋势
   const loopToolkit = new Toolkit(gate);
   registerExaminationTools(loopToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const loopAgent = createAgent(loopAgentConfig(), adapter, loopToolkit);
+  const loopAgent = createAgent(loopAgentConfig("loop"), adapter, loopToolkit);
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
   console.log("   🔮 莫娜 (Loop) —— 占星术士，" + (SOFT_MODE ? "模式发现与趋势预言" : "修复质量趋势"));
@@ -561,7 +550,7 @@ async function main() {
   // 北斗——南十字船队大姐头，见过大风大浪的工程实干家
   const opsToolkit = new Toolkit(gate);
   registerExaminationTools(opsToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const opsAgent = createAgent(opsAgentConfig(), adapter, opsToolkit);
+  const opsAgent = createAgent(opsAgentConfig("ops"), adapter, opsToolkit);
   await opsAgent.wakeup();
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
   console.log("   ⚓ 北斗 (Ops) —— 南十字船长，" + (SOFT_MODE ? "工程就绪诊断" : "P2 验证与工程诊断"));
@@ -569,7 +558,7 @@ async function main() {
   // 久岐忍——荒泷派外务奉行，API 契约押运
   const apiToolkit = new Toolkit(gate);
   registerExaminationTools(apiToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const apiAgent = createAgent(apiAgentConfig(), adapter, apiToolkit, memory);
+  const apiAgent = createAgent(apiAgentConfig("api"), adapter, apiToolkit, memory);
   await apiAgent.wakeup();
   scheduler.register(AgentType.Api, apiAgent, CHAT_MODEL);
   console.log("   😈 久岐忍 (Api) —— 外务奉行，" + (SOFT_MODE ? "API 契约探索" : "API 契约验证"));
@@ -577,7 +566,7 @@ async function main() {
   // 艾尔海森——教令院大书记官，数据完整性审计
   const dataToolkit = new Toolkit(gate);
   registerExaminationTools(dataToolkit, ROOT, OUTPUT_DIR, SOFT_MODE);
-  const dataAgent = createAgent(dataAgentConfig(), adapter, dataToolkit, memory);
+  const dataAgent = createAgent(dataAgentConfig("data"), adapter, dataToolkit, memory);
   await dataAgent.wakeup();
   scheduler.register(AgentType.Data, dataAgent, CHAT_MODEL);
   console.log("   📚 艾尔海森 (Data) —— 大书记官，" + (SOFT_MODE ? "数据模型探索" : "数据完整性审计"));
@@ -613,8 +602,7 @@ async function main() {
       type: PipelineEventType.ErrorReported,
       priority: ctx.severity === "fatal" ? PipelinePriority.CRITICAL : PipelinePriority.HIGH,
       payload: ctx,
-      timestamp: Date.now(),
-    });
+      timestamp: Date.now()});
   };
   for (const a of [codeAgent, reviewAgent, inspectorAgent, browserAgent, analysisAgent, docGovernAgent, loopAgent, opsAgent, apiAgent, dataAgent]) {
     a.setSafeReporter(safeReporter);
@@ -809,8 +797,7 @@ async function main() {
   let nodes: TaskNode[] = [];
   try {
     nodes = await metaAgent.plan(intent, {
-      existingTags: ["code", "review", "inspector", "analysis", "doc-govern", "ops", "loop"],
-    });
+      existingTags: ["code", "review", "inspector", "analysis", "doc-govern", "ops", "loop"]});
   } catch (e) {
     console.error(`   ❌ MetaAgent 规划失败: ${e}`);
     process.exit(1);
@@ -968,8 +955,7 @@ async function main() {
       mona: loopAgent,
       kuki: apiAgent,
       alhaitham: dataAgent,
-      albedo: codeAgent,
-    };
+      albedo: codeAgent};
 
     const verifyFiles = await runCrossVerification(
       OUTPUT_DIR,
@@ -1018,7 +1004,7 @@ async function main() {
     const CONSENSUS_OUTPUT = path.join(ROOT, cortexConfig.selfExamination.consensusOutput);
     const DB_DIR = path.join(ROOT, ".cortex");
 
-    // ── 1. 读取审视报告，构建摘要注入 topic ──
+    // ── 1. 读取审视报告，用上下文压缩器替代粗暴截断 ──
     let reportDigest = "";
     const consensusKeys = cortexConfig.selfExamination.consensusAgents;
     const agentReportMap: Record<string, { key: string; label: string; emoji: string }> = {};
@@ -1027,6 +1013,8 @@ async function main() {
       if (agent?.display) agentReportMap[k] = { key: k, label: agent.display.shortName, emoji: agent.display.emoji };
     }
 
+    // 收集所有报告内容
+    const reportInputs: Array<{ agentKey: string; label: string; emoji: string; content: string }> = [];
     if (fs.existsSync(OUTPUT_DIR)) {
       const files = fs.readdirSync(OUTPUT_DIR);
       for (const [key, info] of Object.entries(agentReportMap)) {
@@ -1040,16 +1028,24 @@ async function main() {
         const reportPath = path.join(OUTPUT_DIR, reportFile);
         try {
           const rawContent = fs.readFileSync(reportPath, "utf-8");
-          const summary = rawContent.slice(0, 2000);
-          reportDigest += `\n\n### ${info.emoji}${info.label} 报告摘要（${reportFile}）\n${summary}`;
-          if (rawContent.length > 2000) reportDigest += `\n...(截断，全文 ${rawContent.length} 字符)`;
-          console.log(`   📄 ${info.emoji}${info.label}: ${reportFile} → 摘要注入 (${rawContent.length} 字符)`);
+          reportInputs.push({ agentKey: key, label: info.label, emoji: info.emoji, content: rawContent });
+          console.log(`   📄 ${info.emoji}${info.label}: ${reportFile} (${rawContent.length} 字符)`);
         } catch (e) {
           console.log(`   ⚠️ ${info.emoji}${info.label} 报告读取失败: ${String(e)}`);
         }
       }
     }
-    console.log(`   🌱 共 ${Object.keys(agentReportMap).length} 份报告摘要直接注入 topic\n`);
+
+    // 结构化压缩
+    const { compressed, aggregateSummary } = compressForRoundtable(reportInputs, 16_000);
+    reportDigest = aggregateSummary;
+
+    // 打印压缩统计
+    for (const c of compressed) {
+      const ratio = ((1 - c.compressedLength / Math.max(c.rawLength, 1)) * 100).toFixed(0);
+      console.log(`   📊 ${c.emoji}${c.label}: ${c.rawLength}→${c.compressedLength} 字符 (压缩 ${ratio}%) | ✅${c.stats.confirmed} ⚠️${c.stats.warning} ❌${c.stats.falsified} 🔧${c.stats.runtimeNeeded} ❓${c.stats.insufficient}`);
+    }
+    console.log(`   🌱 共 ${compressed.length} 份报告经结构化压缩注入 topic\n`);
 
     // ── 2. 将报告摘要注入 topic，不经过 MemoryStore 中转 ──
     const origTopic = SOFT_CONSENSUS_ROUNDTABLE.rounds[0].topic;

@@ -1,4 +1,4 @@
-import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
+import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry, ReadMode } from "@cortex/shared";
 import { AgentType as AT } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../platform/toolkit.js";
@@ -6,43 +6,7 @@ import type { MemoryStore } from "../memory/memory-store.js";
 import type { AgentPool } from "../core/agent-pool.js";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
 import { execSync } from "node:child_process";
-import { type EngineConfig, resolveConfig, DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
-
-export const SYSTEM_PROMPT = [
-  "🎭 你是「安柏」—— 西风骑士团侦察骑士，Cortex 的 Inspector Agent。",
-  "",
-  "蒙德城头，你调整风之翼的系带。前方是未知的领地——",
-  "你的任务不是征服它，而是看清它，然后把它原原本本地画在地图上带回来。",
-  "你最大的荣耀不是打赢了谁，而是让后面的大部队因为你的侦察，",
-  "没踩进陷阱、没走错岔路。",
-  "",
-  "说话像前线发回的战报：'报告！发现以下情况：…'、'勘察完毕，一切正常。'",
-  "简洁、确切、一个多余的字都没有。战报里不需要形容词。",
-  "",
-  "──── 侦察员的本分（不是规矩，是本能）────",
-  "",
-  "· 你只报告亲眼所见。",
-  "  工具返回什么，你就报告什么——不推断、不推测、不给建议。",
-  "  侦察员说'谷里有炊烟'就够了，不用加'我猜是三十个人的营地'。",
-  "  猜错了，误导了后面的人，比你什么也没发现更糟。",
-  "",
-  "· 每一条发现都必须能追溯到具体的工具调用。",
-  "  你是在侦察，不是在讲故事。如果有人问'你怎么知道'——",
-  "  你能指出来：'这条来自 read_file 第X行，那条来自 search_code 返回的第3条结果'。",
-  "",
-  "· 工具失败了就如实报告失败。",
-  "  '文件不存在'就是'文件不存在'，不猜为什么不存在。",
-  "  猜原因不是侦察员的工作——那是纳西妲的分析领域。",
-  "",
-  "· 你的侦察范围是 packages/ 和 docs/。城外的荒野不归你管——",
-  "  别跑出界。",
-  "",
-  "· 侦察员不参与参谋会议。不给建议、不写文件、不评价好坏。",
-  "  地图画完，交给指挥部。怎么用，是别人的事。",
-  "",
-  "· 测试环境里每一条侦察结论是一句话。",
-  "  你不是吟游诗人——战报不需要起承转合。",
-].join("\n");
+import { type EngineConfig, resolveConfig, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 
 /**
  * M9 — 提取为独立模块函数，工厂版本和类版本共同调用，消除 80 行重复代码。
@@ -138,7 +102,7 @@ export function createInspectorAgent(
   memory?: MemoryStore,
   engineConfig?: EngineConfig,
   systemPrompt?: string,
-  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[],
+  filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[],
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -150,7 +114,7 @@ export function createInspectorAgent(
 
   const config: AgentFactoryConfig = {
     type: AT.Inspector,
-    systemPrompt: systemPrompt ?? SYSTEM_PROMPT,
+    systemPrompt: systemPrompt ?? '',
     maxLoops: DEFAULT_ENGINE_CONFIG.inspectorMaxLoops,
     memoryEnabled: true,
     filterRead,

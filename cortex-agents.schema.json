@@ -1,0 +1,208 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cortex-agents.schema.json",
+  "title": "Cortex 声明式配置中枢",
+  "description": "Cortex 项目的唯一配置真相源。Agent 定义、工具元数据、引擎运行时参数、记忆算法常量——全部在此声明。引擎和CLI只读不写。人工编辑，Schema 校验。",
+  "type": "object",
+  "required": ["agents"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "关联的 JSON Schema 路径，VS Code 自动补全与校验。"
+    },
+
+    "agents": {
+      "type": "object",
+      "description": "Agent 定义集合。key 为 Agent 标识（如 albedo, keqing）。",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]*$": {
+          "type": "object",
+          "required": ["id", "type", "role", "model", "key"],
+          "properties": {
+            "id": { "type": "string", "description": "Agent 标识（如 albedo, keqing）" },
+            "type": {
+              "type": "string",
+              "enum": ["code", "review", "analysis", "ops", "loop", "doc-govern", "butler", "inspector", "browser", "fix", "api", "data", "strategist", "meta"],
+              "description": "Agent 类型"
+            },
+            "role": { "type": "string", "description": "角色名（如 '阿贝多 — 西风骑士团首席炼金术士'）" },
+            "systemPrompt": { "type": "string", "description": "系统提示词（内联，与 systemPromptFile 二选一）" },
+            "systemPromptFile": { "type": "string", "description": "系统提示词文件路径（相对项目根，与 systemPrompt 二选一）" },
+            "display": {
+              "type": "object",
+              "required": ["emoji", "shortName", "title"],
+              "properties": {
+                "emoji": { "type": "string", "description": "展示用 emoji" },
+                "shortName": { "type": "string", "description": "短名（中文名）" },
+                "title": { "type": "string", "description": "头衔" }
+              }
+            },
+            "roundtable": {
+              "type": "object",
+              "required": ["roundtableTitle"],
+              "properties": {
+                "personaPrompt": { "type": "string", "description": "圆桌会议 Persona 提示词（内联，与 personaPromptFile 二选一）" },
+                "personaPromptFile": { "type": "string", "description": "圆桌会议 Persona 提示词文件路径（相对项目根，与 personaPrompt 二选一）" },
+                "roundtableTitle": { "type": "string", "description": "圆桌会议角色标题" }
+              }
+            },
+            "produces": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "生产的事件类型列表"
+            },
+            "model": { "type": "string", "description": "使用的 LLM 模型名" },
+            "key": { "type": "string", "description": "API 密钥标识符。对应 env var {key}_API_KEY。同一厂商不同模型独立 Key 实现资源隔离。如 DEEPSEEK_CYRENE / DEEPSEEK_CHAT / DEEPSEEK_REASONER 各自独立计费。" },
+            "maxInstances": { "type": "integer", "minimum": 1, "maximum": 10, "default": 1, "description": "最大实例数" },
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "认领标签，用于 Scheduler 匹配分发"
+            },
+            "toolPermissions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "工具权限列表，用于 Toolkit 权限校验"
+            },
+            "memoryQueryStrategy": { "type": "string", "description": "记忆查询策略名" },
+            "planningPrompt": { "type": "string", "description": "规划系统提示词（内联，仅 meta agent 使用）" },
+            "planningPromptFile": { "type": "string", "description": "规划系统提示词文件路径（相对项目根，仅 meta agent 使用）" },
+            "replanPrompt": { "type": "string", "description": "重规划系统提示词（内联，仅 meta agent 使用）" },
+            "replanPromptFile": { "type": "string", "description": "重规划系统提示词文件路径（相对项目根，仅 meta agent 使用）" }
+          }
+        }
+      }
+    },
+
+    "tools": {
+      "type": "object",
+      "description": "工具元数据定义。key 为工具名。",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]*$": {
+          "type": "object",
+          "required": ["category", "description", "level", "parameters"],
+          "properties": {
+            "category": {
+              "type": "string",
+              "enum": ["Read", "Write", "Search", "Shell"],
+              "description": "工具分类"
+            },
+            "description": { "type": "string", "description": "工具描述" },
+            "level": {
+              "type": "string",
+              "enum": ["L0", "L1", "L2", "L3"],
+              "description": "可逆性级别。L0=可逆读取，L1=可逆轻写，L2=不可逆需确认，L3=不可逆写/删除"
+            },
+            "parameters": {
+              "type": "object",
+              "required": ["type", "properties", "required"],
+              "properties": {
+                "type": { "type": "string", "const": "object" },
+                "properties": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": ["type", "description"],
+                    "properties": {
+                      "type": { "type": "string", "enum": ["string", "number", "boolean"] },
+                      "description": { "type": "string" }
+                    }
+                  }
+                },
+                "required": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "engine": {
+      "type": "object",
+      "description": "引擎运行时配置。未提供的字段走代码层默认值。",
+      "properties": {
+        "defaultMaxLoops": { "type": "integer", "minimum": 1, "maximum": 256, "default": 64, "description": "Agent ReAct 循环上限" },
+        "inspectorMaxLoops": { "type": "integer", "minimum": 1, "maximum": 128, "default": 48, "description": "InspectorAgent ReAct 循环上限" },
+        "maxReplanPerNode": { "type": "integer", "minimum": 1, "maximum": 10, "default": 3, "description": "单节点最大重规划轮次" },
+        "maxTotalReplans": { "type": "integer", "minimum": 1, "maximum": 20, "default": 3, "description": "executeAll 全局最大重规划次数" },
+        "executeAllTimeoutMs": { "type": "integer", "minimum": 30000, "maximum": 1800000, "default": 600000, "description": "executeAll 全局超时 (ms)" },
+        "reactLoopTimeoutMs": { "type": "integer", "minimum": 10000, "maximum": 600000, "default": 300000, "description": "单 Agent ReAct 循环墙钟超时 (ms)" },
+        "toolTimeouts": {
+          "type": "object",
+          "description": "工具执行超时 (ms)",
+          "properties": {
+            "searchCode": { "type": "integer", "default": 15000 },
+            "runShell": { "type": "integer", "default": 60000 },
+            "confirmWait": { "type": "integer", "default": 300000 },
+            "webSearch": { "type": "integer", "default": 15000 },
+            "webSearchRetries": { "type": "integer", "default": 2 },
+            "webSearchCacheTTL": { "type": "integer", "default": 300000 }
+          }
+        },
+        "inspector": {
+          "type": "object",
+          "description": "InspectorAgent 编译/测试采集超时 (ms)",
+          "properties": {
+            "tscTimeout": { "type": "integer", "default": 30000 },
+            "testTimeout": { "type": "integer", "default": 30000 },
+            "vitestTimeout": { "type": "integer", "default": 60000 }
+          }
+        }
+      }
+    },
+
+    "memory": {
+      "type": "object",
+      "description": "MemoryStore 算法常量。仅修改产生行为变更。",
+      "properties": {
+        "ttlMs": { "type": "integer", "default": 2592000000, "description": "30天过期窗口 (ms)" },
+        "flushDebounceMs": { "type": "integer", "default": 200, "description": "防抖写盘间隔 (ms)" },
+        "maxFlushFailStreak": { "type": "integer", "default": 3, "description": "防饿死：连续失败上限" },
+        "embeddingDim": { "type": "integer", "default": 384, "description": "embedding 向量维度 (all-MiniLM-L6-v2)" },
+        "vectorDedupThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.95, "description": "向量相似度去重阈值（余弦相似度）" },
+        "bfsWeightThreshold": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.1, "description": "BFS 展开噪声门限" },
+        "maxLinksPerNode": { "type": "integer", "default": 10, "description": "BFS 每节点最多考察出边数" },
+        "weightAgingFactor": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.95, "description": "权重老化因子（每7天未访问衰减5%）" },
+        "maxTotalMemories": { "type": "integer", "default": 10000, "description": "内存记忆条目软上限" },
+        "schemaVersion": { "type": "integer", "default": 2, "description": "持久化模式版本" },
+        "contentHashAlgo": { "type": "string", "default": "sha256", "enum": ["sha256"] }
+      }
+    },
+
+    "eventRouting": {
+      "type": "object",
+      "description": "事件路由配置（四通道物理分层）"
+    },
+    "roundtableTemplates": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "圆桌会议模板列表"
+    },
+    "searchProviders": {
+      "type": "object",
+      "description": "搜索后端与聚合配置"
+    },
+    "selfExamination": {
+      "type": "object",
+      "description": "自审视脚本配置"
+    },
+    "crossVerification": {
+      "type": "object",
+      "description": "交叉验证配对配置"
+    },
+    "seedMemories": {
+      "type": "object",
+      "description": "种子记忆配置"
+    },
+    "governancePipeline": {
+      "type": "object",
+      "description": "治理管线配置"
+    }
+  }
+}

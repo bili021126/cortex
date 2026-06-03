@@ -1,15 +1,16 @@
 /**
- * json-file.adapter.ts — JSON 文件存储适配器
+ * json-file.adapter.ts -- JSON 文件存储适配器
  *
  * 将任务数据存储为 JSON 文件。
- * 写操作使用原子写入（写临时文件 → rename）。
+ * 写操作使用原子写入（写临时文件 -> rename）。
  *
  * 原位于 .cortex/archive/.../solo-flight/src/storage/adapters/json-file.adapter.ts
  *
- * @fix P2-9 — 同步 I/O 置换为异步 fs.promises，避免阻塞事件循环
+ * @fix P2-9 -- 同步 I/O 置换为异步 fs.promises，避免阻塞事件循环
+ * @fix M-02 -- ensureDir 改为异步，消除 async 方法内同步 I/O 阻塞事件循环
  */
 
-import { existsSync, mkdirSync } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
 import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import * as path from 'node:path';
 import { Task, TaskJSON } from '../../core/models/task.js';
@@ -26,11 +27,20 @@ export class JsonFileAdapter implements TaskRepository {
     this.filePath = path.resolve(filePath);
   }
 
-  /** ensureDir 仍使用同步版本——目录创建是轻量操作，避免在每个 I/O 前引入额外 await */
-  private ensureDir(): void {
+  /**
+   * @fix P1-7 — 仅吞没 EEXIST 错误（目录已存在），
+   *   其他错误（权限不足、磁盘满、路径非法）向上传播，
+   *   避免丢失根因诊断信息。
+   */
+  private async ensureDir(): Promise<void> {
     const dir = path.dirname(this.filePath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+    try {
+      await mkdir(dir, { recursive: true });
+    } catch (err: unknown) {
+      // EEXIST: 目录已存在，安全忽略（recursive:true 本应处理，但某些平台/FS 仍可能抛 EEXIST）
+      if ((err as NodeJS.ErrnoException)?.code === 'EEXIST') return;
+      // 非 EEXIST 错误——权限不足、磁盘满等——向上传播
+      throw err;
     }
   }
 
@@ -51,9 +61,9 @@ export class JsonFileAdapter implements TaskRepository {
   }
 
   private async _doLoad(): Promise<void> {
-    this.ensureDir();
+    await this.ensureDir();
 
-    let fileExists = false;
+    let fileExists: boolean;
     try {
       await readFile(this.filePath, 'utf-8');
       fileExists = true;
@@ -94,7 +104,7 @@ export class JsonFileAdapter implements TaskRepository {
   }
 
   private async persist(): Promise<void> {
-    this.ensureDir();
+    await this.ensureDir();
 
     const data: { version: number; tasks: Record<string, TaskJSON> } = {
       version: 1,
@@ -141,7 +151,7 @@ export class JsonFileAdapter implements TaskRepository {
           filter.tags!.some(tag => t.tags.includes(tag)),
         );
       }
-      if (filter.search && filter.search.trim()) {
+      if (filter.search?.trim()) {
         const keyword = filter.search.toLowerCase();
         result = result.filter(t =>
           t.title.toLowerCase().includes(keyword)

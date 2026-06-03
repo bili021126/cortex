@@ -1,26 +1,28 @@
 import type {
+  IMemoryStore,
+  MaintainReport,
   MemoryEntry,
   MemoryLink,
   MemoryQuery,
   MemoryWriteInput,
-  MemoryType,
-  AgentType,
+  ReadMode,
 } from "@cortex/shared";
-import { MemoryState, MemorySubType, LinkType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import { LinkType, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import type { IPipelineObserver } from "@cortex/shared";
 import * as crypto from "node:crypto";
 
-import { SCHEMA_VERSION, EMBEDDING_DIM, LINK_WEIGHTS, CONTENT_HASH_ALGO, VECTOR_DEDUP_THRESHOLD, BFS_WEIGHT_THRESHOLD, MAX_LINKS_PER_NODE, WEIGHT_AGING_FACTOR, MAX_TOTAL_MEMORIES } from "./schema.js";
+import { SCHEMA_VERSION, EMBEDDING_DIM, LINK_WEIGHTS, CONTENT_HASH_ALGO, VECTOR_DEDUP_THRESHOLD, WEIGHT_AGING_FACTOR, MAX_TOTAL_MEMORIES, STALE_FREEZE_DAYS, FROZEN_OBLITERATE_DAYS, MAINTENANCE_WEIGHT_THRESHOLD } from "./schema.js";
 import { MemoryStorage } from "./storage.js";
 import { MemoryPersistence } from "./persistence.js";
 import { MemoryLifecycle } from "./lifecycle.js";
 import { MemoryQueryEngine } from "./query.js";
-import { SemiFinishedMgr } from "./semi-finished.js";
-import { embedText } from "./embedding.js";
+import { type IEmbeddingService, defaultEmbeddingService } from "./embedding.js";
 
 // MemoryWriteInput 已迁移至 @cortex/shared —— shared import 即可
 // 迁移原因（艾尔海森 P0）：任何包只要想写入记忆条目就必须构造此接口
 // 定义在 shared 中可避免各包自行重复定义
+
+// MaintainReport 已迁移至 @cortex/shared —— shared import 即可
 
 /**
  * MemoryStore —— 内存级记忆存储 + better-sqlite3 持久化（Facade）。
@@ -58,25 +60,27 @@ import { embedText } from "./embedding.js";
  *   │ └──────────────────────┘                               │
  *   └─────────────────────────────────────────────────────────┘
  */
-export class MemoryStore {
+export class MemoryStore implements IMemoryStore {
   private _storage: MemoryStorage;
   private _persistence: MemoryPersistence;
   private _lifecycle: MemoryLifecycle;
   private _queryEngine: MemoryQueryEngine;
-  /** P0 — 半成品管理 */
-  private _semiFinished: SemiFinishedMgr;
-  private _observer?: PipelineObserver;
+  private _observer?: IPipelineObserver;
+  private readonly _embedder: IEmbeddingService;
+
+  /** P1-六层防御：写前校验钩子（由 ConsistencyLayer 注入） */
+  private _preWriteHook?: (input: MemoryWriteInput) => MemoryWriteInput;
 
   /** 公开 schema 版本常量，供外部校验 */
   static readonly SCHEMA_VERSION = SCHEMA_VERSION;
 
-  constructor(observer?: PipelineObserver) {
+  constructor(observer?: IPipelineObserver, embedder?: IEmbeddingService) {
     this._observer = observer;
+    this._embedder = embedder ?? defaultEmbeddingService;
     this._storage = new MemoryStorage(observer);
     this._persistence = new MemoryPersistence(observer);
     this._lifecycle = new MemoryLifecycle();
     this._queryEngine = new MemoryQueryEngine();
-    this._semiFinished = new SemiFinishedMgr(this._lifecycle);
   }
 
   /**
@@ -93,6 +97,14 @@ export class MemoryStore {
   }
 
   /**
+   * P1-六层防御：注入写前校验钩子（由 ConsistencyLayer 注入）。
+   * 在 write()/writePending() 处理前调用，执行 SchemaEnforcer 校验 + IntentFactWall 标记。
+   */
+  setPreWriteHook(hook: (input: MemoryWriteInput) => MemoryWriteInput): void {
+    this._preWriteHook = hook;
+  }
+
+  /**
    * 写入一条记忆（内存 + DB write-through）
    *
    * 流程：embedding 生成 → 内容去重（SHA256 + 向量相似） → Storage.insert → Persistence.run → scheduleFlush
@@ -101,18 +113,14 @@ export class MemoryStore {
    * @fix 语义卫生 — async embedding 生成 + SHA256 精确去重 + 向量相似去重 + 总量上限
    */
   async write(input: MemoryWriteInput): Promise<string> {
-    // M3: 关闭保护 — 非 active 态拒绝写入
-    if (this._persistence.lifecycle !== "active") {
-      throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝写入`);
-    }
+    input = this._validateWrite(input);
 
-    // ── embedding 生成（静默降级：失败不阻塞写入） ──
+    // ── embedding 生成（静默降级：失败不阻塞写入）──
     if (input.embedding === undefined) {
       try {
-        const text = input.summary || JSON.stringify(input.content).slice(0, 2000);
-        input.embedding = await embedText(text);
+        const text = input.semantic_gist || JSON.stringify(input.content_blob).slice(0, 2000);
+        input.embedding = await this._embedder.embedText(text);
       } catch {
-        // embedding 生成失败——记录但继续写入
         if (this._observer) {
           this._observer.emit({
             type: PipelineEventType.MemorySqlDegraded,
@@ -124,7 +132,6 @@ export class MemoryStore {
       }
     }
 
-    // embedding 维度校验
     if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
       throw new Error(
         `Embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`
@@ -132,25 +139,9 @@ export class MemoryStore {
     }
 
     // ── 内容去重：SHA256 精确匹配 ──
-    const contentHash = crypto.createHash(CONTENT_HASH_ALGO)
-      .update(input.summary + JSON.stringify(input.content))
-      .digest("hex");
-    const exactDup = this._storage.findByContentHash(contentHash);
-    if (exactDup) {
-      exactDup.accessCount++;
-      exactDup.lastAccessedAt = Date.now();
-      if (this._persistence.isEnabled) {
-        try {
-          this._persistence.run(
-            "UPDATE memories SET access_count = ?, last_accessed_at = ? WHERE id = ?",
-            [exactDup.accessCount, exactDup.lastAccessedAt, exactDup.id],
-            "write.dedup"
-          );
-          this._persistence.scheduleFlush();
-        } catch { /* DB 更新失败静默降级 */ }
-      }
-      return exactDup.id;
-    }
+    const contentHash = this._computeContentHash(input);
+    const exactDup = this._tryDedup(contentHash);
+    if (exactDup) return exactDup.id;
 
     // ── 内容去重：向量相似匹配 ──
     if (input.embedding) {
@@ -166,51 +157,28 @@ export class MemoryStore {
               "write.vector-dedup"
             );
             this._persistence.scheduleFlush();
-          } catch { /* DB 更新失败静默降级 */ }
+          } catch {
+            similar.accessCount--;
+            this._observer?.emit({
+              type: PipelineEventType.MemorySqlDegraded,
+              priority: PipelinePriority.NORMAL,
+              payload: { operation: "write.vector-dedup", detail: "DB UPDATE 失败，accessCount 已回滚" },
+              timestamp: Date.now(),
+            });
+          }
         }
         return similar.id;
       }
     }
 
     const entry = this._storage.insert(input, contentHash);
-    const id = entry.id;
-
-    if (this._persistence.isEnabled) {
-      try {
-        this._persistence.run(
-          `INSERT INTO memories (id, memory_type, state, sub_type, content, summary, agent_type, creator_id, created_at, updated_at, last_accessed_at, access_count, weight, metadata, embedding, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            entry.id,
-            entry.memoryType,
-            entry.state,
-            entry.subType ?? null,
-            entry.content ? JSON.stringify(entry.content) : null,
-            entry.summary,
-            entry.agentType,
-            entry.creatorId,
-            entry.createdAt,
-            entry.createdAt,
-            entry.lastAccessedAt,
-            entry.accessCount,
-            entry.weight,
-            entry.metadata ? JSON.stringify(entry.metadata) : "{}",
-            entry.embedding ? JSON.stringify(entry.embedding) : null,
-            entry.isPrivate ? 1 : 0,
-          ],
-          "write"
-        );
-        this._persistence.scheduleFlush();
-      } catch (e) {
-        this._storage.memories.delete(id);
-        throw e;
-      }
-    }
+    this._persistInsert(entry, "write");
 
     // ── 总量上限：超出时 archive 最久未访问的记忆 ──
     if (this._storage.memories.size > MAX_TOTAL_MEMORIES) {
       const excess = this._storage.memories.size - MAX_TOTAL_MEMORIES;
       const candidates = Array.from(this._storage.memories.values())
-        .filter((m) => m.state === MemoryState.Active)
+        .filter((m) => m.semantic_state === "Active")
         .sort((a, b) => a.lastAccessedAt - b.lastAccessedAt)
         .slice(0, excess);
       for (const m of candidates) {
@@ -227,7 +195,7 @@ export class MemoryStore {
       }
     }
 
-    return id;
+    return entry.id;
   }
 
   /**
@@ -237,25 +205,23 @@ export class MemoryStore {
    *
    * @fix 语义卫生 — 自动 query embedding 生成 + 向量召回 + 权重自然老化
    */
-  async read(query: MemoryQuery): Promise<MemoryEntry[]> {
-    // D3: 关闭保护 — read() 在非 active 态时抛出异常，与 write() 一致
+  async read(query: MemoryQuery, mode: ReadMode = "CSA"): Promise<MemoryEntry[]> {
     if (this._persistence.lifecycle !== "active") {
       throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝读取`);
     }
 
-    // ── 自动生成 query embedding（若未提供且有 keywords） ──
+    // ── 自动生成 query embedding（若未提供且有 keywords）──
     if (!query.queryEmbedding && query.keywords && query.keywords.length > 0) {
       try {
-        query.queryEmbedding = await embedText(query.keywords.join(" "));
+        query.queryEmbedding = await this._embedder.embedText(query.keywords.join(" "));
       } catch { /* 降级跳过向量检索 */ }
     }
 
     const now = Date.now();
-    const mode = query.queryMode ?? "csa";
-    const resolvedBfsDepth = query.bfsDepth ?? (mode === "hca" ? 1 : 2);
+    const resolvedBfsDepth = query.bfsDepth ?? (mode === "HCA" ? 1 : 2);
     const resolvedBfsMaxNodes = query.bfsMaxNodes ?? 20;
-    const resolvedTrackAccess = query.trackAccess ?? (mode === "csa");
-    const resolvedLimit = query.limit ?? (mode === "hca" ? 10 : 3);
+    const resolvedTrackAccess = mode === "CSA";
+    const resolvedLimit = query.limit ?? (mode === "HCA" ? 10 : 3);
 
     let results: MemoryEntry[];
 
@@ -368,7 +334,6 @@ export class MemoryStore {
    * 异常路径：DB 失败时回滚内存（existing.pop）
    */
   link(sourceId: string, targetId: string, linkType: LinkType): MemoryLink | null {
-    // 生命周期守卫 — 与 write()/writePending() 一致
     if (this._persistence.lifecycle !== "active") {
       throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝写入`);
     }
@@ -376,7 +341,7 @@ export class MemoryStore {
     const source = this._storage.memories.get(sourceId);
     const target = this._storage.memories.get(targetId);
     if (!source || !target) return null;
-    if (source.state === MemoryState.Obliterated || target.state === MemoryState.Obliterated) return null;
+    if (source.semantic_state === "Obliterated" || target.semantic_state === "Obliterated") return null;
 
     let existing = this._storage.links.get(sourceId);
     if (!existing) {
@@ -384,10 +349,8 @@ export class MemoryStore {
       this._storage.links.set(sourceId, existing);
     }
 
-    // 幂等去重（AccessedDuring 是特殊 linkType，允许重复）
-    if (linkType !== LinkType.AccessedDuring) {
-      if (existing.some(l => l.targetId === targetId && l.linkType === linkType)) return null;
-    }
+    // 幂等去重
+    if (existing.some(l => l.targetId === targetId && l.linkType === linkType)) return null;
 
     const now = Date.now();
     const link: MemoryLink = {
@@ -396,7 +359,7 @@ export class MemoryStore {
       targetId,
       linkType,
       weight: LINK_WEIGHTS[linkType] ?? 0.5,
-      targetState: target.state,
+      targetState: target.semantic_state,
       lastAccessedAt: now,
     };
     existing.push(link);
@@ -431,7 +394,7 @@ export class MemoryStore {
    *
    * @fix Core-1 CAS 封闭：所有状态变更必须经过此处，不允许外部直接修改 state
    */
-  cas(memoryId: string, expected: MemoryState, newState: MemoryState): boolean {
+  cas(memoryId: string, expected: string, newState: string): boolean {
     return this._lifecycle.cas(
       this._storage, memoryId, expected, newState,
       this._statePersistFn("cas"),
@@ -457,80 +420,67 @@ export class MemoryStore {
    * 异常路径：DB 失败时回滚内存（假阳性禁止原则）
    */
   writePending(input: MemoryWriteInput): string {
-    if (this._persistence.lifecycle !== "active") {
-      throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝写入`);
+    input = this._validateWrite(input);
+
+    const contentHash = this._computeContentHash(input);
+    const exactDup = this._tryDedup(contentHash);
+    if (exactDup) return exactDup.id;
+
+    const pendingEntry = this._storage.insert(input, contentHash);
+    const m = this._storage.memories.get(pendingEntry.id);
+    if (m) {
+      // v3: Pending 为工程态标记，不影响 semantic_state
+      (m as any)._pending = true;
     }
 
-    if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
-      throw new Error(
-        `Embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`
-      );
-    }
+    this._persistInsert(pendingEntry, "writePending");
+    return pendingEntry.id;
+  }
 
-    const pendingInput = { ...input, subType: input.subType ?? MemorySubType.Intent };
-    const id = this._semiFinished.writePending(this._storage, pendingInput);
-
-    if (this._persistence.isEnabled) {
-      const entry = this._storage.memories.get(id);
-      if (entry) {
+  commitMemory(memoryId: string): boolean {
+    const m = this._storage.memories.get(memoryId);
+    if (!m) return false;
+    const ok = this._lifecycle.commit(this._storage, memoryId, this._statePersistFn("commitMemory"));
+    if (ok) {
+      delete (m as any)._pending;
+      if (this._persistence.isEnabled) {
         try {
           this._persistence.run(
-            `INSERT INTO memories (id, memory_type, state, sub_type, content, summary, agent_type, creator_id, created_at, updated_at, last_accessed_at, access_count, weight, metadata, embedding, is_private) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              entry.id, entry.memoryType, entry.state,
-              entry.subType ?? null,
-              entry.content ? JSON.stringify(entry.content) : null,
-              entry.summary, entry.agentType, entry.creatorId,
-              entry.createdAt, entry.createdAt, // updated_at = created_at
-              entry.lastAccessedAt, entry.accessCount,
-              entry.weight,
-              entry.metadata ? JSON.stringify(entry.metadata) : "{}",
-              entry.embedding ? JSON.stringify(entry.embedding) : null,
-              entry.isPrivate ? 1 : 0,
-            ],
-            "writePending"
+            "UPDATE memories SET semantic_state = ? WHERE id = ?",
+            ["Active", memoryId],
+            "commitMemory"
           );
           this._persistence.scheduleFlush();
         } catch (e) {
-          this._storage.memories.delete(id);
-          throw e;
+          (m as any)._pending = true;
+          if (this._observer) {
+            this._observer.emit({
+              type: PipelineEventType.MemoryPersistFailed,
+              priority: PipelinePriority.HIGH,
+              payload: { operation: "commitMemory", detail: String(e).slice(0, 200), memoryId },
+              timestamp: Date.now(),
+              notificationType: "WARNING",
+            });
+          }
         }
       }
     }
-
-    return id;
-  }
-
-  /**
-   * 提交半成品 → Active
-   *
-   * 委托 SemiFinishedMgr.commit，其内部使用 _statePersistFn 持久化状态变更。
-   * isEnabled 为 true 时传入回调 persister，否则为 undefined（纯内存操作）。
-   */
-  commitMemory(memoryId: string): boolean {
-    const ok = this._semiFinished.commit(
-      this._storage, memoryId,
-      this._statePersistFn("commitMemory"),
-      this._persistence.isEnabled
-        ? (id: string, subType: MemorySubType) => {
-            this._persistence.run(
-              `UPDATE memories SET state = 'ACTIVE', sub_type = ? WHERE id = ?`,
-              [subType, id],
-              "commitMemory"
-            );
-            this._persistence.scheduleFlush();
-          }
-        : undefined
-    );
     return ok;
   }
 
   getPending(): MemoryEntry[] {
-    return this._semiFinished.getPending(this._storage);
+    const results: MemoryEntry[] = [];
+    for (const m of this._storage.memories.values()) {
+      if ((m as any)._pending) results.push(m);
+    }
+    return results;
   }
 
   hasPending(): boolean {
-    return this._semiFinished.hasPending(this._storage);
+    for (const m of this._storage.memories.values()) {
+      if ((m as any)._pending) return true;
+    }
+    return false;
   }
 
   peek(memoryId: string): Readonly<MemoryEntry> | undefined {
@@ -555,23 +505,167 @@ export class MemoryStore {
   }
 
   /**
-   * 生成状态持久化回调（供 MemoryLifecycle 使用）
+   * 主动维护：冻结过期记忆 + 湮灭冻结记忆 + 清理孤儿边。
    *
-   * 返回一个函数，调用 persistence.run() 写入状态变更 + scheduleFlush
+   * 与被动衰减（read() 中的权重老化）互补：
+   *   - 权重老化：被动衰减数值（read 触发）
+   *   - 主动维护：状态转移 + 清理（定期调用）
+   *
+   * 流程：
+   *   1. Active 记忆：lastAccessedAt > STALE_FREEZE_DAYS 且 weight < MAINTENANCE_WEIGHT_THRESHOLD → Freeze
+   *   2. Frozen 记忆：metadata.frozenAt > FROZEN_OBLITERATE_DAYS → Obliterate
+   *   3. 清理孤儿边：targetId 指向不存在/湮灭记忆的边
+   *
+   * @returns 维护报告
    */
-  private _statePersistFn(opName: string): ((id: string, state: MemoryState) => void) | undefined {
+  maintain(): MaintainReport {
+    if (this._persistence.lifecycle !== "active") {
+      return { archived: 0, obliterated: 0, orphanedLinks: 0, skipped: "MemoryStore 未处于 active 状态" };
+    }
+
+    const now = Date.now();
+    const freezeThreshold = now - STALE_FREEZE_DAYS * 24 * 60 * 60 * 1000;
+    const obliterateThreshold = now - FROZEN_OBLITERATE_DAYS * 24 * 60 * 60 * 1000;
+    const archivePersist = this._statePersistFn("maintain.archive");
+    const obliteratePersist = this._statePersistFn("maintain.obliterate");
+
+    let archived = 0;
+    let obliterated = 0;
+
+    // Phase 1: 归档过期低权重 Active 记忆
+    for (const [, m] of this._storage.memories) {
+      if (m.semantic_state !== "Active") continue;
+      if (m.lastAccessedAt > freezeThreshold) continue;
+      if (m.weight >= MAINTENANCE_WEIGHT_THRESHOLD) continue;
+
+      const ok = this._lifecycle.archive(this._storage, m.id, archivePersist);
+      if (ok) archived++;
+    }
+
+    // Phase 2: 湮灭长期 Archived 记忆
+    for (const [, m] of this._storage.memories) {
+      if (m.semantic_state !== "Archived") continue;
+      if (m.lastAccessedAt > obliterateThreshold && (m.expires_at ?? 0) === 0) continue;
+
+      const ok = this._lifecycle.obliterate(this._storage, m.id, obliteratePersist);
+      if (ok) obliterated++;
+    }
+
+    // Phase 3: 清理孤儿边
+    const orphanedLinks = this._storage.cleanOrphanedLinks();
+
+    if (this._persistence.isEnabled && (archived > 0 || obliterated > 0 || orphanedLinks > 0)) {
+      this._persistence.scheduleFlush();
+    }
+
+    return { archived, obliterated, orphanedLinks };
+  }
+
+  /**
+   * 写入前公共校验：生命周期守卫 + 写前 Hook + embedding 维度校验。
+   * write() 与 writePending() 共享此校验。
+   */
+  /**
+   * 计算 SHA256 内容哈希 — write() / writePending() 共用的去重基础
+   * 输入相同摘要+内容 → 相同哈希 → 识别重复记忆
+   */
+  private _computeContentHash(input: MemoryWriteInput): string {
+    return crypto.createHash(CONTENT_HASH_ALGO)
+      .update(input.summary + JSON.stringify(input.content_blob))
+      .digest("hex");
+  }
+
+  /**
+   * SHA256 内容去重 — write() / writePending() 共用
+   * 命中时自动 bump accessCount 并持久化，返回已存在的 MemoryEntry 或 null
+   */
+  private _tryDedup(contentHash: string): MemoryEntry | null {
+    const dup = this._storage.findByContentHash(contentHash);
+    if (!dup) return null;
+
+    dup.accessCount++;
+    dup.lastAccessedAt = Date.now();
+    if (this._persistence.isEnabled) {
+      try {
+        this._persistence.run(
+          "UPDATE memories SET access_count = ?, last_accessed_at = ? WHERE id = ?",
+          [dup.accessCount, dup.lastAccessedAt, dup.id],
+          "dedup"
+        );
+        this._persistence.scheduleFlush();
+      } catch {
+        dup.accessCount--;
+        this._observer?.emit({
+          type: PipelineEventType.MemorySqlDegraded,
+          priority: PipelinePriority.NORMAL,
+          payload: { operation: "dedup", detail: "DB UPDATE 失败，accessCount 已回滚" },
+          timestamp: Date.now(),
+        });
+      }
+    }
+    return dup;
+  }
+
+  private _validateWrite(input: MemoryWriteInput): MemoryWriteInput {
+    if (this._persistence.lifecycle !== "active") {
+      throw new Error(`MemoryStore 已关闭(状态 ${this._persistence.lifecycle})，拒绝写入`);
+    }
+    if (this._preWriteHook) {
+      input = this._preWriteHook(input);
+    }
+    if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
+      throw new Error(
+        `Embedding 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${input.embedding.length}`
+      );
+    }
+    return input;
+  }
+
+  /**
+   * 持久化 INSERT：将内存 MemoryEntry 写入 SQLite。
+   * write() 与 writePending() 共享此段——二者 INSERT 语句完全相同。
+   * DB 失败时回滚内存（假阳性禁止原则）。
+   */
+  private _persistInsert(entry: MemoryEntry, opName: string): void {
+    if (!this._persistence.isEnabled) return;
+    const e = this._storage.memories.get(entry.id);
+    if (!e) return;
+    try {
+      this._persistence.run(
+        `INSERT INTO memories (id, semantic_state, kind, source, summary, semantic_gist, content_blob, content_hash, embedding, weight, access_count, created_at, last_accessed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          e.id,
+          e.semantic_state,
+          e.kind,
+          JSON.stringify(e.source),
+          e.summary,
+          e.semantic_gist,
+          JSON.stringify(e.content_blob),
+          e.content_hash,
+          e.embedding ? JSON.stringify(e.embedding) : null,
+          e.weight,
+          e.accessCount,
+          e.createdAt,
+          e.lastAccessedAt,
+          e.expires_at ?? null,
+        ],
+        opName
+      );
+      this._persistence.scheduleFlush();
+    } catch (err) {
+      this._storage.memories.delete(entry.id);
+      throw err;
+    }
+  }
+
+  private _statePersistFn(opName: string): ((id: string, state: string) => void) | undefined {
     if (!this._persistence.isEnabled) return undefined;
-    return (id: string, state: MemoryState) => {
-      this._persistence.run("UPDATE memories SET state = ? WHERE id = ?", [state, id], opName);
+    return (id: string, state: string) => {
+      this._persistence.run("UPDATE memories SET semantic_state = ? WHERE id = ?", [state, id], opName);
       this._persistence.scheduleFlush();
     };
   }
 
-  /**
-   * SQLite 读取 → 反序列化
-   *
-   * DB 异常时降级至内存扫描（memScanRead + 日志警告）
-   */
   private _persistenceRead(query: MemoryQuery, now: number): MemoryEntry[] {
     try {
       const rawRows = this._persistence.sqlRead(query, now);
@@ -583,14 +677,12 @@ export class MemoryStore {
 
       if (query.metadataFilter && Object.keys(query.metadataFilter).length > 0) {
         return rows.filter((m) => {
-          if (!m.metadata) return false;
-          return Object.entries(query.metadataFilter!).every(([k, v]) => m.metadata![k] === v);
+          return Object.entries(query.metadataFilter!).every(([k, v]) => m.content_blob[k as string] === v);
         });
       }
 
       return rows;
     } catch (e) {
-      // 上报异常
       if (this._observer) {
         this._observer.emit({
           type: PipelineEventType.MemorySqlDegraded,

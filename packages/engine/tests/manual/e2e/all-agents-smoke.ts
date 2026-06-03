@@ -36,8 +36,7 @@ import {
   MemoryStore,
   PipelineObserver,
   ConfirmGate,
-  CLIAdapter,
-} from "@cortex/engine";
+  CLIAdapter} from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ══════════════════════════════════════════════
@@ -63,8 +62,7 @@ function makeNode(id: string, type: string, payload: string, tags: string[] = []
     claimedBy: [],
     results: [],
     createdAt: Date.now(),
-    depth: 0,
-  } as TaskNode;
+    depth: 0} as TaskNode;
 }
 
 // ══════════════════════════════════════════════
@@ -169,8 +167,7 @@ async function runAgentSmoke(
       success: result.success === true && output.length > 10,
       output: output || "(empty)",
       durationMs: duration,
-      error: result.success ? undefined : String(result.error ?? "unknown").slice(0, 200),
-    };
+      error: result.success ? undefined : String(result.error ?? "unknown").slice(0, 200)};
   } catch (e) {
     const duration = Date.now() - start;
     return { agent: label, success: false, output: "", durationMs: duration, error: String(e).slice(0, 200) };
@@ -185,54 +182,43 @@ const TASKS: Record<string, { type: string; payload: string; tags: string[] }> =
   code: {
     type: "implementation",
     payload: "Read packages/engine/package.json and tell me the package name and version. Reply in 1 sentence.",
-    tags: ["code", "smoke"],
-  },
+    tags: ["code", "smoke"]},
   review: {
     type: "review",
     payload: "Read packages/engine/src/base-agent.ts and identify ONE thing that could be improved. Be specific and concise.",
-    tags: ["review", "smoke"],
-  },
+    tags: ["review", "smoke"]},
   analysis: {
     type: "research",
     payload: "Read packages/engine/src/memory/pipeline.ts and briefly explain what executeWithMemoryPipeline does in 2 sentences.",
-    tags: ["analysis", "smoke"],
-  },
+    tags: ["analysis", "smoke"]},
   ops: {
     type: "ops",
     payload: "Read packages/engine/src/index.ts and list the agent-related exported symbols (just the names).",
-    tags: ["ops", "smoke"],
-  },
+    tags: ["ops", "smoke"]},
   loop: {
     type: "planning",
     payload: "Break down the task 'Add unit tests for memory-store.ts' into 3 concrete subtasks. Reply with a numbered list.",
-    tags: ["loop", "smoke"],
-  },
+    tags: ["loop", "smoke"]},
   docGovern: {
     type: "doc_audit",
     payload: "Read packages/engine/package.json and verify: does the package have a name, version, and description? Answer yes/no with details.",
-    tags: ["doc-govern", "smoke"],
-  },
+    tags: ["doc-govern", "smoke"]},
   api: {
     type: "api_design",
     payload: "Read packages/engine/src/index.ts and describe the public API surface in 2 sentences. Focus on what a consumer would import.",
-    tags: ["api", "smoke"],
-  },
+    tags: ["api", "smoke"]},
   data: {
     type: "data_modeling",
     payload: "Read packages/engine/src/memory-store.ts (first 50 lines) and describe the MemoryStore's data model in 2 sentences.",
-    tags: ["data", "smoke"],
-  },
+    tags: ["data", "smoke"]},
   fix: {
     type: "bugfix",
     payload: "Read packages/engine/src/memory/pipeline.ts and find the _rememberResult function. Suggest ONE concrete improvement to its error handling.",
-    tags: ["fix", "smoke"],
-  },
+    tags: ["fix", "smoke"]},
   inspector: {
     type: "inspect",
     payload: "List all files in packages/engine/src/agents/ directory. Report each file name. Do NOT make inferences — only report what you see.",
-    tags: ["inspector", "smoke"],
-  },
-};
+    tags: ["inspector", "smoke"]}};
 
 // ══════════════════════════════════════════════
 // 5. 主流程
@@ -262,8 +248,7 @@ async function main() {
     apiKey: API_KEY,
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
-    reasonerModel: CHAT_MODEL,
-  });
+    reasonerModel: CHAT_MODEL});
   adapter.setCacheEnabled(true);
 
   const observer = new PipelineObserver();
@@ -318,7 +303,7 @@ async function main() {
       case "code": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(codeAgentConfig(), adapter, tk, memory);
+        const agent = createAgent(codeAgentConfig("code"), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("CodeAgent (阿贝多)", () => ({ agent, node }));
         break;
@@ -326,7 +311,7 @@ async function main() {
       case "review": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(reviewAgentConfig(), adapter, tk, memory);
+        const agent = createAgent(reviewAgentConfig("review"), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("ReviewAgent (刻晴)", () => ({ agent, node }));
         break;
@@ -334,7 +319,7 @@ async function main() {
       case "analysis": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(analysisAgentConfig(), adapter, tk, memory);
+        const agent = createAgent(analysisAgentConfig("analysis"), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("AnalysisAgent (纳西妲)", () => ({ agent, node }));
         break;
@@ -342,7 +327,7 @@ async function main() {
       case "ops": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(opsAgentConfig(), adapter, tk);
+        const agent = createAgent(opsAgentConfig("ops"), adapter, tk);
         agent.setSafeReporter(safeReporter);
         await testAgent("OpsAgent (北斗)", () => ({ agent, node }));
         break;
@@ -350,7 +335,7 @@ async function main() {
       case "loop": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(loopAgentConfig(), adapter, tk);
+        const agent = createAgent(loopAgentConfig("loop"), adapter, tk);
         agent.setSafeReporter(safeReporter);
         await testAgent("LoopAgent (莫娜)", () => ({ agent, node }));
         break;
@@ -358,7 +343,7 @@ async function main() {
       case "docGovern": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(docGovernAgentConfig(), adapter, tk, memory);
+        const agent = createAgent(docGovernAgentConfig("doc-govern"), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("DocGovernAgent (凝光)", () => ({ agent, node }));
         break;
@@ -366,7 +351,7 @@ async function main() {
       case "api": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(apiAgentConfig(), adapter, tk, memory);
+        const agent = createAgent(apiAgentConfig("api"), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("ApiAgent (久岐忍)", () => ({ agent, node }));
         break;
@@ -374,7 +359,7 @@ async function main() {
       case "data": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(dataAgentConfig(), adapter, tk, memory);
+        const agent = createAgent(dataAgentConfig("data"), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("DataAgent (艾尔海森)", () => ({ agent, node }));
         break;
@@ -382,7 +367,7 @@ async function main() {
       case "fix": {
         const tk = new Toolkit(gate);
         registerReadOnlyTools(tk, WORKSPACE);
-        const agent = createAgent(fixAgentConfig(), adapter, tk, memory);
+        const agent = createAgent(fixAgentConfig("fix"), adapter, tk, memory);
         agent.setSafeReporter(safeReporter);
         await testAgent("FixAgent (希格雯)", () => ({ agent, node }));
         break;
@@ -415,8 +400,7 @@ async function main() {
         agent: label,
         success: statusOk,
         output: statusOk ? `wakeup→Awake shutdown→Destroyed ✅` : `status: ${browserAgent.status}`,
-        durationMs: 0,
-      });
+        durationMs: 0});
       const icon = statusOk ? "✅" : "❌";
       console.log(`  ${icon} ${label}: wakeup/shutdown lifecycle OK`);
     } catch (e) {
@@ -451,8 +435,7 @@ async function main() {
         priority: PipelinePriority.NORMAL,
         payload: { nodeId: "smoke-butler", type: "smoke" },
         timestamp: Date.now(),
-        requestId: "smoke-butler-req",
-      } as any);
+        requestId: "smoke-butler-req"} as any);
 
       // 等待异步 handler
       await new Promise((r) => setTimeout(r, 100));
@@ -461,8 +444,7 @@ async function main() {
         agent: label,
         success: true,
         output: `wakeup→Awake, observer subscribed, event emitted, intercepted=${intercepted}`,
-        durationMs: 0,
-      });
+        durationMs: 0});
       const icon = "✅";
       console.log(`  ${icon} ${label}: observer pipeline OK`);
     } catch (e) {

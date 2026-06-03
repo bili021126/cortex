@@ -1,16 +1,18 @@
 import { MemoryStore } from "../src/memory/memory-store.js";
 import { PipelineObserver } from "../src/core/pipeline-observer.js";
+import { AgentType } from "../../shared/src/agent.js";
 
 const s = new MemoryStore(new PipelineObserver());
 console.log("isEnabled:", (s as any)._persistence.isEnabled);
 console.log("lifecycle:", (s as any)._persistence.lifecycle);
 
 const id1 = await s.write({
-  memoryType: "Episodic" as any,
-  content: {},
+  kind: "TaskLog",
+  content_blob: {},
   summary: "aging debug",
-  agentType: "Code" as any,
-  creatorId: "test",
+  semantic_gist: "aging debug",
+  source: { agentType: AgentType.Code, taskId: "" },
+  content_hash: "",
   weight: 1.0,
 });
 
@@ -25,9 +27,8 @@ console.log("in-mem lastAccessedAt after:", internalEntry.lastAccessedAt);
 console.log("days since:", (Date.now() - internalEntry.lastAccessedAt) / 86400000);
 
 const r = await s.read({
-  memoryTypes: ["Episodic" as any],
+  kind: "TaskLog",
   limit: 50,
-  trackAccess: false,
 });
 
 console.log("read() results count:", r.length);

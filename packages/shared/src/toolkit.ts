@@ -8,10 +8,10 @@ import type { AgentType } from "./agent.js";
 // ─── 工具定义 ──────────────────────────────────────────────
 
 export enum ToolCategory {
-  Read = "read",
-  Write = "write",
-  Shell = "shell",
-  Search = "search",
+  Read = "Read",
+  Write = "Write",
+  Shell = "Shell",
+  Search = "Search",
 }
 
 export interface ToolDefinition {

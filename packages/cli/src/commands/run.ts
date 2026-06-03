@@ -7,14 +7,14 @@
  * @see CLI 设计文档 §4.3
  */
 
-import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import type { CommandHandler, CommandResult } from "../types.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
 import { convert, convertToDocument } from "@cortex/parser";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 export function createRunHandler(bridge: EngineBridge): CommandHandler {
-  return async (args, options, context): Promise<CommandResult> => {
+  return async (args, options, _context): Promise<CommandResult> => {
     const filePath = args[0];
     if (!filePath && !options["--"]) {
       return {
@@ -133,8 +133,8 @@ export function createRunHandler(bridge: EngineBridge): CommandHandler {
       }
 
       const errorDetails = report.results
-        .filter((r) => !r.success)
-        .map((r) => `  [${r.nodeId}] ${r.error ?? "未知错误"}`)
+        .filter((r: { success: boolean }) => !r.success)
+        .map((r: { nodeId: string; error?: string }) => `  [${r.nodeId}] ${r.error ?? "未知错误"}`)
         .join("\n");
       return {
         success: false,

@@ -1,10 +1,8 @@
+/* eslint-disable no-console */
 import type { TaskNode, NodeResult, AgentType, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
-import { DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
-
-const DEFAULT_MAX_LOOPS = DEFAULT_ENGINE_CONFIG.defaultMaxLoops;
 
 /**
  * ReAct 循环上下文——解耦 BaseAgent 继承链。
@@ -16,6 +14,8 @@ export interface ReActContext {
   toolkit: Toolkit;
   systemPrompt: string;
   maxLoops: number;
+  /** 单 Agent ReAct 循环墙钟超时 (ms)。超时后返回 partial output + error 信息，不会被调度器视为异常崩溃。 */
+  reactLoopTimeoutMs: number;
   memory?: MemoryStore;
   safeReporter?: SafeErrorReporter;
 }
@@ -55,6 +55,9 @@ export async function runReActLoop(
     "· run_shell 仅用于构建/测试/包管理命令（如 pnpm build, npx vitest, npm install），",
     "  绝不用于文件搜索、目录浏览、文件读写等已有专用工具的操作。",
     "",
+    "· run_shell 通过 Windows cmd.exe 执行命令。不能使用 PowerShell 语法（如 Get-ChildItem）",
+    "  或 Unix/bash 语法（如 mkdir -p, ls -la, find . -name）。",
+    "",
     "违反此约束 = 你根本没在执行任务，是在浪费时间。",
   ].join("\n");
 
@@ -66,37 +69,80 @@ export async function runReActLoop(
 
   let loops = 0;
   let finalOutput: string | undefined;
+  const startTime = Date.now();
+  const deadline = startTime + ctx.reactLoopTimeoutMs;
+
+  const diagnostic = (msg: string): void => {
+    console.log(`  🔁 [ReAct-${agentType}#${loops}] ${msg}`);
+  };
+
+  diagnostic(`启动——maxLoops=${maxLoops}, timeout=${ctx.reactLoopTimeoutMs}ms, tools=${toolDefs.length}个`);
 
   while (loops < maxLoops) {
+    // ── 墙钟超时检查 ──
+    if (Date.now() >= deadline) {
+      return {
+        nodeId: node.id,
+        agentType: agentType,
+        success: false,
+        output: finalOutput ?? `[partial output — wall-clock timeout at ${Date.now() - startTime}ms]`,
+        error: `ReAct loop wall-clock timeout after ${ctx.reactLoopTimeoutMs}ms (iteration ${loops}/${maxLoops})`,
+      };
+    }
+
     loops++;
 
     try {
       if (loops === maxLoops - 4) {
+        diagnostic("接近循环上限，注入截止提示");
         messages.push({
           role: "user",
           content: "⚠️ You have only 4 tool-call turns left. Start wrapping up and produce a final answer summarising what you have found or done so far. It's OK if the work is incomplete.",
         });
       }
 
+      const msgCount = messages.length;
+      diagnostic(`🛰️  调用 LLM (${model})——上下文 ${msgCount} 条消息，工具 ${toolDefs.length} 个...`);
+      const callStart = Date.now();
       const res = await llm.chat(model, messages, toolDefs, node.reasoningEffort);
+      const callElapsed = Date.now() - callStart;
 
-      if (res.toolCalls.length === 0) {
+      // ── 思维链诊断：打印推理内容 ──
+      if (res.reasoning_content) {
+        const preview = res.reasoning_content.slice(0, 300);
+        console.log(`  💭 [ReAct-${agentType}#${loops}] 思维链预览: ${preview}${res.reasoning_content.length > 300 ? "...(截断)" : ""}`);
+      }
+      if (res.content) {
+        const preview = res.content.slice(0, 200);
+        console.log(`  📝 [ReAct-${agentType}#${loops}] 文本响应: ${preview}${res.content.length > 200 ? "...(截断)" : ""}`);
+      }
+
+      const toolCallCount = (res.tool_calls ?? []).length;
+      diagnostic(`✅ LLM 响应耗时 ${callElapsed}ms——工具调用 ${toolCallCount} 个`);
+
+      if (toolCallCount === 0) {
         finalOutput = res.content ?? undefined;
+        diagnostic(`🛑 无工具调用，本轮结束——output=${(finalOutput ?? "(空)").slice(0, 100)}`);
         break;
       }
 
       messages.push({
         role: "assistant",
         content: res.content ?? "",
-        tool_calls: res.toolCalls,
+        tool_calls: res.tool_calls,
         reasoning_content: res.reasoning_content,
       });
 
-      for (const tc of res.toolCalls) {
+      for (const tc of (res.tool_calls ?? [])) {
+        diagnostic(`🔧 执行工具 ${tc.name}`);
+        const toolStart = Date.now();
         const result = await toolkit.execute(
           { toolName: tc.name, params: tc.arguments },
           agentType,
         );
+        const toolElapsed = Date.now() - toolStart;
+        const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
+        diagnostic(`🔧 ${tc.name} → ${outcome}`);
 
         messages.push({
           role: "tool",
@@ -107,6 +153,7 @@ export async function runReActLoop(
         });
       }
     } catch (e) {
+      diagnostic(`💥 崩溃: ${String(e).slice(0, 200)}`);
       return {
         nodeId: node.id,
         agentType: agentType,
@@ -116,6 +163,9 @@ export async function runReActLoop(
       };
     }
   }
+
+  const totalElapsed = Date.now() - startTime;
+  diagnostic(`🏁 循环结束——耗时 ${totalElapsed}ms, loops=${loops}/${maxLoops}, success=${finalOutput !== undefined}`);
 
   return {
     nodeId: node.id,

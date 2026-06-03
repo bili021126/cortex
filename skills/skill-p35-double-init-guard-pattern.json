@@ -1,0 +1,21 @@
+{
+  "id": "skill-p35-double-init-guard-pattern",
+  "agentType": "fix",
+  "name": "P35: 单例/DB 双重初始化防护",
+  "triggerTags": ["fix", "bugfix", "database", "memory", "resource-leak"],
+  "trigger": "init()/initialize() 方法未检查是否已初始化，重复调用导致资源泄漏（DB 连接泄漏、WAL 锁定、重复订阅事件）。典型场景：memory/persistence.ts 两次 init() 导致 SQLite 连接泄漏+WAL 锁定。",
+  "steps": [
+    "用 search_code 搜索包含 'init()' 或 'initialize()' 方法的文件，特别关注含 DB/连接/订阅资源的类",
+    "检查每个 init() 入口处是否有 'if (this._db)' 或 'if (this._initialized)' 等已初始化检查",
+    "若缺少检查，在 init() 方法第一行添加资源防护：'if (this._db) throw new Error(...)' 或 'if (this._initialized) return'——取决于语义（幂等返回 vs 错误抛出）",
+    "对于 DB 连接类（如 persistence.ts），使用 throw 语义防止隐蔽的重复初始化",
+    "对于事件订阅类，使用 return 语义允许安全重复调用",
+    "运行 pnpm test（engine 包）验证：双重 init 不再导致资源泄漏"
+  ],
+  "expectedOutput": "所有含 init() 方法的资源管理类入口处增加双重初始化防护，防止 DB 连接泄漏、WAL 锁定、重复订阅等资源问题。",
+  "status": "trial",
+  "adoptionCount": 1,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

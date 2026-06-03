@@ -4,11 +4,11 @@
  * @see CLI 设计文档 §4.15
  */
 
-import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import { CORTEX_VERSION, CORTEX_PHASE, DEPENDENCY_VERSIONS } from "../constants.js";
+import type { CommandHandler, CommandResult } from "../types.js";
+import { CORTEX_VERSION, CORTEX_PHASE, DEPENDENCY_VERSIONS } from "@cortex/config";
 
 export function createVersionHandler(): CommandHandler {
-  return async (args, options, context): Promise<CommandResult> => {
+  return async (args, options, _context): Promise<CommandResult> => {
     const jsonOutput = options["json"] as boolean;
     const full = options["full"] as boolean;
 

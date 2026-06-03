@@ -1,0 +1,17 @@
+{
+  "id": "skill-generate-docs",
+  "name": "Documentation Generator",
+  "description": "Generates documentation from source code comments and structure",
+  "agentTypes": ["documentation", "code"],
+  "triggerTags": ["document", "docs", "generate"],
+  "version": "2.1.0",
+  "author": "Docs Team",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "format": { "type": "string", "enum": ["markdown", "html", "pdf"], "default": "markdown" },
+      "sourceDir": { "type": "string" }
+    }
+  },
+  "requiredContextFiles": ["src/**/*.ts", "src/**/*.tsx"]
+}

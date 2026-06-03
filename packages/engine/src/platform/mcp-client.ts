@@ -186,7 +186,7 @@ export class McpClient {
     this.rl?.close();
 
     // 先 SIGTERM, 2s 后 SIGKILL
-    const pid = this.process.pid;
+    const _pid = this.process.pid;
     this.process.kill("SIGTERM");
     const killed = await new Promise<boolean>((resolve) => {
       const t = setTimeout(() => {

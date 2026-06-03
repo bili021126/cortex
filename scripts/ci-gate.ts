@@ -41,6 +41,7 @@ interface PackageInfo {
 }
 
 interface GateResult {
+  configValid: boolean;
   build: boolean;
   typecheck: boolean;
   lint: boolean;
@@ -60,6 +61,7 @@ const PACKAGES: PackageInfo[] = [
   { name: "parser",       dir: join(ROOT, "packages", "parser"),       filter: "@cortex/parser" },
   { name: "pm",           dir: join(ROOT, "packages", "pm"),           filter: "@cortex/pm" },
   { name: "data",         dir: join(ROOT, "packages", "data"),         filter: "@cortex/data" },
+  { name: "skill-kit",    dir: join(ROOT, "packages", "skill-kit"),    filter: "@cortex/skill-kit" },
   { name: "tools",        dir: join(ROOT, "packages", "tools"),        filter: "@cortex/tools" },
   { name: "llm",          dir: join(ROOT, "packages", "llm"),          filter: "@cortex/llm" },
   { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
@@ -128,6 +130,47 @@ function extractCiTag(filePath: string): CiTag {
   } catch {
     return "unit";
   }
+}
+
+/** 检查文件头是否有 @ci 标签（不限标签值，只要写了 @ci 就算有） */
+function hasCiTag(filePath: string): boolean {
+  try {
+    const head = readFileSync(filePath, "utf-8").split("\n").slice(0, 10).join("\n");
+    return /@ci\b/.test(head);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 扫描全项目测试文件，检查是否都有 @ci 标签。
+ * 缺失标签的文件输出警告但不断路（渐进式推行）。
+ *
+ * @returns 缺失 @ci 标签的文件绝对路径列表
+ */
+function checkAllTestsTagged(): string[] {
+  const untagged: string[] = [];
+
+  for (const pkg of PACKAGES) {
+    const testDir = join(pkg.dir, "tests");
+    const files = walkTests(testDir);
+    for (const f of files) {
+      if (!hasCiTag(f)) {
+        untagged.push(f);
+      }
+    }
+  }
+
+  if (untagged.length > 0) {
+    console.warn(`\n⚠️  @ci 标签缺失 (${untagged.length} 个文件) —— 请为以下测试文件添加 @ci 标签（渐进式推行，暂不断路）:`);
+    for (const f of untagged) {
+      console.warn(`   📄 ${relative(ROOT, f)}`);
+    }
+  } else {
+    console.log("\n✅ 所有测试文件均已声明 @ci 标签");
+  }
+
+  return untagged;
 }
 
 /** 扫描全项目测试文件并分类 */
@@ -268,6 +311,122 @@ function runTests(runAll: boolean): { ok: boolean; details: GateResult["testDeta
   return { ok: allOk, details: { total: grandTotal, passed: grandPassed, skipped: skipped.length } };
 }
 
+// ─── Schema 校验 ─────────────────────────────────────────
+
+/**
+ * 校验 cortex-agents.json 是否符合 cortex-agents.schema.json 约束。
+ * 仅做结构性校验（必填字段、枚举值、ID 一致性），不做完整 JSON Schema 验证。
+ * 完整 Schema 验证由 VS Code + ajv 在编辑期和使用时完成。
+ */
+function validateConfig(): boolean {
+  console.log("\n📋 Schema 校验 cortex-agents.json …");
+
+  const configPath = join(ROOT, "cortex-agents.json");
+  const schemaPath = join(ROOT, "cortex-agents.schema.json");
+
+  if (!existsSync(configPath)) {
+    console.error("   ❌ cortex-agents.json 不存在");
+    return false;
+  }
+  if (!existsSync(schemaPath)) {
+    console.error("   ❌ cortex-agents.schema.json 不存在");
+    return false;
+  }
+
+  let config: any;
+  let schema: any;
+
+  try {
+    config = JSON.parse(readFileSync(configPath, "utf-8"));
+  } catch (e: any) {
+    console.error(`   ❌ cortex-agents.json JSON 解析失败: ${e.message}`);
+    return false;
+  }
+
+  try {
+    schema = JSON.parse(readFileSync(schemaPath, "utf-8"));
+  } catch (e: any) {
+    console.error(`   ❌ cortex-agents.schema.json JSON 解析失败: ${e.message}`);
+    return false;
+  }
+
+  const errors: string[] = [];
+
+  // 1. $schema 引用检查
+  if (!config.$schema) {
+    errors.push("缺少 $schema 字段——请添加对 cortex-agents.schema.json 的引用");
+  }
+
+  // 2. 顶层必填: agents
+  if (!config.agents || typeof config.agents !== "object") {
+    errors.push("缺少必需的 'agents' 域");
+  } else {
+    // 从 schema 提取合法 type 枚举
+    const agentSchema =
+      schema.properties?.agents?.patternProperties?.["^[a-z][a-z0-9-]*$"]?.properties;
+    const validAgentTypes: string[] = agentSchema?.type?.enum ?? [];
+
+    for (const [key, agent] of Object.entries(config.agents) as [string, any][]) {
+      // 必填字段
+      for (const req of ["id", "type", "role", "model", "key"]) {
+        if (!agent[req]) {
+          errors.push(`agents.${key}: 缺少必需的 '${req}' 字段`);
+        }
+      }
+
+      // type 枚举校验
+      if (agent.type && validAgentTypes.length > 0 && !validAgentTypes.includes(agent.type)) {
+        errors.push(
+          `agents.${key}: 'type' 值 "${agent.type}" 不在允许的枚举中 [${validAgentTypes.join(", ")}]`,
+        );
+      }
+
+      // ID 一致性
+      if (agent.id && agent.id !== key) {
+        errors.push(`agents.${key}: 'id' 值 "${agent.id}" 与 key "${key}" 不一致`);
+      }
+
+      // systemPrompt 与 systemPromptFile 必须至少有一个
+      if (!agent.systemPrompt && !agent.systemPromptFile) {
+        errors.push(`agents.${key}: 缺少 'systemPrompt' 或 'systemPromptFile'（必须至少指定一个）`);
+      }
+    }
+  }
+
+  // 3. tools 枚举校验（如果存在）
+  if (config.tools && typeof config.tools === "object") {
+    const toolSchema =
+      schema.properties?.tools?.patternProperties?.["^[a-z][a-z0-9_]*$"]?.properties;
+    const validCategories: string[] = toolSchema?.category?.enum ?? [];
+    const validLevels: string[] = toolSchema?.level?.enum ?? [];
+
+    for (const [key, tool] of Object.entries(config.tools) as [string, any][]) {
+      if (tool.category && validCategories.length > 0 && !validCategories.includes(tool.category)) {
+        errors.push(
+          `tools.${key}: 'category' 值 "${tool.category}" 不在允许的枚举中 [${validCategories.join(", ")}]`,
+        );
+      }
+      if (tool.level && validLevels.length > 0 && !validLevels.includes(tool.level)) {
+        errors.push(
+          `tools.${key}: 'level' 值 "${tool.level}" 不在允许的枚举中 [${validLevels.join(", ")}]`,
+        );
+      }
+    }
+  }
+
+  // 报告
+  if (errors.length === 0) {
+    console.log("   ✅ cortex-agents.json 校验通过");
+    return true;
+  }
+
+  console.error(`   ❌ 校验失败 (${errors.length} 个错误):`);
+  for (const err of errors) {
+    console.error(`      - ${err}`);
+  }
+  return false;
+}
+
 // ─── Lint ────────────────────────────────────────────────
 
 function runLint(): boolean {
@@ -291,6 +450,7 @@ async function main() {
   const args = process.argv.slice(2);
   const runAll = args.includes("--all");
   const dryRun = args.includes("--dry-run");
+  const jsonMode = args.includes("--json");
 
   console.log("╔══════════════════════════════╗");
   console.log("║  🔒 Cortex CI 门禁          ║");
@@ -298,7 +458,17 @@ async function main() {
   console.log("╚══════════════════════════════╝\n");
 
   if (dryRun) {
+    checkAllTestsTagged();
     const { unit, skipped } = scanAllTests();
+    if (jsonMode) {
+      const grouped = groupByTag([...unit, ...skipped]);
+      const summary: Record<string, { count: number; files: string[] }> = {};
+      for (const [tag, files] of Object.entries(grouped)) {
+        summary[tag] = { count: files.length, files: files.map((f) => f.path.replace(ROOT, "").replace(/^[\\/]/, "")) };
+      }
+      console.log(JSON.stringify({ mode: "dry-run", total: unit.length + skipped.length, byTag: summary }));
+      return;
+    }
     console.log("📋 测试文件扫描（干跑）:\n");
     for (const [tag, files] of Object.entries(groupByTag([...unit, ...skipped]))) {
       console.log(`   @ci: ${tag} (${files.length} 个):`);
@@ -311,12 +481,20 @@ async function main() {
   }
 
   const result: GateResult = {
+    configValid: false,
     build: false,
     typecheck: false,
     lint: false,
     test: false,
     testDetails: { total: 0, passed: 0, skipped: 0 },
   };
+
+  // 0. Schema 校验
+  result.configValid = validateConfig();
+  if (!result.configValid) {
+    console.error("\n❌ 配置校验失败，请修正 cortex-agents.json 后重试");
+    process.exit(1);
+  }
 
   // 1. 构建
   result.build = buildAll();
@@ -327,6 +505,9 @@ async function main() {
 
   // 2. 类型检查
   result.typecheck = typecheckAll();
+
+  // 2.5 @ci 标签审计（警告不阻断）
+  checkAllTestsTagged();
 
   // 3. 测试（仅 unit，除非 --all）
   const testResult = runTests(runAll);
@@ -340,13 +521,18 @@ async function main() {
   console.log("\n══════════════════════════════════");
   console.log("  门禁判定");
   console.log("══════════════════════════════════");
+  console.log(`  config    ${result.configValid ? "✅" : "❌"}`);
   console.log(`  build     ${result.build ? "✅" : "❌"}`);
   console.log(`  typecheck ${result.typecheck ? "✅" : "❌"}`);
   console.log(`  test      ${result.test ? "✅" : "❌"} (${result.testDetails.passed}/${result.testDetails.total} passed)`);
   console.log(`  lint      ${result.lint ? "✅" : "❌"}`);
   console.log("──────────────────────────────────");
 
-  const allPassed = result.build && result.typecheck && result.test && result.lint;
+  const allPassed = result.configValid && result.build && result.typecheck && result.test && result.lint;
+
+  if (jsonMode) {
+    console.log(JSON.stringify({ ...result, allPassed }));
+  }
 
   if (allPassed) {
     console.log("\n✅ 全部门禁通过\n");

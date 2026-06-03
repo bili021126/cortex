@@ -65,7 +65,7 @@ export function createConfigHandler(configManager: ConfigManager): CommandHandle
 function handleConfigList(
   config: ConfigManager,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   const prefix = options["prefix"] as string | undefined;
   const all = config.getAll();
@@ -104,7 +104,7 @@ function handleConfigList(
 function handleConfigGet(
   config: ConfigManager,
   key: string | undefined,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   if (!key) {
     return { success: false, error: "请指定配置键。用法: cortex config get <key>", exitCode: 1 };
@@ -127,8 +127,8 @@ function handleConfigSet(
   config: ConfigManager,
   key: string | undefined,
   value: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): CommandResult {
   if (!key || value === undefined) {
     return { success: false, error: "请指定 key 和 value。用法: cortex config set <key> <val>", exitCode: 1 };
@@ -150,7 +150,7 @@ function handleConfigSet(
 
 function handleConfigInit(
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   const global_ = options["global"] as boolean;
   const force = options["force"] || options["f"];
@@ -176,7 +176,7 @@ function handleConfigInit(
 function handleConfigValidate(
   config: ConfigManager,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   const strict = options["strict"] as boolean;
   const errors = config.validate(strict);

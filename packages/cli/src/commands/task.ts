@@ -8,12 +8,12 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import { DEFAULT_TASK_TIMEOUT_SEC } from "../constants.js";
-import type { EngineBridge } from "../services/engine-bridge.js";
+import { DEFAULT_TASK_TIMEOUT_SEC } from "@cortex/config";
+import type { ICortexApi } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-export function createTaskHandler(bridge: EngineBridge): CommandHandler {
+export function createTaskHandler(bridge: ICortexApi): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
     if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
       return {
@@ -46,7 +46,6 @@ export function createTaskHandler(bridge: EngineBridge): CommandHandler {
     const subcommand = args[0];
 
     try {
-      await bridge.ensureInitialized();
       const board = await bridge.getTaskBoard();
       const scheduler = await bridge.getScheduler();
 
@@ -80,7 +79,7 @@ async function handleTaskSubmit(
   scheduler: any,
   filePath: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!filePath) {
     return { success: false, error: "请指定任务文件。用法: cortex task submit <file>", exitCode: 1 };
@@ -98,7 +97,7 @@ async function handleTaskSubmit(
   const priority = (options["priority"] ?? "P2") as string;
   const label = options["label"] as string | undefined;
   const wait = options["wait"] || options["w"];
-  const timeout = parseInt(String(options["timeout"] ?? String(DEFAULT_TASK_TIMEOUT_SEC)), 10);
+  const _timeout = parseInt(String(options["timeout"] ?? String(DEFAULT_TASK_TIMEOUT_SEC)), 10);
 
   const taskNode: any = {
     id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -136,7 +135,7 @@ async function handleTaskSubmit(
 async function handleTaskList(
   board: any,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   const statusFilter = options["status"] as string | undefined;
   const limit = parseInt(String(options["limit"] ?? "20"), 10);
@@ -170,7 +169,7 @@ async function handleTaskStatus(
   board: any,
   taskId: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!taskId) {
     return { success: false, error: "请指定任务 ID。用法: cortex task status <id>", exitCode: 1 };
@@ -210,8 +209,8 @@ async function handleTaskStatus(
 async function handleTaskCancel(
   board: any,
   taskId: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!taskId) {
     return { success: false, error: "请指定任务 ID。用法: cortex task cancel <id>", exitCode: 1 };
@@ -234,8 +233,8 @@ async function handleTaskRedo(
   board: any,
   scheduler: any,
   taskId: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!taskId) {
     return { success: false, error: "请指定任务 ID。用法: cortex task redo <id>", exitCode: 1 };

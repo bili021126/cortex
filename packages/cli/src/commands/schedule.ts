@@ -8,11 +8,12 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import type { EngineBridge } from "../services/engine-bridge.js";
+import type { ICortexApi } from "@cortex/shared";
+import type { ITaskBoard, IScheduler } from "@cortex/engine";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-export function createScheduleHandler(bridge: EngineBridge): CommandHandler {
+export function createScheduleHandler(bridge: ICortexApi): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
     if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
       return {
@@ -64,7 +65,7 @@ export function createScheduleHandler(bridge: EngineBridge): CommandHandler {
 async function handleSchedulePlan(
   filePath: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!filePath) {
     return { success: false, error: "请指定任务描述文件。用法: cortex schedule plan <file>", exitCode: 1 };
@@ -124,18 +125,17 @@ async function handleSchedulePlan(
 }
 
 async function handleScheduleRun(
-  bridge: EngineBridge,
+  bridge: ICortexApi,
   planPath: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!planPath) {
     return { success: false, error: "请指定计划文件。用法: cortex schedule run <plan>", exitCode: 1 };
   }
 
-  await bridge.ensureInitialized();
-  const board = await bridge.getTaskBoard();
-  const scheduler = await bridge.getScheduler();
+  const board = await bridge.getTaskBoard() as ITaskBoard;
+  const scheduler = await bridge.getScheduler() as IScheduler;
 
   try {
     const content = fs.readFileSync(path.resolve(planPath), "utf-8");
@@ -172,20 +172,11 @@ async function handleScheduleRun(
 }
 
 async function handleScheduleStatus(
-  bridge: EngineBridge,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  bridge: ICortexApi,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): Promise<CommandResult> {
-  await bridge.ensureInitialized();
-  const board = await bridge.getTaskBoard();
-
-  if (!board) {
-    return {
-      success: true,
-      output: "调度系统: 未初始化",
-      exitCode: 0,
-    };
-  }
+  const board = await bridge.getTaskBoard() as ITaskBoard;
 
   const allNodes = board.getAllNodes();
   const pendingNodes = board.getPendingNodes();

@@ -31,8 +31,7 @@ import {
   ConfirmGate,
   Toolkit,
   MemoryStore,
-  CLIAdapter,
-} from "@cortex/engine";
+  CLIAdapter} from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
@@ -138,8 +137,8 @@ const REAL_TOOLS: RealToolkit = {
       try {
         const dir = path.dirname(fp);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(fp, params.content as string, "utf-8");
-        return { success: true, output: `Wrote ${Buffer.byteLength(params.content as string)} bytes to ${fp}` };
+        fs.writeFileSync(fp, params.content_blob as string, "utf-8");
+        return { success: true, output: `Wrote ${Buffer.byteLength(params.content_blob as string)} bytes to ${fp}` };
       } catch (e) {
         return { success: false, error: String(e) };
       }
@@ -160,8 +159,7 @@ const REAL_TOOLS: RealToolkit = {
           timeout: 60_000,
           encoding: "utf-8",
           maxBuffer: 512 * 1024,
-          stdio: ["ignore", "pipe", "pipe"],
-        });
+          stdio: ["ignore", "pipe", "pipe"]});
         return { success: true, output: output || "(exit 0, no output)" };
       } catch (e: any) {
         const stderr = e.stderr?.toString() ?? "";
@@ -169,8 +167,7 @@ const REAL_TOOLS: RealToolkit = {
         return { success: false, error: `Command failed (exit ${e.status ?? "?"}): ${e.message.slice(0, 200)}\nstdout: ${stdout.slice(0, 200)}\nstderr: ${stderr.slice(0, 200)}` };
       }
     });
-  },
-};
+  }};
 
 // ═══════════════════════════════════════════════
 // 3. 主流程
@@ -225,7 +222,7 @@ async function main() {
   pool.register({ type: AgentType.Ops, maxInstances: 3 });
   pool.register({ type: AgentType.Loop, maxInstances: 3 });
 
-  const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+  const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
   // 注入 CLIAdapter 到 ConfirmGate，启用真实用户确认（L2/L3 操作到 stdin 交互）
   const cliAdapter = new CLIAdapter();
@@ -239,26 +236,26 @@ async function main() {
 
   const codeToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(codeToolkit, WORKSPACE);
-  const codeAgent = createAgent(codeAgentConfig(), adapter, codeToolkit, memory);
+  const codeAgent = createAgent(codeAgentConfig("code"), adapter, codeToolkit, memory);
   await codeAgent.wakeup();
   scheduler.register(AgentType.Code, codeAgent, CHAT_MODEL);
 
   const reviewToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(reviewToolkit, WORKSPACE);
-  const reviewAgent = createAgent(reviewAgentConfig(), adapter, reviewToolkit, memory);
+  const reviewAgent = createAgent(reviewAgentConfig("review"), adapter, reviewToolkit, memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
 
   const analysisToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(analysisToolkit, WORKSPACE);
-  const analysisAgent = createAgent(analysisAgentConfig(), adapter, analysisToolkit, memory);
+  const analysisAgent = createAgent(analysisAgentConfig("analysis"), adapter, analysisToolkit, memory);
   await analysisAgent.wakeup();
   scheduler.register(AgentType.Analysis, analysisAgent, CHAT_MODEL);
 
   // DocGovernAgent —— 只读工具，审计文档合规性
   const docGovernToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(docGovernToolkit, WORKSPACE);
-  const docGovernAgent = createAgent(docGovernAgentConfig(), adapter, docGovernToolkit, memory);
+  const docGovernAgent = createAgent(docGovernAgentConfig("doc-govern"), adapter, docGovernToolkit, memory);
   await docGovernAgent.wakeup();
   scheduler.register(AgentType.DocGovern, docGovernAgent, CHAT_MODEL);
 
@@ -272,14 +269,14 @@ async function main() {
   // OpsAgent —— 编译/测试/部署，run_shell + write_file
   const opsToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(opsToolkit, WORKSPACE);
-  const opsAgent = createAgent(opsAgentConfig(), adapter, opsToolkit);
+  const opsAgent = createAgent(opsAgentConfig("ops"), adapter, opsToolkit);
   await opsAgent.wakeup();
   scheduler.register(AgentType.Ops, opsAgent, CHAT_MODEL);
 
   // LoopAgent —— 模式提炼（只读）
   const loopToolkit = new Toolkit(gate);
   REAL_TOOLS.registerReal(loopToolkit, WORKSPACE);
-  const loopAgent = createAgent(loopAgentConfig(), adapter, loopToolkit);
+  const loopAgent = createAgent(loopAgentConfig("loop"), adapter, loopToolkit);
   await loopAgent.wakeup();
   scheduler.register(AgentType.Loop, loopAgent, CHAT_MODEL);
 
@@ -339,7 +336,7 @@ async function main() {
   for (const r of report.results) {
     const icon = r.success ? "✅" : "❌";
     const preview = (r.output ?? r.error ?? "?").slice(0, 100);
-    console.log(`   ${icon} [${r.agentType ?? "?"}] ${r.nodeId}: ${preview}`);
+    console.log(`   ${icon} [${r.source.agentType ?? "?"}] ${r.nodeId}: ${preview}`);
   }
   console.log();
 
@@ -348,20 +345,20 @@ async function main() {
   const allNodes = board.getAllNodes();
   const completedNodes = allNodes.filter((n) => n.status === "done");
   const failedNodes = allNodes.filter((n) => n.status === "failed");
-  const memories = memory.read({});
+  const memories = await memory.read({});
 
   console.log(`   TaskBoard: ${allNodes.length} nodes (${completedNodes.length} done, ${failedNodes.length} failed)`);
   console.log(`   MemoryStore: ${memories.length} 条 [持久化: ${memory.isPersisted ? "✅ sql.js" : "⚠️ 仅内存"}]`);
   
   for (const n of completedNodes) {
     for (const r of n.results) {
-      const agentLabel = r.agentType === AgentType.DocGovern ? "📋 DocGovern" : `📝 [${r.agentType}]`;
+      const agentLabel = r.source.agentType === AgentType.DocGovern ? "📋 DocGovern" : `📝 [${r.source.agentType}]`;
       console.log(`   ${agentLabel} ${n.id}: ${(r.output ?? "").slice(0, 120)}`);
     }
   }
   
   // DocGovernAgent 审计摘要
-  const docGovernResults = allNodes.flatMap((n) => n.results).filter((r) => r.agentType === AgentType.DocGovern);
+  const docGovernResults = allNodes.flatMap((n) => n.results).filter((r) => r.source.agentType === AgentType.DocGovern);
   if (docGovernResults.length > 0) {
     console.log(`\n   📋 DocGovernAgent 审计产出:`);
     for (const dr of docGovernResults) {

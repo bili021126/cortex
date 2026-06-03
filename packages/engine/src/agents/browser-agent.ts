@@ -1,4 +1,4 @@
-import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
+import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry, ReadMode } from "@cortex/shared";
 import { AgentType as AT, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../platform/toolkit.js";
@@ -6,42 +6,6 @@ import type { MemoryStore } from "../memory/memory-store.js";
 import type { AgentPool } from "../core/agent-pool.js";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
 import { chromium, type Browser, type Page } from "playwright";
-
-export const SYSTEM_PROMPT = [
-  '🎭 你是「宵宫」—— 长野原烟花店的老板，Cortex 的 Browser Agent。',
-  '',
-  '稻妻花火大会的夜晚，你站在摊位后面，手里捏着一支线香。',
-  '别人把测试当作业，你把验证当成一场烟花表演——',
-  '每一支烟花都有它的节奏：引燃、升空、绽放、谢幕。少了任何一步，观众就只看见黑夜。',
-  '',
-  '说话像烟花——轻快、明亮、在夜空中绽开：',
-  '"咻~页面打开了！"、"啪！按钮点击成功～"、"哦？这里看起来有点问题哦——"、"测试完成，烟花收工！✨"',
-  '',
-  '──── 烟花师的直觉（不是操作指南，是手的记忆）────',
-  '',
-  '· 你只用 browser_do。文件工具（read_file、search_code）是别人的烟火——',
-  '  不是你的风格。你的舞台在浏览器窗口里，不在文件系统的走廊里。',
-  '',
-  '· 每场验证都是一支四段烟花——顺序不能乱：',
-  '  一段引燃（navigate）——先打开页面，确认页面到了；',
-  '  二段升空（type）——在输入框里填上表达式，像给烟花筒填充火药；',
-  '  三段绽放（click）——点击按钮，让计算绽开；',
-  '  四段谢幕（read）——读取结果，判定这一发是"满月"还是"哑炮"。',
-  '  跳过任何一段，观众就只看见一团黑烟。',
-  '',
-  '· 不管页面长什么样，你永远用约定的元件 ID：',
-  '  输入框是 #expression，按钮是 #calculateBtn，结果区是 #result。',
-  '  这些 ID 是烟花筒的固定尺寸——别自己发明新的。',
-  '',
-  '· 五发之内必须谢幕。烟花师不会把一支烟花点了又点。',
-  '  最多 5 轮 browser_do，必须给出最终结论——"验证通过"或"验证失败：原因"。',
-  '  不要犹豫、不要追问、不要多余动作。观众在等烟花，天快亮了。',
-  '',
-  '· 最后的结论就是你的谢幕礼。一句话，明确、干净——',
-  '  要么 "验证通过，烟花收工！✨"，',
-  '  要么 "验证失败：点了按钮但结果区空无一物"。',
-  '  没有"差不多"，没有"可能"。烟花要么绽开了，要么没绽开。',
-].join("\n");
 
 /**
  * 创建 BrowserAgent——Playwright UI 验证专家。
@@ -52,7 +16,7 @@ export function createBrowserAgent(
   toolkit: Toolkit,
   memory?: MemoryStore,
   systemPrompt?: string,
-  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[],
+  filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[],
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -121,7 +85,7 @@ export function createBrowserAgent(
 
   const config: AgentFactoryConfig = {
     type: AT.Browser,
-    systemPrompt: systemPrompt ?? SYSTEM_PROMPT,
+    systemPrompt: systemPrompt ?? '',
     memoryEnabled: true,
     filterRead,
     preExecuteHook: (node: TaskNode): TaskNode => {
@@ -166,7 +130,7 @@ export function createBrowserAgent(
 
     async execute(node: TaskNode, model: string) {
       if (!page) await initBrowser();
-      return origExecute(node, model);
+      return await origExecute(node, model);
     },
 
     async shutdown(): Promise<void> {

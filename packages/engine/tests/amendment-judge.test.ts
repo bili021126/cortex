@@ -67,15 +67,12 @@ function makeProposal(overrides: Partial<AmendmentProposal> = {}): AmendmentProp
       principles: [],
       crossReferences: ["§3.1"],
       agents: ["DocGovernAgent"],
-      breaking: false,
-    },
+      breaking: false},
     source: {
       agent: "DocGovernAgent",
-      trace: "自审视审计 #AM-001——发现标签词汇表中缺少 constitution_propose",
-    },
+      trace: "自审视审计 #AM-001——发现标签词汇表中缺少 constitution_propose"},
     status: "pending_judgment",
-    ...overrides,
-  };
+    ...overrides};
 }
 
 // ── 测试用例 ─────────────────────────────────────
@@ -89,9 +86,7 @@ describe("evaluateAmendment", () => {
         principles: ["原则一"],
         crossReferences: [],
         agents: [],
-        breaking: false,
-      },
-    });
+        breaking: false}});
 
     const result = evaluateAmendment(proposal, FIXTURE_CONSTITUTION);
     expect(result.verdict).toBe("BLOCKED");
@@ -126,9 +121,7 @@ describe("evaluateAmendment", () => {
         principles: [],
         crossReferences: ["§3.1"],
         agents: ["DocGovernAgent"],
-        breaking: true,
-      },
-    });
+        breaking: true}});
 
     const result = evaluateAmendment(proposal, FIXTURE_CONSTITUTION);
     expect(result.verdict).toBe("APPROVED_WITH_CAVEATS");
@@ -142,8 +135,7 @@ describe("evaluateAmendment", () => {
     const proposal = makeProposal({
       before: "这段文字根本不存在于宪法中。虚构的段落。",
       after: "替换文本",
-      category: "modify",
-    });
+      category: "modify"});
 
     const result = evaluateAmendment(proposal, FIXTURE_CONSTITUTION);
     expect(result.verdict).toBe("BLOCKED");
@@ -174,9 +166,7 @@ describe("evaluateAmendment", () => {
         principles: [],
         crossReferences: ["§9.99"], // 不存在
         agents: [],
-        breaking: false,
-      },
-    });
+        breaking: false}});
 
     const result = evaluateAmendment(proposal, FIXTURE_CONSTITUTION);
     expect(result.verdict).toBe("BLOCKED");
@@ -208,8 +198,7 @@ describe("evaluateAmendment", () => {
       category: "add",
       before: "",
       after: "新增 §5.3 修宪管线条款。",
-      summary: "新增修宪管线条款以支持自动化修宪审批流程",
-    });
+      summary: "新增修宪管线条款以支持自动化修宪审批流程"});
 
     const result = evaluateAmendment(proposal, FIXTURE_CONSTITUTION);
     expect(result.verdict).not.toBe("BLOCKED");

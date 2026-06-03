@@ -1,0 +1,22 @@
+{
+  "id": "skill-p32-cross-package-migration-test-fix",
+  "agentType": "fix",
+  "name": "P32: 跨包类迁移后测试断裂修复",
+  "triggerTags": ["fix", "test", "migration", "refactor"],
+  "trigger": "类从 @cortex/shared 移至 @cortex/engine（或反之）后，shared 和/或 engine 的测试文件报 'X is not a constructor' 或 'Module not found'。典型场景：SkillRegistry 类从 shared 移 engine 后，shared/tests/skill-registry.test.ts 18 个测试全红 + engine/tests/skill-system-integration.test.ts 7 个测试全红。",
+  "steps": [
+    "用 search_code 搜索 'from \"@cortex/shared\"' 和 'from \"@cortex/engine\"'，定位所有导入已迁移类的测试文件",
+    "检查 shared 下的旧测试文件：若测试的类已移出 shared，则整个测试文件应移至 engine/tests/（原文件删除）",
+    "检查 engine 下的测试文件：若从 '@cortex/shared' 导入已迁移的类，改为相对路径导入（如 '../src/registry/skill-registry.js'），类型导入保留 '@cortex/shared'",
+    "在 engine/tests/ 重建测试文件时，修正所有 import 路径为相对路径",
+    "对 engine 中引用已迁移类的集成测试（如 skill-system-integration.test.ts），同样修正导入路径并验证其能找到正确的构造函数",
+    "运行 pnpm test（engine 和 shared 两个包）验证：原 shared 旧测试不再存在，engine 新测试全部通过",
+    "检查 shared/src/index.ts（桶导出）：已迁移的类应从 barrel 中移除，仅保留类型导出"
+  ],
+  "expectedOutput": "跨包迁移后所有测试通过：shared 旧测试已删除/迁移，engine 新测试使用相对路径导入，0 个 'is not a constructor' 错误",
+  "status": "trial",
+  "adoptionCount": 2,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

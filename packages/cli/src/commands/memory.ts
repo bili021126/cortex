@@ -7,10 +7,10 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import type { EngineBridge } from "../services/engine-bridge.js";
-import { MemoryType, MemoryState, LinkType, AgentType } from "@cortex/shared";
+import type { ICortexApi } from "@cortex/shared";
+import { LinkType, AgentType } from "@cortex/shared";
 
-export function createMemoryHandler(bridge: EngineBridge): CommandHandler {
+export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
     if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
       return {
@@ -84,7 +84,7 @@ async function handleMemoryWrite(
   key: string | undefined,
   value: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!key || !value) {
     return { success: false, error: "请指定 key 和 value。用法: cortex memory write <key> <value>", exitCode: 1 };
@@ -94,13 +94,14 @@ async function handleMemoryWrite(
   const agentType = (options["agent"] as string) ?? "butler";
   const weight = parseInt(String(options["weight"] ?? "5"), 10);
 
-  const id = memory.write({
-    memoryType: MemoryType[memoryType as keyof typeof MemoryType] ?? MemoryType.Episodic,
-    content: { key, value },
+  const id = await memory.write({
+    kind: "TaskLog",
+    content_blob: { key, value },
     summary: key,
-    agentType: agentType as AgentType,
-    creatorId: "cli",
+    semantic_gist: key,
+    source: { agentType: agentType as AgentType, taskId: "" },
     weight,
+    content_hash: "",
   });
 
   return {
@@ -115,14 +116,14 @@ async function handleMemoryRead(
   memory: any,
   key: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!key) {
     return { success: false, error: "请指定 key。用法: cortex memory read <key>", exitCode: 1 };
   }
 
   const mode = (options["mode"] as string) ?? "csa";
-  const entries = memory.read({ keywords: [key], queryMode: mode, limit: 5 });
+  const entries = await memory.read({ keywords: [key], limit: 5 }, mode);
 
   return {
     success: true,
@@ -138,7 +139,7 @@ async function handleMemorySearch(
   memory: any,
   query: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!query) {
     return { success: false, error: "请指定搜索关键词。用法: cortex memory search <query>", exitCode: 1 };
@@ -151,24 +152,23 @@ async function handleMemorySearch(
 
   const searchQuery: any = {
     keywords: query.split(/\s+/),
-    queryMode: mode,
     limit,
   };
 
   if (memoryType) {
-    searchQuery.memoryTypes = [MemoryType[memoryType.toUpperCase() as keyof typeof MemoryType]].filter(Boolean);
+    searchQuery.kind = memoryType.toUpperCase() === "KNOWLEDGE" ? "Insight" : "TaskLog";
   }
   if (agentType) {
     searchQuery.agentTypes = [agentType as AgentType];
   }
 
-  const entries = memory.read(searchQuery);
+  const entries = await memory.read(searchQuery, mode);
 
   return {
     success: true,
     data: entries,
     output: entries.length > 0
-      ? entries.map((e: any) => `[${e.id}] ${e.summary} (${e.memoryType}, w:${e.weight})`).join("\n")
+      ? entries.map((e: any) => `[${e.id}] ${e.summary} (${e.kind}, w:${e.weight})`).join("\n")
       : `未找到匹配 "${query}" 的记忆`,
     exitCode: 0,
   };
@@ -179,7 +179,7 @@ async function handleMemoryLink(
   srcId: string | undefined,
   tgtId: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!srcId || !tgtId) {
     return { success: false, error: "请指定源和目标 ID。用法: cortex memory link <src> <tgt>", exitCode: 1 };
@@ -200,25 +200,25 @@ async function handleMemoryLink(
   };
 }
 
-async function handleMemoryArchive(memory: any, id: string | undefined, context: CommandContext): Promise<CommandResult> {
+async function handleMemoryArchive(memory: any, id: string | undefined, _context: CommandContext): Promise<CommandResult> {
   if (!id) return { success: false, error: "请指定记忆 ID。用法: cortex memory archive <id>", exitCode: 1 };
   const ok = memory.archive(id);
   return { success: ok, output: ok ? `✓ 记忆已归档: ${id}` : `归档失败: ${id}`, exitCode: ok ? 0 : 1 };
 }
 
-async function handleMemoryFreeze(memory: any, id: string | undefined, context: CommandContext): Promise<CommandResult> {
+async function handleMemoryFreeze(memory: any, id: string | undefined, _context: CommandContext): Promise<CommandResult> {
   if (!id) return { success: false, error: "请指定记忆 ID。用法: cortex memory freeze <id>", exitCode: 1 };
   const ok = memory.freeze(id);
   return { success: ok, output: ok ? `✓ 记忆已冻结: ${id}` : `冻结失败: ${id}`, exitCode: ok ? 0 : 1 };
 }
 
-async function handleMemoryObliterate(memory: any, id: string | undefined, context: CommandContext): Promise<CommandResult> {
+async function handleMemoryObliterate(memory: any, id: string | undefined, _context: CommandContext): Promise<CommandResult> {
   if (!id) return { success: false, error: "请指定记忆 ID。用法: cortex memory obliterate <id>", exitCode: 1 };
   const ok = memory.obliterate(id);
   return { success: ok, output: ok ? `✓ 记忆已湮灭: ${id}` : `湮灭失败: ${id}`, exitCode: ok ? 0 : 1 };
 }
 
-async function handleMemoryFlush(memory: any, context: CommandContext): Promise<CommandResult> {
+async function handleMemoryFlush(memory: any, _context: CommandContext): Promise<CommandResult> {
   await memory.flush();
   return { success: true, output: "✓ 持久化已刷新", exitCode: 0 };
 }
@@ -226,18 +226,18 @@ async function handleMemoryFlush(memory: any, context: CommandContext): Promise<
 async function handleMemoryStats(
   memory: any,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   const detail = options["detail"] || options["d"];
-  const entries = memory.read({ limit: 0 }); // 获取全部
+  const entries = await memory.read({ limit: 0 }); // 获取全部
 
   const byType: Record<string, number> = {};
   const byState: Record<string, number> = {};
   let totalWeight = 0;
 
   for (const e of entries) {
-    byType[e.memoryType] = (byType[e.memoryType] ?? 0) + 1;
-    byState[e.state] = (byState[e.state] ?? 0) + 1;
+    byType[e.kind] = (byType[e.kind] ?? 0) + 1;
+    byState[e.semantic_state] = (byState[e.semantic_state] ?? 0) + 1;
     totalWeight += e.weight;
   }
 

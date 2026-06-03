@@ -14,8 +14,7 @@ function makeNode(overrides: Partial<Parameters<TaskBoard["addNode"]>[0]> = {}) 
     results: [],
     payload: "写 hello world",
     createdAt: Date.now(),
-    ...overrides,
-  };
+    ...overrides};
 }
 
 describe("TaskBoard", () => {
@@ -58,8 +57,7 @@ describe("TaskBoard", () => {
     tb.addNode(
       makeNode({
         needsMultiPerspective: true,
-        tags: ["review", "research"],
-      }),
+        tags: ["review", "research"]}),
     );
     const r1 = tb.claim("node-1", AgentType.Review);
     expect(r1).not.toBeNull();
@@ -76,8 +74,7 @@ describe("TaskBoard", () => {
     tb.addNode(
       makeNode({
         needsMultiPerspective: true,
-        tags: ["review", "research"],
-      }),
+        tags: ["review", "research"]}),
     );
     tb.claim("node-1", AgentType.Review);
     expect(tb.claim("node-1", AgentType.Review)).toBeNull();
@@ -88,8 +85,7 @@ describe("TaskBoard", () => {
     tb.addNode(
       makeNode({
         needsMultiPerspective: true,
-        tags: ["review", "research"],
-      }),
+        tags: ["review", "research"]}),
     );
     tb.claim("node-1", AgentType.Review);
     // ReviewAgent 已认领 → findPending 不返回该节点
@@ -105,8 +101,7 @@ describe("TaskBoard", () => {
     tb.addNode(
       makeNode({
         needsMultiPerspective: true,
-        tags: ["review", "deploy"],
-      }),
+        tags: ["review", "deploy"]}),
     );
     tb.claim("node-1", AgentType.Review);
     tb.claim("node-1", AgentType.Ops);
@@ -127,8 +122,7 @@ describe("TaskBoard", () => {
     tb.addNode(
       makeNode({
         needsMultiPerspective: true,
-        tags: ["review"],
-      }),
+        tags: ["review"]}),
     );
     tb.claim("node-1", AgentType.Review);
     tb.complete("node-1", AgentType.Review, false, undefined, "审查失败");

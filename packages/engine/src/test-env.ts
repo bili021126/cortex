@@ -8,8 +8,10 @@
  *   if (!isTestEnv()) { console.error(...); }
  */
 
+import { ENV_VITEST, ENV_NODE_ENV } from "@cortex/config";
+
 export function isTestEnv(): boolean {
-  return !!process.env.VITEST || !!process.env.NODE_ENV?.startsWith("test");
+  return !!process.env[ENV_VITEST] || !!process.env[ENV_NODE_ENV]?.startsWith("test");
 }
 
 /**

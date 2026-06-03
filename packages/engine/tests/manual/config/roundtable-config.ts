@@ -9,7 +9,7 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { AgentType, LinkType, MemoryType } from "@cortex/shared";
+import { AgentType, LinkType, type MemoryKind } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import { MemoryStore } from "@cortex/engine";
 import cortexConfig from "../../../../../cortex-agents.json" assert { type: "json" };
@@ -31,22 +31,33 @@ const PERSONA_TYPE_MAP: Record<string, AgentType> = {
   thoma: AgentType.Butler,
   zhongli: AgentType.Strategist,
   kuki: AgentType.Api,
-  alhaitham: AgentType.Data,
-};
+  alhaitham: AgentType.Data};
 
 /** 从 cortex-agents.json 提取圆桌 Persona 数据，转换为旧 persona-prompts.json 格式 */
 export function getPersonaPrompts(): Record<string, { emoji: string; name: string; title: string; systemPrompt: string }> {
   const result: Record<string, { emoji: string; name: string; title: string; systemPrompt: string }> = {};
+  // 项目根目录：当前文件位于 packages/engine/tests/manual/config/，向上 5 层到项目根
+  const projectRoot = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
   for (const [key, agent] of Object.entries(cortexConfig.agents)) {
-    const a = agent as { display?: { emoji: string; shortName: string }; roundtable?: { personaPrompt: string; roundtableTitle: string } };
-    if (a.roundtable && a.display) {
-      result[key] = {
-        emoji: a.display.emoji,
-        name: a.display.shortName,
-        title: a.roundtable.roundtableTitle,
-        systemPrompt: a.roundtable.personaPrompt,
-      };
+    const a = agent as {
+      display?: { emoji: string; shortName: string };
+      roundtable?: { personaPrompt?: string; personaPromptFile?: string; roundtableTitle: string };
+    };
+    if (!a.roundtable || !a.display) continue;
+    let personaPrompt = a.roundtable.personaPrompt ?? "";
+    // 如果 personaPrompt 为空但有 personaPromptFile，从文件加载
+    if (!personaPrompt && a.roundtable.personaPromptFile) {
+      const filePath = path.resolve(projectRoot, a.roundtable.personaPromptFile);
+      if (fs.existsSync(filePath)) {
+        personaPrompt = fs.readFileSync(filePath, "utf-8");
+      }
     }
+    if (!personaPrompt) continue; // 跳过无 prompt 的 Agent
+    result[key] = {
+      emoji: a.display.emoji,
+      name: a.display.shortName,
+      title: a.roundtable.roundtableTitle,
+      systemPrompt: personaPrompt};
   }
   return result;
 }
@@ -59,8 +70,7 @@ function buildPersonas(prompts: Record<string, { emoji: string; name: string; ti
       emoji: (p as { emoji: string }).emoji,
       name: (p as { name: string }).name,
       title: (p as { title: string }).title,
-      systemPrompt: (p as { systemPrompt: string }).systemPrompt,
-    }));
+      systemPrompt: (p as { systemPrompt: string }).systemPrompt}));
 }
 
 // ═══════════════════════════════════════════════
@@ -171,66 +181,57 @@ export const MATERIAL_CHECKLIST: MaterialChecklist = {
       source: "软约束自审视脚本（cortex-self-examination.ts --soft）",
       filePath: "test-output/self-examination-soft/",
       phase: "第一轮",
-      required: true,
-    },
+      required: true},
     {
       name: "共识修复清单（上一轮）",
       description: "上一轮圆桌产出的 P0-P3 修复清单——如为首次圆桌则此项为空，视为无历史基准",
       source: "上一轮圆桌凝光收束签署",
       filePath: "test-output/self-examination/consensus-fix-list.md",
       phase: "第一轮",
-      required: false,
-    },
+      required: false},
     {
       name: "根因归簇分析报告",
       description: "AI 归因分析引擎对 7 份审视报告进行跨报告去重归簇后产出的根因分析——将 206+ 项发现归为 6 个根因簇，标注每簇的发生频率、影响范围、修复成本估算",
       source: "AI 归因分析引擎（在自审视完成后自动触发）",
       filePath: "test-output/self-examination-soft/root-cause-cluster-analysis.md",
       phase: "第二阶段·无主题",
-      required: true,
-    },
+      required: true},
     {
       name: "钟离战略评估报告",
       description: "钟离（StrategistAgent）在第四阶段半读取全部审视报告后产出的战略判断——架构方向、契约完整性、阶段跃迁判定、磨损预警",
       source: "钟离（StrategistAgent）· 第四阶段半战略分析",
       filePath: "test-output/self-examination-soft/zhongli-strategy-assessment.md",
       phase: "第二阶段·无主题",
-      required: false,
-    },
+      required: false},
     {
       name: "宪法 v2.5 全文",
       description: "Cortex 概念顶层设计 v2.5——作为讨论的宪法基准，所有修复建议不得违宪",
       source: "docs/Cortex 概念顶层设计 v2.5.md",
       filePath: "docs/Cortex 概念顶层设计 v2.5.md",
       phase: "全程参考",
-      required: true,
-    },
+      required: true},
     {
       name: "Agent 标签词汇表",
       description: "Agent 标签词汇表 v2.0——标签匹配的语法参考",
       source: "docs/core/Agent标签词汇表-v2.0.md",
       filePath: "docs/core/Agent标签词汇表-v2.0.md",
       phase: "全程参考",
-      required: false,
-    },
+      required: false},
     {
       name: "意图响应体系设计",
       description: "意图响应体系设计文档——澄清层+匹配增强+模式区分的概念蓝图，供第三轮宪法演进讨论参考",
       source: "架构设计",
       filePath: "docs/core/意图响应体系设计.md",
       phase: "第三轮",
-      required: false,
-    },
+      required: false},
     {
       name: "自由审视摘要",
       description: "自审视脚本自动生成的执行摘要——包含执行概况、Agent 产出明细、整体状态速览",
       source: "cortex-self-examination.ts 自动生成",
       filePath: "test-output/self-examination-soft/self-examination-summary.md",
       phase: "热身",
-      required: false,
-    },
-  ],
-};
+      required: false},
+  ]};
 
 // ═══════════════════════════════════════════════
 // 审视共识会议配置（2026-05-04 修复验证审视后）
@@ -254,7 +255,6 @@ export const SHENSHI_CONFIG: MeetingConfig = {
       title: "第零轮 · 已闭合项确认",
       minTurns: 1,
       maxTurns: 2,
-      queryMode: "hca",
       topic: `在讨论新问题之前，先建立地面真相基准线。
 
 请每位 Agent 根据自己亲手的验证结果，逐一确认哪些修复项已经确定闭合。
@@ -264,13 +264,11 @@ export const SHENSHI_CONFIG: MeetingConfig = {
 3. 如果某项你只是"听说闭合了"但未亲手验证，标注 ⚠️ "未亲手验证"
 4. 第零轮的陈述将作为后续讨论的地面真相基准——后续轮次不应将已闭合项重新当成待修复项
 
-凝光的任务：倾听并记录各 Agent 确认的已闭合项，这些项将在最终清单中归入 ✅ 已闭合节，不得出现在 P0-P3 修复清单中。`,
-    },
+凝光的任务：倾听并记录各 Agent 确认的已闭合项，这些项将在最终清单中归入 ✅ 已闭合节，不得出现在 P0-P3 修复清单中。`},
     {
       title: "第一轮 · 修复验证陈述",
       minTurns: 2,
       maxTurns: 3,
-      queryMode: "csa",
       topic: `请结合你自己的验证结果，陈述你发现的 TOP 3 关键发现。
 重点：哪些修复闭合得很好，哪些修复未完成或有残留。
 如果你发现了新问题（修复引入的副作用、验证过程中暴露的隐藏债务），务必提出来。
@@ -278,13 +276,11 @@ export const SHENSHI_CONFIG: MeetingConfig = {
 ⚠️ 重要约束：第零轮已确认闭合的项，本轮不应再作为"未修复"提出。
 如果你认为某已闭合项仍有残留，必须提供新的具体证据（新发现的代码路径、新暴露的边界条件），而不是重复已知信息。
 
-注意别人说了什么——如果多人已经说了同一个问题，请从你的不同视角补充，不要重复。`,
-    },
+注意别人说了什么——如果多人已经说了同一个问题，请从你的不同视角补充，不要重复。`},
     {
       title: "第二轮 · 交叉验证与重点识别",
       minTurns: 2,
       maxTurns: 3,
-      queryMode: "csa",
       topic: `基于前两轮的陈述进行交叉分析：
 1. 哪些问题被多人独立发现——这意味着共识强度高，应升级优先级
 2. 哪些问题是同一问题的不同表现——应合并为一条修复项
@@ -292,13 +288,11 @@ export const SHENSHI_CONFIG: MeetingConfig = {
 4. 是否遗漏了重大问题？
 5. 检查清单中被标 [x] 的项是否真的完成了——而不是改了个标记或加了行注释就算完
 
-目标：深化分析，不展开新话题。`,
-    },
+目标：深化分析，不展开新话题。`},
     {
       title: "第三轮 · 凝光收束与全员签署",
       minTurns: 2,
       maxTurns: 3,
-      queryMode: "csa",
       topic: `基于前三轮的所有陈述和交叉分析，凝光现在收束共识。
 
 凝光：请产出完整更新版修复优先级清单，格式如下：
@@ -330,12 +324,10 @@ export const SHENSHI_CONFIG: MeetingConfig = {
 
 其他 Agent：审阅凝光的清单，确认你的关键发现是否被正确记录和定级。
 如有遗漏或定级错误，必须在下一轮中指出。
-如无异议，签署「确认」。最终产出一份全员签署的新版审视共识修复清单。`,
-    },
+如无异议，签署「确认」。最终产出一份全员签署的新版审视共识修复清单。`},
   ],
 
-  personas: buildPersonas(getPersonaPrompts()),
-};
+  personas: buildPersonas(getPersonaPrompts())};
 
 // ═══════════════════════════════════════════════
 // 三轮代码审阅圆桌配置（2026-05-11 宪法 v2.5 入宪）
@@ -368,7 +360,6 @@ export const CODE_REVIEW_ROUNDTABLE: MeetingConfig = {
       title: "第一轮 · 持久化链路与状态机——区分「本轮必修」vs「Core-2 再修」",
       minTurns: 5,
       maxTurns: 7,
-      queryMode: "csa",
       topic: `【聚焦根因簇 A（持久化链路防御不足）+ B（状态机流转不完整）】
 
 ⚠️ 约束：这是「分类决策」会议，不是「架构设计」会议。每个发言必须给出明确的「必修/延后」判断，
@@ -394,13 +385,11 @@ export const CODE_REVIEW_ROUNDTABLE: MeetingConfig = {
 
 发言格式：每项一条，格式为「A1: 必修/延后。理由：xxx」
 
-收束要求：本轮结束时凝光输出「第一轮收束结论」，列出本轮必修项及其排期。`,
-    },
+收束要求：本轮结束时凝光输出「第一轮收束结论」，列出本轮必修项及其排期。`},
     {
       title: "第二轮 · 工程债务与可观测管道——评估偿还优先级",
       minTurns: 5,
       maxTurns: 7,
-      queryMode: "csa",
       topic: `【聚焦根因簇 C（可观测管道覆盖不全）+ D（基础设施/工程债务）】
 
 ⚠️ 约束：这是「优先级评估」会议，不是「重构设计」会议。每个发言必须给出「必修/可延后/已归因」的判断，
@@ -426,13 +415,11 @@ export const CODE_REVIEW_ROUNDTABLE: MeetingConfig = {
 
 发言格式：每项一条，格式为「D2: 必修。理由：xxx」或「D3: 延后。风险：xxx」
 
-收束要求：本轮结束时凝光输出「第二轮收束结论」，更新优先级矩阵。`,
-    },
+收束要求：本轮结束时凝光输出「第二轮收束结论」，更新优先级矩阵。`},
     {
       title: "第三轮 · 模式债务 + DeepSeek 4.1 多模态——宪法演进讨论",
       minTurns: 5,
       maxTurns: 7,
-      queryMode: "hca",
       topic: `【聚焦根因簇 E（代码模式债务）+ F（治理合规偏差，已归因）+ DeepSeek 4.1 多模态预留】
 
 簇 E：代码模式债务（莫娜发现）
@@ -455,12 +442,10 @@ DeepSeek 4.1 多模态预留（2026-06 发布）
 3. DeepSeek 4.1：哪些预埋伏笔必须现在就埋（否则发版后再改宪法就是 breaking change）？
 4. 宪法中还有哪些未提及的议题需要在这次讨论中提出？
 
-收束要求：本轮结束时凝光输出「第三轮收束结论」+ 对宪法的补充建议（如有）。`,
-    },
+收束要求：本轮结束时凝光输出「第三轮收束结论」+ 对宪法的补充建议（如有）。`},
   ],
 
-  personas: buildPersonas(getPersonaPrompts()),
-};
+  personas: buildPersonas(getPersonaPrompts())};
 
 // ═══════════════════════════════════════════════
 // 软约束共识圆桌配置（2026-05-11 合入）
@@ -502,7 +487,6 @@ Cortex 刚刚完成了软约束自由审视——9 位 Agent 在代码库中自�
       title: "发现陈述 + 共识签署（合并轮）",
       minTurns: 3,
       maxTurns: 5,
-      queryMode: "hca",
       topic: `【基于各自审视报告，直接产出共识修复清单】
 
 ⚠️ 约束：一轮内完成全部流程。发言顺序：
@@ -547,12 +531,10 @@ Cortex 刚刚完成了软约束自由审视——9 位 Agent 在代码库中自�
 - 定级是否合理？如有遗漏或定级错误，必须在发言中明确指出。
 - 如无异议，签署「确认」。
 
-最终产出一份全员签署的共识修复清单。`,
-    },
+最终产出一份全员签署的共识修复清单。`},
   ],
 
-  personas: buildPersonas(getPersonaPrompts()).filter((p) => p.type !== AgentType.Browser),
-};
+  personas: buildPersonas(getPersonaPrompts()).filter((p) => p.type !== AgentType.Browser)};
 
 // ═══════════════════════════════════════════════
 // 归因分析圆桌——第二阶段 · 无主题会议（2026-05-04 入宪）
@@ -598,7 +580,6 @@ export const ATTRIBUTION_ROUNDTABLE: MeetingConfig = {
       title: "开放讨论 · 根因归簇审视",
       minTurns: 3,
       maxTurns: 8,
-      queryMode: "hca",
       topic: `【无预设议题——从归因报告中自由展开】
 
 桌上有一份「根因归簇分析报告」——AI 归因引擎将 206+ 项发现归为 6 个根因簇：
@@ -624,12 +605,10 @@ export const ATTRIBUTION_ROUNDTABLE: MeetingConfig = {
 凝光的任务：
 - 不设定议题，不引导方向——让讨论自然展开
 - 动态记录共识点（多人认同的判断）和分歧点（对同一归簇的不同解读）
-- 讨论自然收束后，输出「归因共识纪要」——不是修复清单，而是对根因地图的集体确认或修正`,
-    },
+- 讨论自然收束后，输出「归因共识纪要」——不是修复清单，而是对根因地图的集体确认或修正`},
   ],
 
-  personas: buildPersonas(getPersonaPrompts()),
-};
+  personas: buildPersonas(getPersonaPrompts())};
 
 // ═══════════════════════════════════════════════
 // 发言质量规则（注入为第二层 system prompt）
@@ -646,7 +625,13 @@ export const QUALITY_RULES = `
 4. 质量权重：实质贡献越多，发言机会越多。禁止灌水消耗轮次权重。
 5. 发言前先读记忆——了解别人说了什么，再决定自己要不要说、说什么。
 6. 强约束提醒：本轮只有 2-3 次发言机会，每次发言都应推进共识，请务必珍惜。
-7. 🔥 允许抱怨——看到烂代码、设计缺陷、迟迟不修的 bug、糊弄的修复时，可以表达不满甚至发火。但抱怨之后必须跟上实质分析（为什么烂、怎么修），纯宣泄不算贡献。刻晴的「效率太低了！」、北斗的「别整这些虚的！」都是合法的——只要后面跟着干货。`;
+7. 🔥 允许抱怨——看到烂代码、设计缺陷、迟迟不修的 bug、糊弄的修复时，可以表达不满甚至发火。但抱怨之后必须跟上实质分析（为什么烂、怎么修），纯宣泄不算贡献。刻晴的「效率太低了！」、北斗的「别整这些虚的！」都是合法的——只要后面跟着干货。
+8. 🔍 **事实权重规则**（P0 级——高于所有角色设定）：
+   - 任何涉及具体代码位置、函数行为、调用关系的断言，必须来自交叉验证报告中「已验证（含代码引用）」的条目——不得凭记忆重述。
+   - 如果某条发现来自交叉验证报告中标 ⚠️ 未验证的条目，其发言权重自动降为 0——视同未证实传闻，不得进入 P0/P1 清单。
+   - 如果一名 Agent 的发现被交叉验证标为 ❌ 不成立，该 Agent 不得在圆桌中再次引用该发现——已被代码反驳的声明是废纸。
+   - 记忆（前轮发言）和代码证据（交叉验证报告）冲突时，代码证据优先。
+   - 如果你不确定某条声明的代码依据，说「我不确定，请查阅交叉验证报告」而不是猜测。`;
 
 // ═══════════════════════════════════════════════
 // 共识校验：检测已闭合项是否错误进入修复清单
@@ -715,11 +700,12 @@ function validateConsensus(filePath: string) {
 // ═══════════════════════════════════════════════
 
 export interface SeedMemory {
-  memoryType: MemoryType;
-  content: Record<string, unknown>;
+  kind: string;
+  content_blob: Record<string, unknown>;
   summary: string;
-  agentType: AgentType;
-  creatorId: string;
+  semantic_gist: string;
+  content_hash: string;
+  source: { agentType: AgentType; taskId: string };
   weight?: number;
 }
 
@@ -751,26 +737,26 @@ export async function runMeeting(
 
     // 会议背景写入 Knowledge 记忆
     memory.write({
-      memoryType: MemoryType.Knowledge,
-      content: { background: config.background },
+      kind: "Insight",
+      content_blob: { background: config.background },
       summary: `[会议背景] ${config.name}: ${config.background.slice(0, 80)}`,
-      agentType: AgentType.Meta,
-      creatorId: "system",
-      weight: 10,
-    });
+      semantic_gist: `[会议背景] ${config.name}`,
+      content_hash: "",
+      source: { agentType: AgentType.Meta, taskId: "" },
+      weight: 10});
 
     // 种子记忆注入：在会议开始前将审视报告摘要写入 MemoryStore
     if (seedMemories && seedMemories.length > 0) {
       console.log(`  🌱 注入 ${seedMemories.length} 条种子记忆...`);
       for (const seed of seedMemories) {
         memory.write({
-          memoryType: seed.memoryType,
-          content: seed.content,
+          kind: seed.kind as MemoryKind,
+          content_blob: seed.content_blob,
           summary: seed.summary,
-          agentType: seed.agentType,
-          creatorId: seed.creatorId,
-          weight: seed.weight ?? 5,
-        });
+          semantic_gist: seed.semantic_gist,
+          content_hash: seed.content_hash,
+          source: seed.source,
+          weight: seed.weight ?? 5});
       }
       console.log(`  ✅ 种子记忆注入完成\n`);
     }
@@ -780,6 +766,11 @@ export async function runMeeting(
       speeches: Array<{ turn: number; speaker: string; said: boolean; chars: number; preview: string }>;
     }> = [];
 
+    // 追踪凝光最后一次实质发言，用于共识覆写（避免依赖 memory.read 的不确定性）
+    let lastNingSpeech: string | null = null;
+    let lastNingTurn = 0;
+    let lastNingRound = 0;
+
     for (let ri = 0; ri < config.rounds.length; ri++) {
       const round = config.rounds[ri];
       console.log(`${"=".repeat(50)}`);
@@ -788,13 +779,13 @@ export async function runMeeting(
       console.log(`  📋 ${round.topic.slice(0, 100)}...\n`);
 
       memory.write({
-        memoryType: MemoryType.Knowledge,
-        content: { topic: round.topic, round: ri + 1 },
+        kind: "Insight",
+        content_blob: { topic: round.topic, round: ri + 1 },
         summary: `[轮次] 第${ri + 1}轮 ${round.title} - ${round.topic.slice(0, 80)}`,
-        agentType: AgentType.Meta,
-        creatorId: "system",
-        weight: 8,
-      });
+        semantic_gist: `[轮次] ${round.title}`,
+        content_hash: "",
+        source: { agentType: AgentType.Meta, taskId: "" },
+        weight: 8});
 
       console.log(`  👥 ${config.personas.map((p) => `${p.emoji}${p.name}`).join("  ")}\n`);
 
@@ -816,8 +807,7 @@ export async function runMeeting(
             Loop: ["pattern", "trend", "memory", "skill", "learning", "discovery", "repeat"],
             Inspector: ["inspect", "directory", "file", "structure", "git", "config", "missing", "anomaly", "recon"],
             Api: ["api", "contract", "interface", "signature", "boundary", "export", "import", "type-safe", "design"],
-            Data: ["data", "schema", "serialization", "storage", "consistency", "naming", "field", "model"],
-          };
+            Data: ["data", "schema", "serialization", "storage", "consistency", "naming", "field", "model"]};
           const agentKws = KW_MAP[persona.type] ?? [];
           const hasRelevance = agentKws.length === 0 || agentKws.some((kw) => topicLower.includes(kw));
 
@@ -828,15 +818,13 @@ export async function runMeeting(
           }
 
           // ── DSA 稀疏注意力：按轮次 queryMode 决定读取广度/深度 ──
-          const recentMems = memory.read({
-            memoryTypes: [MemoryType.Episodic, MemoryType.Knowledge],
-            queryMode: round.queryMode ?? 'csa',
-          } as any);
+          const recentMems = await memory.read({
+            kind: "TaskLog" } as any);
 
           const history = recentMems
             .map((m) => {
-              const agent = config.personas.find((p) => p.type === m.agentType);
-              const label = agent ? `${agent.emoji}${agent.name}` : m.agentType;
+              const agent = config.personas.find((p) => p.type === m.source.agentType);
+              const label = agent ? `${agent.emoji}${agent.name}` : m.source.agentType;
               return `[${label}]: ${m.summary}`;
             })
             .join("\n");
@@ -881,6 +869,14 @@ export async function runMeeting(
 
           if (said) {
             if (isSubstantive) cycleSubstantive++;
+
+            // 追踪凝光最后一次实质发言（用于共识覆写）
+            if (persona.name === "凝光" && isSubstantive) {
+              lastNingSpeech = speech;
+              lastNingTurn = turn;
+              lastNingRound = ri + 1;
+            }
+
             // 流式输出：先打印发言标头，再打印全文
             const qualityTag = isSubstantive ? "\u25CF" : "\u25CB";
             console.log(`\n  ${persona.emoji} ${persona.name} [${turn}]${qualityTag}(${chars}字):`);
@@ -891,13 +887,13 @@ export async function runMeeting(
             }
             console.log(`  ${"\u2502".repeat(3)}`);
             memory.write({
-              memoryType: MemoryType.Episodic,
-              content: { speech, round: ri + 1, turn, meeting: config.name },
+              kind: "TaskLog",
+              content_blob: { speech, round: ri + 1, turn, meeting: config.name },
               summary: `[发言:${config.name}] ${persona.name}: ${speech.slice(0, 100)}`,
-              agentType: persona.type,
-              creatorId: persona.name,
-              weight: isSubstantive ? 6 : 2,
-            });
+              semantic_gist: `[发言] ${persona.name}: ${speech.slice(0, 100)}`,
+              content_hash: "",
+              source: { agentType: persona.type, taskId: "" },
+              weight: isSubstantive ? 6 : 2});
           } else {
             console.log(`  ${persona.emoji} ${persona.name} [${turn}]: ⏭️`);
           }
@@ -928,20 +924,19 @@ export async function runMeeting(
           .map((s) => `[${s.speaker} R${ri + 1}T${s.turn}] ${s.preview.slice(0, 150)}`)
           .join("\n");
         memory.write({
-          memoryType: MemoryType.Conceptual,
-          content: {
+          kind: "Insight",
+          content_blob: {
             round: ri + 1,
             title: round.title,
             mode: roundMode,
             substantiveSpeeches: saidSpeeches.length,
             totalSpeeches: roundSpeeches.filter((s) => s.said).length,
-            digest: roundDigest,
-          },
+            digest: roundDigest},
           summary: `[轮次收束:${config.name}] R${ri + 1} ${round.title} (${roundMode.toUpperCase()}) — ${saidSpeeches.length} 次实质发言`,
-          agentType: AgentType.Meta,
-          creatorId: "system",
-          weight: roundMode === 'hca' ? 4 : 7,
-        });
+          semantic_gist: `[轮次收束] ${round.title}`,
+          content_hash: "",
+          source: { agentType: AgentType.Meta, taskId: "" },
+          weight: roundMode === 'hca' ? 4 : 7});
         console.log(`  🔄 上下文重置: R${ri + 1} 收束 → Conceptual (${roundMode.toUpperCase()}, weight=${roundMode === 'hca' ? 4 : 7})`);
       }
     }
@@ -975,35 +970,13 @@ export async function runMeeting(
         }
       }
     }
-    const allMems = memory.read({});
+    const allMems = await memory.read({});
     console.log(`  🧠 记忆: ${allMems.length} 条\n`);
 
     // 共识覆写：提取凝光最终发言 → 共识清单覆写 markdown 文件
     if (consensusOutputPath) {
-      // 取凝光所有轮次中实际的最大轮号（而非 config.rounds.length，
-      // 因为单轮配置在 maxTurns>1 时会展开为多轮）
-      const allRounds = allMems
-        .filter((m: any) => m.memoryType === MemoryType.Episodic)
-        .map((m: any) => m.content?.round ?? 0);
-      const finalRound = allRounds.length > 0 ? Math.max(...allRounds) : config.rounds.length;
-      const ningEpisodic = allMems.filter(
-        (m: any) =>
-          m.memoryType === MemoryType.Episodic &&
-          m.creatorId === "凝光" &&
-          m.content?.round === finalRound
-      );
-
-      // 取凝光最后一轮的最后一次实质发言
-      const lastSpeech = ningEpisodic
-        .sort((a: any, b: any) => (b.content?.turn ?? 0) - (a.content?.turn ?? 0))
-        .find((m: any) => {
-          const s = String(m.content?.speech ?? "");
-          return s.length > 40 && !s.startsWith("[PASS]");
-        });
-
-      if (lastSpeech) {
-        const speechText = String(lastSpeech.content.speech);
-        const turnNum = lastSpeech.content.turn;
+      if (lastNingSpeech) {
+        const speechText = lastNingSpeech;
         const now = new Date().toISOString().slice(0, 10);
 
         // 读取旧文件内容，用于追加历史版本
@@ -1016,9 +989,9 @@ export async function runMeeting(
         const header = [
           `# 审视共识修复清单`,
           ``,
-          `> 产出方式：6 位 Agent 圆桌会议（审视共识会议 · 强约束版本）`,
+          `> 产出方式：${config.personas.length} 位 Agent 圆桌会议（${config.name}）`,
           `> 生成日期：${now}`,
-          `> 收束者：凝光（第 ${finalRound} 轮第 ${turnNum} 次发言 · ${speechText.length} 字）`,
+          `> 收束者：凝光（第 ${lastNingRound} 轮第 ${lastNingTurn} 次发言 · ${speechText.length} 字）`,
           `> 参会 Agent：${config.personas.map((p) => `${p.emoji}${p.name}`).join("、")}`,
           `> 此文件由 runMeeting 自动生成，每次会议完成后覆写。旧版自动追加至「历史版本」区。`,
           ``,
@@ -1046,40 +1019,23 @@ export async function runMeeting(
         }
 
         // ── 共识晋升：P0-P3 修复项 → CONCEPTUAL 记忆 ──
-        // FSA 闭环：共识产出（Episodic 讨论）晋升为 Conceptual（持久知识），
-        // 链接到凝光的收束发言和全体参会 Agent 的实质贡献。
         const promotedItems = extractConsensusItems(speechText);
         if (promotedItems.length > 0) {
           console.log(`  🧠 共识晋升: ${promotedItems.length} 项 P0-P3 条目 → Conceptual 记忆`);
           for (const item of promotedItems) {
-            const memId = memory.write({
-              memoryType: MemoryType.Conceptual,
-              content: {
+            const memId = await memory.write({
+              kind: "Insight",
+              content_blob: {
                 taskType: "consensus-fix-item",
                 priority: item.priority,
                 description: item.description,
                 source: config.name,
-                round: finalRound,
-              },
+                round: lastNingRound},
               summary: `[共识修复:${item.priority}] ${item.description.slice(0, 120)}`,
-              agentType: AgentType.DocGovern,
-              creatorId: "凝光",
-              weight: item.priority === "P0" ? 10 : item.priority === "P1" ? 8 : item.priority === "P2" ? 6 : 4,
-            });
-            // FSA 反馈：共识产出链接到凝光的收束发言
-            if (lastSpeech) {
-              memory.link(memId, (lastSpeech as any).id, LinkType.DerivedFrom);
-            }
-            // 链接到全体参会 Agent 的最后一轮实质发言（ConfirmedUseful）
-            const lastRoundEpisodic = allMems.filter(
-              (m: any) =>
-                m.memoryType === MemoryType.Episodic &&
-                m.content?.round === finalRound &&
-                String(m.content?.speech ?? "").length > 40
-            );
-            for (const epiMem of lastRoundEpisodic.slice(0, 10)) {
-              memory.link(memId, (epiMem as any).id, LinkType.ConfirmedUseful);
-            }
+              semantic_gist: `[共识修复:${item.priority}] ${item.description.slice(0, 120)}`,
+              content_hash: "",
+              source: { agentType: AgentType.DocGovern, taskId: "" },
+              weight: item.priority === "P0" ? 10 : item.priority === "P1" ? 8 : item.priority === "P2" ? 6 : 4});
           }
         }
 

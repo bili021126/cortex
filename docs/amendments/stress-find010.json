@@ -1,0 +1,21 @@
+{
+  "id": "STRESS-FIND-010",
+  "version": "v99.99.99",
+  "section": "§1",
+  "category": "modify",
+  "summary": "修正 §1 声明中 Agent 数量：14 种 Agent → 13 种 Agent，昔涟为独立实体不应计入 Agent 计数",
+  "rationale": "昔涟共识修复清单 FIND-010/014：§1 声明「以 14 种 Agent 为执行单元」与 §3 系统架构图「Agent池 (13 Agent)」、§5 标题「13 种执行单元」矛盾。经核实：AgentType 枚举虽含 14 种，但 StrategistAgent 为 Core-2+ 预留（active: false），昔涟是独立实体（宪法 §9）而非 Agent。实际可调度执行单元为 13 种。此为版本演进中数字未同步更新的文档债务，不涉及原则变更。",
+  "before": "Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢，以 14 种 Agent 为执行单元，以确认门和安全规则引擎为护栏。",
+  "after": "Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢，以 13 种 Agent 为执行单元，以确认门和安全规则引擎为护栏。",
+  "impact": {
+    "principles": [],
+    "crossReferences": ["§1", "§5"],
+    "agents": [],
+    "breaking": false
+  },
+  "source": {
+    "agent": "凝光",
+    "trace": "amendment-stress T2"
+  },
+  "status": "pending_judgment"
+}

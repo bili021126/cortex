@@ -1,0 +1,29 @@
+{
+  "id": "AM-2026-0515-009",
+  "version": "v2.5.23",
+  "section": "§3 物理包结构表 + 依赖方向声明",
+  "category": "modify",
+  "summary": "更新 CLI 包描述与依赖声明——从「md-to-html」修正为完整命令 shell（13 命令 + EngineBridge），补充 CLI→tools 导通依赖关系",
+  "rationale": "CLI 与 @cortex/tools 的工具复用导通（packages/cli/tests/cli-engine-integration.test.ts 全量通过）完成后，宪法 §3 物理包结构表存在两项事实性错误：\n\n**错误1（CLI 描述过时）**：表中描述为「CLI 命令行工具（md-to-html），Markdown→HTML 命令行转换器」。实际 CLI 已演进为完整命令 shell——支持 run/agent/task/memory/config/doc/schedule/roundtable/inspect/confirm/repl/version/help 共 13 个顶级命令，通过 EngineBridge（engine-bridge.ts）集成 Engine 执行引擎与 AgentPool 生命周期管理。\n\n**错误2（依赖关系遗漏）**：表中 CLI 的 workspace 依赖仅列出 parser。实际 package.json 声明依赖：@cortex/parser（workspace:*）, @cortex/shared（workspace:*）, @cortex/llm（workspace:*）, @cortex/engine（workspace:*）, @cortex/tools（workspace:*）。其中 tools 依赖为 inspect deps/drift 子命令的委托链路（inspect.ts → @cortex/tools → configuration-drift.ts / monorepo-analyzer.ts），是本次导通的核心架构变更。\n\n**错误3（依赖方向声明不完整）**：当前声明 `parser ← cli` 未反映 CLI 对 shared/llm/engine/tools 的依赖。\n\n实证依据：packages/cli/package.json 第25-29行（dependencies 字段）；packages/cli/src/commands/inspect.ts 第10-11行（tools 导入）；packages/cli/tests/cli-engine-integration.test.ts 全量通过（48 tests passed）。",
+  "before": "| `@cortex/cli` | CLI 命令行工具（md-to-html），Markdown→HTML 命令行转换器 | parser |",
+  "after": "| `@cortex/cli` | CLI 命令 shell——13 个顶级命令（run/agent/task/memory/config/doc/schedule/roundtable/inspect/confirm/repl/version/help），通过 EngineBridge 集成 Engine 执行引擎与 AgentPool 生命周期管理。inspect 子命令（deps/drift/report）委托至 @cortex/tools 纯函数层 | parser, shared, llm, engine, tools |",
+  "depDirectionBefore": "依赖方向：shared ← (llm / testing / parser / pm / data / tools / notification)，shared, notification ← factory，llm ← engine，parser ← cli。",
+  "depDirectionAfter": "依赖方向：shared ← (llm / testing / parser / pm / data / tools / notification)，shared, notification ← factory，llm ← engine，parser, shared, llm, engine, tools ← cli。",
+  "impact": {
+    "principles": [],
+    "crossReferences": [
+      "§3 物理包结构表",
+      "depDirectionAfter 处依赖方向声明",
+      "packages/cli/src/commands/inspect.ts",
+      "packages/cli/src/services/engine-bridge.ts"
+    ],
+    "agents": [],
+    "breaking": false,
+    "rationale": "本次修宪仅修正 §3 物理包结构表中 CLI 的描述文本和依赖列，以及对应的依赖方向声明行。不改变任何接口契约、Agent 职责划分或架构原则。CLI→tools 的导通已在代码层完成并通过全量测试（529 tests passed），宪法修正为事后追认。breaking=false。"
+  },
+  "source": {
+    "agent": "DocGovernAgent（凝光）",
+    "trace": "开拓者指令——CLI 与 @cortex/tools 工具复用导通完成后，宪法 §3 包结构表未同步更新。凝光于 2026-05-15 审计发现 CLI 描述与依赖声明与实际代码不一致，提出本修正案。实证见 packages/cli/package.json、packages/cli/src/commands/inspect.ts。"
+  },
+  "status": "applied"
+}

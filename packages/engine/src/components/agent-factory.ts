@@ -1,6 +1,6 @@
 import type {
   Agent, TaskNode, NodeResult, AgentType, MemoryQuery,
-  SafeErrorReporter, AgentStatus, MemoryEntry,
+  SafeErrorReporter, AgentStatus, MemoryEntry, ReadMode,
 } from "@cortex/shared";
 import { AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
@@ -9,8 +9,8 @@ import type { MemoryStore } from "../memory/memory-store.js";
 import type { AgentPool } from "../core/agent-pool.js";
 import { PoolAwareState } from "./pool-aware.js";
 import { type ReActContext } from "./react-loop.js";
-import { executeWithMemoryPipeline } from "../memory/pipeline.js";
-import { DEFAULT_ENGINE_CONFIG } from "../engine-config.js";
+import { executeWithMemoryPipeline, resolvePipeline } from "../memory/pipeline.js";
+import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 
 /**
  * Agent 工厂配置——组合式替代 BaseAgent 继承。
@@ -38,7 +38,7 @@ export interface AgentFactoryConfig {
   /** 记忆检索条数覆写——不提供则由 getMemoryQuery 决定 */
   memoryLimit?: number;
   /** P0-六层防御：读路径 Intent 过滤回调 */
-  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[];
+  filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[];
 }
 
 /**
@@ -77,6 +77,7 @@ export function createAgent(
     toolkit,
     systemPrompt: config.systemPrompt,
     maxLoops,
+    reactLoopTimeoutMs: DEFAULT_ENGINE_CONFIG.reactLoopTimeoutMs,
     memory,
     safeReporter: safeReporter ?? undefined,
   });
@@ -100,18 +101,21 @@ export function createAgent(
           : node;
 
         const ctx = buildCtx();
+        const steps = resolvePipeline(enrichedNode.preferredStrategy);
         const result = config.memoryEnabled && memory
           ? await executeWithMemoryPipeline(
               ctx, enrichedNode, model,
               config.getMemoryQuery,
               safeReporter ?? undefined,
               config.filterRead,
+              steps,
             )
           : await executeWithMemoryPipeline(
               ctx, enrichedNode, model,
               undefined,
               safeReporter ?? undefined,
               config.filterRead,
+              steps,
             );
         return result;
       } finally {

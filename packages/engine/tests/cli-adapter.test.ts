@@ -56,8 +56,7 @@ describe("CLIAdapter", () => {
         id: "test-1",
         level: ReversibilityLevel.L2,
         toolName: "write_file",
-        summary: "Write to /etc/hosts",
-      };
+        summary: "Write to /etc/hosts"};
       const res = await adapter.confirm(req);
       expect(res.requestId).toBe("test-1");
       expect(res.approved).toBe(true);
@@ -78,8 +77,7 @@ describe("CLIAdapter", () => {
         id: "test-2",
         level: ReversibilityLevel.L3,
         toolName: "run_shell",
-        summary: "rm -rf /tmp/build",
-      };
+        summary: "rm -rf /tmp/build"};
       const res = await adapter.confirm(req);
       expect(res.approved).toBe(false);
 
@@ -99,8 +97,7 @@ describe("CLIAdapter", () => {
         id: "test-3",
         level: ReversibilityLevel.L2,
         toolName: "write_file",
-        summary: "Some file",
-      };
+        summary: "Some file"};
       const res = await adapter.confirm(req);
       expect(res.approved).toBe(false);
 

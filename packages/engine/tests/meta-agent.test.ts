@@ -9,8 +9,7 @@ function mockMetaAgentLlm() {
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
 
   adapter.injectMock(async () => {
     const plan = JSON.stringify([
@@ -24,16 +23,13 @@ function mockMetaAgentLlm() {
             task: "为 formatDate 函数写单元测试",
             type: "implementation",
             tags: ["test"],
-            needsMultiPerspective: false,
-          },
-        ],
-      },
+            needsMultiPerspective: false},
+        ]},
       {
         task: "审查新增函数的类型安全",
         type: "review",
         tags: ["review"],
-        needsMultiPerspective: true,
-      },
+        needsMultiPerspective: true},
     ]);
     return { content: plan, toolCalls: [] };
   });
@@ -73,12 +69,10 @@ describe("MetaAgent", () => {
       apiKey: "mock",
       baseUrl: "mock",
       chatModel: "mock-chat",
-      reasonerModel: "mock-reasoner",
-    });
+      reasonerModel: "mock-reasoner"});
     adapter.injectMock(async () => ({
       content: "I think this task should be done in one step: just add the function.",
-      toolCalls: [],
-    }));
+      toolCalls: []}));
 
     const meta = new MetaAgent(adapter);
     const nodes = await meta.plan("随便说点什么");
@@ -109,12 +103,10 @@ describe("MetaAgent", () => {
       apiKey: "mock",
       baseUrl: "mock",
       chatModel: "mock-chat",
-      reasonerModel: "mock-reasoner",
-    });
+      reasonerModel: "mock-reasoner"});
     adapter.injectMock(async () => ({
       content: "This is not JSON at all.",
-      toolCalls: [],
-    }));
+      toolCalls: []}));
 
     const meta = new MetaAgent(adapter);
     const reporterCalls: any[] = [];

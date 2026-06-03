@@ -42,8 +42,7 @@ function planJson(nodes: Partial<TaskNode>[]): string {
     type: n.type ?? "code",
     tags: n.tags ?? ["implementation"],
     task: n.payload ?? "实施任务",
-    needsMultiPerspective: n.needsMultiPerspective ?? false,
-  }));
+    needsMultiPerspective: n.needsMultiPerspective ?? false}));
   return JSON.stringify(arr);
 }
 
@@ -76,8 +75,7 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB,
-    });
+      dbPath: TEMP_DB});
 
     // 核心组件
     expect(result.scheduler).toBeDefined();
@@ -115,19 +113,18 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB,
-    });
+      dbPath: TEMP_DB});
 
     const memory = result.memory!;
 
     // 写入
     const writeResult = await memory.write({
-      memoryType: "EPISODIC" as any,
-      content: { value: "bootstrap integration test" },
+      kind: "EPISODIC" as any,
+      content_blob: { value: "bootstrap integration test" },
       summary: "集成测试记忆条目",
-      agentType: AgentType.Code,
-      creatorId: "test-runner",
-    });
+      semantic_gist: "集成测试记忆条目",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
     expect(writeResult).toBeDefined();
 
     // 读取
@@ -147,15 +144,13 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB,
-    });
+      dbPath: TEMP_DB});
 
     // 构造合成任务节点
     const node = syntheticTaskNode({
       type: "code",
       tags: ["implementation"],
-      payload: "Test task: verify scheduler execution",
-    });
+      payload: "Test task: verify scheduler execution"});
 
     result.board.addNode(node);
     const report = await result.scheduler.executeAll();
@@ -184,8 +179,7 @@ describe("T2: MetaAgent.plan() 意图拆解", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB,
-    });
+      dbPath: TEMP_DB});
 
     const plan = await result.metaAgent.plan("实现用户登录功能");
 
@@ -206,8 +200,7 @@ describe("T2: MetaAgent.plan() 意图拆解", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB,
-    });
+      dbPath: TEMP_DB});
 
     const plan = await result.metaAgent.plan("某个无法拆解的简单意图");
 
@@ -233,8 +226,7 @@ describe("T3: Plan → Execute 闭环", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB,
-    });
+      dbPath: TEMP_DB});
 
     // Step 1: 规划
     const plan = await result.metaAgent.plan("写一个 Hello World 程序");
@@ -271,8 +263,7 @@ describe("T4: MemoryStore 读写闭环", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB,
-    });
+      dbPath: TEMP_DB});
 
     const memory = result.memory!;
 
@@ -286,23 +277,23 @@ describe("T4: MemoryStore 读写闭环", () => {
 
     for (const item of items) {
       const r = await memory.write({
-        memoryType: "EPISODIC" as any,
-        content: item.content,
+        kind: "EPISODIC" as any,
+        content_blob: item.content,
         summary: item.summary,
-        agentType: AgentType.Review,
-        creatorId: "agent-test",
-      });
+        semantic_gist: item.summary,
+        content_hash: "",
+        source: { agentType: AgentType.Review, taskId: "" }});
       expect(r).toBeDefined();
       ids.push(r!);
     }
 
     // 按 memoryType 读取（limit:0 不截断，避免受其他测试写入影响）
-    const episodicEntries = await memory.read({ memoryTypes: ["EPISODIC" as any], limit: 0 });
+    const episodicEntries = await memory.read({ kind: "EPISODIC" as any, limit: 0 });
     expect(episodicEntries.length).toBeGreaterThanOrEqual(3);
 
     // 验证每条内容存在
     for (const item of items) {
-      const found = episodicEntries.find((e) => (e.content as any)?.value === item.content.value);
+      const found = episodicEntries.find((e) => (e.content_blob as any)?.value === item.content.value);
       expect(found).toBeDefined();
     }
 

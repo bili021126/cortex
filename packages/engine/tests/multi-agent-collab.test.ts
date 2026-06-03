@@ -1,16 +1,15 @@
 // @ci: llm
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentType, MemoryType, MemoryState, PipelinePriority } from "@cortex/shared";
+import { AgentType, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, createInspectorAgent, Scheduler } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, createInspectorAgent, Scheduler } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 
 // ─── Mock helpers ────────────────────────────────
 
 function mockAdapter(output: string) {
   const adapter = new LlmAdapter({
-    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-  });
+    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
   adapter.injectMock(async () => ({ content: output, toolCalls: [] }));
   return adapter;
 }
@@ -19,10 +18,10 @@ async function mockAgent(agentType: string, adapter: LlmAdapter) {
   const tk = new Toolkit();
   let agent;
   switch (agentType) {
-    case AgentType.Code: agent = createAgent(codeAgentConfig(), adapter, tk); break;
-    case AgentType.Review: agent = createAgent(reviewAgentConfig(), adapter, tk); break;
-    case AgentType.Analysis: agent = createAgent(analysisAgentConfig(), adapter, tk); break;
-    default: agent = createAgent(codeAgentConfig(), adapter, tk);
+    case AgentType.Code: agent = createAgent(codeAgentConfig("test"), adapter, tk); break;
+    case AgentType.Review: agent = createAgent(reviewAgentConfig("test"), adapter, tk); break;
+    case AgentType.Analysis: agent = createAgent(analysisAgentConfig("test"), adapter, tk); break;
+    default: agent = createAgent(codeAgentConfig("test"), adapter, tk);
   }
   await agent.wakeup();
   return agent;
@@ -42,8 +41,7 @@ function makeNode(overrides: Partial<{
     claimedBy: [] as never[],
     payload: overrides.payload ?? "do something",
     results: [] as never[],
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 }
 
 // ═══════════════════════════════════════════════════
@@ -54,19 +52,17 @@ describe("串行协作 CodeAgent → ReviewAgent", () => {
   let board: TaskBoard;
   let pool: AgentPool;
   let observer: PipelineObserver;
-  let gate: ConfirmGate;
   let scheduler: Scheduler;
 
   beforeEach(() => {
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
-    gate = new ConfirmGate();
 
     pool.register({ type: AgentType.Code, maxInstances: 3 });
     pool.register({ type: AgentType.Review, maxInstances: 3 });
 
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
   });
 
   it("CodeAgent 产出 → ReviewAgent 审查（拓扑排序保证顺序）", async () => {
@@ -75,15 +71,13 @@ describe("串行协作 CodeAgent → ReviewAgent", () => {
       id: "code-1",
       type: "implementation",
       tags: ["implementation"],
-      payload: "Implement login handler",
-    });
+      payload: "Implement login handler"});
     const reviewNode = makeNode({
       id: "review-1",
       parentId: "code-1",
       type: "review",
       tags: ["review"],
-      payload: "Review login handler",
-    });
+      payload: "Review login handler"});
 
     board.addNode(codeNode);
     board.addNode(reviewNode);
@@ -129,27 +123,24 @@ describe("串行协作 CodeAgent → ReviewAgent", () => {
       id: "code-2",
       type: "implementation",
       tags: ["implementation"],
-      payload: "Implement login",
-    });
+      payload: "Implement login"});
     const reviewNode = makeNode({
       id: "review-2",
       parentId: "code-2",
       type: "review",
       tags: ["review"],
-      payload: "Review login",
-    });
+      payload: "Review login"});
 
     board.addNode(codeNode);
     board.addNode(reviewNode);
 
     // Code agent 失败 — 注入一个必定抛异常的 mock
     const failAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     failAdapter.injectMock(async () => {
       throw new Error("Code execution failed");
     });
-    const failCodeRunner = createAgent(codeAgentConfig(), failAdapter, new Toolkit());
+    const failCodeRunner = createAgent(codeAgentConfig("test"), failAdapter, new Toolkit());
     await failCodeRunner.wakeup();
 
     const reviewRunner = await mockAgent(AgentType.Review, mockAdapter("Needs work"));
@@ -176,20 +167,18 @@ describe("开会 needsMultiPerspective 并行", () => {
   let board: TaskBoard;
   let pool: AgentPool;
   let observer: PipelineObserver;
-  let gate: ConfirmGate;
   let scheduler: Scheduler;
 
   beforeEach(() => {
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
-    gate = new ConfirmGate();
 
     pool.register({ type: AgentType.Review, maxInstances: 3 });
     pool.register({ type: AgentType.Analysis, maxInstances: 3 });
     pool.register({ type: AgentType.Code, maxInstances: 3 });
 
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
   });
 
   it("needsMultiPerspective 节点 → 2 Agent 并行认领+执行", async () => {
@@ -199,8 +188,7 @@ describe("开会 needsMultiPerspective 并行", () => {
       type: "analysis",
       tags: ["review", "analysis"],
       needsMultiPerspective: true,
-      payload: "Assess security of login flow",
-    });
+      payload: "Assess security of login flow"});
     board.addNode(node);
 
     const reviewRunner = await mockAgent(AgentType.Review, mockAdapter("Review: password hashing OK, rate limiting missing"));
@@ -250,8 +238,7 @@ describe("开会 needsMultiPerspective 并行", () => {
       type: "implementation",
       tags: ["implementation"],  // 只有 Code 匹配
       needsMultiPerspective: false,
-      payload: "Write unit tests",
-    });
+      payload: "Write unit tests"});
     board.addNode(node);
 
     const codeRunner = await mockAgent(AgentType.Code, mockAdapter("test done"));
@@ -275,8 +262,7 @@ describe("开会 needsMultiPerspective 并行", () => {
       type: "analysis",
       tags: ["audit", "constitution_check"],
       needsMultiPerspective: true,
-      payload: "Perform constitution audit",
-    });
+      payload: "Perform constitution audit"});
     board.addNode(node);
 
     // 不注册任何 runner，也没有 Agent 能匹配 constitution_check 标签
@@ -298,7 +284,6 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
   let board: TaskBoard;
   let pool: AgentPool;
   let observer: PipelineObserver;
-  let gate: ConfirmGate;
   let memory: MemoryStore;
   let scheduler: Scheduler;
 
@@ -306,7 +291,6 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
-    gate = new ConfirmGate();
     memory = new MemoryStore();
 
     pool.register({ type: AgentType.Code, maxInstances: 3 });
@@ -320,23 +304,20 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
       id: "fail-1",
       type: "implementation",
       tags: ["implementation"],
-      payload: "Build a rocket engine",
-    });
+      payload: "Build a rocket engine"});
     board.addNode(node);
 
     // 2. 创建带 MetaAgent 的 Scheduler
     const metaAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     metaAdapter.injectMock(async () => ({
       content: JSON.stringify([
         { task: "Research rocket propulsion alternatives", type: "research", tags: ["research"], needsMultiPerspective: false },
       ]),
-      toolCalls: [],
-    }));
+      toolCalls: []}));
 
     const metaAgent = new MetaAgent(metaAdapter);
-    scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+    scheduler = new Scheduler(board, pool, observer, metaAgent);
 
     // 3. 注册 Analysis runner（用于执行重规划产出的 research 节点）
     const analysisRunner = await mockAgent(AgentType.Analysis, mockAdapter("Research: rocket engines need specialized materials"));
@@ -373,23 +354,20 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
       id: "fail-2",
       type: "implementation",
       tags: ["implementation"],
-      payload: "Solve P vs NP",
-    });
+      payload: "Solve P vs NP"});
     board.addNode(node);
 
     // MetaAgent → 每次重规划都返回同一个类型的 implementation 节点（死循环模拟）
     const metaAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     metaAdapter.injectMock(async () => ({
       content: JSON.stringify([
         { task: "Attempt approach A", type: "implementation", tags: ["implementation"], needsMultiPerspective: false },
       ]),
-      toolCalls: [],
-    }));
+      toolCalls: []}));
 
     const metaAgent = new MetaAgent(metaAdapter);
-    scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+    scheduler = new Scheduler(board, pool, observer, metaAgent);
 
     // 只注册 Analysis runner（永远不匹配 implementation 标签 → 新节点持续失败）
     const analysisRunner2 = await mockAgent(AgentType.Analysis, mockAdapter("unsolvable"));
@@ -420,24 +398,21 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
       id: "fail-3",
       type: "implementation",
       tags: ["implementation"],
-      payload: "Implement complex algorithm",
-    });
+      payload: "Implement complex algorithm"});
     board.addNode(node);
 
     // MetaAgent → 重规划为 research 类型（能被 Analysis agent 处理）
     const metaAdapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     metaAdapter.injectMock(async () => ({
       content: JSON.stringify([
         { task: "Research algorithm alternatives", type: "research", tags: ["research"], needsMultiPerspective: false },
         { task: "Compare time complexity", type: "analysis", tags: ["analysis"], needsMultiPerspective: false },
       ]),
-      toolCalls: [],
-    }));
+      toolCalls: []}));
 
     const metaAgent = new MetaAgent(metaAdapter);
-    scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+    scheduler = new Scheduler(board, pool, observer, metaAgent);
 
     // 注册 Analysis runner（用于执行重规划产出的 research/analysis 节点）
     const analysisRunner3 = await mockAgent(AgentType.Analysis, mockAdapter("Research: algorithm complexity analysis"));
@@ -459,14 +434,13 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
   it("无 MetaAgent 注入 → 失败不触发重规划", async () => {
     // ── Arrange ──
     // scheduler 没有 metaAgent
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
 
     const node = makeNode({
       id: "fail-4",
       type: "implementation",
       tags: ["implementation"],
-      payload: "Do impossible thing",
-    });
+      payload: "Do impossible thing"});
     board.addNode(node);
 
     // 无匹配 runner
@@ -490,18 +464,16 @@ describe("InspectorAgent 认领 inspect 节点", () => {
   let board: TaskBoard;
   let pool: AgentPool;
   let observer: PipelineObserver;
-  let gate: ConfirmGate;
   let scheduler: Scheduler;
 
   beforeEach(() => {
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
-    gate = new ConfirmGate();
 
     pool.register({ type: AgentType.Inspector, maxInstances: 3 });
 
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
   });
 
   it("Inspector 认领 inspect 节点 → 产出事实报告", async () => {
@@ -510,8 +482,7 @@ describe("InspectorAgent 认领 inspect 节点", () => {
       id: "inspect-1",
       type: "inspect",
       tags: ["inspect"],
-      payload: "Inspect login.ts for facts",
-    });
+      payload: "Inspect login.ts for facts"});
     board.addNode(node);
 
     const inspectorAdapter = mockAdapter("事实报告：login.ts 共 45 行，导出 3 个函数");

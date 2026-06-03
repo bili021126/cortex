@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { AgentType, MemoryType, MemoryState } from "@cortex/shared";
+import { AgentType } from "@cortex/shared";
 import {
   syntheticTaskNode,
   syntheticTaskTree,
@@ -77,17 +77,17 @@ describe("generateSyntheticMemories", () => {
   it("默认类型为 Episodic", () => {
     const mems = generateSyntheticMemories(2);
     for (const m of mems) {
-      expect(m.memoryType).toBe(MemoryType.Episodic);
+      expect(m.kind).toBe("TaskLog");
       expect(typeof m.summary).toBe("string");
       expect(Object.values(AgentType)).toContain(m.agentType);
     }
   });
 
   it("支持 Knowledge 类型", () => {
-    const mems = generateSyntheticMemories(2, MemoryType.Knowledge);
+    const mems = generateSyntheticMemories(2, "Insight");
     expect(mems).toHaveLength(2);
     for (const m of mems) {
-      expect(m.memoryType).toBe(MemoryType.Knowledge);
+      expect(m.kind).toBe("Insight");
     }
   });
 });
@@ -96,13 +96,13 @@ describe("generateMemoriesWithStates", () => {
   it("active + archived 数量正确", () => {
     const result = generateMemoriesWithStates(2, 3);
     expect(result).toHaveLength(5);
-    expect(result.filter((r) => r.state === MemoryState.Active)).toHaveLength(2);
-    expect(result.filter((r) => r.state === MemoryState.Archived)).toHaveLength(3);
+    expect(result.filter((r) => r.state === "Active")).toHaveLength(2);
+    expect(result.filter((r) => r.state === "Archived")).toHaveLength(3);
   });
 
   it("零个 archived", () => {
     const result = generateMemoriesWithStates(3, 0);
     expect(result).toHaveLength(3);
-    expect(result.every((r) => r.state === MemoryState.Active)).toBe(true);
+    expect(result.every((r) => r.state === "Active")).toBe(true);
   });
 });

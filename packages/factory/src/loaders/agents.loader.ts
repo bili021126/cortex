@@ -38,7 +38,9 @@ export function loadAgentsConfig(projectRoot: string): CortexAgentsConfig {
     throw new Error(`cortex-agents.json JSON 解析失败: ${String(e)}`, { cause: e });
   }
 
-  return _validateStructure(config as CortexAgentsConfig);
+  const validated = _validateStructure(config as CortexAgentsConfig);
+  _resolvePromptFiles(validated, projectRoot);
+  return validated;
 }
 
 /** 校验基本结构 */
@@ -78,8 +80,8 @@ function _validateAgent(id: string, agent: AgentDefinition): void {
   if (!agent.role) {
     throw new Error(`${prefix}: 缺少 role`);
   }
-  if (!agent.systemPrompt) {
-    throw new Error(`${prefix}: 缺少 systemPrompt`);
+  if (!agent.systemPrompt && !agent.systemPromptFile) {
+    throw new Error(`${prefix}: 缺少 systemPrompt 或 systemPromptFile`);
   }
   if (!Array.isArray(agent.produces)) {
     throw new Error(`${prefix}: produces 必须为数组`);
@@ -101,4 +103,44 @@ function _validateAgent(id: string, agent: AgentDefinition): void {
 
   // 补全 id
   agent.id = id;
+}
+
+/** 解析 prompt 文件引用，将文件内容注入到内联字段 */
+function _resolvePromptFiles(config: CortexAgentsConfig, projectRoot: string): void {
+  for (const [_id, agent] of Object.entries(config.agents)) {
+    const a = agent as AgentDefinition;
+
+    // systemPrompt
+    if (a.systemPromptFile) {
+      a.systemPrompt = _readPromptFile(projectRoot, a.systemPromptFile);
+    }
+
+    // roundtable personaPrompt
+    if (a.roundtable?.personaPromptFile) {
+      a.roundtable.personaPrompt = _readPromptFile(projectRoot, a.roundtable.personaPromptFile);
+    }
+
+    // planningPrompt
+    if (a.planningPromptFile) {
+      a.planningPrompt = _readPromptFile(projectRoot, a.planningPromptFile);
+    }
+
+    // replanPrompt
+    if (a.replanPromptFile) {
+      a.replanPrompt = _readPromptFile(projectRoot, a.replanPromptFile);
+    }
+  }
+}
+
+/** 读取 prompt 文件内容 */
+function _readPromptFile(projectRoot: string, filePath: string): string {
+  const fullPath = path.join(projectRoot, filePath);
+  if (!fs.existsSync(fullPath)) {
+    throw new Error(`Prompt 文件不存在: ${fullPath}`);
+  }
+  try {
+    return fs.readFileSync(fullPath, "utf-8").trim();
+  } catch (e) {
+    throw new Error(`读取 Prompt 文件失败: ${fullPath}: ${String(e)}`, { cause: e });
+  }
 }

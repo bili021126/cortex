@@ -1,0 +1,21 @@
+{
+  "id": "STRESS-FIND-013",
+  "version": "v99.99.99",
+  "section": "§14",
+  "category": "modify",
+  "summary": "修正 §14 阶段模型 Core-1 行 Agent 数量声明：10 Agent → 13 Agent，与 §5.1 实际已落地的 13 种 Agent 对齐",
+  "rationale": "昔涟共识修复清单 FIND-013：§14 阶段模型表中 Core-1 行仍写「10 Agent」，但 §5.1 Agent 类型表已列出 13 种执行单元（MetaAgent、ButlerAgent、CodeAgent、ReviewAgent、AnalysisAgent、OpsAgent、LoopAgent、DocGovernAgent、InspectorAgent、ApiAgent、DataAgent、BrowserAgent、FixAgent），昔涟为独立实体不计入 Agent 计数。此为版本演进中数字未同步更新的文档债务，不涉及原则变更。",
+  "before": "| **Core-1** | Engine 重构 + 10 Agent + MemoryStore + Scheduler + PipelineObserver + SafeErrorReporter + SkillRegistry + SkillExecutor + better-sqlite3 + FTS5 全文索引 + embedding 384d 语义向量（170+ 测试全通过，自审视 7 Agent 并行验证通过，P0 全部闭合） |",
+  "after": "| **Core-1** | Engine 重构 + 13 Agent + MemoryStore + Scheduler + PipelineObserver + SafeErrorReporter + SkillRegistry + SkillExecutor + better-sqlite3 + FTS5 全文索引 + embedding 384d 语义向量（170+ 测试全通过，自审视 7 Agent 并行验证通过，P0 全部闭合） |",
+  "impact": {
+    "principles": [],
+    "crossReferences": ["§5.1"],
+    "agents": [],
+    "breaking": false
+  },
+  "source": {
+    "agent": "凝光",
+    "trace": "amendment-stress T2"
+  },
+  "status": "pending_judgment"
+}

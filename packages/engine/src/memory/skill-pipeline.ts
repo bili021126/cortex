@@ -1,20 +1,20 @@
 /**
- * SkillPipeline —— 技能提取与持久化管道（Core-2 技能闭环）。
+ * SkillPipeline —— 技能提取与持久化管道（Core-1 技能闭环）。
  *
  * 从 Agent 节点输出中提取技能模板，注册到 SkillRegistry（内存），
  * 并持久化到 MemoryStore（SQLite），实现跨轮次认知复用。
  *
  * 提取失败不阻塞调度——通过 PipelineObserver 上报诊断信息。
  *
- * @since 技能沉淀机制 Core-2
+ * @since 技能沉淀机制 Core-1
  *
  * @fix D2 — SkillRegistry 类型从 @cortex/shared 改为从本地 ../skill-registry.js 导入。
  *   SkillRegistry 类的实现已从 shared 移入 engine，shared 仅保留 SerializedSkillRegistry 类型。
  */
 import type { SkillTemplate, AgentType } from "@cortex/shared";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import type { IPipelineObserver, IMemoryStore } from "@cortex/shared";
 import type { SkillRegistry } from "../registry/skill-registry.js";
-import type { MemoryStore } from "./memory-store.js";
+import type { MemoryStore } from "./memory-store.js"; // for cast only
 import { extractSkillsFromOutput } from "../components/index.js";
 import { persistSkillsToMemory } from "../components/index.js";
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
@@ -27,8 +27,8 @@ import type { PipelineHandler } from "@cortex/shared";
  */
 export function extractAndPersistSkills(
   skillRegistry: SkillRegistry,
-  memoryStore: MemoryStore | undefined,
-  observer: PipelineObserver,
+  memoryStore: IMemoryStore | undefined,
+  observer: IPipelineObserver,
   nodeId: string,
   agentType: AgentType,
   output: string,
@@ -86,7 +86,7 @@ export function extractAndPersistSkills(
 
     // 持久化到 MemoryStore
     if (memoryStore) {
-      persistSkillsToMemory(registered, memoryStore);
+      persistSkillsToMemory(registered, memoryStore as MemoryStore);
     }
   }
 
@@ -106,9 +106,9 @@ export function extractAndPersistSkills(
  * @returns             取消订阅函数（调用即移除 handler）
  */
 export function registerSkillPipeline(
-  observer: PipelineObserver,
+  observer: IPipelineObserver,
   skillRegistry: SkillRegistry,
-  memoryStore?: MemoryStore,
+  memoryStore?: IMemoryStore,
 ): () => void {
   const handler: PipelineHandler = (event) => {
     if (event.type !== PipelineEventType.NodeComplete) return;

@@ -7,6 +7,8 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import { findProjectRoot, collectPackages, collectDeps, buildEdges, detectCycles, generateDot } from "@cortex/tools";
+import { collectDependencies, detectDrift } from "@cortex/tools";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -62,7 +64,7 @@ export function createInspectHandler(): CommandHandler {
 function handleInspectDir(
   dirPath: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   const target = dirPath ? path.resolve(dirPath) : process.cwd();
   const depth = parseInt(String(options["depth"] ?? "3"), 10);
@@ -98,105 +100,98 @@ function handleInspectDir(
   };
 }
 
-function findMonorepoRoot(fromDir: string): string {
-  let dir = fromDir;
-  for (let i = 0; i < 10; i++) {
-    if (fs.existsSync(path.join(dir, "pnpm-workspace.yaml"))
-      || fs.existsSync(path.join(dir, "lerna.json"))) {
-      return dir;
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return fromDir;
-}
-
 function handleInspectDeps(
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   const graphFormat = options["graph"] as boolean;
-  const detectCycles = options["cycles"] as boolean;
+  const detectCyclesOpt = options["cycles"] as boolean;
 
-  // 侦察 packages 间的依赖关系
-  const root = findMonorepoRoot(process.cwd());
-  const packagesDir = path.join(root, "packages");
+  const root = findProjectRoot(process.cwd());
+  const packages = collectPackages(root);
+  const allDeps = collectDeps(root, packages);
+  const edges = buildEdges(packages, allDeps, false);
+
+  // 构建包名→workspace依赖映射
   const deps: Record<string, string[]> = {};
-
-  if (fs.existsSync(packagesDir)) {
-    const pkgDirs = fs.readdirSync(packagesDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory());
-
-    for (const pkgDir of pkgDirs) {
-      const pkgJsonPath = path.join(packagesDir, pkgDir.name, "package.json");
-      if (fs.existsSync(pkgJsonPath)) {
-        try {
-          const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
-          const workspaceDeps = [
-            ...Object.entries(pkg.dependencies ?? {}),
-            ...Object.entries(pkg.devDependencies ?? {}),
-          ]
-            .filter(([, v]) => String(v).includes("workspace"))
-            .map(([k]) => k);
-          deps[pkg.name ?? pkgDir.name] = workspaceDeps;
-        } catch { /* 忽略 */ }
-      }
-    }
+  for (const pkg of packages) {
+    if (pkg.isRoot) continue;
+    const pkgEdges = edges.filter((e) => e.from === pkg.id);
+    deps[pkg.name] = pkgEdges.map((e) => e.to);
   }
 
   if (graphFormat) {
-    // DOT 格式输出
-    const dotLines = ["digraph Cortex {"];
-    for (const [pkg, targets] of Object.entries(deps)) {
-      for (const target of targets) {
-        dotLines.push(`  "${pkg}" -> "${target}";`);
-      }
-    }
-    dotLines.push("}");
+    const cycles = detectCyclesOpt ? detectCycles(edges) : [];
+    const dot = generateDot(packages, edges, cycles);
     return {
       success: true,
-      output: dotLines.join("\n"),
-      data: { dot: dotLines.join("\n"), deps },
+      output: dot,
+      data: { dot, deps, edges },
       exitCode: 0,
     };
   }
 
+  let output = Object.entries(deps)
+    .map(([pkg, targets]) => `  ${pkg} → ${targets.join(", ") || "(无 workspace 依赖)"}`)
+    .join("\n");
+
+  if (detectCyclesOpt) {
+    const cycles = detectCycles(edges);
+    if (cycles.length > 0) {
+      output += "\n\n⚠️ 循环依赖:";
+      for (const cycle of cycles) {
+        output += `\n  ${cycle.path.join(" → ")}`;
+      }
+    } else {
+      output += "\n\n✅ 未发现循环依赖";
+    }
+  }
+
   return {
     success: true,
-    data: deps,
-    output: Object.entries(deps)
-      .map(([pkg, targets]) => `  ${pkg} → ${targets.join(", ") || "(无 workspace 依赖)"}`)
-      .join("\n"),
+    data: { deps, edges },
+    output,
     exitCode: 0,
   };
 }
 
 function handleInspectDrift(
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): CommandResult {
-  const baselinePath = options["baseline"] as string | undefined;
+  const root = findProjectRoot(process.cwd());
+  const entries = collectDependencies(root);
+  const groups = detectDrift(entries);
+  const drifts = groups.filter((g) => g.hasDrift);
 
-  if (!baselinePath) {
+  if (drifts.length === 0) {
     return {
       success: true,
-      output: "配置漂移检测需要 --baseline <file> 指定基准配置文件",
+      output: "✅ 未发现版本漂移（所有同名依赖版本一致）",
       exitCode: 0,
     };
   }
 
+  const lines = [`❌ 发现 ${drifts.length} 处版本漂移:\n`];
+  for (const drift of drifts) {
+    lines.push(`  ${drift.depName}:`);
+    for (const entry of drift.entries) {
+      lines.push(`    ${entry.pkg}: ${entry.version}`);
+    }
+    lines.push("");
+  }
+
   return {
     success: true,
-    data: { baseline: baselinePath, drift: [], status: "ok" },
-    output: `配置漂移检测: ${baselinePath} — 未发现漂移`,
+    data: { drifts },
+    output: lines.join("\n"),
     exitCode: 0,
   };
 }
 
 function handleInspectReport(
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   const outputPath = (options["output"] ?? options["o"]) as string | undefined;
 

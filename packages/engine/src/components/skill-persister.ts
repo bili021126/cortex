@@ -7,15 +7,265 @@
  *   3. scanOutputFilesForSkills(): 扫描已产出文件（pattern/design/review），
  *      从 Markdown 提取技能模板（文件回溯扫描）。
  *
- * @since 技能沉淀机制 Core-2
+ * @since 技能沉淀机制 Core-1
  */
 
 import type { MemoryStore } from "../memory/memory-store.js";
 import type { SkillTemplate, Tag } from "@cortex/shared";
-import { MemoryType, MemorySubType, AgentType } from "@cortex/shared";
+import { AgentType, LinkType } from "@cortex/shared";
+import type { SearchResult } from "../platform/search-backend.js";
 import { extractSkillsFromOutput } from "./skill-extractor.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
+
+// ─── 0. 技能结晶为知识 ────────────────────────────
+
+/** Knowledge 条目元数据（写入 metadata 域） */
+export interface KnowledgeMetadata {
+  skillId: string;
+  triggerTags: Tag[];
+  /** 版本号：新建=1，每次更新递增 */
+  version: number;
+  /** 是否已通过事实认证 */
+  verified: boolean;
+  /** 认证者（如 "analysis-agent"），未认证时为空 */
+  verifiedBy?: string;
+  /** 认证时间戳 */
+  verifiedAt?: number;
+  /** 佐证情景记忆 ID 列表 */
+  evidenceIds: string[];
+  /** 技能采纳次数 */
+  adoptionCount: number;
+}
+
+/** 结晶选项 */
+export interface CrystallizeOptions {
+  /** 认证者标识（如 "analysis-agent"），传入即视为已认证 */
+  verifiedBy?: string;
+  /** 佐证情景记忆 ID 列表 */
+  evidenceIds?: string[];
+}
+
+/** 结晶结果 */
+export interface CrystallizeResult {
+  memId: string;
+  isUpdate: boolean;
+  version: number;
+  verified: boolean;
+}
+
+/**
+ * 将已验证技能结晶为 MemoryType.Knowledge 记忆。支持幂等更新与版本追踪。
+ *
+ * 行为：
+ *   - 首次结晶（无同名 Knowledge）→ 新建，version=1
+ *   - 重复结晶（已有同名 Knowledge）→ 归档旧版，version 递增，合并证据链
+ *   - 传入 verifiedBy 即视为已认证（weight=5），否则为未认证（weight=3）
+ *
+ * @param skill  技能模板
+ * @param memory MemoryStore 实例
+ * @param opts   可选：认证信息 + 证据链
+ * @returns 结晶结果，失败返回 null
+ */
+export async function crystallizeSkillToKnowledge(
+  skill: SkillTemplate,
+  memory: MemoryStore,
+  opts?: CrystallizeOptions,
+): Promise<CrystallizeResult | null> {
+  try {
+    // 1. 查重：是否已有同名 Active Knowledge
+    const existing = await memory.read({
+      kind: "Insight",
+      metadataFilter: { skillId: skill.id },
+      limit: 1,
+    }, "CSA");
+
+    let version = 1;
+    let existingEvidenceIds: string[] = [];
+
+    if (existing.length > 0) {
+      // 2. 已有记录 → 归档旧版本 → 继承版本号 + 证据链
+      const oldEntry = existing[0];
+      version = ((oldEntry.content_blob?.version as number) ?? 1) + 1;
+      existingEvidenceIds = (oldEntry.content_blob?.evidenceIds as string[]) ?? [];
+      memory.cas(oldEntry.id, "Active", "Archived");
+    }
+
+    // 3. 合并证据链（去重）
+    const evidenceIds = [...existingEvidenceIds];
+    if (opts?.evidenceIds) {
+      for (const eid of opts.evidenceIds) {
+        if (!evidenceIds.includes(eid)) evidenceIds.push(eid);
+      }
+    }
+
+    // 4. 认证状态
+    const verified = opts?.verifiedBy != null;
+
+    // 5. 写入新 Knowledge
+    const summaryPrefix = verified ? "[已验证技能知识]" : "[未验证技能知识]";
+    const memId = memory.writePending({
+      source: { agentType: skill.agentType, taskId: "" },
+      kind: "Insight",
+      content_blob: {
+        skillId: skill.id,
+        name: skill.name,
+        trigger: skill.trigger,
+        steps: skill.steps,
+        expectedOutput: skill.expectedOutput,
+        triggerTags: skill.triggerTags,
+        agentType: skill.agentType,
+        version,
+        verified,
+        verifiedBy: opts?.verifiedBy,
+        verifiedAt: opts?.verifiedBy ? Date.now() : undefined,
+        evidenceIds,
+        adoptionCount: skill.adoptionCount,
+      },
+      summary: `${summaryPrefix} ${skill.agentType}:${skill.name} — ${skill.trigger}`,
+      semantic_gist: `${skill.agentType}:${skill.name} — ${skill.trigger}`.slice(0, 200),
+      weight: verified ? 5 : 3,
+      content_hash: "",
+    });
+    memory.commitMemory(memId);
+
+    // 6. 链接证据链（DerivedFrom）
+    if (opts?.evidenceIds) {
+      for (const eid of opts.evidenceIds) {
+        try { memory.link(memId, eid, LinkType.DerivedFrom); } catch { /* link best-effort */ }
+      }
+    }
+
+    return { memId, isUpdate: existing.length > 0, version, verified };
+  } catch (e) {
+    console.error(
+      `[skill-persister] 技能结晶为知识失败: ${skill.agentType}:${skill.name}`,
+      e instanceof Error ? e.message : String(e),
+    );
+    return null;
+  }
+}
+
+/**
+ * 验证知识条目的事实基础。
+ *
+ * 当前实现为启发式验证（至少需 1 条情景记忆佐证）。
+ * AnalysisAgent（纳西妲）可调用此函数做深度验证：
+ *   1. 检索 skillId 关联的 Episodic 记忆
+ *   2. 比对技能步骤与实际执行记录
+ *   3. 返回 verified + evidenceIds + report
+ *
+ * @param skill  待验证的技能模板
+ * @param memory MemoryStore 实例
+ * @param verifier 认证者标识（如 "analysis-agent"）
+ * @returns 验证结果
+ */
+/** 外部搜索器回调签名 */
+export type ExternalSearcher = (query: string, maxResults: number) => Promise<SearchResult[]>;
+
+/** 验证选项 */
+export interface VerifyOptions {
+  /** 外部搜索回调（如 SearchAggregator.search），提供联网事实佐证 */
+  externalSearch?: ExternalSearcher;
+}
+
+/** 验证结果 */
+export interface VerifyResult {
+  verified: boolean;
+  /** 内部证据：情景记忆 ID 列表 */
+  evidenceIds: string[];
+  /** 外部证据：web_search 搜索结果 */
+  externalResults?: SearchResult[];
+  report: string;
+}
+
+/**
+ * 搜索外部事实证据（基于技能关键信息构造搜索 query，调用外部搜索器）。
+ *
+ * 搜索策略：使用技能 name + trigger 拼接搜索词，取前 5 条结果。
+ * 此函数用于弥补纯内存证据的不足——当技能缺乏情景记忆佐证时，
+ * 外部搜索结果可作为事实认证的辅助证据。
+ *
+ * @param skill      待验证的技能模板
+ * @param searcher   外部搜索回调（SearchAggregator.search）
+ * @returns 搜索结果列表
+ */
+export async function searchExternalEvidence(
+  skill: SkillTemplate,
+  searcher: ExternalSearcher,
+): Promise<SearchResult[]> {
+  const query = `${skill.name} ${skill.trigger} ${skill.triggerTags?.join(" ") ?? ""}`.trim();
+  if (!query) return [];
+  try {
+    return await searcher(query, 5);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 验证知识条目的事实基础。
+ *
+ * 两层证据：
+ *   1. 内部证据——检索 skillId 关联的 Episodic 记忆（至少 1 条）
+ *   2. 外部证据——通过 externalSearch 回调联网搜索（可选）
+ *
+ * 验证通过条件：内部证据 ≥ 1 条（外部证据辅助但不改变 verdict）。
+ * AnalysisAgent（纳西妲）可传入 externalSearch 做深度验证。
+ *
+ * @param skill    待验证的技能模板
+ * @param memory   MemoryStore 实例
+ * @param verifier 认证者标识（如 "analysis-agent"）
+ * @param opts     可选：外部搜索回调
+ * @returns 验证结果
+ */
+export async function verifySkillKnowledge(
+  skill: SkillTemplate,
+  memory: MemoryStore,
+  verifier: string,
+  opts?: VerifyOptions,
+): Promise<VerifyResult> {
+  // 检索与该技能关联的情景记忆
+  const episodes = await memory.read({
+    kind: "TaskLog",
+    metadataFilter: { skillId: skill.id },
+    limit: 10,
+  }, "CSA");
+
+  const evidenceIds = episodes.map((e) => e.id);
+
+  // ── 外部证据搜索（并行，失败不阻塞） ──
+  let externalResults: SearchResult[] | undefined;
+  if (opts?.externalSearch) {
+    try {
+      externalResults = await searchExternalEvidence(skill, opts.externalSearch);
+    } catch {
+      // 外部搜索失败不影响内部验证
+    }
+  }
+
+  // 验证标准：内部证据 ≥ 1 条（外部证据辅助，不改变 verdict）
+  const verified = episodes.length >= 1;
+
+  let report: string;
+  if (verified) {
+    report = `知识通过事实认证 (${verifier}): ${episodes.length} 条情景记忆佐证。` +
+      episodes.map((e) => `\n  - ${e.summary.slice(0, 120)}`).join("");
+    if (externalResults && externalResults.length > 0) {
+      report += `\n外部佐证 (web_search): ${externalResults.length} 条。` +
+        externalResults.slice(0, 3).map((r) => `\n  - [${r.title}](${r.url})`).join("");
+    }
+  } else {
+    report = `知识未通过事实认证 (${verifier}): 缺少情景记忆佐证。` +
+      `技能 ${skill.name} 虽被采纳 ${skill.adoptionCount} 次，但无情景记忆可追溯。`;
+    if (externalResults && externalResults.length > 0) {
+      report += `\n提示: web_search 找到 ${externalResults.length} 条外部结果，可辅助人工审核。` +
+        externalResults.slice(0, 3).map((r) => `\n  - [${r.title}](${r.url})`).join("");
+    }
+  }
+
+  return { verified, evidenceIds, externalResults, report };
+}
 
 // ─── 1. 写入：SkillRegistry → MemoryStore ─────────────
 
@@ -34,18 +284,13 @@ export function persistSkillsToMemory(
   for (const skill of skills) {
     try {
       const memId = memory.writePending({
-        memoryType: MemoryType.Skill,
-        subType: MemorySubType.Fact,
-        content: skill as unknown as Record<string, unknown>,
+        source: { agentType: skill.agentType, taskId: "" },
+        kind: "Skill",
+        content_blob: skill as unknown as Record<string, unknown>,
         summary: `[技能沉淀] ${skill.agentType}:${skill.name} — ${skill.trigger}`,
-        agentType: skill.agentType,
-        creatorId: "skill-persister",
+        semantic_gist: `${skill.agentType}:${skill.name} — ${skill.trigger}`.slice(0, 200),
         weight: 5,
-        metadata: {
-          skillId: skill.id,
-          triggerTags: skill.triggerTags,
-          status: skill.status,
-        },
+        content_hash: "",
       });
       memory.commitMemory(memId);
       count++;
@@ -72,17 +317,15 @@ export async function loadSkillsFromMemory(memory: MemoryStore): Promise<SkillTe
 
   try {
     const entries = await memory.read({
-      memoryTypes: [MemoryType.Skill],
-      queryMode: "csa",
+      kind: "Skill",
       limit: 100,
-      trackAccess: false,
-    });
+    }, "CSA");
 
     for (const entry of entries) {
-      if (entry.memoryType !== MemoryType.Skill) continue;
-      if (entry.state !== "ACTIVE") continue;
+      if (entry.kind !== "Skill") continue;
+      if (entry.semantic_state !== "Active") continue;
 
-      const content = entry.content;
+      const content = entry.content_blob;
       if (!content || typeof content !== "object") continue;
 
       const skill = content as unknown as SkillTemplate;
@@ -204,7 +447,7 @@ function extractSkillsFromMarkdown(
   if (!content || content.trim().length === 0) return [];
 
   // 策略 1：JSON 块提取（SkillTemplate 格式）
-  const { skills, diagnostics } = extractSkillsFromOutput(content);
+  const { skills } = extractSkillsFromOutput(content);
   if (skills.length > 0) return skills;
 
   // 策略 2：P0-P9 段落提取

@@ -6,8 +6,6 @@
 // ============================================================
 
 import type { AgentType } from "./agent.js";
-import type { AgentStatus } from "./agent.js";
-import type { TaskNode, NodeResult } from "./task.js";
 
 // ─── PipelineObserver ──────────────────────────────────────
 
@@ -20,6 +18,8 @@ export enum PipelinePriority {
 /**
  * 事件类型枚举——封闭集合，镜像代码库中所有 emit 点。
  * 用枚举替代裸 string，编译期约束事件名拼写。
+ *
+ * @fix N-07 — 新增 NodeRemoved 事件类型，供 TaskBoard.removeNode() 使用
  */
 export enum PipelineEventType {
   // ── AgentPool ──
@@ -41,6 +41,7 @@ export enum PipelineEventType {
   NodeReplan = "node.replan",
   NodeReplanQueued = "node.replan.queued",
   NodeSpawnFailed = "node.spawn_failed",
+  NodeRemoved = "node.removed",
   // ── Pool ──
   PoolDestroyFailed = "pool.destroy_failed",
   // ── MemoryStore ──
@@ -85,6 +86,7 @@ export type EventPayloadMap = {
   [PipelineEventType.NodeReplan]: { nodeId: string; reason: string; attempt: number };
   [PipelineEventType.NodeReplanQueued]: { nodeId: string; reason: string; attempt: number };
   [PipelineEventType.NodeSpawnFailed]: { nodeId: string; agentType: AgentType; reason: string };
+  [PipelineEventType.NodeRemoved]: { nodeId: string };
   [PipelineEventType.PoolDestroyFailed]: { agentType: AgentType; instanceId: string; error: string };
   [PipelineEventType.MemoryDbWriteFailed]: { operation: string; error: string };
   [PipelineEventType.MemoryWriteBlocked]: { reason: string };
@@ -125,6 +127,17 @@ export interface ObservableEvent<T extends PipelineEventType = PipelineEventType
 }
 
 export type PipelineHandler = (event: ObservableEvent) => void;
+
+/**
+ * IPipelineObserver —— 可观测事件管道接口。
+ * PipelineObserver 实现此接口，外部可在测试/生产/桌面端注入不同的 observer 实现。
+ * @since v2.8 核心组件接口化与组合式重构
+ */
+export interface IPipelineObserver {
+  emit(event: ObservableEvent): void;
+  on(priority: PipelinePriority, handler: PipelineHandler): void;
+  off(priority: PipelinePriority, handler?: PipelineHandler): void;
+}
 
 // ─── SafeErrorReporter ─────────────────────────────────────
 
@@ -202,50 +215,103 @@ export interface LlmToolCall {
 
 export interface LlmResponse {
   content: string | null;
-  toolCalls: LlmToolCall[];
-  reasoning_content?: string; // V4-Flash 思考模式：需在下一轮 assistant 消息中回传
+  tool_calls?: LlmToolCall[];
+  usage?: LlmUsage;
+  reasoning_content?: string; // V4-Flash 思考模式
 }
 
-/**
- * LLM function calling 用工具定义。
- * @fix 艾尔海森 P0-2 — 与 toolkit.ts 中 ToolDefinition 语义重叠，
- *   此处保留为 ToolDefinition 的精简别名。消费方优先使用 ToolDefinition。
- *
- * @deprecated 新代码请使用 ToolDefinition（来自 toolkit.ts），功能更完整。
- */
+export interface LlmUsage {
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
+/** LLM function calling 工具定义（OpenAI 兼容格式） */
 export interface ToolDef {
   name: string;
   description: string;
-  parameters: Record<string, unknown>;
+  parameters?: Record<string, unknown>;
 }
 
+/** LLM 适配器配置 */
 export interface LlmAdapterConfig {
-  apiKey: string;
   baseUrl: string;
-  chatModel: string;
-  reasonerModel: string;
-  reasoningEffort?: "high" | "max"; // V4-Flash 思考模式推理深度
+  apiKey: string;
+  chatModel?: string;
+  reasonerModel?: string;
+  reasoningEffort?: "high" | "max";
+  /** 权限控制标识（用于限流/配额匹配，如 "cyrene" / "chat" / "reasoner"） */
+  label?: string;
 }
 
-// ─── Agent 接口（定义于此以解耦 agent ↔ task 循环依赖） ───
+// ─── 运行时类型约束 ──────────────────────────────────────────
 
-/** Agent 接口——所有 Agent 类必须实现此接口 */
-export interface Agent {
-  readonly type: AgentType;
-  readonly status: AgentStatus;
-  wakeup(): Promise<void>;
-  execute(node: TaskNode, model: string): Promise<NodeResult>;
+// ─── CLI ↔ 引擎统一通信接口 ─────────────────────────────
+
+/** 对话选项 */
+export interface ChatOptions {
+  model?: string;
+  reasoningEffort?: "high" | "max";
+}
+
+/**
+ * ICortexApi —— CLI 与引擎的公共通信契约。
+ *
+ * CLI 命令只依赖此接口，不感知引擎内部组件（Scheduler/TaskBoard/MemoryStore 等）。
+ * EngineBridge 实现此契约，bootstrapEngine 产出的结果也实现了此契约。
+ *
+ * @since v2.7 替代桥接模式的直接组件暴露
+ */
+export interface ICortexApi {
+  // ── 生命周期 ──
+  readonly ready: boolean;
+  readonly bootstrapped: boolean;
+  ensureReady(): Promise<void>;
+  ensureBootstrapped(): Promise<void>;
   shutdown(): Promise<void>;
-  /** 方案B：注入 Pool 引用（Scheduler spawn 时调用）。
-   *  类型擦除为 unknown 以避免 shared↔engine 循环依赖。
-   *  调用方通过 AgentPool.setPool 传入具体实现。 */
-  setPool?(pool: unknown, instanceId: string): void;
-  /** 注入 SafeErrorReporter */
-  setSafeReporter?(reporter: SafeErrorReporter): void;
+
+  // ── 直接对话（闲聊，不经调度器）──
+  chat(systemPrompt: string, messages: LlmMessage[], opts?: ChatOptions): Promise<string>;
+
+  // ── 模型名（用于 talk/trio/party 的双模型分流）──
+  getChatModelName(): string;
+  getReasonerModelName(): string;
+
+  // ── 任务执行 ──
+  submitTask(node: import("./task.js").TaskNode): Promise<void>;
+  executeAll(): Promise<import("./task.js").ExecutionReport>;
+
+  // ── Talk 专用记忆 ──
+  ensureTalkMemory(): Promise<void>;
+  readTalkMemory(query: import("./memory.js").MemoryQuery): Promise<import("./memory.js").MemoryEntry[]>;
+  writeTalkMemory(entry: import("./memory.js").MemoryWriteInput): Promise<void>;
+
+  // ── Agent 查询（返回引擎类型，CLI 知道具体类型可转型）──
+  getMetaAgent(): unknown;
+  getStrategists(): unknown;
+
+  // ── 确认门（已有 IConfirmGate 契约）──
+  getConfirmGate(): Promise<import("./toolkit.js").IConfirmGate>;
+
+  // ── 主记忆库（只读，用于获取工程上下文）──
+  readMainMemory(query: import("./memory.js").MemoryQuery): Promise<import("./memory.js").MemoryEntry[]>;
+
+  // ── 引擎组件访问（管理命令用）──
+  /** 获取记忆库（管理命令：memory write/read/search/link/archive/freeze/obliterate） */
+  getMemoryStore(): Promise<import("./memory.js").IMemoryStore>;
+
+  /** 获取任务板（管理命令：task submit/list/status/cancel/redo） */
+  getTaskBoard(): Promise<unknown>;
+
+  /** 获取调度器（管理命令：task redo / run / schedule） */
+  getScheduler(): Promise<unknown>;
+
+  /** 获取 AgentPool（管理命令：agent list/inspect/spawn/destroy） */
+  getAgentPool(): unknown;
 }
 
-/** Agent 配置（权限由 Toolkit 层 AGENT_TOOL_PERMISSIONS 管理） */
-export interface AgentConfig {
-  type: AgentType;
-  maxInstances: number;
-}
+// ─── 运行时类型约束 ──────────────────────────────────────────
+
+/** 返回类型声明——插件式注入类型 */
+export type SafeAny = unknown;
+
+export type StrictNonEmptyArray<T> = T extends readonly [infer F, ...infer R] ? (F extends undefined ? never : readonly [F, ...R]) : never;

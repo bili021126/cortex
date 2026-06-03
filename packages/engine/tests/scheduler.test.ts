@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentType, MemoryType, PipelinePriority } from "@cortex/shared";
+import { AgentType, PipelinePriority } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, Scheduler, topologicalSort } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 
@@ -8,16 +8,15 @@ import { LlmAdapter } from "@cortex/llm";
 
 async function mockAgentByType(agentType: string, success = true, output = `done by ${agentType}`) {
   const adapter = new LlmAdapter({
-    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-  });
+    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
   adapter.injectMock(async () => ({ content: output, toolCalls: [] }));
   const tk = new Toolkit();
   let agent;
   switch (agentType) {
-    case AgentType.Code: agent = createAgent(codeAgentConfig(), adapter, tk); break;
-    case AgentType.Review: agent = createAgent(reviewAgentConfig(), adapter, tk); break;
-    case AgentType.Analysis: agent = createAgent(analysisAgentConfig(), adapter, tk); break;
-    default: agent = createAgent(codeAgentConfig(), adapter, tk);
+    case AgentType.Code: agent = createAgent(codeAgentConfig("test"), adapter, tk); break;
+    case AgentType.Review: agent = createAgent(reviewAgentConfig("test"), adapter, tk); break;
+    case AgentType.Analysis: agent = createAgent(analysisAgentConfig("test"), adapter, tk); break;
+    default: agent = createAgent(codeAgentConfig("test"), adapter, tk);
   }
   await agent.wakeup();
   return agent;
@@ -83,7 +82,7 @@ describe("Scheduler", () => {
     pool.register({ type: AgentType.Review, maxInstances: 3 });
     pool.register({ type: AgentType.Analysis, maxInstances: 3 });
 
-    scheduler = new Scheduler(board, pool, observer, gate);
+    scheduler = new Scheduler(board, pool, observer);
 
     // 注册 agents
     scheduler.register(AgentType.Code, await mockAgentByType(AgentType.Code), "mock");
@@ -101,8 +100,7 @@ describe("Scheduler", () => {
       claimedBy: [],
       payload: "修一个 bug",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const report = await scheduler.executeAll();
 
@@ -127,8 +125,7 @@ describe("Scheduler", () => {
       claimedBy: [],
       payload: "父任务",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
     board.addNode({
       id: "child",
       parentId: "parent",
@@ -139,8 +136,7 @@ describe("Scheduler", () => {
       claimedBy: [],
       payload: "子任务",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const events: string[] = [];
     observer.on(PipelinePriority.HIGH, (e: any) => {
@@ -165,8 +161,7 @@ describe("Scheduler", () => {
       claimedBy: [],
       payload: "部署任务",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const report = await scheduler.executeAll();
 
@@ -186,20 +181,18 @@ describe("Scheduler", () => {
       claimedBy: [],
       payload: "安全审查 + 架构审计",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     const report = await scheduler.executeAll();
 
     expect(report.totalNodes).toBe(1);
     expect(report.completed).toBe(1);
 
-    // TaskBoard 的多视角等齐——三种 Agent 都跑了（CodeAgent 也匹配 review+analysis）
+    // TaskBoard 的多视角等齐——匹配的 Agent 都跑（Review 匹配 review/audit，Analysis 匹配 analysis）
     const node = board.getNode("multi-1")!;
     expect(node.status).toBe("done");
-    expect(node.results).toHaveLength(3);
+    expect(node.results).toHaveLength(2);
     const agentTypes = node.results.map((r) => r.agentType);
-    expect(agentTypes).toContain(AgentType.Code);
     expect(agentTypes).toContain(AgentType.Review);
     expect(agentTypes).toContain(AgentType.Analysis);
   });
@@ -219,8 +212,7 @@ describe("Scheduler", () => {
       claimedBy: [],
       payload: "事件测试",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     await scheduler.executeAll();
 
@@ -234,13 +226,12 @@ describe("Scheduler", () => {
   it("集成 MemoryStore：执行后自动写入 EPISODIC 记忆", async () => {
     const memory = new MemoryStore();
     const adapter = new LlmAdapter({
-      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock",
-    });
+      apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     adapter.injectMock(async () => ({ content: "产出内容", toolCalls: [] }));
     // CodeAgent 注入 MemoryStore 以写记忆
-    const agentWithMem = createAgent(codeAgentConfig(), adapter, new Toolkit(), memory);
+    const agentWithMem = createAgent(codeAgentConfig("test"), adapter, new Toolkit(), memory);
 
-    const memScheduler = new Scheduler(board, pool, observer, gate);
+    const memScheduler = new Scheduler(board, pool, observer);
     await agentWithMem.wakeup();
     memScheduler.register(AgentType.Code, agentWithMem, "mock");
 
@@ -253,14 +244,13 @@ describe("Scheduler", () => {
       claimedBy: [],
       payload: "写记忆测试",
       results: [],
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     await memScheduler.executeAll();
 
-    const mems = memory.read({ memoryTypes: [MemoryType.Episodic] });
+    const mems = await memory.read({ kind: "TaskLog" });
     expect(mems.length).toBeGreaterThanOrEqual(1);
     expect(mems[0].summary).toContain("写记忆测试");
-    expect(mems[0].agentType).toBe(AgentType.Code);
+    expect(mems[0].source.agentType).toBe(AgentType.Code);
   });
 });

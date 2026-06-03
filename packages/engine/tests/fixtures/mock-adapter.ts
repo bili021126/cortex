@@ -14,12 +14,10 @@ export function mockLlmAdapter(output = "Task completed."): LlmAdapter {
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
   adapter.injectMock(async () => ({
     content: output,
-    toolCalls: [],
-  }));
+    tool_calls: []}));
   return adapter;
 }
 
@@ -29,17 +27,15 @@ export function mockStuckAdapter(): LlmAdapter {
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
   let callCount = 0;
   adapter.injectMock(async () => {
     callCount++;
     return {
       content: `Working on attempt ${callCount}`,
-      toolCalls: [
+      tool_calls: [
         { id: `c${callCount}`, name: "search_code", arguments: { query: "test" } },
-      ],
-    };
+      ]};
   });
   return adapter;
 }
@@ -50,8 +46,7 @@ export function mockCrashAdapter(errorMsg = "LLM service unavailable"): LlmAdapt
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
   adapter.injectMock(async () => {
     throw new Error(errorMsg);
   });
@@ -67,18 +62,16 @@ export function mockToolThenFinalAdapter(
     apiKey: "mock",
     baseUrl: "mock",
     chatModel: "mock-chat",
-    reasonerModel: "mock-reasoner",
-  });
+    reasonerModel: "mock-reasoner"});
   let calledOnce = false;
   adapter.injectMock(async () => {
     if (!calledOnce) {
       calledOnce = true;
       return {
         content: "Let me use a tool first.",
-        toolCalls: [{ id: "c1", name: toolCall.name, arguments: toolCall.arguments }],
-      };
+        tool_calls: [{ id: "c1", name: toolCall.name, arguments: toolCall.arguments }]};
     }
-    return { content: finalOutput, toolCalls: [] };
+    return { content: finalOutput, tool_calls: [] };
   });
   return adapter;
 }
@@ -95,6 +88,5 @@ export function makeTestNode(overrides: Partial<TaskNode> = {}): TaskNode {
     payload: overrides.payload ?? "Implement a calculator add function",
     results: overrides.results ?? [],
     createdAt: overrides.createdAt ?? Date.now(),
-    reasoningEffort: overrides.reasoningEffort,
-  };
+    reasoningEffort: overrides.reasoningEffort};
 }

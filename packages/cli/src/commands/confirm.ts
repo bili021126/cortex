@@ -8,9 +8,9 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import type { EngineBridge } from "../services/engine-bridge.js";
+import type { ICortexApi } from "@cortex/shared";
 
-export function createConfirmHandler(bridge: EngineBridge): CommandHandler {
+export function createConfirmHandler(bridge: ICortexApi): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
     if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
       return {
@@ -36,8 +36,7 @@ export function createConfirmHandler(bridge: EngineBridge): CommandHandler {
     const subcommand = args[0];
 
     try {
-      const engine = await bridge.ensureInitialized();
-      const gate = engine.confirmGate!;
+      const gate = await bridge.getConfirmGate();
 
       switch (subcommand) {
         case "pending":
@@ -62,8 +61,8 @@ export function createConfirmHandler(bridge: EngineBridge): CommandHandler {
 
 function handleConfirmPending(
   gate: any,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): CommandResult {
   const hasPending = gate.hasPending();
 
@@ -80,8 +79,8 @@ function handleConfirmPending(
 function handleConfirmApprove(
   gate: any,
   requestId: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): CommandResult {
   if (!requestId) {
     return { success: false, error: "请指定确认请求 ID。用法: cortex confirm approve <id>", exitCode: 1 };
@@ -104,8 +103,8 @@ function handleConfirmApprove(
 function handleConfirmReject(
   gate: any,
   requestId: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): CommandResult {
   if (!requestId) {
     return { success: false, error: "请指定确认请求 ID。用法: cortex confirm reject <id>", exitCode: 1 };

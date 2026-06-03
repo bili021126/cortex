@@ -19,7 +19,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { AgentType, MemoryType, LinkType, PipelinePriority, type TaskNode } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority, type TaskNode } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import {
   TaskBoard,
@@ -35,8 +35,7 @@ import {
   Toolkit,
   MemoryStore,
   MetaAgent,
-  StrategistAgent,
-} from "@cortex/engine";
+  StrategistAgent} from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════
@@ -209,7 +208,7 @@ function registerFixTools(
 
   toolkit.register("write_file", async (params) => {
     const fp = resolve(params.file_path as string);
-    const content = (params.content ?? "") as string;
+    const content = (params.content_blob ?? "") as string;
     const normalizedFp = path.normalize(fp);
 
     const allowed = ALLOWED_WRITE_DIRS.some(
@@ -219,8 +218,7 @@ function registerFixTools(
       return {
         success: false,
         error: `写入被拒绝：修复模式仅允许修改 packages/ 和 scripts/ 目录。\n` +
-          `不允许的路径: ${normalizedFp}。请仅修复 packages/ 下的源文件。`,
-      };
+          `不允许的路径: ${normalizedFp}。请仅修复 packages/ 下的源文件。`};
     }
     try {
       const dir = path.dirname(fp);
@@ -255,8 +253,7 @@ function registerFixTools(
   // 禁止删除
   toolkit.register("delete_file", async () => ({
     success: false,
-    error: "删除被禁止：修复模式下不允许删除文件。仅允许编辑 (write_file) 现有源文件。",
-  }));
+    error: "删除被禁止：修复模式下不允许删除文件。仅允许编辑 (write_file) 现有源文件。"}));
 
   // ── 禁止原始 run_shell：修复模式仅使用专用工具（read_file/search_code/write_file/verify_build）──
   toolkit.register("run_shell", async () => ({
@@ -265,8 +262,7 @@ function registerFixTools(
       "· 文件读取 → read_file（非 cat/type）\n" +
       "· 内容搜索 → search_code（非 grep/findstr）\n" +
       "· 文件写入 → write_file（非 echo/cp）\n" +
-      "· 编译验证 → verify_build（非 tsc 直接调用）",
-  }));
+      "· 编译验证 → verify_build（非 tsc 直接调用）"}));
 }
 
 // ═══════════════════════════════════════════════
@@ -356,8 +352,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: undefined,
-  });
+    reasoningEffort: undefined});
   adapter.setCacheEnabled(true);
 
   const board = new TaskBoard();
@@ -375,24 +370,22 @@ async function main() {
   await memory.init(MEMORY_DB);
 
   memory.write({
-    memoryType: MemoryType.Episodic,
-    content: {
+    kind: "TaskLog",
+    content_blob: {
       taskType: "fix-session",
       entities: ["consensus-fix-list"],
       decision: `本次修复会话共 ${p2Items.length} P2 + ${p3Items.length} P3 项。\n\n` +
         p2Items.map((it, i) => `P2-${i + 1}: ${it.description}`).join("\n") + "\n" +
         p3Items.map((it, i) => `P3-${i + 1}: ${it.description}`).join("\n"),
-      outcome: "todo",
-    },
+      outcome: "todo"},
     summary: `共识修复清单：${p2Items.length} P2 + ${p3Items.length} P3 项待修复`,
-    agentType: AgentType.Fix as any,
-    creatorId: "system",
-    metadata: { taskId: "self-fix-overview" },
-  });
+    source: { agentType: AgentType.Meta, taskId: "self-fix-overview" },
+    semantic_gist: `共识修复清单：${p2Items.length} P2 + ${p3Items.length} P3 项待修复`,
+    content_hash: "self-fix-overview" });
 
   memory.write({
-    memoryType: MemoryType.Conceptual,
-    content: {
+    kind: "Insight",
+    content_blob: {
       taskType: "fix-protocol",
       entities: ["fix-agent", "protocol"],
       decision: [
@@ -404,13 +397,11 @@ async function main() {
         "Phase 4 霜凝方向监理 — 方向偏移判断、矛盾暴露、三路自洽",
         "Phase 5 汇总验证 — 全量编译 + 修复报告",
       ].join("\n"),
-      outcome: "protocol",
-    },
+      outcome: "protocol"},
     summary: "六阶段约束管道：规划→修复→审查→战略→方向→汇总",
-    agentType: AgentType.Fix as any,
-    creatorId: "system",
-    metadata: { taskId: "self-fix-protocol" },
-  });
+    source: { agentType: AgentType.Meta, taskId: "self-fix-protocol" },
+    semantic_gist: "六阶段约束管道：规划→修复→审查→战略→方向→汇总",
+    content_hash: "self-fix-protocol" });
 
   // ── Agent 注册 ──
   pool.register({ type: AgentType.Fix, maxInstances: 4 });
@@ -419,12 +410,12 @@ async function main() {
   pool.register({ type: AgentType.Data, maxInstances: 2 });
   pool.register({ type: AgentType.Strategist, maxInstances: 2 });
 
-  const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+  const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
   // ── 希格雯 (Fix) ──
   const fixToolkit = new Toolkit(gate);
   registerFixTools(fixToolkit, ROOT);
-  const fixAgent = createAgent(fixAgentConfig(), adapter, fixToolkit, memory);
+  const fixAgent = createAgent(fixAgentConfig("fix"), adapter, fixToolkit, memory);
   await fixAgent.wakeup();
   scheduler.register(AgentType.Fix, fixAgent, CHAT_MODEL);
   console.log("   🩺 希格雯 (Fix) —— 护士长");
@@ -435,9 +426,8 @@ async function main() {
   // 刻晴不写代码——覆盖 write_file 禁止写入
   reviewToolkit.register("write_file", async () => ({
     success: false,
-    error: "刻晴不写代码。审查发现问题时请描述清楚，由希格雯执行修复。",
-  }));
-  const reviewAgent = createAgent(reviewAgentConfig(), adapter, reviewToolkit, memory);
+    error: "刻晴不写代码。审查发现问题时请描述清楚，由希格雯执行修复。"}));
+  const reviewAgent = createAgent(reviewAgentConfig("review"), adapter, reviewToolkit, memory);
   await reviewAgent.wakeup();
   scheduler.register(AgentType.Review, reviewAgent, CHAT_MODEL);
   console.log("   ⚡ 刻晴 (Review) —— 只审不写，审查把关");
@@ -445,7 +435,7 @@ async function main() {
   // ── 久岐忍 (Api) ──
   const apiToolkit = new Toolkit(gate);
   registerFixTools(apiToolkit, ROOT);
-  const apiAgent = createAgent(apiAgentConfig(), adapter, apiToolkit, memory);
+  const apiAgent = createAgent(apiAgentConfig("api"), adapter, apiToolkit, memory);
   await apiAgent.wakeup();
   scheduler.register(AgentType.Api, apiAgent, CHAT_MODEL);
   console.log("   ⚔️ 久岐忍 (Api) —— API 设计修正");
@@ -453,7 +443,7 @@ async function main() {
   // ── 艾尔海森 (Data) ──
   const dataToolkit = new Toolkit(gate);
   registerFixTools(dataToolkit, ROOT);
-  const dataAgent = createAgent(dataAgentConfig(), adapter, dataToolkit, memory);
+  const dataAgent = createAgent(dataAgentConfig("data"), adapter, dataToolkit, memory);
   await dataAgent.wakeup();
   scheduler.register(AgentType.Data, dataAgent, CHAT_MODEL);
   console.log("   📚 艾尔海森 (Data) —— 数据模型修正");
@@ -536,8 +526,7 @@ async function main() {
     claimedBy: [],
     payload: planningPrompt,
     results: [],
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 
   try {
     const planResult = await metaAgent.requestReplan(planNode, "初始修复清单审查", 0);
@@ -596,8 +585,7 @@ async function main() {
         claimedBy: [],
         payload: fixPayload,
         results: [],
-        createdAt: Date.now(),
-      };
+        createdAt: Date.now()};
 
     // 移除旧节点，只留当前修复任务
     for (const n of board.getAllNodes()) {
@@ -632,8 +620,7 @@ async function main() {
       item,
       success: fixSuccess,
       output: lastOutput,
-      diffFiles: item.file ? [item.file] : [],
-    });
+      diffFiles: item.file ? [item.file] : []});
   }
 
   // ═══════════════════════════════════════════════
@@ -675,8 +662,7 @@ async function main() {
         "格式: [通过/需修改/拒绝] P2-N: 简短理由",
       ].join("\n"),
       results: [],
-      createdAt: Date.now(),
-    };
+      createdAt: Date.now()};
 
     // 移除旧节点，只留审查任务
     for (const n of board.getAllNodes()) {
@@ -701,8 +687,7 @@ async function main() {
         reviewResults.push({
           taskId: `fix-p2-${i + 1}`,
           passed: m ? m[1] === "通过" : false,
-          note: m ? m[2].trim() : "未在审查报告中找到对应判断",
-        });
+          note: m ? m[2].trim() : "未在审查报告中找到对应判断"});
       }
     } else {
       console.log(`   ⚠️ 刻晴审查未产出有效输出\n`);
@@ -747,8 +732,7 @@ async function main() {
     claimedBy: [],
     payload: strategyPrompt,
     results: [],
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 
   let zhongliOutput = "";
   try {
@@ -799,8 +783,7 @@ async function main() {
     claimedBy: [],
     payload: directionPrompt,
     results: [],
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 
   try {
     const dirResult = await shuangning.execute(directionNode, CHAT_MODEL);
@@ -840,8 +823,7 @@ async function main() {
         claimedBy: [],
         payload: fileHint + "改善 P3 项:\n" + item.description,
         results: [],
-        createdAt: Date.now(),
-      });
+        createdAt: Date.now()});
     }
 
     const p3Report = await scheduler.executeAll();

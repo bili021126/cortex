@@ -1,0 +1,23 @@
+{
+  "id": "skill-p33-dual-path-code-dedup-extraction",
+  "agentType": "refactor",
+  "name": "P33: 工厂/旧类双路径代码重复消除——顶层函数提取",
+  "triggerTags": ["refactor", "code", "duplication", "agent"],
+  "trigger": "Engine Agent 存在新旧双架构（createAgent 工厂函数 + class extends BaseAgent），两者包含完全相同的逻辑代码块（通常 30-100 行）。典型场景：inspector-agent.ts 中 collectFacts() ~80 行代码在工厂版本和类版本中各出现一次。",
+  "steps": [
+    "用 search_code 搜索涉及双路径的文件（agents/*-agent.ts 中同时存在 'createAgent' 和 'class.*extends BaseAgent' 的文件）",
+    "对比工厂函数版本和 class 版本中相同功能区的代码块，标记完全重复的部分",
+    "将重复代码块提取为顶层模块级函数（export function），放在文件顶部或尾部",
+    "工厂函数版本改为调用提取后的函数",
+    "class 版本改为调用提取后的函数（保留 @deprecated 标记）",
+    "检查提取的函数是否需要访问私有状态：若需要，通过参数传入；若不需要，直接作为纯函数",
+    "运行 pnpm test（engine 包）验证：原双路径行为不变，无测试回归"
+  ],
+  "expectedOutput": "重复代码块提取为顶层函数，工厂和类双路径共同调用，消除 ~80 行重复。旧类路径保留 @deprecated 标记指向工厂路径。",
+  "outputFile": "packages/engine/src/agents/{agent-name}.ts",
+  "status": "trial",
+  "adoptionCount": 1,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

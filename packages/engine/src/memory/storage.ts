@@ -1,6 +1,6 @@
-import type { MemoryEntry, MemoryLink, MemoryType, MemoryWriteInput, AgentType } from "@cortex/shared";
-import { MemoryState, MemorySubType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import type { MemoryEntry, MemoryLink, MemoryWriteInput, AgentType, MemorySource, MemoryKind, SemanticState } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
+import type { IPipelineObserver } from "@cortex/shared";
 import * as crypto from "node:crypto";
 import { EMBEDDING_DIM } from "./schema.js";
 
@@ -19,9 +19,9 @@ export class MemoryStorage {
   readonly memories = new Map<string, MemoryEntry>();
   readonly links = new Map<string, MemoryLink[]>();
 
-  private _observer?: PipelineObserver;
+  private _observer?: IPipelineObserver;
 
-  constructor(observer?: PipelineObserver) {
+  constructor(observer?: IPipelineObserver) {
     this._observer = observer;
   }
 
@@ -33,36 +33,30 @@ export class MemoryStorage {
     const id = `mem-${crypto.randomUUID()}`;
     const entry: MemoryEntry = {
       id,
-      memoryType: input.memoryType,
-      state: MemoryState.Active,
-      subType: input.subType,
-      content: input.content,
+      source: input.source,
+      kind: input.kind,
       summary: input.summary,
-      agentType: input.agentType,
-      creatorId: input.creatorId,
-      createdAt: input.createdAt ?? now,
-      lastAccessedAt: now,
-      accessCount: 0,
+      semantic_gist: input.semantic_gist,
+      content_blob: input.content_blob,
+      semantic_state: "Active",
       weight: input.weight ?? 1.0,
-      projectFingerprint: input.projectFingerprint,
-      metadata: input.metadata,
-      isPrivate: input.isPrivate ?? false,
+      accessCount: 0,
+      lastAccessedAt: now,
+      createdAt: input.createdAt ?? now,
       embedding: input.embedding,
+      content_hash: contentHash ?? input.content_hash ?? "",
+      expires_at: input.expires_at,
     };
-    if (contentHash) {
-      (entry as any)._contentHash = contentHash;
-    }
     this.memories.set(id, entry);
     return entry;
   }
 
   /**
    * 按 SHA256 内容哈希查找 Active 态重复记忆。
-   * @fix 语义卫生 — 写入内容级去重
    */
   findByContentHash(hash: string): MemoryEntry | undefined {
     for (const [, m] of this.memories) {
-      if ((m as any)._contentHash === hash && m.state === MemoryState.Active) {
+      if (m.content_hash === hash && m.semantic_state === "Active") {
         return m;
       }
     }
@@ -71,9 +65,6 @@ export class MemoryStorage {
 
   /**
    * 按向量余弦相似度查找语义重复记忆。
-   * @param embedding 查询向量（384d）
-   * @param threshold 余弦相似度阈值（默认 0.95）
-   * @fix 语义卫生 — 向量去重
    */
   findBySimilarity(embedding: number[], threshold: number): MemoryEntry | undefined {
     if (embedding.length !== EMBEDDING_DIM) return undefined;
@@ -81,7 +72,7 @@ export class MemoryStorage {
     let best: MemoryEntry | undefined;
     let bestScore = threshold;
     for (const [, m] of this.memories) {
-      if (m.state !== MemoryState.Active || !m.embedding || m.embedding.length !== EMBEDDING_DIM) continue;
+      if (m.semantic_state !== "Active" || m.embedding?.length !== EMBEDDING_DIM) continue;
       const e = new Float32Array(m.embedding);
       let dot = 0;
       for (let i = 0; i < EMBEDDING_DIM; i++) dot += q[i] * e[i];
@@ -95,35 +86,30 @@ export class MemoryStorage {
 
   /** 从 DB 行反序列化为 MemoryEntry。损坏/非 JSON/null content 返回 null。 */
   deserializeRow(raw: Record<string, unknown>): MemoryEntry | null {
-    const contentStr = raw.content as string;
-    if (contentStr === null || contentStr === undefined) {
-      this._emitDeserializeFailed(raw.id as string, "null content");
-      return null;
-    }
-    if (typeof contentStr === 'string' && contentStr.trim().length > 0 && !contentStr.trimStart().startsWith('{') && !contentStr.trimStart().startsWith('[')) {
-      this._emitDeserializeFailed(raw.id as string, "non-json content", contentStr.slice(0, 100));
+    const contentBlobStr = raw.content_blob as string;
+    if (contentBlobStr === null || contentBlobStr === undefined) {
+      this._emitDeserializeFailed(raw.id as string, "null content_blob");
       return null;
     }
 
     try {
-      return {
+      const entry: MemoryEntry = {
         id: raw.id as string,
-        memoryType: raw.memory_type as MemoryType,
-        state: raw.state as MemoryState,
-        subType: raw.sub_type as MemorySubType | undefined,
-        content: JSON.parse(contentStr),
-        summary: raw.summary as string,
-        agentType: raw.agent_type as AgentType,
-        creatorId: raw.creator_id as string,
-        createdAt: raw.created_at as number,
-        lastAccessedAt: raw.last_accessed_at as number,
-        accessCount: raw.access_count as number,
-        weight: raw.weight as number,
-        projectFingerprint: raw.project_fingerprint as string | undefined,
-        metadata: raw.metadata ? JSON.parse(raw.metadata as string) : undefined,
-        isPrivate: (raw.is_private as number) === 1,
+        source: _parseSource(raw.source as string),
+        kind: (raw.kind as MemoryKind) || "TaskLog",
+        summary: (raw.summary as string) || "",
+        semantic_gist: (raw.semantic_gist as string) || "",
+        content_blob: JSON.parse(contentBlobStr),
+        semantic_state: (raw.semantic_state as SemanticState) || "Active",
+        weight: (raw.weight as number) ?? 1.0,
+        accessCount: (raw.access_count as number) ?? 0,
+        lastAccessedAt: (raw.last_accessed_at as number) ?? 0,
+        createdAt: (raw.created_at as number) ?? 0,
         embedding: _parseEmbeddingBlob(raw.embedding),
+        content_hash: (raw.content_hash as string) || "",
+        expires_at: (raw.expires_at as number) || undefined,
       };
+      return entry;
     } catch (e) {
       this._emitDeserializeFailed(raw.id as string, String(e).slice(0, 200));
       return null;
@@ -146,10 +132,6 @@ export class MemoryStorage {
 
   // ── 基础访问 ─────────────────────────────────
 
-  /**
-   * 解析 BLOB → number[] (Float32Array → Array.from)。
-   * 长度校验：必须为 EMBEDDING_DIM * 4 字节，否则返回 undefined。
-   */
   static parseEmbeddingBlob(raw: unknown): number[] | undefined {
     return _parseEmbeddingBlob(raw);
   }
@@ -170,14 +152,12 @@ export class MemoryStorage {
     return this.memories.size;
   }
 
-  /** values 迭代器（供全量扫描使用） */
   values(): IterableIterator<MemoryEntry> {
     return this.memories.values();
   }
 
   // ── 关联边 ───────────────────────────────────
 
-  /** 添加一条关联边到 sourceId 的出边列表。Power 等去重逻辑由调用方处理。 */
   addLink(sourceId: string, link: MemoryLink): void {
     let existing = this.links.get(sourceId);
     if (!existing) {
@@ -187,7 +167,6 @@ export class MemoryStorage {
     existing.push(link);
   }
 
-  /** 移除 sourceId 的最后一条出边（DB 回滚用） */
   removeLastLink(sourceId: string): void {
     const existing = this.links.get(sourceId);
     if (existing && existing.length > 0) {
@@ -195,14 +174,12 @@ export class MemoryStorage {
     }
   }
 
-  /** 获取某记忆的所有出边 */
   getLinks(sourceId: string): MemoryLink[] {
     return this.links.get(sourceId) ?? [];
   }
 
   // ── 快照 ─────────────────────────────────────
 
-  /** 只读快照（深拷贝 + 递归冻结） */
   peek(id: string): Readonly<MemoryEntry> | undefined {
     const m = this.memories.get(id);
     if (!m) return undefined;
@@ -216,7 +193,7 @@ export class MemoryStorage {
     return copy;
   }
 
-  // ── 批量加载（供 persistence.init 使用）───────
+  // ── 批量加载 ────────────────────────────────
 
   loadAll(entries: MemoryEntry[]): void {
     for (const e of entries) {
@@ -229,6 +206,27 @@ export class MemoryStorage {
       this.addLink(link.sourceId, link);
     }
   }
+
+  /**
+   * 清理孤儿边：移除指向不存在记忆或已湮灭记忆的关联边。
+   */
+  cleanOrphanedLinks(): number {
+    let cleaned = 0;
+    for (const [sourceId, linkList] of this.links) {
+      const before = linkList.length;
+      const filtered = linkList.filter((link) => {
+        const target = this.memories.get(link.targetId);
+        return target && target.semantic_state !== "Obliterated";
+      });
+      cleaned += before - filtered.length;
+      if (filtered.length === 0) {
+        this.links.delete(sourceId);
+      } else if (filtered.length !== before) {
+        this.links.set(sourceId, filtered);
+      }
+    }
+    return cleaned;
+  }
 }
 
 // ── 模块内辅助 ─────────────────────────────────
@@ -239,4 +237,18 @@ function _parseEmbeddingBlob(raw: unknown): number[] | undefined {
   if (buf.length !== EMBEDDING_DIM * 4) return undefined;
   const arr = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
   return Array.from(arr);
+}
+
+/** 从 SQL source JSON 列反序列化为 MemorySource */
+function _parseSource(raw: string): MemorySource {
+  if (!raw || raw === "{}") return { agentType: "unknown" as AgentType, taskId: "" };
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return {
+      agentType: (parsed.agentType || parsed.agent_type || "unknown") as AgentType,
+      taskId: parsed.taskId || parsed.task_id || "",
+    };
+  } catch {
+    return { agentType: "unknown" as AgentType, taskId: "" };
+  }
 }

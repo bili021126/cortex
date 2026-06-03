@@ -5,8 +5,8 @@
 // 适配：移除 uuid 依赖，使用内置 crypto.randomUUID
 
 import * as crypto from "node:crypto";
-import { AgentType, MemoryType, MemoryState } from "@cortex/shared";
-import type { TaskNode, Tag } from "@cortex/shared";
+import { AgentType } from "@cortex/shared";
+import type { TaskNode, Tag, MemoryKind, SemanticState } from "@cortex/shared";
 
 // ═══════════════════════════════════════════════════════════
 // 合成 TaskNode
@@ -59,14 +59,14 @@ export function syntheticTaskTree(nodeCount: number, parentId?: string): TaskNod
 // ═══════════════════════════════════════════════════════════
 
 const MEMORY_TEMPLATES: Record<string, string[]> = {
-  [MemoryType.Episodic]: [
+  TaskLog: [
     "CodeAgent 完成了 bugfix: 修复 null 检查",
     "ReviewAgent 审查了 utils.ts 并提出 3 条建议",
     "AnalysisAgent 分析了性能瓶颈并给出优化方案",
     "用户偏好使用 TypeScript 进行开发",
     "项目使用 pnpm 作为包管理器",
   ],
-  [MemoryType.Knowledge]: [
+  Insight: [
     "上次重构支付模块时因缺少测试导致回滚",
     "使用 ORM 批量操作比逐条操作性能提升 10 倍",
     "生产环境部署必须在低峰期进行",
@@ -83,28 +83,25 @@ const AGENT_TYPES: AgentType[] = [
 ];
 
 export interface SyntheticMemoryInput {
-  memoryType: MemoryType;
+  kind: MemoryKind;
   summary: string;
   agentType: AgentType;
-  creatorId: string;
   weight?: number;
-  isPrivate?: boolean;
 }
 
 /** 生成合成记忆数据 */
 export function generateSyntheticMemories(
   count: number,
-  memoryType: MemoryType = MemoryType.Episodic,
+  kind: MemoryKind = "TaskLog",
 ): SyntheticMemoryInput[] {
-  const templates = MEMORY_TEMPLATES[memoryType] ?? MEMORY_TEMPLATES[MemoryType.Episodic];
+  const templates = MEMORY_TEMPLATES[kind] ?? MEMORY_TEMPLATES["TaskLog"];
   const entries: SyntheticMemoryInput[] = [];
 
   for (let i = 0; i < count; i++) {
     entries.push({
-      memoryType,
+      kind,
       summary: templates[i % templates.length],
       agentType: AGENT_TYPES[i % AGENT_TYPES.length],
-      creatorId: AGENT_TYPES[i % AGENT_TYPES.length],
     });
   }
 
@@ -115,9 +112,9 @@ export function generateSyntheticMemories(
 export function generateMemoriesWithStates(
   activeCount: number,
   archivedCount: number,
-): Array<{ input: SyntheticMemoryInput; state: MemoryState }> {
+): Array<{ input: SyntheticMemoryInput; state: SemanticState }> {
   return [
-    ...generateSyntheticMemories(activeCount).map((m) => ({ input: m, state: MemoryState.Active })),
-    ...generateSyntheticMemories(archivedCount).map((m) => ({ input: m, state: MemoryState.Archived })),
+    ...generateSyntheticMemories(activeCount).map((m) => ({ input: m, state: "Active" as SemanticState })),
+    ...generateSyntheticMemories(archivedCount).map((m) => ({ input: m, state: "Archived" as SemanticState })),
   ];
 }

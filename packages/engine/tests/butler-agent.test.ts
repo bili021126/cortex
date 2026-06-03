@@ -5,7 +5,7 @@ import type { ObservableEvent } from "@cortex/shared";
 import { PipelineObserver, ButlerAgent } from "@cortex/engine";
 
 function makeEvent(type: string, priority: PipelinePriority, payload: Record<string, unknown> = {}): ObservableEvent {
-  return { type, priority, payload: payload as any, timestamp: Date.now() };
+  return { type: type as any, priority, payload: payload as any, timestamp: Date.now() };
 }
 
 describe("ButlerAgent", () => {
@@ -40,7 +40,7 @@ describe("ButlerAgent", () => {
   it("execute 返回 noop 结果（管家不执行任务）", async () => {
     const result = await agent.execute();
     expect(result.success).toBe(true);
-    expect(result.output).toContain("ButlerAgent does not execute tasks");
+    expect(result.output).toContain("昔涟不执行任务");
     expect(result.nodeId).toBe("butler-noop");
   });
 
@@ -50,11 +50,10 @@ describe("ButlerAgent", () => {
     await agent.wakeup();
     observer.emit(makeEvent("node.failed", PipelinePriority.CRITICAL, {
       nodeId: "n1",
-      error: "LLM timeout",
-    }));
+      error: "LLM timeout"}));
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[Butler-CRITICAL]"),
+      expect.stringContaining("[昔涟-CRITICAL]"),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("n1"),
@@ -69,11 +68,10 @@ describe("ButlerAgent", () => {
     observer.emit(makeEvent("node.replan", PipelinePriority.CRITICAL, {
       nodeId: "n2",
       reason: "CodeAgent failed",
-      attempt: 2,
-    }));
+      attempt: 2}));
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[Butler-CRITICAL]"),
+      expect.stringContaining("[昔涟-CRITICAL]"),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("n2"),
@@ -89,11 +87,10 @@ describe("ButlerAgent", () => {
       total: 5,
       completed: 4,
       failed: 1,
-      durationMs: 1234,
-    }));
+      durationMs: 1234}));
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[Butler-CRITICAL]"),
+      expect.stringContaining("[昔涟-CRITICAL]"),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("4"),
@@ -109,11 +106,10 @@ describe("ButlerAgent", () => {
     await agent.wakeup();
     observer.emit(makeEvent("node.start", PipelinePriority.HIGH, {
       nodeId: "n3",
-      type: "implementation",
-    }));
+      type: "implementation"}));
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[Butler]"),
+      expect.stringContaining("[昔涟]"),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("n3"),
@@ -124,12 +120,10 @@ describe("ButlerAgent", () => {
     await agent.wakeup();
     observer.emit(makeEvent("node.complete", PipelinePriority.HIGH, {
       nodeId: "n4",
-      agentType: "code",
-      success: true,
-    }));
+      success: true}));
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[Butler]"),
+      expect.stringContaining("[昔涟]"),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("n4"),
@@ -140,11 +134,10 @@ describe("ButlerAgent", () => {
     await agent.wakeup();
     observer.emit(makeEvent("scheduler.layer.start", PipelinePriority.HIGH, {
       layer: 2,
-      nodes: 3,
-    }));
+      nodes: 3}));
 
     expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[Butler]"),
+      expect.stringContaining("[昔涟]"),
     );
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("2"),
@@ -160,8 +153,7 @@ describe("ButlerAgent", () => {
     consoleSpy.mockClear();
     observer.emit(makeEvent("node.failed", PipelinePriority.CRITICAL, {
       nodeId: "silent",
-      error: "should not be logged",
-    }));
+      error: "should not be logged"}));
 
     // 退订后不应有任何输出
     expect(consoleSpy).not.toHaveBeenCalled();

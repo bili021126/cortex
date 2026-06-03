@@ -1,0 +1,22 @@
+{
+  "id": "skill-p28-claimed-fixed-cross-verification",
+  "agentType": "review",
+  "name": "P28: 已闭环修复项交叉复验",
+  "triggerTags": ["audit", "verification", "review", "consensus"],
+  "trigger": "需要验证上一轮共识清单中标记为「已修复」的项目是否确实在代码中闭合时触发。适用场景：\n- 跨轮次的自审视审查\n- 共识圆桌产出前验证\n- 怀疑修复被回退或修复覆盖不完整时",
+  "steps": [
+    "用 read_file 读取共识修复清单（consensus-fix-list.md）或软约束分析报告中标记为 ✅ 已闭环的修复项",
+    "提取每一项的：修复描述、修复目标文件/位置、确认人、闭环判定依据",
+    "对每项执行源代码验证：用 read_file 读取修复目标文件，检查修复标记（如 @fix 注释、修复代码是否仍然存在）",
+    "若修复项包含配置变更（如 tsconfig.json references、package.json dependencies），用 read_file 读取配置文件确认变更仍在",
+    "对每项输出复验结果：\n  - ✅ 确认闭环（修复代码存在且测试通过）\n  - ⚠️ 修复覆盖不完整（修复存在但未覆盖所有路径）\n  - ❌ 假闭环（修复代码不存在或已被回退）\n  - 🔴 修复被回退（修复标记存在但代码已还原）",
+    "对假闭环项附加：发现时间、修复内容、当前代码状态、推测回退原因（如重构覆盖、合并冲突、手动还原）",
+    "汇总统计：实闭环 N 项 / 假闭环 M 项 / 修复不完整 K 项"
+  ],
+  "expectedOutput": "修复项复验报告：N 项 ✅ / M 项 ❌ / K 项 ⚠️。每项含源码验证证据。假闭环项含回退原因推测和重新修复建议。",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

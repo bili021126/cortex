@@ -12,8 +12,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeComplete,
       priority: PipelinePriority.NORMAL,
       payload: null,
-      timestamp: Date.now(),
-    };
+      timestamp: Date.now()};
     po.emit(event);
     expect(handler).toHaveBeenCalledWith(event);
   });
@@ -29,8 +28,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeComplete,
       priority: PipelinePriority.NORMAL,
       payload: null,
-      timestamp: Date.now(),
-    });
+      timestamp: Date.now()});
 
     expect(normalHandler).toHaveBeenCalled();
     expect(criticalHandler).not.toHaveBeenCalled();
@@ -45,8 +43,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeComplete,
       priority: PipelinePriority.NORMAL,
       payload: null,
-      timestamp: Date.now(),
-    });
+      timestamp: Date.now()});
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -65,8 +62,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeComplete,
       priority: PipelinePriority.NORMAL,
       payload: null,
-      timestamp: Date.now(),
-    };
+      timestamp: Date.now()};
     po.emit(event);
 
     // handlerA 被移除，不应调用
@@ -88,8 +84,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeFailed,
       priority: PipelinePriority.CRITICAL,
       payload: null,
-      timestamp: Date.now(),
-    });
+      timestamp: Date.now()});
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -106,8 +101,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeStart,
       priority: PipelinePriority.HIGH,
       payload: null,
-      timestamp: Date.now(),
-    };
+      timestamp: Date.now()};
     po.emit(event);
 
     // handlerA 应正常调用
@@ -125,8 +119,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.SchedulerDone,
       priority: PipelinePriority.NORMAL,
       payload: null,
-      timestamp: Date.now(),
-    };
+      timestamp: Date.now()};
     // 未提供 requestId
     expect(event.requestId).toBeUndefined();
 
@@ -148,8 +141,7 @@ describe("PipelineObserver", () => {
       priority: PipelinePriority.CRITICAL,
       payload: null,
       timestamp: Date.now(),
-      requestId: "custom-req-001",
-    };
+      requestId: "custom-req-001"};
 
     po.emit(event);
 
@@ -170,8 +162,7 @@ describe("PipelineObserver", () => {
         type: PipelineEventType.NodeStart,
         priority: PipelinePriority.HIGH,
         payload: null,
-        timestamp: Date.now(),
-      });
+        timestamp: Date.now()});
     }
 
     // 5 次 emit → 5 个不同的 requestId

@@ -39,7 +39,7 @@ const PATH_TEMPLATES: Record<string, string> = {
   consensus: "doc-govern/consensus",
   attribution: "doc-govern/attribution",
   review: "test-output/reviews",
-  "self-examination": ".cortex/archive/self-examination-soft",
+  "self-examination": "test-output/self-examination-soft",
   architecture: "docs/architecture",
 };
 

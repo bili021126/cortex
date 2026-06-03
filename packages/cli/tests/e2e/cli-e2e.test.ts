@@ -14,7 +14,7 @@
 import { describe, it, expect } from "vitest";
 import { convert, convertToDocument } from "@cortex/parser";
 import { createVersionHandler } from "../../src/commands/version.js";
-import { CORTEX_VERSION } from "../../src/constants.js";
+import { CORTEX_VERSION } from "@cortex/config";
 import { CommandRegistry } from "../../src/commands/index.js";
 import type { CommandDefinition } from "../../src/types.js";
 import { createDocHandler } from "../../src/commands/doc.js";

@@ -1,0 +1,21 @@
+{
+  "id": "skill-p30-any-type-leak-scanner",
+  "agentType": "review",
+  "name": "P30: `as any` 类型泄漏扫描",
+  "triggerTags": ["audit", "type_safety", "review"],
+  "trigger": "需要扫描代码库中所有 `as any` 类型断言，评估哪些是合理的使用边界、哪些是类型安全侵蚀。适用于架构审计或类型收紧前的基线扫描。",
+  "steps": [
+    "用 search_code 搜索 'as any' 获取所有出现位置，按文件分组",
+    "对每个 `as any` 出现位置评估其合理性：\n  - ❌ 高风险：核心业务逻辑中的类型擦除（如 memory.read() 结果、event.payload、Agent 返回类型）\n  - 🟡 中风险：工具脚本、调试脚本、测试文件中的 mock\n  - ✅ 低风险：第三方库类型不兼容需临时绕过、已知的 TypeScript 限制",
+    "提取每个高风险 `as any` 的上下文（前后 5 行），记录：文件路径 / 行号 / 使用场景 / 替代方案",
+    "按文件汇总各文件的 `as any` 密度（as any 数 / 文件总行数 * 1000）",
+    "输出统计：全库 N 处 / 高风险 M 处 / 中风险 K 处 / 低风险 L 处 / 文件密度排序",
+    "对每个高风险项输出修复建议：替换为类型谓词（type predicate）或显式接口类型"
+  ],
+  "expectedOutput": "`as any` 泄漏扫描报告：N 处总使用 / 密度排序 / 高风险项清单（含上下文、替代方案）",
+  "status": "trial",
+  "adoptionCount": 0,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

@@ -8,8 +8,9 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import type { EngineBridge } from "../services/engine-bridge.js";
+import type { ICortexApi } from "@cortex/shared";
 import { AgentType, AgentStatus, getAgentTags, getAgentToolPermissions, AGENT_CHINESE_ROLE, CHINESE_NAME_TO_TYPE } from "@cortex/shared";
+import type { IAgentPool, StrategistAgent } from "@cortex/engine";
 
 /**
  * 解析输入——支持英文 type 名和中文角色名。
@@ -28,7 +29,7 @@ function getChineseRole(type: AgentType): string {
   return AGENT_CHINESE_ROLE[type] ?? type;
 }
 
-export function createAgentHandler(bridge: EngineBridge): CommandHandler {
+export function createAgentHandler(bridge: ICortexApi): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
     if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
       return {
@@ -56,13 +57,8 @@ export function createAgentHandler(bridge: EngineBridge): CommandHandler {
     const subcommand = args[0];
 
     try {
-      // 优先走配置驱动模式（有 API key 时），回退轻量模式
-      if (bridge.isBootstrapConfigured) {
-        await bridge.ensureBootstrapped();
-      } else {
-        await bridge.ensureInitialized();
-      }
-      const pool = bridge.agentPool;
+      await bridge.ensureReady();
+      const pool = bridge.getAgentPool() as IAgentPool;
 
       switch (subcommand) {
         case "list":
@@ -116,7 +112,7 @@ async function handleAgentList(
   pool: any,
   options: Record<string, unknown>,
   context: CommandContext,
-  bridge: EngineBridge,
+  bridge: ICortexApi,
 ): Promise<CommandResult> {
   const p = safePool(pool);
   const statusFilter = options["status"] as string | undefined;
@@ -157,7 +153,7 @@ async function handleAgentList(
   }
 
   // ── Strategist Agent（从 bootstrapResult 查询，不注册 AgentPool）──
-  const strategists = bridge.getStrategists();
+  const strategists = bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
   if (strategists && strategists.size > 0) {
     for (const [id, agent] of strategists) {
       const type = "strategist";
@@ -208,7 +204,7 @@ async function handleAgentInspect(
   typeName: string | undefined,
   options: Record<string, unknown>,
   context: CommandContext,
-  bridge: EngineBridge,
+  bridge: ICortexApi,
 ): Promise<CommandResult> {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent inspect <type>", exitCode: 1 };
@@ -227,7 +223,7 @@ async function handleAgentInspect(
   let permissions: readonly string[];
 
   if (agentType === AgentType.Strategist) {
-    const strategists = bridge.getStrategists();
+    const strategists = bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
     const id = typeName === "钟离" || typeName === "zhongli" ? "zhongli" : "shuangning";
     const strategist = strategists?.get(id);
 
@@ -276,7 +272,7 @@ async function handleAgentSpawn(
   pool: any,
   typeName: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent spawn <type>", exitCode: 1 };
@@ -296,10 +292,19 @@ async function handleAgentSpawn(
     if (ok) spawned++;
   }
 
+  // @fix H-03 — 检查 spawn 结果，全部失败时返回错误
+  if (spawned === 0) {
+    return {
+      success: false,
+      error: `所有 ${count} 个 spawn 请求均失败：Agent 类型未注册或已达实例上限`,
+      exitCode: 1,
+    };
+  }
+
   return {
     success: true,
     output: `✓ 已启动 ${spawned}/${count} 个 ${typeName} 实例`,
-    data: { agentType, requested: count, spawned },
+    data: { agentType, requested: count, spawned, failed: count - spawned },
     exitCode: 0,
   };
 }
@@ -308,7 +313,7 @@ async function handleAgentDestroy(
   pool: any,
   typeName: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent destroy <type>", exitCode: 1 };
@@ -330,9 +335,10 @@ async function handleAgentDestroy(
     };
   }
 
+  // @fix H-03 — 没有指定实例 ID 时返回错误而非静默成功
   return {
-    success: true,
-    output: `⚠️ 请使用 --id <instanceId> 指定要回收的实例，或直接指定类型`,
-    exitCode: 0,
+    success: false,
+    error: `请使用 --id <instanceId> 指定要回收的实例 ID`,
+    exitCode: 1,
   };
 }

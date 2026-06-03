@@ -41,8 +41,7 @@ import {
   createInspectorAgent,
   ButlerAgent,
   evaluateAmendment,
-  summarizeGovernance,
-} from "@cortex/engine";
+  summarizeGovernance} from "@cortex/engine";
 import type { AmendmentProposal } from "@cortex/shared";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
@@ -73,7 +72,14 @@ function loadEnv() {
 const DANGEROUS = /\b(rm\s+-rf|del\s+\/F|format\s|shutdown|reboot|sudo|chmod\s+777|>\/dev\/|curl.*\|.*sh|wget.*-O.*\||mkfs)\b/i;
 
 function registerProjectTools(toolkit: Toolkit, projectRoot: string) {
-  const resolve = (p: string) => path.resolve(projectRoot, p);
+  const resolve = (p: string) => {
+    const normalized = path.normalize(p);
+    if (path.isAbsolute(normalized) && normalized.toLowerCase().startsWith(projectRoot.toLowerCase() + path.sep)) {
+      return normalized;
+    }
+    const clean = p.replace(/^[a-zA-Z]:[\\/]/, '').replace(/^[\\/]+/, '');
+    return path.resolve(projectRoot, clean || '.');
+  };
 
   toolkit.register("read_file", async (params: any) => {
     const fp = resolve(params.file_path as string);
@@ -132,7 +138,7 @@ function registerProjectTools(toolkit: Toolkit, projectRoot: string) {
     try {
       const dir = path.dirname(fp);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const content = params.content as string;
+      const content = params.content_blob as string;
       // 写入前校验：amendments JSON 必须是合法 JSON
       if (fp.includes("amendments") && fp.endsWith(".json")) {
         try { JSON.parse(content); } catch {
@@ -153,8 +159,7 @@ function registerProjectTools(toolkit: Toolkit, projectRoot: string) {
     try {
       const output = execSync(cmd, {
         cwd: projectRoot, timeout: 60_000, encoding: "utf-8",
-        maxBuffer: 512 * 1024, stdio: ["ignore", "pipe", "pipe"],
-      });
+        maxBuffer: 512 * 1024, stdio: ["ignore", "pipe", "pipe"]});
       return { success: true, output: output || "(exit 0)" };
     } catch (e: any) {
       return { success: false, error: `Command failed: ${e.message.slice(0, 300)}` };
@@ -229,8 +234,7 @@ async function main() {
   const REASONER_MODEL = llmCfg.reasonerModel;
 
   const adapter = new LlmAdapter({
-    apiKey: API_KEY, baseUrl: BASE_URL, chatModel: CHAT_MODEL, reasonerModel: REASONER_MODEL,
-  });
+    apiKey: API_KEY, baseUrl: BASE_URL, chatModel: CHAT_MODEL, reasonerModel: REASONER_MODEL});
   adapter.setCacheEnabled(true);
 
   const metaAgent = new MetaAgent(adapter);
@@ -261,7 +265,7 @@ async function main() {
   pool.register({ type: AgentType.Fix, maxInstances: 1 });
   pool.register({ type: AgentType.Inspector, maxInstances: 2 });
 
-  const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+  const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
   // 工具注册——所有 Agent 共享同一 Toolkit
   const sharedToolkit = new Toolkit(gate);
@@ -269,15 +273,15 @@ async function main() {
 
   // 注册全部 Agent（工厂模式）
   const agents: { type: AgentType; label: string; inst: any }[] = [
-    { type: AgentType.Code, label: "刻晴", inst: createAgent(codeAgentConfig(), adapter, sharedToolkit, memory) },
-    { type: AgentType.Review, label: "久岐忍", inst: createAgent(reviewAgentConfig(), adapter, sharedToolkit, memory) },
-    { type: AgentType.Analysis, label: "纳西妲", inst: createAgent(analysisAgentConfig(), adapter, sharedToolkit, memory) },
-    { type: AgentType.Ops, label: "北斗", inst: createAgent(opsAgentConfig(), adapter, sharedToolkit, memory) },
-    { type: AgentType.Loop, label: "莫娜", inst: createAgent(loopAgentConfig(), adapter, sharedToolkit, memory) },
-    { type: AgentType.DocGovern, label: "凝光", inst: createAgent(docGovernAgentConfig(), adapter, sharedToolkit) },
-    { type: AgentType.Api, label: "久岐忍", inst: createAgent(apiAgentConfig(), adapter, sharedToolkit, memory) },
-    { type: AgentType.Data, label: "艾尔海森", inst: createAgent(dataAgentConfig(), adapter, sharedToolkit, memory) },
-    { type: AgentType.Fix, label: "希格雯", inst: createAgent(fixAgentConfig(), adapter, sharedToolkit, memory) },
+    { type: AgentType.Code, label: "刻晴", inst: createAgent(codeAgentConfig("e2e"), adapter, sharedToolkit, memory) },
+    { type: AgentType.Review, label: "久岐忍", inst: createAgent(reviewAgentConfig("e2e"), adapter, sharedToolkit, memory) },
+    { type: AgentType.Analysis, label: "纳西妲", inst: createAgent(analysisAgentConfig("e2e"), adapter, sharedToolkit, memory) },
+    { type: AgentType.Ops, label: "北斗", inst: createAgent(opsAgentConfig("e2e"), adapter, sharedToolkit, memory) },
+    { type: AgentType.Loop, label: "莫娜", inst: createAgent(loopAgentConfig("e2e"), adapter, sharedToolkit, memory) },
+    { type: AgentType.DocGovern, label: "凝光", inst: createAgent(docGovernAgentConfig("e2e"), adapter, sharedToolkit) },
+    { type: AgentType.Api, label: "久岐忍", inst: createAgent(apiAgentConfig("e2e"), adapter, sharedToolkit, memory) },
+    { type: AgentType.Data, label: "艾尔海森", inst: createAgent(dataAgentConfig("e2e"), adapter, sharedToolkit, memory) },
+    { type: AgentType.Fix, label: "希格雯", inst: createAgent(fixAgentConfig("e2e"), adapter, sharedToolkit, memory) },
     { type: AgentType.Inspector, label: "安柏", inst: createInspectorAgent(adapter, sharedToolkit, memory) },
   ];
 
@@ -351,7 +355,7 @@ async function main() {
     const p = e.payload as any;
     const id = p?.nodeId ? `[${(p.nodeId as string).slice(0, 20)}]` : "";
     if (e.type === "node.complete") {
-      console.log(`   ✅ ${id} ${p.agentType ?? "?"} 完成`);
+      console.log(`   ✅ ${id} ${p.source.agentType ?? "?"} 完成`);
     } else if (e.type === "node.failed") {
       console.log(`   ❌ ${id} 失败: ${String(p.error ?? "").slice(0, 120)}`);
     } else if (e.type === "node.replan") {
@@ -429,8 +433,7 @@ async function main() {
       APPROVED: "✅ 通过",
       APPROVED_WITH_CAVEATS: "⚠️ 附条件通过",
       BLOCKED: "🚫 阻塞",
-      NEEDS_CLARIFICATION: "❓ 需要澄清",
-    }[judgment.verdict];
+      NEEDS_CLARIFICATION: "❓ 需要澄清"}[judgment.verdict];
     console.log(`  📌 裁决: ${verdictLabel}`);
 
     if (judgment.caveats) {
@@ -473,7 +476,7 @@ async function main() {
 
   // ── 记忆诊断 ──
   console.log(`\n  ── 记忆系统 ──`);
-  const allMem = memory.read({});
+  const allMem = await memory.read({});
   info("总记忆", `${allMem.length} 条`);
 
   await memory.close();

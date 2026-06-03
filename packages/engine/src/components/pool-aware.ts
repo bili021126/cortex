@@ -95,21 +95,32 @@ export class PoolAwareState {
     if (this._pool && this._instanceId) {
       const ok = this._pool.setStatus(this._instanceId, status);
       if (!ok) {
-        if (this._safeReporter) {
-          this._safeReporter({
-            source: `${this._tag}.PoolAwareState.transition`,
-            error: new Error(`Pool 拒绝流转 → ${status}`),
-            severity: "fatal",
-            hint: `instanceId=${this._instanceId}`,
-          });
+        // Pool 拒绝流转——检查是否因实例已销毁（如交叉验证复用主阶段已销毁的 agent）
+        const current = this._pool.getStatus(this._instanceId);
+        if (current === undefined || current === AS.Destroyed) {
+          // 实例已终结——解除 Pool 绑定，降级到本地状态机继续执行
+          this._pool = null;
+          this._instanceId = null;
+          // fall through to local path
+        } else {
+          if (this._safeReporter) {
+            this._safeReporter({
+              source: `${this._tag}.PoolAwareState.transition`,
+              error: new Error(`Pool 拒绝流转 ${current} → ${status}`),
+              severity: "fatal",
+              hint: `instanceId=${this._instanceId}`,
+            });
+          }
+          return false;
         }
+      } else {
+        return true;
       }
-      return ok;
     }
 
     // 降级路径：无 Pool 时校验本地流转合法性
     const allowed = VALID_TRANSITIONS[this._localStatus];
-    if (!allowed || !allowed.has(status)) {
+    if (!allowed?.has(status)) {
       const msg = `[${this._tag}] 非法流转 ${this._localStatus} → ${status}（无 Pool 降级路径）`;
       if (this._safeReporter) {
         this._safeReporter({

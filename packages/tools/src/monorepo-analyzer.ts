@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+/* eslint-disable no-console */
 /**
  * ═══ Monorepo Analyzer ═══
  *
@@ -27,7 +28,8 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { readdirSync, statSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { cwd, exit, argv } from 'node:process';
+import { cwd, argv } from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 /* ════════════════════════════════════════════════════════════════════════════
  * 类型定义
@@ -87,7 +89,7 @@ export interface AnalyzerMeta {
   scannedAt: string;
   filesScanned: number;
   dependenciesChecked: number;
-  status: 'clean' | 'drift' | 'cycle' | 'error';
+  status: 'clean' | 'drift' | 'cycle' | 'cycle+drift' | 'error';
   projectRoot: string;
 }
 
@@ -98,7 +100,9 @@ export interface AnalyzerOutput {
     edges: Edge[];
     adjacency: Record<string, string[]>;
     dot: string;
+    mermaid: string;
   };
+  layers: string[][];
   drifts: DriftItem[];
   allDeps: Record<string, Record<string, string>>;
   cycles: CycleInfo[];
@@ -159,7 +163,7 @@ function padDisplay(s: string, target: number): string {
  * 核心逻辑
  * ════════════════════════════════════════════════════════════════════════════ */
 
-function findProjectRoot(start: string): string {
+export function findProjectRoot(start: string): string {
   let dir = resolve(start);
   for (let i = 0; i < 20; i++) {
     if (existsSync(join(dir, 'pnpm-workspace.yaml'))) return dir;
@@ -191,7 +195,7 @@ function readJson<T>(filePath: string): T | null {
   }
 }
 
-function collectPackages(projectRoot: string): PkgInfo[] {
+export function collectPackages(projectRoot: string): PkgInfo[] {
   const packages: PkgInfo[] = [];
 
   const rootPkgPath = join(projectRoot, 'package.json');
@@ -211,24 +215,6 @@ function collectPackages(projectRoot: string): PkgInfo[] {
   const packagesDir = join(projectRoot, 'packages');
   if (!existsSync(packagesDir)) return packages;
 
-  const layerMap: Record<string, number> = {
-    // Layer 0: 无内部依赖的基础包
-    shared: 0,
-    parser: 0,
-    data: 0,
-    pm: 0,
-    // Layer 1: 仅依赖 shared
-    llm: 1,
-    testing: 1,
-    notification: 1,
-    // Layer 2: 依赖 shared + engine/layer-1 包
-    engine: 2,
-    factory: 2,
-    tools: 2,
-    // Layer 3: 依赖 engine
-    cli: 3,
-  };
-
   const subdirs = getSubdirs(packagesDir);
   for (const entry of subdirs) {
     const pkgPath = join(packagesDir, entry, 'package.json');
@@ -242,14 +228,14 @@ function collectPackages(projectRoot: string): PkgInfo[] {
       filePath: pkgPath,
       relPath: `packages/${entry}/package.json`,
       isRoot: false,
-      layer: layerMap[entry] ?? 99,
+      layer: -1,
     });
   }
 
   return packages;
 }
 
-function collectDeps(projectRoot: string, packages: PkgInfo[]): DepEntry[] {
+export function collectDeps(projectRoot: string, packages: PkgInfo[]): DepEntry[] {
   const entries: DepEntry[] = [];
   const sections = ['dependencies', 'devDependencies', 'peerDependencies'] as const;
 
@@ -281,7 +267,7 @@ function collectDeps(projectRoot: string, packages: PkgInfo[]): DepEntry[] {
   return entries;
 }
 
-function buildEdges(packages: PkgInfo[], deps: DepEntry[], includeDev: boolean): Edge[] {
+export function buildEdges(packages: PkgInfo[], deps: DepEntry[], includeDev: boolean): Edge[] {
   const edges: Edge[] = [];
 
   for (const dep of deps) {
@@ -303,7 +289,15 @@ function buildEdges(packages: PkgInfo[], deps: DepEntry[], includeDev: boolean):
   return edges;
 }
 
-function detectCycles(edges: Edge[]): CycleInfo[] {
+/**
+ * 检测包级别的循环依赖（DFS 回边检测）。
+ *
+ * 局限性：简单 DFS 递归栈检测只能发现从当前遍历顺序可达的回边。
+ * 某些拓扑结构（如多个不同入度的环汇聚到同一节点）下可能遗漏部分循环。
+ * 对于需要完整循环清单的场景（如 CI 门禁），建议使用 Johnson's algorithm
+ * 或 Tarjan's SCC 算法替代。
+ */
+export function detectCycles(edges: Edge[]): CycleInfo[] {
   const adj: Record<string, string[]> = {};
   for (const edge of edges) {
     if (!adj[edge.from]) adj[edge.from] = [];
@@ -369,7 +363,7 @@ function detectCycles(edges: Edge[]): CycleInfo[] {
   return cycles;
 }
 
-function detectDrifts(deps: DepEntry[], ignoreList: string[], verbose: boolean): { drifts: DriftItem[]; allDeps: Record<string, Record<string, string>> } {
+export function detectDrifts(deps: DepEntry[], ignoreList: string[], verbose: boolean): { drifts: DriftItem[]; allDeps: Record<string, Record<string, string>> } {
   const groups: Record<string, DepEntry[]> = {};
   const allDeps: Record<string, Record<string, string>> = {};
 
@@ -455,7 +449,7 @@ function recommendVersion(entries: DepEntry[]): { version: string; reason: strin
   return { version: bestVersion, reason: '自动选择' };
 }
 
-function generateDot(packages: PkgInfo[], edges: Edge[], cycles: CycleInfo[]): string {
+export function generateDot(packages: PkgInfo[], edges: Edge[], cycles: CycleInfo[]): string {
   const lines: string[] = [];
   lines.push('digraph monorepo {');
   lines.push('  rankdir=LR;');
@@ -492,11 +486,110 @@ function generateDot(packages: PkgInfo[], edges: Edge[], cycles: CycleInfo[]): s
   return lines.join('\n');
 }
 
+/**
+ * 动态计算分层：layer = max(被依赖者 layer) + 1，叶子节点（无内部依赖）layer=0。
+ *
+ * 当依赖图存在循环时，循环中的节点会被赋予同一层级（打断递归），
+ * 从而避免栈溢出。循环层级的节点会标注在返回的 `cyclesInLayers` 中。
+ *
+ * @returns {{ layers, pkgLayers }} — layers 按层分组，pkgLayers 为各包的层号映射
+ */
+export function computeLayers(
+  packages: PkgInfo[],
+  edges: Edge[],
+): { layers: string[][]; pkgLayers: Map<string, number> } {
+  const pkgIds = new Set(packages.filter((p) => !p.isRoot).map((p) => p.id));
+
+  // 构建邻接：from 依赖 to，即 to 是 from 的前置层
+  const depOf: Map<string, string[]> = new Map();
+  for (const id of pkgIds) depOf.set(id, []);
+  for (const edge of edges) {
+    if (pkgIds.has(edge.from) && pkgIds.has(edge.to)) {
+      depOf.get(edge.from)!.push(edge.to);
+    }
+  }
+
+  // 递归计算深度，visiting Set 防止循环依赖导致栈溢出
+  const depthCache = new Map<string, number>();
+  function getDepth(id: string, visiting: Set<string> = new Set()): number {
+    if (depthCache.has(id)) return depthCache.get(id)!;
+
+    // 检测到循环：当前节点已在递归栈中 → 打断，赋予 depth 0
+    if (visiting.has(id)) {
+      return 0;
+    }
+    visiting.add(id);
+
+    const deps = depOf.get(id) ?? [];
+    if (deps.length === 0) {
+      visiting.delete(id);
+      depthCache.set(id, 0);
+      return 0;
+    }
+
+    let max = 0;
+    for (const dep of deps) {
+      const d = getDepth(dep, visiting) + 1;
+      if (d > max) max = d;
+    }
+
+    visiting.delete(id);
+    depthCache.set(id, max);
+    return max;
+  }
+
+  // 计算各包的层号，返回 Map 而非原地修改 PkgInfo
+  const pkgLayers = new Map<string, number>();
+  for (const pkg of packages) {
+    if (pkg.isRoot) continue;
+    pkgLayers.set(pkg.id, getDepth(pkg.id));
+  }
+
+  // 同步写回 PkgInfo.layer（保持向后兼容，供调用方用 pkg.layer 属性）
+  for (const [id, layer] of pkgLayers) {
+    const pkg = packages.find((p) => p.id === id);
+    if (pkg) pkg.layer = layer;
+  }
+
+  // 按层分组
+  const maxLayer = Math.max(...pkgLayers.values(), 0);
+  const layers: string[][] = Array.from({ length: maxLayer + 1 }, () => []);
+  for (const pkg of packages) {
+    if (pkg.isRoot) continue;
+    layers[pkgLayers.get(pkg.id) ?? 0].push(pkg.id);
+  }
+
+  return { layers, pkgLayers };
+}
+
+/** 生成 Mermaid flowchart（适合 GitHub/GitLab Markdown 渲染） */
+export function generateMermaid(packages: PkgInfo[], edges: Edge[], cycles: CycleInfo[]): string {
+  const lines: string[] = [];
+  lines.push('```mermaid');
+  lines.push('graph TD');
+
+  const cyclePkgs = new Set(cycles.flatMap((c) => c.packages));
+  for (const pkg of packages) {
+    if (pkg.isRoot) continue;
+    const label = cyclePkgs.has(pkg.id) ? `${pkg.id}⚠️` : pkg.id;
+    lines.push(`  ${pkg.id}["${label}"]`);
+  }
+  lines.push('');
+
+  for (const edge of edges) {
+    const arrow = edge.type === 'devDependencies' ? '-.->|dev|' : '-->';
+    lines.push(`  ${edge.from} ${arrow} ${edge.to}`);
+  }
+
+  lines.push('```');
+  return lines.join('\n');
+}
+
 /* ════════════════════════════════════════════════════════════════════════════
  * 输出格式化
  * ════════════════════════════════════════════════════════════════════════════ */
 
-function formatText(output: AnalyzerOutput, verbose: boolean): string {
+function formatText(output: AnalyzerOutput, _verbose: boolean): string {
   const lines: string[] = [];
   const W = '─'.repeat(58);
 
@@ -509,13 +602,15 @@ function formatText(output: AnalyzerOutput, verbose: boolean): string {
   lines.push(`  ${W}`);
   lines.push('');
 
-  lines.push('  ─── 1. 包清单 ───');
+  lines.push('  ─── 1. 包清单（按依赖层级）───');
   const nonRoot = output.packages.filter((p) => !p.isRoot);
   if (nonRoot.length > 0) {
     const h = '  包名                   版本      层级  路径';
     lines.push(h);
     lines.push('  ' + '─'.repeat(cjkWidth(h)));
-    for (const pkg of nonRoot) {
+    // 按层级排序
+    const sorted = [...nonRoot].sort((a, b) => a.layer - b.layer || a.name.localeCompare(b.name));
+    for (const pkg of sorted) {
       const name = padDisplay(pkg.name, 24);
       const ver = pkg.version.padEnd(9);
       const layer = `L${pkg.layer}`.padEnd(5);
@@ -608,11 +703,21 @@ function formatJSON(output: AnalyzerOutput): string {
  * CLI 入口
  * ════════════════════════════════════════════════════════════════════════════ */
 
-function main(): void {
+function main(): number {
   const args = argv.slice(2);
   const useJSON = args.includes('--json');
   const verbose = args.includes('--verbose');
   const includeDev = args.includes('--include-dev');
+  const useMermaid = args.includes('--mermaid');
+
+  // --project-path / -p：分析目标项目路径
+  const pathIdx = args.indexOf('--project-path');
+  const shortIdx = args.indexOf('-p');
+  const explicitPath = (pathIdx !== -1 && pathIdx + 1 < args.length)
+    ? args[pathIdx + 1]
+    : (shortIdx !== -1 && shortIdx + 1 < args.length)
+      ? args[shortIdx + 1]
+      : undefined;
 
   const outputIdx = args.indexOf('--output');
   const outputPath = outputIdx !== -1 && outputIdx + 1 < args.length
@@ -634,30 +739,56 @@ function main(): void {
 
   用法:
     npx tsx packages/tools/src/monorepo-analyzer.ts [选项]
+    npx tsx packages/tools/src/monorepo-analyzer.ts --project-path /path/to/other-repo
 
   选项:
-    --json                输出 JSON 格式（默认 text）
-    --output <path>       输出到文件
-    --ignore <dep>        忽略指定依赖的漂移检测（可重复）
-    --include-dev         循环依赖检测包含 devDependencies
-    --verbose             显示所有依赖详情
-    --help, -h            显示此帮助
+    --project-path, -p <path>  目标项目路径（默认自动检测当前目录）
+    --json                     输出 JSON 格式（默认 text）
+    --mermaid                  输出 Mermaid 依赖图（适合 GitHub/GitLab Markdown）
+    --output <path>            输出到文件
+    --ignore <dep>             忽略指定依赖的漂移检测（可重复）
+    --include-dev              循环依赖检测包含 devDependencies
+    --verbose                  显示所有依赖详情
+    --help, -h                 显示此帮助
+
+  示例:
+    npx tsx packages/tools/src/monorepo-analyzer.ts                       # 分析自身
+    npx tsx packages/tools/src/monorepo-analyzer.ts -p ../other-monorepo  # 分析其他项目
+    npx tsx packages/tools/src/monorepo-analyzer.ts --mermaid --json       # JSON + Mermaid
 
   退出码:
     0  干净
     1  检测到漂移或循环依赖
     2  异常
 `);
-    exit(0);
+    return 0;
   }
 
   try {
-    const projectRoot = findProjectRoot(cwd());
+    const projectRoot = explicitPath
+      ? resolve(explicitPath)
+      : findProjectRoot(cwd());
+
+    // 显式传入路径时验证有效性
+    if (explicitPath) {
+      if (!existsSync(projectRoot)) {
+        console.error(`💥 指定路径不存在: ${explicitPath}`);
+        return 2;
+      }
+      const hasWorkspace = existsSync(join(projectRoot, 'pnpm-workspace.yaml'));
+      const hasPackages = existsSync(join(projectRoot, 'packages'));
+      if (!hasWorkspace && !hasPackages) {
+        console.error(`💥 指定路径不是有效的 monorepo（缺少 pnpm-workspace.yaml 或 packages/ 目录）: ${explicitPath}`);
+        return 2;
+      }
+    }
+
+    console.error(`🔍 分析项目: ${projectRoot}`);
 
     const packages = collectPackages(projectRoot);
     if (packages.length <= 1) {
       console.error('💥 未找到 packages/ 下的子包');
-      exit(2);
+      return 2;
     }
 
     const allDeps = collectDeps(projectRoot, packages);
@@ -672,7 +803,12 @@ function main(): void {
 
     const cycles = detectCycles(edges);
     const { drifts, allDeps: depSnapshot } = detectDrifts(allDeps, ignoreList, verbose);
+
+    // 动态计算分层
+    const { layers } = computeLayers(packages, edges);
+
     const dot = generateDot(packages, edges, cycles);
+    const mermaid = generateMermaid(packages, edges, cycles);
 
     const uniqueDepCount = new Set(
       allDeps
@@ -681,9 +817,13 @@ function main(): void {
     ).size;
 
     let status: AnalyzerMeta['status'] = 'clean';
-    if (cycles.length > 0) status = 'cycle';
-    if (drifts.length > 0) status = 'drift';
-    if (drifts.length > 0 && cycles.length > 0) status = 'drift';
+    if (cycles.length > 0 && drifts.length > 0) {
+      status = 'cycle+drift';
+    } else if (cycles.length > 0) {
+      status = 'cycle';
+    } else if (drifts.length > 0) {
+      status = 'drift';
+    }
 
     const output: AnalyzerOutput = {
       meta: {
@@ -694,7 +834,8 @@ function main(): void {
         projectRoot,
       },
       packages,
-      dependencyGraph: { edges, adjacency: adj, dot },
+      dependencyGraph: { edges, adjacency: adj, dot, mermaid },
+      layers,
       drifts,
       allDeps: depSnapshot,
       cycles,
@@ -711,10 +852,17 @@ function main(): void {
       console.log(`📝 报告已写入: ${absPath}`);
     } else {
       console.log(formatted);
+      // --mermaid：附赠 Mermaid 依赖图（可直接复制到 Markdown）
+      if (useMermaid && !useJSON) {
+        console.log('\n' + '='.repeat(60));
+        console.log('MERMAID DEPENDENCY GRAPH');
+        console.log('='.repeat(60));
+        console.log(output.dependencyGraph.mermaid);
+      }
     }
 
-    const hasIssue = status === 'drift' || status === 'cycle';
-    exit(hasIssue ? 1 : 0);
+    const hasIssue = status !== 'clean';
+    return hasIssue ? 1 : 0;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
@@ -722,7 +870,8 @@ function main(): void {
       const errorOutput: AnalyzerOutput = {
         meta: { scannedAt: nowISO(), filesScanned: 0, dependenciesChecked: 0, status: 'error', projectRoot: cwd() },
         packages: [],
-        dependencyGraph: { edges: [], adjacency: {}, dot: '' },
+        dependencyGraph: { edges: [], adjacency: {}, dot: '', mermaid: '' },
+        layers: [],
         drifts: [],
         allDeps: {},
         cycles: [],
@@ -732,8 +881,27 @@ function main(): void {
     } else {
       console.error('💥 扫描异常:', message);
     }
-    exit(2);
+    return 2;
   }
 }
 
-main();
+/**
+ * 检测当前模块是否作为 CLI 入口被直接运行。
+ * 使用 import.meta.url 与 process.argv[1] 的绝对路径比较，
+ * 兼容 tsx 等运行时下扩展名差异。
+ */
+function isCliEntry(): boolean {
+  const entryArg = process.argv[1];
+  if (!entryArg) return false;
+  const thisFile = fileURLToPath(import.meta.url);
+  const resolvedEntry = resolve(entryArg);
+  if (thisFile === resolvedEntry) return true;
+  const stripExt = (p: string) => p.replace(/\.(ts|js|mjs)$/, '');
+  if (stripExt(thisFile) === stripExt(resolvedEntry)) return true;
+  return false;
+}
+
+// 仅在直接运行时执行 CLI（而非作为库导入时）
+if (isCliEntry()) {
+  process.exit(main());
+}

@@ -1,3 +1,4 @@
+ 
 /**
  * commands/roundtable.ts — `cortex roundtable` 圆桌辩论命令
  *
@@ -10,6 +11,8 @@
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
 import type { DocRegistry } from "@cortex/engine";
+import type { LlmMessage } from "@cortex/shared";
+import { getAgentDisplay } from "./repl/types.js";
 
 /** 圆桌会议模板（与 @cortex/factory RoundtableTemplate 同构） */
 interface RoundtableTemplate {
@@ -18,13 +21,15 @@ interface RoundtableTemplate {
   personas: number;
   rounds: number;
   agents: string[];
+  /** 自定义规则（追加在通用规则之后） */
+  rules?: string[];
 }
 
 export function createRoundtableHandler(bridge: EngineBridge, docRegistry: DocRegistry): CommandHandler {
   /** 从配置获取圆桌会议模板（若无则退化为空数组） */
   async function _getTemplates(): Promise<RoundtableTemplate[]> {
     try {
-      const ctx = await bridge.ensureBootstrapped();
+      const ctx = await bridge.ensureBootstrappedContext();
       return ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
     } catch {
       return [];
@@ -73,13 +78,13 @@ export function createRoundtableHandler(bridge: EngineBridge, docRegistry: DocRe
 
     switch (subcommand) {
       case "start":
-        return handleRoundtableStart(args[1], options, context, docRegistry, bridge);
+        return await handleRoundtableStart(args[1], options, context, docRegistry, bridge);
       case "list":
-        return handleRoundtableList(options, context, bridge);
+        return await handleRoundtableList(options, context, bridge);
       case "status":
-        return handleRoundtableStatus(options, context, bridge);
+        return await handleRoundtableStatus(options, context, bridge);
       case "join":
-        return handleRoundtableJoin(args[1], options, context);
+        return await handleRoundtableJoin(args[1], options, context);
       default:
         return {
           success: false,
@@ -101,7 +106,7 @@ async function handleRoundtableStart(
     return { success: false, error: "请指定会议模板。用法: cortex roundtable start <name>", exitCode: 1 };
   }
 
-  const ctx = await bridge.ensureBootstrapped();
+  const ctx = await bridge.ensureBootstrappedContext();
   const templates = ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
   const template = templates.find((t: RoundtableTemplate) => t.name === templateName);
   if (!template) {
@@ -115,7 +120,7 @@ async function handleRoundtableStart(
   const dryRun = options["dry-run"] as boolean;
   const topic = options["topic"] as string | undefined;
   const outputPath = (options["output"] ?? options["o"]) as string | undefined;
-  const wait = options["wait"] as boolean;
+  const _wait = options["wait"] as boolean;
 
   if (dryRun) {
     return {
@@ -133,26 +138,69 @@ async function handleRoundtableStart(
     };
   }
 
-  // 产出共识内容
-  const consensusContent = [
+  // ── 真正的圆桌辩论：多 Agent 通过 LLM 做多轮对话 ──
+  const topicText = topic ?? template.description;
+  const rounds = template.rounds;
+  const agentNames = template.agents;
+
+  console.log(`🧠 圆桌会议启动: ${template.name}`);
+  console.log(`   轮次: ${rounds}  |  参与: ${agentNames.join(", ")}`);
+  console.log(`   议题: ${topicText.slice(0, 80)}${topicText.length > 80 ? "..." : ""}`);
+  console.log("");
+
+  // 构建圆桌 system prompt：让 LLM 扮演多位 Agent 进行辩论
+  const systemPrompt = buildRoundtableSystemPrompt(template, topicText);
+  const messages: LlmMessage[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: `请开始第 1 轮圆桌辩论。议题: ${topicText}` },
+  ];
+
+  let consensusContent = "";
+  try {
+    // 多轮辩论：每轮追加前一轮输出作为上下文
+    for (let r = 1; r <= rounds; r++) {
+      console.log(`  ⏳ 第 ${r}/${rounds} 轮辩论中...`);
+      const response = await bridge.directChat(systemPrompt, messages);
+      if (response) {
+        messages.push({ role: "assistant", content: response });
+        messages.push({
+          role: "user",
+          content: r < rounds
+            ? `第 ${r + 1} 轮：请在前一轮基础上深入辩论，收束分歧，产出具体结论。`
+            : "辩论结束。请产出最终共识清单——按 P0/P1/P2/建议 分类，每条附一句话理由。",
+        });
+        consensusContent = response;
+      } else {
+        consensusContent = `[第 ${r} 轮无响应]`;
+        break;
+      }
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  ⚠ 辩论执行异常: ${msg}`);
+    // 有部分产出也继续归档，不丢失
+    if (!consensusContent) {
+      return {
+        success: false,
+        error: `圆桌会议执行失败: ${msg}`,
+        exitCode: 2,
+      };
+    }
+  }
+
+  // 格式化共识输出
+  const output = [
     `# 圆桌会议共识: ${template.name}`,
     "",
     `- 模板: ${template.description}`,
     `- 轮次: ${template.rounds}`,
     `- 参与: ${template.agents.join(", ")}`,
-    topic ? `- 议题: ${topic}` : "",
+    `- 议题: ${topicText}`,
     "",
     "## 共识产出",
     "",
-    `[模拟] 第 1 轮已完成 (${template.agents.length} 位 Persona 已发言)`,
-    "[模拟] 凝光收束完成",
-    "",
-    "### 共识清单",
-    "",
-    "- P0: 3 项",
-    "- P1: 5 项",
-    "- 建议: 2 项",
-  ].filter(Boolean).join("\n");
+    consensusContent,
+  ].join("\n");
 
   // 通过 DocRegistry 注册归档
   const docType = template.name === "attribution" ? "attribution" as const : "consensus" as const;
@@ -162,8 +210,8 @@ async function handleRoundtableStart(
   try {
     const entry = await docRegistry.register({
       type: docType,
-      title: `圆桌-${template.name}${topic ? `: ${topic.slice(0, 40)}` : ""}`,
-      content: consensusContent,
+      title: `圆桌-${template.name}${topic ? `: ${topicText.slice(0, 40)}` : ""}`,
+      content: output,
       authors: template.agents,
       committeeType,
     });
@@ -175,21 +223,61 @@ async function handleRoundtableStart(
   return {
     success: true,
     output: [
-      `🧠 圆桌会议启动: ${template.name}`,
-      `   模板: ${template.description}`,
-      `   轮次: ${template.rounds}`,
-      `   参与: ${template.agents.join(", ")}`,
-      topic ? `   议题: ${topic}` : "",
+      `🧠 圆桌会议完成: ${template.name}`,
+      `   轮次: ${template.rounds}  |  参与: ${template.agents.join(", ")}`,
+      topicText ? `   议题: ${topicText.slice(0, 60)}${topicText.length > 60 ? "..." : ""}` : "",
       "",
-      "[模拟] 第 1 轮已完成",
-      "[模拟] 凝光收束完成",
+      consensusContent.slice(0, 500) + (consensusContent.length > 500 ? "\n...(截断)" : ""),
       "",
-      "✅ 圆桌会议完成",
-      `   共识清单: 3 项 P0, 5 项 P1, 2 项建议`,
+      `📋 完整共识已归档至 DocRegistry`,
       registryInfo,
     ].filter(Boolean).join("\n"),
     exitCode: 0,
   };
+}
+
+/** 构建圆桌辩论 system prompt——让 LLM 扮演多位 Agent 进行多轮对话 */
+function buildRoundtableSystemPrompt(template: RoundtableTemplate, topic: string): string {
+  const agentProfiles = template.agents.map((a) => {
+    const display = getAgentDisplay(a as any);
+    return `- ${display.emoji} ${display.name}: ${display.signature}`;
+  }).join("\n");
+
+  const genericRules = [
+    "1. 每轮由每位 Agent 依次发言——用自己的角色口吻和签名语开头。",
+    "2. 复述前一位 Agent 的核心观点（一句话），然后给出你的判断。",
+    "3. 最后一轮必须产出共识清单——按 P0/P1/P2/建议 分类，每条附一句话理由。",
+  ];
+
+  const customRules = template.rules?.map((r, i) => `${i + genericRules.length + 1}. ${r}`) ?? [];
+  const allRules = [...genericRules, ...customRules];
+
+  return [
+    "[圆桌辩论模式]",
+    `你正在主持一场由 ${template.agents.length} 位 Agent 参与的圆桌辩论。`,
+    `议题: ${topic}`,
+    `轮次: ${template.rounds}`,
+    "",
+    "参与 Agent:",
+    agentProfiles,
+    "",
+    "规则:",
+    ...allRules,
+    "",
+    "格式:",
+    "## 第 N 轮",
+    "### [Agent名]（[Agent角色名]）——[签名语]",
+    "[发言内容]",
+    "### [Agent名]（[Agent角色名]）——[签名语]",
+    "...",
+    "",
+    "如果这是最后一轮:",
+    "## 共识清单",
+    "### P0（必须立即执行）",
+    "- 事项1: 理由",
+    "### P1（本周内执行）",
+    "- 事项2: 理由",
+  ].join("\n");
 }
 
 async function handleRoundtableList(
@@ -199,7 +287,7 @@ async function handleRoundtableList(
 ): Promise<CommandResult> {
   const detail = options["detail"] || options["d"];
 
-  const ctx = await bridge.ensureBootstrapped();
+  const ctx = await bridge.ensureBootstrappedContext();
   const templates = ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
   const listed = templates.map((t: RoundtableTemplate) => ({
     name: t.name,
@@ -212,7 +300,7 @@ async function handleRoundtableList(
   return {
     success: true,
     data: listed,
-    output: listed.map((t) =>
+    output: listed.map((t: { name: string; description: string; personas: number; rounds: number }) =>
       `  ${t.name.padEnd(16)} ${t.description} (${t.personas} Persona, ${t.rounds} 轮)`
     ).join("\n"),
     exitCode: 0,
@@ -226,7 +314,7 @@ async function handleRoundtableStatus(
 ): Promise<CommandResult> {
   const verbose = options["verbose"] || options["v"];
 
-  const ctx = await bridge.ensureBootstrapped();
+  const ctx = await bridge.ensureBootstrappedContext();
   const templates = ctx.bootstrapResult?.config?.roundtableTemplates ?? [];
 
   const status = {
@@ -247,8 +335,8 @@ async function handleRoundtableStatus(
 
 async function handleRoundtableJoin(
   sessionId: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
+  _options: Record<string, unknown>,
+  _context: CommandContext,
 ): Promise<CommandResult> {
   if (!sessionId) {
     return { success: false, error: "请指定会话 ID。用法: cortex roundtable join <id>", exitCode: 1 };

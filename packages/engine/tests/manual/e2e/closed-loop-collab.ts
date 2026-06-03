@@ -38,8 +38,7 @@ import {
   apiAgentConfig,
   dataAgentConfig,
   fixAgentConfig,
-  createInspectorAgent,
-} from "@cortex/engine";
+  createInspectorAgent} from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ══════════════════════════════════════════════
@@ -69,7 +68,14 @@ function loadEnv() {
 const DANGEROUS = /\b(rm\s+-rf|del\s+\/F|format\s|shutdown|reboot|sudo|chmod\s+777|>\/dev\/|curl.*\|.*sh|wget.*-O.*\||mkfs)\b/i;
 
 function registerProjectTools(toolkit: Toolkit, projectRoot: string) {
-  const resolve = (p: string) => path.resolve(projectRoot, p);
+  const resolve = (p: string) => {
+    const normalized = path.normalize(p);
+    if (path.isAbsolute(normalized) && normalized.toLowerCase().startsWith(projectRoot.toLowerCase() + path.sep)) {
+      return normalized;
+    }
+    const clean = p.replace(/^[a-zA-Z]:[\\/]/, '').replace(/^[\\/]+/, '');
+    return path.resolve(projectRoot, clean || '.');
+  };
 
   toolkit.register("read_file", async (params) => {
     const fp = resolve(params.file_path as string);
@@ -135,7 +141,7 @@ function registerProjectTools(toolkit: Toolkit, projectRoot: string) {
     try {
       const dir = path.dirname(fp);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const content = params.content as string;
+      const content = params.content_blob as string;
       fs.writeFileSync(fp, content, "utf-8");
       return { success: true, output: `Wrote ${Buffer.byteLength(content)} bytes to ${fp}` };
     } catch (e) {
@@ -156,16 +162,14 @@ function registerProjectTools(toolkit: Toolkit, projectRoot: string) {
         timeout: 120_000,
         encoding: "utf-8",
         maxBuffer: 1024 * 1024,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+        stdio: ["ignore", "pipe", "pipe"]});
       return { success: true, output: output || "(exit 0, no output)" };
     } catch (e: any) {
       const stderr = e.stderr?.toString() ?? "";
       const stdout = e.stdout?.toString() ?? "";
       return {
         success: false,
-        error: `Command failed (exit ${e.status ?? "?"}): ${e.message.slice(0, 200)}\nstdout: ${stdout.slice(0, 300)}\nstderr: ${stderr.slice(0, 300)}`,
-      };
+        error: `Command failed (exit ${e.status ?? "?"}): ${e.message.slice(0, 200)}\nstdout: ${stdout.slice(0, 300)}\nstderr: ${stderr.slice(0, 300)}`};
     }
   });
 }
@@ -194,8 +198,7 @@ async function main() {
   if (!fs.existsSync(tsconfigPath)) {
     fs.writeFileSync(tsconfigPath, JSON.stringify({
       compilerOptions: { target: "ES2020", module: "ESNext", moduleResolution: "node", strict: true, esModuleInterop: true, outDir: "./dist", rootDir: "." },
-      include: ["src/**/*"],
-    }, null, 2));
+      include: ["src/**/*"]}, null, 2));
   }
 
   console.log("╔══════════════════════════════════════════════════╗");
@@ -214,8 +217,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: REASONER_MODEL,
-    reasoningEffort: llmCfg.reasoningEffort as "high" | "max",
-  });
+    reasoningEffort: llmCfg.reasoningEffort as "high" | "max"});
   adapter.setCacheEnabled(true);
 
   const metaAgent = new MetaAgent(adapter);
@@ -245,7 +247,7 @@ async function main() {
   pool.register({ type: AgentType.Fix, maxInstances: 2 });
   pool.register({ type: AgentType.Inspector, maxInstances: 2 });
 
-  const scheduler = new Scheduler(board, pool, observer, gate, metaAgent);
+  const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
   interface AgentEntry {
     type: AgentType;
@@ -260,81 +262,72 @@ async function main() {
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(codeAgentConfig(), adapter, tk, memory);
-      },
-    },
+        return createAgent(codeAgentConfig("code"), adapter, tk, memory);
+      }},
     {
       type: AgentType.Review,
       label: "ReviewAgent (刻晴)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(reviewAgentConfig(), adapter, tk, memory);
-      },
-    },
+        return createAgent(reviewAgentConfig("review"), adapter, tk, memory);
+      }},
     {
       type: AgentType.Analysis,
       label: "AnalysisAgent (纳西妲)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(analysisAgentConfig(), adapter, tk, memory);
-      },
-    },
+        return createAgent(analysisAgentConfig("analysis"), adapter, tk, memory);
+      }},
     {
       type: AgentType.Ops,
       label: "OpsAgent (北斗)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(opsAgentConfig(), adapter, tk);
-      },
-    },
+        return createAgent(opsAgentConfig("ops"), adapter, tk);
+      }},
     {
       type: AgentType.Loop,
       label: "LoopAgent (莫娜)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(loopAgentConfig(), adapter, tk);
-      },
-    },
+        return createAgent(loopAgentConfig("loop"), adapter, tk);
+      }},
     {
       type: AgentType.DocGovern,
       label: "DocGovernAgent (凝光)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(docGovernAgentConfig(), adapter, tk, memory);
-      },
-    },
+        return createAgent(docGovernAgentConfig("doc-govern"), adapter, tk, memory);
+      }},
     {
       type: AgentType.Api,
       label: "ApiAgent (久岐忍)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(apiAgentConfig(), adapter, tk, memory);
-      },
-    },
+        return createAgent(apiAgentConfig("api"), adapter, tk, memory);
+      }},
     {
       type: AgentType.Data,
       label: "DataAgent (艾尔海森)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(dataAgentConfig(), adapter, tk, memory);
-      },
-    },
+        return createAgent(dataAgentConfig("data"), adapter, tk, memory);
+      }},
     {
       type: AgentType.Fix,
       label: "FixAgent (希格雯)",
       create() {
         const tk = new Toolkit(gate);
         registerProjectTools(tk, PROJECT_DIR);
-        return createAgent(fixAgentConfig(), adapter, tk, memory);
-      },
-    },
+        return createAgent(fixAgentConfig("fix"), adapter, tk, memory);
+      }},
     {
       type: AgentType.Inspector,
       label: "InspectorAgent (安柏)",
@@ -344,8 +337,7 @@ async function main() {
         const agent = createInspectorAgent(adapter, tk, memory);
         agent.setWorkspaceRoot(PROJECT_DIR);
         return agent;
-      },
-    },
+      }},
   ];
 
   for (const entry of agents) {
@@ -424,7 +416,7 @@ async function main() {
     const p = e.payload as any;
     const id = p?.nodeId ? `[${(p.nodeId as string).slice(0, 20)}]` : "";
     if (e.type === "node.complete") {
-      console.log(`   ✅ ${id} ${p.agentType ?? "?"} 完成`);
+      console.log(`   ✅ ${id} ${p.source.agentType ?? "?"} 完成`);
     } else if (e.type === "node.failed") {
       console.log(`   ❌ ${id} 失败: ${String(p.error ?? "").slice(0, 80)}`);
     } else if (e.type === "node.replan") {
@@ -504,8 +496,7 @@ async function main() {
         cwd: PROJECT_DIR,
         timeout: 30_000,
         encoding: "utf-8",
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+        stdio: ["ignore", "pipe", "pipe"]});
       const trimmed = checkOutput.trim();
       if (trimmed) {
         console.log(`   ✅ ${relative} 可执行，输出:\n${trimmed.slice(0, 400)}`);
@@ -528,11 +519,11 @@ async function main() {
 
   // ── Phase 7: 记忆系统观察 ──
   console.log("\n── 记忆系统诊断 ──");
-  const allMemories = memory.read({});
-  const withTask = allMemories.filter((m) => m.metadata?.taskId);
+  const allMemories = await memory.read({});
+  const withTask = allMemories.filter((m) => m.content_blob?.taskId);
   console.log(`   总记忆: ${allMemories.length}  含任务关联: ${withTask.length}`);
   for (const m of withTask.slice(0, 8)) {
-    console.log(`     📖 [${m.memoryType}] ${(m.summary ?? "").slice(0, 120)}`);
+    console.log(`     📖 [${m.kind}] ${(m.summary ?? "").slice(0, 120)}`);
   }
 
   // ── 收尾 ──

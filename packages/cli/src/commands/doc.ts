@@ -1,3 +1,4 @@
+ 
 /**
  * commands/doc.ts — `cortex doc` 文档工具命令
  *
@@ -60,7 +61,7 @@ export function createDocHandler(): CommandHandler {
 function handleDocConvert(
   filePath: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   if (!filePath) {
     return { success: false, error: "请指定输入文件。用法: cortex doc convert <file>", exitCode: 1 };
@@ -115,7 +116,7 @@ function handleDocConvert(
 function handleDocServe(
   dirPath: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   const rootDir = dirPath ? path.resolve(dirPath) : process.cwd();
   const port = parseInt(String(options["port"] ?? "8080"), 10);
@@ -173,7 +174,7 @@ function handleDocServe(
 function handleDocCheck(
   filePath: string | undefined,
   options: Record<string, unknown>,
-  context: CommandContext,
+  _context: CommandContext,
 ): CommandResult {
   if (!filePath) {
     return { success: false, error: "请指定文件。用法: cortex doc check <file>", exitCode: 1 };

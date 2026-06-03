@@ -7,7 +7,7 @@
  * @see CLI 设计文档 §3（命令体系总览）
  */
 
-import type { CommandDefinition, CommandHandler, CommandContext, CommandResult } from "../types.js";
+import type { CommandDefinition, CommandContext, CommandResult } from "../types.js";
 
 export class CommandRegistry {
   private commands = new Map<string, CommandDefinition>();
@@ -80,13 +80,13 @@ export class CommandRegistry {
       if (sub) {
         // 解析剩余参数和选项
         const { options, remaining } = this._parseOptions(subArgs.slice(1));
-        return sub.handler(remaining, options, context);
+        return await sub.handler(remaining, options, context);
       }
     }
 
     // 解析选项并调用顶级处理器
-    const { options, remaining } = this._parseOptions(subArgs);
-    return cmd.handler(remaining, options, context);
+    const { options: _parsedOptions, remaining: _parsedRemaining } = this._parseOptions(subArgs);
+    return await cmd.handler(_parsedRemaining, _parsedOptions, context);
   }
 
   /** 简单选项解析器 */

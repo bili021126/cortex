@@ -13,7 +13,7 @@
 
 import { MemoryStore } from "../src/memory/memory-store.js";
 import { PipelineObserver } from "../src/core/pipeline-observer.js";
-import { MemoryType, MemoryState, LinkType } from "../../shared/src/memory.js";
+import { LinkType } from "../../shared/src/memory.js";
 import { AgentType } from "../../shared/src/agent.js";
 
 const PASS = "✅";
@@ -42,11 +42,12 @@ async function main() {
   console.log("── L1 写入内容级去重 ──");
 
   const input1 = {
-    memoryType: MemoryType.Episodic,
-    content: { port: 3000, status: "occupied" },
+    kind: "TaskLog" as const,
+    content_blob: { port: 3000, status: "occupied" },
     summary: "端口 3000 被占用",
-    agentType: AgentType.Code,
-    creatorId: "verify",
+    semantic_gist: "端口 3000 被占用",
+    source: { agentType: AgentType.Code, taskId: "" },
+    content_hash: "",
   };
 
   const id1 = await store.write(input1);
@@ -58,11 +59,12 @@ async function main() {
 
   // 措辞不同但语义相同 → 依赖向量去重（见 L0）
   const similarInput = {
-    memoryType: MemoryType.Episodic,
-    content: { port: 3000, status: "occupied" },
+    kind: "TaskLog" as const,
+    content_blob: { port: 3000, status: "occupied" },
     summary: "侦测到 3000 端口冲突",
-    agentType: AgentType.Code,
-    creatorId: "verify",
+    semantic_gist: "侦测到 3000 端口冲突",
+    source: { agentType: AgentType.Code, taskId: "" },
+    content_hash: "",
   };
   const idSim = await store.write(similarInput);
   console.log(`  ${INFO} 语义相似写入 id: ${idSim.slice(0, 12)}... (SHA256 不同，向量去重见 L0)`);
@@ -72,39 +74,42 @@ async function main() {
 
   // 创建一条高质量种子记忆
   const seedId = await store.write({
-    memoryType: MemoryType.Episodic,
-    content: { task: "seed" },
+    kind: "TaskLog",
+    content_blob: { task: "seed" },
     summary: "核心开发任务：重构认证模块",
-    agentType: AgentType.Code,
-    creatorId: "verify",
+    semantic_gist: "重构认证模块",
+    source: { agentType: AgentType.Code, taskId: "" },
+    content_hash: "",
     weight: 1.0,
   });
 
   // 创建高权重关联记忆（会被 BFS 召回）
   const highWId = await store.write({
-    memoryType: MemoryType.Episodic,
-    content: { task: "high" },
+    kind: "TaskLog",
+    content_blob: { task: "high" },
     summary: "认证模块依赖 bcrypt 升级",
-    agentType: AgentType.Code,
-    creatorId: "verify",
+    semantic_gist: "bcrypt 升级",
+    source: { agentType: AgentType.Code, taskId: "" },
+    content_hash: "",
     weight: 1.0,
   });
-  store.link(seedId, highWId, LinkType.DependsOn);
+  store.link(seedId, highWId, LinkType.DerivedFrom);
 
   // 创建低权重关联记忆（会被 BFS 门限过滤）
   const lowWId = await store.write({
-    memoryType: MemoryType.Episodic,
-    content: { task: "low" },
+    kind: "TaskLog",
+    content_blob: { task: "low" },
     summary: "无关紧要的杂项备忘",
-    agentType: AgentType.Code,
-    creatorId: "verify",
+    semantic_gist: "杂项备忘",
+    source: { agentType: AgentType.Code, taskId: "" },
+    content_hash: "",
     weight: 0.01,
   });
-  store.link(seedId, lowWId, LinkType.AccessedDuring);
+  store.link(seedId, lowWId, LinkType.DerivedFrom);
 
   // 检索种子 → BFS 展开深度 2
   const bfsResults = await store.read({
-    memoryTypes: [MemoryType.Episodic],
+    kind: "TaskLog",
     keywords: ["重构", "认证"],
     bfsDepth: 2,
     bfsMaxNodes: 10,
@@ -123,11 +128,12 @@ async function main() {
   // 直接用 _storage.insert() 绕过 write() 的向量去重
   // （防止 "需要老化的测试记忆" 被意外匹配到已有低权重噪音记忆）
   const agingEntry = (store as any)._storage.insert({
-    memoryType: MemoryType.Episodic,
-    content: { task: "aging" },
+    kind: "TaskLog",
+    content_blob: { task: "aging" },
     summary: "需要老化的测试记忆",
-    agentType: AgentType.Code,
-    creatorId: "verify",
+    semantic_gist: "老化测试记忆",
+    source: { agentType: AgentType.Code, taskId: "" },
+    content_hash: "",
     weight: 1.0,
   });
   const agingId = agingEntry.id;
@@ -139,9 +145,8 @@ async function main() {
 
   // 先读一次触发老化
   const agedResults = await store.read({
-    memoryTypes: [MemoryType.Episodic],
+    kind: "TaskLog",
     limit: 50,
-    trackAccess: false,
   });
 
   const agedEntry = agedResults.find((m) => m.id === agingId);
@@ -202,11 +207,12 @@ async function main() {
 
     // 向量去重：写入语义极近的记忆（阈值 0.95）
     const dedupId = await store.write({
-      memoryType: MemoryType.Episodic,
-      content: { port: 3000, status: "occupied" },
+      kind: "TaskLog",
+      content_blob: { port: 3000, status: "occupied" },
       summary: "端口3000被占用",
-      agentType: AgentType.Code,
-      creatorId: "verify",
+      semantic_gist: "端口3000被占用",
+      source: { agentType: AgentType.Code, taskId: "" },
+      content_hash: "",
     });
     // 如果向量去重命中，应返回已有 id（id1 或 idSim）
     const dedupHit = dedupId === id1 || dedupId === idSim;

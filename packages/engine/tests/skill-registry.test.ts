@@ -23,8 +23,7 @@ function makeSkill(overrides: Partial<{
     adoptionCount: 0,
     rejectionCount: 0,
     discoveredBy: "LoopAgent",
-    createdAt: Date.now(),
-  };
+    createdAt: Date.now()};
 }
 
 describe("SkillRegistry", () => {

@@ -9,8 +9,7 @@ describe("AgentPool", () => {
     const pool = new AgentPool();
     pool.register({
       type: AgentType.Code,
-      maxInstances: 2,
-    });
+      maxInstances: 2});
     expect(pool.spawn(AgentType.Code, "inst-1")).toBe(true);
     expect(pool.count(AgentType.Code)).toBe(1);
   });
@@ -19,8 +18,7 @@ describe("AgentPool", () => {
     const pool = new AgentPool();
     pool.register({
       type: AgentType.Code,
-      maxInstances: 1,
-    });
+      maxInstances: 1});
     pool.spawn(AgentType.Code, "inst-1");
     expect(pool.spawn(AgentType.Code, "inst-2")).toBe(false);
   });
@@ -29,8 +27,7 @@ describe("AgentPool", () => {
     const pool = new AgentPool();
     pool.register({
       type: AgentType.Code,
-      maxInstances: 1,
-    });
+      maxInstances: 1});
     pool.spawn(AgentType.Code, "inst-1");
     pool.destroy(AgentType.Code, "inst-1");
     expect(pool.spawn(AgentType.Code, "inst-2")).toBe(true);
@@ -51,8 +48,7 @@ describe("AgentPool", () => {
       pool = new AgentPool();
       pool.register({
         type: AgentType.Code,
-        maxInstances: 2,
-      });
+        maxInstances: 2});
       pool.spawn(AgentType.Code, "inst-1");
       observer = new PipelineObserver();
     });

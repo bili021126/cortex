@@ -227,7 +227,7 @@ export class MetaAgent {
 
     for (const candidate of candidates) {
       const items = this._tryParseItems(candidate);
-      if (items !== null) {
+      if (items !== null && items.length > 0) {
         return items.flatMap((item, i) => this._toTaskNode(item, parentId, i));
       }
     }

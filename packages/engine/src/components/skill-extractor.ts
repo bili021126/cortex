@@ -1,6 +1,20 @@
 import type { SkillTemplate, Tag } from "@cortex/shared";
 import { AgentType, getTagVocabulary } from "@cortex/shared";
 
+/** 解析 outputFile 模板变量：{date} → YYYY-MM-DD, {time} → HH-MM-SS */
+export function resolveOutputFile(template: string): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  return template
+    .replace(/\{date\}/g, `${y}-${m}-${d}`)
+    .replace(/\{time\}/g, `${hh}-${mm}-${ss}`);
+}
+
 /** 提取结果：成功提取的技能 + 解析诊断信息 */
 export interface SkillExtractResult {
   skills: SkillTemplate[];
@@ -111,10 +125,11 @@ function normalizeSkillTemplate(
     ? (raw.expectedOutput ?? raw.expected_output) as string
     : "";
 
-  // 可选：outputFile
-  const outputFile = typeof raw.outputFile === "string" || typeof raw.output_file === "string"
+  // 可选：outputFile（解析模板变量 {date}/{time}）
+  const rawOutputFile = typeof raw.outputFile === "string" || typeof raw.output_file === "string"
     ? (raw.outputFile ?? raw.output_file) as string
     : undefined;
+  const outputFile = rawOutputFile ? resolveOutputFile(rawOutputFile) : undefined;
 
   // 状态：默认为 trial（需验证后升级为 active）
   const status = normalizeStatus(raw.status, diagnostics, id);
@@ -217,12 +232,11 @@ function normalizeTriggerTags(
   const vocabSet = new Set<string>(getTagVocabulary());
   const tags = raw
     .filter((t): t is string => typeof t === "string")
-    .filter((t) => {
+    .map((t) => {
       if (!vocabSet.has(t)) {
-        diagnostics.push(`技能 ${skillId} 的标签 "${t}" 不在词汇表中，已过滤`);
-        return false;
+        diagnostics.push(`技能 ${skillId} 的标签 "${t}" 不在预定义词汇表中——保留为自定义标签，请确认 MetaAgent 节点标签与之匹配`);
       }
-      return true;
+      return t;
     });
   if (tags.length === 0) {
     diagnostics.push(`技能 ${skillId} triggerTags 为空（所有标签被过滤）`);
@@ -231,7 +245,7 @@ function normalizeTriggerTags(
 }
 
 /** 规范化 steps */
-function normalizeSteps(raw: unknown, skillId: string): string[] {
+function normalizeSteps(raw: unknown, _skillId: string): string[] {
   if (!Array.isArray(raw)) {
     if (typeof raw === "string") {
       // 容错：LLM 可能输出逗号分隔的字符串

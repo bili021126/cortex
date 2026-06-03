@@ -45,8 +45,7 @@ describe("PipelineObserver SafeErrorReporter 上报 (方案A)", () => {
       reporter({
         source: "test",
         error: new Error("test"),
-        severity: "silent",
-      });
+        severity: "silent"});
     }).not.toThrow();
   });
 
@@ -107,8 +106,7 @@ describe("PipelineObserver SafeErrorReporter 上报 (方案A)", () => {
       source: "Agent.shutdown",
       error: new Error("cleanup failed"),
       severity: "degraded",
-      hint: "non-critical cleanup",
-    });
+      hint: "non-critical cleanup"});
 
     // Assert
     const reportedEvents = emitted.filter((e) => e.type === "error.reported");
@@ -133,8 +131,7 @@ describe("PipelineObserver SafeErrorReporter 上报 (方案A)", () => {
     reporter({
       source: "MemoryStore.write",
       error: new Error("disk full"),
-      severity: "fatal",
-    });
+      severity: "fatal"});
 
     // Assert
     const reportedEvents = emitted.filter((e) => e.type === "error.reported");

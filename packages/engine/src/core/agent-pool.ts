@@ -1,7 +1,33 @@
 import type { AgentType, AgentConfig, InvariantReporter } from "@cortex/shared";
-import type { PipelineObserver } from "./pipeline-observer.js";
+import type { IPipelineObserver } from "@cortex/shared";
 import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import { isTestEnv } from "../test-env.js";
+
+/**
+ * ISchedulerAgentPool —— Scheduler 依赖的 AgentPool 最小契约。
+ * 提取此接口使 Scheduler 不依赖具体 AgentPool 实现，
+ * 允许 CLI 侧 MiniAgentPool 在轻量模式下替代完整 AgentPool。
+ */
+export interface ISchedulerAgentPool {
+  spawn(agentType: AgentType, instanceId: string): boolean;
+  getStatus(instanceId: string): AgentStatus | undefined;
+  setStatus(instanceId: string, status: AgentStatus): boolean;
+  destroy(agentType: AgentType, instanceId: string): void;
+}
+
+/**
+ * IAgentPool —— AgentPool 完整管理接口。
+ * 扩展 ISchedulerAgentPool（Scheduler 最小依赖），补全管理端方法。
+ * @since v2.8 核心组件接口化与组合式重构
+ */
+export interface IAgentPool extends ISchedulerAgentPool {
+  register(config: AgentConfig): void;
+  setObserver(observer: IPipelineObserver): void;
+  getStatuses(agentType: AgentType): AgentStatus[];
+  hasAwake(agentType: AgentType): boolean;
+  canSpawn(agentType: AgentType): boolean;
+  count(agentType: AgentType): number;
+}
 
 /**
  * AgentPool —— Agent 生命周期管理 + 状态机追踪
@@ -14,18 +40,21 @@ import { isTestEnv } from "../test-env.js";
  * @fix D6 — invariant 上报单通道收敛：_observer 实例优先于 onInvariant 静态字段，
  *   消除静动态优先级不明确的问题。destroy() 中避免双路径重复 emit。
  */
-export class AgentPool {
+export class AgentPool implements IAgentPool {
   private configs = new Map<AgentType, AgentConfig>();
   private active = new Map<AgentType, Set<string>>();
   private statuses = new Map<string, AgentStatus>(); // instanceId → status
-  private _observer?: PipelineObserver;
+  private _observer?: IPipelineObserver;
 
   /**
    * invariant 违规上报后端。
-   * 默认为 `null`（仅 console.error）。
+   * 默认为 `null`（末尾兜底 console.error）。
    * 在 bootstrap 中注入 observer.emit 后，所有状态机违规会走 observer 管道。
    *
-   * 优先级：实例 _observer > 静态 onInvariant > console.error
+   * 优先级：实例 _observer > 静态 onInvariant > console.error（最后防线——无任何上报通道时的硬兜底）
+   *
+   * @justification 原则五豁免——console.error 在无 observer 且无 onInvariant 时作为唯一可用的紧急告警通道。
+   *   正常运行时 observer 必然已注入，此分支仅在 bootstrap 早期阶段或严重配置错误时触发。
    *
    * 类型来源：@cortex/shared InvariantReporter（与 TaskBoard 共享同一签名）
    * @migrated-from 内联回调签名 → shared InvariantReporter (P1 — 艾尔海森类型迁移计划)
@@ -33,15 +62,17 @@ export class AgentPool {
   static onInvariant: InvariantReporter | null = null;
 
   /** 注入 PipelineObserver（与 onInvariant 互补的双通道模式） */
-  setObserver(observer: PipelineObserver): void {
+  setObserver(observer: IPipelineObserver): void {
     this._observer = observer;
   }
 
-  /** 合法状态流转表（pool-aware.ts 共享引用，与 AgentPool 同源） */
+  /** 合法状态流转表（pool-aware.ts 共享引用，与 AgentPool 同源）
+   *  Active → Active 允许作为无操作：调度器可能对同一实例并发分发任务，
+   *  已激活的 agent 再次执行时无需变更状态，静默通过即可。 */
   static readonly VALID_TRANSITIONS: Record<AgentStatus, Set<AgentStatus>> = {
     [AgentStatus.Created]: new Set([AgentStatus.Awake, AgentStatus.Destroyed]),
     [AgentStatus.Awake]: new Set([AgentStatus.Active, AgentStatus.Draining]),
-    [AgentStatus.Active]: new Set([AgentStatus.Awake, AgentStatus.Draining]),
+    [AgentStatus.Active]: new Set([AgentStatus.Awake, AgentStatus.Draining, AgentStatus.Active]),
     [AgentStatus.Draining]: new Set([AgentStatus.Destroyed]),
     [AgentStatus.Destroyed]: new Set([]),
   };
@@ -58,7 +89,7 @@ export class AgentPool {
     const config = this.configs.get(agentType);
     if (!config) return false;
     const instances = this.active.get(agentType)!;
-    if (instances.size >= config.maxInstances) return false;
+    if (instances.size >= (config.maxInstances ?? 1)) return false;
     instances.add(instanceId);
     this.statuses.set(instanceId, AgentStatus.Created);
     return true;
@@ -128,7 +159,7 @@ export class AgentPool {
     const config = this.configs.get(agentType);
     if (!config) return false;
     const instances = this.active.get(agentType)!;
-    return instances.size < config.maxInstances;
+    return instances.size < (config.maxInstances ?? 1);
   }
 
   /** 某类型当前实例数 */

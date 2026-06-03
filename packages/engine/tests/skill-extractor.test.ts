@@ -9,7 +9,6 @@ function skillOutput(skill: Record<string, unknown> | Record<string, unknown>[])
 
 const VALID_SKILL = {
   id: "skill-pattern-scan",
-  agentType: "loop",
   name: "模式扫描",
   triggerTags: ["pattern_scan", "loop"],
   trigger: "当需要从已完成任务中寻找重复模式时触发",
@@ -25,7 +24,7 @@ const VALID_SKILL = {
   adoptionCount: 0,
   rejectionCount: 0,
   discoveredBy: "LoopAgent",
-};
+  agentType: "loop"};
 
 describe("SkillExtractor", () => {
   it("should extract a single skill from JSON fence", () => {
@@ -94,14 +93,13 @@ describe("SkillExtractor", () => {
     expect(result.diagnostics.some((d: string) => d.includes("降级"))).toBe(true);
   });
 
-  it("should filter tags not in vocabulary", () => {
+  it("should preserve tags not in vocabulary with diagnostic", () => {
     const skill = {
       ...VALID_SKILL,
-      triggerTags: ["implementation", "not_a_tag", "refactor"],
-    };
+      triggerTags: ["implementation", "not_a_tag", "refactor"]};
     const result = extractSkillsFromOutput(JSON.stringify(skill));
     expect(result.skills.length).toBe(1);
-    expect(result.skills[0].triggerTags).toEqual(["implementation", "refactor"]);
+    expect(result.skills[0].triggerTags).toEqual(["implementation", "not_a_tag", "refactor"]);
     expect(result.diagnostics.some((d: string) => d.includes("not_a_tag"))).toBe(true);
   });
 
@@ -109,13 +107,11 @@ describe("SkillExtractor", () => {
     const output = JSON.stringify({
       id: "skill-1",
       name: "Test",
-      agentType: "code",
       trigger_tags: ["implementation"],
       trigger: "test",
       steps_json: ["step 1", "step 2"],
       expected_output: "file",
-      output_file: "test.md",
-    });
+      output_file: "test.md"});
     const result = extractSkillsFromOutput(output);
     expect(result.skills.length).toBe(1);
     expect(result.skills[0].triggerTags).toEqual(["implementation"]);

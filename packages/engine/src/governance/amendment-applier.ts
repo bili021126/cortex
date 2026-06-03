@@ -18,9 +18,6 @@ const CONSTITUTION_PATTERN = /^Cortex 概念顶层设计 v[\d.]+.md$/;
 /** 宪法文件所在目录（相对于项目根） */
 const CONSTITUTION_DIR = "docs/constitution";
 
-/** 备份目录 */
-const ARCHIVE_DIR = "docs/constitution/archive";
-
 // ─── 宪法文件定位 ──────────────────────────────
 
 /**
@@ -89,7 +86,7 @@ function applyTextChanges(content: string, proposal: AmendmentProposal): string 
     // 纯新增——将 after 文本插入宪法体末尾（文档状态行之前）
     const docStatusRe = /^\*\*文档状态\*\*[：:]/m;
     const match = content.match(docStatusRe);
-    if (match && match.index !== undefined) {
+    if (match?.index !== undefined) {
       // 在文档状态行之前插入，前后各加空行保持格式
       const before = content.slice(0, match.index);
       const after = content.slice(match.index);

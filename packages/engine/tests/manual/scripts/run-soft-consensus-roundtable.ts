@@ -12,7 +12,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { AgentType, MemoryType, type SafeErrorReporter } from "@cortex/shared";
+import { AgentType, type SafeErrorReporter } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import { runMeeting, SOFT_CONSENSUS_ROUNDTABLE, type SeedMemory } from "../config/roundtable-config";
 import { resolveLlmConfig } from "../config/llm-defaults";
@@ -92,8 +92,7 @@ async function main() {
     baseUrl: BASE_URL,
     chatModel: CHAT_MODEL,
     reasonerModel: CHAT_MODEL,
-    reasoningEffort: REASONING_EFFORT,
-  });
+    reasoningEffort: REASONING_EFFORT});
   adapter.setCacheEnabled(true);
 
   // ── 1. 读取审视报告，构建种子记忆 ──
@@ -108,8 +107,7 @@ async function main() {
     amber: { key: "amber", label: "安柏", emoji: "🐰", agentType: "inspector" },
     beidou: { key: "beidou", label: "北斗", emoji: "⚓", agentType: "ops" },
     kuki: { key: "kuki", label: "久岐忍", emoji: "😈", agentType: "api" },
-    alhaitham: { key: "alhaitham", label: "艾尔海森", emoji: "📚", agentType: "data" },
-  };
+    alhaitham: { key: "alhaitham", label: "艾尔海森", emoji: "📚", agentType: "data" }};
 
   if (fs.existsSync(REPORT_DIR)) {
     const files = fs.readdirSync(REPORT_DIR);
@@ -127,13 +125,13 @@ async function main() {
         // 取前 4000 字符作为摘要（更多上下文，帮助 Agent 理解核心发现）
         const summary = rawContent.slice(0, 4000) + (rawContent.length > 4000 ? `...(截断，全文 ${rawContent.length} 字符)` : "");
         seedMemories.push({
-          memoryType: MemoryType.Knowledge,
-          content: { reportSummary: summary, sourceFile: reportFile },
+          kind: "Insight",
+          content_blob: { reportSummary: summary, sourceFile: reportFile },
           summary: `[审视报告:${info.emoji}${info.label}] ${reportFile} (${rawContent.length} 字符) —— 该 Agent 的软约束自由探索报告，详细记录了发现的具体问题、代码位置和严重程度评估`,
-          agentType: info.agentType as AgentType,
-          creatorId: "system",
-          weight: 7,
-        });
+          source: { agentType: AgentType.Analysis as AgentType, taskId: `self-exam-report-${key}` },
+          semantic_gist: `审视报告:${info.emoji}${info.label} ${reportFile}`,
+          content_hash: `self-exam-report-${key}`,
+          weight: 7});
         console.log(`  📄 ${info.emoji}${info.label}: ${reportFile} → 种子记忆 (${rawContent.length} 字符)`);
       } catch (e) {
         console.log(`  ⚠️ ${info.emoji}${info.label} 报告读取失败: ${String(e)}`);
@@ -148,13 +146,13 @@ async function main() {
         const rcaContent = fs.readFileSync(rcaPath, "utf-8");
         const rcaSummary = rcaContent.slice(0, 6000) + (rcaContent.length > 6000 ? `...(截断，全文 ${rcaContent.length} 字符)` : "");
         seedMemories.push({
-          memoryType: MemoryType.Knowledge,
-          content: { reportSummary: rcaSummary, sourceFile: rootCauseFile },
+          kind: "Insight",
+          content_blob: { reportSummary: rcaSummary, sourceFile: rootCauseFile },
           summary: `[根因归簇分析报告] ${rootCauseFile} (${rcaContent.length} 字符) —— AI 归因引擎将 206+ 项发现跨报告去重归为 6 个根因簇`,
-          agentType: "analysis" as AgentType,
-          creatorId: "system",
-          weight: 9,
-        });
+          source: { agentType: AgentType.Analysis as AgentType, taskId: "self-exam-root-cause" },
+          semantic_gist: `根因归簇分析 ${rootCauseFile}`,
+          content_hash: "self-exam-root-cause",
+          weight: 9});
         console.log(`  📄 🔬根因归簇分析: ${rootCauseFile} → 种子记忆 (${rcaContent.length} 字符)`);
       } catch { /* skip */ }
     }
@@ -166,13 +164,13 @@ async function main() {
       try {
         const zlContent = fs.readFileSync(zlPath, "utf-8");
         seedMemories.push({
-          memoryType: MemoryType.Knowledge,
-          content: { reportSummary: zlContent, sourceFile: zhongliFile },
+          kind: "Insight",
+          content_blob: { reportSummary: zlContent, sourceFile: zhongliFile },
           summary: `[钟离战略评估] ${zhongliFile} (${zlContent.length} 字符) —— 架构方向评估、契约完整性、阶段跃迁判定、磨损预警`,
-          agentType: "strategist" as AgentType,
-          creatorId: "system",
-          weight: 8,
-        });
+          source: { agentType: AgentType.Strategist as AgentType, taskId: "self-exam-zhongli" },
+          semantic_gist: `钟离战略评估 ${zhongliFile}`,
+          content_hash: "self-exam-zhongli",
+          weight: 8});
         console.log(`  📄 🗿钟离战略评估: ${zhongliFile} → 种子记忆 (${zlContent.length} 字符)`);
       } catch { /* skip */ }
     }

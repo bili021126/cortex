@@ -9,7 +9,7 @@
 
 import type { Formatter } from "./index.js";
 import type { CommandResult } from "../types.js";
-import { CORTEX_VERSION } from "../constants.js";
+import { CORTEX_VERSION } from "@cortex/config";
 
 export class JsonFormatter implements Formatter {
   private _buildMeta(): Record<string, unknown> {

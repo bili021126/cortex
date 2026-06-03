@@ -1,72 +1,50 @@
-import type { MemoryEntry } from "@cortex/shared";
-import { MemoryState } from "@cortex/shared";
 import type { MemoryStorage } from "./storage.js";
 
 /**
- * MemoryLifecycle —— 记忆五态状态机。
+ * MemoryLifecycle —— 记忆三态状态机 (v3)。
  *
  * 职责：
  * - 状态转移规则校验（isValidTransition）
  * - CAS 原子状态变更
- * - P0-六层防御：Pending（半成品）标记 + 提交
- * - archive / freeze / obliterate 操作
+ * - archive / obliterate 操作
  *
- * 不负责：持久化（通过 persistFn 回调注入）、查询、BFS。
- *
- * 状态流转图（v2.1——五态）：
- *   Active ←→ Pending  （markPending / commit）
- *   Active  → Archived （archive）
- *   *       → Frozen   （freeze，Obliterated 除外）
- *   *       → Obliterated（obliterate）
+ * 状态流转图（v3——三态）：
+ *   Active  → Archived     (archive)
+ *   Active  → Obliterated  (obliterate)
+ *   Archived → Obliterated (obliterate)
  */
 export class MemoryLifecycle {
-  /**
-   * 校验状态转移是否合法。
-   *
-   * 规则（五态）：
-   * - Obliterated 不可逆 → 拒绝所有转移
-   * - 非 Active 且非 Pending → Active → 拒绝复活
-   * - Frozen → 仅可 Obliterated
-   * - Pending ↔ Active（两阶段提交的提交/回退）
-   * - Pending → Archived / Frozen / Obliterated（放弃半成品）
-   */
-  static isValidTransition(from: MemoryState, to: MemoryState): boolean {
-    if (from === MemoryState.Obliterated) return false;
-    // 复活保护：只有 Active 或 Pending 能回到 Active
-    if (to === MemoryState.Active && from !== MemoryState.Active && from !== MemoryState.Pending) return false;
-    if (from === MemoryState.Frozen && to !== MemoryState.Obliterated) return false;
+  private static readonly ACTIVE = "Active";
+  private static readonly ARCHIVED = "Archived";
+  private static readonly OBLITERATED = "Obliterated";
+
+  static isValidTransition(from: string, to: string): boolean {
+    if (from === MemoryLifecycle.OBLITERATED) return false;
+    // 复活保护
+    if (to === MemoryLifecycle.ACTIVE && from !== MemoryLifecycle.ACTIVE) return false;
     return true;
   }
 
-  /**
-   * CAS（Compare-And-Swap）原子状态变更。
-   *
-   * @returns true 如果转移成功；false 如果校验失败
-   *
-   * 治理判例 NG-2026-0509-Persist-False-Positive（假阳性禁止原则）：
-   * persistFn 抛出时自动回滚 state。
-   */
   cas(
     storage: MemoryStorage,
     id: string,
-    expected: MemoryState,
-    newState: MemoryState,
-    persistFn?: (id: string, state: MemoryState) => void,
+    expected: string,
+    newState: string,
+    persistFn?: (id: string, state: string) => void,
   ): boolean {
     const m = storage.memories.get(id);
     if (!m) return false;
-    if (m.state !== expected) return false;
+    if (m.semantic_state !== expected) return false;
 
-    if (!MemoryLifecycle.isValidTransition(m.state, newState)) return false;
+    if (!MemoryLifecycle.isValidTransition(m.semantic_state, newState)) return false;
 
-    m.state = newState;
+    m.semantic_state = newState as MemoryEntry["semantic_state"];
 
     if (persistFn) {
       try {
         persistFn(id, newState);
       } catch (e) {
-        // 假阳性禁止原则：持久化失败回滚 state
-        m.state = expected;
+        m.semantic_state = expected as MemoryEntry["semantic_state"];
         throw e;
       }
     }
@@ -74,68 +52,70 @@ export class MemoryLifecycle {
     return true;
   }
 
-  /** archive: Active → Archived */
   archive(
     storage: MemoryStorage,
     id: string,
-    persistFn?: (id: string, state: MemoryState) => void,
+    persistFn?: (id: string, state: string) => void,
   ): boolean {
-    return this.cas(storage, id, MemoryState.Active, MemoryState.Archived, persistFn);
+    return this.cas(storage, id, MemoryLifecycle.ACTIVE, MemoryLifecycle.ARCHIVED, persistFn);
   }
 
-  /** ── P0-六层防御：两阶段提交 ── */
-
-  /** markPending: Active → Pending（标记为半成品，暂不可检索） */
+  /** Pending 两阶段提交（用于 writePending/commitMemory 的内部实现） */
   markPending(
-    storage: MemoryStorage,
-    id: string,
-    persistFn?: (id: string, state: MemoryState) => void,
+    _storage: MemoryStorage,
+    _id: string,
+    _persistFn?: (id: string, state: string) => void,
   ): boolean {
-    return this.cas(storage, id, MemoryState.Active, MemoryState.Pending, persistFn);
+    // v3: Pending 是工程态，不改变语义态——直接返回 true
+    return true;
   }
 
-  /** commit: Pending → Active（半成品验证通过，提交为正式记忆） */
   commit(
     storage: MemoryStorage,
     id: string,
-    persistFn?: (id: string, state: MemoryState) => void,
+    persistFn?: (id: string, state: string) => void,
   ): boolean {
-    return this.cas(storage, id, MemoryState.Pending, MemoryState.Active, persistFn);
+    // v3: commit 确认语义态为 Active
+    const m = storage.memories.get(id);
+    if (!m) return false;
+    m.semantic_state = "Active";
+    if (persistFn) {
+      persistFn(id, "Active");
+    }
+    return true;
   }
 
-  /** freeze: 任意状态 → Frozen（Obliterated 除外）。
-   * @fix SM-4 — 增加幂等短路：已是 Frozen 则直接返回 true，与 obliterate() 对称。 */
   freeze(
     storage: MemoryStorage,
     id: string,
-    persistFn?: (id: string, state: MemoryState) => void,
+    persistFn?: (id: string, state: string) => void,
   ): boolean {
+    // v3: freeze 转为 archive
     const m = storage.memories.get(id);
     if (!m) return false;
-    if (m.state === MemoryState.Frozen) return true;
-    return this.cas(storage, id, m.state, MemoryState.Frozen, persistFn);
+    if (m.semantic_state === "Archived") return true;
+    return this.cas(storage, id, m.semantic_state, MemoryLifecycle.ARCHIVED, persistFn);
   }
 
-  /** obliterate: 任意状态 → Obliterated */
   obliterate(
     storage: MemoryStorage,
     id: string,
-    persistFn?: (id: string, state: MemoryState) => void,
+    persistFn?: (id: string, state: string) => void,
   ): boolean {
     const m = storage.memories.get(id);
     if (!m) return false;
-    if (m.state === MemoryState.Obliterated) return true;
+    if (m.semantic_state === MemoryLifecycle.OBLITERATED) return true;
 
-    if (!MemoryLifecycle.isValidTransition(m.state, MemoryState.Obliterated)) return false;
+    if (!MemoryLifecycle.isValidTransition(m.semantic_state, MemoryLifecycle.OBLITERATED)) return false;
 
-    const previousState = m.state;
-    m.state = MemoryState.Obliterated;
+    const previousState = m.semantic_state;
+    m.semantic_state = "Obliterated";
 
     if (persistFn) {
       try {
-        persistFn(id, MemoryState.Obliterated);
+        persistFn(id, MemoryLifecycle.OBLITERATED);
       } catch (e) {
-        m.state = previousState;
+        m.semantic_state = previousState;
         throw e;
       }
     }
@@ -143,3 +123,5 @@ export class MemoryLifecycle {
     return true;
   }
 }
+
+import type { MemoryEntry } from "@cortex/shared";

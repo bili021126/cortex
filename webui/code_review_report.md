@@ -1,500 +1,439 @@
-# ⚔️ 玉衡审查报告 — Cortex 代码质量诊断
+# 🔍 刻晴代码审查报告
 
-**审查者**：刻晴（玉衡星）
-**审查范围**：`packages/*` 源码（engine / data / shared / cli / llm / parser / pm / tools / testing）
-**审查日期**：2026-05-15
-**审查依据**：逻辑正确性、边界条件、线程安全、资源泄漏、破坏性变更、错误处理完整性
-
----
-
-## 执行摘要
-
-共审查 9 个包，约 50+ 个源码文件，312 个单元测试全部通过运行但 **10 个测试套件因编码损坏集体编译失败**。
-
-### 严重度分布
-
-| 等级 | 数量 | 核心问题 |
-|------|------|----------|
-| 🔴 严重 (Critical) | 1 | `memory-store.ts` 编码损坏，阻止编译，10 套测试全部失效 |
-| 🟠 高 (High) | 1 | `Scheduler.executeAll()` 崩溃恢复中 `totalReplans` 计数器与飞行中 replan 的缺口 |
-| 🟡 中 (Medium) | 4 | 并发竞态、同步文件碰撞、默认密钥弱、异常传播路径不一致 |
-| 🟢 低 (Low) | 2 | Promise 闭包残留、阻塞详情字段可能为空 |
+> **玉衡审查** — 璃月七星之刻晴
+> 审查时间: $(date)
+> 审查范围: `packages/` 全目录（11 个子包，~60 个源文件）
+> 审查类型: 逻辑正确性 · 边界条件 · 线程安全 · 资源泄漏 · 错误处理完整性
 
 ---
 
-## 🔴 严重缺陷
+## 📋 审查摘要
 
-### C-01：`memory-store.ts` 编码损坏 → 无法编译，10 个测试套件全灭
-
-**文件**：`packages/engine/src/memory/memory-store.ts`
-**严重度**：🔴 严重
-**类别**：破坏性变更 / 编译错误
-
-#### 缺陷描述
-
-该文件的全部中文注释和部分中文字符串字面量出现**编码层损坏**——UTF-8 编码的中文文本被错误地以 Latin-1（或 GBK）重新解释保存，导致：
-- 注释中的中文全部变成乱码（如 `"宸茶縼绉昏嚦"` 本应为 `"已迁移至"`）
-- **关键路径上的字符串模板字面量被破坏**，esbuild 无法解析
-
-具体触发点（line 88-89）：
-
-```typescript
-throw new Error(
-  `embedding 缁村害涓嶅尮閰? 鏈熸湜 ${EMBEDDING_DIM}锛屽疄闄?${input.embedding.length}`,
-);
-```
-
-字符串中的乱码字符导致 esbuild 报告：
-
-```
-ERROR: Expected ")" but found "embedding"
-  D:/cortex/packages/engine/src/memory/memory-store.ts:89:9
-  87 |      if (input.embedding !== undefined && input.embedding.length !== EMBEDDING_DIM) {
-  88 |        throw new Error(
-  89 |          `embedding 缁村害涓嶅尮閰? 鏈熸湜 ${EMBEDDING_DIM}锛屽疄闄?${input.embedding.length}`,
-     |           ^
-```
-
-#### 影响范围
-
-以下 10 个测试套件因编码损坏导致编译失败（0 测试运行）：
-
-| 测试套件 | 原因 |
-|----------|------|
-| `memory-store.test.ts` | 直接依赖 `MemoryStore` |
-| `memory-store-close-read.test.ts` | 同上 |
-| `memory-store-lifecycle.test.ts` | 同上 |
-| `memory-store-save.test.ts` | 同上 |
-| `memory-store-write-rollback.test.ts` | 同上 |
-| `memory-pipeline.test.ts` | 间接依赖 MemoryStore |
-| `multi-agent-collab.test.ts` | 集成测试依赖 MemoryStore |
-| `scheduler.test.ts` | 集成测试 |
-| `doc-govern-agent.test.ts` | 集成测试 |
-| `task-board-stress.test.ts` | 压力测试 |
-
-#### 根因分析
-
-文件头部存在 UTF-8 BOM（`﻿`），但中文字段内容被以**错误的编码重新保存**过。`import` 和纯 ASCII 类型定义部分正常工作，但所有包含中文的行都被破坏。两种可能路径：
-1. 跨平台 Git 换行符转换 + 编辑器编码自动检测失败（UTF-8 → Windows-1252 → 保存）
-2. PowerShell `>` 输出重定向或其他工具处理时的编码降级
-
-#### 修复建议
-
-1. **直接修复**：用正确的 UTF-8 内容覆盖该文件的中文部分。可从 `dist/packages/engine/src/memory/memory-store.js` 的构建产物反推字符串内容。
-2. **根本解决**：在 CI 中加入编码校验：
-
-```bash
-# CI 步骤：检测非 UTF-8 编码的 TypeScript 文件
-find packages/engine/src/memory -name "*.ts" -exec file --mime-encoding {} \; | grep -v "utf-8"
-```
-
-3. 该文件需**完整重新录入中文注释和错误消息文本**。编码损坏波及所有 JSDoc 注释和 `throw new Error()`、`console.warn()` 中的中文字符串。
+| 指标 | 数值 |
+|------|------|
+| 扫描包数 | 11 |
+| 扫描源文件 | ~60 |
+| 发现的缺陷/问题 | **17** |
+| — 严重 (P0) | **2** |
+| — 高 (P1) | **5** |
+| — 中 (P2) | **6** |
+| — 低/建议 (P3) | **4** |
 
 ---
 
-## 🟠 高风险缺陷
+## 🔴 P0 — 必须修复
 
-### H-01：`Scheduler.executeAll()` 崩溃恢复路径中后台 `replanFlight` 与状态不一致
+### P0-1 `packages/engine/src/core/scheduler.ts` — `topologicalSort` dangling parentId 事件 payload 类型不符
 
-**文件**：`packages/engine/src/scheduler.ts` line 195-209（catch 块）
-**严重度**：🟠 高
-**类别**：状态残留 / 数据不一致
-
-#### 缺陷描述
-
-当 `executeAll()` 主循环抛出异常进入 catch 块时：
+**位置**: 第 35-40 行附近
 
 ```typescript
-} catch (loopErr) {
-  const snappedPending = this.board.getPendingNodes();
-  this.observer.emit({ /* SchedulerLoopCrashed */ });
-  for (const n of snappedPending) {
-    this.board.failNode(n.id);
-    allResults.push({ /* failed */ });
-    failed++;
-  }
-  this.replanQueue.length = 0;
-  break;
-}
-```
-
-catch 块执行 `this.replanQueue.length = 0` 清空重规划队列，但**未处理飞行中的 `replanFlight` Promise**。`replanFlight` 可能已在后台通过 `_tryFireReplan()` 启动并正在执行 LLM 调用。
-
-循环退出后执行收尾代码：
-
-```typescript
-if (replanFlight) await replanFlight;  // ← 仍会等待飞行中的 replan
-// ...
-this.replanMap.clear();
-this.totalReplans = 0;
-```
-
-问题在于：
-1. `replanFlight` 完成时，新的 TaskNode 会被 `addNode` 到 TaskBoard 中
-2. 但这些新节点已不在 replanMap 的追踪范围内（`replanMap` 已被清空）
-3. 新节点成为**悬挂节点**——在 TaskBoard 中但永远不会被调度
-
-#### 触发条件
-
-精确触发路径：
-1. 主循环正常执行节点 → 某一节点失败 → `_tryFireReplan()` 被调用 → `replanFlight` 开始飞行
-2. 下一轮循环（`replanFlight` 尚未完成）中，另一分支抛出异常
-3. catch 块捕获 → 清空 replanQueue → break
-4. `await replanFlight` → 新节点入板 → replanMap 已空 → 新节点成为孤儿
-
-#### 修复建议
-
-在 catch 块中等待飞行中的 replan，并将产生的节点一并标记为失败：
-
-```typescript
-} catch (loopErr) {
-  // 先等待飞行中的 replan，防止新节点成为悬挂节点
-  if (replanFlight) {
-    try { await replanFlight; } catch { /* 忽略飞行异常 */ }
-    replanFlight = null;
-  }
-  // 对 replan 产生的新节点也做失败处理
-  const allPending = this.board.getPendingNodes();
-  for (const n of allPending) {
-    this.board.failNode(n.id);
-    allResults.push({ nodeId: n.id, success: false, error: `Scheduler crashed` });
-    failed++;
-  }
-  this.replanQueue.length = 0;
-  this.replanMap.clear();
-  this.totalReplans = 0;
-  break;
-}
-```
-
----
-
-## 🟡 中风险缺陷
-
-### M-01：`governance-loop.ts` 同步文件操作缺乏并发保护
-
-**文件**：`packages/engine/src/governance-loop.ts`
-**严重度**：🟡 中
-**类别**：并发竞态 / 数据损坏
-
-#### 缺陷描述
-
-`saveProposal()`、`updateProposalStatus()`、`loadPendingProposals()` 均使用同步 `fs` API 操作同一目录下的提案文件：
-
-```typescript
-export function updateProposalStatus(proposalId, status, rootDir): void {
-  const dir = path.resolve(rootDir, AMENDMENTS_DIR);
-  const filePath = path.join(dir, `${proposalId}.json`);
-  if (!fs.existsSync(filePath)) return;
-  const raw = fs.readFileSync(filePath, "utf-8");   // 读
-  const p = JSON.parse(raw) as AmendmentProposal;
-  p.status = status;                                   // 改
-  fs.writeFileSync(filePath, JSON.stringify(p, null, 2), "utf-8"); // 写
-}
-```
-
-当两个 Agent（昔涟评判 + 开拓者裁决）并发处理同一个治理闭环时：
-- Agent A 读取提案 → 修改状态 → 写入
-- Agent B 在 A 写入前读取旧状态 → 覆盖 A 的修改
-
-**实际风险**：`judgeProposals()` 调用 `loadPendingProposals()` 后批量评判，`applyApproved()` 调用 `updateProposalStatus()` 逐条写入。如果治理闭环被多个并发触发，同一条提案的状态可能被覆盖。
-
-#### 修复建议
-
-对提案文件的写入采用原子操作模式（临时文件 + rename）：
-
-```typescript
-export function updateProposalStatus(proposalId, status, rootDir): void {
-  const dir = path.resolve(rootDir, AMENDMENTS_DIR);
-  const filePath = path.join(dir, `${proposalId}.json`);
-  if (!fs.existsSync(filePath)) return;
-  const raw = fs.readFileSync(filePath, "utf-8");
-  const p = JSON.parse(raw) as AmendmentProposal;
-  p.status = status;
-  // 原子写入
-  const tmpPath = filePath + '.tmp';
-  fs.writeFileSync(tmpPath, JSON.stringify(p, null, 2), "utf-8");
-  fs.renameSync(tmpPath, filePath);
-}
-```
-
-或者复用 `FileLockManager`（已在 engine 中实现）对提案文件加写锁。
-
----
-
-### M-02：`JsonFileAdapter` 异常路径导致 `loaded` 标志未设置
-
-**文件**：`packages/data/src/storage/adapters/json-file.adapter.ts`
-**严重度**：🟡 中
-**类别**：错误处理完整性
-
-#### 缺陷描述
-
-```typescript
-private load(): void {
-  if (this.loaded) return;
-  this.ensureDir();
-  if (!fs.existsSync(this.filePath)) {
-    this.tasks = new Map();
-    this.loaded = true;
-    return;
-  }
-  try {
-    const raw = fs.readFileSync(this.filePath, 'utf-8');
-    // ...解析 JSON...
-    this.loaded = true;
-  } catch (err) {
-    throw new StorageIOError(/* ... */);  // ← throw 前未设置 this.loaded
-  }
-}
-```
-
-`load()` 在 `try` 块中如果抛出 `StorageIOError`，`this.loaded` 保持 `false`。但 `ensureDir()` 和 `fs.existsSync()` 已通过——意味着 `this.loaded` 的语义变为"加载成功"，而非"已尝试加载"。
-
-**触发场景**：文件存在但 JSON 解析失败 → `StorageIOError` 抛出 → 调用方捕获后重试 → `this.loaded` 仍为 false → 再次执行完整加载流程（空耗性能，但功能上正确）。
-
-#### 修复建议
-
-```typescript
-private load(): void {
-  if (this.loaded) return;
-  this.ensureDir();
-  this.loaded = true;  // 先标记已尝试加载，防止重复加载
-  try {
-    // ...实际加载...
-  } catch (err) {
-    this.loaded = false;  // 加载失败时重置，允许下次重试
-    throw new StorageIOError(/* ... */);
-  }
-}
-```
-
----
-
-### M-03：PM 密码管理器使用固定默认主密钥
-
-**文件**：`packages/pm/src/crypto.ts` line 20-23
-**严重度**：🟡 中
-**类别**：安全风险
-
-#### 缺陷描述
-
-```typescript
-function getMasterKey(): string {
-  const envKey = process.env.PM_MASTER_KEY;
-  if (envKey && envKey.length >= 8) {
-    return envKey;
-  }
-  return 'password-manager-default-master-key-2024';
-}
-```
-
-当 `PM_MASTER_KEY` 环境变量未设置时，使用固定的默认字符串作为 AES-256-GCM 主密钥。任何获取到源代码的人都可以：
-1. 读取 `.pm-data/vault.enc` 文件
-2. 用此默认密钥解密所有存储的密码条目
-
-#### 影响评估
-
-AES-256-GCM 加密的**全部安全性取决于密钥的保密性**。默认密钥硬编码在源码中意味着：能访问源码 == 能解密所有密码。密码管理器存储的通常是高价值凭证，默认密钥使整个加密形同虚设。
-
-#### 修复建议
-
-```typescript
-function getMasterKey(): string {
-  const envKey = process.env.PM_MASTER_KEY;
-  if (envKey && envKey.length >= 8) {
-    return envKey;
-  }
-  throw new Error(
-    '[PM] 环境变量 PM_MASTER_KEY 未设置或长度不足 8 位。' +
-    '密码管理器无法使用默认密钥——请设置强密码作为 PM_MASTER_KEY。'
-  );
-}
-```
-
----
-
-### M-04：治理 API 异常传播路径不一致
-
-**文件**：`packages/engine/src/governance-loop.ts` + `amendment-judge.ts`
-**严重度**：🟡 中
-**类别**：错误处理完整性
-
-#### 缺陷描述
-
-治理闭环的各 API 函数对错误的处理方式不一致：
-
-| 函数 | 错误处理方式 | 一致性 |
-|------|-------------|--------|
-| `saveProposal()` | 让异常自然传播（`fs.mkdirSync`/`writeFileSync` 抛错） | ⚠️ |
-| `loadPendingProposals()` | catch 内吞异常（跳过格式错误的文件） | ✅ 优雅降级 |
-| `judgeProposals()` | 宪法不存在时 `throw new Error(...)` | ❌ 裸抛 |
-| `applyApproved()` | 返回 `AmendmentApplyResult { success: false, error }` | ✅ 优雅降级 |
-| `summarizeGovernance()` | 内部调用 `judgeProposals()` → 异常向上传播 | ❌ 裸抛 |
-| `updateProposalStatus()` | 文件不存在静默返回 | ✅ 幂等 |
-
-治理闭环的入口点 `summarizeGovernance()` 和 `judgeProposals()` 在宪法文件缺失时抛异常，而 `applyApproved()` 返回错误结果对象。上层编排器（昔涟 Agent）对这两种错误模式需要不同的处理逻辑，增加了复杂度和遗漏风险。
-
-#### 修复建议
-
-统一治理 API 的错误处理策略。推荐采用返回结果对象（Result Type）模式，与 `applyApproved()` 保持一致：
-
-```typescript
-export interface GovernanceError {
-  success: false;
-  error: string;
-}
-
-export function judgeProposals(rootDir: string): BatchJudgment[] | GovernanceError {
-  const constitutionPath = path.resolve(rootDir, CONSTITUTION_RELATIVE);
-  if (!fs.existsSync(constitutionPath)) {
-    return { success: false, error: `宪法文件不存在：${constitutionPath}` };
-  }
-  // ...
-}
-```
-
----
-
-## 🟢 低风险缺陷
-
-### L-01：`ConfirmGate.waitFor()` timeout 闭包作用域链残留
-
-**文件**：`packages/engine/src/confirm-gate.ts` line 83-92
-**严重度**：🟢 低
-**类别**：资源泄漏（轻微）
-
-#### 缺陷描述
-
-```typescript
-return new Promise<boolean>((resolve) => {
-  this.resolvers.set(requestId, resolve);
-  if (timeoutMs !== undefined && timeoutMs !== null) {
-    setTimeout(() => {
-      if (this.resolvers.has(requestId)) {
-        this.resolvers.delete(requestId);
-        this.pending.delete(requestId);
-        resolve(false);
-      }
-    }, timeoutMs);
-  }
+observer.emit({
+  type: PipelineEventType.SchedulerNonstandardType,
+  priority: PipelinePriority.NORMAL,
+  payload: { danglings: [...dangling].slice(0, 10), total: dangling.size },
+  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  // ❌ EventPayloadMap[SchedulerNonstandardType] 要求:
+  //    { nodeId: string; nodeType: string; matchedCount: number; assigned: string; totalAgents: number }
+  //    但这里传的是 { danglings: string[]; total: number }
+  timestamp: Date.now(),
 });
 ```
 
-当 `resolve(response)` 被外部提前调用后，timeout 定时器的闭包仍持有对 `requestId`、`resolve` 和整个 `ConfirmGate` 实例（通过 `this`）的引用。虽然后续 `resolvers.has()` 检查会短路，但闭包作用域链在 timeout 触发前无法被 GC 回收。
+**证据**: `infra.ts` 中 `EventPayloadMap` 对 `SchedulerNonstandardType` 的 payload 定义有 5 个固定字段，而此处传了完全不同的结构。这会导致 PipelineObserver 的订阅者在类型判断时拿到意外的 payload 形状。
 
-**影响**：在测试场景中，如果大量请求设置了 5 分钟超时并在 1 秒后被 resolve，后续 4 分 59 秒内闭包链无法回收。
-
-#### 修复建议
-
-在 `resolve()` 方法中清除关联的定时器 timerId；或在 timeout 回调中将闭包引用置 null 以释放作用域链。
+**预期**: 要么使用正确的事件类型（如 `SchedulerInvariantViolation`），要么按 `SchedulerNonstandardType` 的 payload 契约填充字段。
 
 ---
 
-### L-02：`evaluateAmendment()` 返回的 `blocking` 数组永远为占位符
+### P0-2 `packages/notification/src/channels.ts` — `UrgentChannel.push` 队列满时丢弃队尾而非队首
 
-**文件**：`packages/engine/src/amendment-judge.ts`
-**严重度**：🟢 低
-**类别**：接口契约完整性
-
-#### 缺陷描述
-
-`JudgmentResult` 接口定义：
+**位置**: 第 90-92 行
 
 ```typescript
-export interface JudgmentResult {
-  verdict: JudgmentVerdict;
-  checks: JudgmentCheck[];
-  caveats?: string[];
-  blocking: string[];         // ← 调用方可从此字段读取阻塞原因
+push(event: NotificationEvent): void {
+  // ...
+  if (this.config.maxQueueSize > 0 && this.queue.length >= this.config.maxQueueSize) {
+    this.queue.pop(); // ❌ 丢弃最旧事件应使用 .shift()，而非 .pop()
+  }
+  this.queue.unshift(event); // 新事件插队到队首
+```
+
+**证据**: Urgent 通道是"优先级插队队列"，新事件通过 `unshift` 插入到队首。队列满时却 `pop()`（移除**最晚**插入的事件），而非 `shift()`（移除**最早**/最久未确认的事件）。这与 `ImportantChannel` 的 FIFO 满时 `shift()` 行为不一致，且最紧急的事件可能被错误丢弃。
+
+**预期**: 队列满时应 `this.queue.pop()` 改为 `this.queue.shift()`，丢弃最久未确认的紧急事件，保留最新插入的。
+
+---
+
+## 🟠 P1 — 高优先级
+
+### P1-1 `packages/engine/src/memory/memory-store.ts` — `write()` 中 embedding 降级后 observer.emit payload 类型不完整
+
+**位置**: 第 110-118 行
+
+```typescript
+this._observer.emit({
+  type: PipelineEventType.MemorySqlDegraded,
+  priority: PipelinePriority.NORMAL,
+  payload: { operation: "embedding", detail: "embedding 生成失败，已降级跳过" },
+  // ^^ EventPayloadMap[MemorySqlDegraded] 要求 { operation: string; detail: string }
+  // 合法，但 detail 信息量不足——未包含实际错误原因
+  timestamp: Date.now(),
+});
+```
+
+**证据**: catch 块中虽然静默降级了，但 `detail` 字段丢失了原始错误信息。embedding 失败有各种原因（模型加载失败、OOM、维度不匹配等），不保留原始错误会导致运维时无法区分原因。
+
+**预期**: 在 catch 中捕获 error 并写入 detail，如 `` `embedding 生成失败: ${String(e).slice(0, 200)}` ``。
+
+---
+
+### P1-2 `packages/engine/src/core/scheduler.ts` — `executeAll` 中 `replanFlight` 竞态条件
+
+**位置**: 第 130-150 行附近
+
+```typescript
+if (pendingNodes.length === 0) {
+  if (replanFlight) {
+    await replanFlight;   // 等待 replan 完成
+    replanFlight = null;
+  }
+  if (this.board.getPendingNodes().length === 0) break; // 仍无新节点 → 完成
 }
 ```
 
-但 `evaluateAmendment()` 的返回值中，`blocking` 始终为 `["Blocking details omitted — see checks for specifics"]` 占位符。调用方（昔涟 Agent）实际上需要遍历 `checks` 中所有 `passed === false` 的项来提取阻塞原因——这意味着 `blocking` 字段的存在语义与实际填充内容不一致。
+**证据**: `replanFlight` 是一个 `Promise<void> | null` 后台任务。在主循环的不同轮次之间，如果 `replanFlight` 仍在执行但新的 pending 节点已经由 MetaAgent 产生（通过其他路径），那么等待 `replanFlight` 可能不必要地阻塞调度。更严重的是，在 `while(true)` 循环中 `replanFlight` 只在 pendings 为空时才 await——如果在 pendings 非空时 `replanFlight` 完成了且新节点入板，这些节点要等到下一轮 pendings 为空时才会被消费，增加了延迟。
 
-如果下游代码直接依赖 `blocking` 字段（而非从 checks 中二次提取），收到的将是一段无用的占位文本。
+**预期**: 在每次循环顶部（即使 pendingNodes > 0）也检查并 await 已完成的 `replanFlight`，或者改为 await all settled 模式。
 
-#### 修复建议
+---
 
-方案A：从未通过的 checks 中自动填充 blocking 数组：
+### P1-3 `packages/notification/src/persistence.ts` — `@ts-expect-error` 动态导入 better-sqlite3 无类型安全
+
+**位置**: 第 107-108 行
 
 ```typescript
-function buildBlocking(checks: JudgmentCheck[], verdict: JudgmentVerdict): string[] {
-  if (verdict !== "BLOCKED") return [];
-  return checks
-    .filter(c => !c.passed)
-    .map(c => `[${c.id}] ${c.detail.slice(0, 100)}`);
+// @ts-expect-error — better-sqlite3 是可选的运行时依赖，不在 package.json 中声明
+const BetterSqlite3 = await import("better-sqlite3");
+```
+
+**证据**: 虽然定义了 `SqliteDb` / `SqliteStatement` 最小接口，但 `new Database(this.dbPath) as unknown as SqliteDb` 使用了双重类型断言，完全绕过了类型检查。如果 better-sqlite3 API 在某个版本发生变化，此处不会产生编译错误，而是运行时崩溃。
+
+**预期**: 考虑使用 ` satisfies ` 或通过 factory 函数约束返回类型。至少要确保 `_init()` 方法的降级路径能覆盖动态导入失败的情况（try-catch 已处理，但类型断言本身不安全）。
+
+---
+
+### P1-4 `packages/engine/src/core/task-board.ts` — `complete()` 中 multi-perspective 去重算法在并发场景下有可能丢失结果
+
+**位置**: 第 195-225 行
+
+```typescript
+// 等齐判断之后执行去重：移除重复结果（如有重入导致）
+const seen = new Set<AgentType>();
+for (let i = node.results.length - 1; i >= 0; i--) {
+  const at = node.results[i].agentType;
+  if (at === undefined) continue;
+  if (seen.has(at)) {
+    node.results.splice(i, 1); // 移除重复
+  } else {
+    seen.add(at);
+  }
 }
 ```
 
-方案B：从接口中移除 `blocking` 字段，让调用方直接从 `checks` 中提取。
+**证据**: 该去重算法遍历时从后往前，保留每个 agentType 的最后一个结果。但 `complete()` 本身是同步方法（无 await），在同一事件循环 tick 内不会并发。不过如果 `complete()` 在 future 中改为异步（如加入持久化），则去重逻辑与"等齐判断"之间的时序可能产生 race condition。
+
+**预期**: 当前是安全的（同步执行），但需要加注释说明并发假设。如果将来引入异步持久化，需加锁或改为 CAS 模式。
 
 ---
 
-## 历史档案交叉引用
+### P1-5 `packages/engine/src/components/react-loop.ts` — 工具调用循环中 `maxLoops` 耗尽时已调用部分工具的结果丢失
 
-根据 MemoryStore 审查档案检索，发现以下模式与历史缺陷关联：
+**位置**: 第 119-124 行
 
-| 本次缺陷 | 历史案例 | 关联分析 |
-|----------|----------|----------|
-| C-01 编码损坏 | 无直接前例 | **新发现的检查盲区**——CI 流水线缺少编码格式校验 |
-| H-01 replanFlight 未处理 | NG-2026-0511-Destroy-Bypass | **同模式**——AgentPool.destroy() 中也有绕过状态机的直接写路径 |
-| M-01 文件并发 | NG-2026-0509-DeleteLock | **同领域**——delete_file 曾因缺文件锁产生竞态，治理流程有同样问题 |
-| M-03 默认密钥 | （设计评审记录） | 代码从 solo-flight 迁移时未做安全加固 |
-| L-02 blocking 占位符 | （多次评审中提及但未修复） | **已知未闭合项**——接口设计与实现之间的偏差 |
-
----
-
-## 各包质量总评
-
-| 包 | 源码文件 | 缺陷数 | 最严重缺陷 | 质量评估 |
-|-------|---------|--------|-----------|---------|
-| `engine/src/memory/` | 6 个核心 + 5 个组件 | 1 🔴 | C-01 编码损坏 → 编译中断 | **不可用**—0 个测试可通过 |
-| `engine/src/`（调度/治理） | 8+ 个 | 3 🟠🟡 | H-01 崩溃恢复缺口 | ⚠️ 需修复后回归 |
-| `data/src/` | 5 个 | 1 🟡 | M-02 loaded 标志 | ✅ 轻微瑕疵 |
-| `pm/src/` | 2 个 | 1 🟡 | M-03 默认主密钥 | ⚠️ 安全风险 |
-| `shared/` | 12 个 | 0 | — | ✅ 稳定 |
-| `cli/` | 多命令 | 0 | — | ✅ 稳定 |
-| `llm/` | 2 个 | 0 | — | ✅ 稳定 |
-| `parser/` | 2 个 | 0 | — | ✅ 稳定 |
-| `testing/` | 1 个 | 0 | — | ✅ 稳定 |
-| `tools/` | 3 个 | 0 | — | ✅ 稳定 |
-
----
-
-## 优先修复顺序
-
-```
-优先级 1️⃣ → C-01：memory-store.ts 编码修复
-     理由：阻塞全部记忆子系统，10 套测试全灭
-     工作量：约 30 分钟恢复中文字符串 + 注释
-
-优先级 2️⃣ → H-01：catch 块添加 await replanFlight
-     理由：崩溃恢复路径可能产生悬挂节点
-     工作量：约 10 行代码修改
-
-优先级 3️⃣ → M-03：PM 默认密钥改为抛异常
-     理由：安全漏洞，影响所有用户
-     工作量：约 5 行代码修改
-
-优先级 4️⃣ → M-01 / M-04：治理流程文件操作加锁 + 统一错误处理
-     理由：并发场景数据一致性和可维护性
-     工作量：约 2 小时重构
-
-优先级 5️⃣ → M-02 / L-01 / L-02：低优先级修补
-     理由：不影响运行正确性
-     工作量：约 30 分钟
+```typescript
+while (loops < maxLoops) {
+  // ... 每次循环调用 llm.chat + toolkit.execute
+}
+// 循环结束后：
+return {
+  nodeId: node.id,
+  agentType: agentType,
+  success: finalOutput !== undefined,
+  output: finalOutput,
+  error: finalOutput === undefined ? "Exceeded max loops without final answer" : undefined,
+};
 ```
 
+**证据**: 当 `loops >= maxLoops` 退出循环时，如果最后一次 `toolCalls.length > 0` 且工具调用已成功执行，但其结果还没来得及发给 LLM 产生最终输出——这些工具调用的副作用已经发生，但 `finalOutput` 仍是 `undefined`，任务被标记为失败。调用方无法得知哪些工具调用已成功。
+
+**预期**: 在循环结束时，如果最后一次迭代有 toolCalls 但未拿到 finalOutput，应收集已执行的 tool results 作为 partial output 返回。
+
 ---
 
-## 审查结论
+### P1-6 `packages/shared/src/agent.ts` — `AGENT_TAGS` 中 Code 与 Api/Data 的标签重叠可能导致调度错配
 
-代码核心架构（类型系统、状态机、调度管线）设计扎实。312 个单元测试在非记忆模块通过率 100%，说明**核心调度逻辑和 Agent 生命周期管理质量可靠**。
+**位置**: 第 84-101 行
 
-但记忆子系统（MemoryStore）的编码损坏是一个不应存在的**工程质量问题**——比逻辑错误更难调试，因为编译阶段就直接阻断。此类问题应在 CI 编码检查中捕获。
+```typescript
+[AgentType.Code]: ["code", "implementation", "refactor", "test", "config", "review", "research", "analysis"],
+// ...
+[AgentType.Api]:  ["api", "api_design", "api_integration", "endpoint", "review", "research", "analysis"],
+[AgentType.Data]: ["data", "data_model", "migration", "storage", "schema", "review", "research", "analysis"],
+```
 
-治理流程（Governance Loop）和密码管理器（PM）的缺陷更多是**迁移遗留**——从 solo-flight 项目迁移时安全加固和并发保护未被纳入检查范围。
+**证据**: Code、Api、Data 三个 Agent 的 tags 都包含了 `"review"`、`"research"`、`"analysis"`。当 Scheduler 在 `_findMatchingAgent` 中匹配这些标签时，会出现平局——多个 Agent 匹配度相同。Scheduler 的平局打破策略是"匹配密度"（标签少的 Agent 优先），但由于 Code 的标签更多（8 个），Api 和 Data（各 7 个）反而在窄标签匹配中占优。对于携带 `review+analysis` 标签的节点，Api 和 Data 可能意外被选中而非 Review Agent。
 
-> "璃月的城墙经得起魔神级的冲击，但不能被编码问题绊倒。"
-> —— 刻晴，审查完毕
+**预期**: 将 `review`、`research`、`analysis` 从 Api 和 Data 的标签集中移除，或添加注释说明这是有意的设计。Agent 的责任边界应更清晰。
+
+---
+
+## 🟡 P2 — 中等优先级
+
+### P2-1 `packages/parser/src/parser.ts` — `parseInline` 中加粗/斜体嵌套解析缺陷
+
+**位置**: 第 110-120 行
+
+```typescript
+// 加粗 **text** 或 __text__
+if ((text[i] === '*' && text[i + 1] === '*') || ...) {
+  const marker = text.slice(i, i + 2);
+  const end = text.indexOf(marker, i + 2);
+  if (end !== -1) {
+    result += `<strong>${parseInline(text.slice(i + 2, end))}</strong>`;
+    i = end + 2;
+    continue;
+  }
+}
+```
+
+**证据**: 对于 `**hello *world* test**`，解析器会在 `i=0` 处匹配 `**`，然后 `text.indexOf('**', 2)` 找到的是第 21 个位置的 `**`（结尾），而不是第 16 个位置的 `**`。这意味着它会把 `hello *world* test` 全部当作加粗内容，内部再解析 `*world*` 为斜体。虽然结果 HTML 可能正确，但语义上不准确——Markdown 标准要求 `**` 的闭合匹配遵循最短匹配原则。
+
+更严重的是嵌套 `***text***`（三级嵌套）：当前代码在三级嵌套检测后，剩下的 `**text**` 匹配会从内部剩余部分开始匹配，可能匹配到错误的位置。
+
+**预期**: 加粗匹配应从 `i+2` 开始查找，且遇到新的 `**` 时应增加嵌套计数，确保匹配正确配对的闭合标记。
+
+---
+
+### P2-2 `packages/engine/src/memory/storage.ts` — `findByContentHash` 遍历全部记忆 O(n)，大数据量性能风险
+
+**位置**: 第 58-67 行
+
+```typescript
+findByContentHash(hash: string): MemoryEntry | undefined {
+  for (const [, m] of this.memories) {
+    if ((m as any)._contentHash === hash && m.state === MemoryState.Active) {
+      return m;
+    }
+  }
+  return undefined;
+}
+```
+
+**证据**: `(m as any)._contentHash` 使用了 `any` 类型断言，且 `_contentHash` 不是 `MemoryEntry` 的正式字段——它是 `insert()` 中通过 `(entry as any)._contentHash = contentHash` 附加的隐藏属性。如果 `MemoryEntry` 接口在未来重构或序列化/反序列化过程中丢失了这个隐藏属性，去重将完全失效（静默）。
+
+此外，遍历全部 10000 条记忆的 Map 进行线性搜索，每次写入都要 O(n) 复杂度。
+
+**预期**: 增加一个独立的 `Map<string, string>`（hash → id）索引用于内容哈希查找。同时将 `_contentHash` 纳入 `MemoryEntry` 的正式字段（或至少保证在 deserialize 中恢复）。
+
+---
+
+### P2-3 `packages/engine/src/core/pipeline-observer.ts` — `emit()` 中 handler 异常处理递归防护门闩在嵌套 emit 场景下可能丢弃真实错误
+
+**位置**: 第 118-131 行
+
+```typescript
+private _reportingError = false;
+
+private _reportError(ctx: SafeErrorContext): void {
+  if (this._reportingError) {
+    console.error("[PipelineObserver] 递归 _reportError 防护，丢弃:",
+      ctx.source, String(ctx.error).slice(0, 200));
+    return; // ❌ 递归防护会丢弃嵌套错误
+  }
+```
+
+**证据**: 当 handler A 抛异常 → `_reportError` 设置 `_reportingError=true` → 内部 emit 新事件 → handler B 抛异常 → 再次 `_reportError` → 因为 `_reportingError=true` 而跳过。这会导致 handler B 的错误被静默丢弃。虽然防止了无限递归，但真实错误信息丢失了。
+
+**预期**: 使用计数器替代布尔值：`let _reportDepth = 0; if (_reportDepth > MAX_DEPTH) return;`。这样允许有限层级的嵌套错误上报（如 2 层），超出才丢弃。
+
+---
+
+### P2-4 `packages/engine/src/memory/persistence.ts` — `runBatch` 中 transaction 不处理部分失败回滚
+
+**位置**: 第 177-186 行
+
+```typescript
+const batchInsert = this._db.transaction((batchRows: Array<(string | number | null)[]>) => {
+  for (const row of batchRows) {
+    stmt.run(...row);
+  }
+});
+batchInsert(rows);
+```
+
+**证据**: better-sqlite3 的 `transaction` API 默认是自动回滚的——但这里没有 try-catch 包裹 transaction 调用。如果 `batchInsert(rows)` 中某行失败（如 UNIQUE 约束冲突），transaction 会自动回滚所有行。但调用方 `MemoryStore` 的 `flush()` 会捕获异常，认为"批量写入失败"，但没有单独重试成功行。下次 flush 时会重新写入全部数据，导致死锁（不断失败重试）。
+
+**预期**: 捕获 transaction 异常，通过 observer 上报具体哪一行失败，并支持逐行重新尝试（fallback to single-row）。
+
+---
+
+### P2-5 `packages/notification/src/persistence.ts` — `persist()` 和 `markAcked()` 静默降级可能掩盖持久化问题
+
+**位置**: 第 63-72 行、第 92-100 行
+
+```typescript
+persist(event: NotificationEvent): void {
+  // ...
+  } catch {
+    // 持久化失败不阻塞通知管线  // ❌ 完全静默
+  }
+}
+
+markAcked(requestId: string): void {
+  // ...
+  } catch {
+    // 静默降级  // ❌ 完全静默
+  }
+```
+
+**证据**: 持久化层多处使用空 catch 块（无任何日志输出、无 observer emit）。当 SQLite 磁盘满、权限问题或数据库损坏时，所有通知事件都会静默丢失。用户看不到通知但系统不会报警。
+
+**预期**: 至少在 catch 中通过 `console.error` 或 callback 报告错误。持久化降级可以接受，但**降级不可静默**。
+
+---
+
+### P2-6 `packages/engine/src/memory/embedding.ts` — 模型加载超时无兜底
+
+**位置**: 第 46-53 行
+
+```typescript
+_loading = (async (): Promise<EmbeddingPipeline> => {
+  const { pipeline, env } = await import("@xenova/transformers");
+  // 首次加载 ~80MB ONNX 模型
+  const extractor = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2");
+```
+
+**证据**: `embedText()` 调用 `_ensurePipeline()`，后者尝试异步下载 ~80MB 模型。如果网络不通或 HF 镜像不可用，这个 Promise 永远不会 resolve（也没有超时机制）。整个 `memory-store.write()` 会挂在 `embedText(text)` 上，阻塞所有后续的记忆写入操作。
+
+虽然 memory-store 中的 `write()` 对 embedding 有 try-catch 降级，但这里的 Promise 挂起不是 throw，而是 never resolve——try-catch 捕获不了。
+
+**预期**: 在 `_ensurePipeline()` 中增加超时（如 60s），超时后 reject 以便上游 catch 降级。
+
+---
+
+## 🟢 P3 — 低优先级 / 建议
+
+### P3-1 `packages/data/src/core/models/task.ts` — `validate()` 在构造函数中被调用但 update 后也调用了 validate，存在双重校验
+
+**位置**: 第 30 行和第 54 行
+
+```typescript
+constructor(data: TaskConstructorData) {
+  // ...
+  this.validate(); // 调用一次
+}
+
+update(partial: Partial<TaskUpdateData>): void {
+  // ...
+  this.validate(); // 又调用一次
+}
+```
+
+**建议**: `update()` 中修改字段后调用 `validate()` 是正确的（因为字段可能被改为非法值），但构造函数中已有 `validate()`。行为上没问题，但建议在 `update()` 中只验证被更新的字段，而不是全量验证，以提高大数据量场景下的性能。
+
+---
+
+### P3-2 `packages/engine/src/memory/memory-store.ts` — `write()` 中 `input = this._preWriteHook(input)` 可能返回 undefined
+
+**位置**: 第 95-97 行
+
+```typescript
+if (this._preWriteHook) {
+  input = this._preWriteHook(input);
+}
+```
+
+**证据**: `_preWriteHook` 的类型签名是 `(input: MemoryWriteInput) => MemoryWriteInput`，但 TypeScript 不阻止 hook 返回 `input` 的修改副本。如果 hook 无意中返回 `undefined` 或修改了关键字段，下游代码可能产生意外行为。
+
+**建议**: 增加运行时校验：`if (!input) throw new Error("preWriteHook returned falsy")`。
+
+---
+
+### P3-3 `packages/cli/src/cli.ts` — `main()` 中 `process.exit(1)` 在 async 函数中不等待 pending 操作
+
+**证据**: 整个 `main()` 函数是同步的，但如果未来引入异步操作（如网络请求），`process.exit(1)` 不会等待这些操作完成。建议使用 `process.exitCode = 1` 替代。
+
+---
+
+### P3-4 `packages/engine/src/memory/pipeline.ts` — `executeWithMemoryPipeline` 中 enrichedNode 每次都拷贝整个 node 对象
+
+**位置**: 第 90 行
+
+```typescript
+enrichedNode = {
+  ...node,
+  payload: `上下文记忆：\n${ctxSummary}\n\n任务：${node.payload}`,
+};
+```
+
+**建议**: `payload` 拼接的字符串会随着多次检索不断增长（因为 memory-retrieval 阶段可能多次调用该函数）。建议设置最大上下文长度，超出时截断。
+
+---
+
+## 📊 按包统计
+
+| 包 | 文件数 | P0 | P1 | P2 | P3 | 关键风险 |
+|----|--------|----|----|----|----|---------|
+| `engine` | ~45 | 1 | 3 | 3 | 2 | 调度竞态、embedding 挂起、event payload 类型不符 |
+| `shared` | ~12 | 0 | 1 | 1 | 0 | Agent 标签重叠导致调度错配 |
+| `notification` | ~6 | 1 | 1 | 1 | 0 | 紧急通道队列满时丢弃错误、持久化静默降级 |
+| `parser` | ~2 | 0 | 0 | 1 | 0 | 加粗/斜体嵌套匹配缺陷 |
+| `data` | ~8 | 0 | 0 | 0 | 1 | 双重校验（无害但冗余） |
+| `cli` | ~1 | 0 | 0 | 0 | 1 | process.exit 模式 |
+| `pm` | ~2 | 0 | 0 | 0 | 0 | 加密存储设计良好 |
+| `llm` | ~2 | 0 | 0 | 0 | 0 | 缓存 LRU 实现正确 |
+| `tools` | ~3 | 0 | 0 | 0 | 0 | CLI 工具逻辑正确 |
+| `testing` | ~1 | 0 | 0 | 0 | 0 | 仅导出 |
+
+---
+
+## 🔁 跨包交叉问题
+
+### 类型漂移风险 (P2)
+
+`@cortex/shared` 中的 `EventPayloadMap` 定义了 28 个事件类型的 payload 结构。**Scheduler** 中 `topologicalSort` 方法（P0-1）就违反了这一契约。搜索全库中所有 `observer.emit` 调用，发现至少有 5 处 emit 的 payload 字段与 `EventPayloadMap` 不完全一致。
+
+**建议**: 在 CI 中增加一条 lint 规则：对比 `observer.emit({ type: ..., payload: ... })` 的 payload 字段与 `EventPayloadMap[type]` 的键集合是否匹配。
+
+### MemoryStore `init()` 幂等性 (已修复 D4)
+
+`MemoryPersistence.init()` 中已有 `if (this._db) throw` 防止重复初始化，设计良好。
+
+---
+
+## ✅ 设计亮点
+
+1. **`MemoryLifecycle.cas()`** — 假阳性禁止原则落实到位：持久化失败回滚 state，不产生虚假成功的记录。
+2. **`SemiFinishedMgr.commit()`** — subType 持久化双重重试回滚，确保 `state=Active + subType=Intent` 的危险组合不会出现在 DB 中。
+3. **`engine-config.ts` mergeDefaults 重构** — P0-2 修复后两个分支统一使用辅助函数，默认值传播一致。
+4. **`PipelineObserver.off()` 精确移除** — D4 修复后按 handler 引用删除，不影响其他组件。
+5. **`IntentFactWall`** — 意图/事实分离设计清晰，HCA/CSA 双模式过滤完备。
+6. **`ModificationRecordV1`** — 事实锚点与时间戳来源标记消除幻觉日期风险。
+
+---
+
+## 💡 总结
+
+> 代码库整体质量较高，类型系统覆盖全面，架构分层清晰。`shared` → `engine` → `agent` 的依赖方向正确。
+>
+> **最需关注的两个问题**：
+> 1. `UrgentChannel` 队列满时丢弃了对端（`pop()` vs `shift()`），可能导致最紧急的通知被错误淘汰（P0-2）
+> 2. `topologicalSort` 的事件 payload 类型不匹配破坏了事件管线的类型契约（P0-1）
+>
+> **次需关注**：
+> - embedding 模型加载无超时兜底（P2-6）
+> - Notification persistence 多处空 catch 静默降级（P2-5）
+> - Code/Api/Data Agent 标签重叠可能导致的调度错配（P1-6）
+>
+> *刻晴的审查记录是一桩一桩的'案底'——下次见到同一类问题会直接触发警报。*

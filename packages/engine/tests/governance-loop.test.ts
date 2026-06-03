@@ -21,8 +21,7 @@ import {
   judgeProposals,
   applyApproved,
   summarizeGovernance,
-  findConstitutionPath,
-} from "@cortex/engine";
+  findConstitutionPath} from "@cortex/engine";
 import type { AmendmentProposal } from "@cortex/shared";
 
 // ─── 辅助函数 ───────────────────────────────────
@@ -110,15 +109,12 @@ function makeValidProposal(overrides: Partial<AmendmentProposal> = {}): Amendmen
       principles: [],
       crossReferences: ["二、六条不可变原则", "原则六"],
       agents: ["DocGovernAgent"],
-      breaking: false,
-    },
+      breaking: false},
     source: {
       agent: "TestAgent",
-      trace: "governance-loop.test.ts 单元测试",
-    },
+      trace: "governance-loop.test.ts 单元测试"},
     status: "pending_judgment",
-    ...overrides,
-  };
+    ...overrides};
 }
 
 function cleanup(dir: string): void {
@@ -224,8 +220,7 @@ describe("GovernanceLoop", () => {
     it("before 不匹配返回 BLOCKED", () => {
       makeConstitution(tmpDir);
       const proposal = makeValidProposal({
-        before: "宪法中不存在的文本内容 ABCDEFG",
-      });
+        before: "宪法中不存在的文本内容 ABCDEFG"});
       saveProposal(proposal, tmpDir);
 
       const judgments = judgeProposals(tmpDir);
@@ -236,8 +231,7 @@ describe("GovernanceLoop", () => {
     it("触及不可变原则返回 BLOCKED", () => {
       makeConstitution(tmpDir);
       const proposal = makeValidProposal({
-        impact: { principles: ["原则一"], crossReferences: [], agents: [], breaking: false },
-      });
+        impact: { principles: ["原则一"], crossReferences: [], agents: [], breaking: false }});
       saveProposal(proposal, tmpDir);
 
       const judgments = judgeProposals(tmpDir);
@@ -259,8 +253,7 @@ describe("GovernanceLoop", () => {
     it("breaking=true 但其他全通过返回 APPROVED_WITH_CAVEATS", () => {
       makeConstitution(tmpDir);
       const proposal = makeValidProposal({
-        impact: { principles: [], crossReferences: ["原则六"], agents: [], breaking: true },
-      });
+        impact: { principles: [], crossReferences: ["原则六"], agents: [], breaking: true }});
       saveProposal(proposal, tmpDir);
 
       const judgments = judgeProposals(tmpDir);

@@ -21,6 +21,7 @@ import type {
 } from "@cortex/shared";
 import { evaluateAmendment } from "./amendment-judge.js";
 import { applyAmendment, findConstitutionPath } from "./amendment-applier.js";
+import { checkTimeout, updateStaleCount, type TimeoutAction } from "./amendment-timeout.js";
 
 // ─── 常量 ───────────────────────────────────────
 
@@ -160,6 +161,27 @@ export interface GovernanceSummary {
   /** 逐条提案的评判结果 */
   judgments: BatchJudgment[];
 }
+
+// ─── 超时检查 ──────────────────────────────────
+
+/**
+ * 检查所有待决提案的超时状态，返回处置动作列表。
+ * 嵌入治理闭环的超时检查步骤——每次 summarise 或手动调用时触发。
+ */
+export function checkTimeouts(rootDir: string): TimeoutAction[] {
+  const dir = path.resolve(rootDir, AMENDMENTS_DIR);
+  const proposals = loadPendingProposals(rootDir);
+  const actions = checkTimeout(proposals, dir);
+
+  // 更新超时计数，供下次检查使用
+  for (const action of actions) {
+    updateStaleCount(action.proposalId, dir);
+  }
+
+  return actions;
+}
+
+// ─── 治理摘要 ──────────────────────────────────
 
 /**
  * 生成治理闭环的当前状态摘要。

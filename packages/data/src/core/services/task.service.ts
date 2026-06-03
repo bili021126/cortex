@@ -37,7 +37,7 @@ export class TaskService {
   }
 
   async list(filter?: TaskFilter): Promise<Task[]> {
-    return this.repository.findAll(filter);
+    return await this.repository.findAll(filter);
   }
 
   async show(id: string): Promise<Task> {

@@ -1,0 +1,21 @@
+{
+  "id": "skill-p36-alert-throttle-guard-pattern",
+  "agentType": "fix",
+  "name": "P36: 告警洪泛限流防护阈值标记模式",
+  "triggerTags": ["fix", "bugfix", "monitor", "observability", "flood"],
+  "trigger": "监控/告警组件中，状态跨过阈值后每次新事件都触发告警，导致告警洪泛。典型场景：memory/monitor.ts 窗口内超阈值后每次事件触发告警。",
+  "steps": [
+    "用 search_code 搜索包含 'threshold'/'阈值' 和 '告警'/'alert'/'warn' 的文件，定位告警触发逻辑",
+    "检查告警触发处是否有状态标记防止重复触发：查找 '_alerted' / '_warned' / '_notified' 等布尔标记",
+    "若缺少标记，在类中添加 'private _alerted = false' 标记字段",
+    "在阈值检查逻辑中修改：'if (value > threshold && !this._alerted) { this._alerted = true; triggerAlert(); }'",
+    "添加回落重置机制：当值回落到阈值以下时重置标记 'if (value <= threshold) this._alerted = false'",
+    "运行 pnpm test（engine 包）验证：超阈值只触发一次告警，回落后可再次触发"
+  ],
+  "expectedOutput": "告警洪泛修复：跨过阈值时触发一次，回落后重置。防止单次异常导致数十次重复告警。",
+  "status": "trial",
+  "adoptionCount": 1,
+  "rejectionCount": 0,
+  "discoveredBy": "Mona",
+  "createdAt": 0
+}

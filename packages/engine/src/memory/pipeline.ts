@@ -1,9 +1,8 @@
-import type { TaskNode, NodeResult, MemoryQuery, AgentType, SafeErrorReporter, MemoryEntry } from "@cortex/shared";
-import { MemoryType, LinkType, MemoryState, MemorySubType } from "@cortex/shared";
-import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../platform/toolkit.js";
+import type { TaskNode, NodeResult, MemoryQuery, AgentType, SafeErrorReporter, MemoryEntry, ReadMode, MemoryKind } from "@cortex/shared";
+import { LinkType } from "@cortex/shared";
 import type { MemoryStore } from "./memory-store.js";
 import { runReActLoop, type ReActContext } from "../components/react-loop.js";
+import { PipelineRunner, type PipelineCtx, type IStep } from "../core/pipeline-runner.js";
 
 /**
  * 默认记忆检索策略——调用统一入口 makeMemoryQuery。
@@ -11,7 +10,7 @@ import { runReActLoop, type ReActContext } from "../components/react-loop.js";
  */
 export function defaultMemoryQuery(node: TaskNode): MemoryQuery {
   return makeMemoryQuery(node, {
-    memoryTypes: [MemoryType.Episodic],
+    kind: "TaskLog",
     limit: 5,
   });
 }
@@ -20,28 +19,17 @@ export function defaultMemoryQuery(node: TaskNode): MemoryQuery {
  * 记忆检索查询工厂函数——统一入口。
  *
  * 11 个 Agent 的关键词提取全部收敛至此处，各 Agent 仅需指定差异化参数
- * （memoryTypes / linkTypes / bfsDepth / limit）。
- *
- * 关键词提取策略：
- *   1. CJK 2-gram —— payload 中提取连续中文双字（覆盖日/韩汉字区）
- *   2. 拉丁词 —— 空格分词后保留长度 > 3 的词
- *   3. 粗粒度 CJK 去重 —— 移除被更长 bigram 覆盖的短 bigram（如"重构"被"重构记忆"包含时保留后者）
- *
- * @param node 任务节点
- * @param opts 搜索选项（memoryTypes 必填）
+ * （kind / linkTypes / bfsDepth / limit）。
  */
 export function makeMemoryQuery(
   node: TaskNode,
   opts: {
-    memoryTypes: MemoryType[];
+    kind?: MemoryKind;
     linkTypes?: LinkType[];
     bfsDepth?: number;
     bfsMaxNodes?: number;
-    queryMode?: 'hca' | 'csa';
-    trackAccess?: boolean;
     limit?: number;
     bfsDirection?: 'both' | 'outbound';
-    states?: MemoryState[];
   },
 ): MemoryQuery {
   const payload = node.payload;
@@ -59,30 +47,195 @@ export function makeMemoryQuery(
 
   return {
     keywords,
-    memoryTypes: opts.memoryTypes,
+    kind: opts.kind,
     linkTypes: opts.linkTypes,
-    states: opts.states,
     bfsDepth: opts.bfsDepth ?? 2,
     bfsMaxNodes: opts.bfsMaxNodes ?? 20,
-    queryMode: opts.queryMode ?? 'csa',
-    trackAccess: opts.trackAccess,
     limit: opts.limit ?? 3,
     bfsDirection: opts.bfsDirection ?? 'outbound',
   };
 }
 
+// ──────────────────────────────────────────────────────────────
+// 管道步骤定义（可插拔积木）
+// ──────────────────────────────────────────────────────────────
+
 /**
- * 记忆增强执行管道。
- * 从 BaseAgent._executeWithMemory + _executeAndRemember 提取为独立函数。
+ * MemoryRetrievalStep — 记忆检索 + 上下文增强。
+ * 从 MemoryStore 检索相关记忆，注入到任务 payload 中。
+ * 检索失败不阻塞执行（降级为无记忆）。
+ */
+export class MemoryRetrievalStep implements IStep {
+  readonly name = "MemoryRetrieval";
+
+  async run(ctx: PipelineCtx): Promise<PipelineCtx> {
+    const { memory, agentType, node, memoryQuery, safeReporter, filterRead } = ctx;
+
+    if (!memory) {
+      ctx.enrichedNode = node;
+      return ctx;
+    }
+
+    const query = memoryQuery ? memoryQuery(node) : defaultMemoryQuery(node);
+    try {
+      const ctxRecords = await memory.read(query);
+      const filtered = filterRead ? filterRead(ctxRecords, "CSA") : ctxRecords;
+      if (filtered.length > 0) {
+        const ctxSummary = filtered.map((m) => `[记忆] ${m.summary}`).join("\n");
+        ctx.enrichedNode = {
+          ...node,
+          payload: `上下文记忆：\n${ctxSummary}\n\n任务：${node.payload}`,
+        };
+      } else {
+        ctx.enrichedNode = node;
+      }
+    } catch (e) {
+      ctx.enrichedNode = node;
+      if (safeReporter) {
+        safeReporter({
+          source: `${agentType}.MemoryRetrievalStep`,
+          error: e,
+          severity: "degraded",
+          hint: `节点 ${node.id} 记忆检索失败，降级为无记忆执行`,
+        });
+      }
+    }
+
+    return ctx;
+  }
+}
+
+/**
+ * ReActLoopStep — ReAct 循环执行。
+ * 从 ctx 提取 ReActContext，调用共享的 runReActLoop。
+ * 将来可通过构造函数注入不同的循环策略（Direct / Decompose / Jury）。
+ */
+export class ReActLoopStep implements IStep {
+  readonly name = "ReActLoop";
+
+  async run(ctx: PipelineCtx): Promise<PipelineCtx> {
+    const node = ctx.enrichedNode ?? ctx.node;
+
+    const reactCtx: ReActContext = {
+      agentType: ctx.agentType,
+      llm: ctx.llm,
+      toolkit: ctx.toolkit,
+      systemPrompt: ctx.systemPrompt,
+      maxLoops: ctx.maxLoops,
+      reactLoopTimeoutMs: ctx.reactLoopTimeoutMs,
+      memory: ctx.memory,
+      safeReporter: ctx.safeReporter,
+    };
+
+    ctx.result = await runReActLoop(reactCtx, node, ctx.model);
+    return ctx;
+  }
+}
+
+/**
+ * MemoryWriteStep — 记忆写入。
+ * 成功和失败都写（失败经验价值最高）。
+ */
+export class MemoryWriteStep implements IStep {
+  readonly name = "MemoryWrite";
+
+  async run(ctx: PipelineCtx): Promise<PipelineCtx> {
+    const { memory, agentType, node, result, safeReporter } = ctx;
+    if (memory && result) {
+      await _rememberResult(memory, agentType, node, result, safeReporter);
+    }
+    return ctx;
+  }
+}
+
+/**
+ * DirectStep — 单次 LLM 调用，不进入 ReAct 循环，不调用工具。
+ * 适合：意图清晰、无工具依赖的单步任务（如纯文本生成、简单分类）。
+ * 仍写记忆，以便后续任务利用上下文。
+ */
+export class DirectStep implements IStep {
+  readonly name = "Direct";
+
+  async run(ctx: PipelineCtx): Promise<PipelineCtx> {
+    const node = ctx.enrichedNode ?? ctx.node;
+
+    const messages: { role: "system" | "user"; content: string }[] = [
+      { role: "system", content: ctx.systemPrompt },
+      { role: "user", content: `Task: ${node.payload}` },
+    ];
+
+    try {
+      const res = await ctx.llm.chat(ctx.model, messages, [], node.reasoningEffort);
+      ctx.result = {
+        nodeId: node.id,
+        agentType: ctx.agentType,
+        success: true,
+        output: res.content ?? undefined,
+      };
+    } catch (e) {
+      ctx.result = {
+        nodeId: node.id,
+        agentType: ctx.agentType,
+        success: false,
+        output: `[DirectStep crashed: ${String(e).slice(0, 200)}]`,
+        error: `Direct step failed: ${String(e)}`,
+      };
+    }
+
+    return ctx;
+  }
+}
+
+// ── 管道配置 ──
+
+/** 默认管道：记忆检索 → ReAct 循环 → 记忆写入 */
+export const DEFAULT_PIPELINE: IStep[] = [
+  new MemoryRetrievalStep(),
+  new ReActLoopStep(),
+  new MemoryWriteStep(),
+];
+
+/** Direct 管道：单次 LLM 调用 → 记忆写入（跳过记忆检索和 ReAct 循环） */
+export const DIRECT_PIPELINE: IStep[] = [
+  new DirectStep(),
+  new MemoryWriteStep(),
+];
+
+/**
+ * resolvePipeline —— 根据策略名返回对应的 Step 管道。
  *
- * 流程：检索记忆 → 增强上下文 → ReAct 执行 → 记忆写入（成功时）
+ * 策略映射：
+ *   "react"  → DEFAULT_PIPELINE   [MemoryRetrieval, ReActLoop, MemoryWrite]
+ *   "direct" → DIRECT_PIPELINE    [DirectStep, MemoryWrite]
+ *   undefined → DEFAULT_PIPELINE  （回退）
+ *   "decompose" / "jury" → 未来扩展
+ */
+export function resolvePipeline(strategy?: string): IStep[] {
+  if (!strategy) return DEFAULT_PIPELINE;
+  switch (strategy) {
+    case "react":  return DEFAULT_PIPELINE;
+    case "direct": return DIRECT_PIPELINE;
+    // 未来: case "decompose": return DECOMPOSE_PIPELINE;
+    // 未来: case "jury": return JURY_PIPELINE;
+    default:       return DEFAULT_PIPELINE;
+  }
+}
+
+/**
+ * executeWithMemoryPipeline —— 记忆增强执行管道。
  *
- * @param ctx ReAct 上下文
- * @param node 任务节点
- * @param model LLM 模型
- * @param memoryQuery 自定义记忆检索策略（可选，默认 CJK bigram）
- * @param safeReporter 错误上报器
- * @param filterRead 读路径 Intent 过滤回调（可选，P0-六层防御）
+ * 流程：检索记忆 → 增强上下文 → ReAct 执行 → 记忆写入。
+ * 内部使用 PipelineRunner 串联 DEFAULT_PIPELINE 三个 Step。
+ *
+ * 签名完全向后兼容——所有现有调用者无需修改。
+ *
+ * @param ctx    ReAct 上下文
+ * @param node   任务节点
+ * @param model  LLM 模型
+ * @param memoryQuery    可选自定义记忆检索策略
+ * @param safeReporter   可选错误上报器
+ * @param filterRead     可选读路径 Intent 过滤
+ * @returns NodeResult
  */
 export async function executeWithMemoryPipeline(
   ctx: ReActContext,
@@ -90,47 +243,30 @@ export async function executeWithMemoryPipeline(
   model: string,
   memoryQuery?: (node: TaskNode) => MemoryQuery,
   safeReporter?: SafeErrorReporter,
-  filterRead?: (entries: MemoryEntry[], queryMode: "hca" | "csa") => MemoryEntry[],
+  filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[],
+  customSteps?: IStep[],
 ): Promise<NodeResult> {
-  const { memory, agentType } = ctx;
+  const pipelineCtx: PipelineCtx = {
+    agentType: ctx.agentType,
+    llm: ctx.llm,
+    toolkit: ctx.toolkit,
+    systemPrompt: ctx.systemPrompt,
+    maxLoops: ctx.maxLoops,
+    reactLoopTimeoutMs: ctx.reactLoopTimeoutMs ?? 300_000,
+    model,
+    memory: ctx.memory,
+    safeReporter: safeReporter ?? ctx.safeReporter,
+    filterRead,
+    memoryQuery,
+    node,
+  };
 
-  // ── 步骤1：记忆检索 + 上下文增强 ──
-  let enrichedNode = node;
-  if (memory) {
-    const query = memoryQuery ? memoryQuery(node) : defaultMemoryQuery(node);
-    try {
-      const ctxRecords = await memory.read(query);
-      // P0-六层防御：读路径 Intent 过滤（CSA 模式排除 Intent 半成品记忆）
-      const filtered = filterRead ? filterRead(ctxRecords, query.queryMode ?? "csa") : ctxRecords;
-      if (filtered.length > 0) {
-        const ctxSummary = filtered.map((m) => `[记忆] ${m.summary}`).join("\n");
-        enrichedNode = {
-          ...node,
-          payload: `上下文记忆：\n${ctxSummary}\n\n任务：${node.payload}`,
-        };
-      }
-    } catch (e) {
-      // 记忆检索失败不阻塞执行
-      if (safeReporter) {
-        safeReporter({
-          source: `${agentType}.executeWithMemoryPipeline`,
-          error: e,
-          severity: "degraded",
-          hint: `节点 ${node.id} 记忆检索失败，降级为无记忆执行`,
-        });
-      }
-    }
+  const steps = customSteps ?? DEFAULT_PIPELINE;
+  const finalCtx = await PipelineRunner.run(steps, pipelineCtx);
+  if (!finalCtx.result) {
+    throw new Error(`Pipeline [${steps.map(s => s.name).join("→")}] completed without result for node ${node.id}`);
   }
-
-  // ── 步骤2：ReAct 执行 ──
-  const result = await runReActLoop(ctx, enrichedNode, model);
-
-  // ── 步骤3：写入记忆（成功和失败都写，失败经验价值最高）──
-  if (memory) {
-    await _rememberResult(memory, agentType, node, result, safeReporter);
-  }
-
-  return result;
+  return finalCtx.result;
 }
 
 /**
@@ -140,6 +276,8 @@ export async function executeWithMemoryPipeline(
  * 失败记忆：Episodic，weight=3（经验教训，价值高但不重复推荐），记录错误原因
  *
  * 包括：主记忆（Episodic）+ 上下文记忆 + 链接。
+ *
+ * @fix H-01 — catch 块清理半成品 Pending 条目，防止残品占满 MAX_TOTAL_MEMORIES
  */
 async function _rememberResult(
   memory: MemoryStore,
@@ -166,35 +304,45 @@ async function _rememberResult(
     content.lesson = `${agentType} successfully fixed a ${node.type}. The original error context is preserved above.`;
   }
 
-  // P0-六层防御：使用 writePending + commitMemory 两阶段提交
+  // v3: semantic_gist = summary（暂从 summary 复刻，后续由 LLM 萃取增强）
+  const mainSummary = isSuccess
+    ? `[${isFix ? "修复记录" : "完成"}] ${agentType} × ${node.type}: ${node.payload.slice(0, 120)}`
+    : `[失败教训] ${agentType} × ${node.type}: ${(result.error ?? "unknown").slice(0, 120)}`;
+
+  const source = { agentType, taskId: node.id };
+
+  let memId: string | undefined;
+  let ctxMemId: string | undefined;
   try {
-    const memId = memory.writePending({
-      memoryType: MemoryType.Episodic,
-      content,
-      summary: isSuccess
-        ? isFix
-          ? `[修复记录] ${agentType} 修复了 ${node.type}: ${node.payload.slice(0, 100)}`
-          : `${agentType} 完成 ${node.type} 任务: ${node.payload.slice(0, 120)}`
-        : `[失败教训] ${agentType} 执行 ${node.type} 失败: ${(result.error ?? "unknown").slice(0, 100)}`,
-      agentType,
-      creatorId: agentType,
-      subType: MemorySubType.Fact,
+    memId = memory.writePending({
+      source,
+      kind: "TaskLog",
+      summary: mainSummary,
+      semantic_gist: mainSummary.slice(0, 200),
+      content_blob: content,
+      content_hash: "", // 由 writePending 内部计算
       weight: isSuccess ? 5 : 3,
-      metadata: { taskId: node.id, nodeType: node.type, tags: node.tags },
     });
 
-    const ctxMemId = memory.writePending({
-      memoryType: MemoryType.Episodic,
-      content: { nodeId: node.id, nodeType: node.type, tags: node.tags, outcome: isSuccess ? "success" : "failure" },
-      summary: `[上下文] 节点 ${node.id} (${node.type}): ${node.payload.slice(0, 60)}`,
-      agentType,
-      creatorId: agentType,
-      subType: MemorySubType.Fact,
-      weight: 1,
-      metadata: { taskId: node.id },
+    const ctxContent: Record<string, unknown> = {
+      nodeId: node.id,
+      nodeType: node.type,
+      tags: node.tags,
+      outcome: isSuccess ? "success" : "failure",
+      snippet: String(content.decision).slice(0, 200),
+    };
+    const ctxSummary = `[上下文] 节点 ${node.id} (${node.type}): ${node.payload.slice(0, 120)}`;
+
+    ctxMemId = memory.writePending({
+      source,
+      kind: "TaskLog",
+      summary: ctxSummary,
+      semantic_gist: ctxSummary.slice(0, 200),
+      content_blob: ctxContent,
+      content_hash: "",
+      weight: 2,
     });
 
-    // D5: link() 已移除未使用的 _creatorId 参数，改为 3 参数签名
     memory.link(memId, ctxMemId, LinkType.ProducedBy);
 
     if (isFix && node.parentId) {
@@ -207,16 +355,27 @@ async function _rememberResult(
       }
     }
 
-    // 两阶段提交：全部成功 → commit
-    memory.commitMemory(memId);
-    memory.commitMemory(ctxMemId);
+    const ok1 = memory.commitMemory(memId);
+    const ok2 = memory.commitMemory(ctxMemId);
+    if (!ok1 || !ok2) {
+      safeReporter?.({
+        source: `${agentType}.executeWithMemoryPipeline._rememberResult`,
+        error: new Error(`commit 部分失败: main=${ok1}, ctx=${ok2}`),
+        severity: "degraded",
+        hint: `节点 ${node.id} 记忆提交失败，main=${ok1}, ctx=${ok2}`,
+      });
+    }
   } catch (memErr) {
+    try { if (memId !== undefined) memory.cas(memId, "Active", "Archived"); } catch { /* 静默 */ }
+    try { if (ctxMemId !== undefined) memory.cas(ctxMemId, "Active", "Archived"); } catch { /* 静默 */ }
+
+    const hint = `任务 ${node.id} 已${isSuccess ? "成功" : "失败"}完成，但记忆写入失败，半成品 Pending 条目已清理`;
     if (safeReporter) {
       safeReporter({
         source: `${agentType}.executeWithMemoryPipeline._rememberResult`,
         error: memErr,
         severity: "degraded",
-        hint: `任务 ${node.id} 已${isSuccess ? "成功" : "失败"}完成，但记忆写入失败`,
+        hint,
       });
     }
   }

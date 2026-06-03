@@ -27,6 +27,8 @@ import {
   AGENT_TOOL_PERMISSIONS,
   getTagVocabulary,
 } from "../src/index.js";
+import { resolveAgentPermissions } from "../src/agent-permissions.js";
+import { AgentContext } from "../src/agent-enums.js";
 
 describe("@cortex/shared v2.0 types", () => {
   it("AgentType includes Meta, Code, Review, Analysis, Ops, DocGovern, Inspector, Browser", () => {
@@ -168,8 +170,26 @@ describe("@cortex/shared v2.0 types", () => {
 
   it("AGENT_TOOL_PERMISSIONS grants run_shell to Code/Review/Ops for test analysis", () => {
     expect(AGENT_TOOL_PERMISSIONS[AgentType.Code]).toContain("run_shell");
-    expect(AGENT_TOOL_PERMISSIONS[AgentType.Review]).toContain("run_shell");
+    // Review 在生产模式不含 run_shell，自查模式通过 resolveAgentPermissions 获得
+    expect(resolveAgentPermissions(AgentType.Review, AgentContext.SelfExamination)).toContain("run_shell");
     expect(AGENT_TOOL_PERMISSIONS[AgentType.Ops]).toContain("run_shell");
+  });
+
+  it("resolveAgentPermissions: Review in Production has no run_shell (BASE_TOOLSET)", () => {
+    const perms = resolveAgentPermissions(AgentType.Review, AgentContext.Production);
+    expect(perms).not.toContain("run_shell");
+    expect(perms).toContain("read_file");
+    expect(perms).toContain("write_file");
+  });
+
+  it("resolveAgentPermissions: non-Review agents ignore context (static table)", () => {
+    // Code always has FULL_TOOLSET regardless of context
+    expect(resolveAgentPermissions(AgentType.Code, AgentContext.Production)).toContain("run_shell");
+    expect(resolveAgentPermissions(AgentType.Code, AgentContext.SelfExamination)).toContain("run_shell");
+    // Analysis always has BASE_TOOLSET
+    const analysisPerms = resolveAgentPermissions(AgentType.Analysis, AgentContext.Production);
+    expect(analysisPerms).not.toContain("run_shell");
+    expect(resolveAgentPermissions(AgentType.Analysis, AgentContext.SelfExamination)).not.toContain("run_shell");
   });
 
   it("PipelinePriority CRITICAL < HIGH < NORMAL", () => {

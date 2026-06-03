@@ -6,7 +6,7 @@
  * @see CLI 设计文档 §4.16
  */
 
-import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import type { CommandHandler, CommandResult } from "../types.js";
 import type { CommandRegistry } from "./index.js";
 
 export function createHelpHandler(registry: CommandRegistry): CommandHandler {

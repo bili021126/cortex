@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { MemoryEntry, MemoryWriteInput } from "@cortex/shared";
+import type { MemoryEntry, MemoryWriteInput, ReadMode } from "@cortex/shared";
 import type { IFileSystemAdapter } from "@cortex/shared";
 import type { MemoryStore } from "../memory/memory-store.js";
 import { InitVerifier } from "./init-verifier.js";
@@ -36,6 +36,8 @@ export interface ConsistencyLayerConfig {
   enableSchemaEnforcer?: boolean;
   /** FileSystemAdapter（注入以实现可测试性） */
   fs?: IFileSystemAdapter;
+  /** 辅助搜索路径：短文件名找不到时，在这些子目录中递归查找 */
+  searchPaths?: string[];
 }
 
 // ─── Facade ──────────────────────────────────────
@@ -57,6 +59,7 @@ export class ConsistencyLayer {
       failThreshold: config.failThreshold ?? 0.3,
       enableInitVerifier: config.enableInitVerifier ?? true,
       enableSchemaEnforcer: config.enableSchemaEnforcer ?? true,
+      searchPaths: config.searchPaths ?? [],
       fs: config.fs,
     };
 
@@ -73,7 +76,7 @@ export class ConsistencyLayer {
       );
     }
     this._initVerifier = this._config.enableInitVerifier && this._config.fs
-      ? new InitVerifier(memory, this._config.fs, this._config.projectRoot, this._config.failThreshold)
+      ? new InitVerifier(memory, this._config.fs, this._config.projectRoot, this._config.failThreshold, this._config.searchPaths)
       : null;
 
     this._schemaEnforcer = this._config.enableSchemaEnforcer
@@ -91,10 +94,28 @@ export class ConsistencyLayer {
    */
   async verify(): Promise<ConsistencyReport | null> {
     if (!this._initVerifier) return null;
-    return this._initVerifier.run();
+    return await this._initVerifier.run();
   }
 
   // ── 写前校验 ────────────────────────────────
+
+  /**
+   * 写前三合一校验：validateInput → annotateInput → ensureSubType。
+   * 作为 MemoryStore 的 preWriteHook 直接注入。
+   */
+  preWriteCheck(input: MemoryWriteInput): MemoryWriteInput {
+    if (this._schemaEnforcer) {
+      const validation = this._schemaEnforcer.validate(input);
+      if (!validation.valid) {
+        console.warn(
+          `[ConsistencyLayer] 写前校验失败: ${validation.errors.join("; ")}`,
+        );
+      }
+      input = this._schemaEnforcer.annotate(input);
+    }
+    input = this._intentFactWall.ensureSubType(input);
+    return input;
+  }
 
   /**
    * 校验写入输入的结构完整性。
@@ -124,8 +145,8 @@ export class ConsistencyLayer {
    * @param queryMode 注意力模式（hca/csa）
    * @returns 过滤后的记忆列表
    */
-  filterRead(entries: MemoryEntry[], queryMode: "hca" | "csa" = "csa"): MemoryEntry[] {
-    return this._intentFactWall.filterRead(entries, queryMode);
+  filterRead(entries: MemoryEntry[], mode: ReadMode = "CSA"): MemoryEntry[] {
+    return this._intentFactWall.filterRead(entries, mode);
   }
 
   /**

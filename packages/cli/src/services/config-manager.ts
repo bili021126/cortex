@@ -14,7 +14,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { DEFAULT_OUTPUT_FORMAT, DEFAULT_AGENT_QUOTA } from "../constants.js";
+import { DEFAULT_OUTPUT_FORMAT, DEFAULT_AGENT_QUOTA, DEFAULT_CLI_CHAT_MODEL, DIR_CORTEX, DIR_GLOBAL_CONFIG, FILE_LOCAL_CONFIG, FILE_ENGINE_DB, FILE_REPL_HISTORY } from "@cortex/config";
 
 export interface CliConfig {
   version: string;
@@ -37,15 +37,15 @@ const DEFAULT_CONFIG: CliConfig = {
   version: "0.2",
   cli: {
     defaultFormat: DEFAULT_OUTPUT_FORMAT,
-    historyFile: "~/.cortex/repl-history",
+    historyFile: `~/${DIR_GLOBAL_CONFIG}/${FILE_REPL_HISTORY}`,
     aliases: {},
   },
   engine: {
-    dbPath: ".cortex/engine.db",
+    dbPath: `${DIR_CORTEX}/${FILE_ENGINE_DB}`,
     maxAgents: DEFAULT_AGENT_QUOTA,
   },
   llm: {
-    chatModel: "deepseek-v4-flash",
+    chatModel: DEFAULT_CLI_CHAT_MODEL,
     reasoningEffort: "high",
   },
 };
@@ -136,11 +136,11 @@ export class ConfigManager {
       this._mergeFromFile(config, configPath);
     } else {
       // 向上搜索 .cortex/config
-      const localConfig = this._searchUp(".cortex/config");
+      const localConfig = this._searchUp(FILE_LOCAL_CONFIG);
       if (localConfig) this._mergeFromFile(config, localConfig);
 
       // 全局配置
-      const globalConfig = path.join(os.homedir(), ".cortex", "config");
+      const globalConfig = path.join(os.homedir(), DIR_GLOBAL_CONFIG, "config");
       if (fs.existsSync(globalConfig)) {
         this._mergeFromFile(config, globalConfig);
       }

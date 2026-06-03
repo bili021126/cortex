@@ -1,5 +1,5 @@
 import type { MemoryEntry, MemoryQuery } from "@cortex/shared";
-import { MemoryState, type LinkType } from "@cortex/shared";
+import { type LinkType } from "@cortex/shared";
 import type { MemoryStorage } from "./storage.js";
 import { THIRTY_DAYS_MS, EMBEDDING_DIM, BFS_WEIGHT_THRESHOLD, MAX_LINKS_PER_NODE } from "./schema.js";
 
@@ -21,30 +21,17 @@ export class MemoryQueryEngine {
   memScanRead(storage: MemoryStorage, query: MemoryQuery, now: number): MemoryEntry[] {
     let results = Array.from(storage.memories.values());
 
-    if (query.states && query.states.length > 0) {
-      results = results.filter((m) => query.states!.includes(m.state));
-    } else {
-      // P0-六层防御：默认只返回 Active 记忆，Pending（半成品）不可见
-      results = results.filter((m) => m.state === MemoryState.Active);
-    }
-
-    // P0-六层防御：子类型过滤
-    if (query.subTypes && query.subTypes.length > 0) {
-      results = results.filter((m) => m.subType ? query.subTypes!.includes(m.subType) : false);
-    }
+    // 默认只返回 Active 语义态记忆
+    results = results.filter((m) => m.semantic_state === "Active");
 
     results = results.filter((m) => now - m.createdAt < THIRTY_DAYS_MS);
 
-    if (!query.includePrivate) {
-      results = results.filter((m) => !m.isPrivate);
-    }
-
-    if (query.memoryTypes && query.memoryTypes.length > 0) {
-      results = results.filter((m) => query.memoryTypes!.includes(m.memoryType));
+    if (query.kind) {
+      results = results.filter((m) => m.kind === query.kind);
     }
 
     if (query.agentTypes && query.agentTypes.length > 0) {
-      results = results.filter((m) => query.agentTypes!.includes(m.agentType));
+      results = results.filter((m) => query.agentTypes!.includes(m.source.agentType));
     }
 
     if (query.timeRange) {
@@ -55,16 +42,15 @@ export class MemoryQueryEngine {
 
     if (query.keywords && query.keywords.length > 0) {
       results = results.filter((m) => {
-        const searchText = (m.summary + " " + JSON.stringify(m.content)).toLowerCase();
+        const searchText = (m.summary + " " + m.semantic_gist + " " + JSON.stringify(m.content_blob)).toLowerCase();
         return query.keywords!.every((kw) => searchText.includes(kw.toLowerCase()));
       });
     }
 
     if (query.metadataFilter && Object.keys(query.metadataFilter).length > 0) {
       results = results.filter((m) => {
-        if (!m.metadata) return false;
         return Object.entries(query.metadataFilter!).every(
-          ([k, v]) => m.metadata![k] === v,
+          ([k, v]) => m.content_blob[k as string] === v,
         );
       });
     }
@@ -118,7 +104,7 @@ export class MemoryQueryEngine {
           if (visited.has(link.targetId)) continue;
 
           const target = storage.memories.get(link.targetId);
-          if (!target || target.state === MemoryState.Obliterated) continue;
+          if (!target || target.semantic_state === "Obliterated") continue;
 
           const decayedWeight = target.weight * decay;
           if (decayedWeight < BFS_WEIGHT_THRESHOLD) continue;
@@ -139,7 +125,7 @@ export class MemoryQueryEngine {
               if (visited.has(sourceId)) continue;
 
               const source = storage.memories.get(sourceId);
-              if (!source || source.state === MemoryState.Obliterated) continue;
+              if (!source || source.semantic_state === "Obliterated") continue;
 
               const decayedWeight = source.weight * decay;
               if (decayedWeight < BFS_WEIGHT_THRESHOLD) continue;
@@ -211,7 +197,7 @@ export class MemoryQueryEngine {
     const withoutEmbedding: MemoryEntry[] = [];
 
     for (const entry of candidates) {
-      if (!entry.embedding || entry.embedding.length !== EMBEDDING_DIM) {
+      if (entry.embedding?.length !== EMBEDDING_DIM) {
         withoutEmbedding.push(entry);
         continue;
       }

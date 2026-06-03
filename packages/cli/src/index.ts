@@ -21,7 +21,7 @@ export type { CommandContext, CommandResult, OutputFormat } from "./types.js";
 
 // ── 命令注册 ───────────────────────────────────────
 export { CommandRegistry } from "./commands/index.js";
-export { CORTEX_VERSION } from "./constants.js";
+export { CORTEX_VERSION } from "@cortex/config";
 export type { CommandDefinition, CommandHandler } from "./types.js";
 
 // ── 服务 ───────────────────────────────────────────

@@ -1,4 +1,4 @@
-import type { ObservableEvent, PipelineHandler, SafeErrorReporter, SafeErrorContext, HandlerErrorContext, HandlerErrorReporter } from "@cortex/shared";
+import type { ObservableEvent, PipelineHandler, SafeErrorReporter, SafeErrorContext, HandlerErrorContext, HandlerErrorReporter, IPipelineObserver } from "@cortex/shared";
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 
 // HandlerErrorContext + HandlerErrorReporter 已迁移至 @cortex/shared —— 从 shared import 即可
@@ -10,13 +10,16 @@ import { PipelineEventType, PipelinePriority } from "@cortex/shared";
  * 替代 v1.1 的 EventBus。所有可观测事件走此管道。
  *
  * @fix D4 — off() 支持按 handler 引用精确移除，避免误删其他组件的 handler。
+ * @fix N-01 — _reportError 防递归标记，防止 handler 异常 → emit → handler 异常 → 栈溢出。
  */
-export class PipelineObserver {
+export class PipelineObserver implements IPipelineObserver {
   private handlers = new Map<PipelinePriority, PipelineHandler[]>();
   private _onHandlerError: HandlerErrorReporter | null = null;
   /** silent 错误连续发生计数器：source → 连续次数 */
   private _silentCounters = new Map<string, number>();
   private static readonly SILENT_UPGRADE_THRESHOLD = 3;
+  /** @fix N-01 — _reportError 递归防护门闩 */
+  private _reportingError = false;
 
   /**
    * 注入 handler 异常上报后端。
@@ -126,42 +129,53 @@ export class PipelineObserver {
   // ── 私有：SafeErrorReporter 实现 ─────────────────
 
   private _reportError(ctx: SafeErrorContext): void {
-    if (ctx.severity === "silent") {
-      const count = (this._silentCounters.get(ctx.source) ?? 0) + 1;
-      this._silentCounters.set(ctx.source, count);
-      if (count >= PipelineObserver.SILENT_UPGRADE_THRESHOLD) {
-        this._silentCounters.delete(ctx.source);
-        this.emit({
-          type: PipelineEventType.ErrorSilentUpgraded,
-          priority: PipelinePriority.HIGH,
-          payload: {
-            source: ctx.source,
-            consecutive: count,
-            threshold: PipelineObserver.SILENT_UPGRADE_THRESHOLD,
-            lastError: String(ctx.error).slice(0, 300),
-            hint: ctx.hint,
-          },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-      }
+    // @fix N-01 — 防递归门闩：_reportError → emit → handler 抛异常 → _reportError 环路防护
+    if (this._reportingError) {
+      console.error("[PipelineObserver] 递归 _reportError 防护，丢弃:",
+        ctx.source, String(ctx.error).slice(0, 200));
       return;
     }
-    // 非 silent 错误：重置该 source 的计数器
-    this._silentCounters.delete(ctx.source);
+    this._reportingError = true;
+    try {
+      if (ctx.severity === "silent") {
+        const count = (this._silentCounters.get(ctx.source) ?? 0) + 1;
+        this._silentCounters.set(ctx.source, count);
+        if (count >= PipelineObserver.SILENT_UPGRADE_THRESHOLD) {
+          this._silentCounters.delete(ctx.source);
+          this.emit({
+            type: PipelineEventType.ErrorSilentUpgraded,
+            priority: PipelinePriority.HIGH,
+            payload: {
+              source: ctx.source,
+              consecutive: count,
+              threshold: PipelineObserver.SILENT_UPGRADE_THRESHOLD,
+              lastError: String(ctx.error).slice(0, 300),
+              hint: ctx.hint,
+            },
+            timestamp: Date.now(),
+            notificationType: "WARNING",
+          });
+        }
+        return;
+      }
+      // 非 silent 错误：重置该 source 的计数器
+      this._silentCounters.delete(ctx.source);
 
-    const priority = ctx.severity === "fatal" ? PipelinePriority.CRITICAL : PipelinePriority.HIGH;
-    this.emit({
-      type: PipelineEventType.ErrorReported,
-      priority,
-      payload: {
-        source: ctx.source,
-        severity: ctx.severity,
-        error: String(ctx.error).slice(0, 500),
-        hint: ctx.hint,
-      },
-      timestamp: Date.now(),
-      notificationType: "WARNING",
-    });
+      const priority = ctx.severity === "fatal" ? PipelinePriority.CRITICAL : PipelinePriority.HIGH;
+      this.emit({
+        type: PipelineEventType.ErrorReported,
+        priority,
+        payload: {
+          source: ctx.source,
+          severity: ctx.severity,
+          error: String(ctx.error).slice(0, 500),
+          hint: ctx.hint,
+        },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+    } finally {
+      this._reportingError = false;
+    }
   }
 }
