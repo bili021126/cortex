@@ -54,11 +54,16 @@ projects/
 tsc_check.txt
 tsc_engine.txt
 packages/skill-kit/err.txt
-# docs/core 私密文本
+# docs/core 私密文本（个人创作/昔涟相关文稿）
 docs/core/昔涟篇.txt
 docs/core/纳西妲.txt
 docs/core/缇宝偏.txt
 docs/core/[sxsy.org]*
+docs/core/三人.md
+docs/core/三人-改写.md
+docs/core/小昔涟的翁法罗斯.md
+docs/core/昔涟原始角色定义-翁法罗斯手稿.md
+docs/core/翁法罗斯游记.md
 
 # 临时文件
 .tmp-*/

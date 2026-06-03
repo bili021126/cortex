@@ -189,7 +189,7 @@ describe("DocGovernAgent 执行", () => {
     const events: string[] = [];
     observer.on(PipelinePriority.HIGH, (e: any) => {
       if (e.type === "node.complete") {
-        events.push(`${e.payload.nodeId}:${e.payload.source.agentType}`);
+        events.push(`${e.payload.nodeId}:${e.payload.agentType}`);
       }
     });
 
