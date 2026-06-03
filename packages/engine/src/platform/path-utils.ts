@@ -39,6 +39,10 @@ export function validatePath(filePath: string, projectRoot: string | null): Path
   if (filePath.includes("\0")) {
     return { ok: false, reason: "路径包含 NUL 字节", input: filePath };
   }
+  // 阻断 Windows 绝对路径（如 C:\ D:\），跨平台均需拦截
+  if (/^[a-zA-Z]:[/\\]/.test(filePath)) {
+    return { ok: false, reason: `路径越界: Windows 绝对路径绕过 "${filePath}"`, input: filePath };
+  }
 
   // ── 未设沙箱时允许任意路径（向后兼容测试场景） ──
   if (!projectRoot) {
