@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "packages/config" },
     { "path": "packages/shared" },
     { "path": "packages/notification" },
     { "path": "packages/factory" },

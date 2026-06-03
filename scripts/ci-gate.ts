@@ -55,6 +55,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 
 /** 需要构建和类型检查的包（按依赖顺序） */
 const PACKAGES: PackageInfo[] = [
+  { name: "config",       dir: join(ROOT, "packages", "config"),       filter: "@cortex/config" },
   { name: "shared",       dir: join(ROOT, "packages", "shared"),       filter: "@cortex/shared" },
   { name: "notification", dir: join(ROOT, "packages", "notification"), filter: "@cortex/notification" },
   { name: "factory",      dir: join(ROOT, "packages", "factory"),      filter: "@cortex/factory" },
