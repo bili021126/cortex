@@ -34,7 +34,6 @@ describe("Skill System Integration", () => {
       {
         id: "skill-ci-fix",
         name: "CI 构建修复流程",
-        agentType: "fix",
         triggerTags: ["fix", "bugfix", "config"],
         trigger: "当 CI 构建失败且错误与依赖或配置相关时触发",
         steps: [
@@ -46,12 +45,11 @@ describe("Skill System Integration", () => {
         ],
         expectedOutput: "修复后的配置文件 + CI 通过",
         outputFile: "docs/fixes/{date}-ci-fix.md",
-        status: "trial",
-      },
+        agentType: AgentType.Fix,
+        status: "trial"},
       {
         id: "skill-memory-cleanup",
         name: "记忆清理巡检",
-        agentType: "loop",
         triggerTags: ["loop", "pattern_scan", "skill_precipitate"],
         trigger: "当 MemoryStore 中存在超过30天的废弃记忆时触发",
         steps: [
@@ -62,8 +60,8 @@ describe("Skill System Integration", () => {
           "清理湮灭态记忆的关联边",
         ],
         expectedOutput: "清理报告：冻结/归档/湮灭计数",
-        status: "trial",
-      },
+        agentType: AgentType.Loop,
+        status: "trial"},
     ]);
 
     // 阶段2：SkillExtractor 解析
@@ -101,11 +99,9 @@ describe("Skill System Integration", () => {
     const output = mockLoopAgentOutput([
       {
         name: "Auto-generated Skill",
-        agentType: "code",
         triggerTags: ["implementation"],
         trigger: "auto trigger",
-        steps: ["step 1", "step 2"],
-      },
+        steps: ["step 1", "step 2"]},
     ]);
 
     const { skills } = extractSkillsFromOutput(output);
@@ -119,7 +115,7 @@ describe("Skill System Integration", () => {
   it("should handle duplicate registration (overwrite)", () => {
     const skill: SkillTemplate = {
       id: "skill-v1",
-      agentType: AgentType.Code,
+      agentType: AgentType.Fix,
       name: "Version 1",
       triggerTags: ["implementation" as Tag],
       trigger: "test",
@@ -129,8 +125,7 @@ describe("Skill System Integration", () => {
       adoptionCount: 0,
       rejectionCount: 0,
       discoveredBy: "LoopAgent",
-      createdAt: Date.now(),
-    };
+      createdAt: Date.now()};
 
     registry.register(skill);
     expect(registry.get("skill-v1")?.name).toBe("Version 1");
@@ -138,8 +133,7 @@ describe("Skill System Integration", () => {
     const updated: SkillTemplate = {
       ...skill,
       name: "Version 2",
-      steps: ["step 1", "step 2"],
-    };
+      steps: ["step 1", "step 2"]};
     registry.register(updated);
     expect(registry.get("skill-v1")?.name).toBe("Version 2");
     expect(registry.get("skill-v1")?.steps.length).toBe(2);
@@ -159,8 +153,7 @@ describe("Skill System Integration", () => {
       adoptionCount: 0,
       rejectionCount: 0,
       discoveredBy: "LoopAgent",
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     registry.register({
       id: "skill-deprecated",
@@ -174,8 +167,7 @@ describe("Skill System Integration", () => {
       adoptionCount: 0,
       rejectionCount: 5,
       discoveredBy: "LoopAgent",
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     expect(registry.totalCount).toBe(2);
     expect(registry.activeCount).toBe(1);
@@ -193,13 +185,12 @@ describe("Skill System Integration", () => {
     const loopOutput = mockLoopAgentOutput([
       {
         id: "skill-persist-1",
+        agentType: AgentType.Review,
         name: "Persist Test",
-        agentType: "review",
         triggerTags: ["review", "audit"],
         trigger: "test persistence",
         steps: ["step 1", "step 2"],
-        status: "active",
-      },
+        status: "active"},
     ]);
 
     const { skills } = extractSkillsFromOutput(loopOutput);
@@ -231,8 +222,7 @@ describe("Skill System Integration", () => {
       adoptionCount: 0,
       rejectionCount: 0,
       discoveredBy: "LoopAgent",
-      createdAt: Date.now(),
-    });
+      createdAt: Date.now()});
 
     expect(registry.queryByTags(["fix" as Tag]).length).toBe(1);
     expect(registry.queryByAgent(AgentType.Fix).length).toBe(1);

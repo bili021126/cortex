@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority } from "@cortex/shared";
 import { MemoryStore, PipelineObserver } from "@cortex/engine";
 
 describe("MemoryStore", () => {
@@ -12,167 +12,164 @@ describe("MemoryStore", () => {
 
   // ── 写入 & 基本检索 ─────────────────────────
 
-  it("写入并检索单条记忆", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { taskType: "implementation", entities: ["app.ts"], decision: "done" },
+  it("写入并检索单条记忆", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { taskType: "implementation", entities: ["app.ts"], decision: "done" },
       summary: "Agent 完成文件修改",
-      agentType: AgentType.Code,
-      creatorId: "code-agent-1",
+      semantic_gist: "Agent 完成文件修改",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     expect(id).toMatch(/^mem-/);
 
-    const results = store.read({
+    const results = await store.read({
       keywords: ["文件修改"],
     });
     expect(results).toHaveLength(1);
     expect(results[0].summary).toBe("Agent 完成文件修改");
-    expect(results[0].memoryType).toBe(MemoryType.Episodic);
-    expect(results[0].agentType).toBe(AgentType.Code);
+    expect(results[0].kind).toBe("TaskLog");
+    expect(results[0].source.agentType).toBe(AgentType.Code);
   });
 
-  it("按 memoryType 过滤", () => {
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("按 memoryType 过滤", async () => {
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "经验记忆",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "代码实现经验记录 TaskLog",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    store.write({
-      memoryType: MemoryType.Knowledge,
-      content: {},
+    await store.write({
+      kind: "Insight",
+      content_blob: {},
       summary: "知识记忆",
-      agentType: AgentType.Analysis,
-      creatorId: "b",
+      semantic_gist: "分析洞察知识沉淀 Insight",
+      source: { agentType: AgentType.Analysis, taskId: "" },
     });
 
-    const epis = store.read({ memoryTypes: [MemoryType.Episodic] });
+    const epis = await store.read({ kind: "TaskLog" });
     expect(epis).toHaveLength(1);
     expect(epis[0].summary).toBe("经验记忆");
 
-    const know = store.read({ memoryTypes: [MemoryType.Knowledge] });
+    const know = await store.read({ kind: "Insight" });
     expect(know).toHaveLength(1);
     expect(know[0].summary).toBe("知识记忆");
   });
 
-  it("按 agentType 过滤", () => {
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("按 agentType 过滤", async () => {
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "code 产出",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "code 产出",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "review 产出",
-      agentType: AgentType.Review,
-      creatorId: "b",
+      semantic_gist: "review 产出",
+      source: { agentType: AgentType.Review, taskId: "" },
     });
 
-    const code = store.read({ agentTypes: [AgentType.Code] });
+    const code = await store.read({ agentTypes: [AgentType.Code] });
     expect(code).toHaveLength(1);
     expect(code[0].summary).toBe("code 产出");
   });
 
-  it("关键词匹配 content JSON 字段", () => {
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: { taskType: "bugfix", entities: ["utils.ts"], decision: "加 null 检查" },
+  it("关键词匹配 content JSON 字段", async () => {
+    await store.write({
+      kind: "TaskLog",
+      content_blob: { taskType: "bugfix", entities: ["utils.ts"], decision: "加 null 检查" },
       summary: "修复 bug",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "修复 bug",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     // 关键词在 content 中
-    const r1 = store.read({ keywords: ["null"] });
+    const r1 = await store.read({ keywords: ["null"] });
     expect(r1).toHaveLength(1);
 
     // 关键词在 summary 中
-    const r2 = store.read({ keywords: ["修复"] });
+    const r2 = await store.read({ keywords: ["修复"] });
     expect(r2).toHaveLength(1);
 
     // 不匹配
-    const r3 = store.read({ keywords: ["不存在"] });
+    const r3 = await store.read({ keywords: ["不存在"] });
     expect(r3).toHaveLength(0);
   });
 
   // ── 30 天 TTL ──────────────────────────────────
 
-  it("30 天窗口外记忆自动过滤", () => {
+  it("30 天窗口外记忆自动过滤", async () => {
     // 写入一条记忆，createdAt 设为 31 天前
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "过期记忆",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "过期记忆",
+      source: { agentType: AgentType.Code, taskId: "" },
       createdAt: Date.now() - 31 * 24 * 60 * 60 * 1000,
     });
 
-    const results = store.read({});
+    const results = await store.read({});
     expect(results).toHaveLength(0);
   });
 
-  it("30 天内记忆正常可见", () => {
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("30 天内记忆正常可见", async () => {
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "新鲜记忆",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "新鲜记忆",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
-    expect(store.read({})).toHaveLength(1);
+    expect(await store.read({})).toHaveLength(1);
   });
 
   // ── 私密记忆 ──────────────────────────────────
 
-  it("私密记忆默认不可见", () => {
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("私密记忆默认不可见", async () => {
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "公开",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "公开",
+      source: { agentType: AgentType.Code, taskId: "" },
       isPrivate: false,
     });
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "私密",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "私密",
+      source: { agentType: AgentType.Code, taskId: "" },
       isPrivate: true,
     });
 
-    const pub = store.read({ includePrivate: false });
-    expect(pub).toHaveLength(1);
-    expect(pub[0].summary).toBe("公开");
-
-    const all = store.read({ includePrivate: true });
-    expect(all).toHaveLength(2);
+    // v3: includePrivate 已移除，默认返回所有非湮灭态记忆
+    const pub = await store.read({});
+    expect(pub).toHaveLength(2);
   });
 
   // ── 关联 ───────────────────────────────────────
 
-  it("建立关联边 + 幂等去重", () => {
-    const a = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("建立关联边 + 幂等去重", async () => {
+    const a = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "源记忆",
-      agentType: AgentType.Code,
-      creatorId: "x",
+      semantic_gist: "源记忆",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    const b = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const b = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "目标记忆",
-      agentType: AgentType.Review,
-      creatorId: "y",
+      semantic_gist: "目标记忆",
+      source: { agentType: AgentType.Review, taskId: "" },
     });
 
     // D5: link() 改为 3 参数签名
@@ -186,34 +183,34 @@ describe("MemoryStore", () => {
     const link2 = store.link(a, b, LinkType.ProducedBy);
     expect(link2).toBeNull();
 
-    // ACCESSED_DURING 可以重复
+    // v3: 所有 linkType 幂等去重
     const link3 = store.link(a, b, LinkType.AccessedDuring);
     expect(link3).toBeTruthy();
     const link4 = store.link(a, b, LinkType.AccessedDuring);
-    expect(link4).toBeTruthy();
+    expect(link4).toBeNull();
   });
 
-  it("getLinks 返回所有出边", () => {
-    const a = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("getLinks 返回所有出边", async () => {
+    const a = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "源",
-      agentType: AgentType.Code,
-      creatorId: "x",
+      semantic_gist: "源",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    const b = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const b = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "目标1",
-      agentType: AgentType.Code,
-      creatorId: "y",
+      semantic_gist: "目标1",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    const c = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const c = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "目标2",
-      agentType: AgentType.Code,
-      creatorId: "z",
+      semantic_gist: "目标2",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.link(a, b, LinkType.ProducedBy);
@@ -225,33 +222,33 @@ describe("MemoryStore", () => {
 
   // ── 权重排序 ──────────────────────────────────
 
-  it("结果按 weight 降序排列", () => {
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("结果按 weight 降序排列", async () => {
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "低权重",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "低权重",
+      source: { agentType: AgentType.Code, taskId: "" },
       weight: 0.3,
     });
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "高权重",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "高权重",
+      source: { agentType: AgentType.Code, taskId: "" },
       weight: 0.9,
     });
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "中权重",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "中权重",
+      source: { agentType: AgentType.Code, taskId: "" },
       weight: 0.6,
     });
 
-    const results = store.read({});
+    const results = await store.read({});
     expect(results).toHaveLength(3);
     expect(results[0].summary).toBe("高权重");
     expect(results[1].summary).toBe("中权重");
@@ -260,29 +257,29 @@ describe("MemoryStore", () => {
 
   // ── 归档（CAS 保护） ───────────────────────────
 
-  it("archive：Active → Archived（CAS）", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("archive：Active → Archived（CAS）", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "待归档",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "待归档",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
-    expect(store.read({})).toHaveLength(1);
+    expect(await store.read({})).toHaveLength(1);
 
     expect(store.archive(id)).toBe(true);
-    expect(store.read({})).toHaveLength(0);
-    expect(store.read({ states: [MemoryState.Archived] })).toHaveLength(1);
+    expect(await store.read({})).toHaveLength(0);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
   });
 
-  it("archive 拒绝非 Active 态的记忆", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("archive 拒绝非 Active 态的记忆", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "先归档再归档",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "先归档再归档",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     expect(store.archive(id)).toBe(true);  // 第一次成功
@@ -291,185 +288,185 @@ describe("MemoryStore", () => {
 
   // ── 四态状态机 ────────────────────────────────
 
-  it("has：存在性检查", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("has：存在性检查", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "存在",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "存在",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     expect(store.has(id)).toBe(true);
     expect(store.has("nonexistent")).toBe(false);
   });
 
-  it("cas：合法流转成功", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("cas：合法流转成功", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "cas 测试",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "cas 测试",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
-    expect(store.cas(id, MemoryState.Active, MemoryState.Archived)).toBe(true);
-    expect(store.peek(id)!.state).toBe(MemoryState.Archived);
+    expect(store.cas(id, "Active", "Archived")).toBe(true);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
   });
 
-  it("cas：expected 不匹配时失败", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("cas：expected 不匹配时失败", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "cas 冲突",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "cas 冲突",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     // 实际是 Active，expected 传 Archived → 失败
-    expect(store.cas(id, MemoryState.Archived, MemoryState.Frozen)).toBe(false);
-    expect(store.peek(id)!.state).toBe(MemoryState.Active); // 未变
+    expect(store.cas(id, "Archived", "Archived")).toBe(false);
+    expect(store.peek(id)!.semantic_state).toBe("Active"); // 未变
   });
 
-  it("cas：Obliterated 不可逆", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("cas：Obliterated 不可逆", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "湮灭不可逆",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "湮灭不可逆",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.obliterate(id);
-    expect(store.peek(id)!.state).toBe(MemoryState.Obliterated);
+    expect(store.peek(id)!.semantic_state).toBe("Obliterated");
 
     // 任何从 Obliterated 的 CAS 都失败
-    expect(store.cas(id, MemoryState.Obliterated, MemoryState.Active)).toBe(false);
-    expect(store.cas(id, MemoryState.Obliterated, MemoryState.Archived)).toBe(false);
-    expect(store.peek(id)!.state).toBe(MemoryState.Obliterated);
+    expect(store.cas(id, "Obliterated", "Active")).toBe(false);
+    expect(store.cas(id, "Obliterated", "Archived")).toBe(false);
+    expect(store.peek(id)!.semantic_state).toBe("Obliterated");
   });
 
-  it("freeze：Active|Archived → Frozen", () => {
-    const a = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("freeze：Active|Archived → Frozen", async () => {
+    const a = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "冻 Active",
-      agentType: AgentType.Code,
-      creatorId: "x",
+      semantic_gist: "冻 Active",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    const b = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const b = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "冻 Archived",
-      agentType: AgentType.Code,
-      creatorId: "x",
+      semantic_gist: "冻 Archived",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.archive(b);
 
     expect(store.freeze(a)).toBe(true);
-    expect(store.peek(a)!.state).toBe(MemoryState.Frozen);
+    expect(store.peek(a)!.semantic_state).toBe("Archived");
 
     expect(store.freeze(b)).toBe(true);
-    expect(store.peek(b)!.state).toBe(MemoryState.Frozen);
+    expect(store.peek(b)!.semantic_state).toBe("Archived");
 
     // 已 Frozen 再 freeze 幂等返回 true（不抛错，状态不变）
     expect(store.freeze(a)).toBe(true);
   });
 
-  it("obliterate：任何非 Obliterated 态 → Obliterated", () => {
-    const a = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("obliterate：任何非 Obliterated 态 → Obliterated", async () => {
+    const a = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "湮灭 Active",
-      agentType: AgentType.Code,
-      creatorId: "x",
+      semantic_gist: "湮灭 Active",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    const b = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const b = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "湮灭 Archived",
-      agentType: AgentType.Code,
-      creatorId: "x",
+      semantic_gist: "湮灭 Archived",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.archive(b);
 
     expect(store.obliterate(a)).toBe(true);
-    expect(store.peek(a)!.state).toBe(MemoryState.Obliterated);
+    expect(store.peek(a)!.semantic_state).toBe("Obliterated");
 
     expect(store.obliterate(b)).toBe(true);
-    expect(store.peek(b)!.state).toBe(MemoryState.Obliterated);
+    expect(store.peek(b)!.semantic_state).toBe("Obliterated");
 
     // 已 Obliterated 再次 obliterate：幂等，返回 true
     expect(store.obliterate(a)).toBe(true);
   });
 
-  it("cas 拒绝 Frozen → Active", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("cas 拒绝 Frozen → Active", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "冻结不可回 Active",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "冻结不可回 Active",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.freeze(id);
-    expect(store.peek(id)!.state).toBe(MemoryState.Frozen);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
 
     // Frozen → Active 被 _isValidTransition 拒绝
-    expect(store.cas(id, MemoryState.Frozen, MemoryState.Active)).toBe(false);
-    expect(store.peek(id)!.state).toBe(MemoryState.Frozen);
+    expect(store.cas(id, "Archived", "Active")).toBe(false);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
   });
 
-  it("cas 拒绝 Frozen → Archived", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
-      summary: "冻结不可回 Archived",
-      agentType: AgentType.Code,
-      creatorId: "a",
+  it("freeze 后 cas Archived→Archived 幂等（自引用允许）", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
+      summary: "冻结后自引用",
+      semantic_gist: "冻结后自引用",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.freeze(id);
-    expect(store.peek(id)!.state).toBe(MemoryState.Frozen);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
 
-    // Frozen → Archived 被 _isValidTransition 拒绝
-    expect(store.cas(id, MemoryState.Frozen, MemoryState.Archived)).toBe(false);
-    expect(store.peek(id)!.state).toBe(MemoryState.Frozen);
+    // Archived → Archived 自引用在 v3 允许（新态=旧态，无变更）
+    expect(store.cas(id, "Archived", "Archived")).toBe(true);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
   });
 
-  it("cas 拒绝 Archived → Active", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("cas 拒绝 Archived → Active", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "归档不可回 Active",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "归档不可回 Active",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.archive(id);
-    expect(store.peek(id)!.state).toBe(MemoryState.Archived);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
 
     // Archived → Active 被 _isValidTransition 拒绝
-    expect(store.cas(id, MemoryState.Archived, MemoryState.Active)).toBe(false);
-    expect(store.peek(id)!.state).toBe(MemoryState.Archived);
+    expect(store.cas(id, "Archived", "Active")).toBe(false);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
   });
 
-  it("link 拒绝湮灭态记忆", () => {
-    const a = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("link 拒绝湮灭态记忆", async () => {
+    const a = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "活记忆",
-      agentType: AgentType.Code,
-      creatorId: "x",
+      semantic_gist: "活记忆",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
-    const b = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const b = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "湮灭记忆",
-      agentType: AgentType.Code,
-      creatorId: "y",
+      semantic_gist: "湮灭记忆",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.obliterate(b);
@@ -480,38 +477,38 @@ describe("MemoryStore", () => {
 
   // ── HCA/CSA 注意力区分 ────────────────────────
 
-  it("trackAccess: false（HCA 规划扫描）不累加 accessCount", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("trackAccess: false（HCA 规划扫描）不累加 accessCount", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "HCA 扫描目标",
-      agentType: AgentType.Code,
-      creatorId: "meta",
+      semantic_gist: "HCA 扫描目标",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     const before = store.peek(id)!.accessCount;
 
     // HCA 模式读 3 次
-    store.read({ keywords: ["HCA"] });                         // CSA 默认，累加
-    store.read({ keywords: ["HCA"] });                         // CSA 默认，累加
-    store.read({ keywords: ["HCA"], trackAccess: false });     // HCA，不累加
+    await store.read({ keywords: ["HCA"] });                         // CSA 默认，累加
+    await store.read({ keywords: ["HCA"] });                         // CSA 默认，累加
+    await await store.read({ keywords: ["HCA"] }, "HCA");                  // HCA，不累加
 
     // 前两次（CSA 默认）累加了，第三次（HCA）没有
     expect(store.peek(id)!.accessCount).toBe(before + 2);
   });
 
-  it("trackAccess: true（CSA 默认）正常累加", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+  it("trackAccess: true（CSA 默认）正常累加", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "CSA 检索目标",
-      agentType: AgentType.Code,
-      creatorId: "code",
+      semantic_gist: "CSA 检索目标",
+      source: { agentType: AgentType.Code, taskId: "" },
     });
 
     const before = store.peek(id)!.accessCount;
-    store.read({ keywords: ["CSA"] });
-    store.read({ keywords: ["CSA"], trackAccess: true });
+    await store.read({ keywords: ["CSA"] });
+    await store.read({ keywords: ["CSA"], trackAccess: true });
 
     expect(store.peek(id)!.accessCount).toBe(before + 2);
   });
@@ -526,22 +523,22 @@ describe("MemoryStore", () => {
       emitted.push({ type: event.type, payload: event.payload });
     });
 
-    const result = (s as any)._storage.deserializeRow({ id: "mem-null", content: null });
+    const result = (s as any)._storage.deserializeRow({ id: "mem-null", content_blob: null });
     expect(result).toBeNull();
 
     const failed = emitted.filter((e) => e.type === "memory.deserialize_failed");
     expect(failed.length).toBe(1);
-    expect(failed[0].payload.reason).toBe("null content");
+    expect(failed[0].payload.reason).toBe("null content_blob");
   });
 
   it("_deserializeRow: undefined content 返回 null 不崩溃", () => {
-    const result = (store as any)._storage.deserializeRow({ id: "mem-undefined", content: undefined });
+    const result = (store as any)._storage.deserializeRow({ id: "mem-undefined", content_blob: undefined });
     expect(result).toBeNull();
   });
 
   it("_deserializeRow: null content 无 observer 时 console.error 兜底", () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = (store as any)._storage.deserializeRow({ id: "mem-null-no-obs", content: null });
+    const result = (store as any)._storage.deserializeRow({ id: "mem-null-no-obs", content_blob: null });
     expect(result).toBeNull();
     expect(errSpy).toHaveBeenCalledWith(
       expect.stringContaining("[MemoryStore] null content")
@@ -551,42 +548,40 @@ describe("MemoryStore", () => {
 
   // ── M3: embedding 维度校验 ─────────────────────
 
-  it("M3: write() 校验 embedding 维度 (期望 384)", () => {
+  it("M3: write() 校验 embedding 维度 (期望 384)", async () => {
     // 维度正确 → 成功写入
     const validEmbedding = new Array(384).fill(0.1);
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "合法 embedding",
-      agentType: AgentType.Code,
-      creatorId: "a",
+      semantic_gist: "合法 embedding",
+      source: { agentType: AgentType.Code, taskId: "" },
       embedding: validEmbedding,
     });
     expect(id).toMatch(/^mem-/);
 
     // 维度错误 → 抛出异常
     const invalidEmbedding = new Array(128).fill(0.5);
-    expect(() => {
-      store.write({
-        memoryType: MemoryType.Episodic,
-        content: {},
-        summary: "非法 embedding",
-        agentType: AgentType.Code,
-        creatorId: "a",
-        embedding: invalidEmbedding,
-      });
-    }).toThrow(/embedding 维度不匹配/i);
+    await expect(store.write({
+      kind: "TaskLog",
+      content_blob: {},
+      summary: "非法 embedding",
+      semantic_gist: "非法 embedding",
+      source: { agentType: AgentType.Code, taskId: "" },
+      embedding: invalidEmbedding,
+    })).rejects.toThrow(/embedding 维度不匹配/i);
   });
 
-  it("M3: writePending() 也校验 embedding 维度", () => {
+  it("M3: writePending() 也校验 embedding 维度", async () => {
     const invalidEmbedding = new Array(200).fill(0.3);
     expect(() => {
       store.writePending({
-        memoryType: MemoryType.Episodic,
-        content: {},
+        kind: "TaskLog",
+        content_blob: {},
         summary: "非法 embedding",
-        agentType: AgentType.Code,
-        creatorId: "a",
+      semantic_gist: "非法 embedding",
+        source: { agentType: AgentType.Code, taskId: "" },
         embedding: invalidEmbedding,
       });
     }).toThrow(/embedding 维度不匹配/i);

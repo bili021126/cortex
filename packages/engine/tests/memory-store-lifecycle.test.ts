@@ -22,7 +22,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority } from "@cortex/shared";
 import { MemoryStore, PipelineObserver } from "@cortex/engine";
 
 describe("MemoryStore 生命周期状态机", () => {
@@ -44,17 +44,17 @@ describe("MemoryStore 生命周期状态机", () => {
     expect(db).toBeTruthy();
 
     // Act: 通过 write() 间接调用 _safeDbRun
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { key: "safe_db_run_ok" },
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { key: "safe_db_run_ok" },
       summary: "_safeDbRun 正常测试",
-      agentType: AgentType.Code,
-      creatorId: "test",
-    });
+      semantic_gist: "_safeDbRun 正常测试",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // Assert: 写入成功
     expect(id).toMatch(/^mem-/);
-    const results = store.read({ keywords: ["safe_db_run"] });
+    const results = await store.read({ keywords: ["safe_db_run"] });
     expect(results).toHaveLength(1);
 
     await store.close();
@@ -82,13 +82,13 @@ describe("MemoryStore 生命周期状态机", () => {
 
     // Act: write 应抛异常
     try {
-      store.write({
-        memoryType: MemoryType.Episodic,
-        content: { test: true },
+      await store.write({
+        kind: "TaskLog",
+        content_blob: { test: true },
         summary: "DB 失败事件测试",
-        agentType: AgentType.Code,
-        creatorId: "test",
-      });
+        semantic_gist: "DB 失败事件测试",
+        content_hash: "",
+        source: { agentType: AgentType.Code, taskId: "" }});
     } catch {}
 
     // Assert: 应有 memory.db_write_failed 事件
@@ -114,15 +114,13 @@ describe("MemoryStore 生命周期状态机", () => {
     };
 
     // Act & Assert: 必须抛出
-    expect(() => {
-      store.write({
-        memoryType: MemoryType.Episodic,
-        content: {},
-        summary: "传播测试",
-        agentType: AgentType.Code,
-        creatorId: "a",
-      });
-    }).toThrow("PERSIST_FAILURE");
+    await expect(store.write({
+      kind: "TaskLog",
+      content_blob: {},
+      summary: "传播测试",
+      semantic_gist: "传播测试",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }})).rejects.toThrow("PERSIST_FAILURE");
 
     await store.close();
   });
@@ -136,13 +134,13 @@ describe("MemoryStore 生命周期状态机", () => {
     expect((store as any)._persistence.lifecycle).toBe("active");
 
     // 写入一条触发 flush 队列
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "生命周期",
-      agentType: AgentType.Code,
-      creatorId: "a",
-    });
+      semantic_gist: "生命周期",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // Act
     await store.close();
@@ -170,13 +168,13 @@ describe("MemoryStore 生命周期状态机", () => {
     await store.init(":memory:");
 
     // 写入记忆触发 _scheduleFlush（启动 200ms 定时器）
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "触发定时器",
-      agentType: AgentType.Code,
-      creatorId: "a",
-    });
+      semantic_gist: "触发定时器",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 应存在定时器
     expect((store as any)._persistence._flushTimer).not.toBeNull();
@@ -200,13 +198,13 @@ describe("MemoryStore 生命周期状态机", () => {
 
     // 写入多条
     for (let i = 0; i < 5; i++) {
-      store2.write({
-        memoryType: MemoryType.Episodic,
-        content: { idx: i },
+      await store2.write({
+        kind: "TaskLog",
+        content_blob: { idx: i },
         summary: `记忆 ${i}`,
-        agentType: AgentType.Code,
-        creatorId: "a",
-      });
+        semantic_gist: `记忆 ${i}`,
+        content_hash: "",
+        source: { agentType: AgentType.Code, taskId: "" }});
     }
 
     // 手动 flush 确保落盘（close 前）
@@ -218,7 +216,7 @@ describe("MemoryStore 生命周期状态机", () => {
     // 重新打开验证数据完整性
     const store3 = new MemoryStore(observer);
     await store3.init(dbPath);
-    const results = store3.read({ queryMode: 'hca' });
+    const results = await store3.read({}, "HCA");
     expect(results.length).toBeGreaterThanOrEqual(5);
     await store3.close();
 

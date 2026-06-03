@@ -1,94 +1,96 @@
 // ============================================================
-// @cortex/shared — 记忆系统类型域
+// @cortex/shared — 记忆系统类型域 v3
+//
+// v3 重构：字段四层切割（身份/认知/生命周期/工程）
+//       + HCA/CSA 检索模式分离
+//       + content_hash 正式化（不再走 as any 走私）
+//       + summary 仅展示，semantic_gist 专供 embedding
+//       + kind 替代 memoryType/subType
+//       + agentType+taskId 合并为 source
 // ============================================================
 
 import type { AgentType } from "./agent.js";
 
-// ─── 记忆系统（兼容议题四 Schema） ────────────────────────
+// ─── v3 核心类型 ──────────────────────────────────────────
 
-export enum MemoryType {
-  Episodic = "EPISODIC",
-  Conceptual = "CONCEPTUAL",
-  Knowledge = "KNOWLEDGE",
-  Skill = "SKILL",
+/** 记忆认知类别 */
+export type MemoryKind = "TaskLog" | "Insight" | "Skill";
+
+/** 语义生命周期 */
+export type SemanticState = "Active" | "Archived" | "Obliterated";
+
+/** 检索模式：HCA=广度浅读（MetaAgent 规划），CSA=深度窄读（Agent 执行） */
+export type ReadMode = "HCA" | "CSA";
+
+/** 记忆来源锚点 */
+export interface MemorySource {
+  agentType: AgentType;
+  taskId: string;
 }
 
-export enum MemoryState {
-  Active = "ACTIVE",
-  Pending = "PENDING",
-  Archived = "ARCHIVED",
-  Frozen = "FROZEN",
-  Obliterated = "OBLITERATED",
-}
-
-/**
- * MemorySubType —— 记忆子类型，区分意图（规划阶段的思考）与事实（执行后的产出）。
- *
- * P0-六层防御：意图/事实分离是记忆-现实一致性的第一道防线。
- * 意图记忆在规划阶段写入，事实记忆在执行完成后写入，
- * 二者在检索中可独立过滤，避免"想做的事"和"做成的事"混淆。
- */
-export enum MemorySubType {
-  Intent = "INTENT",
-  Fact = "FACT",
-}
+// ─── MemoryEntry v3 ─────────────────────────────────────
 
 export interface MemoryEntry {
+  // §1 身份层（写入后永不变）
   id: string;
-  memoryType: MemoryType;
-  state: MemoryState;
-  /** P0-六层防御：意图/事实子类型分离 */
-  subType?: MemorySubType;
-  content: Record<string, unknown>;
+  source: MemorySource;
+
+  // §2 认知层（自迭代策略操作的对象）
+  kind: MemoryKind;
   summary: string;
-  agentType: AgentType; // v2.0：替代 orientation_source
-  creatorId: string;
-  createdAt: number;
-  lastAccessedAt: number;
-  accessCount: number;
+  /** LLM 萃取的语义精华，专供 embedding 生成。<=200 字 */
+  semantic_gist: string;
+  /** 原始完整 JSON 输出，不截断 */
+  content_blob: Record<string, unknown>;
+
+  // §3 生命周期层
+  semantic_state: SemanticState;
   weight: number;
-  projectFingerprint?: string;
-  metadata?: Record<string, unknown>;
-  isPrivate: boolean;
-  /** 语义嵌入向量（384d Float32，异步生成，NULL 时跳过向量粗召） */
+  accessCount: number;
+  lastAccessedAt: number;
+  createdAt: number;
+
+  // §4 工程层（不参与检索语义）
   embedding?: number[];
+  content_hash: string;
+  /** Unix 毫秒时间戳，之后可湮灭。0 或 undefined = 永不过期 */
+  expires_at?: number;
 }
 
-/**
- * MemoryWriteInput —— 记忆写入构造参数（id/createdAt/lastAccessedAt 由 MemoryStore 自动生成）。
- *
- * @migrated-from engine/src/memory-store.ts (P0 — 艾尔海森类型迁移计划)
- * @usedBy  engine/src/memory-store.ts, engine/src/memory/storage.ts, engine/src/memory/pipeline.ts
- * @since   v2.1 迁移至 shared，所有需要写入记忆的包共用此类型
- */
+// ─── MemoryWriteInput v3 ────────────────────────────────
+
 export interface MemoryWriteInput {
-  memoryType: MemoryType;
-  /** P0-六层防御：意图/事实子类型分离 */
-  subType?: MemorySubType;
-  content: Record<string, unknown>;
+  // §1 身份
+  source: MemorySource;
+
+  // §2 认知
+  kind: MemoryKind;
   summary: string;
-  agentType: AgentType;
-  creatorId: string;
+  semantic_gist: string;
+  content_blob: Record<string, unknown>;
+
+  // §3 生命周期（可选，MemoryStore 填默认值）
   weight?: number;
   createdAt?: number;
-  projectFingerprint?: string;
-  metadata?: Record<string, unknown>;
-  isPrivate?: boolean;
-  /** 语义嵌入向量（384d number[]），异步生成后传入 */
+
+  // §4 工程
   embedding?: number[];
+  /** SHA256 内容哈希，store 内部自动计算，外部可选提供 */
+  content_hash?: string;
+  expires_at?: number;
 }
 
+// ─── ReadMode ──────────────────────────────────────────
+
+// ─── LinkType ────────────────────────────────────────────
+// link_type 精简：移除非实践验证的值。ProducedBy/DerivedFrom
+// 是主力，ConfirmedUseful/ConfirmedNoise 是 FSA 反馈闭环所需。
+// 其他值在 Core-1 未产生实际链路，后续按需恢复。
+
 export enum LinkType {
-  AccessedDuring = "ACCESSED_DURING",
   ProducedBy = "PRODUCED_BY",
   DerivedFrom = "DERIVED_FROM",
-  DependsOn = "DEPENDS_ON",
-  RefactoredFrom = "REFACTORED_FROM",
-  CitedInCommittee = "CITED_IN_COMMITTEE",
-  CascadeTo = "CASCADE_TO",
-  /** FSA 反馈：检索到的记忆在决策中被实际引用 */
   ConfirmedUseful = "CONFIRMED_USEFUL",
-  /** FSA 反馈：检索到的记忆在决策中未被引用，标记为噪音候选 */
   ConfirmedNoise = "CONFIRMED_NOISE",
 }
 
@@ -98,36 +100,103 @@ export interface MemoryLink {
   targetId: string;
   linkType: LinkType;
   weight: number;
-  targetState: MemoryState;
+  targetState: SemanticState;
   lastAccessedAt: number;
 }
 
+// ─── MemoryQuery v3 ─────────────────────────────────────
+// 检索策略（"找什么"）与检索模式（"怎么读"）分离。
+// queryMode / trackAccess / subTypes 已移除，
+// HCA/CSA 由 read(query, mode) 的 mode 参数控制。
+
 export interface MemoryQuery {
+  /** 按认知类别过滤。不指定则返回全部 */
+  kind?: MemoryKind;
+  /** 关键词匹配（中文 bigram + 拉丁词） */
   keywords?: string[];
-  memoryTypes?: MemoryType[];
-  states?: MemoryState[];
-  /** P0-六层防御：按子类型过滤（INTENT / FACT） */
-  subTypes?: MemorySubType[];
-  timeRange?: { start: number; end: number };
-  agentTypes?: AgentType[];
-  includePrivate?: boolean;
-  limit?: number;
-  /** 稀疏注意力模式：hca=广度浅读（MetaAgent 规划），csa=深度窄读（Agent 执行）。默认 csa。 */
-  queryMode?: 'hca' | 'csa';
-  /** HCA 模式（MetaAgent 规划扫描）：false 时不累加 accessCount/不刷新 lastAccessedAt。默认 true（CSA 模式）。 */
-  trackAccess?: boolean;
-  /** BFS 图检索深度（沿关联边遍历）。0 = 仅关键词匹配，不展开。默认 2。 */
-  bfsDepth?: number;
-  /** BFS 最大展开节点数，防止图爆炸。默认 20。 */
-  bfsMaxNodes?: number;
-  /** BFS 遍历方向：'both' = 出边+入边双向（默认，兼容旧行为），'outbound' = 仅出边（抗噪音）。 */
-  bfsDirection?: 'both' | 'outbound';
-  /** BFS 遍历时过滤关联边类型。未指定时遍历所有边。 */
-  linkTypes?: LinkType[];
-  /** 按 metadata 字段精确过滤记忆条目。多个键值间为 AND 关系。 */
-  metadataFilter?: Record<string, unknown>;
-  /** 向量粗召模式：提供 query embedding 以启用语义召回。384d number[]。 */
+  /** 语义向量粗召（384d） */
   queryEmbedding?: number[];
-  /** 向量粗召 Top-K 数量（默认 50） */
+  /** 向量粗召 Top-K */
   vectorTopK?: number;
+  /** 时间范围过滤 */
+  timeRange?: { start: number; end: number };
+  /** 按 source.agentType 过滤 */
+  agentTypes?: AgentType[];
+  /** 结果数量限制 */
+  limit?: number;
+  /** BFS 图检索深度。0 = 仅关键词，不展开。默认 2 */
+  bfsDepth?: number;
+  /** BFS 最大展开节点数 */
+  bfsMaxNodes?: number;
+  /** BFS 遍历方向 */
+  bfsDirection?: "both" | "outbound";
+  /** BFS 遍历时过滤边类型 */
+  linkTypes?: LinkType[];
+  /** 按 metadata（content_blob 内字段）精确过滤 */
+  metadataFilter?: Record<string, unknown>;
+}
+
+// ─── IMemoryStore ──────────────────────────────────────
+
+export interface IMemoryStore {
+  readonly isPersisted: boolean;
+  readonly size: number;
+  init(dbPath: string): Promise<void>;
+  write(input: MemoryWriteInput): Promise<string>;
+  /** @param mode HCA=广度浅读不追踪热度，CSA=深度窄读追踪热度 */
+  read(query: MemoryQuery, mode?: ReadMode): Promise<MemoryEntry[]>;
+  link(sourceId: string, targetId: string, linkType: LinkType): MemoryLink | null;
+  getLinks(sourceId: string): MemoryLink[];
+  has(memoryId: string): boolean;
+  cas(memoryId: string, expected: SemanticState, newState: SemanticState): boolean;
+  archive(memoryId: string): boolean;
+  obliterate(memoryId: string): boolean;
+  writePending(input: MemoryWriteInput): string;
+  commitMemory(memoryId: string): boolean;
+  getPending(): MemoryEntry[];
+  hasPending(): boolean;
+  peek(memoryId: string): Readonly<MemoryEntry> | undefined;
+  flush(): Promise<void>;
+  close(): Promise<void>;
+  maintain(): MaintainReport;
+  setPreWriteHook(hook: (input: MemoryWriteInput) => MemoryWriteInput): void;
+}
+
+export interface MaintainReport {
+  archived: number;
+  obliterated: number;
+  orphanedLinks: number;
+  skipped?: string;
+}
+
+// ─── v2 兼容层（@deprecated，迁移期间保留）──────────────
+
+/**
+ * @deprecated 使用 MemoryKind 替代。v2 兼容保留，consumer 迁移完成后移除。
+ */
+export enum MemoryType {
+  Episodic = "EPISODIC",
+  Conceptual = "CONCEPTUAL",
+  Knowledge = "KNOWLEDGE",
+  Skill = "SKILL",
+}
+
+/**
+ * @deprecated 使用 SemanticState 替代。v2 兼容保留。
+ */
+export enum MemoryState {
+  Active = "ACTIVE",
+  Pending = "PENDING",
+  Archived = "ARCHIVED",
+  Frozen = "FROZEN",
+  Obliterated = "OBLITERATED",
+}
+
+/**
+ * @deprecated 意图/事实区分由 pipeline 内部处理，不再作为检索维度。
+ * v2 兼容保留。
+ */
+export enum MemorySubType {
+  Intent = "INTENT",
+  Fact = "FACT",
 }

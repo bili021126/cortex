@@ -23,7 +23,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MemoryType, MemoryState, AgentType, LinkType, PipelinePriority } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority } from "@cortex/shared";
 import { MemoryStore, PipelineObserver } from "@cortex/engine";
 
 describe("MemoryStore 写路径 DB 失败回滚", () => {
@@ -41,16 +41,16 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     // 初始化持久化
     await store.init(":memory:");
 
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { task: "test_write" },
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { task: "test_write" },
       summary: "正常写入测试",
-      agentType: AgentType.Code,
-      creatorId: "test-agent",
-    });
+      semantic_gist: "正常写入测试",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     expect(id).toMatch(/^mem-/);
-    const results = store.read({ keywords: ["正常写入"] });
+    const results = await store.read({ keywords: ["正常写入"] });
     expect(results).toHaveLength(1);
     expect(results[0].summary).toBe("正常写入测试");
 
@@ -72,18 +72,16 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     };
 
     // Act: 写入——应抛异常
-    expect(() => {
-      store.write({
-        memoryType: MemoryType.Episodic,
-        content: { task: "rollback_test" },
-        summary: "应被回滚的记忆",
-        agentType: AgentType.Code,
-        creatorId: "test-agent",
-      });
-    }).toThrow("SIMULATED_DISK_FULL");
+    await expect(store.write({
+      kind: "TaskLog",
+      content_blob: { task: "rollback_test" },
+      summary: "应被回滚的记忆",
+      semantic_gist: "应被回滚的记忆",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }})).rejects.toThrow("SIMULATED_DISK_FULL");
 
     // Assert: 内存中无残留
-    const results = store.read({ keywords: ["回滚"] });
+    const results = await store.read({ keywords: ["回滚"] });
     expect(results).toHaveLength(0);
 
     await store.close();
@@ -94,20 +92,20 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
   it("用例3: link() 正常建立关联边并可通过 getLinks() 获取", async () => {
     await store.init(":memory:");
 
-    const a = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const a = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "源记忆",
-      agentType: AgentType.Code,
-      creatorId: "x",
-    });
-    const b = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+      semantic_gist: "源记忆",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
+    const b = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "目标记忆",
-      agentType: AgentType.Review,
-      creatorId: "y",
-    });
+      semantic_gist: "目标记忆",
+      content_hash: "",
+      source: { agentType: AgentType.Review, taskId: "" }});
 
     // D5: link() 改为 3 参数签名
     const link = store.link(a, b, LinkType.ProducedBy);
@@ -122,20 +120,20 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
   it("用例4: link() — DB INSERT 失败，link 从数组回滚", async () => {
     await store.init(":memory:");
 
-    const a = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const a = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "源记忆",
-      agentType: AgentType.Code,
-      creatorId: "x",
-    });
-    const b = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+      semantic_gist: "源记忆",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
+    const b = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "目标记忆",
-      agentType: AgentType.Review,
-      creatorId: "y",
-    });
+      semantic_gist: "目标记忆",
+      content_hash: "",
+      source: { agentType: AgentType.Review, taskId: "" }});
 
     // 劫持 _db.prepare 让 links INSERT 抛异常
     const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
@@ -162,21 +160,21 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
   it("用例5: cas() — DB UPDATE 失败，state 回滚到 expected", async () => {
     await store.init(":memory:");
 
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "CAS 回滚测试",
-      agentType: AgentType.Code,
-      creatorId: "x",
-    });
+      semantic_gist: "CAS 回滚测试",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 确认初始状态
-    expect(store.peek(id)!.state).toBe(MemoryState.Active);
+    expect(store.peek(id)!.semantic_state).toBe("Active");
 
     // 劫持 _db.prepare 让 cas 的 UPDATE 抛异常
     const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
     (store as any)._persistence.db.prepare = (sql: string) => {
-      if (sql.includes("UPDATE memories SET state")) {
+      if (sql.includes("UPDATE memories SET semantic_state")) {
         throw new Error("SIMULATED_CAS_DB_FAIL");
       }
       return origPrepare(sql);
@@ -184,11 +182,11 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
 
     // Act: cas 应抛异常
     expect(() => {
-      store.cas(id, MemoryState.Active, MemoryState.Archived);
+      store.cas(id, "Active", "Archived");
     }).toThrow("SIMULATED_CAS_DB_FAIL");
 
     // Assert: state 回滚为 Active（expected 值）
-    expect(store.peek(id)!.state).toBe(MemoryState.Active);
+    expect(store.peek(id)!.semantic_state).toBe("Active");
 
     await store.close();
   });
@@ -198,22 +196,22 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
   it("用例6: obliterate() — DB UPDATE 失败，state 回滚到 previousState", async () => {
     await store.init(":memory:");
 
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "湮灭回滚测试",
-      agentType: AgentType.Code,
-      creatorId: "x",
-    });
+      semantic_gist: "湮灭回滚测试",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 先归档
     store.archive(id);
-    expect(store.peek(id)!.state).toBe(MemoryState.Archived);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
 
     // 劫持 _db.prepare 让 obliterate 的 UPDATE 抛异常
     const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
     (store as any)._persistence.db.prepare = (sql: string) => {
-      if (sql.includes("UPDATE memories SET state")) {
+      if (sql.includes("UPDATE memories SET semantic_state")) {
         throw new Error("SIMULATED_OBLITERATE_DB_FAIL");
       }
       return origPrepare(sql);
@@ -225,7 +223,7 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     }).toThrow("SIMULATED_OBLITERATE_DB_FAIL");
 
     // Assert: state 回滚为 Archived（previousState）
-    expect(store.peek(id)!.state).toBe(MemoryState.Archived);
+    expect(store.peek(id)!.semantic_state).toBe("Archived");
 
     await store.close();
   });
@@ -242,13 +240,13 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     await store2.init(dbPath);
 
     // 写入一条记忆触发 _scheduleFlush
-    store2.write({
-      memoryType: MemoryType.Episodic,
-      content: { x: 1 },
+    await store2.write({
+      kind: "TaskLog",
+      content_blob: { x: 1 },
       summary: "预关闭记忆",
-      agentType: AgentType.Code,
-      creatorId: "a",
-    });
+      semantic_gist: "预关闭记忆",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 关闭 store
     await store2.close();
@@ -271,13 +269,13 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
   it("用例8: close() closing 状态拒绝二次关闭但不拒绝已调用 close", async () => {
     await store.init(":memory:");
 
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: {},
+    await store.write({
+      kind: "TaskLog",
+      content_blob: {},
       summary: "关闭前记忆",
-      agentType: AgentType.Code,
-      creatorId: "a",
-    });
+      semantic_gist: "关闭前记忆",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 第一次 close
     await store.close();

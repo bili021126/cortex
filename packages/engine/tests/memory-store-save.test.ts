@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { AgentType, MemoryType, MemoryState, PipelinePriority } from "@cortex/shared";
+import { AgentType, PipelinePriority } from "@cortex/shared";
 import { MemoryStore, PipelineObserver } from "@cortex/engine";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -28,13 +28,13 @@ describe("MemoryStore._saveDb", () => {
     expect(store.isPersisted).toBe(true);
 
     // 写入一条记忆（触发 _saveDb）
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { key: "value", nested: { a: 1 } },
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { key: "value", nested: { a: 1 } },
       summary: "test persistence",
-      agentType: AgentType.Code,
-      creatorId: "test-agent",
-    });
+      semantic_gist: "test persistence",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 确认数据在内存中
     const entry = store.peek(id);
@@ -53,18 +53,18 @@ describe("MemoryStore._saveDb", () => {
     await store2.init(dbPath);
     const reloaded = store2.peek(id);
     expect(reloaded).toBeDefined();
-    expect(reloaded!.content).toEqual({ key: "value", nested: { a: 1 } });
+    expect(reloaded!.content_blob).toEqual({ key: "value", nested: { a: 1 } });
     store2.close();
   });
 
-  it("writes without persistence when init is not called (pure memory)", () => {
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { test: true },
+  it("writes without persistence when init is not called (pure memory)", async () => {
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { test: true },
       summary: "memory-only",
-      agentType: AgentType.Code,
-      creatorId: "test",
-    });
+      semantic_gist: "memory-only",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
     expect(store.isPersisted).toBe(false);
     expect(store.peek(id)).toBeDefined();
   });
@@ -77,13 +77,13 @@ describe("MemoryStore._saveDb", () => {
     });
 
     // 写入一条记忆，触发 _saveDb（正常路径，不会有 persist_failed）
-    store.write({
-      memoryType: MemoryType.Episodic,
-      content: { test: true },
+    await store.write({
+      kind: "TaskLog",
+      content_blob: { test: true },
       summary: "observer test",
-      agentType: AgentType.Code,
-      creatorId: "test",
-    });
+      semantic_gist: "observer test",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 正常写入不应触发 persist_failed
     const persistErrors = events.filter((e) => e.type === "memory.persist_failed");
@@ -93,38 +93,38 @@ describe("MemoryStore._saveDb", () => {
 });
 
 describe("MemoryStore._deserializeRow", () => {
-  it("handles normal JSON content correctly via write + read", () => {
+  it("handles normal JSON content correctly via write + read", async () => {
     const store = new MemoryStore();
 
     // 写带 JSON content 的记忆
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { message: "hello", count: 42 },
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { message: "hello", count: 42 },
       summary: "json test",
-      agentType: AgentType.Review,
-      creatorId: "tester",
-    });
+      semantic_gist: "json test",
+      content_hash: "",
+      source: { agentType: AgentType.Review, taskId: "" }});
 
     // 读回——不应崩溃
-    const results = store.read({ keywords: ["json"] });
+    const results = await store.read({ keywords: ["json"] });
     expect(results).toHaveLength(1);
-    expect(results[0].content).toEqual({ message: "hello", count: 42 });
+    expect(results[0].content_blob).toEqual({ message: "hello", count: 42 });
   });
 
-  it("handles content with special characters without crash", () => {
+  it("handles content with special characters without crash", async () => {
     const store = new MemoryStore();
 
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { text: "包含中文和符号 {}[]:\"", nested: { x: null } },
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { text: "包含中文和符号 {}[]:\"", nested: { x: null } },
       summary: "special chars",
-      agentType: AgentType.Analysis,
-      creatorId: "tester",
-    });
+      semantic_gist: "special chars",
+      content_hash: "",
+      source: { agentType: AgentType.Analysis, taskId: "" }});
 
-    const results = store.read({ keywords: ["special"] });
+    const results = await store.read({ keywords: ["special"] });
     expect(results).toHaveLength(1);
-    expect(results[0].content.text).toContain("中文");
+    expect(results[0].content_blob.text).toContain("中文");
   });
 
   it("persists and reloads content with metadata correctly", async () => {
@@ -132,14 +132,13 @@ describe("MemoryStore._deserializeRow", () => {
     const store = new MemoryStore();
     await store.init(dbPath);
 
-    const id = store.write({
-      memoryType: MemoryType.Episodic,
-      content: { data: "persisted" },
+    const id = await store.write({
+      kind: "TaskLog",
+      content_blob: { data: "persisted" },
       summary: "with metadata",
-      agentType: AgentType.Code,
-      creatorId: "test",
-      metadata: { version: 1, env: "test" },
-    });
+      semantic_gist: "with metadata",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }});
 
     // 等待防抖刷盘完成后，从同一文件重新加载
     await store.flush();
@@ -148,8 +147,7 @@ describe("MemoryStore._deserializeRow", () => {
     await store2.init(dbPath);
     const reloaded = store2.peek(id);
     expect(reloaded).toBeDefined();
-    expect(reloaded!.metadata).toEqual({ version: 1, env: "test" });
-    expect(reloaded!.content).toEqual({ data: "persisted" });
+    expect(reloaded!.content_blob).toEqual({ data: "persisted" });
 
     store.close();
     store2.close();
