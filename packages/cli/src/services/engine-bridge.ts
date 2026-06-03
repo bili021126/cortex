@@ -11,22 +11,23 @@
  * @see CLI 设计文档 §5.2（单次模式资源管理策略）
  */
 
+import * as path from "node:path";
+
 import {
-  Scheduler, TaskBoard, AgentPool, PipelineObserver, ConfirmGate,
-  CLIAdapter, MemoryStore, bootstrapEngine, StrategistAgent,
+  Scheduler, TaskBoard, PipelineObserver, ConfirmGate,
+  CLIAdapter, MemoryStore, bootstrapEngine, StrategistAgent, Toolkit,
+  type IScheduler, type IAgentPool, type ITaskBoard, type IMemoryStore, type EngineConfig, type BootstrapEngineResult,
 } from "@cortex/engine";
-import type { EngineConfig, BootstrapEngineResult } from "@cortex/engine";
-import type { AgentConfig } from "@cortex/shared";
-import { AgentStatus } from "@cortex/shared";
+import { AgentStatus, type AgentConfig, type LlmMessage, type AgentType, type ICortexApi, type ChatOptions, type IConfirmGate, type IPipelineObserver } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import { Toolkit } from "@cortex/engine";
+
 import type { ConfigManager } from "./config-manager.js";
 
 export interface BridgeContext {
-  scheduler?: Scheduler;
-  memoryStore?: MemoryStore;
-  taskBoard?: TaskBoard;
-  pipelineObserver?: PipelineObserver;
+  scheduler?: IScheduler;
+  memoryStore?: IMemoryStore;
+  taskBoard?: ITaskBoard;
+  pipelineObserver?: IPipelineObserver;
   confirmGate?: ConfirmGate;
   cliAdapter?: CLIAdapter;
   initialized: boolean;
@@ -34,16 +35,18 @@ export interface BridgeContext {
   bootstrapped?: boolean;
   /** bootstrapEngine 完整结果 */
   bootstrapResult?: BootstrapEngineResult;
+  /** 昔涟独立记忆数据库——仅 talk 模式使用，与主 MemoryStore 物理隔离 */
+  talkMemoryStore?: MemoryStore;
 }
 
 /**
  * 最小 AgentPool 兼容包装。
  * 原型阶段使用简单的内存存储，模拟 AgentPool 的接口。
  */
-export class MiniAgentPool {
+export class MiniAgentPool implements IAgentPool {
   private configs = new Map<string, AgentConfig>();
   private instances = new Map<string, Set<string>>();
-  private statuses = new Map<string, string>();
+  private statuses = new Map<string, AgentStatus>();
 
   register(config: AgentConfig): void {
     this.configs.set(config.type, config);
@@ -52,29 +55,34 @@ export class MiniAgentPool {
     }
   }
 
-  spawn(agentType: string, instanceId: string): boolean {
+  /** MiniAgentPool 无 observer 管道 */
+  setObserver(_observer: any): void {
+    // no-op: MiniAgentPool 不参与事件总线
+  }
+
+  spawn(agentType: AgentType, instanceId: string): boolean {
     const config = this.configs.get(agentType);
     if (!config) return false;
     const instances = this.instances.get(agentType)!;
-    if (instances.size >= config.maxInstances) return false;
+    if (instances.size >= (config.maxInstances ?? 1)) return false;
     instances.add(instanceId);
     this.statuses.set(instanceId, AgentStatus.Created);
     return true;
   }
 
-  setStatus(instanceId: string, status: string): boolean {
+  setStatus(instanceId: string, status: AgentStatus): boolean {
     if (!this.statuses.has(instanceId)) return false;
     this.statuses.set(instanceId, status);
     return true;
   }
 
-  getStatuses(agentType: string): string[] {
+  getStatuses(agentType: AgentType): AgentStatus[] {
     const instances = this.instances.get(agentType);
     if (!instances) return [];
     return [...instances].map((id) => this.statuses.get(id) ?? AgentStatus.Created);
   }
 
-  getStatus(instanceId: string): string | undefined {
+  getStatus(instanceId: string): AgentStatus | undefined {
     return this.statuses.get(instanceId);
   }
 
@@ -84,7 +92,15 @@ export class MiniAgentPool {
     return [...instances].some((id) => this.statuses.get(id) === AgentStatus.Awake);
   }
 
-  destroy(agentType: string, instanceId: string): void {
+  canSpawn(agentType: string): boolean {
+    const config = this.configs.get(agentType as AgentType);
+    if (!config) return false;
+    const instances = this.instances.get(agentType);
+    if (!instances) return true;
+    return instances.size < (config.maxInstances ?? 1);
+  }
+
+  destroy(agentType: AgentType, instanceId: string): void {
     const instances = this.instances.get(agentType);
     instances?.delete(instanceId);
     this.statuses.delete(instanceId);
@@ -97,7 +113,7 @@ export class MiniAgentPool {
 
 /** Bootstrap 配置——使用 bootstrapEngine 的必需参数 */
 export interface BootstrapConfig {
-  llm: LlmAdapter;
+  llms: Map<string, LlmAdapter>;
   toolkit: Toolkit;
   projectRoot: string;
   dbPath?: string;
@@ -112,7 +128,7 @@ export interface BootstrapConfig {
  * 2. 配置驱动模式（ensureBootstrapped）—— 使用 bootstrapEngine，
  *    从 cortex-agents.json 加载所有 Agent 定义并注册
  */
-export class EngineBridge {
+export class EngineBridge implements ICortexApi {
   private ctx: BridgeContext = { initialized: false };
   private _pool: MiniAgentPool = new MiniAgentPool();
   private config: ConfigManager;
@@ -141,7 +157,12 @@ export class EngineBridge {
    * 此方法完全替代硬编码 Agent 创建流程。
    * 必须先调用 setBootstrapConfig() 设置 LlmAdapter 等参数。
    */
-  async ensureBootstrapped(): Promise<BridgeContext> {
+  async ensureBootstrapped(): Promise<void> {
+    await this._ensureBootstrapped();
+  }
+
+  /** 兼容旧调用方——返回 BridgeContext 的具体实现 */
+  private async _ensureBootstrapped(): Promise<BridgeContext> {
     if (this.ctx.bootstrapped) return this.ctx;
 
     if (!this._bootstrapConfig) {
@@ -150,11 +171,11 @@ export class EngineBridge {
       );
     }
 
-    const { llm, toolkit, projectRoot, dbPath, engineConfig } =
+    const { llms, toolkit, projectRoot, dbPath, engineConfig } =
       this._bootstrapConfig;
 
     const result = await bootstrapEngine(projectRoot, {
-      llm,
+      llms,
       toolkit,
       dbPath: dbPath ?? this.dbPath,
       engineConfig: engineConfig ?? this.engineConfig,
@@ -174,6 +195,14 @@ export class EngineBridge {
     };
 
     return this.ctx;
+  }
+
+  /**
+   * 获取 Bootstrap 上下文（EngineBridge 专有，不在 ICortexApi 契约中）。
+   * 供 roundtable / agent / task 等命令工厂在需要访问 bootstrapResult 时使用。
+   */
+  async ensureBootstrappedContext(): Promise<BridgeContext> {
+    return await this._ensureBootstrapped();
   }
 
   /** 初始化全部引擎组件（轻量模式，惰性，仅首次调用时创建） */
@@ -205,7 +234,7 @@ export class EngineBridge {
     // MiniAgentPool 满足接口要求。
     // 配置驱动模式请使用 ensureBootstrapped()，它会用真实 AgentPool
     // 并从 cortex-agents.json 加载所有 Agent。
-    const scheduler = new Scheduler(board, this._pool as any, observer, gate, undefined, this.engineConfig);
+    const scheduler = new Scheduler(board, this._pool, observer, undefined, this.engineConfig);
 
     this.ctx = {
       scheduler,
@@ -220,40 +249,148 @@ export class EngineBridge {
     return this.ctx;
   }
 
+  /** 是否已初始化（ICortexApi.ready） */
+  get ready(): boolean {
+    return this.ctx.initialized;
+  }
+
+  /** 是否已 Bootstrap（ICortexApi.bootstrapped） */
+  get bootstrapped(): boolean {
+    return this.ctx.bootstrapped ?? false;
+  }
+
+  /** 确保引擎就绪（轻量模式，ICortexApi） */
+  async ensureReady(): Promise<void> {
+    await this.ensureInitialized();
+  }
+
+  /**
+   * 统一对话接口（ICortexApi.chat）。
+   * 等价于 directChat——不经调度器，直连 LLM。
+   */
+  async chat(systemPrompt: string, messages: LlmMessage[], opts?: ChatOptions): Promise<string> {
+    return await this.directChat(systemPrompt, messages, opts);
+  }
+
+  /** 获取闲聊模型名（ICortexApi） */
+  getChatModelName(): string {
+    return this.llm?.chatModel ?? "";
+  }
+
+  /** 获取推理模型名（ICortexApi） */
+  getReasonerModelName(): string {
+    return this.llm?.reasonerModel ?? "";
+  }
+
+  /** 提交任务节点到 TaskBoard（ICortexApi） */
+  async submitTask(node: import("@cortex/shared").TaskNode): Promise<void> {
+    const ctx = await (this.ctx.bootstrapped ? this._ensureBootstrapped() : this.ensureInitialized());
+    if (ctx.taskBoard) {
+      ctx.taskBoard.addNode(node as any);
+    }
+  }
+
+  /** 执行 TaskBoard 上所有待处理节点（ICortexApi） */
+  async executeAll(): Promise<import("@cortex/shared").ExecutionReport> {
+    const scheduler = await this.getScheduler();
+    return await scheduler.executeAll();
+  }
+
+  /** 读取 Talk 专属记忆（ICortexApi） */
+  async readTalkMemory(query: import("@cortex/shared").MemoryQuery): Promise<import("@cortex/shared").MemoryEntry[]> {
+    const store = this.ctx.talkMemoryStore;
+    if (!store) return [];
+    return await store.read(query);
+  }
+
+  /** 写入 Talk 专属记忆（ICortexApi） */
+  async writeTalkMemory(entry: import("@cortex/shared").MemoryWriteInput): Promise<void> {
+    const store = this.ctx.talkMemoryStore;
+    if (!store) return;
+    await store.write(entry);
+  }
+
+  /** 只读访问主记忆库（ICortexApi，修复原 (bridge as any).ctx hack） */
+  async readMainMemory(query: import("@cortex/shared").MemoryQuery): Promise<import("@cortex/shared").MemoryEntry[]> {
+    const store = this.ctx.memoryStore;
+    if (!store) return [];
+    return await store.read(query);
+  }
+
   /** 是否已设置 Bootstrap 配置（用于按需选择初始化模式） */
   get isBootstrapConfigured(): boolean {
     return this._bootstrapConfig !== undefined;
   }
 
+  /** LLM 适配器（从 llms 映射中取昔涟适配器或第一个可用适配器，用于 directChat/talk） */
+  private get llm(): LlmAdapter | undefined {
+    const map = this._bootstrapConfig?.llms;
+    if (!map || map.size === 0) return undefined;
+    // 优先取昔涟适配器（talk 模式主要使用者）
+    return map.get("DEEPSEEK_CYRENE") ?? map.values().next().value;
+  }
+
+  /**
+   * 直接调用 LLM（绕过调度器，用于闲聊等不需要 Agent 的对话模式）。
+   * 支持多轮对话——传入完整的 messages 数组（不含 system），
+   * system 提示词单独传入并自动插入消息列表头部。
+   * @param systemPrompt 系统提示词
+   * @param messages 对话历史（user/assistant 交替，不含 system）
+   * @param opts.model 可选覆盖模型名（默认使用 chatModel）
+   * @param opts.reasoningEffort 推理强度（"high" | "max"），仅 reasoner 模型有效
+   * @returns LLM 返回的文本内容
+   */
+  async directChat(
+    systemPrompt: string,
+    messages: LlmMessage[],
+    opts?: { model?: string; reasoningEffort?: "high" | "max" },
+  ): Promise<string> {
+    const l = this.llm;
+    if (!l) throw new Error("LLM 未配置——请设置 DEEPSEEK_API_KEY 环境变量");
+    const model = opts?.model ?? l.chatModel;
+    const resp = await l.chat(
+      model,
+      [{ role: "system", content: systemPrompt }, ...messages],
+      undefined,
+      opts?.reasoningEffort,
+    );
+    return resp.content ?? "";
+  }
+
   /** 获取 AgentPool（轻量模式使用 MiniAgentPool，配置驱动模式使用真实 AgentPool） */
-  get agentPool(): MiniAgentPool | AgentPool {
+  get agentPool(): IAgentPool | MiniAgentPool {
     if (this.ctx.bootstrapped && this.ctx.bootstrapResult) {
       return this.ctx.bootstrapResult.pool;
     }
     return this._pool;
   }
 
-  async getMemoryStore(): Promise<MemoryStore> {
+  /** ICortexApi.getAgentPool() —— 返回 AgentPool 实例（管理命令用） */
+  getAgentPool(): unknown {
+    return this.agentPool;
+  }
+
+  async getMemoryStore(): Promise<IMemoryStore> {
     const ctx = await this.ensureInitialized();
     return ctx.memoryStore!;
   }
 
-  async getScheduler(): Promise<Scheduler> {
+  async getScheduler(): Promise<IScheduler> {
     const ctx = await this.ensureInitialized();
     return ctx.scheduler!;
   }
 
-  async getTaskBoard(): Promise<TaskBoard> {
+  async getTaskBoard(): Promise<ITaskBoard> {
     const ctx = await this.ensureInitialized();
     return ctx.taskBoard!;
   }
 
-  async getObserver(): Promise<PipelineObserver> {
+  async getObserver(): Promise<IPipelineObserver> {
     const ctx = await this.ensureInitialized();
     return ctx.pipelineObserver!;
   }
 
-  async getConfirmGate(): Promise<ConfirmGate> {
+  async getConfirmGate(): Promise<IConfirmGate> {
     const ctx = await this.ensureInitialized();
     return ctx.confirmGate!;
   }
@@ -275,11 +412,41 @@ export class EngineBridge {
     return undefined;
   }
 
+  /**
+   * 初始化昔涟的独立记忆数据库（仅在 talk 模式下调用一次）。
+   * 数据库文件：.cortex/cyrene-memory.db（已 gitignored）。
+   * 与主 MemoryStore（.cortex/memory.db）物理隔离——昔涟的记忆
+   * 不参与 Agent 调度、宪法治理、roundtable 辩论。
+   */
+  async ensureTalkMemory(): Promise<void> {
+    await this._ensureTalkMemory();
+  }
+
+  /** 兼容旧调用方——返回 MemoryStore 的具体实现 */
+  async _ensureTalkMemory(): Promise<MemoryStore> {
+    if (this.ctx.talkMemoryStore) return this.ctx.talkMemoryStore;
+    const dbPath = path.join(process.cwd(), ".cortex", "cyrene-memory.db");
+    // 昔涟的记忆不需要 PipelineObserver——她不参与事件总线
+    const talkStore = new MemoryStore();
+    await talkStore.init(dbPath);
+    this.ctx.talkMemoryStore = talkStore;
+    return talkStore;
+  }
+
+  /** 暴露 talkMemoryStore 给 repl.ts（懒加载，不强制初始化） */
+  private get talkMemoryStore(): MemoryStore | undefined {
+    return this.ctx.talkMemoryStore;
+  }
+
   async shutdown(): Promise<void> {
     if (!this.ctx.initialized) return;
     if (this.ctx.memoryStore) {
       await this.ctx.memoryStore.flush();
       await this.ctx.memoryStore.close();
+    }
+    if (this.ctx.talkMemoryStore) {
+      await this.ctx.talkMemoryStore.flush();
+      await this.ctx.talkMemoryStore.close();
     }
     if (this.ctx.cliAdapter) {
       this.ctx.cliAdapter.close();

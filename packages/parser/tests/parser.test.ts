@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * parser.test.ts — @cortex/parser 单元测试
  *

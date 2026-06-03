@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/factory — smoke test
  */

@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * pm.test.ts — @cortex/pm 冒烟测试
  *

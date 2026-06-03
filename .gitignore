@@ -2,6 +2,9 @@
 .env
 *.env
 
+# pm 加密 vault（AES-256-GCM 加密存储）
+.pm-data/
+
 # 依赖
 node_modules/
 
@@ -9,6 +12,7 @@ node_modules/
 dist/
 *.tsbuildinfo
 cortex-cli.mjs
+coverage/
 # 测试构建产物混入（dist/ 已覆盖，显式标注防回归）
 packages/shared/dist/__tests__/
 

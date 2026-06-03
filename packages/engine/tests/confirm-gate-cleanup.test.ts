@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * ConfirmGate 测试 —— 修复 M1：handleTimeout L2/L3 回收 pending
  *

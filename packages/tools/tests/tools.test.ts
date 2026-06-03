@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * tools.test.ts — @cortex/tools 冒烟测试
  *

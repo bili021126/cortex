@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * ReAct 循环规范测试 —— 修复 D2：react-helper.ts 已删除，仅保留 components/react-loop.ts
  *

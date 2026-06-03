@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * StrategistAgent 测试 —— 修复 D1：状态管理复用 PoolAwareState
  *

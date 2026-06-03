@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * data.test.ts — @cortex/data 单元测试
  *

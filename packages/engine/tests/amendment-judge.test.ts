@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * amendment-judge 评判引擎单元测试。
  *

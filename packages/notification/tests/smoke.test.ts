@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/notification — smoke test
  */

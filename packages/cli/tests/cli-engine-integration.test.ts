@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * cli-engine-integration.test.ts — CLI↔Engine 独立闭环集成测试
  *
@@ -170,6 +171,23 @@ describe("A. EngineBridge 生命周期", () => {
       // 无 dbPath 时 memory 不初始化持久化层，但对象仍然可用
     } finally {
       await bridge.shutdown();
+    }
+  });
+
+  it("A7. getAgentPool 返回 AgentPool 实例（ICortexApi 契约）", async () => {
+    const { bridge, dbPath } = createBridge("pool-icortexapi.db");
+    try {
+      // 未初始化时返回 MiniAgentPool
+      const poolBefore = bridge.getAgentPool();
+      expect(poolBefore).toBeDefined();
+
+      await bridge.ensureInitialized();
+      // 初始化后仍可用
+      const poolAfter = bridge.getAgentPool();
+      expect(poolAfter).toBeDefined();
+    } finally {
+      await bridge.shutdown();
+      cleanupDir(path.dirname(dbPath));
     }
   });
 });
@@ -466,7 +484,7 @@ describe("D. cortex agent — AgentPool 集成", () => {
 
       const { createAgentHandler } = await import("@cortex/cli");
       const handler = createAgentHandler(bridge);
-      const result = await handler(["destroy", AgentType.Data], {}, ctx);
+      const result = await handler(["destroy", AgentType.Data], { id: "instance-1" }, ctx);
       assertValidResult(result);
       expect(result.output).toContain("回收");
     } finally {
