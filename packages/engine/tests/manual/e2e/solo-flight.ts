@@ -435,10 +435,13 @@ async function main() {
   const REASONER_MODEL = llmCfg.reasonerModel;
   const WORKSPACE = process.cwd();
 
-  // ── 工作目录：直接写入 monorepo 的 packages/skill-kit ──
-  const PROJECT_DIR = path.resolve(WORKSPACE, "packages", "skill-kit");
+  // ── 工作目录：专用实验目录，不与正式包冲突 ──
+  const PROJECT_DIR = path.resolve(WORKSPACE, "projects", "_solo-flight-target");
   if (fs.existsSync(PROJECT_DIR)) {
-    // 清理上一轮残留
+    const existing = fs.readdirSync(PROJECT_DIR).filter(f => f !== ".gitkeep");
+    if (existing.length > 0) {
+      console.log(`⚠️  实验目录非空，清理 ${existing.length} 个残留文件...`);
+    }
     fs.rmSync(PROJECT_DIR, { recursive: true, force: true });
   }
   fs.mkdirSync(PROJECT_DIR, { recursive: true });
@@ -446,7 +449,7 @@ async function main() {
   // monorepo 标准子包配置
   const pkgPath = path.join(PROJECT_DIR, "package.json");
   fs.writeFileSync(pkgPath, JSON.stringify({
-    name: "@cortex/skill-kit",
+    name: "@cortex/solo-flight-target",
     version: "0.1.0",
     private: true,
     type: "module",
@@ -732,17 +735,58 @@ async function main() {
     userIntent
       ? `用户指定了意图："${userIntent}"`
       : [
-          "根据母项目的定位和上述探索结果来决定要构建什么。",
-          "重点看：哪些包缺少什么？有什么是母项目明显需要的但还没做的？",
-          "母项目已有的工具包（tools/）已经有 monorepo-analyzer 和 configuration-drift，",
-          "思考还能补充什么。你拥有完全的创造自由——选择你认为真正有价值的东西。",
-        ].join(" "),
+          "你的任务是：在母项目 monorepo 中建造一个**有价值的、可独立编译测试的 TypeScript 包**。",
+          "",
+          "你需要自主决策造什么——基于母项目的定位和上述探索结果：",
+          "  1. 哪些包已经存在？它们各自做什么？",
+          "  2. 母项目的架构中还缺什么？有什么明显需要但还没做的？",
+          "  3. 工具包（tools/）已有 monorepo-analyzer 和 configuration-drift，还能补充什么？",
+          "",
+          "=== 强制要求 ===",
+          "",
+          "1. 【核心交付】包必须包含：",
+          "   - src/index.ts（公开 API，barrel 导出）",
+          "   - src/ 下至少一个功能模块",
+          "   - tests/ 下至少一个单元测试文件",
+          "2. 【CI 标注】每个测试文件第一行必须是 `// @ci: unit`（宪法 §十四·一 自声明机制）",
+          "3. 【编译通过】`npx tsc --noEmit` 必须零错误通过",
+          "4. 【测试通过】`npx vitest run` 必须全部通过",
+          "5. 【编码规范】所有代码必须遵守 coding-standards.md 强制要求：",
+          "   - 禁止空 catch {} 块",
+          "   - 禁止 var 声明，优先 const",
+          "   - 禁止裸 console.error/warn（生产代码走 PipelineObserver，测试代码允许）",
+          "   - 导入走 barrel：`import { X } from \"@cortex/xxx\"`",
+          "   - 禁止硬编码魔法数字/路径/环境变量名/版本号",
+          "6. 【补足声明】在包根目录创建 PACKAGE_POSITIONING.md，回答三个问题：",
+          "   - 这个包补足了什么？（母项目中缺了什么）",
+          "   - 它的定位是什么？（在 monorepo 架构中的位置和职责）",
+          "   - 为什么值得合入？（解决了什么实际问题）",
+          "7. 【模块化注册】包名必须是 @cortex/<name> 命名空间，package.json 依赖声明用 workspace:*",
+          "",
+          "=== 允许的工具 ===",
+          "",
+          "你拥有所有工具的完整访问权限：读取、写入、shell（npm install, tsc, vitest）。",
+          "",
+          "=== 路径规则（重要！）===",
+          "你当前的工作目录 **就是** 包根目录。所有写入路径都相对于此解析。",
+          "- 写 `src/index.ts` → 创建的就是包根的 src/index.ts",
+          "- 写 `tests/core.test.ts` → 创建的就是包根的 tests/core.test.ts",
+          "- **不要**在你的包内创建 `packages/`、`cortex/`、`src/observability/` 等嵌套目录结构",
+          "- 你不需要模仿母项目的目录树——你的包本身就是 monorepo 的一个叶子节点",
+          "- 功能模块直接放在 src/ 下：`src/metrics.ts`、`src/tracer.ts` 等",
+          "",
+          "所有文件必须保持在本目录内。你不能在外部写入。",
+          "你可能需要探索母项目的具体源码来做决策——这由调度阶段的 Agent 来完成。",
+          "规划阶段你只能基于上述探索摘要做决策。",
+        ].join("\n"),
     "",
     "规则：",
-    "1. 项目必须能用 `npx tsx <入口文件>` 运行，并产生可验证的输出。",
-    "2. 所有文件必须保持在本目录内。你不能在外部写入。",
-    "3. 你拥有所有工具的完整访问权限：读取、写入、shell（npm install, tsc, tsx）。",
-    "4. 你可能需要探索母项目的具体源码来做决策——这由调度阶段的 Agent 来完成。",
+    "1. 包必须能用 `npx tsc --noEmit` 编译通过，`npx vitest run` 测试全部通过。",
+    "2. 所有测试文件首行必须有 `// @ci: unit` 标注。",
+    "3. 必须产出 PACKAGE_POSITIONING.md 说明补足内容和定位。",
+    "4. 所有文件必须保持在本目录内。你不能在外部写入。",
+    "5. 你拥有所有工具的完整访问权限：读取、写入、shell（npm install, tsc, tsx）。",
+    "6. 你可能需要探索母项目的具体源码来做决策——这由调度阶段的 Agent 来完成。",
     "   规划阶段你只能基于上述探索摘要做决策。",
     "",
     "团队：",
@@ -848,11 +892,12 @@ async function main() {
   }
   console.log();
 
-  // ── Phase 6: 闭环验证 —— 产物可执行？──
+  // ── Phase 6: 验收 —— 编译 + 测试 + CI 标注 ──
   console.log("╔══════════════════════════════════════════════════╗");
-  console.log("║   🔍 闭环验证：产物真实存在且可执行                ║");
+  console.log("║   🔍 验收：编译 + 测试 + CI 标注 + Barrel 导出     ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
 
+  // 收集产出文件
   const producedFiles: string[] = [];
   const walkProduced = (d: string) => {
     for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
@@ -860,7 +905,7 @@ async function main() {
       const full = path.join(d, entry.name);
       if (entry.isDirectory()) {
         walkProduced(full);
-      } else if (/\.(ts|js|json|html)$/.test(entry.name)) {
+      } else if (/\.(ts|js|json|html|md)$/.test(entry.name)) {
         producedFiles.push(full);
       }
     }
@@ -879,52 +924,111 @@ async function main() {
     console.log(`   ${size > 0 ? "✅" : "❌"} ${relative} (${size} bytes)`);
   }
 
-  let closedLoopPassed = true;
+  let acceptancePassed = true;
 
   if (sourceFiles.length === 0) {
-    console.log("\n   ❌ 闭环验证失败：未发现任何产出文件。");
-    closedLoopPassed = false;
+    console.log("\n   ❌ 验收失败：未发现任何产出文件。");
+    acceptancePassed = false;
   }
 
-  // 尝试找到入口文件并执行
-  const tsFiles = sourceFiles.filter((f) => f.endsWith(".ts"));
-  // 优先找 index.ts 或 main.ts
-  const entryCandidates = tsFiles.filter(
-    (f) => /(index|main|app|server|cli)\.ts$/.test(path.basename(f))
-  );
-  const runners = entryCandidates.length > 0 ? entryCandidates : tsFiles.slice(0, 3);
+  // ── 6a. 结构检查：src/index.ts + tests/ ──
+  console.log("\n   ── 6a. 包结构检查 ──");
+  const hasSrcIndex = fs.existsSync(path.join(PROJECT_DIR, "src", "index.ts"));
+  const testDir = path.join(PROJECT_DIR, "tests");
+  const hasTests = fs.existsSync(testDir) && fs.readdirSync(testDir).some(f => f.endsWith(".test.ts"));
+  console.log(`   src/index.ts: ${hasSrcIndex ? "✅" : "❌ 缺失"}`);
+  console.log(`   tests/*.test.ts: ${hasTests ? "✅" : "❌ 缺失"}`);
+  if (!hasSrcIndex || !hasTests) acceptancePassed = false;
 
-  for (const f of runners) {
-    const relative = path.relative(PROJECT_DIR, f);
-    console.log(`\n   🏃 执行: ${relative} ...`);
-    try {
-      const { execSync } = await import("node:child_process");
-      const output = execSync(
-        `npx tsx "${relative}"`,
-        {
-          cwd: PROJECT_DIR,
-          timeout: 30_000,
-          encoding: "utf-8",
-          stdio: ["ignore", "pipe", "pipe"]}
-      );
-      const trimmed = output.trim();
-      if (trimmed) {
-        console.log(`   ✅ ${relative} 运行成功，输出:\n${trimmed.slice(0, 400)}`);
+  // ── 6b. Barrel 导出检查 ──
+  console.log("\n   ── 6b. Barrel 导出检查 ──");
+  if (hasSrcIndex) {
+    const barrelContent = fs.readFileSync(path.join(PROJECT_DIR, "src", "index.ts"), "utf-8");
+    const hasExports = /export\s+/.test(barrelContent);
+    console.log(`   index.ts 含导出语句: ${hasExports ? "✅" : "⚠️ 无导出"}`);
+    if (!hasExports) acceptancePassed = false;
+  }
+
+  // ── 6c. CI 标注检查 ──
+  console.log("\n   ── 6c. CI 标注检查（@ci: unit）──");
+  let ciAnnotationsOk = true;
+  if (hasTests) {
+    const testFiles = fs.readdirSync(testDir).filter(f => f.endsWith(".test.ts"));
+    for (const tf of testFiles) {
+      const content = fs.readFileSync(path.join(testDir, tf), "utf-8");
+      const firstLine = content.split("\n")[0].trim();
+      if (firstLine === "// @ci: unit") {
+        console.log(`   ✅ ${tf}: @ci: unit`);
       } else {
-        console.log(`   ✅ ${relative} 运行成功 (无输出)`);
-      }
-    } catch (e: any) {
-      const stderr = e.stderr?.toString() ?? "";
-      const stdout = e.stdout?.toString() ?? "";
-      if (stderr.includes("SyntaxError")) {
-        console.log(`   ❌ ${relative} 语法错误:\n${stderr.slice(0, 300)}`);
-        closedLoopPassed = false;
-      } else {
-        console.log(`   ⚠️ ${relative} 运行时错误:\n${(stderr || stdout).slice(0, 300)}`);
-        // 不因运行时错误标记失败
+        console.log(`   ❌ ${tf}: 缺失 @ci: unit 标注（首行: "${firstLine.slice(0, 60)}"）`);
+        ciAnnotationsOk = false;
       }
     }
+    if (!ciAnnotationsOk) acceptancePassed = false;
+  } else {
+    console.log("   ⚠️ 无测试文件，跳过 CI 标注检查");
   }
+
+  // ── 6d. 编译检查 ──
+  console.log("\n   ── 6d. 编译检查（tsc --noEmit）──");
+  let compileOk = false;
+  try {
+    const { execSync } = await import("node:child_process");
+    const tscOutput = execSync("npx tsc --noEmit", {
+      cwd: PROJECT_DIR,
+      timeout: 60_000,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"]});
+    console.log(`   ✅ tsc --noEmit 通过`);
+    if (tscOutput.trim()) console.log(`   ${tscOutput.trim().split("\n").slice(0, 3).join("\n   ")}`);
+    compileOk = true;
+  } catch (e: any) {
+    const stderr = e.stderr?.toString() ?? "";
+    console.log(`   ❌ tsc --noEmit 失败:`);
+    const errors = stderr.split("\n").filter((l: string) => l.includes("error TS")).slice(0, 8);
+    for (const line of errors) console.log(`      ${line.trim()}`);
+    acceptancePassed = false;
+  }
+
+  // ── 6e. 测试运行 ──
+  console.log("\n   ── 6e. 测试运行（vitest run）──");
+  let testOk = false;
+  try {
+    const { execSync } = await import("node:child_process");
+    const testOutput = execSync("npx vitest run", {
+      cwd: PROJECT_DIR,
+      timeout: 120_000,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "pipe"]});
+    // 解析 vitest 输出
+    const testSummary = testOutput.match(/Tests\s+(\d+)\s+passed/);
+    const testFailed = testOutput.match(/(\d+)\s+failed/);
+    if (testSummary) {
+      console.log(`   ✅ vitest: ${testSummary[0]}` + (testFailed ? `, ${testFailed[0]}` : ""));
+      testOk = !testFailed || parseInt(testFailed[1]) === 0;
+    } else {
+      console.log(`   ✅ vitest 运行成功`);
+      testOk = true;
+    }
+  } catch (e: any) {
+    const stderr = e.stderr?.toString() ?? "";
+    const stdout = e.stdout?.toString() ?? "";
+    console.log(`   ❌ vitest 失败:`);
+    const relevant = (stdout + stderr).split("\n").filter((l: string) =>
+      l.includes("FAIL") || l.includes("failed") || l.includes("Error")
+    ).slice(0, 6);
+    for (const line of relevant) console.log(`      ${line.trim()}`);
+    acceptancePassed = false;
+  }
+
+  console.log(`\n   ── 验收总结 ──`);
+  console.log(`   包结构:  ${hasSrcIndex && hasTests ? "✅" : "❌"}`);
+  console.log(`   CI 标注: ${ciAnnotationsOk ? "✅" : "❌"}`);
+  console.log(`   编译:    ${compileOk ? "✅" : "❌"}`);
+  console.log(`   测试:    ${testOk ? "✅" : "❌"}`);
+  console.log(`   总结果:  ${acceptancePassed ? "✅ 通过" : "❌ 未通过"}`);
+
+  const closedLoopPassed = acceptancePassed;
 
   // ── Phase 7: 六层防御合规性 + 记忆诊断（合并）──
   console.log("\n╔══════════════════════════════════════════════════╗");
@@ -1029,11 +1133,115 @@ async function main() {
     }
   }
 
+  // ── Phase 8: 合并门禁 —— 编码规范强制检查 + 补足定位确认 ──
+  console.log("\n╔══════════════════════════════════════════════════╗");
+  console.log("║   🚪 合并门禁：编码规范 + 补足定位                    ║");
+  console.log("╚══════════════════════════════════════════════════╝\n");
+
+  // 8a. 补足定位文档检查
+  const positioningPath = path.join(PROJECT_DIR, "PACKAGE_POSITIONING.md");
+  let positioningOk = false;
+  let positioningSummary = "";
+  if (fs.existsSync(positioningPath)) {
+    const ppContent = fs.readFileSync(positioningPath, "utf-8");
+    // 检查是否回答了三个问题
+    const hasGap = /补足|缺了|补充|填补|空缺/.test(ppContent);
+    const hasPosition = /定位|位置|职责|架构/.test(ppContent);
+    const hasValue = /价值|解决|为什么|合入/.test(ppContent);
+    positioningOk = hasGap && hasPosition && hasValue;
+    console.log(`   PACKAGE_POSITIONING.md: ${fs.existsSync(positioningPath) ? "✅ 存在" : "❌ 缺失"}`);
+    console.log(`     补足说明: ${hasGap ? "✅" : "❌"}  定位说明: ${hasPosition ? "✅" : "❌"}  合入理由: ${hasValue ? "✅" : "❌"}`);
+    if (positioningOk) {
+      // 提取摘要
+      const lines = ppContent.split("\n").filter((l: string) => l.trim() && !l.startsWith("#")).slice(0, 3);
+      positioningSummary = lines.map((l: string) => `     ${l.trim().slice(0, 100)}`).join("\n");
+      console.log(positioningSummary);
+    }
+  } else {
+    console.log(`   ❌ PACKAGE_POSITIONING.md 缺失——合入前必须说明包补足了什么、定位是什么`);
+  }
+
+  // 8b. 编码规范强制检查（对 src/ 下所有 .ts 文件）
+  console.log("\n   ── 8b. 编码规范强制检查 ──");
+  let codingStandardsOk = true;
+  const srcDir = path.join(PROJECT_DIR, "src");
+  if (fs.existsSync(srcDir)) {
+    const walkSrc = (d: string): string[] => {
+      const results: string[] = [];
+      for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          results.push(...walkSrc(path.join(d, entry.name)));
+        } else if (entry.name.endsWith(".ts")) {
+          results.push(path.join(d, entry.name));
+        }
+      }
+      return results;
+    };
+    const srcFiles = walkSrc(srcDir);
+
+    let violations = 0;
+    for (const f of srcFiles) {
+      const content = fs.readFileSync(f, "utf-8");
+      const relative = path.relative(PROJECT_DIR, f);
+      // 检查空 catch {}
+      if (/catch\s*\{\s*\}/.test(content)) {
+        console.log(`   ❌ ${relative}: 空 catch {} 块（禁止）`);
+        violations++;
+      }
+      // 检查 var 声明
+      if (/\bvar\s+/.test(content)) {
+        console.log(`   ❌ ${relative}: var 声明（禁止，用 const/let）`);
+        violations++;
+      }
+      // 检查裸 console.error/warn（生产代码不允许）
+      if (/console\.(error|warn)\s*\(/.test(content) && !f.includes("test")) {
+        console.log(`   ⚠️ ${relative}: console.error/warn（生产代码应走 PipelineObserver）`);
+        // warn 级别，不阻塞
+      }
+      // 检查硬编码环境变量名
+      if (/['"]DEEPSEEK_API_KEY['"]|['"]cortex-agents\.json['"]/.test(content)) {
+        console.log(`   ❌ ${relative}: 硬编码常量（禁止，应走 constants.ts）`);
+        violations++;
+      }
+    }
+
+    if (violations > 0) {
+      console.log(`\n   ❌ 编码规范: ${violations} 处违规`);
+      codingStandardsOk = false;
+    } else {
+      console.log(`   ✅ 编码规范: 全部通过`);
+    }
+  }
+
+  // 8c. 模块化注册检查（package.json 命名空间 + workspace 依赖）
+  console.log("\n   ── 8c. 模块化注册检查 ──");
+  let moduleRegOk = true;
+  try {
+    const pkgJson = JSON.parse(fs.readFileSync(path.join(PROJECT_DIR, "package.json"), "utf-8"));
+    const hasName = pkgJson.name?.startsWith("@cortex/");
+    const deps = { ...pkgJson.dependencies, ...pkgJson.devDependencies };
+    const hasWorkspace = Object.values(deps).some((v: any) => v === "workspace:*");
+    console.log(`   命名空间 @cortex/*: ${hasName ? "✅" : "❌"} (${pkgJson.name || "未定义"})`);
+    console.log(`   workspace 依赖: ${hasWorkspace ? "✅" : "❌"}`);
+    if (!hasName || !hasWorkspace) moduleRegOk = false;
+  } catch {
+    console.log("   ❌ package.json 解析失败");
+    moduleRegOk = false;
+  }
+
+  console.log(`\n   ── 合并门禁总结 ──`);
+  console.log(`   补足定位: ${positioningOk ? "✅" : "❌"}`);
+  console.log(`   编码规范: ${codingStandardsOk ? "✅" : "❌"}`);
+  console.log(`   模块注册: ${moduleRegOk ? "✅" : "❌"}`);
+  const mergeReady = positioningOk && codingStandardsOk && moduleRegOk && acceptancePassed;
+  console.log(`   合并就绪: ${mergeReady ? "✅ 可合入" : "❌ 未就绪"}`);
+
   // ── 收尾 ──
   await memory.close();
 
   console.log("\n╔══════════════════════════════════════════════════╗");
-  console.log(`║   ${closedLoopPassed ? "✅ 独自飞翔 —— 闭环验证通过" : "❌ 闭环验证失败"}        ║`);
+  console.log(`║   ${closedLoopPassed ? "✅ 独自飞翔 —— 验收通过" : "❌ 验收失败"}        ║`);
+  console.log(`║   合并就绪: ${mergeReady ? "✅" : "❌"}                                  ║`);
   console.log("╚══════════════════════════════════════════════════╝\n");
   console.log(`   规划耗时: ${planDuration}ms (${(planDuration / 1000).toFixed(1)}s)`);
   console.log(`   执行耗时: ${execDuration}ms (${(execDuration / 1000).toFixed(1)}s)`);
@@ -1041,11 +1249,12 @@ async function main() {
   console.log(`   MetaAgent 计划: ${plan.length} 节点`);
   console.log(`   Scheduler 完成: ${report.completed}  失败: ${report.failed}`);
   console.log(`   产出文件: ${sourceFiles.length} 个`);
-  console.log(`   可执行验证: ${closedLoopPassed ? "✅" : "❌"}`);
+  console.log(`   验收结果: ${acceptancePassed ? "✅" : "❌"} (结构 ${hasSrcIndex && hasTests ? "✅" : "❌"} | CI ${ciAnnotationsOk ? "✅" : "❌"} | 编译 ${compileOk ? "✅" : "❌"} | 测试 ${testOk ? "✅" : "❌"})`);
+  console.log(`   合并门禁: ${mergeReady ? "✅ 可合入" : "❌ 未就绪"} (定位 ${positioningOk ? "✅" : "❌"} | 规范 ${codingStandardsOk ? "✅" : "❌"} | 注册 ${moduleRegOk ? "✅" : "❌"})`);
   console.log(`   六层防御: P0-Pending隔离 ${pendingIsolated ? "✅" : "❌"} | P1-InitVerifier ${consistencyReport && !consistencyReport.fatal ? "✅" : "⚠️"} | P2-技能沉淀 ${skillPrecipitated ? "✅" : "⚠️"}`);
   console.log();
 
-  if (!closedLoopPassed || report.failed > 0) {
+  if (!acceptancePassed || !mergeReady || report.failed > 0) {
     process.exit(1);
   }
 }
