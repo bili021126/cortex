@@ -5,8 +5,7 @@
 // @moved-from projects/solo-flight/src/registry/errors.ts
 // ============================================================
 
-import { SkillErrorCode } from './types.js';
-import type { SkillError } from './types.js';
+import { SkillErrorCode, type SkillError } from './types.js';
 
 /** 创建技能错误 */
 export function createSkillError(

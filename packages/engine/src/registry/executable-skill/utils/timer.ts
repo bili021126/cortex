@@ -14,7 +14,7 @@ export function withTimeout<T>(
   timeoutMs: number,
   skillId?: string
 ): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
@@ -24,6 +24,6 @@ export function withTimeout<T>(
   });
 
   return Promise.race([promise, timeoutPromise]).finally(() => {
-    clearTimeout(timer!);
+    if (timer !== undefined) clearTimeout(timer);
   }) as Promise<T>;
 }

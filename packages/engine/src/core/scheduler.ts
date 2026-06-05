@@ -1,4 +1,4 @@
-import type { TaskNode, NodeResult, ExecutionReport, AgentType, Agent } from "@cortex/shared";
+import type { TaskNode, NodeResult, ExecutionReport, AgentType, Agent, IMemoryStore } from "@cortex/shared";
 import { PipelinePriority, AgentStatus, PipelineEventType } from "@cortex/shared";
 import type { ITaskBoard } from "./task-board.js";
 import type { ISchedulerAgentPool } from "./agent-pool.js";
@@ -11,10 +11,11 @@ import { isTestEnv } from "../test-env.js";
 import { type EngineConfig, resolveConfig } from "@cortex/config";
 import type { SkillExecutor } from "./skill-executor.js";
 import type { DispatchCtx, IDispatchStep } from "./dispatch-steps/types.js";
+import type { LlmCallable } from "./rlm-decompose.js";
 import { ClaimStep } from "./dispatch-steps/claim-step.js";
 import { SpawnStep } from "./dispatch-steps/spawn-step.js";
 import { SkillInjectionStep } from "./dispatch-steps/skill-injection-step.js";
-import { ExecuteStep } from "./dispatch-steps/execute-step.js";
+import { RlmExecuteStep } from "./dispatch-steps/rlm-execute-step.js";
 import { CleanupStep } from "./dispatch-steps/cleanup-step.js";
 
 /**
@@ -82,6 +83,10 @@ export class Scheduler implements IScheduler {
   private readonly replanManager: ReplanManager;
   private readonly config: Required<EngineConfig>;
   private _skillExecutor?: SkillExecutor;
+  /** 当前运行会话标识——executeAll() 启动时生成 */
+  private _sessionId?: string;
+  /** MemoryStore 引用——用于 beginSession/endSession 生命周期管理 */
+  private _memoryStore?: IMemoryStore;
 
   constructor(
     private readonly board: ITaskBoard,
@@ -105,6 +110,21 @@ export class Scheduler implements IScheduler {
     this._skillExecutor = executor;
   }
 
+  /** 注入 MemoryStore——用于 executeAll() 的 sessionId 生命周期管理 */
+  setMemoryStore(memory: IMemoryStore): void {
+    this._memoryStore = memory;
+  }
+
+  /** 构建 RLM 拆解用的 LLM 调用入口。从 MetaAgent 的 LlmAdapter 桥接。 */
+  private _buildLlmChat(): LlmCallable | undefined {
+    const adapter = this.metaAgent?.llmAdapter;
+    if (!adapter) return undefined;
+    return async (model: string, messages: Array<{ role: string; content: string }>) => {
+      const res = await adapter.chat(model, messages as Parameters<typeof adapter.chat>[1]);
+      return res.content ?? "";
+    };
+  }
+
   /**
    * 执行 TaskBoard 上全部节点。
    * 动态消费模式：只要有 pending/claimed 节点就继续拓扑排序 + 逐层并行执行。
@@ -113,6 +133,10 @@ export class Scheduler implements IScheduler {
    */
   async executeAll(): Promise<ExecutionReport> {
     const startTime = Date.now();
+    // v2.5.41: 生成 sessionId——每次 executeAll() 唯一标识，注入 MetaAgent 管线上下文
+    this._sessionId = `run-${startTime}-${Math.random().toString(36).slice(2, 8)}`;
+    // 激活 MemoryStore 会话——后续 write/writePending 自动注入此 sessionId
+    this._memoryStore?.beginSession(this._sessionId);
     const allResults: NodeResult[] = [];
     let completed = 0;
     let failed = 0;
@@ -262,6 +286,9 @@ export class Scheduler implements IScheduler {
     failed = actualFailed;
     this.replanManager.reset();
 
+    // 终结 MemoryStore 会话——归档 Active 记忆，湮灭 Pending 记忆
+    this._memoryStore?.endSession().catch(() => { /* best-effort */ });
+
     const durationMs = Date.now() - startTime;
     const allNodes = this.board.getAllNodes();
 
@@ -279,6 +306,7 @@ export class Scheduler implements IScheduler {
       failed,
       results: allResults,
       durationMs,
+      sessionId: this._sessionId,
     };
   }
 
@@ -364,6 +392,7 @@ export class Scheduler implements IScheduler {
       skillExecutor: this._skillExecutor,
       isTestEnv: isTestEnv(),
       node,
+      llmChat: this._buildLlmChat(),
     };
 
     const steps: IDispatchStep[] = [
@@ -375,7 +404,7 @@ export class Scheduler implements IScheduler {
       steps.push(new SkillInjectionStep());
     }
 
-    steps.push(new ExecuteStep(), new CleanupStep());
+    steps.push(new RlmExecuteStep(), new CleanupStep());
 
     return await this._runDispatchPipeline(ctx, steps);
   }
@@ -409,6 +438,7 @@ export class Scheduler implements IScheduler {
         node,
         agentType: at,
         agent,
+        llmChat: this._buildLlmChat(),
       };
 
       const claimed = this.board.claim(node.id, at as AgentType);
@@ -418,7 +448,7 @@ export class Scheduler implements IScheduler {
 
       const steps: IDispatchStep[] = [
         new SpawnStep(),
-        new ExecuteStep(),
+        new RlmExecuteStep(),
         new CleanupStep(),
       ];
 

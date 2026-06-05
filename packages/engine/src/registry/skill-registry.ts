@@ -16,8 +16,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AgentType } from "@cortex/shared";
-import type { SkillTemplate, Tag, SerializedSkillRegistry } from "@cortex/shared";
+import { AgentType, type SkillTemplate, type Tag, type SerializedSkillRegistry } from "@cortex/shared";
 
 // ─── 注册表实现 ─────────────────────────────────────────
 
