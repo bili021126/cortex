@@ -77,6 +77,7 @@ const PACKAGES: PackageInfo[] = [
   { name: "engine-slow",  dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine",       config: "vitest.ci-slow.config.ts", testOnly: true },
   { name: "skill-kit",    dir: join(ROOT, "packages", "skill-kit"),    filter: "@cortex/skill-kit" },
   { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
+  { name: "prompt-kit",   dir: join(ROOT, "packages", "prompt-kit"),   filter: "@cortex/prompt-kit" },
   { name: "cli",          dir: join(ROOT, "packages", "cli"),          filter: "@cortex/cli" },
 ];
 
