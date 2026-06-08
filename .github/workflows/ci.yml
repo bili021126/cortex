@@ -10,6 +10,8 @@ jobs:
   gate:
     name: 门禁（构建 + 类型检查 + 单元测试 + Lint）
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -21,4 +23,3 @@ jobs:
       - run: npx tsx scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
