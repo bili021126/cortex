@@ -6,9 +6,9 @@
  * 原位于 .cortex/archive/.../solo-flight/src/storage/interfaces/task.repository.ts
  */
 
-import { Task } from '../../core/models/task.js';
-import { TaskStatus } from '../../core/models/status.js';
-import { Priority } from '../../core/models/priority.js';
+import type { Task } from '../../core/models/task.js';
+import type { TaskStatus } from '../../core/models/status.js';
+import type { Priority } from '../../core/models/priority.js';
 
 export interface TaskFilter {
   status?: TaskStatus;

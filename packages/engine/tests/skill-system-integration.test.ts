@@ -1,7 +1,6 @@
 // @ci: integration
 import { describe, it, expect, beforeEach } from "vitest";
 import { SkillRegistry, extractSkillsFromOutput } from "@cortex/engine";
-import { AgentType } from "@cortex/shared";
 import type { SkillTemplate, Tag } from "@cortex/shared";
 
 /** 模拟 LoopAgent 输出：模式提炼 + SkillTemplate JSON */
@@ -13,6 +12,8 @@ function mockLoopAgentOutput(skills: Record<string, unknown>[]): string {
  * 技能系统集成测试。
  * 验证完整的技能生命周期：
  *   LoopAgent 输出 → SkillExtractor 解析 → SkillRegistry 注册 → MetaAgent 查询
+ *
+ * @since v2.6 — queryByAgent 移除，改用 queryByTags + getAll().filter()
  */
 describe("Skill System Integration", () => {
   let registry: SkillRegistry;
@@ -45,7 +46,7 @@ describe("Skill System Integration", () => {
         ],
         expectedOutput: "修复后的配置文件 + CI 通过",
         outputFile: "docs/fixes/{date}-ci-fix.md",
-        agentType: AgentType.Fix,
+        agentType: "fix", // v2.5 兼容字段，extractor 自动映射为 kind
         status: "trial"},
       {
         id: "skill-memory-cleanup",
@@ -60,7 +61,7 @@ describe("Skill System Integration", () => {
           "清理湮灭态记忆的关联边",
         ],
         expectedOutput: "清理报告：冻结/归档/湮灭计数",
-        agentType: AgentType.Loop,
+        agentType: "loop",
         status: "trial"},
     ]);
 
@@ -81,8 +82,9 @@ describe("Skill System Integration", () => {
     expect(fixSkills[0].name).toBe("CI 构建修复流程");
     expect(fixSkills[0].steps.length).toBe(5);
 
-    // loop 类型查询
-    const loopSkills = registry.queryByAgent(AgentType.Loop);
+    // loop 类型查询（queryByAgent 已移除，改用 getAll + filter）
+    // agentType "loop" → normalizeSkillKind 映射为 "workflow"
+    const loopSkills = registry.getAll().filter((s) => s.kind === "workflow");
     expect(loopSkills.length).toBe(1);
     expect(loopSkills[0].name).toBe("记忆清理巡检");
 
@@ -115,15 +117,15 @@ describe("Skill System Integration", () => {
   it("should handle duplicate registration (overwrite)", () => {
     const skill: SkillTemplate = {
       id: "skill-v1",
-      agentType: AgentType.Fix,
+      kind: "action",
       name: "Version 1",
       triggerTags: ["implementation" as Tag],
       trigger: "test",
       steps: ["step 1"],
       expectedOutput: "output",
       status: "trial",
-      adoptionCount: 0,
-      rejectionCount: 0,
+      weight: 0,
+      feedbackHistory: [],
       discoveredBy: "LoopAgent",
       createdAt: Date.now()};
 
@@ -143,29 +145,33 @@ describe("Skill System Integration", () => {
   it("should filter deprecated skills from queries", () => {
     registry.register({
       id: "skill-active",
-      agentType: AgentType.Code,
+      kind: "action",
       name: "Active Skill",
       triggerTags: ["implementation" as Tag],
       trigger: "test",
       steps: ["step"],
       expectedOutput: "ok",
       status: "active",
-      adoptionCount: 0,
-      rejectionCount: 0,
+      weight: 5,
+      feedbackHistory: [{ agentId: "x", rating: 1, timestamp: Date.now() }],
       discoveredBy: "LoopAgent",
       createdAt: Date.now()});
 
     registry.register({
       id: "skill-deprecated",
-      agentType: AgentType.Code,
+      kind: "action",
       name: "Deprecated Skill",
       triggerTags: ["implementation" as Tag],
       trigger: "test",
       steps: ["step"],
       expectedOutput: "ok",
       status: "deprecated",
-      adoptionCount: 0,
-      rejectionCount: 5,
+      weight: -3,
+      feedbackHistory: [
+        { agentId: "x", rating: -1, timestamp: Date.now() - 3000 },
+        { agentId: "x", rating: -1, timestamp: Date.now() - 2000 },
+        { agentId: "x", rating: -1, timestamp: Date.now() - 1000 },
+      ],
       discoveredBy: "LoopAgent",
       createdAt: Date.now()});
 
@@ -176,8 +182,9 @@ describe("Skill System Integration", () => {
     expect(byTag.length).toBe(1);
     expect(byTag[0].id).toBe("skill-active");
 
-    const byAgent = registry.queryByAgent(AgentType.Code);
-    expect(byAgent.length).toBe(1);
+    // queryByAgent 已移除，改用 getAll + filter
+    const byKind = registry.getAll().filter((s) => s.kind === "action" && s.status !== "deprecated");
+    expect(byKind.length).toBe(1);
   });
 
   it("should round-trip skills through persistence", () => {
@@ -185,7 +192,7 @@ describe("Skill System Integration", () => {
     const loopOutput = mockLoopAgentOutput([
       {
         id: "skill-persist-1",
-        agentType: AgentType.Review,
+        agentType: "review", // v2.5 兼容字段
         name: "Persist Test",
         triggerTags: ["review", "audit"],
         trigger: "test persistence",
@@ -200,38 +207,40 @@ describe("Skill System Integration", () => {
     // 持久化
     const json = registry.toJSON();
     expect(json.templates.length).toBe(1);
-    expect(json.version).toBe(1);
+    expect(json.version).toBe(2); // v2.6 版本号
 
     // 恢复
     const restored = SkillRegistry.fromJSON(json);
     expect(restored.totalCount).toBe(1);
     expect(restored.get("skill-persist-1")?.name).toBe("Persist Test");
-    expect(restored.queryByAgent(AgentType.Review).length).toBe(1);
+    // queryByAgent 已移除，改用 getAll + filter
+    // agentType "review" 不在别名映射表中，默认 fallback 为 "action"
+    expect(restored.getAll().filter((s) => s.kind === "action").length).toBe(1);
   });
 
   it("should unregister and clean indexes", () => {
     registry.register({
       id: "skill-to-remove",
-      agentType: AgentType.Fix,
+      kind: "action",
       name: "To Remove",
       triggerTags: ["fix" as Tag, "bugfix" as Tag],
       trigger: "test",
       steps: ["step"],
       expectedOutput: "ok",
       status: "active",
-      adoptionCount: 0,
-      rejectionCount: 0,
+      weight: 5,
+      feedbackHistory: [{ agentId: "x", rating: 1, timestamp: Date.now() }],
       discoveredBy: "LoopAgent",
       createdAt: Date.now()});
 
     expect(registry.queryByTags(["fix" as Tag]).length).toBe(1);
-    expect(registry.queryByAgent(AgentType.Fix).length).toBe(1);
+    expect(registry.getAll().filter((s) => s.kind === "action").length).toBe(1);
 
     registry.unregister("skill-to-remove");
 
     expect(registry.totalCount).toBe(0);
     expect(registry.queryByTags(["fix" as Tag]).length).toBe(0);
-    expect(registry.queryByAgent(AgentType.Fix).length).toBe(0);
+    expect(registry.getAll().filter((s) => s.kind === "action").length).toBe(0);
   });
 
   it("should handle empty LoopAgent output gracefully", () => {

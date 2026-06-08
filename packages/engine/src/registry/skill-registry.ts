@@ -1,36 +1,82 @@
 /**
- * SkillRegistry —— 技能模板注册表。
+ * SkillRegistry —— 莫娜技能池。
  *
- * 从 @cortex/shared 移入本包，解决类型中枢包包含运行时实现代码的问题。
- * shared 层仅保留 SerializedSkillRegistry 类型定义。
+ * 技能不是可执行函数，是 Agent 产出的结构化认知。
+ * 技能即记忆：一个 Agent 对另一个 Agent 说"我曾这样做成过"。
  *
- * MetaAgent 规划时查询匹配的技能模板。
- * LoopAgent 从已完成任务中提炼可复用工作流，写入注册表。
+ * 设计宪法：
+ *   - 技能是"被参照"而非"被执行"——执行权属于 Agent
+ *   - 状态是衍生标签（deriveStatus），而非状态机
+ *   - 可靠性来自评价累加（weight + feedbackHistory），而非二值判断
+ *   - 三层权限：莫娜持有池子 → MetaAgent 建议标签 → 执行Agent 自主拉取
  *
- * 支持 JSON 序列化/反序列化持久化。
- * SkillExecutor 已于 Core-1 完整落地（步骤执行引擎 + 反馈闭环）。
+ * 双路径入池：
+ *   内生——Agent 产出 → Pipeline 事件 → 注册（trial, weight=0）
+ *   外源——skills/*.json → Schema 校验 → 注册（trial, weight=0）
  *
- * @fix C5 — unregister 收集待删除 key 到数组后再统一删除，不在 for-of 中修改 Map。
- * @moved-from @cortex/shared/src/skill-registry.ts (久岐忍 P1-3：外部端点缺少统一契约文档 → 已闭合)
+ * 生命周期闭环：
+ *   生产→注册→MetaAgent 建议→执行Agent 拉取→使用→评价回流→更新
+ *
+ * @since v2.6 — 技能系统重构：压扁两套 Registry，回归记忆本质
+ * @moved-from @cortex/shared/src/skill-registry.ts
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AgentType, type SkillTemplate, type Tag, type SerializedSkillRegistry } from "@cortex/shared";
+import {
+  type SkillTemplate,
+  type SerializedSkillRegistry,
+  type Tag,
+  type FeedbackEntry,
+} from "@cortex/shared";
+
+// ─── 纯函数：状态推导 ───────────────────────────────────────
+
+/**
+ * 从 weight 和评价次数推导状态标签。
+ * 这不是状态机——是纯函数的标签化显示。
+ *
+ *   - trial:   weight <= 0 或尚无正向评价
+ *   - active:  weight >= 1 且有至少一次正向评价
+ *   - deprecated: 连续 3+ 条 rating=-1
+ */
+export function deriveStatus(
+  weight: number,
+  feedbackHistory: FeedbackEntry[],
+): "trial" | "active" | "deprecated" {
+  // ⛑️ 兼容旧数据：feedbackHistory 可能为 undefined（v2.5 遗留或旧 toJSON 反序列化）
+  const history = feedbackHistory ?? [];
+  // 连续有害判定
+  let consecutiveNegative = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].rating === -1) {
+      consecutiveNegative++;
+    } else {
+      break;
+    }
+  }
+  if (consecutiveNegative >= 3) return "deprecated";
+
+  if (weight >= 1 && history.some((f) => f.rating === 1)) {
+    return "active";
+  }
+
+  return "trial";
+}
 
 // ─── 注册表实现 ─────────────────────────────────────────
 
 export class SkillRegistry {
   /** 按标签索引 */
   private _byTag: Map<string, SkillTemplate[]> = new Map();
-  /** 按 Agent 类型索引 */
-  private _byAgent: Map<AgentType, SkillTemplate[]> = new Map();
-  /** 按时 id 索引 */
+  /** 按 id 索引 */
   private _byId: Map<string, SkillTemplate> = new Map();
 
-  /** 注册一个技能模板 */
+  // ── 注册 / 注销 ─────────────────────────────────────
+
+  /** 注册一个技能模板（有则覆盖） */
   register(template: SkillTemplate): void {
-    // id 去重
+    // id 去重——新模板覆盖旧模板
     if (this._byId.has(template.id)) {
       this.unregister(template.id);
     }
@@ -43,16 +89,11 @@ export class SkillRegistry {
       existing.push(template);
       this._byTag.set(tag, existing);
     }
-
-    // 按 Agent 类型索引
-    const byAgent = this._byAgent.get(template.agentType) ?? [];
-    byAgent.push(template);
-    this._byAgent.set(template.agentType, byAgent);
   }
 
   /**
    * 注销技能模板。
-   * C5: 收集待删除的 key 到数组，遍历完后统一删除，不在 for-of 中修改 Map。
+   * 收集待删除 key 到数组后再统一删除，不在 for-of 中修改 Map。
    */
   unregister(id: string): boolean {
     const tmpl = this._byId.get(id);
@@ -60,7 +101,7 @@ export class SkillRegistry {
 
     this._byId.delete(id);
 
-    // 从标签索引中移除（C5: 收集待删除 key）
+    // 从标签索引中移除
     const tagsToDelete: string[] = [];
     for (const [tag, templates] of this._byTag) {
       const filtered = templates.filter((t) => t.id !== id);
@@ -70,29 +111,19 @@ export class SkillRegistry {
         this._byTag.set(tag, filtered);
       }
     }
-    // 统一删除空标签
     for (const tag of tagsToDelete) {
       this._byTag.delete(tag);
-    }
-
-    // 从 Agent 类型索引中移除
-    const byAgent = this._byAgent.get(tmpl.agentType);
-    if (byAgent) {
-      const filtered = byAgent.filter((t) => t.id !== id);
-      if (filtered.length === 0) {
-        this._byAgent.delete(tmpl.agentType);
-      } else {
-        this._byAgent.set(tmpl.agentType, filtered);
-      }
     }
 
     return true;
   }
 
+  // ── 查询 ────────────────────────────────────────────
+
   /**
    * 按标签查询匹配的技能模板。
    * 匹配规则：template.triggerTags ∩ queryTags ≠ ∅
-   * 仅返回 status === "active" 或 "trial" 的模板。
+   * 仅返回 trial 或 active 状态的模板。
    */
   queryByTags(queryTags: Tag[]): SkillTemplate[] {
     const matched = new Map<string, SkillTemplate>();
@@ -100,20 +131,15 @@ export class SkillRegistry {
       const templates = this._byTag.get(tag);
       if (templates) {
         for (const t of templates) {
-          if (t.status === "active" || t.status === "trial") {
+          const status = deriveStatus(t.weight, t.feedbackHistory);
+          if (status === "active" || status === "trial") {
             matched.set(t.id, t);
           }
         }
       }
     }
-    return [...matched.values()];
-  }
-
-  /** 按 Agent 类型查询 */
-  queryByAgent(agentType: AgentType): SkillTemplate[] {
-    return (this._byAgent.get(agentType) ?? []).filter(
-      (t) => t.status === "active" || t.status === "trial"
-    );
+    // 按 weight 降序排列——权重高的更可信，排在前面
+    return [...matched.values()].sort((a, b) => b.weight - a.weight);
   }
 
   /** 按 id 获取 */
@@ -128,9 +154,10 @@ export class SkillRegistry {
 
   /** 获取活跃技能数 */
   get activeCount(): number {
-    return this.getAll().filter(
-      (t) => t.status === "active" || t.status === "trial"
-    ).length;
+    return this.getAll().filter((t) => {
+      const s = deriveStatus(t.weight, t.feedbackHistory);
+      return s === "active" || s === "trial";
+    }).length;
   }
 
   /** 获取总数 */
@@ -138,28 +165,78 @@ export class SkillRegistry {
     return this._byId.size;
   }
 
+  // ── 评价回流 ────────────────────────────────────────
+
+  /**
+   * Agent 使用技能后，带回评价。
+   * weight 累加，feedbackHistory 追加。
+   * 这是技能闭环的核心——评价驱动进化。
+   */
+  recordFeedback(
+    id: string,
+    agentId: string,
+    rating: number,
+    suggestion?: string,
+  ): boolean {
+    const tmpl = this._byId.get(id);
+    if (!tmpl) return false;
+
+    tmpl.weight += rating; // rating: 1=有效, 0=无感, -1=有害
+    tmpl.feedbackHistory.push({
+      agentId,
+      rating,
+      suggestion,
+      timestamp: Date.now(),
+    });
+
+    // 评价后重新计算状态
+    tmpl.status = deriveStatus(tmpl.weight, tmpl.feedbackHistory);
+
+    return true;
+  }
+
+  // ── 孤技能清理 ──────────────────────────────────────
+
+  /**
+   * 清理孤技能——weight=0 且创建超过 maxAgeMs 毫秒未被领取的技能。
+   * 返回被清理的技能 id 列表。
+   */
+  cleanupOrphans(maxAgeMs: number = 7 * 24 * 60 * 60 * 1000): string[] {
+    const now = Date.now();
+    const removed: string[] = [];
+    for (const [id, tmpl] of this._byId) {
+      if (tmpl.weight === 0 && tmpl.feedbackHistory.length === 0) {
+        if (now - tmpl.createdAt > maxAgeMs) {
+          this.unregister(id);
+          removed.push(id);
+        }
+      }
+    }
+    return removed;
+  }
+
+  // ── 批量操作 ────────────────────────────────────────
+
+  /** 批量注册 */
+  registerAll(templates: SkillTemplate[]): void {
+    for (const tmpl of templates) {
+      this.register(tmpl);
+    }
+  }
+
   /** 清空注册表 */
   clear(): void {
     this._byId.clear();
     this._byTag.clear();
-    this._byAgent.clear();
   }
 
   // ── 持久化 ─────────────────────────────────────────
 
-  /**
-   * 导出为可序列化的纯数据。
-   * Maps 转为 JSON 数组，供 saveJson / MemoryStore 使用。
-   */
   toJSON(): SerializedSkillRegistry {
     const templates = [...this._byId.values()];
-    return { version: 1, templates };
+    return { version: 2, templates };
   }
 
-  /**
-   * 从纯数据恢复注册表。
-   * 先清空当前数据再加载，确保一致性。
-   */
   static fromJSON(data: SerializedSkillRegistry): SkillRegistry {
     const registry = new SkillRegistry();
     for (const tmpl of data.templates) {
@@ -170,10 +247,9 @@ export class SkillRegistry {
 
   /**
    * 保存注册表到 JSON 文件。
-   * 目录不存在时自动创建。
    *
-   * @deprecated 自技能沉淀闭环 v2 起，MemoryStore 是唯一持久化源。
-   *             保留此方法仅用于测试和手动迁移，生产环境不再调用。
+   * @deprecated 自 v2.6 起，MemoryStore 是唯一持久化源。
+   *             保留此方法仅用于测试和手动迁移。
    */
   saveJson(filePath: string): void {
     const dir = path.dirname(filePath);
@@ -184,10 +260,9 @@ export class SkillRegistry {
 
   /**
    * 从 JSON 文件恢复注册表。
-   * 文件不存在时返回空注册表。
    *
-   * @deprecated 自技能沉淀闭环 v2 起，MemoryStore 是唯一持久化源。
-   *             保留此方法仅用于测试和冷启动迁移兜底，生产环境不再调用。
+   * @deprecated 自 v2.6 起，MemoryStore 是唯一持久化源。
+   *             保留此方法仅用于测试和冷启动迁移兜底。
    */
   static loadJson(filePath: string): SkillRegistry {
     if (!fs.existsSync(filePath)) {
@@ -197,14 +272,5 @@ export class SkillRegistry {
     const data = JSON.parse(raw) as SerializedSkillRegistry;
     return SkillRegistry.fromJSON(data);
   }
-
-  /**
-   * 批量注册技能模板。
-   * 用于从 MemoryStore 的 Skill 类型记忆中批量加载。
-   */
-  registerAll(templates: SkillTemplate[]): void {
-    for (const tmpl of templates) {
-      this.register(tmpl);
-    }
-  }
 }
+

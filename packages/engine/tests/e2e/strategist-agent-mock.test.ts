@@ -39,7 +39,7 @@ describe("霜凝 StrategistAgent Mock E2E", () => {
       maxLoops: 3};
     const agent = createAgent(config, llm, toolkit);
     await agent.wakeup();
-    scheduler.register(AgentType.Strategist, agent, "deepseek-reasoner");
+    scheduler.register(AgentType.Strategist, agent, "deepseek-v4-flash");
 
     board.addNode({
       id: "task-direction-1",
@@ -85,7 +85,7 @@ describe("霜凝 StrategistAgent Mock E2E", () => {
       maxLoops: 3};
     const agent = createAgent(config, llm, toolkit);
     await agent.wakeup();
-    scheduler.register(AgentType.Strategist, agent, "deepseek-reasoner");
+    scheduler.register(AgentType.Strategist, agent, "deepseek-v4-flash");
 
     board.addNode({
       id: "task-strategy-1",
@@ -131,7 +131,7 @@ describe("霜凝 StrategistAgent Mock E2E", () => {
       maxLoops: 3};
     const agent = createAgent(config, llm, toolkit);
     await agent.wakeup();
-    scheduler.register(AgentType.Strategist, agent, "deepseek-reasoner");
+    scheduler.register(AgentType.Strategist, agent, "deepseek-v4-flash");
 
     board.addNode({
       id: "task-combined-1",

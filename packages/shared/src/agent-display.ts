@@ -1,53 +1,46 @@
 // ============================================================
-// @cortex/shared — Agent 展示/身份域
+// @cortex/shared — Agent 展示/身份域（重导出层）
 //
-// @depends agent.ts (AgentType 枚举)
-// @usedBy  cli/repl.ts, engine/bootstrap 等需要 Agent 中文名映射的模块
-// @dataflow 单向导出：类型/常量由本文件定义，所有消费方只读引用
-//
-// 从 agent.ts 提取：此前所有展示相关类型/常量/函数与 AgentType 枚举
-// 共处 agent.ts，导致该文件成为上帝类。提取后 agent.ts 仅保留
-// 类型脊梁（AgentType/AgentStatus/TAG_VOCABULARY/AGENT_TAGS 等），
-// 展示域独立为本文件，遵循单一职责原则。
+// AGENT_CHINESE_ROLE / CHINESE_NAME_TO_TYPE 的实际定义已迁移至 @cortex/config。
+// 本文件保留为向后兼容的重导出层，提供 AgentType 键版本的转换。
 //
 // @governance 单源原则：编译期常量为 fallback，运行时由
 //   cortex-agents.json agents[].display 域 + buildChineseRoleMap() 覆盖。
 // ============================================================
 
 import { AgentType } from "./agent.js";
+import {
+  AGENT_CHINESE_ROLE as CONFIG_CHINESE_ROLE,
+  buildChineseRoleMap,
+} from "@cortex/config";
+export type { AgentDisplayEntry } from "@cortex/config";
+export { buildChineseRoleMap };
 
-// ─── 中文角色名映射（编译期 fallback） ─────────────────
+// ─── 中文角色名映射（AgentType 键版本） ─────────────────
 
 /**
  * AgentType -> 中文角色名映射（编译期 fallback）。
  * 运行时从 cortex-agents.json agents[].display.shortName 构建。
- *
- * 注意：strategist 类型映射到两个 Agents（钟离+霜凝），
- * 此处只映射 return 值，CLI 层需从 bootstrapResult.strategists 分别查询。
  */
 export const AGENT_CHINESE_ROLE: Record<AgentType, string> = {
-  [AgentType.Meta]:      "甘雨",
-  [AgentType.Code]:      "阿贝多",
-  [AgentType.Review]:    "刻晴",
-  [AgentType.Analysis]:  "纳西妲",
-  [AgentType.Ops]:       "北斗",
-  [AgentType.Loop]:      "莫娜",
-  [AgentType.DocGovern]: "凝光",
-  [AgentType.Butler]:    "昔涟",
-  [AgentType.Inspector]: "安柏",
-  [AgentType.Fix]:       "希格雯",
-  [AgentType.Api]:       "久岐忍",
-  [AgentType.Browser]:   "宵宫",
-  [AgentType.Data]:      "艾尔海森",
-  [AgentType.Strategist]: "钟离",
+  [AgentType.Meta]:      CONFIG_CHINESE_ROLE.meta,
+  [AgentType.Code]:      CONFIG_CHINESE_ROLE.code,
+  [AgentType.Review]:    CONFIG_CHINESE_ROLE.review,
+  [AgentType.Analysis]:  CONFIG_CHINESE_ROLE.analysis,
+  [AgentType.Ops]:       CONFIG_CHINESE_ROLE.ops,
+  [AgentType.Loop]:      CONFIG_CHINESE_ROLE.loop,
+  [AgentType.DocGovern]: CONFIG_CHINESE_ROLE["doc-govern"],
+  [AgentType.Butler]:    CONFIG_CHINESE_ROLE.butler,
+  [AgentType.Inspector]: CONFIG_CHINESE_ROLE.inspector,
+  [AgentType.Fix]:       CONFIG_CHINESE_ROLE.fix,
+  [AgentType.Api]:       CONFIG_CHINESE_ROLE.api,
+  [AgentType.Browser]:   CONFIG_CHINESE_ROLE.browser,
+  [AgentType.Data]:      CONFIG_CHINESE_ROLE.data,
+  [AgentType.Strategist]: CONFIG_CHINESE_ROLE.strategist,
 };
 
 /**
  * 中文名 -> AgentType 反向映射（编译期 fallback）。
- * 运行时从 cortex-agents.json 动态构建。
- *
- * 注意：钟离和霜凝共享 AgentType.Strategist，反向映射返回同一个 type。
- * CLI 层的 inspect 需额外查 bootstrapResult.strategists 区分实例。
  */
 export const CHINESE_NAME_TO_TYPE: Record<string, AgentType> = {
   "甘雨":   AgentType.Meta,
@@ -71,22 +64,4 @@ export const CHINESE_NAME_TO_TYPE: Record<string, AgentType> = {
 export interface AgentDisplayInfo {
   type: string;
   shortName: string;
-}
-
-/**
- * 从 Agent 定义列表构建中文名映射（运行时期望入口）。
- * 覆盖编译期 AGENT_CHINESE_ROLE / CHINESE_NAME_TO_TYPE。
- */
-export function buildChineseRoleMap(
-  defs: AgentDisplayInfo[],
-): { role: Record<string, string>; nameToType: Record<string, string> } {
-  const role: Record<string, string> = {};
-  const nameToType: Record<string, string> = {};
-  for (const d of defs) {
-    role[d.type] = d.shortName;
-    if (!nameToType[d.shortName]) {
-      nameToType[d.shortName] = d.type;
-    }
-  }
-  return { role, nameToType };
 }

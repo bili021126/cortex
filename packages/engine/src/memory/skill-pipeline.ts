@@ -11,14 +11,10 @@
  * @fix D2 — SkillRegistry 类型从 @cortex/shared 改为从本地 ../skill-registry.js 导入。
  *   SkillRegistry 类的实现已从 shared 移入 engine，shared 仅保留 SerializedSkillRegistry 类型。
  */
-import type { SkillTemplate, AgentType } from "@cortex/shared";
-import type { IPipelineObserver, IMemoryStore } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type AgentType, type IMemoryStore, type IPipelineObserver, type PipelineHandler, type SkillTemplate } from "@cortex/shared";
 import type { SkillRegistry } from "../registry/skill-registry.js";
 import type { MemoryStore } from "./memory-store.js"; // for cast only
-import { extractSkillsFromOutput } from "../components/index.js";
-import { persistSkillsToMemory } from "../components/index.js";
-import { PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { PipelineHandler } from "@cortex/shared";
+import { extractSkillsFromOutput, persistSkillsToMemory } from "../components/index.js";
 
 /**
  * 从节点输出中提取技能并注册+持久化。

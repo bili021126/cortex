@@ -1,0 +1,29 @@
+{
+  "id": "AM-2026-0531-001",
+  "version": "v2.5.30",
+  "section": "§七·子约束8（硬编码禁令） + §九（接口抽象） + §十（代码规范）",
+  "category": "modify",
+  "supersedes": null,
+  "status": "merged",
+  "summary": "全仓架构审计驱动的宪法补全——在 §七 新增运行时默认值可配置化(7.5)和拆分配置清理义务(7.6)；在 §九 新增 God Interface 禁令(9.6)、共享层零实现规则(9.7)、薄壳包生命周期(9.8)；在 §十 新增 as any 类型断言禁令(10.3-bis)",
+  "rationale": "甘雨于 2026-05-31 对全仓 19 个包进行架构审计，审核覆盖 engine(108文件)/cli(38文件)/shared(21文件)/config(32文件)/prompt-kit(20文件)，发现以下跨包模式性问题需要宪法约束：\n\n1. as any 类型断言泛滥：engine 25+处、prompt-kit 12处、cli 数十处，通过 as any 绕过类型系统访问未声明属性或绕过枚举\n2. 运行时默认值硬编码：函数参数默认值（viewportSize=1280x720、timeout=30000等）散落各处，未引用 config\n3. 已拆分配置的原文件未删除：memory 薄壳包（核心已迁 shared）、cortex-agents.json 已拆为 config/data/* 但原文件仍在\n4. God Interface：ICortexApi 横跨生命周期/对话/任务/记忆/引擎组件 5 域 19 个方法\n5. shared 含运行时实现：InMemoryKvStore 含 Map 状态管理 + TTL 过期 + Date.now() 调用，突破零实现边界",
+  "before": "§七：硬编码禁令仅覆盖编译期常量（环境变量名、文件路径、版本号字符串），未涵盖运行时默认值。\n§九：接口抽象无 God Interface 限制，无共享层零实现规则，无薄壳包生命周期。\n§十：any 禁令仅覆盖公开 API 签名中的 any 类型，未覆盖 as any 类型断言。",
+  "after": "§7.5 运行时默认值可配置化：函数参数默认值中的魔法数字必须来自 @cortex/config 常量或通过构造函数参数注入\n§7.6 已拆分配置文件的清理义务：拆分完成必须删除原文件并验证无代码引用旧路径\n§9.6 God Interface 禁令：禁止单接口超 10 方法或横跨 3+ 职责域\n§9.7 共享层零实现规则：shared 禁止运行时类实现，例外需标注 @exception\n§9.8 薄壳包生命周期：零消费方确认后立即删除\n§10.3-bis as any 类型断言同等处罚：与 any 类型泄漏同级别禁止，要求扩展类型定义而非强制断言",
+  "impact": {
+    "principles": [
+      "原则七·子约束8（硬编码禁令）——扩展至运行时默认值和配置清理",
+      "原则九（接口抽象具体化）——新增 God Interface、零实现、薄壳包三条子规则"
+    ],
+    "crossReferences": [
+      "§七·子约束8（硬编码禁令）",
+      "§九（接口抽象具体化）",
+      "§十（代码规范深度约束）"
+    ],
+    "breaking": false,
+    "rationale": "本次修宪不破坏任何现有契约。新增的 6 条子规则均为补全性约束，对已有代码提出更高的可维护性要求但不强制立即修改已有代码。breaking=false。"
+  },
+  "source": {
+    "agent": "MetaAgent",
+    "trace": "甘雨全仓架构审计 2026-05-31——对 engine/cli/shared/config/prompt-kit 五包深度审计，交叉验证审计结果，确认 as any 泛滥、运行时默认值硬编码、已拆分配置残留、God Interface、shared 零实现突破等五项跨包模式问题。"
+  }
+}

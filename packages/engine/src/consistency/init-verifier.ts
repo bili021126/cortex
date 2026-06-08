@@ -1,5 +1,4 @@
-import type { MemoryEntry } from "@cortex/shared";
-import type { IFileSystemAdapter } from "@cortex/shared";
+import { type IFileSystemAdapter, type MemoryEntry, type MemoryQuery } from "@cortex/shared";
 import type { MemoryStore } from "../memory/memory-store.js";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
@@ -20,7 +19,7 @@ import { DEFAULT_ENGINE_CONFIG, DIR_CORTEX } from "@cortex/config";
 
 // ─── 哈希缓存路径 ───────────────────────────────
 
-const HASH_CACHE_FILENAME = DEFAULT_ENGINE_CONFIG.filePaths.hashCache!;
+const HASH_CACHE_FILENAME = DEFAULT_ENGINE_CONFIG.filePaths.hashCache ?? ".cache/hash-cache.json";
 
 // ─── 类型 ────────────────────────────────────────
 
@@ -127,7 +126,7 @@ export class InitVerifier {
     // 获取全部 Active 记忆（limit=0 不限量，trackAccess=false 避免校验扫描污染访问统计）
     const activeMemories = await this._memory.read({
       limit: 0,
-    } as any);
+    } as unknown as MemoryQuery);
 
     const totalMemories = activeMemories.length;
     const fileChecks: VerificationEntry[] = [];

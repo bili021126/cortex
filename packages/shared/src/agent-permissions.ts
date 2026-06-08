@@ -28,7 +28,7 @@ export const AGENT_TOOL_PERMISSIONS: Record<AgentType, readonly string[]> = {
   [AgentType.Inspector]: BASE_TOOLSET,
   [AgentType.Browser]:   [...BASE_TOOLSET, "browser_do"],
   [AgentType.Fix]:       FULL_TOOLSET,
-  [AgentType.Butler]:    ["web_search"],
+  [AgentType.Butler]:    ["read_file", "search_code", "list_files"],
   // Core-2
   [AgentType.Api]:        BASE_TOOLSET,
   [AgentType.Data]:       BASE_TOOLSET,

@@ -5,15 +5,16 @@
  * classifyTalkIntent、parseAgentPrefix、buildPrompt、getPrimaryTag。
  */
 
-import { AgentType, AGENT_TAGS, AGENT_CHINESE_ROLE } from "@cortex/shared";
+import { AGENT_CHINESE_ROLE, AGENT_TAGS, type AgentType } from "@cortex/shared";
 import {
   getAgentDisplay,
   getRuntimeAliases,
   CHAT_AGENT_ALIASES,
   MODE_PROMPTS,
-  ReplMode,
+  type ReplMode,
 } from "./types.js";
 import { DIR_CORTEX, FILE_PERSONA_TALK_TXT, FILE_CORTEX_AGENTS_JSON } from "@cortex/config";
+import { PromptOrchestrator } from "@cortex/prompt-kit";
 import type { PartyGroup, PartyMember } from "./party.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -235,6 +236,64 @@ export function loadAgentSystemPrompt(agentType: AgentType): string {
     "你不需要分析代码、不需要执行任务——这只是开拓者想和你聊聊天。",
     "用你一贯的视角自然地回应他。简短就好。",
   ].join("\n");
+}
+
+// ── prompt-kit 集成 ──────────────────────────────
+
+/** 单例 PromptOrchestrator */
+let _orchestrator: PromptOrchestrator | null = null;
+
+function getOrchestrator(): PromptOrchestrator {
+  if (!_orchestrator) {
+    _orchestrator = new PromptOrchestrator({ baseDir: process.cwd() });
+  }
+  return _orchestrator;
+}
+
+/**
+ * 通过 prompt-kit 的 PromptOrchestrator 加载 Agent 系统提示词。
+ * 利用 FilePromptSource 从 prompts/<agent>/system.md 加载，
+ * 享受 LRU 缓存、模板渲染、校验等基础设施。
+ *
+ * 失败时自动回退到同步的 loadAgentSystemPrompt。
+ */
+export async function loadAgentPrompt(agentType: AgentType): Promise<string> {
+  try {
+    const configPath = path.join(process.cwd(), FILE_CORTEX_AGENTS_JSON);
+    if (!fs.existsSync(configPath)) {
+      return loadAgentSystemPrompt(agentType);
+    }
+
+    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const agents = raw?.agents;
+    if (!agents) return loadAgentSystemPrompt(agentType);
+
+    const primaryTag = getPrimaryTag(agentType);
+    const matched = (Object.values(agents) as Array<Record<string, unknown>>)
+      .find((cfg: Record<string, unknown>) => cfg.type === primaryTag);
+
+    if (!matched?.systemPromptFile || typeof matched.systemPromptFile !== "string") {
+      return loadAgentSystemPrompt(agentType);
+    }
+
+    // prompts/albedo/system.md → albedo-system
+    const templateId = (matched.systemPromptFile as string)
+      .replace(/^prompts\//, "")
+      .replace(/\.md$/, "")
+      .replace(/\//g, "-")
+      .toLowerCase();
+
+    const orch = getOrchestrator();
+    const result = await orch.renderSystemPrompt({
+      baseTemplateId: templateId,
+      context: { variables: {} },
+    });
+
+    return result.text;
+  } catch {
+    // 任意环节失败 → 同步回退
+    return loadAgentSystemPrompt(agentType);
+  }
 }
 
 // ── 分类 ──────────────────────────────────────────

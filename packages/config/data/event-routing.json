@@ -1,0 +1,205 @@
+{
+  "description": "事件路由配置——四通道物理分层。routeTable 定义 eventType → channel + ackRequired，committeeRules 定义触发委员会召集的条件。",
+  "routeTable": {
+    "code_changed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "implementation_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "code_committed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "review_completed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "code_reviewed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "defect_found": {
+      "channel": "urgent",
+      "ackRequired": true
+    },
+    "analysis_completed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "pattern_discovered": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "architecture_finding": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "ops_executed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "build_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "ci_result": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "test_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "skill_extracted": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "pattern_identified": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "loop_training_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "doc_audited": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "amendment_proposed": {
+      "channel": "urgent",
+      "ackRequired": true
+    },
+    "constitution_reviewed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "compliance_check_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "bug_fixed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "issue_diagnosed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "repair_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "api_implemented": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "api_verified": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "contract_validated": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "schema_migrated": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "data_integrity_checked": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "migration_applied": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "fact_collected": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "inspection_complete": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "factsheet_generated": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "browser_verified": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "ui_checked": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "plan_generated": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "replan_executed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "strategy_assessed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "contract_reviewed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "phase_gate_decided": {
+      "channel": "urgent",
+      "ackRequired": true
+    },
+    "direction_supervised": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "contradiction_exposed": {
+      "channel": "urgent",
+      "ackRequired": true
+    },
+    "coherence_validated": {
+      "channel": "important",
+      "ackRequired": false
+    }
+  },
+  "committeeRules": [
+    {
+      "id": "security-review",
+      "triggerEvent": "defect_found",
+      "members": [
+        "review",
+        "analysis",
+        "fix"
+      ],
+      "urgent": true
+    },
+    {
+      "id": "architecture-review",
+      "triggerEvent": "architecture_finding",
+      "members": [
+        "analysis",
+        "strategist",
+        "code"
+      ],
+      "urgent": false
+    },
+    {
+      "id": "amendment-review",
+      "triggerEvent": "amendment_proposed",
+      "members": [
+        "doc-govern",
+        "strategist",
+        "meta"
+      ],
+      "urgent": true
+    }
+  ]
+}

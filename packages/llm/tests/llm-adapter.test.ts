@@ -8,8 +8,8 @@ function makeConfig() {
   return {
     apiKey: "sk-test",
     baseUrl: "https://api.deepseek.com/v1",
-    chatModel: "deepseek-chat",
-    reasonerModel: "deepseek-reasoner",
+    chatModel: "deepseek-v4-flash",
+    reasonerModel: "deepseek-v4-flash",
   };
 }
 
@@ -20,7 +20,7 @@ function exactKey(model: string, messages: LlmMessage[], tools?: ToolDef[], reas
 
 const MOCK_RESPONSE: LlmResponse = {
   content: "你好，我是 DeepSeek。",
-  toolCalls: [],
+  tool_calls: []
 };
 
 const MSG_A: LlmMessage[] = [{ role: "user", content: "A" }];
@@ -35,14 +35,14 @@ describe("LlmAdapter", () => {
 
   // ─── 基础配置 ───
   it("should expose chatModel and reasonerModel", () => {
-    expect(adapter.chatModel).toBe("deepseek-chat");
-    expect(adapter.reasonerModel).toBe("deepseek-reasoner");
+    expect(adapter.chatModel).toBe("deepseek-v4-flash");
+    expect(adapter.reasonerModel).toBe("deepseek-v4-flash");
   });
 
   // ─── Mock 注入 ───
   it("should use injected mock for chat", async () => {
     adapter.injectMock(async () => MOCK_RESPONSE);
-    const res = await adapter.chat("deepseek-chat", [{ role: "user", content: "你好" }]);
+    const res = await adapter.chat("deepseek-v4-flash", [{ role: "user", content: "你好" }]);
     expect(res.content).toBe("你好，我是 DeepSeek。");
   });
 
@@ -55,7 +55,7 @@ describe("LlmAdapter", () => {
       return MOCK_RESPONSE;
     });
     await adapter.chat(
-      "deepseek-chat",
+      "deepseek-v4-flash",
       [{ role: "user", content: "hello" }],
       [{ name: "read_file", description: "read a file", parameters: { type: "object", properties: {}, required: [] } }],
     );
@@ -67,11 +67,11 @@ describe("LlmAdapter", () => {
   // ─── 缓存：精确模式（mock 会绕过缓存，故通过 saveCache/loadCache 验证） ───
   it("should cache and hit via save/load round-trip", async () => {
     // 构造已知 cache key 的缓存数据
-    const keyA = exactKey("deepseek-chat", MSG_A, undefined, undefined);
-    const keyB = exactKey("deepseek-chat", MSG_B, undefined, undefined);
+    const keyA = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
+    const keyB = exactKey("deepseek-v4-flash", MSG_B, undefined, undefined);
     const cacheData: Record<string, { response: LlmResponse; ts: number }> = {};
     cacheData[keyA] = { response: MOCK_RESPONSE, ts: Date.now() };
-    cacheData[keyB] = { response: { content: "msg B response", toolCalls: [] }, ts: Date.now() };
+    cacheData[keyB] = { response: { content: "msg B response", tool_calls: [] }, ts: Date.now() };
 
     const adapter2 = new LlmAdapter(makeConfig());
     adapter2.setCacheEnabled(true);
@@ -88,8 +88,8 @@ describe("LlmAdapter", () => {
   });
 
   it("saveCache should produce valid JSON with all entries", async () => {
-    const keyA = exactKey("deepseek-chat", MSG_A, undefined, undefined);
-    const keyB = exactKey("deepseek-chat", MSG_B, undefined, undefined);
+    const keyA = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
+    const keyB = exactKey("deepseek-v4-flash", MSG_B, undefined, undefined);
     const cacheData: Record<string, { response: LlmResponse; ts: number }> = {};
     cacheData[keyA] = { response: MOCK_RESPONSE, ts: 1000 };
     cacheData[keyB] = { response: MOCK_RESPONSE, ts: 2000 };
@@ -107,7 +107,7 @@ describe("LlmAdapter", () => {
 
   it("cacheSize should report loaded entries", async () => {
     expect(adapter.cacheSize).toBe(0);
-    const key = exactKey("deepseek-chat", MSG_A, undefined, undefined);
+    const key = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
     const data: Record<string, { response: LlmResponse; ts: number }> = {};
     data[key] = { response: MOCK_RESPONSE, ts: Date.now() };
     adapter.loadCache(JSON.stringify(data));
@@ -115,7 +115,7 @@ describe("LlmAdapter", () => {
   });
 
   it("clearCache should remove all entries and reset stats", async () => {
-    const key = exactKey("deepseek-chat", MSG_A, undefined, undefined);
+    const key = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
     const data: Record<string, { response: LlmResponse; ts: number }> = {};
     data[key] = { response: MOCK_RESPONSE, ts: Date.now() };
     adapter.loadCache(JSON.stringify(data));
@@ -128,7 +128,7 @@ describe("LlmAdapter", () => {
   });
 
   it("setCacheEnabled(false) should clear cache", async () => {
-    const key = exactKey("deepseek-chat", MSG_A, undefined, undefined);
+    const key = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
     const data: Record<string, { response: LlmResponse; ts: number }> = {};
     data[key] = { response: MOCK_RESPONSE, ts: Date.now() };
     adapter.setCacheEnabled(true);
@@ -141,7 +141,7 @@ describe("LlmAdapter", () => {
 
   it("should load nothing when cache is disabled", async () => {
     adapter.setCacheEnabled(false);
-    const key = exactKey("deepseek-chat", MSG_A, undefined, undefined);
+    const key = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
     const data: Record<string, { response: LlmResponse; ts: number }> = {};
     data[key] = { response: MOCK_RESPONSE, ts: Date.now() };
     adapter.loadCache(JSON.stringify(data));
@@ -166,7 +166,7 @@ describe("LlmAdapter", () => {
     // 501 个条目，超过 MAX_CACHE=500
     for (let i = 0; i < 501; i++) {
       const msg: LlmMessage[] = [{ role: "user", content: `msg-${i}` }];
-      const key = exactKey("deepseek-chat", msg, undefined, undefined);
+      const key = exactKey("deepseek-v4-flash", msg, undefined, undefined);
       data[key] = { response: MOCK_RESPONSE, ts: Date.now() };
     }
     adapter.setCacheEnabled(true);
@@ -178,7 +178,7 @@ describe("LlmAdapter", () => {
   // ─── 缓存：指纹模式 ───
   it("fingerprint key should differ from exact key", async () => {
     // 同一 payload，exact vs fingerprint 键不同
-    const exact_k = exactKey("deepseek-chat", MSG_A, undefined, undefined);
+    const exact_k = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
 
     // 加载 exact key 的缓存，切换 fingerprint 模式后不会命中
     const data: Record<string, { response: LlmResponse; ts: number }> = {};
@@ -199,20 +199,20 @@ describe("LlmAdapter", () => {
 
   // ─── 消息指纹（独立于 mock，可单测） ───
   it("exactKey should produce deterministic keys", () => {
-    const k1 = exactKey("deepseek-chat", MSG_A, undefined, undefined);
-    const k2 = exactKey("deepseek-chat", MSG_A, undefined, undefined);
+    const k1 = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
+    const k2 = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
     expect(k1).toBe(k2);
     expect(k1).toHaveLength(32);
   });
 
   it("exactKey should differ when content differs", () => {
-    const k1 = exactKey("deepseek-chat", MSG_A, undefined, undefined);
-    const k2 = exactKey("deepseek-chat", MSG_B, undefined, undefined);
+    const k1 = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
+    const k2 = exactKey("deepseek-v4-flash", MSG_B, undefined, undefined);
     expect(k1).not.toBe(k2);
   });
 
   it("exactKey should differ when model differs", () => {
-    const k1 = exactKey("deepseek-chat", MSG_A, undefined, undefined);
+    const k1 = exactKey("deepseek-v4-flash", MSG_A, undefined, undefined);
     const k2 = exactKey("deepseek-reasoner", MSG_A, undefined, undefined);
     expect(k1).not.toBe(k2);
   });

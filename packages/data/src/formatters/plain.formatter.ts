@@ -6,7 +6,7 @@
  * 原位于 .cortex/archive/.../solo-flight/src/formatters/plain.formatter.ts
  */
 
-import { Task } from '../core/models/task.js';
+import type { Task } from '../core/models/task.js';
 import { priorityLabel } from '../core/models/priority.js';
 import { formatDate } from '../utils/date.js';
 

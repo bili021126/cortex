@@ -1,6 +1,5 @@
 import * as readline from "node:readline";
-import type { PlatformBridge, ConfirmationRequest, ConfirmationResponse, PlatformContext } from "@cortex/shared";
-import { PlatformKind } from "@cortex/shared";
+import { PlatformKind, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type PlatformContext } from "@cortex/shared";
 
 /**
  * CLIAdapter —— PlatformBridge 的 CLI 实现。

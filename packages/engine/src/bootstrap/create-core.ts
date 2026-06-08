@@ -2,8 +2,7 @@
 // @cortex/engine/bootstrap/create-core —— 引擎核心组件创建
 // ============================================================
 
-import type { ToolMeta } from "../platform/toolkit.js";
-import { Toolkit } from "../platform/toolkit.js";
+import { type ToolMeta, type Toolkit } from "../platform/toolkit.js";
 import { Scheduler } from "../core/scheduler.js";
 import { TaskBoard } from "../core/task-board.js";
 import { AgentPool } from "../core/agent-pool.js";
@@ -57,6 +56,8 @@ export async function createSpecialAgents(
   config: BootstrapResult,
   llms: Map<string, LlmAdapter>,
   codingStandards: string,
+  observer?: PipelineObserver,
+  workspaceRoot?: string,
 ): Promise<SpecialAgents> {
   // MetaAgent（甘雨）
   const metaDef = config.agentDefinitions.find((d) => d.type === "meta");
@@ -65,6 +66,8 @@ export async function createSpecialAgents(
     undefined,
     metaDef?.planningPrompt,
     metaDef?.replanPrompt,
+    observer, // v2.5.41: 注入管线——MetaAgent 订阅事件以获取执行层信息
+    workspaceRoot, // v2.5.41: 工作区边界校验——甘雨必须知道当前工作区路径
   );
 
   // StrategistAgent（钟离 + 霜凝）

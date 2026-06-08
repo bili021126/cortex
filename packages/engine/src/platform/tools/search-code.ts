@@ -1,77 +1,79 @@
 // ============================================================
-// @cortex/engine/platform/tools/search-code —— search_code 工具 Handler
+// @cortex/engine/platform/tools/search-code —— search_code 工具
 //
 // 使用 ripgrep 优先，不可用时退回 Node.js 原生 grep。
+//
+// @core v3 —— Tool 接口统一：export createTool(ctx): Tool
 // ============================================================
 
-import type { ToolMeta } from "../toolkit.js";
+import { ToolCategory, ReversibilityLevel as RL, type Tool, type DirectoryEntry } from "@cortex/shared";
+import { LocalTool } from "../local-tool.js";
 import type { ToolContext } from "./types.js";
-import type { ToolHandler, DirectoryEntry } from "@cortex/shared";
-import { ToolCategory } from "@cortex/shared";
-import { ReversibilityLevel as RL } from "@cortex/shared";
 import { isTestEnv } from "../../test-env.js";
 
-export const meta: ToolMeta = {
-  category: ToolCategory.Search,
-  description: "Search for code patterns in the project.",
-  level: RL.L0,
-  parameters: {
-    type: "object",
-    properties: {
-      query: { type: "string", description: "Code pattern to search" },
+export function createTool(ctx: ToolContext): Tool {
+  return new LocalTool(
+    "search_code",
+    ToolCategory.Search,
+    "Search for code patterns in the project.",
+    {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Code pattern to search" },
+      },
+      required: ["query"],
     },
-    required: ["query"],
-  },
-  required: ["query"],
-};
-
-export function createHandler(ctx: ToolContext): ToolHandler {
-  return async (params) => {
-    const query = params.query as string;
-    if (!query) {
-      return { success: false, error: "search_code 缺少 query 参数" };
-    }
-    try {
-      const searchRoot = ctx.workspaceRoot ?? ctx.fs.cwd();
-      let output: string;
-      let fallbackError: string | null = null;
+    RL.L0,
+    async (params) => {
+      const query = params.query as string;
+      if (!query) {
+        return { success: false, error: "search_code 缺少 query 参数" };
+      }
       try {
-        output = await ctx.fs.execFile(
-          "rg",
-          ["--line-number", "--max-count", "30", "--no-heading", query],
-          { cwd: searchRoot, timeout: ctx.toolTimeouts.searchCode },
-        );
-      } catch (e) {
-        const err = e as { status?: number; stderr?: unknown; message?: string };
-        const stderr = err.stderr?.toString() ?? "";
-        if (err.status === 1) {
-          // 无匹配，rg 正常工作
-          output = "";
-        } else {
-          if (!isTestEnv()) {
-            console.warn(
-              `[toolkit] search_code: rg failed (exit ${err.status ?? "?"}), falling back to grep. stderr: ${stderr.slice(0, 200)}`,
-            );
-          }
-          try {
-            output = await grepFallback(ctx, searchRoot, query);
-          } catch (fallbackErr) {
-            fallbackError = `grep fallback failed: ${String(fallbackErr)}`;
+        const searchRoot = ctx.workspaceRoot ?? ctx.fs.cwd();
+        let output: string;
+        let fallbackError: string | null = null;
+        try {
+          output = await ctx.fs.execFile(
+            "rg",
+            ["--line-number", "--max-count", "30", "--no-heading", query],
+            { cwd: searchRoot, timeout: ctx.toolTimeouts.searchCode },
+          );
+        } catch (e) {
+          const err = e as { status?: number; stderr?: unknown; message?: string };
+          const stderr = err.stderr?.toString() ?? "";
+          if (err.status === 1) {
+            // 无匹配，rg 正常工作
             output = "";
+          } else if (process.platform === "win32") {
+            // Windows: rg 不可用时直接返回错误，不走 grep 回退（grep 遍历目录树耗时 35-47s，会耗尽 ReAct 预算）
+            return { success: false, error: "search_code: rg 不可用。请使用 list_files 列出目录 + read_file 读取具体文件。" };
+          } else {
+            if (!isTestEnv()) {
+              console.warn(
+                `[toolkit] search_code: rg failed (exit ${err.status ?? "?"}), falling back to grep. stderr: ${stderr.slice(0, 200)}`,
+              );
+            }
+            try {
+              output = await grepFallback(ctx, searchRoot, query);
+            } catch (fallbackErr) {
+              fallbackError = `grep fallback failed: ${String(fallbackErr)}`;
+              output = "";
+            }
           }
         }
+        if (!output.trim()) {
+          const msg = fallbackError
+            ? `搜索失败: rg 不可用且 grep 降级也失败 (${fallbackError})`
+            : `未找到匹配 "${query}" 的结果`;
+          return { success: true, output: msg };
+        }
+        return { success: true, output: output.slice(0, 10_000) };
+      } catch (e) {
+        return { success: false, error: `搜索失败: ${String(e)}` };
       }
-      if (!output.trim()) {
-        const msg = fallbackError
-          ? `搜索失败: rg 不可用且 grep 降级也失败 (${fallbackError})`
-          : `未找到匹配 "${query}" 的结果`;
-        return { success: true, output: msg };
-      }
-      return { success: true, output: output.slice(0, 10_000) };
-    } catch (e) {
-      return { success: false, error: `搜索失败: ${String(e)}` };
-    }
-  };
+    },
+  );
 }
 
 /**

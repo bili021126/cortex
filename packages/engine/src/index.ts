@@ -16,8 +16,8 @@
 // ============================================================
 
 // ── 工厂组件 ─────────────────────────────────────
-export { createAgent, runReActLoop, extractSkillsFromOutput, scanOutputFilesForSkills, persistSkillsToMemory, loadSkillsFromMemory, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence } from "./components/index.js";
-export type { AgentFactoryConfig, ReActContext, SkillExtractResult, CrystallizeOptions, CrystallizeResult, KnowledgeMetadata, ExternalSearcher, VerifyOptions, VerifyResult } from "./components/index.js";
+export { createAgent, runReActLoop, extractSkillsFromOutput, scanOutputFilesForSkills, persistSkillsToMemory, loadSkillsFromMemory, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence, validateExternalSkillJson, externalJsonToSkillTemplate, importExternalSkill, SkillTemplateEngine } from "./components/index.js";
+export type { AgentFactoryConfig, ReActContext, SkillExtractResult, CrystallizeOptions, CrystallizeResult, KnowledgeMetadata, ExternalSearcher, VerifyOptions, VerifyResult, SkillJsonValidationResult, SkillJsonValidationError, SkillJsonValidationWarning, SkillJsonValidationInfo, SkillJsonValidator, SkillStatus, TemplateEngineOptions, TemplateContext } from "./components/index.js";
 
 // ── Agent（registry 统一导出 + 特殊／实验性 Agent） ──
 // 配置函数 & 记忆查询（9 Agent）→ 来自 registry.ts
@@ -31,7 +31,7 @@ export {
 // 复杂 Agent 创建
 export { createInspectorAgent, createBrowserAgent, ButlerAgent } from "./agents/index.js";
 // 特殊 Agent & Core-2 实验性
-export { MetaAgent, StrategistAgent, ApiAgent, DataAgent } from "./agents/index.js";
+export { MetaAgent, StrategistAgent, ApiAgent, DataAgent, type IntentClarification } from "./agents/index.js";
 
 // ── 记忆子系统 ───────────────────────────────────
 export {
@@ -39,8 +39,9 @@ export {
   resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE,
   MemoryStoreMonitor, registerSkillPipeline,
   embedText, embedBatch, isModelLoaded, defaultEmbeddingService,
+  ContextBuilder,
 } from "./memory/index.js";
-export type { IMemoryStore, MaintainReport, IEmbeddingService } from "./memory/index.js";
+export type { IMemoryStore, MaintainReport, IEmbeddingService, ContextBuildResult } from "./memory/index.js";
 
 // ── Bootstrap 集成入口 ──────────────────────────
 export { bootstrapEngine, resolveLlm } from "./bootstrap/bootstrap-engine.js";
@@ -64,10 +65,17 @@ export { ReplanManager } from "./core/replan-manager.js";
 export type { ReplanItem } from "./core/replan-manager.js";
 export { ClaimStep } from "./core/dispatch-steps/claim-step.js";
 export { SpawnStep } from "./core/dispatch-steps/spawn-step.js";
-export { SkillInjectionStep } from "./core/dispatch-steps/skill-injection-step.js";
 export { ExecuteStep } from "./core/dispatch-steps/execute-step.js";
+export { RlmExecuteStep } from "./core/dispatch-steps/rlm-execute-step.js";
 export { CleanupStep } from "./core/dispatch-steps/cleanup-step.js";
+export { BoundaryGuardStep, BOUNDARY_RULES } from "./core/dispatch-steps/boundary-guard-step.js";
+export type { AgentBoundaryRule } from "./core/dispatch-steps/boundary-guard-step.js";
 export type { DispatchCtx, IDispatchStep } from "./core/dispatch-steps/types.js";
+
+// ── RLM 递归拆解 + DENSITY 密度压缩（思考执行体系总纲 §四/§六）──
+export { decompose, shouldDecompose, shouldExecuteDecomposition, MAX_RLM_DEPTH, parseDecomposeResponse, buildDecomposePrompt } from "./core/rlm-decompose.js";
+export type { LlmCallable } from "./core/rlm-decompose.js";
+export { parseDensityTag, stripDensityTag, compressByDensity, annotateAndCompress, mergeContext, densityToStrategy } from "./core/density-compress.js";
 export { FileLockManager } from "./platform/file-lock-manager.js";
 export { Toolkit } from "./platform/toolkit.js";
 export { CLIAdapter } from "./platform/cli-adapter.js";
@@ -114,59 +122,15 @@ export { McpSearchBackend, DdgSearchBackend } from "./platform/search-backend.js
 export type { SearchBackend, SearchResult } from "./platform/search-backend.js";
 export { compressContent, extractFindings, compressForRoundtable } from "./platform/context-compressor.js";
 export type { CompressionLevel, CompressedReport, ReportStats, RoundtableCompressInput } from "./platform/context-compressor.js";
-export { McpClient } from "./platform/mcp-client.js";
+export { McpClient, McpToolAdapter, MCP_PREFIX } from "./platform/mcp-client.js";
 export type { McpServerConfig, McpToolDef } from "./platform/mcp-client.js";
+export { LocalTool } from "./platform/local-tool.js";
 
-// ── 技能系统（模板） ───────────────────────────
-export { SkillRegistry } from "./registry/skill-registry.js";
-export { SkillExecutor } from "./core/skill-executor.js";
+// ── 技能系统 ────────────────────────────────────
+export { SkillRegistry, deriveStatus } from "./registry/skill-registry.js";
 
-// ── 可执行技能注册表 ───────────────────────────
-export {
-  DefaultSkillRegistry,
-  BaseSkill,
-  SkillCategory,
-  SkillErrorCode,
-  DefaultServiceContainer,
-  compose,
-  createLoggingMiddleware,
-  timingMiddleware,
-  errorCatchMiddleware,
-  createSkillId,
-  createSkillVersion,
-  safeCreateSkillId,
-  safeCreateSkillVersion,
-  generateTraceId,
-  validateSkillMeta,
-  formatValidationErrors,
-  withTimeout,
-  createSkillError,
-  skillNotFound,
-} from "./registry/executable-skill/index.js";
-export type {
-  DefaultRegistryOptions,
-  SkillId,
-  SkillVersion,
-  SkillMeta,
-  SkillInput,
-  SkillResult,
-  SkillError,
-  ExecutionMeta,
-  ServiceContainer,
-  Logger,
-  SkillMiddleware,
-  RegistryFilter,
-  RegisterOptions,
-  Skill,
-  SimpleResult,
-  ValidationError,
-} from "./registry/executable-skill/index.js";
-export type {
-  SkillRegistry as ExecSkillRegistry,
-} from "./registry/executable-skill/index.js";
-
-// ── 内置技能 ───────────────────────────────────
-export { EchoSkill, CalculatorSkill, RegistryInfoSkill } from "./skills/builtin/index.js";
+// ── Core-2: 引擎遥测 ───────────────────────────
+export { getTelemetry, setTelemetry, recordTelemetry, shutdownTelemetry } from "./telemetry/engine-telemetry.js";
 
 // ── 引擎配置 ───────────────────────────────────
 // @note 配置类型、常量、默认值统一由 @cortex/config 提供。
@@ -202,3 +166,20 @@ export type { TimeoutAction, TimeoutConfig } from "./governance/amendment-timeou
 // @note LlmAdapter 由 @cortex/engine 重导出：engine 作为 llm 的消费封装层，
 // 对 CLI/外部消费者提供统一入口，避免调用方同时依赖 @cortex/llm。
 export { LlmAdapter } from "@cortex/llm";
+
+// ── 插件体系（v3.1 配置驱动）────────────────────
+export { PluginLoader, type EnginePluginLoadConfig } from "./plugin/plugin-loader.js";
+export { registerAgentFactory, getAgentFactory, hasAgentFactory, getRegisteredAgentTypes } from "./plugin/register-all.js";
+export type { EnginePlugin, PluginContext, PluginContainer, PluginExternals, PluginHealth } from "./plugin/types.js";
+export type { AgentFactory } from "./plugin/agent-factory-registry.js";
+
+// ── 插件实例（供测试/扩展直接引用）───────────────
+export { PipelineObserverPlugin } from "./plugin/pipeline-observer.plugin.js";
+export { TaskBoardPlugin } from "./plugin/task-board.plugin.js";
+export { AgentPoolPlugin } from "./plugin/agent-pool.plugin.js";
+export { ConfirmGatePlugin } from "./plugin/confirm-gate.plugin.js";
+export { MemoryStorePlugin } from "./plugin/memory-store.plugin.js";
+export { ConsistencyLayerPlugin } from "./plugin/consistency-layer.plugin.js";
+export { MetaAgentPlugin } from "./plugin/meta-agent.plugin.js";
+export { GovernancePlugin } from "./plugin/governance.plugin.js";
+export { SchedulerPlugin } from "./plugin/scheduler.plugin.js";

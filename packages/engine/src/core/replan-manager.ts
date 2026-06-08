@@ -1,7 +1,5 @@
-import type { TaskNode, NodeResult } from "@cortex/shared";
-import { PipelinePriority, PipelineEventType } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IPipelineObserver, type NodeResult, type TaskNode } from "@cortex/shared";
 import type { ITaskBoard } from "./task-board.js";
-import type { IPipelineObserver } from "@cortex/shared";
 import type { MetaAgent } from "./meta-agent.js";
 import type { EngineConfig } from "@cortex/config";
 
@@ -10,6 +8,8 @@ export interface ReplanItem {
   node: TaskNode;
   reason: string;
   count: number; // 该节点已重规划次数
+  /** 处置类型："failure"（执行失败）| "boundary_violation"（Agent越界） */
+  disposition?: "failure" | "boundary_violation";
 }
 
 /**
@@ -41,10 +41,12 @@ export class ReplanManager {
   }
 
   /**
-   * 将失败节点入队（如果未超过 per-node 上限）。
-   * 由 _dispatchNode 在失败且需要重规划时调用。
+   * 将节点入队重规划队列。
+   * @param node 失败/越界节点
+   * @param reason 失败原因或违规描述
+   * @param disposition 处置类型："failure"（默认）| "boundary_violation"
    */
-  enqueue(node: TaskNode, reason: string): void {
+  enqueue(node: TaskNode, reason: string, disposition: "failure" | "boundary_violation" = "failure"): void {
     if (!this.metaAgent) return;
 
     const isReActTimeout = (reason).includes("Exceeded max loops");
@@ -53,7 +55,7 @@ export class ReplanManager {
     const count = this.replanCount.get(node.id) ?? 0;
     if (count >= this.config.maxReplanPerNode) return;
 
-    this.replanQueue.push({ node, reason, count });
+    this.replanQueue.push({ node, reason, count, disposition });
     this.observer.emit({
       type: PipelineEventType.NodeReplanQueued,
       priority: PipelinePriority.HIGH,
@@ -120,11 +122,23 @@ export class ReplanManager {
         allResults[origIdx] = {
           nodeId: origId,
           success: true,
-          output: "Replanned: task completed by new nodes",
+          output: this._getMergedOutput(newIds, allResults),
         };
       }
     }
     return [completed, failed];
+  }
+
+  private _getMergedOutput(newIds: string[], allResults: NodeResult[]): string {
+    const parts: string[] = [];
+    for (const id of newIds) {
+      const r = allResults.find((rr) => rr.nodeId === id);
+      if (r?.success && r.output) {
+        parts.push("[" + id + "] " + r.output.slice(0, 2000));
+      }
+    }
+    if (parts.length === 0) return "Replanned: task completed by new nodes";
+    return "[Replanned - " + newIds.length + " sub-tasks]\n" + parts.join("\n---\n");
   }
 
   /**
@@ -140,7 +154,8 @@ export class ReplanManager {
   // ── 内部实现 ─────────────────────────────────
 
   private async _drain(): Promise<void> {
-    if (!this.metaAgent) {
+    const meta = this.metaAgent;
+    if (!meta) {
       const orphanCount = this.replanQueue.length;
       this.replanQueue.length = 0;
       if (orphanCount > 0) {
@@ -174,12 +189,19 @@ export class ReplanManager {
         notificationType: "WARNING",
       });
 
-      const result = await this.metaAgent!.requestReplan(
-        item.node, item.reason, count, undefined, this.config.maxReplanPerNode,
-      );
+      const result = item.disposition === "boundary_violation"
+        ? await meta.requestBoundaryReplan(
+            item.node, item.reason, count, undefined, this.config.maxReplanPerNode,
+          )
+        : await meta.requestReplan(
+            item.node, item.reason, count, undefined, this.config.maxReplanPerNode,
+          );
 
       const newIds: string[] = [];
       for (const n of result.nodes) {
+        // 标记为 RLM 子任务——走 pool.spawnSubtask() 独立配额，
+        // 避免与主 agent 实例争抢池子导致 pool exhausted
+        n.isRlmSubtask = true;
         this.board.addNode(n);
         this.replanCount.set(n.id, count);
         newIds.push(n.id);

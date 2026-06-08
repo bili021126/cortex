@@ -1,27 +1,27 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { SkillRegistry } from "@cortex/engine";
-import { AgentType } from "@cortex/shared";
-import type { Tag } from "@cortex/shared";
+import type { SkillKind, Tag, FeedbackEntry } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
 function makeSkill(overrides: Partial<{
-  id: string; agentType: AgentType; triggerTags: Tag[]; status: string; name: string;
+  id: string; kind: SkillKind; triggerTags: Tag[]; status: string; name: string;
+  weight: number; feedbackHistory: FeedbackEntry[];
 }> = {}) {
   return {
     id: overrides.id ?? "skill-1",
-    agentType: overrides.agentType ?? AgentType.Code,
+    kind: overrides.kind ?? "action",
     name: overrides.name ?? "测试技能模板",
     triggerTags: (overrides.triggerTags ?? ["implementation", "bugfix"]) as Tag[],
     trigger: "当需要实现或修复代码时触发",
     steps: ["读取相关文件", "分析代码结构", "实施修改"],
     expectedOutput: "修改后的代码文件",
     outputFile: "output.md",
-    status: (overrides.status ?? "active") as "draft" | "trial" | "active" | "deprecated",
-    adoptionCount: 0,
-    rejectionCount: 0,
+    status: (overrides.status ?? "active") as "trial" | "active" | "deprecated",
+    weight: overrides.weight ?? 0,
+    feedbackHistory: overrides.feedbackHistory ?? [],
     discoveredBy: "LoopAgent",
     createdAt: Date.now()};
 }
@@ -59,28 +59,34 @@ describe("SkillRegistry", () => {
   });
 
   it("should filter out inactive status", () => {
-    registry.register(makeSkill({ id: "s1", status: "active" }));
-    registry.register(makeSkill({ id: "s2", status: "deprecated" }));
-    registry.register(makeSkill({ id: "s3", status: "draft" }));
+    // status 由 deriveStatus(weight, feedbackHistory) 动态推导
+    registry.register(makeSkill({ id: "s1", status: "active", weight: 5, feedbackHistory: [{ agentId: "x", rating: 1, timestamp: Date.now() }] }));
+    registry.register(makeSkill({ id: "s2", status: "deprecated", weight: -3, feedbackHistory: [
+      { agentId: "x", rating: -1, timestamp: Date.now() - 3000 },
+      { agentId: "x", rating: -1, timestamp: Date.now() - 2000 },
+      { agentId: "x", rating: -1, timestamp: Date.now() - 1000 },
+    ]}));
+    registry.register(makeSkill({ id: "s3", status: "trial", weight: 0, feedbackHistory: [] }));
 
     const matches = registry.queryByTags(["implementation"]);
-    expect(matches.length).toBe(1); // only "active"
-    expect(matches[0].id).toBe("s1");
+    expect(matches.length).toBe(2); // active + trial
+    expect(matches.map((m) => m.id).sort()).toEqual(["s1", "s3"]);
   });
 
   it("should include trial status in queries", () => {
-    registry.register(makeSkill({ id: "s1", status: "trial" }));
+    registry.register(makeSkill({ id: "s1", status: "trial", weight: 0, feedbackHistory: [] }));
     const matches = registry.queryByTags(["implementation"]);
     expect(matches.length).toBe(1);
   });
 
-  it("should query by agent type", () => {
-    registry.register(makeSkill({ id: "s1", agentType: AgentType.Code }));
-    registry.register(makeSkill({ id: "s2", agentType: AgentType.Review }));
-    registry.register(makeSkill({ id: "s3", agentType: AgentType.Code }));
+  it("should query by kind via getAll filter", () => {
+    // queryByAgent 已移除；按 kind 过滤改用 getAll() + filter
+    registry.register(makeSkill({ id: "s1", kind: "action", triggerTags: ["fix"] }));
+    registry.register(makeSkill({ id: "s2", kind: "thought", triggerTags: ["review"] }));
+    registry.register(makeSkill({ id: "s3", kind: "action", triggerTags: ["refactor"] }));
 
-    const matches = registry.queryByAgent(AgentType.Code);
-    expect(matches.length).toBe(2);
+    const actionSkills = registry.getAll().filter((s) => s.kind === "action");
+    expect(actionSkills.length).toBe(2);
   });
 
   it("should unregister a skill", () => {
@@ -107,12 +113,17 @@ describe("SkillRegistry", () => {
   });
 
   it("should track active and total counts", () => {
-    registry.register(makeSkill({ id: "s1", status: "active" }));
-    registry.register(makeSkill({ id: "s2", status: "deprecated" }));
-    registry.register(makeSkill({ id: "s3", status: "active" }));
+    // activeCount 由 deriveStatus 动态推导
+    registry.register(makeSkill({ id: "s1", status: "active", weight: 5, feedbackHistory: [{ agentId: "x", rating: 1, timestamp: Date.now() }] }));
+    registry.register(makeSkill({ id: "s2", status: "deprecated", weight: -3, feedbackHistory: [
+      { agentId: "x", rating: -1, timestamp: Date.now() - 3000 },
+      { agentId: "x", rating: -1, timestamp: Date.now() - 2000 },
+      { agentId: "x", rating: -1, timestamp: Date.now() - 1000 },
+    ]}));
+    registry.register(makeSkill({ id: "s3", status: "active", weight: 3, feedbackHistory: [{ agentId: "x", rating: 1, timestamp: Date.now() }] }));
 
     expect(registry.totalCount).toBe(3);
-    expect(registry.activeCount).toBe(2);
+    expect(registry.activeCount).toBe(2); // s1 + s3
   });
 
   it("should clear all skills", () => {
@@ -154,16 +165,16 @@ describe("SkillRegistry", () => {
 
     it("should round-trip via toJSON/fromJSON", () => {
       registry.register(makeSkill({ id: "s1", name: "Pattern Scan" }));
-      registry.register(makeSkill({ id: "s2", name: "Quick Fix", agentType: AgentType.Fix }));
+      registry.register(makeSkill({ id: "s2", name: "Quick Fix", kind: "action" }));
 
       const json = registry.toJSON();
-      expect(json.version).toBe(1);
+      expect(json.version).toBe(2); // v2.6 版本号
       expect(json.templates.length).toBe(2);
 
       const restored = SkillRegistry.fromJSON(json);
       expect(restored.totalCount).toBe(2);
       expect(restored.get("s1")?.name).toBe("Pattern Scan");
-      expect(restored.get("s2")?.agentType).toBe(AgentType.Fix);
+      expect(restored.get("s2")?.kind).toBe("action");
     });
 
     it("should save and load via JSON file", () => {
@@ -196,9 +207,9 @@ describe("SkillRegistry", () => {
     });
 
     it("should preserve index consistency after round-trip", () => {
-      registry.register(makeSkill({ id: "s1", agentType: AgentType.Code, triggerTags: ["implementation"] }));
-      registry.register(makeSkill({ id: "s2", agentType: AgentType.Review, triggerTags: ["review"] }));
-      registry.register(makeSkill({ id: "s3", agentType: AgentType.Code, triggerTags: ["refactor"] }));
+      registry.register(makeSkill({ id: "s1", kind: "action", triggerTags: ["implementation"] }));
+      registry.register(makeSkill({ id: "s2", kind: "thought", triggerTags: ["review"] }));
+      registry.register(makeSkill({ id: "s3", kind: "action", triggerTags: ["refactor"] }));
 
       const filePath = path.join(tmpDir, "skills.json");
       registry.saveJson(filePath);
@@ -206,8 +217,9 @@ describe("SkillRegistry", () => {
       const loaded = SkillRegistry.loadJson(filePath);
       expect(loaded.queryByTags(["implementation"]).length).toBe(1);
       expect(loaded.queryByTags(["review"]).length).toBe(1);
-      expect(loaded.queryByAgent(AgentType.Code).length).toBe(2);
-      expect(loaded.queryByAgent(AgentType.Review).length).toBe(1);
+      // queryByAgent 已移除，改用 getAll + filter
+      expect(loaded.getAll().filter((s) => s.kind === "action").length).toBe(2);
+      expect(loaded.getAll().filter((s) => s.kind === "thought").length).toBe(1);
     });
   });
 });

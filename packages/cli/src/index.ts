@@ -19,8 +19,15 @@ export { convert, convertToDocument } from "@cortex/parser";
 export { main as runCli } from "./main.js";
 export type { CommandContext, CommandResult, OutputFormat } from "./types.js";
 
-// ── 命令注册 ───────────────────────────────────────
+// ── 引导模块 ───────────────────────────────────────
+export { bootstrapLlm, hasAnyLlmKey, enableLlmAudit } from "./bootstrap/llm.js";
+export type { LlmBootstrapResult } from "./bootstrap/llm.js";
+export { bootstrapMcp } from "./bootstrap/mcp.js";
+export type { McpBootstrapResult } from "./bootstrap/mcp.js";
+
+// ── 命令注册 ─────────────────────────────────────
 export { CommandRegistry } from "./commands/index.js";
+export { COMMAND_DEFS, registerCommands } from "./commands/command-list.js";
 export { CORTEX_VERSION } from "@cortex/config";
 export type { CommandDefinition, CommandHandler } from "./types.js";
 
@@ -43,6 +50,12 @@ export { createHelpHandler } from "./commands/help.js";
 // ── 格式器 ─────────────────────────────────────────
 export { getFormatter, detectDefaultFormat } from "./formatters/index.js";
 export type { Formatter } from "./formatters/index.js";
+
+// ── 工具函数 ───────────────────────────────────────
+export { parseGlobalFormat, createDefaultContext, outputResult, stripGlobalOptions, isDirectRun } from "./utils.js";
+
+// ── Plan 执行器 ────────────────────────────────────
+export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm, executePlanInput, handlePlanCommand } from "./commands/repl/executors/plan-executor.js";
 
 // ── Platform ───────────────────────────────────────
 export { getPlatformBridge, closePlatformBridge } from "./platform.js";

@@ -135,4 +135,135 @@ describe("MetaAgent", () => {
     expect(nodes[0].type).toBe("analysis");
     expect(nodes[0].tags).toContain("analysis");
   });
+
+  // ── 空数组 [] 处理 ──
+
+  it("LLM 返回空数组 [] 时不生成兜底节点（工作区边界拒绝）", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+    adapter.injectMock(async () => ({
+      content: "[]",
+      toolCalls: []}));
+
+    const meta = new MetaAgent(adapter);
+    const nodes = await meta.plan("分析 D:\\outside\\project");
+
+    // 空数组是合法结果——不应生成 fallback 节点
+    expect(nodes.length).toBe(0);
+  });
+
+  it("LLM 返回空数组带空格也不兜底", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+    adapter.injectMock(async () => ({
+      content: "  []  ",
+      toolCalls: []}));
+
+    const meta = new MetaAgent(adapter);
+    const nodes = await meta.plan("工作区外的项目分析");
+
+    expect(nodes.length).toBe(0);
+  });
+
+  // ── clarifyIntent: 意图明晰化确认 ──
+
+  it("clarifyIntent 正确解析结构化意图", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+    adapter.injectMock(async () => ({
+      content: JSON.stringify({
+        goal: "分析用户模块的数据流",
+        actionType: "analysis",
+        scope: "controller/service/dao 层",
+        constraints: "仅读不写",
+        unclear: null,
+      }),
+      toolCalls: [],
+    }));
+
+    const meta = new MetaAgent(adapter);
+    const result = await meta.clarifyIntent("分析用户模块的数据流，不要修改任何文件");
+
+    expect(result.goal).toBe("分析用户模块的数据流");
+    expect(result.actionType).toBe("analysis");
+    expect(result.scope).toBe("controller/service/dao 层");
+    expect(result.constraints).toBe("仅读不写");
+    expect(result.unclear).toBeUndefined();
+    expect(result.originalIntent).toBe("分析用户模块的数据流，不要修改任何文件");
+  });
+
+  it("clarifyIntent 解析失败时回退为 inquiry", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+    adapter.injectMock(async () => ({
+      content: "Sorry, I cannot parse this.",
+      toolCalls: [],
+    }));
+
+    const meta = new MetaAgent(adapter);
+    const result = await meta.clarifyIntent("乱七八糟的输入 @@#$%");
+
+    // 解析失败时用原始 intent 前 80 字符作为 goal
+    expect(result.goal).toBe("乱七八糟的输入 @@#$%");
+    expect(result.actionType).toBe("inquiry");
+    expect(result.originalIntent).toBe("乱七八糟的输入 @@#$%");
+  });
+
+  it("clarifyIntent 对非法 actionType 归一化为 inquiry", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+    adapter.injectMock(async () => ({
+      content: JSON.stringify({
+        goal: "do something",
+        actionType: "hack",
+        scope: "all",
+        constraints: "none",
+      }),
+      toolCalls: [],
+    }));
+
+    const meta = new MetaAgent(adapter);
+    const result = await meta.clarifyIntent("hack the planet");
+
+    expect(result.actionType).toBe("inquiry"); // 非法值被归一化
+    expect(result.goal).toBe("do something");
+  });
+
+  it("clarifyIntent 正确传递 unclear 字段", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+    adapter.injectMock(async () => ({
+      content: JSON.stringify({
+        goal: "分析代码",
+        actionType: "analysis",
+        scope: "未知",
+        constraints: "无",
+        unclear: "用户未指定具体文件或模块",
+      }),
+      toolCalls: [],
+    }));
+
+    const meta = new MetaAgent(adapter);
+    const result = await meta.clarifyIntent("分析代码");
+
+    expect(result.unclear).toBe("用户未指定具体文件或模块");
+  });
 });

@@ -1,21 +1,18 @@
-import type { TaskNode, NodeResult, ExecutionReport, AgentType, Agent, IMemoryStore } from "@cortex/shared";
-import { PipelinePriority, AgentStatus, PipelineEventType } from "@cortex/shared";
+import { AgentStatus, PipelineEventType, PipelinePriority, type Agent, type AgentType, type ExecutionReport, type IMemoryStore, type IPipelineObserver, type NodeResult, type PipelineHandler, type TaskNode } from "@cortex/shared";
 import type { ITaskBoard } from "./task-board.js";
 import type { ISchedulerAgentPool } from "./agent-pool.js";
-import type { IPipelineObserver } from "@cortex/shared";
 import type { MetaAgent } from "./meta-agent.js";
 import { topologicalSort } from "./topological-sort.js";
 import { findAllMatchingAgents } from "./agent-matcher.js";
 import { ReplanManager } from "./replan-manager.js";
 import { isTestEnv } from "../test-env.js";
 import { type EngineConfig, resolveConfig } from "@cortex/config";
-import type { SkillExecutor } from "./skill-executor.js";
 import type { DispatchCtx, IDispatchStep } from "./dispatch-steps/types.js";
 import type { LlmCallable } from "./rlm-decompose.js";
 import { ClaimStep } from "./dispatch-steps/claim-step.js";
 import { SpawnStep } from "./dispatch-steps/spawn-step.js";
-import { SkillInjectionStep } from "./dispatch-steps/skill-injection-step.js";
 import { RlmExecuteStep } from "./dispatch-steps/rlm-execute-step.js";
+import { BoundaryGuardStep } from "./dispatch-steps/boundary-guard-step.js";
 import { CleanupStep } from "./dispatch-steps/cleanup-step.js";
 
 /**
@@ -25,7 +22,6 @@ import { CleanupStep } from "./dispatch-steps/cleanup-step.js";
  */
 export interface IScheduler {
   register(agentType: string, agent: Agent, model: string): void;
-  setSkillExecutor(executor: SkillExecutor): void;
   executeAll(): Promise<ExecutionReport>;
 }
 
@@ -82,7 +78,6 @@ export class Scheduler implements IScheduler {
   private models = new Map<string, string>();
   private readonly replanManager: ReplanManager;
   private readonly config: Required<EngineConfig>;
-  private _skillExecutor?: SkillExecutor;
   /** 当前运行会话标识——executeAll() 启动时生成 */
   private _sessionId?: string;
   /** MemoryStore 引用——用于 beginSession/endSession 生命周期管理 */
@@ -103,11 +98,6 @@ export class Scheduler implements IScheduler {
   register(agentType: string, agent: Agent, model: string): void {
     this.agents.set(agentType, agent);
     this.models.set(agentType, model);
-  }
-
-  /** 注入技能执行器（Agent 执行前自动匹配技能注入 prompt） */
-  setSkillExecutor(executor: SkillExecutor): void {
-    this._skillExecutor = executor;
   }
 
   /** 注入 MemoryStore——用于 executeAll() 的 sessionId 生命周期管理 */
@@ -143,6 +133,18 @@ export class Scheduler implements IScheduler {
     let round = 0;
     let replanFlight: Promise<void> | null = null;
     const deadline = startTime + this.config.executeAllTimeoutMs;
+
+    // ─── 边界违规事件监听：Agent 越界写文件 → 入队 replanManager → MetaAgent 重规划 ───
+    const boundaryHandler: PipelineHandler = (event) => {
+      if (event.type === PipelineEventType.AgentBoundaryViolation) {
+        const payload = event.payload as { nodeId: string; reason: string };
+        const node = this.board.getNode(payload.nodeId);
+        if (node) {
+          this.replanManager.enqueue(node, payload.reason, "boundary_violation");
+        }
+      }
+    };
+    this.observer.on(PipelinePriority.HIGH, boundaryHandler);
 
     while (true) {
       // ── 全局超时检查 ──
@@ -286,6 +288,9 @@ export class Scheduler implements IScheduler {
     failed = actualFailed;
     this.replanManager.reset();
 
+    // 退订边界违规监听
+    this.observer.off(PipelinePriority.HIGH, boundaryHandler);
+
     // 终结 MemoryStore 会话——归档 Active 记忆，湮灭 Pending 记忆
     this._memoryStore?.endSession().catch(() => { /* best-effort */ });
 
@@ -389,7 +394,6 @@ export class Scheduler implements IScheduler {
       board: this.board,
       pool: this.pool,
       observer: this.observer,
-      skillExecutor: this._skillExecutor,
       isTestEnv: isTestEnv(),
       node,
       llmChat: this._buildLlmChat(),
@@ -398,13 +402,10 @@ export class Scheduler implements IScheduler {
     const steps: IDispatchStep[] = [
       new ClaimStep(),
       new SpawnStep(),
+      new RlmExecuteStep(),
+      new BoundaryGuardStep(),
+      new CleanupStep(),
     ];
-
-    if (this._skillExecutor) {
-      steps.push(new SkillInjectionStep());
-    }
-
-    steps.push(new RlmExecuteStep(), new CleanupStep());
 
     return await this._runDispatchPipeline(ctx, steps);
   }
@@ -449,6 +450,7 @@ export class Scheduler implements IScheduler {
       const steps: IDispatchStep[] = [
         new SpawnStep(),
         new RlmExecuteStep(),
+        new BoundaryGuardStep(),
         new CleanupStep(),
       ];
 

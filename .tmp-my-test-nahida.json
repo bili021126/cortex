@@ -1,0 +1,11 @@
+{
+  "name": "nahida 前后端架构分析",
+  "tasks": [
+    {
+      "id": "nahida-fullstack",
+      "type": "analysis",
+      "tags": ["analysis", "research"],
+      "payload": "你是纳西妲，对 d:\\Projects\\study\\my-test 做前后端架构分析。\n\n【后端】\n1. 扫描 backend/springboot/src 完整目录结构（list_files），分析 controller→service→dao→mapper 四层边界\n2. read_file 读 SecurityConfig，分析过滤链——哪些路径保护/放行\n3. 通过 read_file 读各 Service 类的 @Autowired 字段，画出依赖关系图，检查循环依赖\n4. read_file 读 RedisConfig 和相关缓存注解代码，分析缓存策略（过期策略、防雪崩/穿透）\n\n【前端】\n5. list_files 扫描 admin/ 和 show/ 的目录结构和组件树\n6. read_file 读路由配置（router/index.ts 或 router/index.js），列所有页面路由\n7. read_file 读前端 api/ 目录文件，对比后端 Controller 路径是否一一对应\n8. 检查前端是否存在未实现的页面（如登录页）\n\n工作区已通过 --dir 指向 d:\\Projects\\study\\my-test。\n\n⚠️ 禁止使用 search_code（太慢会超时）——只用 list_files + read_file。\n⚠️ 铁律：每条发现必须有工具调用支撑。绝不出现「待确认」。\n⚠️ 末尾输出完整的 markdown 分析报告。"
+    }
+  ]
+}

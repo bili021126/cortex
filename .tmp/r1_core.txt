@@ -1,0 +1,20 @@
+﻿diff --git a/packages/engine/src/bootstrap/create-core.ts b/packages/engine/src/bootstrap/create-core.ts
+index 3c9488ad..e3284c2c 100644
+--- a/packages/engine/src/bootstrap/create-core.ts
++++ b/packages/engine/src/bootstrap/create-core.ts
+@@ -57,6 +57,7 @@ export async function createSpecialAgents(
+   config: BootstrapResult,
+   llms: Map<string, LlmAdapter>,
+   codingStandards: string,
++  observer?: PipelineObserver,
+ ): Promise<SpecialAgents> {
+   // MetaAgent锛堢敇闆級
+   const metaDef = config.agentDefinitions.find((d) => d.type === "meta");
+@@ -65,6 +66,7 @@ export async function createSpecialAgents(
+     undefined,
+     metaDef?.planningPrompt,
+     metaDef?.replanPrompt,
++    observer, // v2.5.41: 娉ㄥ叆绠＄嚎鈥斺€擬etaAgent 璁㈤槄浜嬩欢浠ヨ幏鍙栨墽琛屽眰淇℃伅
+   );
+ 
+   // StrategistAgent锛堥挓绂?+ 闇滃嚌锛?

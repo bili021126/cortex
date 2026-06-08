@@ -1,10 +1,10 @@
-import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry, ReadMode } from "@cortex/shared";
-import { AgentType as AT, AgentStatus as AS } from "@cortex/shared";
+import { AgentType as AT, AgentStatus as AS, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
 import type { AgentPool } from "../core/agent-pool.js";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
+import { BROWSER_DEFAULT_VIEWPORT } from "@cortex/config";
 import { chromium, type Browser, type Page } from "playwright";
 
 /**
@@ -103,7 +103,7 @@ export function createBrowserAgent(
     if (browser?.isConnected()) return;
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage();
-    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.setViewportSize(BROWSER_DEFAULT_VIEWPORT);
   }
 
   const origWakeup = agent.wakeup;

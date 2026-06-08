@@ -1,5 +1,4 @@
-import type { ConfirmationRequest, ConfirmationResponse, ReversibilityLevel, PlatformBridge } from "@cortex/shared";
-import { ReversibilityLevel as RL } from "@cortex/shared";
+import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel } from "@cortex/shared";
 import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_NODE_ENV } from "@cortex/config";
 
 /**
@@ -101,22 +100,38 @@ export class ConfirmGate {
 
     // 有 bridge 时走真实用户交互
     if (this.bridge) {
-      const req = this.pending.get(requestId)!;
+      const req = this.pending.get(requestId);
+      if (!req) return false;
       try {
         const response = await this.bridge.confirm(req);
         return response.approved;
       } finally {
         this.pending.delete(requestId);
+        this.resolvers.delete(requestId);
+        this.rejecters.delete(requestId);
       }
     }
 
-    // 无 bridge 时挂起 Promise，等待 resolve()/reject() 或超时
+    // 无 bridge 时：创建 Promise，等待 resolve() 或超时
     return await new Promise<boolean>((resolve, reject) => {
-      this.resolvers.set(requestId, resolve);
-      this.rejecters.set(requestId, reject);
-      setTimeout(() => {
-        this.handleTimeout(requestId, this.pending.get(requestId)?.level ?? RL.L2);
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId);
+        this.resolvers.delete(requestId);
+        this.rejecters.delete(requestId);
+        resolve(false);
       }, effectiveTimeout);
+
+      this.resolvers.set(requestId, (approved: boolean) => {
+        clearTimeout(timer);
+        this.pending.delete(requestId);
+        resolve(approved);
+      });
+
+      this.rejecters.set(requestId, (reason: Error) => {
+        clearTimeout(timer);
+        this.pending.delete(requestId);
+        reject(reason);
+      });
     });
   }
 

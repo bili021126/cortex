@@ -5,8 +5,7 @@
 // 显式路由优先，未匹配的事件默认 fallback 到 info 通道。
 // ============================================================
 
-import { NotificationChannel } from "./types.js";
-import type { RouteEntry, RouteTableMap } from "./types.js";
+import { NotificationChannel, type RouteEntry, type RouteTableMap } from "./types.js";
 
 /** 默认路由——未在表中显式声明的事件走 info 通道，不持久化，不确认 */
 const DEFAULT_ROUTE: RouteEntry = {

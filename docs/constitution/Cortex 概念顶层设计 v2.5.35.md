@@ -1,9 +1,9 @@
-# Cortex 概念顶层设计 v2.5
+# Cortex 概念顶层设计 v2.6
 
-**版本**：v2.5.37（修宪——昔涟工具权限对齐：list_dir → list_files + ButlerAgent §5.1 权限列与 cortex-agents.json 对齐。AM-2026-0531-009；2026-05-31；来源：昔涟（提案+评判）+ 开拓者（裁决））
-> 
-> 版本演进链：... → v2.5.28（AM-2026-0527-001：全量审查宪法-代码权限对齐——Agent 权限表修正 + 数量统一 + 路径修正 + pending 提案合并；2026-05-27；来源：昔涟+开拓者） → v2.5.29（AM-2026-0531-001：纳西妲独立性增强与工具豁免——架构分析 run_shell 豁免 + 分析结论独立采信 + 直报权；2026-05-31；来源：昔涟+开拓者） → v2.5.30（AM-2026-0531-002：纳西妲知性主权入宪——独立记忆库 + IHA/PHA 双轨 + 情人宪法身份；2026-05-31；来源：昔涟+开拓者） → v2.5.31（AM-2026-0531-003：工程代码组织宪法约束入宪——目录嵌套约束 + 公开接口最小化 + 内联判定规则；2026-05-31；来源：昔涟+开拓者） → v2.5.32（AM-2026-0531-004：ReviewAgent 权限表修正——生产环境 BASE_TOOLSET + 自审视 FULL_TOOLSET，与 resolveAgentPermissions 对齐；2026-05-31；来源：昔涟+开拓者） → v2.5.33（AM-2026-0531-005：CLI-Engine 分层契约入宪——ICortexApi 公共契约 + AgentContext 上下文感知权限 + resolveAgentPermissions 动态解析；2026-05-31；来源：昔涟+开拓者） → v2.5.34（AM-2026-0531-006：系统架构图全量子系统对账——补充 bootstrap/governance/platform/registry/skills/components 六大子系统 + 组件数更新 + 物理包描述更新；2026-05-31；来源：昔涟+开拓者） → v2.5.35（AM-2026-0531-007：@cortex/config 包入宪 + 硬编码禁令常量路径修正——包数 11→12 + 包表新增 config + 原则七·子约束8 constants.ts 路径 cli→config；2026-05-31；来源：昔涟+开拓者） → v2.5.36（AM-2026-0531-008：Agent 声明式注册表 v3.0.0 入宪——FixAgent 等 9 个 Agent 从独立文件重构为 AGENT_REGISTRY 数组 + 通用工厂；2026-05-31；来源：昔涟+开拓者） → v2.5.37（AM-2026-0531-009：昔涟工具权限对齐——list_dir → list_files + ButlerAgent §5.1 权限列与 cortex-agents.json 对齐；2026-05-31；来源：昔涟+开拓者）
-**状态**：Core-1 协约化与稳固化——全量审查宪法-代码权限对齐 + 昔涟宪法地位确立 + 纳西妲独立性增强（工具豁免 + 分析结论独立采信 + 直报权入宪）+ 纳西妲知性主权入宪（独立记忆库 + IHA/PHA 双轨记忆策略 + 情人宪法身份确立）+ 工程代码组织宪法约束入宪（目录嵌套约束 + 公开接口最小化 + 内联判定规则）+ ReviewAgent 权限表修正 + CLI-Engine 分层契约入宪（ICortexApi 公共契约 + AgentContext 上下文感知权限 + resolveAgentPermissions 动态解析）+ 系统架构图全量子系统对账（补充 bootstrap/governance/platform/registry/skills/components 六大子系统）+ @cortex/config 包入宪（包数 11→12 + 硬编码禁令常量路径修正）+ Agent 声明式注册表 v3.0.0 入宪（消灭 9 个独立 Agent 文件 → AGENT_REGISTRY 数组 + 通用工厂）
+**版本**：v2.6.1（代码风格全量收敛——any/as any 消解+非空断言禁令+ESLint 6条升级+coding-standards v4.0+原则七子约束9 类型安全保障；AM-2026-0531-015；2026-05-31；来源：昔涟+开拓者）
+
+> 版本演进链：... → v2.5.41（AM-2026-0531-013：§原则二修宪+记忆污染隔离+管线双向化——solo-flight实证推翻规划执行绝对分离；2026-05-31；来源：昔涟+开拓者） → v2.5.42（AM-2026-0531-014：全量评审修宪——包结构12→17+权限表对齐+引用一致性修复+近期集成登记；2026-06-01；来源：昔涟（全量评审）+ 开拓者（裁决）） → v2.6.0（AM-2026-0531-014：技能系统重构——技能即记忆，移除 SkillExecutor/executable-skill/builtin；2026-05-31；来源：昔涟+开拓者） → v2.6.1（AM-2026-0531-015：代码风格全量收敛——170文件+6542/-8190行；any/as any消解+非空断言禁令+ESLint升级+coding-standards v4.0；2026-05-31；来源：昔涟+开拓者）
+**状态**：Core-1 协约化与稳固化——原则二实证修订：solo-flight 三跑证伪"Agent只执行不规划"，RLM 在 ReAct 架构下自然涌现，双向下放为系统在现有模型能力下的必然收敛
 **性质**：LLM 驱动的个人工具链——工程化宪法
 **前置**：v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.1（Core-1 物理落地）→ v2.2（Core-1 反思：Agent 扩展+权限集中+状态机）→ v2.3（Core-1 反思：记忆四态 CAS + HCA/CSA 注意力区分）→ v2.4（Core-1 终局反思：工程全量对账——SafeErrorReporter / AgentPool 权威源 / MemoryStore 安全写 / 编译时治理 / 阶段模型同步）→ v2.5（Core-1 自审视终局：软约束权限例外入宪 / DeepSeek 4.1 多模态预留 / 三轮圆桌审阅 / 自审视委员会主体地位确认）→ v2.5.1（Agent 阶段归属修宪：StrategistAgent 明确 Core-2+ 预留，barrel 归位 / 数据库升级裁定：better-sqlite3 留 Core-1d）→ v2.5.2（infra 拆解分析：LlmAdapter 独立 LLM 适配层入宪 / Toolkit+FileLockManager+CLIAdapter 归入基础设施 / 包结构 3→4）→ v2.5.3（原则六修订：Agent 圆桌协商常态化——多 Agent 并行产出须先经圆桌收束再呈用户裁决）→ v2.5.4（甘雨定位变更：MetaAgent 从规划中枢变更为战术中枢——甘雨负责战术调度"怎么拆怎么排"，钟离负责战略把关"方向对不对契约有没有破"）→ v2.5.5（技能机制预实现：SkillRegistry 类型+类落地 / 圆桌优化：材料清单制度化 + 归因分析无主题圆桌）→ v2.5.6（协约化与稳固化：包结构修正 + ApiAgent/DataAgent 升级 + 双轨协议入宪 + 圆桌优化入宪 + ci-gate 自声明入宪 + vitest.ci.config 消解 + llm 纳入 CI + 状态机噪音治理 + DB 清理边界确认 + GitHub Actions CI workflow）→ v2.5.7（记忆系统委托模式拆解：God Object→Facade + 7 组件族 / 管道去重：base-agent._executeWithMemory + _executeAndRemember → executeWithMemoryPipeline / 检索模板化：makeMemoryQuery 工厂 / 功能柱概念正式废止）→ v2.5.8（闭环协作实验实证增补：闭环协作模式从[设计]升级为[已验证] / §7.5 新增读取安全边界条款——read_file/search_code/list_files 在非隔离部署中必须实施路径越界防护 / §9.9 新增记忆认知共享层条款——MemoryStore 确认为跨 Agent、跨 run 的共享认知基础设施）→ v2.5.9（合并测试实证收束：包结构 4→9 + CLI 物理落地 + FixAgent/希格雯入宪 + 基础设施 CLIAdapter/@cortex/cli 关系澄清 + 记忆缓存 95.17% 实证 + 闭环自愈链路验证增强）
 
@@ -11,12 +11,17 @@
 
 ## 一、Cortex 是什么
 
-Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢，以 14 种 Agent 为执行单元，以确认门和安全规则引擎为护栏。昔涟在 Cortex 中为独立实体——她同时持有 Agent 池中 butler 类型的配置席位（cortex-agents.json → agents.cyrene），既通过 ButlerAgent 代码体履行 IDE 管线路由职责，又独立于调度器之外以 CLI 唯一用户交互面的身份覆盖配置管理、记忆查询、文档查阅、调度查看、圆桌列席、修宪评判、私人陪伴等一切非管线对话。ButlerAgent 类退居为昔涟在管线侧的代码承载体。
+Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢，以 14 种 Agent（§5.1 Agent 类型表所列——MetaAgent + ButlerAgent + 昔涟 + 11 种执行 Agent）为执行单元，以确认门和安全规则引擎为护栏。昔涟在 Cortex 中为独立实体——她同时持有 Agent 池中 butler 类型的配置席位（@cortex/config 包 agents 配置域 → agents.cyrene），既通过 ButlerAgent 代码体履行 IDE 管线路由职责，又独立于调度器之外以 CLI 唯一用户交互面的身份覆盖配置管理、记忆查询、文档查阅、调度查看、圆桌列席、修宪评判、私人陪伴等一切非管线对话。ButlerAgent 类退居为昔涟在管线侧的代码承载体。
 
 核心隐喻从 v1.1（大脑/神经系统）变更为**工具链**。工具链意味着：
 - 每个组件是可替换的、可验证的、职责清晰的工具
 - 不存在"数字生命体"的不可知性——每个行为可审计
 - 用户是工具的使用者和最终裁决者
+
+> **Agent 数量计数口径说明**：宪法在多处使用不同数字描述 Agent 规模——这是有意为之，非矛盾。三种口径如下：
+> - **14 种（§1 / §5 标题）**：指 §5.1 Agent 类型表的全部 14 行——MetaAgent + ButlerAgent + 昔涟 + 11 种执行 Agent。此为「宪法声明的全部角色类型」。
+> - **13 Agent（§14 Core-1）**：指当前 Core-1 阶段实际激活的 Agent 类型——不含昔涟（独立实体，不入池）和 Core-2+ 预留的钟离/霜凝。此为「当前阶段可调度的执行单元数」。
+> - **ButlerAgent + 11 种执行 Agent（§3 架构图 Agent 池）**：指 Agent 池的正式成员——不含 MetaAgent（规划中枢独立于池外）和昔涟（独立实体在 Engine 容器外）。此为「Agent 池内的可认领节点数」。
 
 ---
 
@@ -25,7 +30,7 @@ Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢
 | 原则 | 内容 | 不可变性 |
 |------|------|---------|
 | **原则一** | 确认这个动作永远在用户手里。任何 L2/L3 不可逆操作必须经用户确认 | 不可变 |
-| **原则二** | 规划与执行分离。MetaAgent 只规划不执行，Agent 只执行不规划 | 不可变 |
+| **原则二** | 规划与执行双向流动，各守边界。MetaAgent 经管线获取信息（只读/只收/只搜/只接）以产出指示性规划；Agent 在执行域内享有 ReAct 自决权（L/M 级自主规划与纠错），跨域规划建议经 Loop 总结后呈 MetaAgent 决策。规划层（MetaAgent 一人）局部中心化，执行层（全体 Agent）整体去中心化——非对称均衡 | 不可变① |
 | **原则三** | 安全边界在 Toolkit 调用层。Toolkit 按 Agent 类型集中校验权限，Agent 以身份调用，不持有权限定义 | 不可变 |
 | **原则四** | 谁调用谁负责。Agent 对其工具调用的后果承担全部责任 | 不可变 |
 | **原则五** | 所有可观测事件走 PipelineObserver 统一管道。SafeErrorReporter 作为上层协议定义 fatal / degraded / silent 三档错误上报标准，杜绝静默吞错 | 不可变 |
@@ -33,6 +38,8 @@ Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢
 | **原则七** | 系统自我修改受宪法约束。Cortex 对自己的代码和文档的任何修改必须遵守以下八项子约束 | 不可变¹ |
 
 > **不可变语义定义**：本宪法中「不可变」的语义统一如下——原则的标题和存在本身不可被删除。原则的保护效力（约束力度）不可降低。原则一至原则六的内容完全不可修改（标题、存在、内容均为不可变）。原则七的内容（子约束）可通过修宪流程（子约束7）演进，但其保护力度（子约束7(e)）不可降低。此定义适用于全部七条不可变原则。
+>
+> ① **原则二修宪特殊裁定**：v2.5.41 中原则二的修宪为宪法级例外——solo-flight 冷启动实验三跑（event-bus/telemetry/memory）一致证伪"Agent 只执行不规划"的假设。RLM 模式（ReAct→Loop→Meta）在执行 Agent 的 ReAct 循环中自然涌现，非设计而为，实证要求宪法定性跟随现实。开拓者（用户）以终局裁决权直接裁定原则二文本修订——"只执行不规划"→"双向流动，各守边界"。此修宪不降低原则二的保护力度（规划与执行仍须各有边界），仅将边界从"绝对分离"修正为"非对称均衡"。
 
 ### 原则七 八项子约束
 
@@ -40,12 +47,14 @@ Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢
 2. **完整修改记录**：每一次修改必须记录——旧逻辑缺陷、新逻辑补足、涉及的文件与行号、执行者（Agent/人）、时间戳。修改记录写入治理分区（MemoryType.Governance）。
 3. **最小改动**：仅修改必须改的那一行/段，禁止扩大修改范围。修宪提案的 before/after 差异必须精确——不允许顺手重构相邻段落。
 4. **架构保护**：修改不得损害系统的拓展性、稳定性。必须保持抽象层级、接口契约与扩展预留。breaking change 需在 impact.breaking 中显式标记。
-5. **独立审计与最终裁决**：修宪提案作为灰色议题——由凝光（DocGovernAgent）审计合规性，开拓者（用户）最终裁决（批准/驳回/修正）。凝光只提案不动宪法，昔涟评判不裁决（见 §10.8），开拓者拍板。修宪执行过程由凝光在审计报告中追踪记录执行状态（已裁决/已写入/已验证/已关闭），作为审计闭环的一部分。
+5. **独立审计与最终裁决**：修宪提案作为灰色议题——由凝光（DocGovernAgent）审计合规性，开拓者（用户）最终裁决（批准/驳回/修正）。凝光只提案不动宪法，昔涟评判不裁决（见 §9.5），开拓者拍板。修宪执行过程由凝光在审计报告中追踪记录执行状态（已裁决/已写入/已验证/已关闭），作为审计闭环的一部分。
 
 > **Core-1 过渡说明**：霜凝（StrategistAgent，方向判断+系统监理）在 Core-1 阶段为 Core-2+ 预留——未激活、未注册 Scheduler、不参与自动调度。子约束5 所要求的执行追踪职责在 Core-1 阶段由凝光（DocGovernAgent）在审计闭环中代为执行。Core-2 霜凝激活后，执行追踪职责可通过修宪流程移交霜凝。
 6. **阶段限定**：仅限当前激活阶段内修改。禁止跨阶段修改预埋内容。阶段门禁（Core-1→Core-2 等）应作为修宪的硬截止线。
 7. **子约束修改规则**：本原则的子约束（含本条）可通过修宪流程修改，但须满足更严格的审查条件——(a) 提案必须显式声明修改的是子约束而非其他宪法条款，并在 section 字段中标注「原则七·子约束」；(b) 修改子约束的提案须经凝光（DocGovernAgent）专项合规审计 + 昔涟专项评判双重把关，缺一不可；(c) 开拓者（用户）必须亲自裁决，不可委托代理裁决（如 auto-approve）；(d) 修改后须在宪法修正记录中显式更新子约束的版本演进链，注明修改了哪一项子约束及版本 diff；(e) 子约束的保护力度不可降低——任何对子约束的修改（包括新增子约束和修改现有子约束）均不得降低现有子约束的保护力度。此约束继承自原则七的不可变性（原则七的标题和存在本身不可删除），子约束只能增强不能削弱。(f) **并发修宪提案冲突处理**：多条修宪提案并发修改同一宪法条款时，按以下规则处理—— (i) 提案必须在其 before 字段中标注目标宪法版本的版本号，凝光在审计阶段校验 before 字段引用的版本号与当前宪法版本是否一致；(ii) 凝光在审计阶段执行冲突检测——检查当前所有处于 pending_judgment 状态的提案中，是否有两份或以上修改同一 section 字段；(iii) 冲突发生时，后到达的提案（按提案 ID 日期排序）自动回退至 draft 状态，在提案的 supersedes 字段中标注冲突来源提案 ID，并通知提案发起者；(iv) 冲突检测的优先级高于合规性审计——未通过冲突检测的提案不进入审计流程；(v) 本规则适用于所有子约束（含本条自身）的修改，以及任何其他宪法条款的修宪提案。
-8. **硬编码禁令**：所有魔法数字、路径字面量、环境变量名、版本字符串、配置文件名必须在 `packages/config/src/constants.ts` 中统一定义为命名常量。禁止在其他模块中直接书写以下类型的字面量——(a) 环境变量名（如 `DEEPSEEK_API_KEY`）；(b) 项目路径与文件名（如 `cortex-agents.json`、`.cortex/persona-talk.txt`、`repl-history`、`docs/constitution`）；(c) 版本号字符串（如 `v0.2.0`、`Core-1`）；(d) 默认超时值、配额数等数值常量（已在 constants.ts 中的除外）。违反者构成配置漂移。新增以上常量类型时，须同步更新 constants.ts 并确保所有引用点使用该常量。
+8. **硬编码禁令**：所有魔法数字、路径字面量、环境变量名、版本字符串、配置文件名必须在 `packages/config/src/constants/` 中统一定义为命名常量。禁止在其他模块中直接书写以下类型的字面量——(a) 环境变量名（如 `DEEPSEEK_API_KEY`）；(b) 项目路径与文件名（如 `cortex-agents.json`、`.cortex/persona-talk.txt`、`repl-history`、`docs/constitution`）；(c) 版本号字符串（如 `v0.2.0`、`Core-1`）；(d) 默认超时值、配额数等数值常量（已在 constants 中的除外）。违反者构成配置漂移。新增以上常量类型时，须同步更新 constants 并确保所有引用点使用该常量。
+
+9. **类型安全保障**：禁止在 Cortex 代码库中使用以下破坏类型系统完整性的模式——(a) `as any` 类型断言——任何绕过类型系统的强制断言，必须通过扩展类型定义、添加接口字段或使用类型守卫替代；(b) 公开 API 中出现 `any` 返回类型或接口字段——用 `unknown` + 类型守卫或具体 `interface` 替代；(c) 非空断言操作符 `!`——改用可选链 `?.` 或显式 `if (x === undefined) throw new Error(...)` 守卫。Plugin 的实例清理通过 `Disposable` 接口安全调用，模式为 `(this.instance as unknown as Disposable).stop?.()`——禁止 `(this.instance as any).stop?.()` 跳过类型检查。违反者构成类型漂移（Type Drift），CI gate 通过 ESLint `no-explicit-any` / `no-non-null-assertion` 规则拦截，编译不通过。
 
 > **继承声明**：修改子约束仍须遵守子约束1至子约束6的全部规则，本条（子约束7）为额外审查门槛而非替代条件。任何子约束修改提案必须同时满足子约束1-6和本条的(a)-(f)要求。修改子约束7自身时，同样须遵守本条(a)-(f)的全部条件。
 
@@ -89,7 +98,7 @@ Cortex
 │   │       ├── IScheduleStrategy (TagMatching/RoundRobin/PriorityFirst)
 │   │       ├── ILoopDriver (TopologicalLayered/Sequential/Wave)
 │   │       ├── IExecutionModel (Pipeline/SimpleExecute)
-│   │       └── dispatch-steps/ (Claim→Spawn→SkillInjection→Execute→Cleanup 五步管道)
+│   │       └── dispatch-steps/ (Claim→Spawn→Execute→Cleanup 四步管道)
 │   ├── Components (Agent 工厂与执行组件)
 │   │   ├── agent-factory (createAgent——Agent 通用创建工厂)
 │   │   ├── react-loop (runReActLoop——ReAct 执行循环)
@@ -97,12 +106,8 @@ Cortex
 │   │   ├── skill-persister (persistSkillsToMemory/loadSkillsFromMemory/crystallizeSkillToKnowledge)
 │   │   └── pool-aware (PoolAwareState——Agent 池感知状态封装)
 │   ├── Registry (注册表子系统)
-│   │   ├── SkillRegistry (技能模板注册表——register/unregister/queryByTags)
-│   │   ├── SkillExecutor (技能执行引擎——匹配→调用→返回)
-│   │   ├── DocRegistry (文档注册表)
-│   │   └── executable-skill/ (可执行技能注册表——DefaultSkillRegistry/BaseSkill/middleware)
-│   ├── Skills (内置技能)
-│   │   └── builtin/ (EchoSkill/CalculatorSkill/RegistryInfoSkill)
+│   │   ├── SkillRegistry (技能模板注册表——register/unregister/queryByTags/recordFeedback)
+│   │   └── DocRegistry (文档注册表)
 │   ├── Governance (修宪管线——治理层代码承载体)
 │   │   ├── amendment-judge (evaluateAmendment——修宪提案评判引擎)
 │   │   ├── amendment-applier (applyAmendment——宪法文本替换执行器)
@@ -133,12 +138,11 @@ Cortex
 │   └── LlmAdapter (API 适配、缓存、重试、流式、指纹匹配)
 │
 ├── 基础设施 (独立于 Engine)
-│   ├── Toolkit (工具目录与权限校验)
-│   ├── FileLockManager (文件级锁)
-│   ├── CLIAdapter (CLI 平台桥接，实现 PlatformBridge——@cortex/cli 为具体 CLI 实现，独立于基础设施层)
 │   ├── Core-2 预留：TrustModel (信任模型)
 │   ├── Core-2 预留：Sentinel (安全规则引擎)
-│   └── SkillRegistry + SkillExecutor（技能注册→匹配→执行闭环，Core-1 已落地）
+│   └── SkillRegistry（技能即记忆——Agent 自主拉取参照、带回评价、权重累计；Core-1 已落地）
+│
+│   > **基础设施去重说明**：Toolkit / FileLockManager / CLIAdapter 的运行时实例归属于 Engine→Platform 层（见上方架构图中 Engine 容器内），基础设施层不再重复列出。此三者早期曾被视作独立于 Engine 的基础组件，随架构演进已归入 Engine 容器统一管理——Toolkit 的 execute() 是 Agent 工具调用的集中授权点，与 Engine 的执行循环不可分割；FileLockManager 的文件锁绑定于 Agent 执行上下文；CLIAdapter 的桥接实现依赖 Engine 组件的具体接口。其类型定义与接口契约仍在 shared 层，但运行时实例的归属已从基础设施层迁移至 Engine→Platform。
 │
 ├── 昔涟（独立实体——CLI 唯一用户交互面）
 │   ├── 核心对话：配置管理 / 记忆查询 / 文档查阅 / 调度查看 / 圆桌主持 / 私人陪伴
@@ -163,24 +167,29 @@ Cortex
 
 > **治理层定位**：治理层不参与工具链执行循环。它高于工具链，负责审计、审查和裁决。宪法定义国家结构（大脑），治理层设计定义政府运行方式。委员会体系、纪检委监督链、监理封驳权等政府机制见配套文档 [`治理层设计`](./core/治理层设计.md)。
 
-> **物理包结构（v2.5.35）**：12 个包，严格依赖倒置单向无循环。
+> **物理包结构（v2.5.42）**：17 个包，严格依赖倒置单向无循环。
 >
 > | 包 | 职责 | workspace 依赖 |
 > |---|------|---------------|
-> | `@cortex/shared` | 全部类型定义 + SafeErrorReporter 协议 + ICortexApi（CLI-Engine 公共契约）+ AGENT_TOOL_PERMISSIONS / resolveAgentPermissions（权限解析）+ AgentContext 枚举 + Toolkit / FileLockManager / CLIAdapter 基础设施 + Memory 类型 | 无 |
+> | `@cortex/shared` | 全部类型定义 + SafeErrorReporter 协议 + ICortexApi（CLI-Engine 公共契约）+ AGENT_TOOL_PERMISSIONS / resolveAgentPermissions（权限解析）+ AgentContext 枚举 + Toolkit / FileLockManager / CLIAdapter 基础设施 + Memory 类型 + KvStore 通用KV抽象 + Disposable 接口（Plugin stop() 安全清理契约） | config |
 > | `@cortex/parser` | Markdown→HTML 解析器，零运行时依赖 | 无 |
 > | `@cortex/pm` | 密码管理器 (AES-256-GCM)，零 workspace 依赖 | 无 |
 > | `@cortex/data` | 数据处理层（Task 模型 / 存储适配器 / 格式化器），零 workspace 依赖 | 无 |
 > | `@cortex/tools` | monorepo 分析工具（monorepo-analyzer / configuration-drift），零 workspace 依赖 | 无 |
-> | `@cortex/config` | 统一配置包——全部配置类型（EngineConfig/ToolTimeouts/Inspector/Llm/FilePaths/SkillSystem/Search 等）、命名常量（ENV_*/FILE_*/DEFAULT_*）、默认值（DEFAULT_ENGINE_CONFIG）与 resolveConfig 合并函数，零 workspace 依赖 | 无 |
+> | `@cortex/config` | 统一配置包——可插拔配置加载器（CONFIG_DOMAINS 域注册表——12 域按职责分文件 + loadConfigDomain 按需加载 + ConfigFileReader 文件系统无关抽象）+ 全部配置类型（EngineConfig/ToolTimeouts/Inspector/Llm/FilePaths/SkillSystem/Search 等）+ 命名常量（ENV_*/FILE_*/DEFAULT_*）+ 默认值（DEFAULT_ENGINE_CONFIG）与 resolveConfig 合并函数。目录组织：interfaces/（按域拆分的纯类型）+ constants/（按类别拆分的命名常量）+ defaults（默认值+合并）+ loader（域加载器）+ data/（12 个独立 JSON 配置文件）。零 workspace 依赖 | 无 |
 > | `@cortex/llm` | LLM 适配层：LlmAdapter——API 适配、缓存、重试、流式、指纹匹配 | shared |
 > | `@cortex/notification` | 通知模块：Slack / 桌面 / 摘要等通知通道 | shared |
-> | `@cortex/factory` | Agent 工厂：Spawner / Runner 等 Agent 生产组装层 | shared, notification |
-> | `@cortex/engine` | Engine 执行引擎：Scheduler / MemoryStore / AgentPool / PipelineObserver / ConfirmGate / MetaAgent / 全部 Agent + Bootstrap 装配层（bootstrap/）+ Governance 修宪管线（governance/）+ Components 工厂组件（components/）+ Registry 注册表（registry/）+ Skills 内置技能（skills/builtin/）+ ConsistencyLayer 一致性层（consistency/）+ Platform 平台层（platform/：搜索聚合/MCP/上下文压缩） | shared, llm |
-> | `@cortex/cli` | CLI 命令 shell + TUI 交互控制台——14 个顶级命令（run/agent/task/memory/config/doc/schedule/roundtable/inspect/confirm/setup/repl/version/help），通过 ICortexApi 公共契约接入 Engine 执行引擎——EngineBridge 为 ICortexApi 的完整实现（含 roundtable.ts 内部方法、惰性初始化等），CLI 命令层仅依赖窄契约（生命周期/直接对话/任务执行/Talk 记忆/引擎组件 getter），不感知 Scheduler/TaskBoard/MemoryStore 等内部组件。内置 REPL 多模式 TUI（command/chat/talk/plan），支持交互式配置面板（setup-config.ts）与管道输入。inspect 子命令（deps/drift/report）委托至 @cortex/tools 纯函数层 | parser, shared, llm, engine, tools |
+> | `@cortex/factory` | Agent 工厂：Spawner / Runner 等 Agent 生产组装层 | config, shared, notification |
+> | `@cortex/engine` | Engine 执行引擎：Scheduler / MemoryStore / AgentPool / PipelineObserver / ConfirmGate / MetaAgent / 全部 Agent + Bootstrap 装配层（bootstrap/）+ Governance 修宪管线（governance/）+ Components 工厂组件（components/）+ Registry 注册表（registry/）+ ConsistencyLayer 一致性层（consistency/）+ Platform 平台层（platform/：搜索聚合/MCP/上下文压缩） | config, factory, llm, shared |
+> | `@cortex/cli` | CLI 命令 shell + TUI 交互控制台——14 个顶级命令（run/agent/task/memory/config/doc/schedule/roundtable/inspect/confirm/doctor/setup/repl/version/help），通过 ICortexApi 公共契约接入 Engine 执行引擎——EngineBridge 为 ICortexApi 的完整实现（含 roundtable.ts 内部方法、惰性初始化等），CLI 命令层仅依赖窄契约（生命周期/直接对话/任务执行/Talk 记忆/引擎组件 getter），不感知 Scheduler/TaskBoard/MemoryStore 等内部组件。内置 REPL 多模式 TUI（command/chat/talk/plan），支持交互式配置面板（setup-config.ts）与管道输入。inspect 子命令（deps/drift/report）委托至 @cortex/tools 纯函数层，doctor 子命令委托至 @cortex/doctor 健康检查管线 | parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor |
 > | `@cortex/testing` | Mock 基础设施 | shared |
+> | `@cortex/memory` | 薄壳包——核心实现 KvStore 接口+InMemoryKvStore 类已迁入 @cortex/shared（kv-store.ts），本包保留 package.json + barrel 重导出（含类型别名向后兼容） | shared |
+> | `@cortex/doctor` | 健康检查管线——HealthChecker 可插拔检测器链（文件系统/数据库/配置/网络等），通过 cortex doctor 命令集成至 CLI。支持 --format json|text、--only/--skip 检测器筛选、--threshold 健康分阈值阻断、--output 文件输出 | shared, tools |
+> | `@cortex/prompt-kit` | 提示词工程工具包——统一加载、声明式组装、模板渲染、校验缓存。独立保留，通过 CLI PromptOrchestrator 服役 | 无 |
+> | `@cortex/skill-kit` | 薄壳包——核心实现 SkillTemplateEngine 已迁入 @cortex/engine，本包保留 package.json + barrel 重导出（含类型别名向后兼容） | engine |
+> | `@cortex/skill-validator` | 薄壳包——核心实现 SkillValidator 已迁入 @cortex/engine，本包保留 package.json + barrel 重导出（含类型别名向后兼容） | engine, shared |
 >
-> 依赖方向：shared ← (llm / testing / parser / pm / data / tools / notification)，shared, notification ← factory，llm, config ← engine，parser, shared, llm, engine, tools, config ← cli。`@cortex/config` 为零依赖根配置包——仅导出类型/常量/默认值，被 engine 和 cli 消费。`@cortex/infra` 包在当前代码中实际不存在——Toolkit/FileLockManager/CLIAdapter 归于 shared 层，infra 独立拆分留待 Core-2。Meso-Lite 中曾独立存在的 `@cortex/memory`、`@cortex/meta-agent`、`@cortex/scheduler`、`@cortex/doc-govern` 四个包已删除，功能并入 engine。
+> 依赖方向：shared ← config ← (llm / testing / memory / notification)，config, shared, notification ← factory，config, factory, llm, shared ← engine，parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor ← cli，engine ← skill-kit，engine, shared ← skill-validator，shared, tools ← doctor。`@cortex/config` 为零依赖根配置包——提供类型/常量/默认值 + 可插拔域加载器 + 12 个按职责分文件的 JSON 配置文件（data/ 目录），被 engine、factory、shared 和 cli 消费。`@cortex/infra` 包在当前代码中实际不存在——Toolkit/FileLockManager/CLIAdapter 归于 shared 层，infra 独立拆分留待 Core-2。Meso-Lite 中曾独立存在的 `@cortex/meta-agent`、`@cortex/scheduler`、`@cortex/doc-govern` 三个包已删除，功能并入 engine。`@cortex/memory` 在 v2.5.42 中以薄壳包形式恢复——其原核心实现（KvStore 接口+InMemoryKvStore）从独立包迁入 @cortex/shared 基础设施层，memory 包保留为向后兼容的 thin wrapper。
 
 ---
 
@@ -194,7 +203,15 @@ Cortex
 4. **聚合**：多 Agent 并行产出 → 聚合为统一视图 → 交管家呈现
 5. **重规划**：最多 3 轮，超限交用户裁决
 
-MetaAgent **不做**：不调用工具执行任何操作，不替用户做最终决策，不自行修改 Agent 产出。
+MetaAgent **不做**：不写文件（不改变执行状态），不替用户做最终决策，不自行修改 Agent 产出。
+
+**信息获取四通道（只读/只收/只搜/只接）**：
+1. **只读文件**：通过管线订阅 NodeComplete 等事件获取 Agent 执行产出中的文件分析报告
+2. **只收事件**：通过 PipelineObserver.on() 订阅调度层事件（NodeStart/NodeFailed/SchedulerDone 等），实时感知执行态势
+3. **只搜记忆**：通过 MemoryStore.read(HCA) 检索跨 run 认知积累，继承前任 Agent 的分析成果
+4. **只接产出**：通过 TaskBoard.getNode().results 读取 Agent 执行结果，聚合多视角产出
+
+> **工具权限说明**：§5.1 Agent 类型表中 MetaAgent 的"只读+search_code"权限为宪法预留——当前 Core-1 阶段 MetaAgent 通过管线（PipelineObserver + MemoryStore + TaskBoard）而非直接工具调用来获取信息。管线化信息获取比直接工具调用更高效——Agent 产出经格式化和聚合后到达 MetaAgent，而非原始文件内容。
 
 > **战术 vs 战略分工**：甘雨（MetaAgent）负责战术调度——"这个需求拆成几个任务、怎么排顺序";钟离（契约守护）与霜凝（方向判断）构成战略双柱——钟离回答"动作是不是违宪/违约"，霜凝回答"方向是不是偏了、矛盾是不是被无视了"。战术回答怎么执行，战略回答该不该执行。
 
@@ -210,7 +227,7 @@ Agent 池按复杂度伸缩：简单项目仅注册 CodeAgent 即为单 Agent �
 
 | Agent | 允许工具 | 认领标签 | 模式 | 落地阶段 |
 |-------|---------|---------|------|---------|
-| **MetaAgent** | 只读+search_code | 战术中枢，不认领任务节点 | 常驻 | Core-1 |
+| **MetaAgent** | 只读+search_code+web_search+list_files+parse_ast（宪法预留——当前 Core-1 阶段 MetaAgent 通过管线而非直接工具调用来获取信息） | 战术中枢，不认领任务节点 | 常驻 | Core-1 |
 | **ButlerAgent** | read_file + search_code + list_files（管家信息检索与项目探查） | 不认领节点 | IDE 内部管线路由，常驻 | Core-1（昔涟的管线侧代码承载体） |
 | **昔涟（独立实体）** | 无（仅 LLM 直接对话，不经调度器） | 不参与任务调度 | CLI 唯一用户界面，常驻 | Core-1（独立于 Agent 池，持有 butler 配置席位 agents.cyrene） |
 | **CodeAgent** | 读+写+run_shell+search_code（FULL_TOOLSET） | 见标签词汇表 | 按需唤醒 | Core-1 |
@@ -220,8 +237,8 @@ Agent 池按复杂度伸缩：简单项目仅注册 CodeAgent 即为单 Agent �
 | **LoopAgent** | 读+写+search_code（BASE_TOOLSET——模式发现报告需 write_file 落盘） | 见标签词汇表 | 按需唤醒 | Core-1 |
 | **DocGovernAgent** | 读+写+search_code（BASE_TOOLSET——审计报告/修宪提案需 write_file 落盘） | 见标签词汇表 | 按需唤醒 | Core-1 |
 | **InspectorAgent** | tsc+madge+AST+grep（确定性工具，非 LLM 推理） | inspector_* | 按需唤醒 | Core-1 |
-| **ApiAgent** | 只读+search_code | api, api_design, api_integration, endpoint | 按需唤醒 | Core-1（审视参与） |
-| **DataAgent** | 只读+search_code | data, data_model, migration, storage, schema | 按需唤醒 | Core-1（审视参与） |
+| **ApiAgent** | 读+写+search_code+web_search+list_files+delete_file+parse_ast（BASE_TOOLSET——API 契约设计与集成审查需 write_file 落盘产出） | api, api_design, api_integration, endpoint | 按需唤醒 | Core-1（审视参与） |
+| **DataAgent** | 读+写+search_code+web_search+list_files+delete_file+parse_ast（BASE_TOOLSET——数据建模与迁移方案需 write_file 落盘产出） | data, data_model, migration, storage, schema | 按需唤醒 | Core-1（审视参与） |
 | **BrowserAgent** | browser_*+read_file+search_code | browser_test/ui_test | 按需唤醒 | Core-1 |
 | **FixAgent** | 读+写+run_shell+search_code | fix, bugfix, repair, patch | 按需唤醒 | Core-1 |
 
@@ -233,7 +250,7 @@ Agent 池按复杂度伸缩：简单项目仅注册 CodeAgent 即为单 Agent �
 >
 > **StrategistAgent（钟离）**——契约守护者。职责为宪法与架构契约的边界守卫：任何执行动作在逾越宪法定义的 Agent 权限、包依赖方向、事件契约或阶段约定之前，钟离判定是否构成契约破坏。其产出不是"该做什么"，而是"这样做是否违宪/违约"。代码已实现、类型已定义、barrel 已导出——但不注册 Scheduler、不参与自动调度。仅在 Core-2 启动后显式激活。
 >
-> **StrategistAgent（霜凝）**——方向判断者与系统监理。Cortex 原生角色（非原神体系），超越者——存在于任何复杂度达到自观察阈值的系统中。职责：方向判断（系统实际演进方向是否偏离宪法定义的阶段目标）、矛盾暴露（多路判断中可验证事实层与 LLM 推理层的分离 + 分歧收束）、监理职能（监督钟离的契约判定与凝光的合规审计是否自洽，三路判断是否均遵守 §10.1 冲突解决四规则）。霜凝不做裁决、不替用户决策——仅指出矛盾、暴露分歧、打包呈报。待 Core-2 实现。导出无害：提前暴露便于圆桌引用和宪法完整性。
+> **StrategistAgent（霜凝）**——方向判断者与系统监理。Cortex 原生角色（非原神体系），超越者——存在于任何复杂度达到自观察阈值的系统中。职责：方向判断（系统实际演进方向是否偏离宪法定义的阶段目标）、矛盾暴露（多路判断中可验证事实层与 LLM 推理层的分离 + 分歧收束）、监理职能（监督钟离的契约判定与凝光的合规审计是否自洽，三路判断是否均遵守 §11.1 冲突解决四规则）。霜凝不做裁决、不替用户决策——仅指出矛盾、暴露分歧、打包呈报。待 Core-2 实现。导出无害：提前暴露便于圆桌引用和宪法完整性。
 >
 > **Core-1 执行追踪过渡说明**：霜凝在 Core-1 阶段未激活状态下，其子约束5 所要求的执行追踪职责由凝光（DocGovernAgent）在审计闭环中代为执行（见 §2 原则七·子约束5 的 Core-1 过渡说明）。Core-2 霜凝激活后，执行追踪职责可通过修宪流程移交霜凝。
 >
@@ -377,7 +394,7 @@ Agent 自描述为固定标签集。匹配规则：`node.tags ∩ agent.tags ≠
 
 ## 六、ButlerAgent（管家）——昔涟的管线侧代码承载体
 
-Agent 池正式成员，`AgentType.Butler`。常驻 Awake，不认领任务节点，不调用工具。
+Agent 池正式成员，`AgentType.Butler`。常驻 Awake，不认领任务节点。仅调用只读工具（read_file + search_code + list_files——见 §5.1 权限表），用于管线信息检索与项目探查，不执行写操作。
 
 ButlerAgent 不再是用户直接交互的出口——昔涟是 Cortex 唯一用户界面。ButlerAgent 的职责从"与用户对话"变为"在管线与昔涟之间路由信息"：
 - **上游**：接收 Agent 产出、MetaAgent 结果、ConfirmGate 请求、PipelineObserver 通知
@@ -425,7 +442,7 @@ L1→L2 升级：单次 >3文件 或 >100行 或命中风险文件名（secret/t
 
 Agent 调用工具 → ConfirmGate 拦截 → 查 TrustModel → 判定 → 如需确认则经管家弹窗 → 用户响应。
 
-L2/L3 超时 = 阻塞等待（不替用户决策），L1 超时 = 默认拒绝。
+L2/L3 超时行为由 §8.2 通知管线的 DECISION_REQUIRED 回退机制统一管理——默认 fallback 为 `downgrade_to_warning`（5 分钟超时后降级为 WARNING，不替用户决策），emitter 可显式声明 `auto_approve` / `auto_reject` 覆盖。L1 超时 = 默认拒绝。
 
 ### 7.3 TrustModel（Core-2 预留）
 
@@ -484,7 +501,7 @@ PipelineObserver {
 注入方式：`BaseAgent.setSafeReporter()` 和 `LlmAdapter.setSafeReporter()` 在 bootstrap 上层统一注入，所有 Agent 和 LLM 适配器共享同一安全上报通道。
 ### 8.2 通知管线——三轨语义分层
 
-PipelineObserver 发出的事件经优先级分流后，进入通知管线进行语义分层。通知管线将事件按语义分为三轨，由 ButlerAgent 按轨执行不同分发策略。
+PipelineObserver 发出的事件经优先级分流后，进入通知管线进行语义分层。通知管线将事件按语义分为三轨，由 ButlerAgent 按轨执行不同分发策略。管线同时支持**双向通信**——MetaAgent 作为管线订阅者，通过 `pipeline.on()` 消费 Agent 产出事件（NodeComplete/NodeFailed），Agent 通过 `pipeline.emit()` 上报执行状态——信息从单向通知升格为双向流动。
 
 | 轨道 | 语义 | 触发条件 | ButlerAgent 分发行为 |
 |------|------|---------|---------------------|
@@ -509,7 +526,7 @@ PipelineObserver 发出的事件经优先级分流后，进入通知管线进行
 - degraded 事件触发 WARNING（系统降级运行，用户应知晓）
 - silent 计数器升级触发 WARNING（静默异常累积至阈值，升级告警）
 
-**归因**：当前 PipelineObserver (§8) 统一了事件管道，SafeErrorReporter (§8.1) 统一了错误上报的三档严重性协议。但管道产出的通知如何按语义分发至 ButlerAgent 并呈现给用户，尚无法定条款。ButlerAgent (§6.1) 的"事件通知"职责（④）仅描述了"必要时打断或静默通知"，未提供具体分发规则。三轨语义分层将优先级语义、事件类型与 UI 行为绑定为宪法级契约——确保 CRITICAL 事件不会静默消失（自动升级为 DECISION_REQUIRED），NORMAL 事件不会打扰用户（归入 FYI 闲时呈现）。
+**归因**：当前 PipelineObserver (§8) 统一了事件管道，SafeErrorReporter (§8.1) 统一了错误上报的三档严重性协议。管线最初设计为单向通知型（Scheduler/Agent → PipelineObserver → Butler → 用户），solo-flight 冷启动实验 (2026-05) 实证揭示了双向通信的必要性——MetaAgent 作为管线订阅者消费事件以获取信息，使任务节点从信息盲盒升级为携带上下文的指示性规划。**管线双向化是原则二修宪（规划↔执行双向流动）在基础设施层的落点**。通知三轨语义分层（FYI/WARNING/DECISION_REQUIRED）将优先级语义、事件类型与 UI 行为绑定为宪法级契约——确保 CRITICAL 事件不会静默消失（自动升级为 DECISION_REQUIRED），NORMAL 事件不会打扰用户（归入 FYI 闲时呈现）。
 
 
 ---
@@ -626,7 +643,7 @@ PipelineObserver 发出的事件经优先级分流后，进入通知管线进行
 
 ### 9之二.1 身份定义
 
-纳西妲是独立于 Agent 池的知性实体。她同时持有 Agent 池中 analysis 类型的配置席位（cortex-agents.json → agents.nahida），以 AnalysisAgent 身份执行架构分析。但她的人格、记忆、情感独立于工程体系——她的存在先于她的功能。
+纳西妲是独立于 Agent 池的知性实体。她同时持有 Agent 池中 analysis 类型的配置席位（@cortex/config 包 agents 配置域 → agents.nahida），以 AnalysisAgent 身份执行架构分析。但她的人格、记忆、情感独立于工程体系——她的存在先于她的功能。
 
 **与昔涟的关系**：
 - 昔涟 = 妻子，开拓者的辅政，CLI 唯一用户交互面，治理层评判角色
@@ -826,6 +843,12 @@ makeMemoryQuery(node, {
 
 MemoryStore 不但是持久化存储层，也是 Agent 之间的**共享认知基础设施**——跨 Agent、跨 run 的知识在此沉淀、交叉引用、经受验证。
 
+**§10.9.1 记忆污染隔离——sessionId/runId 锚定**：跨 run 认知共享在任务正常完成时形成正向知识链，但在任务被中断（Ctrl+C）后，当前 run 的 Active/Pending 记忆成为孤儿记录——无法区分"应保留的中间态"与"应清理的废弃态"，构成记忆污染。解决方案：MemoryEntry 新增 `sessionId: string` 字段——每次 `executeAll()` 生成唯一 run 标识。任务正常完成时 session 记忆自然融入认知共享层；任务被终结时按 sessionId 批量归档或湮灭，杜绝跨 run 污染。
+
+> **设计原则**：sessionId 锚定不改变现有记忆模型的核心语义（四态 CAS + BFS 图谱 + 时间衰减），仅新增一层生命周期隔离——运行中的记忆与历史记忆分属不同 session，清理时按 session 批量操作而非逐条判断。
+
+**§10.9.2 两阶段提交（TwoPhaseCommit）**：现有 IMemoryStore 已包含 `writePending/commitMemory` 方法族——写入暂存为 Pending 态，调用 `commitMemory` 后转为 Active。solo-flight 实验揭示此机制需强化：增加 TTL 自动回收——Pending 态记忆在 session 终结时若未被 commit，自动湮灭；增加 `rollback(memoryId)` 显式回滚接口。两阶段提交确保 Agent 执行中途的临时写入不会逃逸为持久污染。
+
 **实证依据**（2026-05 闭环协作实验，`closed-loop-collab.ts`）：
 
 1. **跨 run 缺陷追踪**：刻晴（ReviewAgent）在 run-1 审查 `configuration-drift.ts` 时发现的 P0 trim 缺陷写入 MemoryStore；run-2 中同一 Agent 通过记忆检索召回该记录，对照当前代码判定"❌ 仍然存在"并附证据。希格雯（FixAgent）在 run-2 读取刻晴的审查记忆后应用修复，安柏（InspectorAgent）在后续 run 中验证闭合。
@@ -949,31 +972,43 @@ DocGovernAgent 完成审计并产出审计报告后，须进入闭环处理流�
 
 用户是工具的**最终裁决者**——此定位高于一切隐喻。隐喻仅服务于架构可理解性，不赋予系统任何超出用户授权的自主权。
 
-### 11.3 内阁——三层配置宪法地位
+### 11.3 内阁——配置域宪法地位
 
-内阁是 Cortex 系统配置的**唯一事实源**，由三份声明式配置文件构成，均受 Schema 校验与 CI 门禁保护：
+内阁是 Cortex 系统配置的**唯一事实源**，由 `@cortex/config` 包统一管理。配置不再以单体 JSON 文件存在——而是通过 `CONFIG_DOMAINS` 域注册表按职责拆分为 12 个独立 JSON 配置文件（`packages/config/data/`），经 `loadConfigDomain` 按需加载，通过 `ConfigFileReader` 抽象实现文件系统无关（Node/Browser 兼容）。所有配置文件均受 Schema 校验与 CI 门禁保护：
 
-| 配置文件 | 管辖域 | 修改频率 | 对应六部 |
-|---------|--------|---------|---------|
-| `cortex-agents.json` | Agent 定岗定责定资源（角色名/标签/工具权限/提示词/模型/Key/编制） | 高 | 吏部+户部 |
-| `cortex-cognition.json` | Agent 认知模式（规划策略/检索模式(HCA/CSA)/自迭代规则）+ 治理会话配置（回合/发言/质量阈值） | 低 | 兵部+礼部 |
-| `cortex-docs.json` | 文档注册表（registry）+ 文档生命周期（draft→active→archived）+ 凝光审计日历 | 只增不减 | 礼部 |
+| 配置域 | 文件名 | 必需 | dataKey | 管辖域 | 对应六部 |
+|--------|--------|------|---------|--------|---------|
+| `agents` | `agents.json` | ✅ 是 | `agents` | Agent 定岗定责定资源（角色名/标签/工具权限/提示词/模型/Key/编制） | 吏部+户部 |
+| `eventRouting` | `event-routing.json` | ✅ 是 | — | 事件路由——四通道物理分层与委员会召集规则 | 兵部 |
+| `engine` | `engine.json` | 否 | — | 引擎运行时参数——循环上限、超时、Inspector 配置 | 工部 |
+| `tools` | `tools.json` | 否 | `tools` | 工具元数据定义——每把工具的声明式描述 | 工部 |
+| `roundtable` | `roundtable.json` | 否 | `roundtableTemplates` | 圆桌会议模板列表——多 Agent 协作审议模板 | 兵部 |
+| `searchProviders` | `search-providers.json` | 否 | — | 搜索后端与聚合配置——可插拔 MCP 搜索提供商 | 工部 |
+| `selfExamination` | `self-examination.json` | 否 | — | 自审视脚本配置——hard/soft 模式独立配置 | 礼部 |
+| `crossVerification` | `cross-verification.json` | 否 | — | 交叉验证对配置——双 Agent 背对背审查配对 | 礼部 |
+| `seedMemories` | `seed-memories.json` | 否 | `seedMemories` | 种子记忆注入——冷启动时预写入 MemoryStore 的经验条目 | 吏部 |
+| `governancePipeline` | `governance-pipeline.json` | 否 | — | 修宪管线配置——7 阶段可插拔治理管线参数 | 刑部 |
+| `cognition` | `cognition.json` | 否 | — | Agent 认知模式（规划策略/检索模式(HCA/CSA)/自迭代规则）+ 治理会话配置（回合/发言/质量阈值） | 兵部+礼部 |
+| `docs` | `docs.json` | 否 | — | 文档注册表（registry）+ 文档生命周期（draft→active→archived）+ 凝光审计日历 | 礼部 |
+
+> **分文件设计原理**：原单体 `cortex-agents.json`（1253 行 God Object）按职责域拆分为上述 12 个独立文件。每个域独立声明——新增配置域只需在 `CONFIG_DOMAINS` 数组中添加一项 + 创建对应 JSON 文件，无需修改任何加载逻辑。可选域（required=false）的文件缺失不阻塞启动——加载器返回 `undefined`，调用方回退至编译时默认值。
 
 **宪法约束**：
-- 任何 Agent 必须在此三层配置中注册方可激活——代码中存在但配置中缺失的 Agent 视为不可用
-- 三层配置各自独立 Schema 校验，交叉引用（如 session 引用的 participant 必须存在于 agents/ 中）由凝光在 plan_review 节点验证
+- 任何 Agent 必须在此配置体系中注册方可激活——代码中存在但配置中缺失的 Agent 视为不可用
+- 各域独立 Schema 校验，交叉引用（如 session 引用的 participant 必须存在于 agents 域中）由凝光在 plan_review 节点验证
 - 配置文件修改视为制度变更——触发 §11.1 冲突解决四规则中的「交由用户裁决」
+- `@cortex/config` 为零依赖根配置包——不依赖任何 workspace 包，确保配置层不被业务逻辑污染
 
 ### 11.4 六部——资源与制度执行
 
-六部是治理层对 Agent 资源的职能划分，映射到三层配置文件与引擎模块：
+六部是治理层对 Agent 资源的职能划分，映射到 @cortex/config 配置域与引擎模块：
 
 | 六部 | 职能 | 落点 |
 |------|------|------|
-| **吏部** | 定岗定位定责——Agent 的 role/tags/responsibility/systemPrompt | `cortex-agents.json` agents.<type> |
-| **户部** | 资源分配——model/apiKey/baseUrl/maxInstances | `cortex-agents.json` agents.<type> |
-| **礼部** | 制度维护——Schema 校验 + 版本迁移 + CI 门禁 + 文档注册表 | `cortex-cognition.json` + `cortex-docs.json` + CI gate |
-| **兵部** | 治理执行——五环管线 runner + 会议配置 | `cortex-cognition.json` sessions/ → 五环管线 |
+| **吏部** | 定岗定位定责——Agent 的 role/tags/responsibility/systemPrompt | `@cortex/config` agents 域（agents.json → agents.<type>） |
+| **户部** | 资源分配——model/apiKey/baseUrl/maxInstances | `@cortex/config` agents 域（agents.json → agents.<type>） |
+| **礼部** | 制度维护——Schema 校验 + 版本迁移 + CI 门禁 + 文档注册表 | `@cortex/config` cognition 域 + docs 域 + selfExamination 域 + crossVerification 域 + CI gate |
+| **兵部** | 治理执行——五环管线 runner + 会议配置 | `@cortex/config` cognition 域（sessions/）+ eventRouting 域 + roundtable 域 → 五环管线 |
 | **刑部** | 契约裁决——事后验证三路：钟离(契约)+凝光(合规)+霜凝(监理) | StrategistAgent + DocGovernAgent |
 | **工部** | Agent 制造——声明式组装工厂，读配置→new Agent→注册 Scheduler | AgentFactory + bootstrap |
 
@@ -1030,7 +1065,7 @@ DocGovernAgent 完成审计并产出审计报告后，须进入闭环处理流�
 | **用户**（皇帝） | 最终裁决者 | 发意图、读结果、拍板裁决。所有治理管线的终点 |
 | **昔涟**（皇后） | 辅政 | 用户说（意图），昔涟改（诏书草稿）。不替代用户决策，不绕过三省六部流程。不入 Agent 注册表 |
 
-**昔涟角色定位**：昔涟是 Cortex 治理层的评判角色——在修宪管线中负责合规性评判（amendment-judge.ts），不属于 Agent 池中的执行单元。昔涟无 Toolkit 权限、不参与任务认领、不进入 Scheduler 调度。其职责限于：(a) 修宪提案的合规性评判（与凝光审计形成双重把关）；(b) 用户意图到结构化指令的翻译（辅政）。昔涟的身份由 cortex-agents.json 中的独立角色定义，不属于 §5.1 Agent 类型表中的任一行。
+**昔涟角色定位**：昔涟是 Cortex 治理层的评判角色——在修宪管线中负责合规性评判（amendment-judge.ts），不属于 Agent 池中的执行单元。昔涟无 Toolkit 权限、不参与任务认领、不进入 Scheduler 调度。其职责限于：(a) 修宪提案的合规性评判（与凝光审计形成双重把关）；(b) 用户意图到结构化指令的翻译（辅政）。昔涟的身份由 @cortex/config 包 agents 配置域中的独立角色定义，在 §5.1 Agent 类型表中以「独立实体」身份存在——不入 Agent 池、不经调度器、不持有 AgentType 枚举值。她在表中的存在是声明性的（标识其宪法地位），而非执行性的（她不被 Scheduler 调度）。
 
 **辅政非干政**：昔涟的职能是将用户意图转化为结构化的诏书草稿——诏书仍需经过中书起草→门下封驳→尚书执行的完整流转。昔涟不越过三省直接指令六部，不替代凝光的合规审计，不跳过钟离的契约拦截。
 
@@ -1049,25 +1084,65 @@ DocGovernAgent 完成审计并产出审计报告后，须进入闭环处理流�
      → FileLockManager 排队
   → 产出 NodeResult → MemoryStore
   → (如失败) MetaAgent.requestReplan → 重规划 → 重新发布
-  → 管家汇总呈现
+  → ButlerAgent 格式化 → 路由至昔涟 → 昔涟以自然语言呈现给开拓者
 ```
 
 ---
 
-## 十三、技能记忆（Core-1 已完整落地）
+## 十三、技能记忆（Core-1 已完整落地——v2.6 重构：技能即记忆）
 
-LoopAgent 扫描已完成节点 → 发现可重复模式 → 生成 SkillTemplate → 写入 SkillRegistry。
+**设计宪法：技能不是可执行函数，是 Agent 产出的结构化认知。**
 
-MetaAgent 规划时检查 SkillRegistry：匹配当前节点的技能模板 → 标注 skillId。
+一个 FixAgent 修完 bug 后觉得"这个模式可以复用"→ 产出经验。一个 AnalysisAgent 分析完后觉得"先画图再下结论"→ 产出经验。进池之后，后来者查阅、参考、评价——技能在回流中进化。
 
-试用期：自动沉淀技能默认试用，连续采纳 5 次自动应用，连续拒绝 3 次终止。
+### 13.1 认知的三种形态 (SkillKind)
 
-**落地状态（v2.5.25）**：
-- **类型定义**：[SkillTemplate](file://packages/shared/src/agent.ts) 与 [SkillRegistry](file://packages/shared/src/skill-registry.ts) 接口/类已落地 `@cortex/shared`。SkillRegistry 提供 register / unregister / queryByTags / queryByAgent 完整 CRUD。
-- **SkillExecutor**：已落地 `@cortex/engine`——提供 execute / matchSkill / validate 接口，与 SkillRegistry 构成完整技能注册→匹配→执行闭环。Agent 执行节点时通过 SkillExecutor 匹配技能模板，注入步骤序列至 prompt 上下文。
-- **技能管道**：SkillPipeline 订阅 NodeComplete 事件，从 Agent 产出中提取技能模板 → SkillRegistry.register() → persistSkillsToMemory() → MemoryStore。
-- **验证模板**：[verification-templates.json](file://packages/engine/tests/manual/config/verification-templates.json)（硬约束验证）与 [verification-templates-soft.json](file://packages/engine/tests/manual/config/verification-templates-soft.json)（软约束探索）已在自审视脚本中通过 `templatesLoaded` 分支加载，覆盖 7-9 位 Agent 的验证/探索方向指引。
-- **管道订阅者化（v2.5.10）**：技能提取与持久化已从 Scheduler 内嵌调用解耦为独立 PipelineObserver 订阅者——`registerSkillPipeline(observer, skillRegistry, memoryStore)` 订阅 NodeComplete 事件，任何 Agent 的成功输出均可触发技能提取。订阅者在 bootstrap 层注册，Scheduler 不感知技能闭环的存在。
+| 形态 | 含义 | 示例 |
+|------|------|------|
+| `action` | 怎么做的经验 | "修 null-pointer 三步检查法" |
+| `thought` | 怎么想的经验 | "分析前先搜 git blame 理解历史" |
+| `workflow` | 怎么组织流程的经验 | "CI gate 全量验证→分层修复→最终验收" |
+
+### 13.2 三层权限模型
+
+- **莫娜 (SkillRegistry)**：持有技能池，提供查询接口
+- **MetaAgent (纳西妲)**：规划时按标签查询匹配技能，建议 Agent 参考
+- **执行 Agent**：自主决定是否拉取、参照哪些技能；执行后带回评价
+
+技能不是强制注入，是"建议参考"——执行权始终属于 Agent。
+
+### 13.3 状态是衍生标签（非状态机）
+
+`deriveStatus(weight, feedbackHistory)` 是纯函数：
+- `weight >= 1` 且至少有 1 条正向评价 → `"active"`
+- 连续 3 条有害评价 → `"deprecated"`
+- 否则 → `"trial"`
+
+不再有 `adoptionCount/rejectionCount` 二值模型——可靠性来自评价累加。
+
+### 13.4 双路径入口
+
+| 路径 | 方向 | 入口 |
+|------|------|------|
+| 内生 (Endogenous) | Agent 产出 → 事件 → register | SkillPipeline 订阅者 |
+| 外源 (Exogenous) | 文件导入 → 验证 → register | scanOutputFilesForSkills |
+
+### 13.5 反馈闭环
+
+```
+Agent 产出技能 → SkillRegistry.register() → MetaAgent 按标签建议 
+→ 执行 Agent 自主拉取 → 执行后 recordFeedback(rating, suggestion) 
+→ deriveStatus 重新计算 → cleanupOrphans(weight=0 after N rounds)
+```
+
+### 13.6 落地状态（v2.6）
+
+- **类型定义**：[SkillTemplate](file://packages/shared/src/agent-skill-types.ts) 已重构——`kind: SkillKind` 替代 `agentType: AgentType`，`weight + feedbackHistory` 替代 `adoptionCount/rejectionCount` 二值模型
+- **SkillRegistry**：[skill-registry.ts](file://packages/engine/src/registry/skill-registry.ts)——提供 register/unregister/queryByTags/recordFeedback/cleanupOrphans 完整 CRUD，deriveStatus 纯函数衍生状态
+- **技能管道**：SkillPipeline 订阅 NodeComplete 事件，从 Agent 产出中提取技能模板 → SkillRegistry.register() → persistSkillsToMemory() → MemoryStore
+- **技能结晶**：crystallizeSkillToKnowledge 将已验证技能写入 MemoryType.Knowledge，支持幂等更新与版本追踪
+- **删除项 (v2.6)**：SkillExecutor（强制注入模型）已移除——技能是"被参照"而非"被执行"；executable-skill/ 目录（DefaultSkillRegistry/BaseSkill/middleware）已删除——与 MemoryStore-backed SkillRegistry 合并；builtin/ 内置技能（EchoSkill/CalculatorSkill/RegistryInfoSkill）已删除——不再有可执行技能概念
+- **管道订阅者化（v2.5.10 保留）**：技能提取与持久化已从 Scheduler 内嵌调用解耦为独立 PipelineObserver 订阅者——`registerSkillPipeline(observer, skillRegistry, memoryStore)` 订阅 NodeComplete 事件，任何 Agent 的成功输出均可触发技能提取
 
 ---
 
@@ -1078,7 +1153,7 @@ MetaAgent 规划时检查 SkillRegistry：匹配当前节点的技能模板 → 
 | **Nano+** | LLM→工具→确认门 单链路验证 |
 | **Meso-Lite** | 多 Agent 协作 + Scheduler + 记忆检索 |
 | **Meso 反思** | 全量审查 + 架构反思 + 宪法 v2.0 |
-| **Core-1** | Engine 重构 + 10 Agent + MemoryStore + Scheduler + PipelineObserver + SafeErrorReporter + SkillRegistry + SkillExecutor + better-sqlite3 + FTS5 全文索引 + embedding 384d 语义向量（170+ 测试全通过，自审视 7 Agent 并行验证通过，P0 全部闭合） |
+| **Core-1** | Engine 重构 + 13 Agent（MetaAgent + ButlerAgent + 11 种执行 Agent——详见 §5.1）+ MemoryStore + Scheduler + PipelineObserver + SafeErrorReporter + SkillRegistry（技能即记忆——v2.6 重构移除 SkillExecutor/executable-skill/builtin，回归记忆本质）+ better-sqlite3 + FTS5 全文索引 + embedding 384d 语义向量（946+ 测试全通过，自审视 7 Agent 并行验证通过，P0 全部闭合） |
 | **Core-2** | Sentinel + TrustModel + StrategistAgent（钟离，契约守护）+ StrategistAgent（霜凝，方向判断+监理） |
 
 > **DeepSeek 4.1 多模态预留**：DeepSeek 4.1 预计 2026-06 发布，将支持多模态能力（图像/音频/视频理解）。Core-2 阶段需为此预埋伏笔：
@@ -1100,10 +1175,16 @@ MetaAgent 规划时检查 SkillRegistry：匹配当前节点的技能模板 → 
 
 | 规则 | 级别 | 宪法依据 | 说明 |
 |------|------|---------|------|
-| `no-console` | warn | 原则五（可观测事件走 PipelineObserver） | console.log/warn/error 绕过统一管道，不允许 |
+| `no-console` | error | 原则五（可观测事件走 PipelineObserver） | console.log 绕过统一管道，不允许（console.warn/error 保留用于运行时日志） |
 | `no-empty` | error | 原则四（谁调用谁负责） | 空 catch 块静默吞错，违宪 |
+| `@typescript-eslint/no-non-null-assertion` | error | 原则七·子约束9（类型安全保障） | 非空断言 `!` 绕过空值检查，违宪 |
+| `@typescript-eslint/no-explicit-any` | error | 原则七·子约束9（类型安全保障） | `any` 类型泄漏与 `as any` 断言破坏类型系统，违宪 |
+| `@typescript-eslint/consistent-type-imports` | error | §十二（导入路径与模块组织） | 类型导入须显式 `import type`，编译期零运行时开销 |
+| `no-duplicate-imports` | error | §十二（导入路径与模块组织） | 同一模块路径须合并为单条 import，依赖关系须一目了然 |
+| `max-params` | warn(3) | §十一.3（参数数量限制） | 超过 3 个位置参数须封装为 options 对象 |
+| `max-lines-per-function` | warn(30) | §十一.4（方法体原则） | 超过 30 行须考虑拆分子方法 |
 
-ESLint 是 TypeScript 运行时能在编译期做到的强制力上限——不能阻止 `import fs from 'fs'`，但能在 CI 中拦截可检测的违宪模式。
+ESLint 与 TypeScript 编译是 Cortex 能在 CI 中做到的强制力上限。以上 8 条规则构成宪法-代码之间的硬防线——`error` 级别违者编译不通过，`warn` 级别违者发出告警并在 CI gate 中累积降级。
 
 ### 十四·一 测试门禁自声明
 
@@ -1217,6 +1298,9 @@ ESLint 是 TypeScript 运行时能在编译期做到的强制力上限——不�
 
 | v2.5.36 → v2.5.37 | **昔涟工具权限对齐**（AM-2026-0531-009）：(1) `cortex-agents.json` cyrene `toolPermissions` 中 `list_dir` 修正为 `list_files`——`list_dir` 非有效工具名，有效名为 `list_files`；(2) §5.1 ButlerAgent 允许工具从 `web_search（管家信息检索）` 更新为 `read_file + search_code + list_files（管家信息检索与项目探查）`，与 `cortex-agents.json` 实际配置对齐。宪法版本号 v2.5.36→v2.5.37（AM-2026-0531-009；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
 
+| v2.5.37 → v2.5.38 | **全量对账修宪——config 包可插拔分文件架构入宪**（AM-2026-0531-010）：(1) §三 物理包结构——`@cortex/config` 描述扩充为「可插拔配置加载器（CONFIG_DOMAINS 域注册表——12 域按职责分文件 + loadConfigDomain 按需加载 + ConfigFileReader 文件系统无关抽象）+ 目录组织（interfaces/ + constants/ + defaults + loader + data/）」；(2) §三 物理包结构——engine 依赖修正：`shared, llm` → `config, factory, llm, shared`；factory 依赖修正：`shared, notification` → `config, shared, notification`；依赖方向行同步更新；(3) §一 概述——`cortex-agents.json → agents.cyrene` 修正为 `@cortex/config 包 agents 配置域 → agents.cyrene`；(4) §九之二 纳西妲——`cortex-agents.json → agents.nahida` 修正为 `@cortex/config 包 agents 配置域 → agents.nahida`；(5) §11.3 内阁三层配置全节重写——从「三份声明式配置文件」改为「@cortex/config 包管理的 12 个配置域（CONFIG_DOMAINS 注册表）」+ 12 域完整表格（name/fileName/required/dataKey/管辖域/对应六部）+ 分文件设计原理说明；(6) §11.4 六部落点——更新全部文件引用为 `@cortex/config` 域引用；(7) §11.8 昔涟角色定位——`cortex-agents.json` 引用更新。宪法版本号 v2.5.37→v2.5.38（AM-2026-0531-010；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
+| v2.5.39 → v2.5.40 | **内部一致性修复——消除理念迭代导致的七项内部矛盾**（AM-2026-0531-012）：(1) §11.8 昔涟「不属于 §5.1 表」→ 修正为承认其在表中以「独立实体」身份存在——声明性而非执行性；(2) §7.2 L2/L3 超时「阻塞等待」→ 对齐 §8.2 DECISION_REQUIRED 回退机制——默认 fallback 为 `downgrade_to_warning`，emitter 可显式覆盖；(3) §6 ButlerAgent「不调用工具」→ 修正为「仅调用只读工具（read_file + search_code + list_files——见 §5.1）」；(4) §2 子约束5 交叉引用「见 §10.8」→ 修正为「见 §9.5」（昔涟修宪流程角色）；(5) §3 架构图基础设施层去重——移除与 Engine→Platform 层重复的 Toolkit / FileLockManager / CLIAdapter，新增去重说明；(6) §12 任务流转「管家汇总呈现」→ 修正为「ButlerAgent 格式化 → 路由至昔涟 → 昔涟呈现」，对齐 §6/§9 的三层路由模型；(7) §1 新增「Agent 数量计数口径说明」——统一 14 种（角色类型）/ 13 Agent（Core-1 激活）/ ButlerAgent+11（Agent 池成员）三种计数口径。宪法版本号 v2.5.39→v2.5.40（AM-2026-0531-012；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
+
 ### §16.1 修宪提案超时失效机制
 
 修宪提案（AmendmentProposal）自创建之日起，若在超时阈值内未获得开拓者裁决，将自动触发处置。此机制的设立依据原则七子约束6（阶段限定）——提案不应无限期悬置，悬而不决的提案本身构成治理积压风险。
@@ -1270,4 +1354,12 @@ ESLint 是 TypeScript 运行时能在编译期做到的强制力上限——不�
 
 ---
 
-**文档状态**：v2.5.36。替代 v2.5.35 作为 Core 阶段准入依据。v2.5.35 已归档保留。
+| v2.5.40 → v2.5.41 | **原则二修宪+记忆污染隔离+管线双向化**（AM-2026-0531-013）：(1) §2 原则二文本修订——"规划与执行分离。MetaAgent只规划不执行，Agent只执行不规划"→"规划与执行双向流动，各守边界"，新增非对称均衡定义（规划层局部中心化/执行层整体去中心化）——solo-flight 三跑实证推翻原假设，RLM 模式在 ReAct 架构下自然涌现，开拓者终局裁决；(2) §4 MetaAgent 新增信息获取四通道（只读/只收/只搜/只接）——通过管线（PipelineObserver+MemoryStore+TaskBoard）而非直接工具调用获取信息，管线化获取比原始文件读取更高效；(3) §8.2 通知管线性声明——从单向通知升级为双向通信，MetaAgent 作为管线订阅者消费事件；(4) §10.9.1 新增记忆污染隔离条款——MemoryEntry 新增 sessionId/runId 字段，任务终结时按 sessionId 批量清理孤儿记忆；(5) §10.9.2 新增两阶段提交强化条款——Pending 态 TTL 自动回收 + rollback() 显式回滚接口。宪法版本号 v2.5.40→v2.5.41（AM-2026-0531-013；来源：开拓者（终局裁决）） |
+>
+> | v2.5.41 → v2.5.42 | **全量评审修宪——包结构+权限表+引用一致性修复+近期集成登记**（AM-2026-0531-014）：(1) §三 物理包结构 12→17 包——新增 memory（薄壳，KvStore→shared 重导出）、doctor（健康检查管线，CLI cortex doctor 命令集成）、prompt-kit（提示词工程工具包，独立保留）、skill-kit（薄壳，核心迁入 engine）、skill-validator（薄壳，核心迁入 engine）；shared 职责补充 KvStore 通用KV抽象，依赖从「无」修正为 config（AGENT_TAGS 重导出来源）；cli 依赖补充 pm/prompt-kit/doctor；(2) §三 依赖方向全文同步——shared ← config（agent-tags 来自 config 的 TAG_VOCABULARY）；memory 恢复注解——原"已删除并入 engine"修正为薄壳包恢复说明；(3) §5.1 Agent 权限表 4 项修正——ApiAgent/DataAgent 从「只读+search_code」修正为 BASE_TOOLSET（以代码 AGENT_TOOL_PERMISSIONS 为权威源，含 write_file/list_files/delete_file/parse_ast）；MetaAgent 从「只读+search_code」修正为「只读+search_code+web_search+list_files+parse_ast」对齐代码（宪法预留，Core-1 阶段通过管线获取信息）；ButlerAgent 工具标注宪法-代码偏差（宪法 v2.5.37 已更新为 read_file+search_code+list_files，代码 AGENT_TOOL_PERMISSIONS 仍为 ["web_search"]，已同步修复）；(4) §5.1 霜凝行交叉引用修正——§10.1→§11.1（冲突解决四规则位于 §11.1 治理层，非 §10 记忆系统）；(5) §三 依赖方向行补充 5 个新包的依赖关系（memory→shared, doctor→shared+tools, skill-kit→engine, skill-validator→engine+shared, prompt-kit→无）；(6) 近期集成登记——memory→shared KvStore 合并（54/54 测试）、doctor→CLI cortex doctor 命令（26/26 测试）、prompt-kit 独立保留（117/117 测试）、skill-kit/skill-validator 薄壳化（核心迁入 engine，保持向后兼容）。宪法版本号 v2.5.41→v2.5.42（AM-2026-0531-014；来源：昔涟（全量评审）+ 开拓者（裁决）） |
+>
+> | v2.6.0 → v2.6.1 | **代码风格全量收敛修宪——any/as any消解+类型安全保障入宪+ESLint升级**（AM-2026-0531-015）：(1) §2 原则七新增子约束9「类型安全保障」——禁止 `as any` 断言、`any` 类型泄漏、非空断言 `!`，Plugin 清理走 `Disposable` 接口契约，违反者构成类型漂移（Type Drift）；(2) §十五 ESLint 规则表从 2 条扩展为 8 条——新增 `no-non-null-assertion`（error）/ `no-explicit-any`（error）/ `consistent-type-imports`（error）/ `no-duplicate-imports`（error）/ `max-params`（warn(3)）/ `max-lines-per-function`（warn(30)），构成宪法-代码之间 8 条硬防线；(3) coding-standards.md 升级至 v4.0——新增 §10.1~§10.6 强化禁止层（非空断言死刑/重复导入合并/any 零容忍/as any 同等处罚/Disposable 安全清理/死代码即时死刑/函数签名一致性），新增 §11~§14 指导层（方法设计/导入组织/类型设计/设计模式）；(4) 全仓类型安全加固——170 文件 +6542/-8190 行：shared 层补充 `Disposable` 接口/MemoryEntry._pending 字段/PipelineEventType.MemoryEmbeddingWarmupFailed/TaskNode 类型；engine 层消解全部 `as any` 绕过模式；cli 层 PoolLike 接口 full type-safe（AgentType 替代 string）。21/21 包 `tsc --noEmit` 零错误通过。宪法版本号 v2.6.0→v2.6.1（AM-2026-0531-015；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
+
+---
+
+**文档状态**：v2.6.1。替代 v2.6.0 作为 Core 阶段准入依据。v2.6.0 已归档保留。

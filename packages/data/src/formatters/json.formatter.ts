@@ -6,7 +6,7 @@
  * 原位于 .cortex/archive/.../solo-flight/src/formatters/json.formatter.ts
  */
 
-import { Task } from '../core/models/task.js';
+import type { Task } from '../core/models/task.js';
 
 export class JsonFormatter {
   formatList(tasks: Task[]): string {

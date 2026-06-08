@@ -14,14 +14,28 @@
 import * as path from "node:path";
 
 import {
-  Scheduler, TaskBoard, PipelineObserver, ConfirmGate,
-  CLIAdapter, MemoryStore, bootstrapEngine, StrategistAgent, Toolkit,
-  type IScheduler, type IAgentPool, type ITaskBoard, type IMemoryStore, type EngineConfig, type BootstrapEngineResult,
+  type MetaAgent,
+  type StrategistAgent,
+  type Toolkit,
+  Scheduler,
+  TaskBoard,
+  PipelineObserver,
+  ConfirmGate,
+  CLIAdapter,
+  MemoryStore,
+  bootstrapEngine,
+  type IScheduler,
+  type IAgentPool,
+  type ITaskBoard,
+  type IMemoryStore,
+  type EngineConfig,
+  type BootstrapEngineResult,
 } from "@cortex/engine";
-import { AgentStatus, type AgentConfig, type LlmMessage, type AgentType, type ICortexApi, type ChatOptions, type IConfirmGate, type IPipelineObserver } from "@cortex/shared";
+import { AgentStatus, type AgentConfig, type AgentType, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
+import { LLM_KEY_NAMES } from "@cortex/config";
 
 export interface BridgeContext {
   scheduler?: IScheduler;
@@ -56,19 +70,32 @@ export class MiniAgentPool implements IAgentPool {
   }
 
   /** MiniAgentPool 无 observer 管道 */
-  setObserver(_observer: any): void {
+  setObserver(_observer: unknown): void {
     // no-op: MiniAgentPool 不参与事件总线
   }
 
   spawn(agentType: AgentType, instanceId: string): boolean {
     const config = this.configs.get(agentType);
     if (!config) return false;
-    const instances = this.instances.get(agentType)!;
+    const instances = this.instances.get(agentType);
+    if (!instances) return false;
     if (instances.size >= (config.maxInstances ?? 1)) return false;
     instances.add(instanceId);
     this.statuses.set(instanceId, AgentStatus.Created);
     return true;
   }
+
+  /** RLM 子任务——不占主配额 */
+  spawnSubtask(agentType: AgentType, instanceId: string): boolean {
+    const config = this.configs.get(agentType);
+    if (!config) return false;
+    const instances = this.instances.get(agentType);
+    if (!instances) return false;
+    instances.add(instanceId);
+    this.statuses.set(instanceId, AgentStatus.Created);
+    return true;
+  }
+
 
   setStatus(instanceId: string, status: AgentStatus): boolean {
     if (!this.statuses.has(instanceId)) return false;
@@ -116,6 +143,8 @@ export interface BootstrapConfig {
   llms: Map<string, LlmAdapter>;
   toolkit: Toolkit;
   projectRoot: string;
+  /** 工作区根目录（Agent 文件操作沙箱），默认等于 projectRoot */
+  workspaceRoot?: string;
   dbPath?: string;
   engineConfig?: EngineConfig;
 }
@@ -161,6 +190,23 @@ export class EngineBridge implements ICortexApi {
     await this._ensureBootstrapped();
   }
 
+  /**
+   * 以新的工作区根路径重新引导引擎。
+   * 用于用户在 intent 中指定了不同的工作区路径（如 "将这个路径作为工作区 D:\\Projects\\xxx"）。
+   * 只有 workspaceRoot 与当前不同时才触发实际重引导。
+   */
+  async rebootstrapIfNeeded(workspaceRoot: string): Promise<void> {
+    if (!this._bootstrapConfig) {
+      throw new Error("[EngineBridge] rebootstrap() 需要先调用 setBootstrapConfig()");
+    }
+    const current = path.resolve(this._bootstrapConfig.workspaceRoot ?? this._bootstrapConfig.projectRoot);
+    const target = path.resolve(workspaceRoot);
+    if (current === target) return;
+    this.ctx.bootstrapped = false;
+    this._bootstrapConfig.workspaceRoot = target;
+    await this._ensureBootstrapped();
+  }
+
   /** 兼容旧调用方——返回 BridgeContext 的具体实现 */
   private async _ensureBootstrapped(): Promise<BridgeContext> {
     if (this.ctx.bootstrapped) return this.ctx;
@@ -171,7 +217,7 @@ export class EngineBridge implements ICortexApi {
       );
     }
 
-    const { llms, toolkit, projectRoot, dbPath, engineConfig } =
+    const { llms, toolkit, projectRoot, dbPath, engineConfig, workspaceRoot } =
       this._bootstrapConfig;
 
     const result = await bootstrapEngine(projectRoot, {
@@ -179,7 +225,7 @@ export class EngineBridge implements ICortexApi {
       toolkit,
       dbPath: dbPath ?? this.dbPath,
       engineConfig: engineConfig ?? this.engineConfig,
-      workspaceRoot: projectRoot,
+      workspaceRoot: workspaceRoot ?? projectRoot,
     });
 
     this.ctx = {
@@ -215,9 +261,10 @@ export class EngineBridge implements ICortexApi {
     // 2. CLIAdapter
     const cliAdapter = new CLIAdapter();
 
-    // 3. ConfirmGate
+    // 3. ConfirmGate（轻量模式：不连接交互桥，无 bridge 时自动放行 L2/L3 确认）
     const gate = new ConfirmGate();
-    gate.setBridge(cliAdapter);
+    // gate.setBridge(cliAdapter); — 轻量模式不连接 CLIAdapter，
+    // 避免在非 TTY/自动化场景下阻塞 stdin。交互确认仅在 bootstrap 模式有效。
 
     // 4. TaskBoard
     const board = new TaskBoard();
@@ -283,35 +330,35 @@ export class EngineBridge implements ICortexApi {
   }
 
   /** 提交任务节点到 TaskBoard（ICortexApi） */
-  async submitTask(node: import("@cortex/shared").TaskNode): Promise<void> {
+  async submitTask(node: TaskNode): Promise<void> {
     const ctx = await (this.ctx.bootstrapped ? this._ensureBootstrapped() : this.ensureInitialized());
     if (ctx.taskBoard) {
-      ctx.taskBoard.addNode(node as any);
+      ctx.taskBoard.addNode(node as unknown as TaskNode);
     }
   }
 
   /** 执行 TaskBoard 上所有待处理节点（ICortexApi） */
-  async executeAll(): Promise<import("@cortex/shared").ExecutionReport> {
+  async executeAll(): Promise<ExecutionReport> {
     const scheduler = await this.getScheduler();
     return await scheduler.executeAll();
   }
 
   /** 读取 Talk 专属记忆（ICortexApi） */
-  async readTalkMemory(query: import("@cortex/shared").MemoryQuery): Promise<import("@cortex/shared").MemoryEntry[]> {
+  async readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
     const store = this.ctx.talkMemoryStore;
     if (!store) return [];
     return await store.read(query);
   }
 
   /** 写入 Talk 专属记忆（ICortexApi） */
-  async writeTalkMemory(entry: import("@cortex/shared").MemoryWriteInput): Promise<void> {
+  async writeTalkMemory(entry: MemoryWriteInput): Promise<void> {
     const store = this.ctx.talkMemoryStore;
     if (!store) return;
     await store.write(entry);
   }
 
   /** 只读访问主记忆库（ICortexApi，修复原 (bridge as any).ctx hack） */
-  async readMainMemory(query: import("@cortex/shared").MemoryQuery): Promise<import("@cortex/shared").MemoryEntry[]> {
+  async readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
     const store = this.ctx.memoryStore;
     if (!store) return [];
     return await store.read(query);
@@ -327,7 +374,7 @@ export class EngineBridge implements ICortexApi {
     const map = this._bootstrapConfig?.llms;
     if (!map || map.size === 0) return undefined;
     // 优先取昔涟适配器（talk 模式主要使用者）
-    return map.get("DEEPSEEK_CYRENE") ?? map.values().next().value;
+    return map.get(LLM_KEY_NAMES.CYRENE) ?? map.values().next().value;
   }
 
   /**
@@ -372,31 +419,36 @@ export class EngineBridge implements ICortexApi {
 
   async getMemoryStore(): Promise<IMemoryStore> {
     const ctx = await this.ensureInitialized();
-    return ctx.memoryStore!;
+    if (!ctx.memoryStore) throw new Error("Engine not initialized: memoryStore missing");
+    return ctx.memoryStore;
   }
 
   async getScheduler(): Promise<IScheduler> {
     const ctx = await this.ensureInitialized();
-    return ctx.scheduler!;
+    if (!ctx.scheduler) throw new Error("Engine not initialized: scheduler missing");
+    return ctx.scheduler;
   }
 
   async getTaskBoard(): Promise<ITaskBoard> {
     const ctx = await this.ensureInitialized();
-    return ctx.taskBoard!;
+    if (!ctx.taskBoard) throw new Error("Engine not initialized: taskBoard missing");
+    return ctx.taskBoard;
   }
 
   async getObserver(): Promise<IPipelineObserver> {
     const ctx = await this.ensureInitialized();
-    return ctx.pipelineObserver!;
+    if (!ctx.pipelineObserver) throw new Error("Engine not initialized: pipelineObserver missing");
+    return ctx.pipelineObserver;
   }
 
   async getConfirmGate(): Promise<IConfirmGate> {
     const ctx = await this.ensureInitialized();
-    return ctx.confirmGate!;
+    if (!ctx.confirmGate) throw new Error("Engine not initialized: confirmGate missing");
+    return ctx.confirmGate;
   }
 
   /** 获取 MetaAgent（甘雨）—— 用于 Plan Mode 生成任务计划 */
-  async getMetaAgent(): Promise<import("@cortex/engine").MetaAgent | undefined> {
+  async getMetaAgent(): Promise<MetaAgent | undefined> {
     if (this.ctx.bootstrapped && this.ctx.bootstrapResult) {
       return this.ctx.bootstrapResult.metaAgent;
     }

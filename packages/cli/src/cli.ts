@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { convert, convertToDocument } from '@cortex/parser';
+import { CLI_EXIT_INTERNAL_ERROR } from '@cortex/config';
 
 function printUsage(): void {
   console.error(`
@@ -95,14 +96,14 @@ function parseArgs(argv: string[]): CliOptions | null {
 function main(): void {
   const options = parseArgs(process.argv);
   if (!options) {
-    process.exit(1);
+    process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
   const inputPath = path.resolve(options.input);
 
   if (!fs.existsSync(inputPath)) {
     console.error(`✗ 错误: 文件不存在 — "${inputPath}"`);
-    process.exit(1);
+    process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
   const ext = path.extname(inputPath).toLowerCase();
@@ -116,12 +117,12 @@ function main(): void {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`✗ 错误: 读取文件失败 — ${msg}`);
-    process.exit(1);
+    process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
   if (markdown.length === 0) {
     console.error('✗ 错误: 输入文件为空');
-    process.exit(1);
+    process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
   let outputPath: string;
@@ -143,7 +144,7 @@ function main(): void {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`✗ 错误: 转换失败 — ${msg}`);
-    process.exit(1);
+    process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
   try {
@@ -151,7 +152,7 @@ function main(): void {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`✗ 错误: 写入文件失败 — ${msg}`);
-    process.exit(1);
+    process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
   console.log(`✓ 转换完成: ${path.basename(inputPath)} → ${path.basename(outputPath)}`);

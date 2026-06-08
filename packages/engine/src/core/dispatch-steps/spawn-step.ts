@@ -1,5 +1,4 @@
-import { AgentStatus, PipelinePriority, PipelineEventType } from "@cortex/shared";
-import type { AgentType } from "@cortex/shared";
+import { AgentStatus, PipelineEventType, PipelinePriority, type AgentType, type TaskNode } from "@cortex/shared";
 import type { DispatchCtx, IDispatchStep } from "./types.js";
 
 /**
@@ -29,8 +28,11 @@ export class SpawnStep implements IDispatchStep {
 
     const instanceId = `${agentType}-${node.id}`;
 
-    // 1. Spawn
-    const spawned = pool.spawn(agentType as AgentType, instanceId);
+    // 1. Spawn——子任务走独立通道，不占主配额
+    const isSubtask = (node as TaskNode).isRlmSubtask === true;
+    const spawned = isSubtask
+      ? pool.spawnSubtask(agentType as AgentType, instanceId)
+      : pool.spawn(agentType as AgentType, instanceId);
     if (!spawned) {
       board.release(node.id, agentType as AgentType);
       board.failNode(node.id);

@@ -1,0 +1,11 @@
+{
+  "name": "kuki API契约+前后端对接",
+  "tasks": [
+    {
+      "id": "kuki-api",
+      "type": "api",
+      "tags": ["api", "api_design", "endpoint", "api_integration"],
+      "payload": "你是久岐忍，对 d:\\Projects\\study\\my-test 做 API 契约 + 前后端对接分析。\n\n【后端 API】\n1. list_files 枚举所有 Controller 文件，逐个 read_file 列出全部 REST API 端点（方法、路径、参数、返回类型）\n2. read_file 读统一响应体类（AjaxResult/Result），检查是否所有 Controller 使用同一包装\n3. read_file 读各 Controller——检查 @Valid/@Validated 入参校验覆盖率\n4. 检查 API 设计一致性——URL 命名风格、错误码体系是否统一\n\n【前后端对接】\n5. list_files 扫描 admin/src/api/ 和 show/src/api/（如果有），read_file 读各 API 调用文件\n6. 逐一对比：前端调用的 API 是否在后端有对应的 Controller\n7. 检查是否存在后端定义但前端未调用的「僵尸 API」\n8. read_file 读前端的 axios 封装（request.ts 或 http.ts），分析拦截器、token 处理\n\n工作区已通过 --dir 指向 d:\\Projects\\study\\my-test。\n\n⚠️ 禁止使用 search_code（太慢会超时）——只用 list_files + read_file。\n⚠️ 铁律：每条发现必须有工具调用支撑。绝不出现「待确认」。\n⚠️ 末尾输出完整的 markdown 分析报告。"
+    }
+  ]
+}

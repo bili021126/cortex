@@ -1,5 +1,4 @@
-import type { SkillTemplate, Tag } from "@cortex/shared";
-import { AgentType, getTagVocabulary } from "@cortex/shared";
+import { getTagVocabulary, type FeedbackEntry, type SkillKind, type SkillTemplate, type Tag } from "@cortex/shared";
 
 /** 解析 outputFile 模板变量：{date} → YYYY-MM-DD, {time} → HH-MM-SS */
 export function resolveOutputFile(template: string): string {
@@ -104,8 +103,8 @@ function normalizeSkillTemplate(
     return null;
   }
 
-  // 必需：agentType
-  const agentType = normalizeAgentType(raw.agentType, diagnostics, id);
+  // 必需：kind
+  const kind = normalizeSkillKind(raw.kind ?? raw.agentType, diagnostics, id);
 
   // 必需：triggerTags
   const triggerTags = normalizeTriggerTags(raw.triggerTags ?? raw.trigger_tags, diagnostics, id);
@@ -136,7 +135,7 @@ function normalizeSkillTemplate(
 
   return {
     id,
-    agentType,
+    kind,
     name,
     triggerTags,
     trigger,
@@ -144,8 +143,8 @@ function normalizeSkillTemplate(
     expectedOutput,
     outputFile,
     status,
-    adoptionCount: typeof raw.adoptionCount === "number" ? raw.adoptionCount : 0,
-    rejectionCount: typeof raw.rejectionCount === "number" ? raw.rejectionCount : 0,
+    weight: typeof raw.weight === "number" ? raw.weight : (typeof raw.adoptionCount === "number" ? raw.adoptionCount : 0),
+    feedbackHistory: Array.isArray(raw.feedbackHistory) ? raw.feedbackHistory as FeedbackEntry[] : [],
     discoveredBy: typeof raw.discoveredBy === "string" ? raw.discoveredBy : "LoopAgent",
     createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
   };
@@ -184,8 +183,8 @@ function extractBalanced(text: string, startIdx: number): string | null {
       stack.push(ch === "{" ? "}" : "]");
     } else if (ch === "}" || ch === "]") {
       if (stack.length === 0) return null; // 不平衡
-      const expected = stack.pop()!;
-      if (ch !== expected) return null; // 括号不匹配
+      const expected = stack.pop();
+      if (expected === undefined) return null; // 不平衡
       if (stack.length === 0) {
         return text.slice(startIdx, i + 1);
       }
@@ -194,29 +193,29 @@ function extractBalanced(text: string, startIdx: number): string | null {
   return null; // 未闭合
 }
 
-/** 规范化 agentType */
-function normalizeAgentType(
+/** 规范化 skillKind */
+function normalizeSkillKind(
   raw: unknown,
   diagnostics: string[],
   skillId: string,
-): AgentType {
+): SkillKind {
   if (typeof raw === "string") {
-    const known = Object.values(AgentType) as string[];
-    if (known.includes(raw)) return raw as AgentType;
+    const known: SkillKind[] = ["action", "thought", "workflow"];
+    if (known.includes(raw as SkillKind)) return raw as SkillKind;
 
-    // 容错：转换短名
-    const aliasMap: Record<string, AgentType> = {
-      "cod": AgentType.Code, "rev": AgentType.Review,
-      "analy": AgentType.Analysis, "op": AgentType.Ops,
-      "loop": AgentType.Loop, "doc": AgentType.DocGovern,
-      "fix": AgentType.Fix, "ins": AgentType.Inspector,
-      "brow": AgentType.Browser, "api": AgentType.Api,
-      "data": AgentType.Data, "strat": AgentType.Strategist,
+    // 容错：旧版 agentType → kind 映射
+    const agentTypeAliasMap: Record<string, SkillKind> = {
+      "cod": "action", "rev": "action",
+      "analy": "thought", "op": "action",
+      "loop": "workflow", "doc": "thought",
+      "fix": "action", "ins": "action",
+      "brow": "action", "api": "action",
+      "data": "thought", "strat": "thought",
     };
-    if (aliasMap[raw]) return aliasMap[raw];
+    if (agentTypeAliasMap[raw]) return agentTypeAliasMap[raw];
   }
-  diagnostics.push(`技能 ${skillId} agentType 无效，默认 code`);
-  return AgentType.Code;
+  diagnostics.push(`技能 ${skillId} kind 无效，默认 action`);
+  return "action";
 }
 
 /** 规范化 triggerTags */
@@ -262,7 +261,7 @@ function normalizeStatus(
   diagnostics: string[],
   skillId: string,
 ): SkillTemplate["status"] {
-  const valid = ["draft", "trial", "active", "deprecated"];
+  const valid = ["trial", "active", "deprecated"];
   if (typeof raw === "string" && valid.includes(raw)) {
     // 安全约束：LLM 输出不能直接声明为 active
     if (raw === "active") {

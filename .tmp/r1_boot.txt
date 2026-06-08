@@ -1,0 +1,39 @@
+﻿diff --git a/packages/engine/src/bootstrap/bootstrap-engine.ts b/packages/engine/src/bootstrap/bootstrap-engine.ts
+index 6963977a..350229fc 100644
+--- a/packages/engine/src/bootstrap/bootstrap-engine.ts
++++ b/packages/engine/src/bootstrap/bootstrap-engine.ts
+@@ -48,6 +48,10 @@ export async function bootstrapEngine(
+   // 搂1 鍔犺浇閰嶇疆
+   const config = loadConfig(projectRoot);
+ 
++  // 搂1.5 璁剧疆 Toolkit 鐨?workspaceRoot锛堣矾寰勬矙绠?+ 鐩稿璺緞瑙ｆ瀽鍩哄噯锛?+  const wsRoot = options.workspaceRoot ?? projectRoot;
++  options.toolkit.setWorkspaceRoot(wsRoot);
++
+   // 搂2 娉ㄥ叆杩愯鏃舵敞鍐岃〃 + 宸ュ叿鍏冩暟鎹?+ 缂栫爜瑙勮寖
+   configAndInject(config, options.toolkit);
+   const codingStandards = resolveCodingStandards(projectRoot);
+@@ -56,7 +60,7 @@ export async function bootstrapEngine(
+   const { observer, pool, gate, cliAdapter, board } = createEngineCore(options.toolkit);
+ 
+   // 搂4 鍒涘缓鐗规畩 Agent锛圡etaAgent + Strategist锛?-  const { metaAgent, strategists } = await createSpecialAgents(config, options.llms, codingStandards);
++  const { metaAgent, strategists } = await createSpecialAgents(config, options.llms, codingStandards, observer);
+ 
+   // 搂5 鍒涘缓 Scheduler
+   const scheduler = createScheduler(board, pool, observer, metaAgent, options.engineConfig);
+@@ -70,7 +74,7 @@ export async function bootstrapEngine(
+   const filterRead = clResult?.filterRead ?? options.filterRead;
+ 
+   // 搂8 鎸夐厤缃畾涔夊垱寤哄苟娉ㄥ唽 Agent
+-  const agents = registerAgents(config, {
++  const agents = await registerAgents(config, {
+     llms: options.llms,
+     toolkit: options.toolkit,
+     scheduler,
+@@ -80,6 +84,7 @@ export async function bootstrapEngine(
+     workspaceRoot: options.workspaceRoot,
+     filterRead,
+     engineConfig: options.engineConfig,
++    observer,
+   });
+ 
+   // 搂9 鍒濆鍖栨妧鑳界郴缁燂紙娉ㄥ叆 web_search 鐢ㄤ簬鐭ヨ瘑浜嬪疄璁よ瘉锛?

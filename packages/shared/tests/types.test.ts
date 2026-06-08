@@ -13,6 +13,7 @@ import {
   NodeResult,
   MemoryType,
   MemoryState,
+  SemanticState,
   MemoryEntry,
   MemoryLink,
   LinkType,
@@ -74,7 +75,9 @@ describe("@cortex/shared v2.0 types", () => {
     expect(types).toHaveLength(4);
   });
 
-  it("MemoryState has four-state machine: Active/Archived/Frozen/Obliterated", () => {
+  it("MemoryState has four-state machine: Active/Archived/Frozen/Obliterated (deprecated v2 enum)", () => {
+    // v3: SemanticState 为三态 "Active"|"Archived"|"Obliterated"
+    // MemoryState.Frozen 为 v2 残留，freeze() 现在转为 Archived
     const states: MemoryState[] = [
       MemoryState.Active, MemoryState.Archived,
       MemoryState.Frozen, MemoryState.Obliterated,
@@ -82,13 +85,18 @@ describe("@cortex/shared v2.0 types", () => {
     expect(states).toHaveLength(4);
   });
 
-  it("LinkType includes 9 association types for BFS graph traversal", () => {
+  it("SemanticState (v3) is three-state: Active/Archived/Obliterated", () => {
+    const validStates: SemanticState[] = ["Active", "Archived", "Obliterated"];
+    expect(validStates).toHaveLength(3);
+  });
+
+  it("LinkType includes 4 association types (v3 精简)", () => {
+    // v3: 移除非实践验证的值，保留 4 种核心关联
     const types: LinkType[] = [
-      LinkType.AccessedDuring, LinkType.ProducedBy, LinkType.DerivedFrom,
-      LinkType.DependsOn, LinkType.RefactoredFrom, LinkType.CitedInCommittee,
-      LinkType.CascadeTo, LinkType.ConfirmedUseful, LinkType.ConfirmedNoise,
+      LinkType.ProducedBy, LinkType.DerivedFrom,
+      LinkType.ConfirmedUseful, LinkType.ConfirmedNoise,
     ];
-    expect(types).toHaveLength(9);
+    expect(types).toHaveLength(4);
   });
 
   it("TaskNode has required fields for scheduler dispatch", () => {
@@ -108,24 +116,28 @@ describe("@cortex/shared v2.0 types", () => {
     expect(failure.success).toBe(false);
   });
 
-  it("MemoryEntry supports metadata and project fingerprint", () => {
+  it("MemoryEntry supports kind, semantic_state, content_blob and source tracking (v3)", () => {
     const entry: MemoryEntry = {
-      id: "mem-1", memoryType: MemoryType.Episodic,
-      state: MemoryState.Active,
-      content: { text: "test" },
-      summary: "test memory", agentType: AgentType.Code,
-      creatorId: "test-creator",
-      createdAt: Date.now(), lastAccessedAt: Date.now(),
-      accessCount: 0, weight: 1.0, isPrivate: false,
-      projectFingerprint: "cortex",
+      id: "mem-1",
+      kind: "TaskLog",
+      semantic_state: "Active",
+      content_blob: { text: "test" },
+      summary: "test memory",
+      semantic_gist: "test memory",
+      source: { agentType: AgentType.Code, taskId: "test-task" },
+      content_hash: "",
+      createdAt: Date.now(),
+      lastAccessedAt: Date.now(),
+      accessCount: 0,
+      weight: 1.0,
     };
     expect(entry.id).toBe("mem-1");
-    expect(entry.projectFingerprint).toBe("cortex");
+    expect(entry.source.agentType).toBe(AgentType.Code);
   });
 
   it("MemoryQuery supports keywords, BFS graph, and metadata filtering", () => {
     const query: MemoryQuery = {
-      keywords: ["test"], linkTypes: [LinkType.DependsOn],
+      keywords: ["test"], linkTypes: [LinkType.DerivedFrom],
       bfsDepth: 2,
     };
     expect(query.keywords).toContain("test");
@@ -221,10 +233,10 @@ describe("@cortex/shared v2.0 types", () => {
   it("MemoryLink references source-target with link type and weight", () => {
     const link: MemoryLink = {
       id: "link-1", sourceId: "a", targetId: "b",
-      linkType: LinkType.DependsOn, weight: 1.0,
-      targetState: MemoryState.Active, lastAccessedAt: Date.now(),
+      linkType: LinkType.DerivedFrom, weight: 1.0,
+      targetState: "Active", lastAccessedAt: Date.now(),
     };
     expect(link.sourceId).toBe("a");
-    expect(link.linkType).toBe(LinkType.DependsOn);
+    expect(link.linkType).toBe(LinkType.DerivedFrom);
   });
 });

@@ -31,7 +31,7 @@ describe("SkillExtractor", () => {
     const result = extractSkillsFromOutput(skillOutput(VALID_SKILL));
     expect(result.skills.length).toBe(1);
     expect(result.skills[0].name).toBe("模式扫描");
-    expect(result.skills[0].agentType).toBe("loop");
+    expect(result.skills[0].kind).toBe("workflow");
     expect(result.skills[0].steps.length).toBe(4);
   });
 
@@ -146,12 +146,12 @@ describe("SkillExtractor", () => {
     expect(result.skills[0].name).toBe("模式扫描");
   });
 
-  it("should normalize unknown agentType to code", () => {
+  it("should normalize unknown agentType to action", () => {
     const skill = { ...VALID_SKILL, agentType: "nonexistent" };
     const result = extractSkillsFromOutput(JSON.stringify(skill));
     expect(result.skills.length).toBe(1);
-    expect(result.skills[0].agentType).toBe("code");
-    expect(result.diagnostics.some((d: string) => d.includes("agentType"))).toBe(true);
+    expect(result.skills[0].kind).toBe("action");
+    expect(result.diagnostics.some((d: string) => d.includes("kind"))).toBe(true);
   });
 
   it("should handle mixed valid/invalid entries in array", () => {

@@ -10,8 +10,8 @@ import {
   type SkillManifest,
   SkillCategory,
   SkillErrorCode,
-} from "../src/types.js";
-import { SimpleSkillValidator } from "../src/validator.js";
+} from "../dist/types.js";
+import { SimpleSkillValidator } from "../dist/validator.js";
 
 // ── 辅助函数 ──────────────────────────────────────────────────
 
@@ -52,7 +52,8 @@ describe("SimpleSkillValidator.validate", () => {
 
   it("拒绝缺少 execute 的技能", () => {
     const skill = makeValidSkill() as SkillDefinition;
-    (skill as Record<string, unknown>).execute = undefined;
+    // biome-ignore lint: 测试需要强制移除 execute 方法
+    (skill as any).execute = undefined;
     const result = validator.validate(skill);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.path === "execute")).toBe(true);
@@ -97,7 +98,8 @@ describe("SimpleSkillValidator.validate", () => {
 
   it("校验 validateInput 类型错误", () => {
     const skill = makeValidSkill() as SkillDefinition;
-    (skill as Record<string, unknown>).validateInput = "not-a-function";
+    // biome-ignore lint: 测试需要将 validateInput 设为非函数类型
+    (skill as any).validateInput = "not-a-function";
     const result = validator.validate(skill);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.path === "validateInput")).toBe(true);

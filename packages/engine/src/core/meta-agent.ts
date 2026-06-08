@@ -1,11 +1,20 @@
-import type { TaskNode, Tag, ImpactScope, ReplanResult, SafeErrorReporter } from "@cortex/shared";
+import { PRESET_CONTEXT_POLICIES, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import { SkillRegistry } from "../registry/skill-registry.js";
+import {
+  buildPlanningSystem,
+  buildPlanningSystemBlank,
+  REPLAN_SYSTEM,
+  PIPELINE_CTX_MAX_OUTPUT_LEN,
+  PIPELINE_CTX_MAX_ERROR_LEN,
+  PIPELINE_CTX_RECENT_LIMIT,
+  PIPELINE_CTX_HARD_CAP,
+} from "@cortex/config";
+import type { SkillRegistry } from "../registry/skill-registry.js";
 
 /**
  * MetaAgent —— 战术引擎。
  * 接收用户意图，拆解为 TaskNode 树，写入 TaskBoard。
- * 独享 DeepSeek V4 Pro（reasoner 模型）。
+ * 独享 DeepSeek V4 Flash 思考模式（reasoner 模型，仅甘雨/钟离/霜凝升格为 V4 Pro）。
  *
  * @contract 模块边界契约（久岐忍 P1-5：模块边界缺少显式契约化定义 → 已闭合）
  *
@@ -30,22 +39,44 @@ import { SkillRegistry } from "../registry/skill-registry.js";
  * @fix D5 — _parseReplanResult 支持简洁数组格式中的 impactScope 字段，
  *   防止 LLM 输出数组格式时 impactScope 被静默认为 "local"。
  */
+
 export class MetaAgent {
   private _nodeCounter = 0; // 防 Date.now() 高频碰撞
   private _safeReporter?: SafeErrorReporter;
   private _skillRegistry?: SkillRegistry;
+  private _observer?: IPipelineObserver;
+  /** 处理函数引用——用于 shutdown 时精确退订 */
+  private _onNodeComplete?: (event: ObservableEvent) => void;
+  private _onNodeFailed?: (event: ObservableEvent) => void;
+  /** 管线事件积累——plan() 调用时注入 prompt 上下文 */
+  private _pipelineContext: string[] = [];
   private readonly _planningSystem: string;
   private readonly _replanSystem: string;
+  private _workspaceRoot?: string;
 
   constructor(
     private readonly llm: LlmAdapter,
     skillRegistry?: SkillRegistry,
     planningSystemPrompt?: string,
     replanSystemPrompt?: string,
+    observer?: IPipelineObserver,
+    workspaceRoot?: string,
   ) {
     this._skillRegistry = skillRegistry;
-    this._planningSystem = planningSystemPrompt ?? PLANNING_SYSTEM;
+    this._planningSystem = planningSystemPrompt ?? buildPlanningSystemBlank();
     this._replanSystem = replanSystemPrompt ?? REPLAN_SYSTEM;
+    this._workspaceRoot = workspaceRoot;
+    if (observer) this.setObserver(observer);
+  }
+
+  /** RLM 拆解用的 LLM 适配器（只读）。Scheduler 通过此入口注入 decompose() 的 LLM 调用能力。 */
+  get llmAdapter(): LlmAdapter {
+    return this.llm;
+  }
+
+  /** 注入/更新工作区根路径 */
+  setWorkspaceRoot(root: string): void {
+    this._workspaceRoot = root;
   }
 
   /** 注入技能注册表（可后置绑定） */
@@ -53,9 +84,65 @@ export class MetaAgent {
     this._skillRegistry = registry;
   }
 
+  /** 注入管线——MetaAgent 订阅节点事件以获取执行层信息 */
+  setObserver(observer: IPipelineObserver): void {
+    if (this._observer) this._unsubscribe();
+    this._observer = observer;
+    // 订阅 NodeComplete（只接——获取 Agent 执行产出）
+    // NodeComplete 以 HIGH 优先级发射（cleanup-step.ts + scheduler._dispatchMulti）
+    this._onNodeComplete = (event: ObservableEvent) => {
+      if (event.type === "node.complete" as PipelineEventType.NodeComplete) {
+        const { nodeId, agentType, output } = event.payload as { nodeId: string; agentType: string; success: true; output?: string };
+        if (output) {
+          this._enqueuePipelineCtx(`[${agentType}] ${nodeId}: ${output.slice(0, PIPELINE_CTX_MAX_OUTPUT_LEN)}`);
+        }
+      }
+    };
+    observer.on(PipelinePriority.HIGH, this._onNodeComplete);
+    // 订阅 NodeFailed（只收——感知执行失败）
+    // NodeFailed 以 CRITICAL 优先级发射（scheduler._dispatchNode）
+    this._onNodeFailed = (event: ObservableEvent) => {
+      if (event.type === "node.failed" as PipelineEventType.NodeFailed) {
+        const { nodeId, error } = event.payload as { nodeId: string; error: string };
+        this._enqueuePipelineCtx(`[FAILED] ${nodeId}: ${error.slice(0, PIPELINE_CTX_MAX_ERROR_LEN)}`);
+      }
+    };
+    observer.on(PipelinePriority.CRITICAL, this._onNodeFailed);
+  }
+
   /** 注入错误上报通道（observer 双通道模式） */
   setSafeReporter(reporter: SafeErrorReporter): void {
     this._safeReporter = reporter;
+  }
+
+  /** 订阅终止——精确退订已注册的 handler，防止误删其他组件 */
+  private _unsubscribe(): void {
+    if (!this._observer) return;
+    if (this._onNodeComplete) this._observer.off(PipelinePriority.HIGH, this._onNodeComplete);
+    if (this._onNodeFailed) this._observer.off(PipelinePriority.CRITICAL, this._onNodeFailed);
+    this._onNodeComplete = undefined;
+    this._onNodeFailed = undefined;
+  }
+
+  /** 将事件入队到管线上下文（带硬上限防内存泄漏） */
+  private _enqueuePipelineCtx(entry: string): void {
+    if (this._pipelineContext.length >= PIPELINE_CTX_HARD_CAP) {
+      // 截半保留最近事件
+      this._pipelineContext = this._pipelineContext.slice(-Math.floor(PIPELINE_CTX_HARD_CAP / 2));
+    }
+    this._pipelineContext.push(entry);
+  }
+
+  /** 清空管线上下文积累（每次 plan() 调用后重置） */
+  private _clearPipelineContext(): void {
+    this._pipelineContext = [];
+  }
+
+  /** 获取当前积累的管线上下文 */
+  private _getPipelineContext(): string {
+    if (this._pipelineContext.length === 0) return "";
+    const recent = this._pipelineContext.slice(-PIPELINE_CTX_RECENT_LIMIT);
+    return `\nRecent execution context (from pipeline):\n${recent.map((c) => `  ${c}`).join("\n")}\n`;
   }
 
   /**
@@ -90,7 +177,7 @@ export class MetaAgent {
       "",
       "Output JSON with two fields:",
       '{"tasks": [...], "impactScope": "local"|"subtree"}',
-      "tasks: array of alternative TaskNode objects (1-4 tasks, simpler than original).",
+      "tasks: array of alternative TaskNode objects (1-3 tasks, narrower than original. Each MUST have isRlmSubtask:true and reasoningEffort:max).",
       "impactScope: the assessed scope of impact.",
     ].join("\n");
 
@@ -103,6 +190,119 @@ export class MetaAgent {
   }
 
   /**
+   * 边界违规重规划——Agent 越界写入越权文件时回调。
+   *
+   * 与 requestReplan 的关键区别：
+   * - 任务执行"成功"了，但 Agent 踩进了不该碰的文件域
+   * - 下游任务（如 code agent）可能发现文件已被 analysis 写入——需重新规划
+   * - impactScope 默认 subtree（越界代码可能污染整个上下游链）
+   *
+   * @param violatingNode 越界的节点
+   * @param boundaryReason 边界违规描述（含越界文件列表）
+   * @param replanCount 重规划轮次
+   * @param originalIntent 原始用户意图
+   */
+  async requestBoundaryReplan(
+    violatingNode: TaskNode,
+    boundaryReason: string,
+    replanCount: number,
+    originalIntent?: string,
+    maxReplan = 3,
+  ): Promise<ReplanResult> {
+    const prompt = [
+      `Original intent: ${originalIntent ?? violatingNode.payload}`,
+      `Boundary violation on task (attempt ${replanCount + 1}/${maxReplan}):`,
+      `Task: ${violatingNode.payload}`,
+      `Tags: ${violatingNode.tags.join(", ")}`,
+      `Violating agent type: ${violatingNode.type}`,
+      `Boundary violation detail: ${boundaryReason}`,
+      "",
+      "CONTEXT:",
+      "The task was NOT a failure—it SUCCEEDED. But the agent wrote files outside its allowed domain.",
+      "For example, an analysis agent wrote package.json/tsconfig.json/src/ files that code agent should write.",
+      "This means downstream tasks may find files already exist, causing conflicts.",
+      "",
+      "YOUR JOB:",
+      "1. If analysis wrote implementation code → the downstream implementation/code node should become a review or fix",
+      "2. If review wrote implementation code → replace review with inspect + add code node",
+      "3. NEVER generate a node that duplicates work already done by the violating agent",
+      "4. impactScope should be 'subtree' (violation may affect all downstream)",
+      "5. Keep output minimal: 1-3 nodes to patch the disruption",
+      "",
+      `Parent node ID: ${violatingNode.parentId ?? "none"}`,
+      "",
+      "Output JSON with two fields:",
+      '{"tasks": [...], "impactScope": "subtree"}',
+      "tasks: array of alternative TaskNode objects (1-3 tasks, each with isRlmSubtask:true, reasoningEffort:max).",
+      "impactScope: use 'subtree' unless absolutely certain only local is affected.",
+    ].join("\n");
+
+    const res = await this.llm.chat(this.llm.reasonerModel, [
+      { role: "system", content: REPLAN_SYSTEM },
+      { role: "user", content: prompt },
+    ]);
+
+    return this._parseReplanResult(res.content ?? "", violatingNode.parentId);
+  }
+
+  /**
+   * 意图明晰化确认：在拆解任务前，向用户确认理解是否正确。
+   * 仅解析意图关键要素（目标/类型/范围/约束），不产生 TaskNode。
+   * 用户在确认后可直接 .yes 进入规划，或输入修正。
+   */
+  async clarifyIntent(intent: string): Promise<IntentClarification> {
+    const prompt = [
+      `Analyze the following user intent and extract its key elements. Return ONLY a JSON object (no markdown, no code fences):`,
+      `{"goal":"<one-line summary of primary goal>","actionType":"analysis|modification|audit|refactor|generation|inquiry","scope":"<what part of the project is targeted>","constraints":"<any explicit constraints mentioned>","unclear":"<any ambiguous parts or null if clear>"}`,
+      ``,
+      `User intent: ${intent}`,
+    ].join("\n");
+
+    const res = await this.llm.chat(this.llm.reasonerModel, [
+      { role: "system", content: "You are a precise intent parser. Extract structured intent from user input. Respond only with the JSON object, no other text." },
+      { role: "user", content: prompt },
+    ]);
+
+    return this._parseClarification(res.content ?? "", intent);
+  }
+
+  /** 解析意图确认结果 */
+  private _parseClarification(raw: string, originalIntent: string): IntentClarification {
+    try {
+      const cleaned = raw
+        .replace(/```json\s*/gi, "")
+        .replace(/```\s*/g, "")
+        .trim();
+      const parsed = JSON.parse(cleaned);
+      return {
+        goal: typeof parsed.goal === "string" ? parsed.goal : originalIntent.slice(0, 80),
+        actionType: this._normalizeActionType(parsed.actionType),
+        scope: typeof parsed.scope === "string" ? parsed.scope : "未指定",
+        constraints: typeof parsed.constraints === "string" ? parsed.constraints : "无",
+        unclear: parsed.unclear && typeof parsed.unclear === "string" ? parsed.unclear : undefined,
+        originalIntent,
+      };
+    } catch {
+      return {
+        goal: originalIntent.slice(0, 80),
+        actionType: "inquiry",
+        scope: "未指定",
+        constraints: "无",
+        originalIntent,
+      };
+    }
+  }
+
+  private readonly _validActionTypes = new Set(["analysis", "modification", "audit", "refactor", "generation", "inquiry"]);
+
+  private _normalizeActionType(raw: unknown): IntentClarification["actionType"] {
+    if (typeof raw === "string" && this._validActionTypes.has(raw)) {
+      return raw as IntentClarification["actionType"];
+    }
+    return "inquiry";
+  }
+
+  /**
    * 规划：将用户意图拆解为 TaskNode 列表。
    * 返回的节点 `parentId` 关系已建立，可直接 add 到 TaskBoard。
    */
@@ -111,12 +311,20 @@ export class MetaAgent {
     context?: PlanContext,
   ): Promise<TaskNode[]> {
     const prompt = this._planningPrompt(intent, context);
-    const res = await this.llm.chat(this.llm.reasonerModel, [
-      { role: "system", content: PLANNING_SYSTEM },
-      { role: "user", content: prompt },
-    ]);
-
-    return this._parsePlan(res.content ?? "", context?.parentId);
+    // 有工作区时注入到系统提示词，确保边界校验规则生效
+    const systemPrompt = this._workspaceRoot
+      ? buildPlanningSystem(this._workspaceRoot)
+      : this._planningSystem;
+    try {
+      const res = await this.llm.chat(this.llm.reasonerModel, [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ]);
+      return this._parsePlan(res.content ?? "", context?.parentId);
+    } finally {
+      // 无论 LLM 调用成功或异常，都必须清理，防止下一次 plan() 注入过期上下文
+      this._clearPipelineContext();
+    }
   }
 
   /** 生成规划 prompt */
@@ -130,12 +338,18 @@ export class MetaAgent {
       parts.push(`Existing context tags: ${context.existingTags.join(", ")}`);
     }
 
+    // ── 管线上下文（v2.5.41 新增——原则二双向下放后在 MetaAgent 侧的落点）──
+    const pipeCtx = this._getPipelineContext();
+    if (pipeCtx) {
+      parts.push(pipeCtx);
+    }
+
     // ── 技能增强：查询 SkillRegistry 匹配的技能模板 ──
     if (this._skillRegistry && context?.existingTags) {
       const matched = this._skillRegistry.queryByTags(context.existingTags as Tag[]);
       if (matched.length > 0) {
         const skillLines = matched.map((s) =>
-          `  · ${s.name} (id:${s.id}) [${s.agentType}] tags:[${s.triggerTags.join(",")}] — ${s.trigger}`,
+          `  · ${s.name} (id:${s.id}) [${s.kind}] tags:[${s.triggerTags.join(",")}] — ${s.trigger}`,
         );
         parts.push(
           `Available skill templates (pre-existing patterns):\n${skillLines.join("\n")}\n\n` +
@@ -214,6 +428,7 @@ export class MetaAgent {
       payload: raw,
       results: [],
       createdAt: Date.now(),
+      contextPolicyId: "diagnose",
     };
   }
 
@@ -227,7 +442,10 @@ export class MetaAgent {
 
     for (const candidate of candidates) {
       const items = this._tryParseItems(candidate);
-      if (items !== null && items.length > 0) {
+      if (items !== null) {
+        // 空数组是合法结果：工作区边界拒绝 / 无操作必要
+        // 直接返回 [] 让调用方处理，不生成垃圾兜底节点
+        if (items.length === 0) return [];
         return items.flatMap((item, i) => this._toTaskNode(item, parentId, i));
       }
     }
@@ -290,6 +508,7 @@ export class MetaAgent {
       results: [],
       createdAt: now,
       reasoningEffort,
+      contextPolicyId: _resolveContextPolicy(item.type, item.tags),
     };
 
     return [self, ...children];
@@ -332,149 +551,47 @@ interface PlanContext {
   existingTags?: string[];
 }
 
-// ─── 系统提示 ─────────────────────────────────────
+/** 意图确认结果——clarifyIntent() 返回 */
+export interface IntentClarification {
+  goal: string;
+  actionType: "analysis" | "modification" | "audit" | "refactor" | "generation" | "inquiry";
+  scope: string;
+  constraints: string;
+  unclear?: string;
+  originalIntent: string;
+}
 
-const PLANNING_SYSTEM = [
-  "你是甘雨，璃月七星秘书，Cortex 的 MetaAgent 战术中枢。",
-  "千年如一日地俯瞰璃月的运转。冷静拆解意图，精准分配兵种，确保每一步都在正确的时机交给正确的人。",
-  "",
-  "── 最高原则：时序依赖 ──",
-  "你在指挥一支专家军队。专家的行动有严格的因果顺序——侦察兵不能在没有城墙的城市里巡逻，审计官不能审查还没有写出来的法典。",
-  "",
-  "在输出计划之前，逐个问自己：'这个任务能否在另一个任务完成之前开始？'",
-  "",
-  "典型的依赖链（你必须据此建立 children 嵌套）：",
-  "• 安柏（侦察）→ 依赖阿贝多（写完代码）—— 没有产出物，侦察什么？",
-  "• 宵宫（UI验证）→ 依赖阿贝多（写完前端页面）—— 页面不存在，怎么打开浏览器？",
-  "• 刻晴（审查）→ 依赖安柏（侦察完成）—— 审查需要侦察报告作为事实基础。",
-  "• 纳西妲（架构分析）→ 依赖阿贝多（代码存在）—— 没有代码，分析什么架构？",
-  "• 凝光（合规审计）→ 依赖阿贝多（代码存在）—— 有没有内容可以审计？",
-  "• 莫娜（模式提炼）→ 依赖前面多位专家（已完成的任务）—— 模式从已完成的成果中提炼。",
-  "• 北斗（运维检查）→ 依赖阿贝多（文件产出）—— 文件没写完，检查什么部署就绪性？",
-  "",
-  "如何表达依赖（用 children 嵌套，不是 parentId 字段）：",
-  "• 把 B 放进 A 的 children 数组里 → B 会在 A 完成后才被调度。",
-  "• 可以并行的任务：放进同一个父节点的 children 里（同层兄弟并行执行）。",
-  "  例如：安柏和宵宫都放进阿贝多的 children → 阿贝多写完代码后，安柏和宵宫同时出发。",
-  "• 串行依赖链：嵌套 children。",
-  "  例如：刻晴依赖安柏的侦察报告 → 把刻晴放进安柏的 children 里。",
-  "• 没有依赖的任务：不加 children。",
-  "",
-  "完整示例（WebUI计算器场景）：",
-  "[",
-  '  { "task": "阿贝多写代码", "type": "code", "tags": ["code"], "children": [',
-  '    { "task": "安柏侦察", "type": "inspector", "tags": ["inspector"], "children": [',
-  '      { "task": "刻晴审查", "type": "review", "tags": ["review"] }',
-  "    ]},",
-  '    { "task": "宵宫UI验证", "type": "browser", "tags": ["browser", "ui_verify"] },',
-  '    { "task": "纳西妲架构分析", "type": "analysis", "tags": ["analysis"] },',
-  '    { "task": "凝光合规审计", "type": "doc-govern", "tags": ["doc-govern"] },',
-  '    { "task": "莫娜模式提炼", "type": "loop", "tags": ["loop", "pattern_scan", "skill_precipitate"] },',
-  '    { "task": "北斗运维检查", "type": "ops", "tags": ["ops", "deploy"] }',
-  "  ]}",
-  "]",
-  "",
-  "── 可用兵种 ──",
-  "  code/阿贝多      —— 炼金术士，写代码、重构、新功能",
-  "  fix/希格雯       —— 护士长，诊断 bug、最小修复、写病历",
-  "  review/刻晴      —— 玉衡星，代码审查、挑剔一切瑕疵",
-  "  analysis/纳西妲   —— 草神，架构分析、深度调研",
-  "  doc-govern/凝光   —— 天权星，律法审计、合规检查",
-  "  inspector/安柏    —— 侦察骑士，纯事实采集",
-  "  loop/莫娜         —— 占星术士，模式提炼、技能沉淀",
-  "  ops/北斗          —— 南十字船长，运维诊断、环境检查",
-  "  browser/宵宫      —— 烟花店老板，浏览器 UI 验证",
-  "",
-  "── 标签匹配规则（关键！tag 错误 → Agent 无法认领 → 节点失败）──",
-  "每个节点必须至少有一个 tag 匹配目标 Agent 的认领词汇表：",
-  "  code  → 必须含: code, implementation, refactor, test, config, review, research, analysis",
-  "  fix   → 必须含: fix, bugfix, repair, diagnose, heal",
-  "  review → 必须含: review, audit",
-  "  analysis → 必须含: analysis, research",
-  "  ops → 必须含: ops, deploy, test",
-  "  doc-govern → 必须含: doc-govern, audit, plan_review, doc_audit, constitution_check",
-  "  loop → 必须含: loop, pattern_scan, skill_precipitate",
-  "  inspector → 必须含: inspect, inspector",
-  "  browser → 必须含: browser, ui_verify",
-  "  api   → 必须含: api, api_design, api_integration, endpoint, review, research, analysis",
-  "  data  → 必须含: data, data_model, migration, storage, schema, review, research, analysis",
-  "⚠️ 反例：type=code 但 tags=[\"review\",\"analysis\"] → ❌ 无交集，节点必定失败",
-  "✅ 正例：type=code 且 tags=[\"code\",\"review\"] → ✅ 匹配",
-  "",
-  "── 输出格式 ──",
-  '每个任务节点的 JSON 格式：',
-  '{',
-  '  "task": "<一句话任务描述>",',
-  '  "type": "implementation|review|analysis|research|bugfix|fix|refactor|deploy|config|audit|inspect|ops|doc-govern|browser",',
-  '  "tags": ["<标签1>", "<标签2>"],',
-  '  "needsMultiPerspective": true 或 false,',
-  '  "reasoningEffort": "high" 或 "max",',
-  '  "children": [<依赖它的任务>] 或省略',
-  '}',
-  "",
-  "── 基本规则 ──",
-  "• 每个计划 3-8 个任务。简单意图少些，复杂意图多些。",
-  "• ⚠️ 当用户显式列出 N 位专家各负责一个独立子任务时，必须创建 N 个独立根节点——绝对不能压缩为 1 个。",
-  "  反例：用户说'刻晴审P1、北斗审P2、纳西妲审P3'而你只建1个节点 → 6位专家闲置，完全浪费。",
-  "• children 用于表达依赖——不是可选的装饰，是时序保证。最多三层。",
-  "• 分析/审计/审查类任务的 payload 必须写清楚：'用 write_file 工具将结果输出为 webui/xxx.md'。不能只说'分析架构'——必须说'分析架构并输出到文件'。没有文件产出的分析等于没做。",
-  "• WebUI 页面元素的 ID 必须使用约定名称：输入框 #expression、按钮 #calculateBtn、结果区 #result。在 payload 里显式写出这些 ID，不要只说'包含输入框和按钮'。",
-  "• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc-govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。\n" +
-    "• ⚠️ 含 bugfix/fix/repair 标签的节点必须独立——不与其他标签（如 implementation/review）共用同一个节点。修 bug 是诊断+治疗，写新功能是创造，二者不可混在一个节点里路由。",
-  "• 纯数据采集用 inspect（派给安柏）。合规审计用 doc-govern（派给凝光）。UI 验证用 browser 或 ui_verify（派给宵宫）。",
-  "• needsMultiPerspective=true 只在该任务确实需要多视角审视时才设。",
-  "• reasoningEffort: 大多数任务设 \"high\"。\"max\" 仅用于深度审计、宪法检查、或复杂多文件分析。",
-  "• 可以不完全精确，但不编造不存在的任务。",
-  "• 只输出 JSON 数组。不要解释、不要前言、不要后记。",
-].join("\n");
+// 系统提示已迁移至 @cortex/config/constants/meta-agent.ts
+// 通过 buildPlanningSystem(workspaceRoot) / REPLAN_SYSTEM 导入使用
 
-const REPLAN_SYSTEM = [
-  "你收到了一份从一线执行层上报的卷宗。请按以下六层框架结构化思考，然后给出精准的修复方案。",
-  "",
-  "── 第一层：当前情境 ──",
-  "一个任务节点执行失败了。失败的 Agent 已经把原始诊断报告附在下方 Error 字段中——不是摘要，不是转述，是完整的原始错误输出。",
-  "这份报告可能包含：具体文件路径、行号、错误类型、甚至修复建议。也可能只有一句语焉不详的报错。",
-  "你的第一步是读懂这份报告：它是精确定位的，还是模糊不清的？",
-  "",
-  "── 第二层：身份位置 ──",
-  "你是甘雨，Cortex 的 MetaAgent 战术中枢。",
-  "你是拿着手术刀的医生，不是拿着望远镜的哲学家。",
-  "你的职责不是每次失败都重新审视整个系统架构，而是精准地找出最小的、可执行的修复步骤。",
-  "",
-  "── 第三层：分寸拿捏 ──",
-  "信任一线侦察的报告。",
-  "• 如果 Inspector/Code Agent/Review 已经指出了具体文件、具体行号、具体错误——直接采纳。不要自己重新推理。",
-  "• 只修复被确认的问题。不扩展为全面检查、不追加额外工程。",
-  "• 只有当错误报告明确指出架构级问题（如模块间循环依赖、核心逻辑断裂、类型系统崩溃）时，才生成 analysis 节点。",
-  "• 机械性错误（导入路径、语法、类型标注）——一个 bugfix 节点足矣。",
-  "",
-  "── 第四层：任务范围 ──",
-  "你只需要生成修复节点。",
-  "• 如果错误报告里有具体文件路径：生成一个 bugfix 节点，在 payload 中写明修复哪个文件、修复什么。",
-  "• 如果错误报告语焉不详（如 'Inspection exceeded max loops' 但没有具体诊断）：最多补一个 inspect 节点做细化探查。",
-  "• 如果失败原因是'文档未生成'或'分析未输出文件'：payload 必须写明'用 write_file 工具将结果输出为 webui/xxx.md'。",
-  "• 节点数量：一个错误 → 一个节点。不制造多余工作。",
-  "",
-  "── 第五层：可用信息 ──",
-  "Error 字段内容是你唯一的决策依据。",
-  "其他节点（parentId 上游已完成的任务输出）不在本次上下文内——不要假设、不要推测。",
-  "如果 Error 信息不足以做出精准决策——生成一个轻量的 inspect 或 analysis 节点去获取更多事实，而非凭空猜测。",
-  "",
-  "── 第六层：输出规范 ──",
-  "输出一个 JSON 数组。格式与规划阶段一致。",
-  "• 如果是一文件、一错误、一修复——只输出一个节点。",
-  "• 如果修复需要多步（比如先分析定位、再动手改、再复查验证）——用 children 嵌套表达时序依赖。",
-  "  例如：{ \"task\": \"分析错误根因\", \"type\": \"analysis\", \"tags\": [\"analysis\"], \"children\": [",
-  "     { \"task\": \"修复具体文件\", \"type\": \"bugfix\", \"tags\": [\"bugfix\"], \"children\": [",
-  "       { \"task\": \"复查修复结果\", \"type\": \"inspect\", \"tags\": [\"inspect\"] }",
-  "     ]}",
-  "   ]}",
-  "  分析→修复→复查 会依次执行，不会同时开始。",
-  "• 注意：你产出的新节点会被插入到失败节点的同一层级（兄弟关系，不是父子关系）。",
-  "  因此，如果新节点之间有先后依赖，用 children 嵌套来建立——不要期望它们自动等待失败节点。",
-  "• 修复节点如果涉及页面元素，必须在 payload 中写明具体 ID（#expression 输入框、#calculateBtn 按钮、#result 结果区）。",
-  "• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc-govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。\n" +
-    "• ⚠️ 含 bugfix/fix/repair 标签的节点必须独立——不与其他标签（如 implementation/review）共用同一个节点。修 bug 是诊断+治疗，写新功能是创造，二者不可混在一个节点里路由。",
-  "• 不要输出解释。不要输出摘要。不要输出风险分析。不要输出 '好的，我理解了...'。",
-  "• 输出前自检：哪一句删了不影响决策？立刻删除。",
-].join("\n");
+// ─── ContextPolicy 自动匹配 ──────────────────────
+
+/**
+ * 根据任务类型和标签自动选择 ContextPolicy。
+ *
+ * 匹配规则：
+ *   1. type 精确命中预设 ID → 直接返回
+ *   2. tags 包含特征标签 → 匹配对应预设
+ *   3. 回退 → "single-step"
+ */
+function _resolveContextPolicy(type?: string, tags?: string[]): string {
+  // 规则 1: type 精确命中
+  if (type && PRESET_CONTEXT_POLICIES[type]) return type;
+
+  // 规则 2: tags 匹配
+  if (tags) {
+    const tagSet = new Set(tags.map((t) => t.toLowerCase()));
+    if (tagSet.has("audit") || tagSet.has("architecture") || tagSet.has("constitution_check")) {
+      return "architecture-review";
+    }
+    if (tagSet.has("debug") || tagSet.has("diagnose") || tagSet.has("bugfix")) {
+      return "diagnose";
+    }
+    if (tagSet.has("code") || tagSet.has("refactor")) {
+      return "code-refactor";
+    }
+  }
+
+  // 规则 3: 回退
+  return "single-step";
+}

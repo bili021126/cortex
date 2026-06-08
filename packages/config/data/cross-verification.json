@@ -1,0 +1,86 @@
+{
+  "description": "交叉验证对表——每位 Agent 的探索报告由互补专长的另一位 Agent 核查。验证者只确认已有声明是否能在代码库中找到对应证据，不做新探索。",
+  "pairs": [
+    {
+      "reporterKey": "keqing",
+      "reporterName": "刻晴",
+      "reporterEmoji": "⚡",
+      "verifierKey": "nahida",
+      "verifierName": "纳西妲",
+      "verifierEmoji": "🌿",
+      "reportFilePattern": "keqing-quality-recon"
+    },
+    {
+      "reporterKey": "albedo",
+      "reporterName": "阿贝多",
+      "reporterEmoji": "⚗️",
+      "verifierKey": "keqing",
+      "verifierName": "刻晴",
+      "verifierEmoji": "⚡",
+      "reportFilePattern": "albedo-deep-review"
+    },
+    {
+      "reporterKey": "beidou",
+      "reporterName": "北斗",
+      "reporterEmoji": "⚓",
+      "verifierKey": "amber",
+      "verifierName": "安柏",
+      "verifierEmoji": "🐰",
+      "reportFilePattern": "beidou-ops-diagnosis"
+    },
+    {
+      "reporterKey": "mona",
+      "reporterName": "莫娜",
+      "reporterEmoji": "🔮",
+      "verifierKey": "nahida",
+      "verifierName": "纳西妲",
+      "verifierEmoji": "🌿",
+      "reportFilePattern": "mona-pattern-discovery"
+    },
+    {
+      "reporterKey": "ningguang",
+      "reporterName": "凝光",
+      "reporterEmoji": "💎",
+      "verifierKey": "alhaitham",
+      "verifierName": "艾尔海森",
+      "verifierEmoji": "📚",
+      "reportFilePattern": "ningguang-governance-audit"
+    },
+    {
+      "reporterKey": "amber",
+      "reporterName": "安柏",
+      "reporterEmoji": "🐰",
+      "verifierKey": "kuki",
+      "verifierName": "久岐忍",
+      "verifierEmoji": "😈",
+      "reportFilePattern": "amber-reconnaissance"
+    },
+    {
+      "reporterKey": "kuki",
+      "reporterName": "久岐忍",
+      "reporterEmoji": "😈",
+      "verifierKey": "albedo",
+      "verifierName": "阿贝多",
+      "verifierEmoji": "⚗️",
+      "reportFilePattern": "kuki-api-design"
+    },
+    {
+      "reporterKey": "alhaitham",
+      "reporterName": "艾尔海森",
+      "reporterEmoji": "📚",
+      "verifierKey": "mona",
+      "verifierName": "莫娜",
+      "verifierEmoji": "🔮",
+      "reportFilePattern": "alhaitham-data-design"
+    },
+    {
+      "reporterKey": "nahida",
+      "reporterName": "纳西妲",
+      "reporterEmoji": "🌿",
+      "verifierKey": "beidou",
+      "verifierName": "北斗",
+      "verifierEmoji": "⚓",
+      "reportFilePattern": "nahida-architecture-analysis"
+    }
+  ]
+}

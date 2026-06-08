@@ -1,8 +1,10 @@
 /**
- * MemoryStore 共享常量 — 零依赖，被所有 memory/ 子模块引用。
+ * MemoryStore 共享常量 — 被所有 memory/ 子模块引用。
  *
  * @module memory/schema
  */
+
+import { DEFAULT_MAX_TOTAL_MEMORIES } from "@cortex/config";
 
 // ── TTL ────────────────────────────────────────
 
@@ -58,7 +60,7 @@ export const WEIGHT_AGING_FACTOR = 0.95;
 // ── 总量控制 ──────────────────────────────────
 
 /** 内存记忆条目软上限，超出时按 lastAccessedAt 升序 archive 最久未访问的记忆 */
-export const MAX_TOTAL_MEMORIES = 10000;
+export const MAX_TOTAL_MEMORIES = DEFAULT_MAX_TOTAL_MEMORIES;
 
 // ── 主动维护 ──────────────────────────────────
 

@@ -1,6 +1,4 @@
-import type { AgentType, AgentConfig, InvariantReporter } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
-import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { AgentStatus, PipelineEventType, PipelinePriority, type AgentConfig, type AgentType, type IPipelineObserver, type InvariantReporter } from "@cortex/shared";
 import { isTestEnv } from "../test-env.js";
 
 /**
@@ -10,6 +8,8 @@ import { isTestEnv } from "../test-env.js";
  */
 export interface ISchedulerAgentPool {
   spawn(agentType: AgentType, instanceId: string): boolean;
+  /** RLM 子任务——不占主配额 */
+  spawnSubtask(agentType: AgentType, instanceId: string): boolean;
   getStatus(instanceId: string): AgentStatus | undefined;
   setStatus(instanceId: string, status: AgentStatus): boolean;
   destroy(agentType: AgentType, instanceId: string): void;
@@ -88,8 +88,24 @@ export class AgentPool implements IAgentPool {
   spawn(agentType: AgentType, instanceId: string): boolean {
     const config = this.configs.get(agentType);
     if (!config) return false;
-    const instances = this.active.get(agentType)!;
+    const instances = this.active.get(agentType);
+    if (!instances) return false;
     if (instances.size >= (config.maxInstances ?? 1)) return false;
+    instances.add(instanceId);
+    this.statuses.set(instanceId, AgentStatus.Created);
+    return true;
+  }
+
+  /**
+   * 生成 RLM 子任务实例——不占主配额，不计入 maxInstances。
+   * 子任务与父任务共享同一 Agent 类型，但不应受池子限制。
+   * 使用场景：MetaAgent replan 产生的子任务、RLM ExecuteStep 拆解的 SubTask。
+   */
+  spawnSubtask(agentType: AgentType, instanceId: string): boolean {
+    const config = this.configs.get(agentType);
+    if (!config) return false;
+    const instances = this.active.get(agentType);
+    if (!instances) return false;
     instances.add(instanceId);
     this.statuses.set(instanceId, AgentStatus.Created);
     return true;
@@ -158,7 +174,8 @@ export class AgentPool implements IAgentPool {
   canSpawn(agentType: AgentType): boolean {
     const config = this.configs.get(agentType);
     if (!config) return false;
-    const instances = this.active.get(agentType)!;
+    const instances = this.active.get(agentType);
+    if (!instances) return false;
     return instances.size < (config.maxInstances ?? 1);
   }
 

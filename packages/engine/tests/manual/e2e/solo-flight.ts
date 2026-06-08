@@ -11,7 +11,7 @@
  *   - 冷启动验证 —— 没有宪法、没有 MemoryStore 种子、没有先例
  *
  * 安全红线:
- *   - 所有文件操作限定在 PROJECT_DIR 内（写入越界直接拒绝）
+ *   - 所有文件操作限定在 PACKAGES_DIR 内（写入越界直接拒绝）
  *   - shell 危险命令拦截
  *   - 不碰主仓库任何代码
  *
@@ -20,6 +20,10 @@
  *   2. Scheduler.executeAll() 完成
  *   3. 产出文件真实存在且非空
  *   4. 至少一个产物可成功执行（npx tsx 不报错）
+ *   5. 包符合组件式架构：≥3 个模块 + ≥1 个 interface 扩展点 + Registry 机制
+ *   6. tsc --noEmit 零错误，vitest run 全部通过
+ *   7. 每个模块有独立单元测试，覆盖率 ≥ 80% lines
+ *   8. 技能沉淀闭环：SkillTemplate JSON 自动提取入池
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -37,6 +41,8 @@ import {
   NodeFileSystemAdapter,
   MetaAgent,
   SkillRegistry,
+  deriveStatus,
+  registerSkillPipeline,
   createAgent,
   codeAgentConfig,
   reviewAgentConfig,
@@ -97,19 +103,40 @@ const DANGEROUS_FORMAT = /\bformat\s+[A-Za-z]:/i; // 单独处理 —— 避免�
 function registerAllTools(toolkit: Toolkit, projectRoot: string) {
   const resolve = (p: string) => {
     const normalized = path.normalize(p);
-    // 如果路径已经是 projectRoot 下的绝对路径，直接返回
     if (path.isAbsolute(normalized) && normalized.toLowerCase().startsWith(projectRoot.toLowerCase() + path.sep)) {
       return normalized;
     }
-    // 去掉绝对路径前缀（/、\、C:\ 等），防止 path.resolve 吞掉 projectRoot
     const clean = p.replace(/^[a-zA-Z]:[\\/]/, '').replace(/^[\\/]+/, '');
     return path.resolve(projectRoot, clean || '.');
   };
 
   // ── 读取（不做越界限制 —— 与 closed-loop-collab 一致）──
 
+  // ⛔ 归档路径黑名单 —— 防止 Agent 读过时/废弃的设计文档
+  const ARCHIVE_DENY = new Set(["docs/archive", "docs/constitution/archive", "docs/constitution/backup"]);
+  const isDenied = (fp: string) => {
+    const rel = path.relative(projectRoot, fp).replace(/\\/g, "/");
+    for (const deny of ARCHIVE_DENY) {
+      if (rel.startsWith(deny + "/") || rel === deny) return deny;
+    }
+    return null;
+  };
+
+  // ⛑️ 补全工具 JSON Schema——DeepSeek API 拒绝 type:null 的 schema
+  toolkit.setToolMeta({
+    read_file: { parameters: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] } },
+    write_file: { parameters: { type: "object", properties: { file_path: { type: "string" }, content: { type: "string" } }, required: ["file_path", "content"] } },
+    run_shell: { parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] } },
+    list_files: { parameters: { type: "object", properties: { dir_path: { type: "string" } }, required: [] } },
+    list_dir: { parameters: { type: "object", properties: { dir_path: { type: "string" } }, required: [] } },
+    search_code: { parameters: { type: "object", properties: { query: { type: "string" }, path: { type: "string" } }, required: ["query"] } },
+    delete_file: { parameters: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] } },
+  });
+
   toolkit.register("read_file", async (params) => {
     const fp = resolve(params.file_path as string);
+    const denied = isDenied(fp);
+    if (denied) return { success: false, error: `read_file denied: ${path.relative(projectRoot, fp)} 位于归档目录 "${denied}/"，请勿引用已废弃的设计文档。` };
     if (!fs.existsSync(fp)) return { success: false, error: `File not found: ${fp}` };
     try {
       return { success: true, output: fs.readFileSync(fp, "utf-8") };
@@ -120,6 +147,8 @@ function registerAllTools(toolkit: Toolkit, projectRoot: string) {
 
   const listHandler = async (params: any) => {
     const dp = resolve((params.dir_path ?? params.path ?? ".") as string);
+    const denied = isDenied(dp);
+    if (denied) return { success: false, error: `list_files denied: ${path.relative(projectRoot, dp)} 位于归档目录 "${denied}/"，请勿引用已废弃的设计文档。` };
     if (!fs.existsSync(dp)) return { success: false, error: `Dir not found: ${dp}` };
     try {
       const entries = fs.readdirSync(dp, { withFileTypes: true });
@@ -135,6 +164,8 @@ function registerAllTools(toolkit: Toolkit, projectRoot: string) {
   toolkit.register("search_code", async (params) => {
     const query = (params.query ?? params.pattern ?? "") as string;
     const dir = resolve((params.path ?? ".") as string);
+    const denied = isDenied(dir);
+    if (denied) return { success: false, error: `search_code denied: ${path.relative(projectRoot, dir)} 位于归档目录 "${denied}/"，请勿引用已废弃的设计文档。` };
     if (!query) return { success: false, error: "Missing query/pattern" };
     try {
       const results: string[] = [];
@@ -164,12 +195,31 @@ function registerAllTools(toolkit: Toolkit, projectRoot: string) {
     }
   });
 
-  // ── 写入 —— 白名单制，拒绝越界 ──
+  // ── 写入 —— 护已有包，开放根级文件供集成 ──
+
+  // 已有包保护：扫描 packages/ 下的子目录（不能覆盖已有包）
+  const existingPkgs = new Set<string>();
+  const packagesPath = path.join(projectRoot, "packages");
+  if (fs.existsSync(packagesPath)) {
+    for (const entry of fs.readdirSync(packagesPath, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.name.startsWith(".")) existingPkgs.add(entry.name);
+    }
+  }
 
   toolkit.register("write_file", async (params) => {
     const fp = resolve(params.file_path as string);
     if (!fp.startsWith(projectRoot + path.sep)) {
-      return { success: false, error: `write_file denied: 路径越界 ${fp}\n  提示: 请使用相对路径，如 "design.md" 或 "src/index.ts"` };
+      return { success: false, error: `write_file denied: 路径越界 ${fp}\n  提示: 请使用相对路径` };
+    }
+    // 已有包目录：可新增文件，不可覆盖/修改已有文件
+    const rel = path.relative(projectRoot, fp);
+    const pkgsPrefix = "packages" + path.sep;
+    if (rel.startsWith(pkgsPrefix)) {
+      const rest = rel.slice(pkgsPrefix.length);
+      const topDir = rest.split(path.sep)[0];
+      if (topDir && existingPkgs.has(topDir) && fs.existsSync(fp)) {
+        return { success: false, error: `write_file denied: "${rel}" 是已有包中的文件，不能修改。只能新增文件。` };
+      }
     }
     try {
       const dir = path.dirname(fp);
@@ -181,6 +231,13 @@ function registerAllTools(toolkit: Toolkit, projectRoot: string) {
     } catch (e) {
       return { success: false, error: String(e) };
     }
+  });
+
+  // ── 删除 —— 一律禁止 ──
+
+  toolkit.register("delete_file", async (params) => {
+    const fp = resolve(params.file_path as string);
+    return { success: false, error: `delete_file denied: ${fp} —— 不能删除任何文件。` };
   });
 
   // ── Shell —— 危险命令拦截，其余放行 ──
@@ -250,12 +307,12 @@ function resolveStrategy(cliOverride: string | null, planText: string): ISchedul
 
 function resolveDriver(cliOverride: string | null, planText: string): ILoopDriver {
   const parsed = tryParseMetaStrategy(planText);
-  const name = cliOverride ?? parsed.driver ?? "wave";
+  const name = cliOverride ?? parsed.driver ?? "topological-layered";
   const map: Record<string, ILoopDriver> = {
     "topological-layered": new TopologicalLayeredDriver(),
     "sequential": new SequentialDriver(),
     "wave": new WaveDriver()};
-  return map[name] ?? map["wave"];
+  return map[name] ?? map["topological-layered"];
 }
 
 function resolveExecModel(cliOverride: string | null, planText: string): IExecutionModel {
@@ -435,60 +492,27 @@ async function main() {
   const REASONER_MODEL = llmCfg.reasonerModel;
   const WORKSPACE = process.cwd();
 
-  // ── 工作目录：专用实验目录，不与正式包冲突 ──
-  const PROJECT_DIR = path.resolve(WORKSPACE, "projects", "_solo-flight-target");
-  if (fs.existsSync(PROJECT_DIR)) {
-    const existing = fs.readdirSync(PROJECT_DIR).filter(f => f !== ".gitkeep");
-    if (existing.length > 0) {
-      console.log(`⚠️  实验目录非空，清理 ${existing.length} 个残留文件...`);
+  // ── 工作目录：packages/（Agent 自主在此建子目录）──
+  const PACKAGES_DIR = path.resolve(WORKSPACE, "packages");
+  // Agent 工作区提升到 workspace 根，允许修改 tsconfig.json 等集成文件
+  const AGENT_ROOT = WORKSPACE;
+
+  // 记录 Agent 创建了哪个包（Phase 6/8 验收时用）
+  let createdPkgDir: string | null = null;
+
+  // 快照：Agent 启动前 packages/ 下的已有子目录（用于验收时差集发现新包）
+  const preExistingPkgs = new Set<string>();
+  if (fs.existsSync(PACKAGES_DIR)) {
+    for (const entry of fs.readdirSync(PACKAGES_DIR, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.name.startsWith(".")) preExistingPkgs.add(entry.name);
     }
-    fs.rmSync(PROJECT_DIR, { recursive: true, force: true });
   }
-  fs.mkdirSync(PROJECT_DIR, { recursive: true });
-
-  // monorepo 标准子包配置
-  const pkgPath = path.join(PROJECT_DIR, "package.json");
-  fs.writeFileSync(pkgPath, JSON.stringify({
-    name: "@cortex/solo-flight-target",
-    version: "0.1.0",
-    private: true,
-    type: "module",
-    main: "./dist/index.js",
-    types: "./dist/index.d.ts",
-    exports: {
-      ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
-    },
-    scripts: {
-      "build": "tsc",
-      "typecheck": "tsc --noEmit",
-      "test": "vitest run",
-      "test:watch": "vitest"
-    },
-    dependencies: {
-      "@cortex/shared": "workspace:*"
-    },
-    devDependencies: {
-      "@types/node": "^22.0.0",
-      "typescript": "^5.7.0",
-      "vitest": "^2.1.0"
-    }
-  }, null, 2));
-
-  const tsconfigPath = path.join(PROJECT_DIR, "tsconfig.json");
-  fs.writeFileSync(tsconfigPath, JSON.stringify({
-    "extends": "../../tsconfig.base.json",
-    compilerOptions: {
-      outDir: "./dist",
-      rootDir: "./src"
-    },
-    include: ["src"]
-  }, null, 2));
 
   console.log("╔══════════════════════════════════════════════════╗");
-  console.log("║   🕊️  独自飞翔 —— 冷启动，空目录，从零建造       ║");
+  console.log("║   🕊️  独自飞翔 —— 冷启动，自主建包，从零建造     ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
-  console.log(`  项目路径: ${PROJECT_DIR}`);
-  console.log(`  起点:     空目录（仅 package.json + tsconfig.json）`);
+  console.log(`  工作区:   ${AGENT_ROOT}（Agent 可修改根级集成文件）`);
+  console.log(`  起点:     空（Agent 自主创建 packages/<name>/）`);
   console.log(`  Chat:     ${CHAT_MODEL}`);
   console.log(`  Reasoner: ${REASONER_MODEL}\n`);
 
@@ -503,7 +527,22 @@ async function main() {
     reasoningEffort: llmCfg.reasoningEffort as "high" | "max"});
   adapter.setCacheEnabled(true);
 
-  const metaAgent = new MetaAgent(adapter);
+  // 🔍 捕获 MetaAgent 原始 LLM 响应，提取 STRATEGY 行
+  let rawPlanResponse = "";
+  const rawAdapter = new Proxy(adapter, {
+    get(target, prop) {
+      if (prop === "chat") {
+        return async (...args: any[]) => {
+          const result = await (target.chat as (...a: any[]) => any)(...args);
+          if (result?.content) rawPlanResponse = result.content;
+          return result;
+        };
+      }
+      return (target as any)[prop];
+    },
+  });
+
+  const metaAgent = new MetaAgent(rawAdapter);
   const board = new TaskBoard();
   const pool = new AgentPool();
   const observer = new PipelineObserver();
@@ -511,14 +550,14 @@ async function main() {
   gate.bypassAll();
 
   const memory = new MemoryStore(undefined, defaultEmbeddingService);
-  const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", "memory-solo-flight.db");
+  const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", `memory-solo-flight-${Date.now()}.db`);
   await memory.init(MEMORY_DB);
   console.log(`   MemoryStore: ${MEMORY_DB}`);
 
   // P1 一致性校验层（文件校验 + 结构校验）
   const fsAdapter = new NodeFileSystemAdapter();
   const consistency = new ConsistencyLayer(memory, {
-    projectRoot: PROJECT_DIR,
+    projectRoot: WORKSPACE,
     enableInitVerifier: true,
     enableSchemaEnforcer: true,
     fs: fsAdapter,
@@ -532,12 +571,62 @@ async function main() {
     skillRegistry.registerAll(loadedSkills);
     console.log(`   从记忆库加载 ${loadedSkills.length} 个技能模板`);
   }
-  const scannedSkills = scanOutputFilesForSkills(PROJECT_DIR);
+  const scannedSkills = scanOutputFilesForSkills(PACKAGES_DIR);
   if (scannedSkills.length > 0) {
     skillRegistry.registerAll(scannedSkills);
     console.log(`   从文件回溯扫描 ${scannedSkills.length} 个技能模板`);
   }
   console.log(`   SkillRegistry: ${skillRegistry.activeCount} 个活跃技能就绪`);
+
+  // ═════ v2.6.0 技能事件管线：NodeComplete → 自动技能提取入池 ═════
+  const unregisterSkillPipe = registerSkillPipeline(observer, skillRegistry, memory);
+  console.log(`   registerSkillPipeline: NodeComplete → 自动技能提取已启用`);
+
+  // ═════ v2.6.0 技能经验上下文：注入 MetaAgent 规划视图 ═════
+  const availableSkills = skillRegistry.getAll();
+  // ⛓️ SkillTemplate JSON 格式——Agent 必须在完成任务后输出此 JSON，否则技能无法自动提取入池
+  const SKILL_TEMPLATE_FORMAT = `\`\`\`json
+{
+  "name": "技能名称（简短描述性标题）",
+  "kind": "action|thought|workflow",
+  "triggerTags": ["标签1", "标签2"],
+  "trigger": "什么情况下触发该技能（一句话描述）",
+  "steps": ["步骤1: 做什么", "步骤2: 做什么", ...],
+  "expectedOutput": "预期产出（可选）"
+}
+\`\`\`
+
+⚠️ 关键约束：
+- 每个 Agent 在最终输出末尾必须包含至少一个 SkillTemplate JSON 块（包裹在 \`\`\`json 围栏中）。
+- 描述你刚完成的任务中复用的经验/模式/方法，让后续 Agent 可以复用。
+- kind 取值：action=操作型技能，thought=思考型技能，workflow=工作流型技能。
+- steps 不能为空，否则技能会被丢弃。
+- 可以输出 JSON 数组（多个技能）或单个 JSON 对象。
+- NodeComplete 事件会自动提取这些 JSON → SkillRegistry.registerAll()。`;
+
+  const skillContextBlock = [
+    "=== 技能经验池 + SkillTemplate 产出规范 ===",
+    "",
+    availableSkills.length > 0
+      ? [
+          "以下技能模板已在 MemoryStore / 文件回溯中加载。",
+          "MetaAgent 分解任务时，按节点标签匹配相关技能（queryByTags），Agent 执行时可参照。",
+          "",
+          ...availableSkills.map(
+            (s) => `  · [${deriveStatus(s.weight, s.feedbackHistory)}] ${s.name} (${s.kind}, weight=${s.weight}) tags:[${s.triggerTags.join(",")}] — ${s.trigger.slice(0, 80)}`,
+          ),
+        ].join("\n")
+      : "（技能池为空——冷启动。Agent 执行过程中产出的技能将自动提取入池。）",
+    "",
+    SKILL_TEMPLATE_FORMAT,
+    "",
+    "在你的任务 JSON 中，每个节点的 payload 必须包含以下指令：",
+    "  1. 完成节点任务后，在输出末尾附加 SkillTemplate JSON（格式见上）。",
+    "  2. 描述你在本次执行中发现的可复用模式/方法/经验。",
+    "  3. 技能命名以动词开头，如「TDD红绿重构循环」「CachePolicy默认值补全」「vitest fakeTimers TTL测试」。",
+    "",
+    "这也意味着：你的 TaskNode payload 中不仅要描述任务，还要提醒 Agent 产出技能。",
+  ].join("\n");
 
   // ══════════════════════════════════════════════
   // 🧪 调度策略 —— 甘雨自主选择（或 CLI 覆盖）
@@ -577,7 +666,7 @@ async function main() {
       label: "CodeAgent (阿贝多)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(codeAgentConfig("solo-flight"), adapter, tk, memory);
       }},
     {
@@ -585,7 +674,7 @@ async function main() {
       label: "ReviewAgent (刻晴)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(reviewAgentConfig("solo-flight"), adapter, tk, memory);
       }},
     {
@@ -593,7 +682,7 @@ async function main() {
       label: "AnalysisAgent (纳西妲)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(analysisAgentConfig("solo-flight"), adapter, tk, memory);
       }},
     {
@@ -601,7 +690,7 @@ async function main() {
       label: "OpsAgent (北斗)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(opsAgentConfig("solo-flight"), adapter, tk);
       }},
     {
@@ -609,7 +698,7 @@ async function main() {
       label: "LoopAgent (莫娜)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(loopAgentConfig("solo-flight"), adapter, tk);
       }},
     {
@@ -617,7 +706,7 @@ async function main() {
       label: "DocGovernAgent (凝光)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(docGovernAgentConfig("solo-flight"), adapter, tk, memory);
       }},
     {
@@ -625,7 +714,7 @@ async function main() {
       label: "ApiAgent (久岐忍)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(apiAgentConfig("solo-flight"), adapter, tk, memory);
       }},
     {
@@ -633,7 +722,7 @@ async function main() {
       label: "DataAgent (艾尔海森)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(dataAgentConfig("solo-flight"), adapter, tk, memory);
       }},
     {
@@ -641,7 +730,7 @@ async function main() {
       label: "FixAgent (希格雯)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         return createAgent(fixAgentConfig("solo-flight"), adapter, tk, memory);
       }},
     {
@@ -649,9 +738,9 @@ async function main() {
       label: "InspectorAgent (安柏)",
       create() {
         const tk = new Toolkit(gate);
-        registerAllTools(tk, PROJECT_DIR);
+        registerAllTools(tk, AGENT_ROOT);
         const agent = createInspectorAgent(adapter, tk);
-        agent.setWorkspaceRoot(PROJECT_DIR);
+        agent.setWorkspaceRoot(AGENT_ROOT);
         return agent;
       }},
   ];
@@ -670,8 +759,7 @@ async function main() {
   console.log("🟢 [Phase 3] 预探索母项目结构 → 甘雨（MetaAgent）接收意图 + 选择调度策略...\n");
 
   // 🔍 替甘雨扫描母项目 + 联网搜索，避免闭门造车
-  const PARENT_PACKAGES_DIR = path.resolve(WORKSPACE, "packages");
-  const discoveryReport = discoverParentProject(PARENT_PACKAGES_DIR);
+  const discoveryReport = discoverParentProject(PACKAGES_DIR);
   console.log(`   📂 母项目探索完成，注入 ${discoveryReport.split("\n").filter(l => l.startsWith("  ") && l.includes("/")).length} 个子包信息`);
 
   const webReport = await researchWebContext();
@@ -713,7 +801,7 @@ async function main() {
     "",
     "选择最适合你项目的一种组合。在任务 JSON 之前输出：",
     "  STRATEGY: <策略名> | <驱动名> | <执行模型名>",
-    "示例：STRATEGY: tag-matching | wave | pipeline",
+    "示例：STRATEGY: tag-matching | topological-layered | pipeline",
   ].join("\n");
 
   // 母项目上下文（含自动探索结果）
@@ -728,9 +816,14 @@ async function main() {
     "",
     webReport,
     "",
+    skillContextBlock,
+    "",
     "=== 你的任务 ===",
     "",
-    "你身处一个空子目录中。目前仅存在 package.json 和 tsconfig.json 两个文件。",
+    "你当前在 monorepo 的 `packages/` 目录下。这里已有一些包（见上方探索结果）。",
+    "你需要：1）确定包名 → 2）创建 `packages/<包名>/` 目录 → 3）在里面建造完整包。",
+    "所有写入路径都以 `packages/` 为起点。写 `<包名>/src/index.ts` 就是在 `packages/<包名>/src/index.ts`。",
+    "不能写入已有包的目录（会被工具层拒绝）。",
     "",
     userIntent
       ? `用户指定了意图："${userIntent}"`
@@ -744,41 +837,133 @@ async function main() {
           "",
           "=== 强制要求 ===",
           "",
-          "1. 【核心交付】包必须包含：",
+          "1. 【核心交付——组件式架构】包必须包含：",
           "   - src/index.ts（公开 API，barrel 导出）",
-          "   - src/ 下至少一个功能模块",
-          "   - tests/ 下至少一个单元测试文件",
-          "2. 【CI 标注】每个测试文件第一行必须是 `// @ci: unit`（宪法 §十四·一 自声明机制）",
-          "3. 【编译通过】`npx tsc --noEmit` 必须零错误通过",
-          "4. 【测试通过】`npx vitest run` 必须全部通过",
-          "5. 【编码规范】所有代码必须遵守 coding-standards.md 强制要求：",
-          "   - 禁止空 catch {} 块",
-          "   - 禁止 var 声明，优先 const",
+          "   - src/ 下至少 3 个独立功能模块，每个模块职责单一、边界清晰",
+          "   - 至少 1 个 interface（扩展点/插件契约），让外部可以实现此接口并注册",
+          "   - 一个 Registry/Factory 模式的注册机制，管理插件/策略的注册与查找",
+          "   - tests/ 下每个模块至少一个单元测试文件",
+          "2. 【可插拔设计】包的设计必须满足：",
+          "   - 核心逻辑依赖抽象（interface），不依赖具体实现",
+          "   - 新增功能 = 实现接口 + 注册，不修改已有代码（Open-Closed 原则）",
+          "   - 策略模式：至少一处可通过注入不同实现来切换行为",
+          "   - 构造函数注入依赖（DI），不在模块内部 new 具体类",
+          "3. 【CI 标注】每个测试文件第一行必须是 `// @ci: unit`（宪法 §十四·一 自声明机制）",
+          "4. 【编译通过】`npx tsc --noEmit` 必须零错误通过",
+          "5. 【测试通过】`npx vitest run` 必须全部通过，覆盖率 ≥ 80% lines",
+          "6. 【编码规范】所有代码必须遵守 coding-standards.md 全部约束（§一至§十四）：",
+          "   - 禁止空 catch {} 块、var 声明、any 类型（公开 API）、非空断言 !",
+          "   - 优先 interface 描述对象形状，type 仅用于联合/交叉/映射",
+          "   - Discriminated union 替代 string + if/else 分叉",
+          "   - 共享数据结构字段加 readonly，配置对象用 as const",
           "   - 禁止裸 console.error/warn（生产代码走 PipelineObserver，测试代码允许）",
           "   - 导入走 barrel：`import { X } from \"@cortex/xxx\"`",
-          "   - 禁止硬编码魔法数字/路径/环境变量名/版本号",
-          "6. 【补足声明】在包根目录创建 PACKAGE_POSITIONING.md，回答三个问题：",
+          "   - 禁止硬编码魔法数字/路径/环境变量名/版本号——走 @cortex/config 常量",
+          "7. 【可读性】所有公开 API（export 的函数/类/接口）必须带 JSDoc，说明：",
+          "   - 做什么（一句话）",
+          "   - @param 参数含义（每个参数一行）",
+          "   - @returns 返回值含义",
+          "   - @throws 可能抛出的异常",
+          "8. 【可维护性】模块间依赖必须单向无环：",
+          "   - src/ 下各模块之间不得出现循环 import",
+          "   - 每个模块的 import 列表反映真实依赖拓扑——一眼能看懂",
+          "   - 禁止隐式依赖（模块 A 修改全局状态，模块 B 读取）——必须显式传参",
+          "9. 【可扩展性】新增能力时不修改已有代码：",
+          "   - 新增策略/插件 = 实现已有 interface + 调用 registry.register()",
+          "   - 新增模块 = 新建 src/<module>/ 目录 + 更新 barrel",
+          "   - 已有测试断言不变（不因扩展而修改已有测试）",
+          "10. 【补足声明】在包根目录创建 PACKAGE_POSITIONING.md，回答三个问题：",
           "   - 这个包补足了什么？（母项目中缺了什么）",
           "   - 它的定位是什么？（在 monorepo 架构中的位置和职责）",
           "   - 为什么值得合入？（解决了什么实际问题）",
-          "7. 【模块化注册】包名必须是 @cortex/<name> 命名空间，package.json 依赖声明用 workspace:*",
+          "11. 【模块化注册】包名必须是 @cortex/<name> 命名空间，package.json 依赖声明用 workspace:*",
+          "12. 【技能沉淀——强制！】每个执行 Agent 完成节点后，必须在输出末尾附加 SkillTemplate JSON（```json 围栏块）。",
+          "   这是技能系统自动提取的唯一入口。不附加 = 技能无法入池 = 经验浪费。",
+          "   格式要求（必须包含以下字段）：",
+          `   \`\`\`json`,
+          `   {`,
+          `     "name": "技能名称（动词开头，简短描述）",`,
+          `     "kind": "action|thought|workflow",`,
+          `     "triggerTags": ["标签1","标签2"],`,
+          `     "trigger": "触发条件（一句话）",`,
+          `     "steps": ["步骤1","步骤2","..."],`,
+          `     "expectedOutput": "预期产出"`,
+          `   }`,
+          `   \`\`\``,
+          "   kind: action=操作型/thought=思考型/workflow=工作流型",
+          "   steps 不能为空（否则丢弃）。可输出数组（多个技能）或单对象。",
+          "   你在每个 TaskNode 的 payload 中必须包含这段指令。",
           "",
           "=== 允许的工具 ===",
           "",
           "你拥有所有工具的完整访问权限：读取、写入、shell（npm install, tsc, vitest）。",
           "",
           "=== 路径规则（重要！）===",
-          "你当前的工作目录 **就是** 包根目录。所有写入路径都相对于此解析。",
-          "- 写 `src/index.ts` → 创建的就是包根的 src/index.ts",
-          "- 写 `tests/core.test.ts` → 创建的就是包根的 tests/core.test.ts",
-          "- **不要**在你的包内创建 `packages/`、`cortex/`、`src/observability/` 等嵌套目录结构",
-          "- 你不需要模仿母项目的目录树——你的包本身就是 monorepo 的一个叶子节点",
-          "- 功能模块直接放在 src/ 下：`src/metrics.ts`、`src/tracer.ts` 等",
+          "你当前在 `packages/` 目录下，所有写入路径都从此解析。",
+          "- 写文件用相对路径：`packages/<包名>/src/index.ts` → 创建 `packages/<包名>/src/index.ts`",
+          "- **不能**覆盖已有包（CLI/engine/shared 等），工具层会拒绝",
+          "- 根级文件（tsconfig.json 等）可直接写，用于集成注册",
+          "- 你不需要 `packages/<包名>/packages/` 这种嵌套——`packages/` 是顶层",
           "",
           "所有文件必须保持在本目录内。你不能在外部写入。",
           "你可能需要探索母项目的具体源码来做决策——这由调度阶段的 Agent 来完成。",
           "规划阶段你只能基于上述探索摘要做决策。",
         ].join("\n"),
+    "",
+    "=== 事实依据与验证原则（铁律） ===",
+    "",
+    "你不是在凭空建造——你是在母项目中造一个新包。你的每一项决策都必须以事实为依据：",
+    "",
+    "1. 【读后写】写入任何文件前，必须先 read_file 确认目标位置的实际状态。",
+    "   - 母项目已有的接口/类型/工具——先读，再决定复用还是新建。",
+    "   - 母项目已有的包——先读其 barrel 导出，再决定依赖关系。",
+    "   - 不要凭'记忆中已经实现了'的假设做决策——只信你亲眼读到的东西。",
+    "",
+    "2. 【探索先行】调度阶段的 Agent 在写代码前，必须先做探索：",
+    "   - search_code 搜母项目中相关模式的实现方式",
+    "   - read_file 读关键包的 src/index.ts 了解公开 API",
+    "   - list_files 扫目标目录结构，确认没有命名冲突",
+    "   - 探索结果必须反映在代码中——不能探索完了却不引用",
+    "",
+    "3. 【禁止臆测】以下行为构成'凭记忆建造'，属于违规：",
+    "   - 假设某个包导出了某个函数——不读就 import",
+    "   - 假设某个类型定义在某个文件——不读就引用",
+    "   - 假设 coding-standards.md 中某条规则'应该改了'——规则以当前文件内容为准",
+    "   - 假设 monorepo 结构'应该是这样'——结构以 list_files 实际输出为准",
+    "",
+    "4. 【母项目接口契约】你的包依赖母包时，必须：",
+    "   - 只依赖母包 barrel 导出的公开符号（src/index.ts 中的 export）",
+    "   - 不依赖母包的内部实现细节（src/ 下非 barrel 导出的符号）",
+    "   - 不假设母包的内部文件路径（如 '../engine/src/core/xxx'——这是面包屑路径，不可依赖）",
+    "",
+    "=== 架构质量要求 —— 抽象层次与设计规范 ===",
+    "",
+    "你建造的包不是'能跑就行'——它必须具备生产级架构质量：",
+    "",
+    "1. 【三层抽象最低标准】包必须至少体现三层抽象：",
+    "   第1层：接口层（interface）——定义'能做什么'，不定义'怎么做'",
+    "   第2层：实现层（class implements interface）——至少 2 个实现变体",
+    "   第3层：编排层（Registry/Factory/Composite）——管理实现的选择与组合",
+    "",
+    "2. 【依赖倒置】高层模块不依赖低层模块——二者都依赖抽象：",
+    "   ✅ Registry 依赖 interface，不依赖具体 class",
+    "   ✅ 业务逻辑接受 interface 参数（构造函数注入），不 new 具体类",
+    "   ❌ 禁止：高层模块直接 import 低层模块的具体类来 new",
+    "",
+    "3. 【组件式组合】模块之间通过组合而非继承协作：",
+    "   ✅ '有一个'（has-a）优于'是一个'（is-a）",
+    "   ✅ 功能通过组装小接口实现，而非继承大基类",
+    "   ❌ 禁止超过 2 层的继承链",
+    "",
+    "4. 【单一职责】每个模块/类/函数只做一件事：",
+    "   - 类名能完整描述其职责——如果名字里有 'And' 或 'Or'，拆",
+    "   - 方法体 > 30 行 → 考虑拆分子方法",
+    "   - 一个文件一个主类/主函数——不堆砌无关符号",
+    "",
+    "5. 【防御式设计】对外接口必须是防御式的：",
+    "   - 所有公开方法验证输入参数（非法输入抛明确错误，不静默吞掉）",
+    "   - 所有异步操作有超时机制（不永久挂起）",
+    "   - 资源（文件句柄/定时器/订阅）有清理机制（dispose/close/AbortSignal）",
     "",
     "规则：",
     "1. 包必须能用 `npx tsc --noEmit` 编译通过，`npx vitest run` 测试全部通过。",
@@ -786,8 +971,9 @@ async function main() {
     "3. 必须产出 PACKAGE_POSITIONING.md 说明补足内容和定位。",
     "4. 所有文件必须保持在本目录内。你不能在外部写入。",
     "5. 你拥有所有工具的完整访问权限：读取、写入、shell（npm install, tsc, tsx）。",
-    "6. 你可能需要探索母项目的具体源码来做决策——这由调度阶段的 Agent 来完成。",
-    "   规划阶段你只能基于上述探索摘要做决策。",
+    "6. 每个执行 Agent 在写代码之前必须先用 read_file/list_files/search_code 探索母项目——以事实为依据，不以记忆为假设。",
+    "   规划阶段你只能基于注入的探索摘要做决策。执行阶段 Agent 必须亲自验证。",
+    "7. 每个 TaskNode 的 payload 末尾必须附加技能沉淀指令（强制要求第 12 条），让执行 Agent 输出 SkillTemplate JSON。",
     "",
     "团队：",
     "- CodeAgent (阿贝多) — 代码实现        - ReviewAgent (刻晴) — 代码审查",
@@ -799,6 +985,8 @@ async function main() {
     STRATEGY_SECTION,
     "",
     "规划任务图。输出 TaskNode JSON。",
+    "",
+    "⚠️ 每个 TaskNode 的 payload 字段末尾必须包含技能沉淀指令（强制要求第 12 条），否则 Agent 不会产出 SkillTemplate。",
   ].join("\n");
 
   const INTENT = PARENT_CONTEXT;
@@ -826,10 +1014,13 @@ async function main() {
   }
 
   // ── 根据甘雨选择（或 CLI 覆盖）构造调度器 ──
-  const planText = extractPlanText(plan);
+  // 从原始 LLM 响应中提取 STRATEGY 行（不在 TaskNode payload 里）
+  const planText = rawPlanResponse || extractPlanText(plan);
   const parsedMeta = tryParseMetaStrategy(planText);
   if (parsedMeta.strategy) {
     console.log(`   🤖 MetaAgent 选择: ${parsedMeta.strategy} | ${parsedMeta.driver} | ${parsedMeta.exec}`);
+  } else {
+    console.log(`   🤖 MetaAgent 未显式选择策略，使用默认值`);
   }
   const strategy = resolveStrategy(cliStrategy, planText);
   const driver = resolveDriver(cliDriver, planText);
@@ -897,9 +1088,26 @@ async function main() {
   console.log("║   🔍 验收：编译 + 测试 + CI 标注 + Barrel 导出     ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
 
+  // 发现 Agent 新建的包目录（与启动前快照做差集）
+  for (const entry of fs.readdirSync(PACKAGES_DIR, { withFileTypes: true })) {
+    if (entry.isDirectory() && !entry.name.startsWith(".") && !preExistingPkgs.has(entry.name)) {
+      createdPkgDir = path.join(PACKAGES_DIR, entry.name);
+      console.log(`   🆕 发现新建包: ${entry.name}`);
+      break;
+    }
+  }
+  if (!createdPkgDir) {
+    console.log("   ❌ 未发现新建包目录，无法验收。");
+  }
+
+  const TARGET_DIR = createdPkgDir ?? PACKAGES_DIR;
+
+  let acceptancePassed = createdPkgDir !== null;
+
   // 收集产出文件
   const producedFiles: string[] = [];
   const walkProduced = (d: string) => {
+    if (!fs.existsSync(d)) return;
     for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
       if (entry.name === "node_modules" || entry.name === "dist" || entry.name === ".cortex") continue;
       const full = path.join(d, entry.name);
@@ -910,7 +1118,7 @@ async function main() {
       }
     }
   };
-  walkProduced(PROJECT_DIR);
+  walkProduced(TARGET_DIR);
 
   // 排除脚手架文件
   const sourceFiles = producedFiles.filter(
@@ -919,12 +1127,10 @@ async function main() {
 
   console.log(`   产出文件 (${sourceFiles.length} 个):`);
   for (const f of sourceFiles) {
-    const relative = path.relative(PROJECT_DIR, f);
+    const relative = path.relative(TARGET_DIR, f);
     const size = fs.statSync(f).size;
     console.log(`   ${size > 0 ? "✅" : "❌"} ${relative} (${size} bytes)`);
   }
-
-  let acceptancePassed = true;
 
   if (sourceFiles.length === 0) {
     console.log("\n   ❌ 验收失败：未发现任何产出文件。");
@@ -933,8 +1139,8 @@ async function main() {
 
   // ── 6a. 结构检查：src/index.ts + tests/ ──
   console.log("\n   ── 6a. 包结构检查 ──");
-  const hasSrcIndex = fs.existsSync(path.join(PROJECT_DIR, "src", "index.ts"));
-  const testDir = path.join(PROJECT_DIR, "tests");
+  const hasSrcIndex = fs.existsSync(path.join(TARGET_DIR, "src", "index.ts"));
+  const testDir = path.join(TARGET_DIR, "tests");
   const hasTests = fs.existsSync(testDir) && fs.readdirSync(testDir).some(f => f.endsWith(".test.ts"));
   console.log(`   src/index.ts: ${hasSrcIndex ? "✅" : "❌ 缺失"}`);
   console.log(`   tests/*.test.ts: ${hasTests ? "✅" : "❌ 缺失"}`);
@@ -943,7 +1149,7 @@ async function main() {
   // ── 6b. Barrel 导出检查 ──
   console.log("\n   ── 6b. Barrel 导出检查 ──");
   if (hasSrcIndex) {
-    const barrelContent = fs.readFileSync(path.join(PROJECT_DIR, "src", "index.ts"), "utf-8");
+    const barrelContent = fs.readFileSync(path.join(TARGET_DIR, "src", "index.ts"), "utf-8");
     const hasExports = /export\s+/.test(barrelContent);
     console.log(`   index.ts 含导出语句: ${hasExports ? "✅" : "⚠️ 无导出"}`);
     if (!hasExports) acceptancePassed = false;
@@ -975,7 +1181,7 @@ async function main() {
   try {
     const { execSync } = await import("node:child_process");
     const tscOutput = execSync("npx tsc --noEmit", {
-      cwd: PROJECT_DIR,
+      cwd: TARGET_DIR,
       timeout: 60_000,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"]});
@@ -996,7 +1202,7 @@ async function main() {
   try {
     const { execSync } = await import("node:child_process");
     const testOutput = execSync("npx vitest run", {
-      cwd: PROJECT_DIR,
+      cwd: TARGET_DIR,
       timeout: 120_000,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"]});
@@ -1129,7 +1335,7 @@ async function main() {
   console.log(`   技能沉淀: ${skillPrecipitated ? "✅ (已闭环)" : "⚠️ (空——无可复用技能沉淀)"}`);
   if (registrySkills.length > 0) {
     for (const s of registrySkills.slice(0, 5)) {
-      console.log(`      · ${s.name} [${s.agentType}] tags:[${s.triggerTags.join(",")}]`);
+      console.log(`      · ${s.name} [${s.kind}] tags:[${s.triggerTags.join(",")}]`);
     }
   }
 
@@ -1139,7 +1345,7 @@ async function main() {
   console.log("╚══════════════════════════════════════════════════╝\n");
 
   // 8a. 补足定位文档检查
-  const positioningPath = path.join(PROJECT_DIR, "PACKAGE_POSITIONING.md");
+  const positioningPath = path.join(TARGET_DIR, "PACKAGE_POSITIONING.md");
   let positioningOk = false;
   let positioningSummary = "";
   if (fs.existsSync(positioningPath)) {
@@ -1164,7 +1370,7 @@ async function main() {
   // 8b. 编码规范强制检查（对 src/ 下所有 .ts 文件）
   console.log("\n   ── 8b. 编码规范强制检查 ──");
   let codingStandardsOk = true;
-  const srcDir = path.join(PROJECT_DIR, "src");
+  const srcDir = path.join(TARGET_DIR, "src");
   if (fs.existsSync(srcDir)) {
     const walkSrc = (d: string): string[] => {
       const results: string[] = [];
@@ -1182,7 +1388,7 @@ async function main() {
     let violations = 0;
     for (const f of srcFiles) {
       const content = fs.readFileSync(f, "utf-8");
-      const relative = path.relative(PROJECT_DIR, f);
+      const relative = path.relative(TARGET_DIR, f);
       // 检查空 catch {}
       if (/catch\s*\{\s*\}/.test(content)) {
         console.log(`   ❌ ${relative}: 空 catch {} 块（禁止）`);
@@ -1213,11 +1419,42 @@ async function main() {
     }
   }
 
+
+  // 8b2. review.md P1 缺陷检测（修复 Agent 不能改主体代码，但不代表可以无视 P1）
+  console.log("\n   ── 8b2. review.md P1 缺陷检测 ──");
+  let p1DefectsResolved = true;
+  const reviewPath = path.join(TARGET_DIR, "docs", "review.md");
+  if (fs.existsSync(reviewPath)) {
+    const reviewContent = fs.readFileSync(reviewPath, "utf-8");
+    // 检测 P1 标记
+    const p1Matches = reviewContent.match(/🔴\s*P1[-\s]*(\d+)?/g) || [];
+    const p1Total = p1Matches.length;
+    // 检测已修复标记
+    const repairedPatterns = [/✅.*已修复/i, /已修复.*P1/i, /✅.*修复/i, /状态.*已修复/i];
+    let repairedCount = 0;
+    for (const pat of repairedPatterns) {
+      const m = reviewContent.match(new RegExp(pat.source, "gi"));
+      if (m) repairedCount += m.length;
+    }
+    const unresolvedP1 = Math.max(0, p1Total - repairedCount);
+    console.log(`   发现 P1 缺陷: ${p1Total} 个`);
+    console.log(`   已修复: ${Math.min(repairedCount, p1Total)} 个`);
+    console.log(`   未修复: ${unresolvedP1} 个`);
+    if (unresolvedP1 > 0) {
+      console.log(`   ❌ ${unresolvedP1} 个 P1 缺陷未修复，合并阻塞`);
+      p1DefectsResolved = false;
+    } else {
+      console.log(`   ✅ 所有 P1 缺陷已修复`);
+    }
+  } else {
+    console.log("   ⚠️ review.md 不存在，跳过 P1 检测");
+  }
+
   // 8c. 模块化注册检查（package.json 命名空间 + workspace 依赖）
   console.log("\n   ── 8c. 模块化注册检查 ──");
   let moduleRegOk = true;
   try {
-    const pkgJson = JSON.parse(fs.readFileSync(path.join(PROJECT_DIR, "package.json"), "utf-8"));
+    const pkgJson = JSON.parse(fs.readFileSync(path.join(TARGET_DIR, "package.json"), "utf-8"));
     const hasName = pkgJson.name?.startsWith("@cortex/");
     const deps = { ...pkgJson.dependencies, ...pkgJson.devDependencies };
     const hasWorkspace = Object.values(deps).some((v: any) => v === "workspace:*");
@@ -1233,8 +1470,34 @@ async function main() {
   console.log(`   补足定位: ${positioningOk ? "✅" : "❌"}`);
   console.log(`   编码规范: ${codingStandardsOk ? "✅" : "❌"}`);
   console.log(`   模块注册: ${moduleRegOk ? "✅" : "❌"}`);
-  const mergeReady = positioningOk && codingStandardsOk && moduleRegOk && acceptancePassed;
-  console.log(`   合并就绪: ${mergeReady ? "✅ 可合入" : "❌ 未就绪"}`);
+  const mergeReady = positioningOk && codingStandardsOk && moduleRegOk && acceptancePassed && p1DefectsResolved;
+  console.log(`   合并就绪: ${mergeReady ? "✅ 可合入" : "❌ 未就绪"} (P1缺陷: ${p1DefectsResolved ? "✅" : "❌"})`);
+
+  // ── 技能 v2.6.0 最终诊断：运行期自动提取 + 权重/评价统计 ──
+  console.log(`\n   ── v2.6.0 技能最终诊断 ──`);
+  const finalSkills = skillRegistry.getAll();
+  const newSkills = finalSkills.filter((s) => !availableSkills.some((as) => as.id === s.id));
+  if (newSkills.length > 0) {
+    console.log(`   🆕 运行期自动提取 ${newSkills.length} 个新技能:`);
+    for (const s of newSkills) {
+      console.log(`      · [${deriveStatus(s.weight, s.feedbackHistory)}] ${s.name} (${s.kind}, weight=${s.weight})`);
+    }
+  } else if (availableSkills.length === 0) {
+    console.log(`   ⚠️ 运行期未自动提取新技能（Agent 输出中未检测到 SkillTemplate JSON）`);
+  }
+  const changedSkills = finalSkills.filter((s) => {
+    const old = availableSkills.find((as) => as.id === s.id);
+    return old && (old.weight !== s.weight || old.feedbackHistory.length !== s.feedbackHistory.length);
+  });
+  if (changedSkills.length > 0) {
+    console.log(`   🔄 评价回流影响的技能:`);
+    for (const s of changedSkills) {
+      const old = availableSkills.find((as) => as.id === s.id)!;
+      console.log(`      · ${s.name}: weight ${old.weight}→${s.weight}, feedbackHistory ${old.feedbackHistory.length}→${s.feedbackHistory.length}`);
+    }
+  }
+  console.log(`   📊 技能池: ${finalSkills.length} 个 (trial=${finalSkills.filter((s) => deriveStatus(s.weight, s.feedbackHistory) === "trial").length}, active=${finalSkills.filter((s) => deriveStatus(s.weight, s.feedbackHistory) === "active").length}, deprecated=${finalSkills.filter((s) => deriveStatus(s.weight, s.feedbackHistory) === "deprecated").length})`);
+  unregisterSkillPipe();
 
   // ── 收尾 ──
   await memory.close();
@@ -1251,7 +1514,7 @@ async function main() {
   console.log(`   产出文件: ${sourceFiles.length} 个`);
   console.log(`   验收结果: ${acceptancePassed ? "✅" : "❌"} (结构 ${hasSrcIndex && hasTests ? "✅" : "❌"} | CI ${ciAnnotationsOk ? "✅" : "❌"} | 编译 ${compileOk ? "✅" : "❌"} | 测试 ${testOk ? "✅" : "❌"})`);
   console.log(`   合并门禁: ${mergeReady ? "✅ 可合入" : "❌ 未就绪"} (定位 ${positioningOk ? "✅" : "❌"} | 规范 ${codingStandardsOk ? "✅" : "❌"} | 注册 ${moduleRegOk ? "✅" : "❌"})`);
-  console.log(`   六层防御: P0-Pending隔离 ${pendingIsolated ? "✅" : "❌"} | P1-InitVerifier ${consistencyReport && !consistencyReport.fatal ? "✅" : "⚠️"} | P2-技能沉淀 ${skillPrecipitated ? "✅" : "⚠️"}`);
+  console.log(`   六层防御: P0-Pending隔离 ${pendingIsolated ? "✅" : "❌"} | P1-InitVerifier ${consistencyReport && !consistencyReport.fatal ? "✅" : "⚠️"} | P2-技能沉淀 ${skillPrecipitated ? "✅" : "⚠️"} | v2.6.0-自动提取 ${newSkills ? newSkills.length : 0}个新技能`);
   console.log();
 
   if (!acceptancePassed || !mergeReady || report.failed > 0) {

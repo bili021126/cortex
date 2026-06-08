@@ -94,7 +94,6 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
 
     // 技能系统
     expect(result.skillRegistry).toBeDefined();
-    expect(result.skillExecutor).toBeDefined();
 
     // 常规 Agent（cortex-agents.json 中定义的可调度 Agent）
     expect(result.agents.size).toBeGreaterThanOrEqual(8); // code/review/analysis/ops/loop/doc/api/data/fix
@@ -153,9 +152,12 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
       payload: "Test task: verify scheduler execution"});
 
     result.board.addNode(node);
+
     const report = await result.scheduler.executeAll();
 
-    expect(report.totalNodes).toBeGreaterThanOrEqual(1);
+    // replan 机制可能移除原节点并创建 RLM 子任务，
+    // totalNodes 反映板子残留节点数而非处理量，用 results 长度断言更准确
+    expect(report.results.length).toBeGreaterThanOrEqual(1);
     expect(report.completed + report.failed).toBeGreaterThanOrEqual(1);
 
     await result.memory!.close();
@@ -192,7 +194,7 @@ describe("T2: MetaAgent.plan() 意图拆解", () => {
     await result.memory!.close();
   });
 
-  it("plan() 对空 JSON 回退为单节点", async () => {
+  it("plan() 对空 JSON 返回空数组（无工作即无任务）", async () => {
     const adapter = mockLlmAdapter("[]"); // 空数组
     const llms = new Map([["default", adapter]]);
     const toolkit = new Toolkit();
@@ -204,8 +206,9 @@ describe("T2: MetaAgent.plan() 意图拆解", () => {
 
     const plan = await result.metaAgent.plan("某个无法拆解的简单意图");
 
-    // 回退：至少一个 generic fallback 节点
-    expect(plan.length).toBeGreaterThanOrEqual(1);
+    // 空 JSON 是合法输出：LLM 判定无需任何操作 → 返回空数组（不生成垃圾兜底节点）
+    expect(Array.isArray(plan)).toBe(true);
+    expect(plan.length).toBe(0);
 
     await result.memory!.close();
   });

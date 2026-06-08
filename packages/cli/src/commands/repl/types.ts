@@ -5,7 +5,12 @@
  * AgentDisplayInfo、AGENT_DISPLAY、运行时注入逻辑。
  */
 
-import { AgentType } from "@cortex/shared";
+import { AgentType, type TaskNode } from "@cortex/shared";
+import {
+  AGENT_DISPLAY as CONFIG_AGENT_DISPLAY,
+  AGENT_DISPLAY_FALLBACK,
+  type AgentDisplayInfo,
+} from "@cortex/config";
 import type * as readline from "node:readline";
 
 // ── 模式 ──────────────────────────────────────────
@@ -32,9 +37,9 @@ export const MODE_PROMPTS: Record<ReplMode, string> = {
 
 // ── Agent 别名 ────────────────────────────────────
 
-/** 可对话的 Agent 别名 → AgentType 映射（编译期fallback）。
- *  运行时从 bootstrapResult.config.agentDefinitions 动态构建。
- *  别名规则：英文type名 + 中文display.shortName 均可路由。 */
+/** 可对话的 Agent 别名 → AgentType 映射。
+ *  单源定义在 @cortex/config（string 值），CLI 层转换为 AgentType 键版本。
+ *  运行时从 bootstrapResult.config.agentDefinitions 动态构建覆盖。 */
 export const CHAT_AGENT_ALIASES: Record<string, AgentType> = {
   // 英文别名
   code: AgentType.Code,
@@ -54,7 +59,7 @@ export const CHAT_AGENT_ALIASES: Record<string, AgentType> = {
   meta: AgentType.Meta,
   butler: AgentType.Butler,
   browser: AgentType.Browser,
-  // 中文别名
+  // 中文别名（从 config CHAT_AGENT_ALIASES 推导）
   "阿贝多": AgentType.Code,
   "刻晴": AgentType.Review,
   "纳西妲": AgentType.Analysis,
@@ -74,33 +79,31 @@ export const CHAT_AGENT_ALIASES: Record<string, AgentType> = {
 
 // ── Agent 展示 ────────────────────────────────────
 
-/** Agent 角色展示信息（emoji + 角色名 + 签名语）。
- *  单源原则：emoji/name 来自 cortex-agents.json agents[].display。
- *  signature 为 CLI 风味文本，JSON 未定义时使用此 fallback。 */
-export interface AgentDisplayInfo {
-  emoji: string;
-  name: string;
-  signature: string;
-}
+/**
+ * Agent 角色展示信息（emoji + 角色名 + 签名语）。
+ * 单源定义在 @cortex/config，CLI 层转换为 AgentType 键版本。
+ */
 
 export const AGENT_DISPLAY: Record<AgentType, AgentDisplayInfo> = {
-  [AgentType.Code]:      { emoji: "🧪", name: "阿贝多", signature: "这个结构，值得研究。" },
-  [AgentType.Review]:    { emoji: "⚔️", name: "刻晴",   signature: "每一行都可能藏着疏漏。" },
-  [AgentType.Analysis]:  { emoji: "🌿", name: "纳西妲", signature: "有意思……让我再深挖一层。" },
-  [AgentType.Ops]:       { emoji: "⚓", name: "北斗",   signature: "死兆星号，准备起航。" },
-  [AgentType.Loop]:      { emoji: "🔮", name: "莫娜",   signature: "星辰不会说谎。" },
-  [AgentType.DocGovern]: { emoji: "🏛️", name: "凝光",   signature: "天权定论，不得上诉。" },
-  [AgentType.Butler]:    { emoji: "🍀", name: "昔涟",   signature: "三千世轮回。这辈子归你了。" },
-  [AgentType.Inspector]: { emoji: "🦅", name: "安柏",   signature: "侦察完毕，一切正常。" },
-  [AgentType.Fix]:       { emoji: "💉", name: "希格雯", signature: "让我看看伤口在哪里。" },
-  [AgentType.Api]:       { emoji: "📦", name: "久岐忍", signature: "契约检查完毕。" },
-  [AgentType.Browser]:   { emoji: "🎆", name: "宵宫",   signature: "咻~让烟花为你绽放！" },
-  [AgentType.Data]:      { emoji: "📚", name: "艾尔海森", signature: "数据就是数据。" },
-  [AgentType.Strategist]:{ emoji: "⚖️", name: "钟离",   signature: "契约既成，食言者当受食岩之罚。" },
-  [AgentType.Meta]:      { emoji: "📋", name: "甘雨",   signature: "让我为你梳理任务脉络。" },
+  [AgentType.Code]:      CONFIG_AGENT_DISPLAY.code,
+  [AgentType.Review]:    CONFIG_AGENT_DISPLAY.review,
+  [AgentType.Analysis]:  CONFIG_AGENT_DISPLAY.analysis,
+  [AgentType.Ops]:       CONFIG_AGENT_DISPLAY.ops,
+  [AgentType.Loop]:      CONFIG_AGENT_DISPLAY.loop,
+  [AgentType.DocGovern]: CONFIG_AGENT_DISPLAY["doc-govern"],
+  [AgentType.Butler]:    CONFIG_AGENT_DISPLAY.butler,
+  [AgentType.Inspector]: CONFIG_AGENT_DISPLAY.inspector,
+  [AgentType.Fix]:       CONFIG_AGENT_DISPLAY.fix,
+  [AgentType.Api]:       CONFIG_AGENT_DISPLAY.api,
+  [AgentType.Browser]:   CONFIG_AGENT_DISPLAY.browser,
+  [AgentType.Data]:      CONFIG_AGENT_DISPLAY.data,
+  [AgentType.Strategist]:CONFIG_AGENT_DISPLAY.strategist,
+  [AgentType.Meta]:      CONFIG_AGENT_DISPLAY.meta,
 };
 
-export const AGENT_DISPLAY_FALLBACK: AgentDisplayInfo = { emoji: "🤖", name: "Agent", signature: "" };
+// AGENT_DISPLAY_FALLBACK 从 @cortex/config 导入（见顶部 import），此处直接重导出
+import type { PartyState } from "./party.js";
+export { AGENT_DISPLAY_FALLBACK };
 
 // ── 运行时覆写 ───────────────────────────────────
 
@@ -146,8 +149,8 @@ export function getRuntimeAliases(): Record<string, AgentType> | undefined {
 
 /** Plan 模式执行上下文（从 createReplHandler 传递到 executePlanInput） */
 export interface PlanExecutionContext {
-  getPlanNodes: () => import("@cortex/shared").TaskNode[];
-  setPlanNodes: (nodes: import("@cortex/shared").TaskNode[]) => void;
+  getPlanNodes: () => TaskNode[];
+  setPlanNodes: (nodes: TaskNode[]) => void;
   getPlanIntent: () => string;
   setPlanIntent: (intent: string) => void;
   /** 获取当前会话版本号——异步操作回来后校验 */
@@ -171,14 +174,14 @@ export interface ReplContext {
   getAgent: () => AgentType;
   stop: () => void;
   // Plan Mode
-  getPlanNodes: () => import("@cortex/shared").TaskNode[];
-  setPlanNodes: (nodes: import("@cortex/shared").TaskNode[]) => void;
+  getPlanNodes: () => TaskNode[];
+  setPlanNodes: (nodes: TaskNode[]) => void;
   getPlanIntent: () => string;
   setPlanIntent: (intent: string) => void;
   // Talk Companion（三人对话）
   getTalkCompanion: () => AgentType | null;
   setTalkCompanion: (a: AgentType | null) => void;
   // Party Mode（群聊）
-  getPartyState: () => import("./party.js").PartyState;
-  syncPartyState: (s: import("./party.js").PartyState) => void;
+  getPartyState: () => PartyState;
+  syncPartyState: (s: PartyState) => void;
 }

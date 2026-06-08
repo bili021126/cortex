@@ -1,4 +1,4 @@
-import { AgentType as AT, AGENT_TAGS, PipelinePriority, PipelineEventType } from "@cortex/shared";
+import { AgentType as AT, AGENT_TAGS, PipelinePriority, PipelineEventType, type AgentType } from "@cortex/shared";
 import type { DispatchCtx, IDispatchStep } from "./types.js";
 import { findMatchingAgent } from "../agent-matcher.js";
 
@@ -39,7 +39,7 @@ export class ClaimStep implements IDispatchStep {
         ...ctx,
         result: {
           nodeId: node.id,
-          agentType: agentType as import("@cortex/shared").AgentType,
+          agentType: agentType as AgentType,
           success: false,
           error: `No agent registered for type: ${agentType}`,
         },
@@ -78,14 +78,14 @@ export class ClaimStep implements IDispatchStep {
     }
 
     // 3. 认领节点
-    const claimed = board.claim(node.id, agentType as import("@cortex/shared").AgentType);
+    const claimed = board.claim(node.id, agentType as AgentType);
     if (!claimed) {
       board.failNode(node.id);
       return {
         ...ctx,
         result: {
           nodeId: node.id,
-          agentType: agentType as import("@cortex/shared").AgentType,
+          agentType: agentType as AgentType,
           success: false,
           error: `Failed to claim node ${node.id} for ${agentType}`,
         },

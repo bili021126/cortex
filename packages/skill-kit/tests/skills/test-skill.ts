@@ -5,8 +5,8 @@
  * - export default 导出 SkillDefinition
  * - 包含 meta / execute / validateInput
  */
-import type { SkillDefinition, SkillContext } from "../../src/types.js";
-import { SkillCategory } from "../../src/types.js";
+import type { SkillDefinition, SkillContext } from "../../dist/types.js";
+import { SkillCategory } from "../../dist/types.js";
 
 interface TestInput {
   name: string;

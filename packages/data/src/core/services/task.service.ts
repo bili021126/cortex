@@ -7,10 +7,10 @@
  * 原位于 .cortex/archive/.../solo-flight/src/core/services/task.service.ts
  */
 
-import { Task, TaskUpdateData } from '../models/task.js';
+import { Task, type TaskUpdateData } from '../models/task.js';
 import { TaskStatus } from '../models/status.js';
 import { Priority, VALID_PRIORITIES } from '../models/priority.js';
-import { TaskRepository, TaskFilter } from '../../storage/interfaces/task.repository.js';
+import type { TaskRepository, TaskFilter } from '../../storage/interfaces/task.repository.js';
 import { TaskNotFoundError, TaskDeletedError } from '../../storage/errors.js';
 
 export interface TaskStats {

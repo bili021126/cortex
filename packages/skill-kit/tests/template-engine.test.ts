@@ -4,7 +4,7 @@
 // ============================================================
 
 import { describe, it, expect } from "vitest";
-import { SimpleTemplateEngine } from "../src/template-engine.js";
+import { SimpleTemplateEngine } from "../dist/template-engine.js";
 
 describe("SimpleTemplateEngine — 变量插值", () => {
   const engine = new SimpleTemplateEngine();

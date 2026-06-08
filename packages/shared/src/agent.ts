@@ -5,7 +5,7 @@
 //   - agent-enums.ts        AgentType / AgentStatus / AgentContext
 //   - agent-tags.ts         TAG_VOCABULARY / AGENT_TAGS / 运行时覆写
 //   - agent-permissions.ts  工具权限表 / resolveAgentPermissions
-//   - agent-skill-types.ts  SkillTemplate / SkillRegistryData
+//   - agent-skill-types.ts  SkillTemplate / SkillKind / FeedbackEntry
 //   - agent-protocols.ts    MemoryAware / Executable / Agent
 //
 // 所有子模块通过此桶统一导出，外部消费方无需感知拆分细节。
@@ -33,7 +33,7 @@ export {
 } from "./agent-permissions.js";
 
 // ── 技能类型 ──
-export type { SkillTemplate, SkillRegistryData } from "./agent-skill-types.js";
+export type { SkillTemplate, SkillKind, FeedbackEntry } from "./agent-skill-types.js";
 
 // ── 能力协议 ──
 export { type AgentConfig, type MemoryAware, type Executable, type Agent } from "./agent-protocols.js";

@@ -38,6 +38,12 @@ interface PackageInfo {
   dir: string;
   /** pnpm filter 名 */
   filter: string;
+  /** vitest 配置文件名（相对于包目录），默认 "vitest.ci.config.ts" */
+  config?: string;
+  /** 仅测试条目（跳过 build/typecheck，避免同 filter 重复编译） */
+  testOnly?: boolean;
+  /** 强制 --exclude glob（vitest 2.1.x config exclude 有 bug，走 CLI 保证生效） */
+  hardExcludes?: string[];
 }
 
 interface GateResult {
@@ -66,7 +72,10 @@ const PACKAGES: PackageInfo[] = [
   { name: "tools",        dir: join(ROOT, "packages", "tools"),        filter: "@cortex/tools" },
   { name: "llm",          dir: join(ROOT, "packages", "llm"),          filter: "@cortex/llm" },
   { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
-  { name: "engine",       dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine" },
+  { name: "engine",       dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine",       config: "vitest.ci.config.ts",
+    hardExcludes: ["tests/bootstrap-integration*", "tests/skill-bootstrap*", "tests/skill-system-integration*", "tests/system-stress*"],
+  },
+  { name: "engine-slow",  dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine",       config: "vitest.ci-slow.config.ts", testOnly: true },
   { name: "cli",          dir: join(ROOT, "packages", "cli"),          filter: "@cortex/cli" },
 ];
 
@@ -153,6 +162,7 @@ function checkAllTestsTagged(): string[] {
   const untagged: string[] = [];
 
   for (const pkg of PACKAGES) {
+    if (pkg.testOnly) continue;
     const testDir = join(pkg.dir, "tests");
     const files = walkTests(testDir);
     for (const f of files) {
@@ -180,6 +190,7 @@ function scanAllTests(): { unit: TestFile[]; skipped: TestFile[] } {
   const skipped: TestFile[] = [];
 
   for (const pkg of PACKAGES) {
+    if (pkg.testOnly) continue;
     const testDir = join(pkg.dir, "tests");
     const files = walkTests(testDir);
     for (const f of files) {
@@ -202,6 +213,7 @@ function buildAll(): boolean {
   console.log("\n🔨 构建（按依赖顺序）…");
   let ok = true;
   for (const pkg of PACKAGES) {
+    if (pkg.testOnly) continue;
     const r = run("pnpm", ["--filter", pkg.filter, "build"], ROOT);
     if (r.ok) {
       console.log(`   ✅ ${pkg.name} build`);
@@ -219,6 +231,7 @@ function typecheckAll(): boolean {
   console.log("\n🔍 TypeScript 类型检查…");
   let ok = true;
   for (const pkg of PACKAGES) {
+    if (pkg.testOnly) continue;
     const r = run("pnpm", ["--filter", pkg.filter, "typecheck"], ROOT);
     if (r.ok) {
       console.log(`   ✅ ${pkg.name} typecheck`);
@@ -269,7 +282,11 @@ function runTests(runAll: boolean): { ok: boolean; details: GateResult["testDeta
 
   for (const pkg of PACKAGES) {
     const pkgUnit = unit.filter((u) => u.path.startsWith(pkg.dir));
-    const pkgExcludes = perPkgExclude.get(pkg.filter)!;
+    const pkgExcludes = [...perPkgExclude.get(pkg.filter)!];
+    // vitest 2.1.x config exclude 字段有 bug，改为 CLI --exclude 注入（仅快速模式）
+    if (pkg.hardExcludes && pkg.config !== "vitest.ci-slow.config.ts") {
+      for (const exc of pkg.hardExcludes) pkgExcludes.push(exc);
+    }
 
     if (!runAll && pkgUnit.length === 0) {
       console.log(`   ⬜ ${pkg.name} — 无 @ci: unit 测试，跳过`);
@@ -277,11 +294,12 @@ function runTests(runAll: boolean): { ok: boolean; details: GateResult["testDeta
     }
 
     // 在包目录下跑 vitest，使用 CI 专用配置（vitest.ci.config.ts）
-    const args = ["--filter", pkg.filter, "exec", "vitest", "run", "--config", "vitest.ci.config.ts", "--reporter=verbose"];
+    const vConfig = pkg.config ?? "vitest.ci.config.ts";
+    const args = ["--filter", pkg.filter, "exec", "vitest", "run", "--config", vConfig];
     if (pkgExcludes.length > 0) {
-      // vitest --exclude 每次只接受单个 glob，需逐文件追加
+      // vitest 2.1.x 要求 --exclude=pattern 格式，空格分隔不生效
       for (const exc of pkgExcludes) {
-        args.push("--exclude", exc);
+        args.push(`--exclude=${exc}`);
       }
     }
 

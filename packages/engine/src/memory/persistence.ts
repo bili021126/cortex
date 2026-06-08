@@ -1,7 +1,5 @@
-import type { MemoryQuery, MemoryLink, SemanticState } from "@cortex/shared";
-import { LinkType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
-import { MemoryStorage } from "./storage.js";
+import { PipelineEventType, PipelinePriority, type IPipelineObserver, type LinkType, type MemoryLink, type MemoryQuery, type SemanticState } from "@cortex/shared";
+import type { MemoryStorage } from "./storage.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import Database from "better-sqlite3";
@@ -374,7 +372,8 @@ export class MemoryPersistence {
         access_count INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
         last_accessed_at INTEGER NOT NULL,
-        expires_at INTEGER
+        expires_at INTEGER,
+        session_id TEXT
       )`,
       "create_tables.memories",
     );
@@ -545,6 +544,8 @@ export class MemoryPersistence {
     ensureColumn("memories", "content_hash", "TEXT NOT NULL DEFAULT ''");
     ensureColumn("memories", "expires_at", "INTEGER");
     ensureColumn("memories", "access_count", "INTEGER NOT NULL DEFAULT 0");
+    ensureColumn("memories", "session_id", "TEXT");
+    ensureColumn("memories", "updated_at", "INTEGER");
 
     // 从 SQLite 加载存量数据到 MemoryStorage
     const memRows = db.prepare("SELECT * FROM memories").all() as Record<string, unknown>[];
@@ -552,6 +553,33 @@ export class MemoryPersistence {
       const entry = storage.deserializeRow(raw);
       if (!entry) continue;
       storage.memories.set(entry.id, entry);
+    }
+
+    // 输出反序列化失败汇总 + 清理 SQLite 中损坏的行
+    const corruptedIds = storage.flushDeserializeErrors();
+    if (corruptedIds.length > 0) {
+      // 分片 DELETE（SQLITE_MAX_VARIABLE_NUMBER 默认 999）
+      // 包裹 try/catch：DB 本身可能已损坏（disk image malformed），清理失败不应让管道崩溃
+      try {
+        const CHUNK = 200;
+        for (let i = 0; i < corruptedIds.length; i += CHUNK) {
+          const chunk = corruptedIds.slice(i, i + CHUNK);
+          const placeholders = chunk.map(() => "?").join(",");
+          db.prepare(`DELETE FROM memories WHERE id IN (${placeholders})`).run(...chunk);
+        }
+        if (this._observer) {
+          this._observer.emit({
+            type: PipelineEventType.MemorySqlDegraded,
+            priority: PipelinePriority.NORMAL,
+            payload: { source: "MemoryPersistence", detail: `已清理 ${corruptedIds.length} 条损坏记忆` },
+            timestamp: Date.now(),
+          });
+        }
+      } catch (cleanupErr) {
+        console.warn(
+          `[MemoryPersistence] 清理损坏记忆失败（DB 可能已损坏）: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`
+        );
+      }
     }
 
     const linkRows = db.prepare("SELECT * FROM links").all() as Record<string, unknown>[];

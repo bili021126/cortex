@@ -1,8 +1,7 @@
-import type { TaskNode, NodeResult, Agent } from "@cortex/shared";
+import { type Agent, type IPipelineObserver, type NodeResult, type TaskNode } from "@cortex/shared";
 import type { ITaskBoard } from "../task-board.js";
 import type { ISchedulerAgentPool } from "../agent-pool.js";
-import type { IPipelineObserver } from "@cortex/shared";
-import type { SkillExecutor } from "../skill-executor.js";
+import type { LlmCallable } from "../rlm-decompose.js";
 
 /**
  * DispatchCtx —— 调度分发管道的共享上下文。
@@ -19,8 +18,9 @@ export interface DispatchCtx {
   readonly board: ITaskBoard;
   readonly pool: ISchedulerAgentPool;
   readonly observer: IPipelineObserver;
-  readonly skillExecutor?: SkillExecutor;
   readonly isTestEnv: boolean;
+  /** RLM 拆解用的 LLM 调用入口。由 Scheduler 从 MetaAgent/MemoryStore 注入 */
+  readonly llmChat?: LlmCallable;
 
   // ── 分发起点 ──
   node: TaskNode;
@@ -31,13 +31,15 @@ export interface DispatchCtx {
   agent?: Agent;
   /** SpawnStep 填充 */
   instanceId?: string;
-  /** SkillInjectionStep 填充 */
-  enrichedNode?: TaskNode;
-  matchedSkillId?: string | null;
   /** 执行使用的模型名 */
   model?: string;
   /** ExecuteStep 填充 */
   result?: NodeResult;
+  /** BoundaryGuardStep 填充——边界违规信息 */
+  boundaryViolation?: {
+    agentType: string;
+    files: string[];
+  };
 }
 
 /**

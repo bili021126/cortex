@@ -10,11 +10,10 @@
  * @fix M-02 -- ensureDir 改为异步，消除 async 方法内同步 I/O 阻塞事件循环
  */
 
-import { mkdir } from 'node:fs/promises';
-import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Task, TaskJSON } from '../../core/models/task.js';
-import { TaskRepository, TaskFilter } from '../interfaces/task.repository.js';
+import { Task, type TaskJSON } from '../../core/models/task.js';
+import type { TaskRepository, TaskFilter } from '../interfaces/task.repository.js';
 import { TaskNotFoundError, StorageIOError } from '../errors.js';
 
 export class JsonFileAdapter implements TaskRepository {
@@ -147,8 +146,9 @@ export class JsonFileAdapter implements TaskRepository {
         result = result.filter(t => t.priority === filter.priority);
       }
       if (filter.tags && filter.tags.length > 0) {
+        const tags = filter.tags;
         result = result.filter(t =>
-          filter.tags!.some(tag => t.tags.includes(tag)),
+          tags.some(tag => t.tags.includes(tag)),
         );
       }
       if (filter.search?.trim()) {

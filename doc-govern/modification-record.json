@@ -240,6 +240,156 @@
       ],
       "reversibility": "reversible",
       "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-001",
+      "runId": "rlm-density-implementation",
+      "type": "file_created",
+      "agentType": "CodeAgent",
+      "description": "新建 @cortex/config constants/rlm.ts —— RLM 递归拆解 & DENSITY 密度压缩的 5 个硬编码阈值常量统一收容 (RLMMIN_CONFIDENCE=0.6, RLMMAXDEPTH=3, RLMMINCOMPLEXITY_CHARS=200, DENSITYLIGHTMAXCHARS=150, DENSITYMEDIUMMAX_CHARS=500)",
+      "filePaths": [
+        "packages/config/src/constants/rlm.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-002",
+      "runId": "rlm-density-implementation",
+      "type": "file_created",
+      "agentType": "CodeAgent",
+      "description": "创建 rlm-decompose.ts —— LLM 驱动的任务拆解引擎：decompose() / shouldDecompose() / parseDecomposeResponse() / shouldExecuteDecomposition()，支持 maxDepth=3 自限、confidence<0.6 回退、markdown 代码块容错解析",
+      "filePaths": [
+        "packages/engine/src/core/rlm-decompose.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-003",
+      "runId": "rlm-density-implementation",
+      "type": "file_created",
+      "agentType": "CodeAgent",
+      "description": "创建 density-compress.ts —— DENSITY 上下文密度分级压缩工具：parseDensityTag / stripDensityTag / compressByDensity (light≤150/medium≤500/heavy全量) / annotateAndCompress / mergeContext / densityToStrategy",
+      "filePaths": [
+        "packages/engine/src/core/density-compress.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-004",
+      "runId": "rlm-density-implementation",
+      "type": "file_modified",
+      "agentType": "CodeAgent",
+      "description": "重写 RlmExecuteStep —— 实现完整的 RLM 三层递归执行：复杂度检测 → LLM 拆解 → 分层并行执行子任务 (按 dependsOn 拓扑) → DENSITY 层间压缩 → 低信心回退直接执行",
+      "filePaths": [
+        "packages/engine/src/core/dispatch-steps/rlm-execute-step.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-005",
+      "runId": "rlm-density-implementation",
+      "type": "file_modified",
+      "agentType": "CodeAgent",
+      "description": "拓扑排序 DAG 边语义扩展 —— topologicalSort 支持 EdgeType (hard/soft/trigger) 分层注入，soft/trigger 边子节点与父节点同层并行",
+      "filePaths": [
+        "packages/engine/src/core/topological-sort.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-006",
+      "runId": "rlm-density-implementation",
+      "type": "file_modified",
+      "agentType": "CodeAgent",
+      "description": "共享类型扩展 —— task.ts 新增 DensityLevel / DensityAnnotated / EdgeType / SubTask / DecomposeResult 类型；TaskNode 新增 edgeType / isRlmSubtask 字段",
+      "filePaths": [
+        "packages/shared/src/task.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-007",
+      "runId": "rlm-density-implementation",
+      "type": "file_modified",
+      "agentType": "CodeAgent",
+      "description": "Scheduler + MetaAgent LLM 注入链路 —— MetaAgent 暴露 llmAdapter getter，Scheduler._buildLlmChat() 桥接为 LlmCallable 注入 DispatchCtx，_dispatchSingle/_dispatchMulti 两处均注入",
+      "filePaths": [
+        "packages/engine/src/core/scheduler.ts",
+        "packages/engine/src/core/meta-agent.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
+    },
+    {
+      "id": "MOD-rlm-density-008",
+      "runId": "rlm-density-implementation",
+      "type": "file_modified",
+      "agentType": "CodeAgent",
+      "description": "RLM/DENSITY 硬编码抽离 —— rlm-decompose.ts 中 MIN_CONFIDENCE/MAX_RLM_DEPTH/MIN_COMPLEXITY_CHARS 和 density-compress.ts 中 LIGHT_MAX_CHARS/MEDIUM_MAX_CHARS 全部迁移到 @cortex/config/constants/rlm.ts；删除 rlm-execute-step.ts 死代码 COMPLEXITY_THRESHOLD；补全所有跨模块接口 @contract 标注",
+      "filePaths": [
+        "packages/engine/src/core/rlm-decompose.ts",
+        "packages/engine/src/core/density-compress.ts",
+        "packages/engine/src/core/dispatch-steps/rlm-execute-step.ts",
+        "packages/config/src/constants/rlm.ts",
+        "packages/config/src/constants/index.ts",
+        "packages/config/src/index.ts"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1749081600000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
     }
   ],
   "sessions": [
@@ -274,6 +424,24 @@
         "MOD-hardcode-extract-003",
         "MOD-hardcode-extract-004",
         "MOD-cli-e2e-expand-001"
+      ]
+    },
+    {
+      "sessionId": "rlm-density-implementation",
+      "startedAt": 1749081600000,
+      "agentTypes": ["CodeAgent"],
+      "projectFingerprint": "fp-3a7e2c1b",
+      "startCommitHash": "HEAD",
+      "status": "completed",
+      "recordIds": [
+        "MOD-rlm-density-001",
+        "MOD-rlm-density-002",
+        "MOD-rlm-density-003",
+        "MOD-rlm-density-004",
+        "MOD-rlm-density-005",
+        "MOD-rlm-density-006",
+        "MOD-rlm-density-007",
+        "MOD-rlm-density-008"
       ]
     }
   ]

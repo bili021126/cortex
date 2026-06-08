@@ -8,8 +8,7 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import type { ICortexApi } from "@cortex/shared";
-import { AgentType, AgentStatus, getAgentTags, getAgentToolPermissions, AGENT_CHINESE_ROLE, CHINESE_NAME_TO_TYPE } from "@cortex/shared";
+import { AGENT_CHINESE_ROLE, AgentStatus, AgentType, CHINESE_NAME_TO_TYPE, getAgentTags, getAgentToolPermissions, type AgentConfig, type ICortexApi } from "@cortex/shared";
 import type { IAgentPool, StrategistAgent } from "@cortex/engine";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -120,31 +119,31 @@ export function createAgentHandler(bridge: ICortexApi): CommandHandler {
 
 /**
  * 获取 AgentPool 的兼容接口。
- * AgentPool 是 engine 内部模块，通过 any 类型桥接。
+ * AgentPool 是 engine 内部模块，通过安全类型桥接。
  */
 interface PoolLike {
-  count(type: string): number;
-  getStatuses(type: string): string[];
-  hasAwake(type: string): boolean;
-  spawn(type: string, instanceId: string): boolean;
-  destroy(type: string, instanceId: string): void;
-  register(config: any): void;
+  count(type: AgentType): number;
+  getStatuses(type: AgentType): AgentStatus[];
+  hasAwake(type: AgentType): boolean;
+  spawn(type: AgentType, instanceId: string): boolean;
+  destroy(type: AgentType, instanceId: string): void;
+  register(config: AgentConfig): void;
 }
 
 /** 安全地获取 pool 方法 */
-function safePool(pool: any): PoolLike {
+function safePool(pool: IAgentPool | null | undefined): PoolLike {
   return {
-    count: (type: string) => pool?.count?.(type) ?? 0,
-    getStatuses: (type: string) => pool?.getStatuses?.(type) ?? [],
-    hasAwake: (type: string) => pool?.hasAwake?.(type) ?? false,
-    spawn: (type: string, instanceId: string) => pool?.spawn?.(type, instanceId) ?? false,
-    destroy: (type: string, instanceId: string) => pool?.destroy?.(type, instanceId),
-    register: (config: any) => pool?.register?.(config),
+    count: (type: AgentType) => pool?.count?.(type) ?? 0,
+    getStatuses: (type: AgentType) => pool?.getStatuses?.(type) ?? [],
+    hasAwake: (type: AgentType) => pool?.hasAwake?.(type) ?? false,
+    spawn: (type: AgentType, instanceId: string) => pool?.spawn?.(type, instanceId) ?? false,
+    destroy: (type: AgentType, instanceId: string) => pool?.destroy?.(type, instanceId),
+    register: (config: AgentConfig) => pool?.register?.(config),
   };
 }
 
 async function handleAgentList(
-  pool: any,
+  pool: IAgentPool,
   options: Record<string, unknown>,
   context: CommandContext,
   bridge: ICortexApi,
@@ -241,7 +240,7 @@ async function handleAgentList(
 }
 
 async function handleAgentInspect(
-  pool: any,
+  pool: IAgentPool,
   typeName: string | undefined,
   options: Record<string, unknown>,
   context: CommandContext,
@@ -310,7 +309,7 @@ async function handleAgentInspect(
 }
 
 async function handleAgentSpawn(
-  pool: any,
+  pool: IAgentPool,
   typeName: string | undefined,
   options: Record<string, unknown>,
   _context: CommandContext,
@@ -356,7 +355,7 @@ async function handleAgentSpawn(
 }
 
 async function handleAgentDestroy(
-  pool: any,
+  pool: IAgentPool,
   typeName: string | undefined,
   options: Record<string, unknown>,
   _context: CommandContext,

@@ -1,6 +1,4 @@
-import type { TaskNode, EdgeType } from "@cortex/shared";
-import { PipelinePriority, PipelineEventType } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type EdgeType, type IPipelineObserver, type TaskNode } from "@cortex/shared";
 
 /**
  * 拓扑排序：按 parentId 依赖关系分层。

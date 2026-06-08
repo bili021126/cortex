@@ -42,7 +42,8 @@ export function validateCrossField(config: CortexAgentsConfig): CrossFieldValida
       if (!allProduces.has(eventType)) {
         allProduces.set(eventType, []);
       }
-      allProduces.get(eventType)!.push(agentId);
+      const producers = allProduces.get(eventType);
+      if (producers) producers.push(agentId);
     }
   }
 

@@ -210,7 +210,7 @@ async function main() {
   const gate = new ConfirmGate();
   gate.bypassAll(); // E2E 测试模式：跳过 L2/L3 确认，专注验证行为链路
   const memory = new MemoryStore();
-  const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", "memory.db");
+  const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", `memory-e2e-real-${Date.now()}.db`);
   await memory.init(MEMORY_DB);
   console.log(`   ✅ MemoryStore 持久化: ${MEMORY_DB}`);
 
@@ -336,7 +336,7 @@ async function main() {
   for (const r of report.results) {
     const icon = r.success ? "✅" : "❌";
     const preview = (r.output ?? r.error ?? "?").slice(0, 100);
-    console.log(`   ${icon} [${r.source.agentType ?? "?"}] ${r.nodeId}: ${preview}`);
+    console.log(`   ${icon} [${r.agentType ?? "?"}] ${r.nodeId}: ${preview}`);
   }
   console.log();
 
@@ -352,13 +352,13 @@ async function main() {
   
   for (const n of completedNodes) {
     for (const r of n.results) {
-      const agentLabel = r.source.agentType === AgentType.DocGovern ? "📋 DocGovern" : `📝 [${r.source.agentType}]`;
+      const agentLabel = r.agentType === AgentType.DocGovern ? "📋 DocGovern" : `📝 [${r.agentType}]`;
       console.log(`   ${agentLabel} ${n.id}: ${(r.output ?? "").slice(0, 120)}`);
     }
   }
   
   // DocGovernAgent 审计摘要
-  const docGovernResults = allNodes.flatMap((n) => n.results).filter((r) => r.source.agentType === AgentType.DocGovern);
+  const docGovernResults = allNodes.flatMap((n) => n.results).filter((r) => r.agentType === AgentType.DocGovern);
   if (docGovernResults.length > 0) {
     console.log(`\n   📋 DocGovernAgent 审计产出:`);
     for (const dr of docGovernResults) {

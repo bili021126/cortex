@@ -14,9 +14,7 @@
  * @fix D4 — stop() 使用 off(priority, handler) 精确移除，防止误删其他组件的 handler。
  * @fix M15 — 简化 start() 中的三次 .bind(this)，使用循环统一绑定。
  */
-import type { ObservableEvent } from "@cortex/shared";
-import { PipelinePriority, PipelineEventType } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 
 export class MemoryStoreMonitor {
   /** 最近 N 秒内事件计数（用于阈值检测） */

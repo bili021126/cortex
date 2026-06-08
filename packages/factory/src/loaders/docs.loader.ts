@@ -1,47 +1,50 @@
 // ============================================================
 // @cortex/factory — 文档配置加载器
 //
-// 读取 cortex-docs.json，解析文档注册表和宪法路径。
+// 从 @cortex/config 包加载 docs.json。
 // ============================================================
 
 import * as fs from "node:fs";
-import * as path from "node:path";
+import { resolveConfigDataDir, loadConfigDomain, type ConfigFileReader } from "@cortex/config";
 import type { CortexDocsConfig, DocEntry } from "../types.js";
 
+const readFileNode: ConfigFileReader = (fp: string) => fs.readFileSync(fp, "utf-8");
+
 /**
- * 加载 cortex-docs.json。
+ * 加载文档配置。
  * 该文件为可选——不存在时返回空默认配置。
  */
-export function loadDocsConfig(projectRoot: string): CortexDocsConfig {
-  const filePath = path.join(projectRoot, "cortex-docs.json");
+export function loadDocsConfig(_projectRoot: string, dataDirOverride?: string): CortexDocsConfig {
+  const dataDir = dataDirOverride ?? resolveConfigDataDir();
 
-  if (!fs.existsSync(filePath)) {
+  let config: CortexDocsConfig | undefined;
+  try {
+    config = loadConfigDomain<CortexDocsConfig>(
+      "docs",
+      readFileNode,
+      dataDir,
+    );
+  } catch {
     return {
       constitutionPath: "docs/Cortex 概念顶层设计 v2.5.md",
       docRegistry: [],
     };
   }
 
-  let raw: string;
-  try {
-    raw = fs.readFileSync(filePath, "utf-8");
-  } catch (e) {
-    throw new Error(`读取 cortex-docs.json 失败: ${String(e)}`, { cause: e });
+  // 可选文件不存在时 loadConfigDomain 返回 undefined
+  if (!config) {
+    return {
+      constitutionPath: "docs/Cortex 概念顶层设计 v2.5.md",
+      docRegistry: [],
+    };
   }
 
-  let config: unknown;
-  try {
-    config = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`cortex-docs.json JSON 解析失败: ${String(e)}`, { cause: e });
-  }
-
-  return _validateStructure(config as CortexDocsConfig);
+  return _validateStructure(config);
 }
 
 function _validateStructure(config: CortexDocsConfig): CortexDocsConfig {
   if (!config || typeof config !== "object") {
-    throw new Error("cortex-docs.json: 顶层必须为对象");
+    throw new Error("docs.json: 顶层必须为对象");
   }
 
   if (!config.constitutionPath) {
@@ -56,7 +59,7 @@ function _validateStructure(config: CortexDocsConfig): CortexDocsConfig {
   for (const entry of config.docRegistry) {
     const e = entry as DocEntry;
     if (!e.path) {
-      throw new Error("cortex-docs.json: docRegistry 项缺少 path");
+      throw new Error("docs.json: docRegistry 项缺少 path");
     }
   }
 

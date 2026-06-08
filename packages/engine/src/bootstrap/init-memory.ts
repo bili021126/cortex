@@ -6,7 +6,7 @@
 import { MemoryStore } from "../memory/memory-store.js";
 import { defaultEmbeddingService } from "../memory/embedding.js";
 import { ConsistencyLayer } from "../consistency/consistency-layer.js";
-import { PipelineObserver } from "../core/pipeline-observer.js";
+import type { PipelineObserver } from "../core/pipeline-observer.js";
 import type { IFileSystemAdapter, IMemoryStore, MemoryEntry, MemoryWriteInput, ReadMode } from "@cortex/shared";
 
 /** ConsistencyLayer 初始化结果——含 filterRead 回传 */

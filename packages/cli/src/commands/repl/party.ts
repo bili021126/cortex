@@ -17,8 +17,7 @@
  * - 开拓者是超级管理员，覆盖所有权限
  */
 
-import { AgentType } from "@cortex/shared";
-import type { LlmMessage } from "@cortex/shared";
+import { type AgentType, type LlmMessage } from "@cortex/shared";
 import { getAgentDisplay } from "./types.js";
 
 // ── 类型 ──────────────────────────────────────────

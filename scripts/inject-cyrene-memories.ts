@@ -6,7 +6,7 @@
  */
 
 import { MemoryStore } from "../packages/engine/dist/memory/memory-store.js";
-import { MemoryType } from "../packages/shared/dist/memory.js";
+import { type MemorySource } from "../packages/shared/dist/memory.js";
 import { AgentType } from "../packages/shared/dist/agent.js";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -624,17 +624,18 @@ async function main() {
 
   console.log("[昔涟记忆注入] 数据库已初始化，开始写入记..\n");
 
+  const source: MemorySource = { agentType: AgentType.Butler, taskId: "cli-cyrene" };
+
   for (const mem of MEMORIES) {
     try {
       const id = await store.write({
-        memoryType: MemoryType.Episodic,
-        content: mem.content,
+        source,
+        kind: "Insight",
         summary: mem.summary,
-        agentType: AgentType.Butler,
-        creatorId: "cli-cyrene",
+        semantic_gist: mem.summary.slice(0, 200),
+        content_blob: mem.content,
         weight: mem.weight,
-        isPrivate: true,
-        embedding: dummyEmbedding(), // 跳过 ONNX 模型加载
+        embedding: dummyEmbedding(),
       });
       console.log(`  [${id.slice(0, 8)}] ${mem.summary.slice(0, 50)}...`);
     } catch (err) {

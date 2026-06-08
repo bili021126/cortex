@@ -7,12 +7,12 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   type SkillDefinition,
   SkillCategory,
-} from "../src/types.js";
-import { SkillFactory } from "../src/factory.js";
-import { DynamicImportLoader } from "../src/loader.js";
-import { SimpleSkillValidator } from "../src/validator.js";
-import { PipelineExecutor } from "../src/executor.js";
-import { DefaultSkillCache } from "../src/cache.js";
+} from "../dist/types.js";
+import { SkillFactory } from "../dist/factory.js";
+import { DynamicImportLoader } from "../dist/loader.js";
+import { SimpleSkillValidator } from "../dist/validator.js";
+import { PipelineExecutor } from "../dist/executor.js";
+import { DefaultSkillCache } from "../dist/cache.js";
 
 describe("SkillFactory", () => {
   let factory: SkillFactory;

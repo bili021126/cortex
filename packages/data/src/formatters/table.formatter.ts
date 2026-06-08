@@ -7,7 +7,7 @@
  */
 
 import Table from 'cli-table3';
-import { Task } from '../core/models/task.js';
+import type { Task } from '../core/models/task.js';
 import { priorityLabel } from '../core/models/priority.js';
 import { formatDate } from '../utils/date.js';
 

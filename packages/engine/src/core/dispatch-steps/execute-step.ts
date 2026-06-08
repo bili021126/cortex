@@ -17,7 +17,7 @@ export class ExecuteStep implements IDispatchStep {
   readonly name = "Execute";
 
   async run(ctx: DispatchCtx): Promise<DispatchCtx> {
-    const { agent, agentType, enrichedNode, node, models } = ctx;
+    const { agent, agentType, node, models } = ctx;
 
     if (!agent || !agentType) {
       return {
@@ -33,11 +33,9 @@ export class ExecuteStep implements IDispatchStep {
     // 模型解析：优先使用 ctx.model，回退到 models 按 agentType 查找，最后兜底
     const model = ctx.model ?? models.get(agentType) ?? DEFAULT_CLI_CHAT_MODEL;
 
-    const executeNode = enrichedNode ?? node;
-
     let result;
     try {
-      result = await agent.execute(executeNode, model);
+      result = await agent.execute(node, model);
     } catch (e) {
       result = {
         nodeId: node.id,

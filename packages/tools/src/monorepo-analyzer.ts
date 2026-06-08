@@ -25,8 +25,7 @@
  * 原位于 .cortex/archive/e2e-outputs/.../closed-loop-test/tools/monorepo-analyzer.ts
  */
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { cwd, argv } from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -505,14 +504,16 @@ export function computeLayers(
   for (const id of pkgIds) depOf.set(id, []);
   for (const edge of edges) {
     if (pkgIds.has(edge.from) && pkgIds.has(edge.to)) {
-      depOf.get(edge.from)!.push(edge.to);
+      const deps = depOf.get(edge.from);
+      if (deps) deps.push(edge.to);
     }
   }
 
   // 递归计算深度，visiting Set 防止循环依赖导致栈溢出
   const depthCache = new Map<string, number>();
   function getDepth(id: string, visiting: Set<string> = new Set()): number {
-    if (depthCache.has(id)) return depthCache.get(id)!;
+    const cached = depthCache.get(id);
+    if (cached !== undefined) return cached;
 
     // 检测到循环：当前节点已在递归栈中 → 打断，赋予 depth 0
     if (visiting.has(id)) {

@@ -13,12 +13,10 @@
  * @since v2.9 调度系统组件化与管线可组合
  */
 
-import type { TaskNode, NodeResult, Agent } from "@cortex/shared";
+import { type Agent, type IPipelineObserver, type NodeResult, type TaskNode } from "@cortex/shared";
 import type { ITaskBoard } from "./task-board.js";
 import type { ISchedulerAgentPool } from "./agent-pool.js";
-import type { IPipelineObserver } from "@cortex/shared";
 import type { MetaAgent } from "./meta-agent.js";
-import type { SkillExecutor } from "./skill-executor.js";
 import type { ReplanManager } from "./replan-manager.js";
 import type { EngineConfig } from "@cortex/config";
 
@@ -70,8 +68,6 @@ export interface LoopContext {
   strategy: IScheduleStrategy;
   /** 当前使用的执行范式 */
   executionModel: IExecutionModel;
-  /** 技能执行器（可选） */
-  skillExecutor?: SkillExecutor;
 }
 
 /** 循环驱动执行结果 */
@@ -114,7 +110,6 @@ export interface ExecutionContext {
   pool: ISchedulerAgentPool;
   observer: IPipelineObserver;
   strategy: IScheduleStrategy;
-  skillExecutor?: SkillExecutor;
   /** 是否为测试环境（绕过确认门） */
   isTestEnv: boolean;
 }

@@ -1,6 +1,4 @@
-import type { MemoryQuery, AgentType } from "@cortex/shared";
-import { AgentType as AT } from "@cortex/shared";
-import type { TaskNode } from "@cortex/shared";
+import { AgentType as AT, LinkType, type MemoryQuery, type AgentType, type TaskNode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
@@ -9,7 +7,7 @@ import { createMemoryQuery } from "./registry.js";
 
 const apiMemoryQuery = createMemoryQuery({
   kind: "TaskLog",
-  linkTypes: ["DerivedFrom" as any, "ProducedBy" as any],
+  linkTypes: [LinkType.DerivedFrom, LinkType.ProducedBy],
   bfsDepth: 2,
   limit: 5,
 });

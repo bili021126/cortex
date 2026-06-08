@@ -30,12 +30,12 @@ import {
   type ValidationResult,
   SkillCategory,
   SkillErrorCode,
-} from "../src/types.js";
-import { DynamicImportLoader } from "../src/loader.js";
-import { SimpleSkillValidator } from "../src/validator.js";
-import { PipelineExecutor } from "../src/executor.js";
-import { DefaultSkillCache } from "../src/cache.js";
-import { SkillFactory } from "../src/factory.js";
+} from "../dist/types.js";
+import { DynamicImportLoader } from "../dist/loader.js";
+import { SimpleSkillValidator } from "../dist/validator.js";
+import { PipelineExecutor } from "../dist/executor.js";
+import { DefaultSkillCache } from "../dist/cache.js";
+import { SkillFactory } from "../dist/factory.js";
 
 // ============================================================
 // 辅助函数

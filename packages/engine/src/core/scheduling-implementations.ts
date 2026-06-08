@@ -6,8 +6,7 @@
  * @module scheduling-implementations
  */
 
-import type { TaskNode, NodeResult, Agent, AgentType } from "@cortex/shared";
-import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { AgentStatus, PipelineEventType, PipelinePriority, type Agent, type AgentType, type NodeResult, type PipelineHandler, type TaskNode } from "@cortex/shared";
 import type {
   IScheduleStrategy,
   ILoopDriver,
@@ -16,15 +15,14 @@ import type {
   LoopResult,
   ExecutionContext,
 } from "./scheduling-types.js";
-import type { SkillExecutor } from "./skill-executor.js";
 import { topologicalSort } from "./topological-sort.js";
 import { findMatchingAgent, findAllMatchingAgents } from "./agent-matcher.js";
 import { isTestEnv } from "../test-env.js";
 import { ClaimStep } from "./dispatch-steps/claim-step.js";
 import { SpawnStep } from "./dispatch-steps/spawn-step.js";
-import { SkillInjectionStep } from "./dispatch-steps/skill-injection-step.js";
 import { ExecuteStep } from "./dispatch-steps/execute-step.js";
 import { CleanupStep } from "./dispatch-steps/cleanup-step.js";
+import { BoundaryGuardStep } from "./dispatch-steps/boundary-guard-step.js";
 import type { DispatchCtx, IDispatchStep } from "./dispatch-steps/types.js";
 
 // ══════════════════════════════════════════════
@@ -137,7 +135,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
   async run(ctx: LoopContext): Promise<LoopResult> {
     const {
       board, pool, observer, agents, models,
-      replanManager, config, strategy, executionModel, skillExecutor,
+      replanManager, config, strategy, executionModel,
     } = ctx;
 
     const startTime = Date.now();
@@ -147,6 +145,19 @@ export class TopologicalLayeredDriver implements ILoopDriver {
     let round = 0;
     let replanFlight: Promise<void> | null = null;
     const deadline = startTime + config.executeAllTimeoutMs;
+
+    // ─── 边界违规事件监听：Agent 越界写文件 → 入队 replanManager → MetaAgent 重规划 ───
+    const boundaryHandler: PipelineHandler = (event) => {
+      if (event.type === PipelineEventType.AgentBoundaryViolation) {
+        const payload = event.payload as { nodeId: string; reason: string };
+        const node = board.getNode(payload.nodeId);
+        if (node) {
+          replanManager.enqueue(node, payload.reason, "boundary_violation");
+        }
+      }
+    };
+    observer.on(PipelinePriority.HIGH, boundaryHandler);
+
     while (true) {
       if (Date.now() >= deadline) {
         const remaining = board.getPendingNodes();
@@ -218,7 +229,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
 
             const execCtx: ExecutionContext = {
               node, agents, models, board, pool, observer,
-              strategy, skillExecutor, isTestEnv: isTestEnv(),
+              strategy, isTestEnv: isTestEnv(),
             };
 
             const dispatchPromise = node.needsMultiPerspective
@@ -280,6 +291,9 @@ export class TopologicalLayeredDriver implements ILoopDriver {
     if (replanFlight) await replanFlight;
     replanManager.resolveChains(allResults);
 
+    // 退订边界违规监听
+    observer.off(PipelinePriority.HIGH, boundaryHandler);
+
     observer.emit({
       type: PipelineEventType.SchedulerDone,
       priority: PipelinePriority.CRITICAL,
@@ -304,7 +318,7 @@ export class SequentialDriver implements ILoopDriver {
   readonly name = "sequential";
 
   async run(ctx: LoopContext): Promise<LoopResult> {
-    const { board, observer, strategy, executionModel, agents, models, pool, skillExecutor, replanManager } = ctx;
+    const { board, observer, strategy, executionModel, agents, models, pool, replanManager } = ctx;
     const allResults: NodeResult[] = [];
     let completed = 0;
     let failed = 0;
@@ -333,7 +347,7 @@ export class SequentialDriver implements ILoopDriver {
 
         const execCtx: ExecutionContext = {
           node, agents, models, board, pool, observer,
-          strategy, skillExecutor, isTestEnv: isTestEnv(),
+          strategy, isTestEnv: isTestEnv(),
         };
 
         try {
@@ -397,12 +411,16 @@ export class SequentialDriver implements ILoopDriver {
 export class WaveDriver implements ILoopDriver {
   readonly name = "wave";
 
-  /** 波浪定义：标签 → 波浪序号（越小越先执行） */
+  /** 波浪定义：标签 → 波浪序号（越小越先执行）
+   *
+   * 注意：标签顺序即优先级——同一节点多个标签命中时，先匹配到的生效。
+   * 因此"review"排在"audit"之前，确保 review 节点不被 audit 误判到设计波。
+   */
   private static readonly WAVE_DEFINITIONS: Array<{ wave: number; tags: string[] }> = [
-    { wave: 0, tags: ["design", "architecture", "research", "analysis", "inspect", "audit", "doc", "constitution"] },
+    { wave: 0, tags: ["design", "architecture", "research", "analysis", "inspect"] },
     { wave: 1, tags: ["code", "implement", "api", "data", "schema", "build"] },
-    { wave: 2, tags: ["review", "fix", "refactor", "test"] },
-    { wave: 3, tags: ["verify", "validate", "deploy", "ops", "script"] },
+    { wave: 2, tags: ["review", "fix", "refactor", "audit", "doc", "constitution"] },
+    { wave: 3, tags: ["verify", "validate", "deploy", "ops", "script", "test"] },
   ];
 
   private _classifyWave(node: TaskNode): number {
@@ -416,7 +434,7 @@ export class WaveDriver implements ILoopDriver {
   }
 
   async run(ctx: LoopContext): Promise<LoopResult> {
-    const { board, observer, strategy, executionModel, agents, models, pool, skillExecutor, replanManager, config } = ctx;
+    const { board, observer, strategy, executionModel, agents, models, pool, replanManager, config } = ctx;
     const allResults: NodeResult[] = [];
     let completed = 0;
     let failed = 0;
@@ -450,13 +468,40 @@ export class WaveDriver implements ILoopDriver {
       for (const n of pendingNodes) {
         const w = this._classifyWave(n);
         if (!waves.has(w)) waves.set(w, []);
-        waves.get(w)!.push(n);
+        const waveBucket = waves.get(w);
+        if (waveBucket) waveBucket.push(n);
       }
 
       const sortedWaves = [...waves.keys()].sort((a, b) => a - b);
 
       for (const waveIdx of sortedWaves) {
-        const waveNodes = waves.get(waveIdx)!;
+        const waveBucket = waves.get(waveIdx);
+        if (!waveBucket) continue;
+        let waveNodes = waveBucket;
+
+        // 跨波父依赖过滤：父节点在其它波且仍未完成 → 本轮跳过，等父节点先跑
+        const pendingIds = new Set(pendingNodes.map((n) => n.id));
+        const filtered = waveNodes.filter((n) => {
+          if (!n.parentId) return true;
+          if (!pendingIds.has(n.parentId)) return true; // 父节点已完成
+          const parentNode = board.getNode(n.parentId);
+          if (!parentNode) return true;                  // 父节点不存在（dangling）
+          const parentWave = this._classifyWave(parentNode);
+          return parentWave === waveIdx;                 // 仅同波父节点才可并行
+        });
+        const skipped = waveNodes.length - filtered.length;
+        if (skipped > 0) {
+          observer.emit({
+            type: PipelineEventType.SchedulerNonstandardType,
+            priority: PipelinePriority.NORMAL,
+            payload: { message: `WaveDriver wave ${waveIdx}: ${skipped} node(s) deferred (parent in different wave)` },
+            timestamp: Date.now(),
+            notificationType: "FYI",
+          });
+        }
+        waveNodes = filtered;
+        if (waveNodes.length === 0) continue;
+
         observer.emit({
           type: PipelineEventType.SchedulerLayerStart,
           priority: PipelinePriority.HIGH,
@@ -474,7 +519,7 @@ export class WaveDriver implements ILoopDriver {
 
             const execCtx: ExecutionContext = {
               node, agents, models, board, pool, observer,
-              strategy, skillExecutor, isTestEnv: isTestEnv(),
+              strategy, isTestEnv: isTestEnv(),
             };
 
             const p = node.needsMultiPerspective
@@ -545,32 +590,27 @@ async function runDispatchPipeline(ctx: DispatchCtx, steps: IDispatchStep[]): Pr
 /**
  * PipelineModel —— 默认管线执行范式。
  *
- * 行为与现有 Scheduler._dispatchSingle / _dispatchMulti 完全一致：
- *   Claim → Spawn → [SkillInjection] → Execute → Cleanup
+ *   单视角：Claim → Spawn → Execute → BoundaryGuard → Cleanup
+ *   多视角：直接 Execute → Cleanup
  */
 export class PipelineModel implements IExecutionModel {
   readonly name = "pipeline";
-  /** 技能执行器（可通过 setSkillExecutor 或 setSkillExecutor 方法注入） */
-  skillExecutor?: SkillExecutor;
-
-  constructor(skillExecutor?: SkillExecutor) {
-    this.skillExecutor = skillExecutor;
-  }
 
   async dispatchSingle(ctx: ExecutionContext): Promise<NodeResult> {
-    const { node, agents, models, board, pool, observer, skillExecutor, isTestEnv: _isTestEnv } = ctx;
+    const { node, agents, models, board, pool, observer, isTestEnv: _isTestEnv } = ctx;
     const dispatchCtx: DispatchCtx = {
       agents, models, board, pool, observer,
-      skillExecutor: skillExecutor ?? this.skillExecutor,
       isTestEnv: _isTestEnv,
       node,
     };
 
-    const steps: IDispatchStep[] = [new ClaimStep(), new SpawnStep()];
-    if (dispatchCtx.skillExecutor) {
-      steps.push(new SkillInjectionStep());
-    }
-    steps.push(new ExecuteStep(), new CleanupStep());
+    const steps: IDispatchStep[] = [
+      new ClaimStep(),
+      new SpawnStep(),
+      new ExecuteStep(),
+      new BoundaryGuardStep(),
+      new CleanupStep(),
+    ];
 
     return await runDispatchPipeline(dispatchCtx, steps);
   }
@@ -593,7 +633,6 @@ export class PipelineModel implements IExecutionModel {
 
       const dispatchCtx: DispatchCtx = {
         agents, models, board, pool, observer,
-        skillExecutor: this.skillExecutor,
         isTestEnv: _isTestEnv,
         node,
         agentType: at,
@@ -601,7 +640,7 @@ export class PipelineModel implements IExecutionModel {
         model: models.get(at) ?? "mock",
       };
 
-      const steps: IDispatchStep[] = [new SpawnStep(), new ExecuteStep(), new CleanupStep()];
+      const steps: IDispatchStep[] = [new SpawnStep(), new ExecuteStep(), new BoundaryGuardStep(), new CleanupStep()];
       return await runDispatchPipeline(dispatchCtx, steps);
     });
 

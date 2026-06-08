@@ -35,7 +35,7 @@ function makeAgent(id: string, produces: string[] = [], overrides?: Record<strin
     role: `${id} — 测试角色`,
     systemPrompt: `你是 ${id}`,
     produces,
-    model: "deepseek-chat",
+    model: "deepseek-v4-flash",
     key: "DEEPSEEK_CHAT",
     ...overrides,
   } as AgentDefinition;

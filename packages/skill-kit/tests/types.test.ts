@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import {
   SkillCategory,
   SkillErrorCode,
-} from "../src/types.js";
+} from "../dist/types.js";
 
 describe("SkillCategory 枚举", () => {
   it("包含所有预期分类", () => {

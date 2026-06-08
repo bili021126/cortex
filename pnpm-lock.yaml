@@ -43,6 +43,9 @@ importers:
       '@cortex/config':
         specifier: workspace:*
         version: link:../config
+      '@cortex/doctor':
+        specifier: workspace:*
+        version: link:../doctor
       '@cortex/engine':
         specifier: workspace:*
         version: link:../engine
@@ -55,6 +58,9 @@ importers:
       '@cortex/pm':
         specifier: workspace:*
         version: link:../pm
+      '@cortex/prompt-kit':
+        specifier: workspace:*
+        version: link:../prompt-kit
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
@@ -100,6 +106,28 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
+  packages/doctor:
+    dependencies:
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@cortex/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      eslint:
+        specifier: ^10.3.0
+        version: 10.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
   packages/engine:
     dependencies:
       '@cortex/config':
@@ -114,6 +142,9 @@ importers:
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
+      '@cortex/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@xenova/transformers':
         specifier: ^2.17.2
         version: 2.17.2
@@ -154,6 +185,9 @@ importers:
 
   packages/factory:
     dependencies:
+      '@cortex/config':
+        specifier: workspace:*
+        version: link:../config
       '@cortex/notification':
         specifier: workspace:*
         version: link:../notification
@@ -243,7 +277,46 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
+  packages/policy-validator:
+    dependencies:
+      '@cortex/config':
+        specifier: workspace:*
+        version: link:../config
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/prompt-kit:
+    dependencies:
+      '@cortex/config':
+        specifier: workspace:*
+        version: link:../config
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
   packages/shared:
+    dependencies:
+      '@cortex/config':
+        specifier: workspace:*
+        version: link:../config
     devDependencies:
       eslint:
         specifier: ^10.3.0
@@ -256,10 +329,45 @@ importers:
         version: 2.1.9(@types/node@22.19.17)
 
   packages/skill-kit:
+    dependencies:
+      '@cortex/engine':
+        specifier: workspace:*
+        version: link:../engine
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/skill-validator:
+    dependencies:
+      '@cortex/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      eslint:
+        specifier: ^10.3.0
+        version: 10.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/telemetry:
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: ^2.1.9
+        version: 2.1.9(vitest@2.1.9(@types/node@22.19.17))
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -294,6 +402,22 @@ importers:
       eslint:
         specifier: ^10.3.0
         version: 10.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  projects/_solo-flight-target:
+    dependencies:
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

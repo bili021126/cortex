@@ -1,11 +1,8 @@
 import * as path from "node:path";
-import type { MemoryEntry, MemoryWriteInput, ReadMode } from "@cortex/shared";
-import type { IFileSystemAdapter } from "@cortex/shared";
+import { type IFileSystemAdapter, type MemoryEntry, type MemoryWriteInput, type ReadMode } from "@cortex/shared";
 import type { MemoryStore } from "../memory/memory-store.js";
-import { InitVerifier } from "./init-verifier.js";
-import type { ConsistencyReport } from "./init-verifier.js";
-import { SchemaEnforcer } from "./schema-enforcer.js";
-import type { ValidationResult } from "./schema-enforcer.js";
+import { InitVerifier, type ConsistencyReport } from "./init-verifier.js";
+import { SchemaEnforcer, type ValidationResult } from "./schema-enforcer.js";
 import { IntentFactWall } from "./intent-fact-wall.js";
 
 /**

@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentType, LinkType, PipelinePriority } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority, type ObservableEvent } from "@cortex/shared";
 import { MemoryStore, PipelineObserver } from "@cortex/engine";
 
 describe("MemoryStore", () => {
@@ -129,29 +129,27 @@ describe("MemoryStore", () => {
     expect(await store.read({})).toHaveLength(1);
   });
 
-  // ── 私密记忆 ──────────────────────────────────
+  // ── 读取全量 ──────────────────────────────────
+  // v3: isPrivate 已移除，所有非湮灭态记忆默认可见
 
-  it("私密记忆默认不可见", async () => {
+  it("read({}) 返回所有非湮灭态记忆", async () => {
     await store.write({
       kind: "TaskLog",
       content_blob: {},
-      summary: "公开",
-      semantic_gist: "公开",
+      summary: "记忆A",
+      semantic_gist: "记忆A",
       source: { agentType: AgentType.Code, taskId: "" },
-      isPrivate: false,
     });
     await store.write({
       kind: "TaskLog",
       content_blob: {},
-      summary: "私密",
-      semantic_gist: "私密",
-      source: { agentType: AgentType.Code, taskId: "" },
-      isPrivate: true,
+      summary: "记忆B",
+      semantic_gist: "记忆B",
+      source: { agentType: AgentType.Review, taskId: "" },
     });
 
-    // v3: includePrivate 已移除，默认返回所有非湮灭态记忆
-    const pub = await store.read({});
-    expect(pub).toHaveLength(2);
+    const all = await store.read({});
+    expect(all).toHaveLength(2);
   });
 
   // ── 关联 ───────────────────────────────────────
@@ -183,10 +181,10 @@ describe("MemoryStore", () => {
     const link2 = store.link(a, b, LinkType.ProducedBy);
     expect(link2).toBeNull();
 
-    // v3: 所有 linkType 幂等去重
-    const link3 = store.link(a, b, LinkType.AccessedDuring);
+    // v3: LinkType 精简为 4 种，所有 linkType 幂等去重
+    const link3 = store.link(a, b, LinkType.DerivedFrom);
     expect(link3).toBeTruthy();
-    const link4 = store.link(a, b, LinkType.AccessedDuring);
+    const link4 = store.link(a, b, LinkType.DerivedFrom);
     expect(link4).toBeNull();
   });
 
@@ -214,7 +212,7 @@ describe("MemoryStore", () => {
     });
 
     store.link(a, b, LinkType.ProducedBy);
-    store.link(a, c, LinkType.DependsOn);
+    store.link(a, c, LinkType.DerivedFrom);
 
     const links = store.getLinks(a);
     expect(links).toHaveLength(2);
@@ -346,7 +344,7 @@ describe("MemoryStore", () => {
     expect(store.peek(id)!.semantic_state).toBe("Obliterated");
   });
 
-  it("freeze：Active|Archived → Frozen", async () => {
+  it("freeze：Active|Archived → Archived（v3: freeze 转为 archive）", async () => {
     const a = await store.write({
       kind: "TaskLog",
       content_blob: {},
@@ -370,7 +368,7 @@ describe("MemoryStore", () => {
     expect(store.freeze(b)).toBe(true);
     expect(store.peek(b)!.semantic_state).toBe("Archived");
 
-    // 已 Frozen 再 freeze 幂等返回 true（不抛错，状态不变）
+    // 已 Archived 再 freeze 幂等返回 true（不抛错，状态不变）
     expect(store.freeze(a)).toBe(true);
   });
 
@@ -402,7 +400,7 @@ describe("MemoryStore", () => {
     expect(store.obliterate(a)).toBe(true);
   });
 
-  it("cas 拒绝 Frozen → Active", async () => {
+  it("freeze 后 CAS 拒绝 Archived → Active", async () => {
     const id = await store.write({
       kind: "TaskLog",
       content_blob: {},
@@ -414,7 +412,7 @@ describe("MemoryStore", () => {
     store.freeze(id);
     expect(store.peek(id)!.semantic_state).toBe("Archived");
 
-    // Frozen → Active 被 _isValidTransition 拒绝
+    // Archived → Active 被 _isValidTransition 拒绝
     expect(store.cas(id, "Archived", "Active")).toBe(false);
     expect(store.peek(id)!.semantic_state).toBe("Archived");
   });
@@ -472,7 +470,7 @@ describe("MemoryStore", () => {
     store.obliterate(b);
 
     expect(store.link(a, b, LinkType.ProducedBy)).toBeNull();
-    expect(store.link(b, a, LinkType.DependsOn)).toBeNull();
+    expect(store.link(b, a, LinkType.DerivedFrom)).toBeNull();
   });
 
   // ── HCA/CSA 注意力区分 ────────────────────────
@@ -491,7 +489,7 @@ describe("MemoryStore", () => {
     // HCA 模式读 3 次
     await store.read({ keywords: ["HCA"] });                         // CSA 默认，累加
     await store.read({ keywords: ["HCA"] });                         // CSA 默认，累加
-    await await store.read({ keywords: ["HCA"] }, "HCA");                  // HCA，不累加
+    await store.read({ keywords: ["HCA"] }, "HCA");                  // HCA，不累加
 
     // 前两次（CSA 默认）累加了，第三次（HCA）没有
     expect(store.peek(id)!.accessCount).toBe(before + 2);
@@ -508,7 +506,7 @@ describe("MemoryStore", () => {
 
     const before = store.peek(id)!.accessCount;
     await store.read({ keywords: ["CSA"] });
-    await store.read({ keywords: ["CSA"], trackAccess: true });
+    await store.read({ keywords: ["CSA"] }, "CSA");
 
     expect(store.peek(id)!.accessCount).toBe(before + 2);
   });
@@ -519,7 +517,7 @@ describe("MemoryStore", () => {
     const obs = new PipelineObserver();
     const s = new MemoryStore(obs);
     const emitted: any[] = [];
-    obs.on(PipelinePriority.HIGH, (event) => {
+    obs.on(PipelinePriority.HIGH, (event: ObservableEvent) => {
       emitted.push({ type: event.type, payload: event.payload });
     });
 
@@ -536,14 +534,17 @@ describe("MemoryStore", () => {
     expect(result).toBeNull();
   });
 
-  it("_deserializeRow: null content 无 observer 时 console.error 兜底", () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("_deserializeRow: null content 无 observer 时收集至 flushDeserializeErrors", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const result = (store as any)._storage.deserializeRow({ id: "mem-null-no-obs", content_blob: null });
     expect(result).toBeNull();
-    expect(errSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[MemoryStore] null content")
+    // 不应逐行 console.error——由 flushDeserializeErrors() 统一汇总
+    const ids = (store as any)._storage.flushDeserializeErrors();
+    expect(ids).toEqual(["mem-null-no-obs"]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("1 条记忆 content_blob JSON 损坏")
     );
-    errSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   // ── M3: embedding 维度校验 ─────────────────────

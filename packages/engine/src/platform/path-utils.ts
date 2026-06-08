@@ -39,11 +39,6 @@ export function validatePath(filePath: string, projectRoot: string | null): Path
   if (filePath.includes("\0")) {
     return { ok: false, reason: "路径包含 NUL 字节", input: filePath };
   }
-  // 阻断 Windows 绝对路径（如 C:\ D:\），跨平台均需拦截
-  if (/^[a-zA-Z]:[/\\]/.test(filePath)) {
-    return { ok: false, reason: `路径越界: Windows 绝对路径绕过 "${filePath}"`, input: filePath };
-  }
-
   // ── 未设沙箱时允许任意路径（向后兼容测试场景） ──
   if (!projectRoot) {
     return { ok: true, safePath: path.resolve(filePath) };
@@ -52,6 +47,15 @@ export function validatePath(filePath: string, projectRoot: string | null): Path
   // ── 解析路径（展开 ..、符号链接等） ──
   const resolvedRoot = path.resolve(projectRoot);
   const resolved = path.resolve(resolvedRoot, filePath);
+
+  // ── 跨盘符/跨根检测（替代早期 Windows 绝对路径硬拦截） ──
+  // path.parse().root 在 Windows 上返回盘符（如 "C:\"），在 Unix 上返回 "/"。
+  // 若 resolved 与 resolvedRoot 不在同一盘符/根下，则一定是越界攻击。
+  const rootParsed = path.parse(resolvedRoot);
+  const fileParsed = path.parse(resolved);
+  if (rootParsed.root !== fileParsed.root) {
+    return { ok: false, reason: `路径越界: 跨越盘符/根 "${filePath}" (解析为 "${resolved}")`, input: filePath };
+  }
 
   // ── 越界检查 ──
   // 允许：resolved 等于 root 或在 root 子树内

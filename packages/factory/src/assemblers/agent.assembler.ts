@@ -33,7 +33,8 @@ export function assembleAgents(definitions: AgentDefinition[]): AgentAssemblyRes
     if (!byKey.has(def.key)) {
       byKey.set(def.key, []);
     }
-    byKey.get(def.key)!.push(def);
+    const bucket = byKey.get(def.key);
+    if (bucket) bucket.push(def);
   }
 
   return { configs, byKey };

@@ -1,0 +1,29 @@
+﻿diff --git a/packages/engine/src/core/scheduler.ts b/packages/engine/src/core/scheduler.ts
+index 724dc7e1..81823206 100644
+--- a/packages/engine/src/core/scheduler.ts
++++ b/packages/engine/src/core/scheduler.ts
+@@ -82,6 +82,8 @@ export class Scheduler implements IScheduler {
+   private readonly replanManager: ReplanManager;
+   private readonly config: Required<EngineConfig>;
+   private _skillExecutor?: SkillExecutor;
++  /** 褰撳墠杩愯浼氳瘽鏍囪瘑鈥斺€攅xecuteAll() 鍚姩鏃剁敓鎴?*/
++  private _sessionId?: string;
+ 
+   constructor(
+     private readonly board: ITaskBoard,
+@@ -113,6 +115,8 @@ export class Scheduler implements IScheduler {
+    */
+   async executeAll(): Promise<ExecutionReport> {
+     const startTime = Date.now();
++    // v2.5.41: 鐢熸垚 sessionId鈥斺€旀瘡娆?executeAll() 鍞竴鏍囪瘑锛屾敞鍏?MetaAgent 绠＄嚎涓婁笅鏂?+    this._sessionId = `run-${startTime}-${Math.random().toString(36).slice(2, 8)}`;
+     const allResults: NodeResult[] = [];
+     let completed = 0;
+     let failed = 0;
+@@ -279,6 +283,7 @@ export class Scheduler implements IScheduler {
+       failed,
+       results: allResults,
+       durationMs,
++      sessionId: this._sessionId,
+     };
+   }
+ 

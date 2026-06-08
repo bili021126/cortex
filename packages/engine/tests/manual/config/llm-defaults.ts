@@ -19,7 +19,7 @@ export interface LlmConfig {
  * 各脚本可通过 overrides 自定义模型名。
  *
  * @example
- * // 大多数 E2E 脚本（默认 deepseek-reasoner + v4-pro）
+ * // 大多数 E2E 脚本（默认 deepseek-v4-flash + 思考模式）
  * const cfg = resolveLlmConfig();
  *
  * @example
@@ -34,7 +34,7 @@ export function resolveLlmConfig(overrides?: {
 }): LlmConfig {
   return {
     baseUrl: overrides?.baseUrl ?? process.env.DEEPSEEK_BASE_URL ?? DEFAULT_DEEPSEEK_BASE_URL,
-    chatModel: overrides?.chatModel ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-reasoner",
-    reasonerModel: overrides?.reasonerModel ?? process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-pro",
-    reasoningEffort: overrides?.reasoningEffort ?? process.env.DEEPSEEK_REASONING_EFFORT ?? "high"};
+    chatModel: overrides?.chatModel ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash",
+    reasonerModel: overrides?.reasonerModel ?? process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-flash",
+    reasoningEffort: overrides?.reasoningEffort ?? process.env.DEEPSEEK_REASONING_EFFORT ?? "max"};
 }

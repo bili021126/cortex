@@ -5,11 +5,10 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ICortexApi } from "@cortex/shared";
-import { AgentType, SHARED_IDENTITY_ANCHOR } from "@cortex/shared";
+import { AgentType, SHARED_IDENTITY_ANCHOR, type ICortexApi } from "@cortex/shared";
 import { ENV_DEEPSEEK_API_KEY } from "@cortex/config";
 import type { CommandContext } from "../../../types.js";
-import { getFormatter } from "../../../formatters/index.js";
+import type { getFormatter } from "../../../formatters/index.js";
 import { getAgentDisplay } from "../types.js";
 import {
   classifyTalkIntent,
@@ -18,8 +17,7 @@ import {
   loadPersonaPrivate,
   loadTrioPersona,
 } from "../display.js";
-import type { PartyState } from "../party.js";
-import { getActiveGroup, getUnmutedMembers } from "../party.js";
+import { getActiveGroup, getUnmutedMembers, type PartyState } from "../party.js";
 import { talkHistory } from "./state.js";
 
 // ── Trio 模式（三人对话）──────────────────────────

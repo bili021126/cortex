@@ -10,7 +10,7 @@
 
 import type {
   EngineConfig,
-} from "./interfaces.js";
+} from "./interfaces/index.js";
 
 /** 默认引擎配置——所有值精确匹配当前系统行为 */
 export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
@@ -47,8 +47,8 @@ export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
 
   llm: {
     baseUrl: "https://api.deepseek.com/v1",
-    chatModel: "deepseek-chat",
-    reasonerModel: "deepseek-reasoner",
+    chatModel: "deepseek-v4-flash",
+    reasonerModel: "deepseek-v4-flash",
   },
 
   filePaths: {

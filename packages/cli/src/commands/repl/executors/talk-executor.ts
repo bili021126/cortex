@@ -5,11 +5,10 @@
  */
 
 import { createHash } from "node:crypto";
-import type { ICortexApi } from "@cortex/shared";
-import { AgentType, SHARED_IDENTITY_ANCHOR } from "@cortex/shared";
+import { AgentType, SHARED_IDENTITY_ANCHOR, type ICortexApi } from "@cortex/shared";
 import { ENV_DEEPSEEK_API_KEY } from "@cortex/config";
 import type { CommandContext } from "../../../types.js";
-import { getFormatter } from "../../../formatters/index.js";
+import type { getFormatter } from "../../../formatters/index.js";
 import { getAgentDisplay } from "../types.js";
 import {
   classifyTalkIntent,

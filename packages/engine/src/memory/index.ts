@@ -16,6 +16,10 @@ export type { IMemoryStore, MaintainReport } from "@cortex/shared";
 // ── 记忆增强执行管道 ────────────────────────────
 export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE } from "./pipeline.js";
 
+// ── Core-2: 上下文构建器 ─────────────────────────
+export { ContextBuilder } from "./context-builder.js";
+export type { ContextBuildResult } from "./context-builder.js";
+
 // ── 监控 ─────────────────────────────────────────
 export { MemoryStoreMonitor } from "./monitor.js";
 

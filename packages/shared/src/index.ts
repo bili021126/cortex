@@ -36,3 +36,5 @@ export * from "./fs-adapter.js";
 export * from "./modification-record.js";
 export * from "./doc-registry.js";
 export * from "./amendment.js";
+export * from "./kv-store.js";
+export * from "./context-policy.js";

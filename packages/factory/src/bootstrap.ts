@@ -19,8 +19,7 @@ import {
   assembleCommittee,
   assembleTelescope,
 } from "./assemblers/index.js";
-import type { BootstrapResult } from "./types.js";
-import type { AgentDefinition } from "./types.js";
+import type { BootstrapResult, AgentDefinition } from "./types.js";
 
 /**
  * Bootstrap —— 从配置文件到运行时对象的完整流水线。
@@ -37,7 +36,7 @@ import type { AgentDefinition } from "./types.js";
  * // result.eventRouting → 供 NotificationPipe 加载
  * ```
  */
-export function bootstrap(projectRoot: string): BootstrapResult {
+export function bootstrap(projectRoot: string, dataDirOverride?: string): BootstrapResult {
   const warnings: string[] = [];
 
   // ── 第一阶段：loadAll ───────────────────────────
@@ -46,19 +45,19 @@ export function bootstrap(projectRoot: string): BootstrapResult {
   let docsConfig;
 
   try {
-    agentsConfig = loadAgentsConfig(projectRoot);
+    agentsConfig = loadAgentsConfig(projectRoot, dataDirOverride);
   } catch (e) {
     throw new Error(`[factory bootstrap] 加载 cortex-agents.json 失败: ${String(e)}`, { cause: e });
   }
 
   try {
-    cognitionConfig = loadCognitionConfig(projectRoot);
+    cognitionConfig = loadCognitionConfig(projectRoot, dataDirOverride);
   } catch (e) {
     throw new Error(`[factory bootstrap] 加载 cortex-cognition.json 失败: ${String(e)}`, { cause: e });
   }
 
   try {
-    docsConfig = loadDocsConfig(projectRoot);
+    docsConfig = loadDocsConfig(projectRoot, dataDirOverride);
   } catch (e) {
     throw new Error(`[factory bootstrap] 加载 cortex-docs.json 失败: ${String(e)}`, { cause: e });
   }

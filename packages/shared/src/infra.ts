@@ -6,6 +6,9 @@
 // ============================================================
 
 import type { AgentType } from "./agent.js";
+import type { TaskNode, ExecutionReport } from "./task.js";
+import type { MemoryQuery, MemoryEntry, MemoryWriteInput, IMemoryStore } from "./memory.js";
+import type { IConfirmGate } from "./toolkit.js";
 
 // ─── PipelineObserver ──────────────────────────────────────
 
@@ -51,6 +54,7 @@ export enum PipelineEventType {
   MemoryPersistFailed = "memory.persist_failed",
   MemorySqlDegraded = "memory.sql_degraded",
   MemoryDeserializeFailed = "memory.deserialize_failed",
+  MemoryEmbeddingWarmupFailed = "memory.embedding_warmup_failed",
   // ── TaskBoard ──
   TaskBoardInvariantViolation = "task_board.invariant_violation",
   // ── Error system (PipelineObserver internal) ──
@@ -58,6 +62,8 @@ export enum PipelineEventType {
   ErrorSilentUpgraded = "error.silent_upgraded",
   // ── Analysis ──
   Analysis = "analysis",
+  // ── Boundary Guard ──
+  AgentBoundaryViolation = "agent.boundary_violation",
 }
 
 /**
@@ -94,10 +100,18 @@ export type EventPayloadMap = {
   [PipelineEventType.MemoryPersistFailed]: { operation: string; error: string };
   [PipelineEventType.MemorySqlDegraded]: { operation: string; detail: string };
   [PipelineEventType.MemoryDeserializeFailed]: { rowId: string; error: string };
+  [PipelineEventType.MemoryEmbeddingWarmupFailed]: { error: string };
   [PipelineEventType.TaskBoardInvariantViolation]: { source: string; detail: string };
   [PipelineEventType.ErrorReported]: { source: string; severity: string; error: string; hint?: string };
   [PipelineEventType.ErrorSilentUpgraded]: { source: string; consecutive: number; threshold: number; lastError: string; hint?: string };
   [PipelineEventType.Analysis]: unknown;
+  [PipelineEventType.AgentBoundaryViolation]: {
+    nodeId: string;
+    agentType: AgentType;
+    violatingFiles: string[];
+    reason: string;
+    expectedScope: string;
+  };
 };
 
 /** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定
@@ -277,27 +291,27 @@ export interface ICortexApi {
   getReasonerModelName(): string;
 
   // ── 任务执行 ──
-  submitTask(node: import("./task.js").TaskNode): Promise<void>;
-  executeAll(): Promise<import("./task.js").ExecutionReport>;
+  submitTask(node: TaskNode): Promise<void>;
+  executeAll(): Promise<ExecutionReport>;
 
   // ── Talk 专用记忆 ──
   ensureTalkMemory(): Promise<void>;
-  readTalkMemory(query: import("./memory.js").MemoryQuery): Promise<import("./memory.js").MemoryEntry[]>;
-  writeTalkMemory(entry: import("./memory.js").MemoryWriteInput): Promise<void>;
+  readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
+  writeTalkMemory(entry: MemoryWriteInput): Promise<void>;
 
   // ── Agent 查询（返回引擎类型，CLI 知道具体类型可转型）──
   getMetaAgent(): unknown;
   getStrategists(): unknown;
 
   // ── 确认门（已有 IConfirmGate 契约）──
-  getConfirmGate(): Promise<import("./toolkit.js").IConfirmGate>;
+  getConfirmGate(): Promise<IConfirmGate>;
 
   // ── 主记忆库（只读，用于获取工程上下文）──
-  readMainMemory(query: import("./memory.js").MemoryQuery): Promise<import("./memory.js").MemoryEntry[]>;
+  readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
 
   // ── 引擎组件访问（管理命令用）──
   /** 获取记忆库（管理命令：memory write/read/search/link/archive/freeze/obliterate） */
-  getMemoryStore(): Promise<import("./memory.js").IMemoryStore>;
+  getMemoryStore(): Promise<IMemoryStore>;
 
   /** 获取任务板（管理命令：task submit/list/status/cancel/redo） */
   getTaskBoard(): Promise<unknown>;
@@ -310,6 +324,21 @@ export interface ICortexApi {
 }
 
 // ─── 运行时类型约束 ──────────────────────────────────────────
+
+/**
+ * Disposable —— 资源清理契约。
+ *
+ * Plugin stop() 通过此接口安全调用实例清理方法，替代裸 `as any`。
+ * 各方法均为可选：实例按需实现，Plugin 通过 optional chaining 安全调用。
+ *
+ * @since v3.1 — Plugin 化 stop() 类型安全收敛
+ */
+export interface Disposable {
+  stop?: () => void;
+  shutdown?: () => void;
+  destroyAll?: () => void;
+  clear?: () => void;
+}
 
 /** 返回类型声明——插件式注入类型 */
 export type SafeAny = unknown;

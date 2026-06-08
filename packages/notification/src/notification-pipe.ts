@@ -9,15 +9,7 @@
 //   4. 同源归并（同一 mergeKey 在窗口内的事件合并为一条 MergedNotification）
 // ============================================================
 
-import { NotificationChannel } from "./types.js";
-import type {
-  NotificationEvent,
-  MergedNotification,
-  MergeRule,
-  NotificationHandler,
-  AckHandler,
-  RouteTableMap,
-} from "./types.js";
+import { NotificationChannel, type NotificationEvent, type MergedNotification, type MergeRule, type NotificationHandler, type AckHandler, type RouteTableMap } from "./types.js";
 import { RouteTable } from "./route-table.js";
 import { UrgentChannel, ImportantChannel, RoutineChannel, InfoChannel } from "./channels.js";
 import type { NotificationPersistence } from "./persistence.js";
@@ -137,7 +129,7 @@ export class NotificationPipe {
     // 通知 ack 回调
     for (const handler of this.ackHandlers) {
       try {
-        handler(requestId, approved);
+        void handler(requestId, approved);
       } catch {
         // 单回调异常不阻断
       }
@@ -235,11 +227,12 @@ export class NotificationPipe {
 
   /** 归并缓冲 */
   private _bufferForMerge(event: NotificationEvent, rule: MergeRule): void {
-    const key = event.mergeKey!;
+    const key = event.mergeKey;
+    if (!key) return;
     if (!this.mergeBuffer.has(key)) {
       this.mergeBuffer.set(key, []);
     }
-    const batch = this.mergeBuffer.get(key)!;
+    const batch = this.mergeBuffer.get(key) ?? [];
     batch.push(event);
 
     // 达到批大小阈值，立即 flush

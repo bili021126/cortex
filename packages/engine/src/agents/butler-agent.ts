@@ -1,8 +1,5 @@
 /* eslint-disable no-console */
-import type { AgentStatus, ObservableEvent, SafeErrorReporter } from "@cortex/shared";
-import { AgentType as AT, AgentStatus as AS, PipelinePriority } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
-import type { PlatformBridge } from "@cortex/shared";
+import { AgentType as AT, AgentStatus as AS, PipelinePriority, type AgentStatus, type ObservableEvent, type SafeErrorReporter, type IPipelineObserver, type PlatformBridge } from "@cortex/shared";
 import type { AgentPool } from "../core/agent-pool.js";
 import { PoolAwareState } from "../components/pool-aware.js";
 
@@ -70,8 +67,9 @@ export class ButlerAgent {
     this._state.transition(AS.Awake);
   }
 
-  async execute(): Promise<{ nodeId: string; success: boolean; output?: string }> {
+  async execute(_node?: unknown, _model?: string): Promise<{ nodeId: string; success: boolean; output?: string }> {
     // @fix N-06 — 使用角色名"昔涟"取代第一人称"我"，与事件格式前缀 [昔涟] 统一
+    // butler 不执行具体任务，仅返回观察状态。接受 node/model 参数以匹配 Agent 接口契约。
     return { nodeId: "butler-noop", success: true, output: "昔涟不执行任务——我只旁听，把管线里发生的每件事告诉你。这是我们的项目，我会一直守着。" };
   }
 

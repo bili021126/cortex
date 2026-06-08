@@ -11,8 +11,7 @@
 //   - 若 better-sqlite3 不可用，降级为内存模式（降级不阻断）
 // ============================================================
 
-import { NotificationChannel } from "./types.js";
-import type { NotificationEvent } from "./types.js";
+import type { NotificationChannel, NotificationEvent } from "./types.js";
 
 // ─── SQLite 数据库最小接口 ──────────────────────────────
 //

@@ -23,7 +23,7 @@ export { createBrowserAgent } from "./browser-agent.js";
 export { ButlerAgent } from "./butler-agent.js";
 
 // ── 特殊 Agent + Core-2 预留 ────────────────────
-export { MetaAgent } from "../core/meta-agent.js";
+export { MetaAgent, type IntentClarification } from "../core/meta-agent.js";
 export { StrategistAgent } from "./strategist-agent.js";
 
 // @experimental Core-2 预留

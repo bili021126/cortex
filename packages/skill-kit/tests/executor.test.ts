@@ -9,8 +9,8 @@ import {
   type SkillContext,
   SkillCategory,
   SkillErrorCode,
-} from "../src/types.js";
-import { PipelineExecutor } from "../src/executor.js";
+} from "../dist/types.js";
+import { PipelineExecutor } from "../dist/executor.js";
 
 // ── 辅助函数 ──────────────────────────────────────────────────
 

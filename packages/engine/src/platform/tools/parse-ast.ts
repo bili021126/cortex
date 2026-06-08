@@ -1,61 +1,59 @@
 // ============================================================
-// @cortex/engine/platform/tools/parse-ast —— parse_ast 工具 Handler
+// @cortex/engine/platform/tools/parse-ast —— parse_ast 工具
 //
 // 使用 TypeScript Compiler API 解析 .ts/.tsx/.js/.jsx。
 // tree-sitter 拓展（.py/.rs/.go 等）预留插槽。
+//
+// @core v3 —— Tool 接口统一：export createTool(ctx): Tool
 // ============================================================
 
-import type { ToolMeta } from "../toolkit.js";
+import { ToolCategory, ReversibilityLevel as RL, type Tool } from "@cortex/shared";
+import { LocalTool } from "../local-tool.js";
 import type { ToolContext } from "./types.js";
-import type { ToolHandler } from "@cortex/shared";
-import { ToolCategory } from "@cortex/shared";
-import { ReversibilityLevel as RL } from "@cortex/shared";
 import * as path from "node:path";
 import * as ts from "typescript";
 
-export const meta: ToolMeta = {
-  category: ToolCategory.Read,
-  description:
+export function createTool(ctx: ToolContext): Tool {
+  return new LocalTool(
+    "parse_ast",
+    ToolCategory.Read,
     "Parse a source file and return its AST (Abstract Syntax Tree). Uses TypeScript Compiler API for .ts/.tsx/.js/.jsx files; tree-sitter for other languages (pending).",
-  level: RL.L0,
-  parameters: {
-    type: "object",
-    properties: {
-      file_path: { type: "string", description: "Absolute path to the source file to parse" },
-      max_depth: { type: "number", description: "Maximum AST depth to return (default: 6, max: 12)" },
-      include_text: { type: "boolean", description: "Include source text snippets in AST nodes (default: true)" },
+    {
+      type: "object",
+      properties: {
+        file_path: { type: "string", description: "Absolute path to the source file to parse" },
+        max_depth: { type: "number", description: "Maximum AST depth to return (default: 6, max: 12)" },
+        include_text: { type: "boolean", description: "Include source text snippets in AST nodes (default: true)" },
+      },
+      required: ["file_path"],
     },
-    required: ["file_path"],
-  },
-  required: ["file_path"],
-};
-
-export function createHandler(ctx: ToolContext): ToolHandler {
-  return async (params) => {
-    const filePath = ctx.resolvePath(params.file_path as string);
-    const maxDepth = Math.min((params.max_depth as number) ?? 6, 12);
-    const includeText = (params.include_text as boolean) ?? true;
-    try {
-      const exists = await ctx.fs.exists(filePath);
-      if (!exists) {
-        return { success: false, error: `文件不存在: ${filePath}` };
+    RL.L0,
+    async (params) => {
+      const filePath = ctx.resolvePath(params.file_path as string);
+      const maxDepth = Math.min((params.max_depth as number) ?? 6, 12);
+      const includeText = (params.include_text as boolean) ?? true;
+      try {
+        const exists = await ctx.fs.exists(filePath);
+        if (!exists) {
+          return { success: false, error: `文件不存在: ${filePath}` };
+        }
+        const content = await ctx.fs.readFile(filePath);
+        const ext = path.extname(filePath).toLowerCase();
+        const parser = getParserByExtension(ext);
+        if (!parser) {
+          return {
+            success: false,
+            error: `不支持的文件类型: ${ext}。当前支持 .ts/.tsx/.js/.jsx（TypeScript Compiler API），其他语言（tree-sitter）待后续版本。`,
+          };
+        }
+        const ast = parser(content, filePath);
+        const output = serializeAST(ast, maxDepth, includeText, content);
+        return { success: true, output };
+      } catch (e) {
+        return { success: false, error: `AST 解析失败: ${String(e)}` };
       }
-      const content = await ctx.fs.readFile(filePath);
-      const ext = path.extname(filePath).toLowerCase();
-      const parser = getParserByExtension(ext);
-      if (!parser) {
-        return {
-          success: false,
-          error: `不支持的文件类型: ${ext}。当前支持 .ts/.tsx/.js/.jsx（TypeScript Compiler API），其他语言（tree-sitter）待后续版本。`,
-        };
-      }
-      const ast = parser(content, filePath);
-      const output = serializeAST(ast, maxDepth, includeText, content);
-      return { success: true, output };
-    } catch (e) {
-      return { success: false, error: `AST 解析失败: ${String(e)}` };
-    }
-  };
+    },
+  );
 }
 
 // ── AST 解析引擎（ParserSelector + 双引擎） ────────

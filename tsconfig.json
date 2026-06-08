@@ -13,7 +13,8 @@
     { "path": "packages/testing" },
     { "path": "packages/engine/tsconfig.src.json" },
     { "path": "packages/cli" },
+    { "path": "packages/telemetry" },
+    { "path": "packages/skill-validator" },
     { "path": "scripts" }
-  
   ]
 }

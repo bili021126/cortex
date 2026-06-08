@@ -2,22 +2,21 @@
 // @cortex/engine/bootstrap/register-agents —— Agent 注册
 // ============================================================
 
-import type { Agent, AgentType, AgentConfig } from "@cortex/shared";
-import { Scheduler } from "../core/scheduler.js";
-import { AgentPool } from "../core/agent-pool.js";
-import { MemoryStore } from "../memory/memory-store.js";
-import type { IMemoryStore } from "@cortex/shared";
-import { Toolkit } from "../platform/toolkit.js";
+import { type Agent, type AgentConfig, type AgentType, type IFileSystemAdapter, type IMemoryStore, type IPipelineObserver, type MemoryEntry, type ReadMode } from "@cortex/shared";
+import type { Scheduler } from "../core/scheduler.js";
+import type { AgentPool } from "../core/agent-pool.js";
+import type { MemoryStore } from "../memory/memory-store.js";
+import type { Toolkit } from "../platform/toolkit.js";
 import type { BootstrapResult } from "@cortex/factory";
 import type { LlmAdapter } from "@cortex/llm";
 import type { EngineConfig } from "@cortex/config";
-import type { IFileSystemAdapter, MemoryEntry, ReadMode } from "@cortex/shared";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
 import { createInspectorAgent } from "../agents/inspector-agent.js";
 import { createBrowserAgent } from "../agents/browser-agent.js";
+import { ButlerAgent } from "../agents/butler-agent.js";
 import { resolveLlm, injectStandards, MEMORY_QUERY_REGISTRY } from "./load-config.js";
 
-export function registerAgents(
+export async function registerAgents(
   config: BootstrapResult,
   options: {
     llms: Map<string, LlmAdapter>;
@@ -30,15 +29,16 @@ export function registerAgents(
     filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[];
     engineConfig?: EngineConfig;
     fs?: IFileSystemAdapter;
+    observer?: IPipelineObserver;
   },
-): Map<string, Agent> {
+): Promise<Map<string, Agent>> {
   const agents = new Map<string, Agent>();
 
   for (const def of config.agentDefinitions) {
     const agentType = def.type;
 
     // 跳过不参与调度的特殊 Agent
-    if (agentType === "butler" || agentType === "meta") {
+    if (agentType === "meta") {
       continue;
     }
 
@@ -69,6 +69,15 @@ export function registerAgents(
         );
         if (options.workspaceRoot) brwAgent.setWorkspaceRoot(options.workspaceRoot);
         agent = brwAgent;
+        break;
+      }
+
+      case "butler": {
+        if (!options.observer) break;
+        const butler = new ButlerAgent(options.observer);
+        // Butler 不调用 LLM、不使用 toolkit，仅旁听管线事件
+        await butler.wakeup();
+        agent = butler as unknown as Agent;
         break;
       }
 

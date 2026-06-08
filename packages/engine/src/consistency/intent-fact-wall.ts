@@ -10,7 +10,7 @@ export class IntentFactWall {
     // HCA: 广度浅读，返回全部（含 Pending 内部标记的记忆）
     if (mode === "HCA") return entries;
     // CSA: 仅返回语义态 Active 的记忆
-    return entries.filter((e) => (e as any)._pending !== true && e.semantic_state === "Active");
+    return entries.filter((e) => e._pending !== true && e.semantic_state === "Active");
   }
 
   /** v3: subType 已移除，此方法为 no-op 兼容保留 */

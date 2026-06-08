@@ -1,30 +1,43 @@
 /**
- * skill-fix-e2e.ts — 技能闭环 + 策略路由 真实 LLM E2E
+ * skill-fix-e2e.ts — 技能闭环 + 多 Agent + 事件管线 真实 LLM E2E
+ *
+ * v2.6.0 技能系统重构后：
+ *   - 技能是"被参照"而非"被注入"——Agent 自主 queryByTags 拉取经验
+ *   - SkillExecutor 已移除——SkillRegistry 是唯一技能池
+ *   - registerSkillPipeline 监听 NodeComplete → 自动提取技能入池
+ *   - 评价回流：recordFeedback(id, agentId, rating) → weight 累加
  *
  * 场景：
- *   react 策略: FixAgent 执行 bug 修复，SkillExecutor 自动匹配技能并注入 prompt
- *   direct 策略: CodeAgent 执行简单问答，DirectStep 单次 LLM 调用（无工具）
+ *   多 Agent 并行：FixAgent 修配置 + CodeAgent 答问题
+ *   技能池预注册 CI 修复技能 → FixAgent 按标签命中
+ *   事件管线验证：PipelineObserver 订阅全部关键事件
  *
  * 用法: npx tsx tests/manual/e2e/skill-fix-e2e.ts [--verbose]
  * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY
  *
  * 验收标准:
- *   1. SkillExecutor 正确匹配技能（fix 标签）
- *   2. react 策略 + skill 注入 → FixAgent 实际修复文件
- *   3. direct 策略 → DirectStep 单次 LLM 调用完成（不需要工具）
- *   4. 两种策略均通过 preferredStrategy 正确路由
- *   5. 反馈闭环正常记录（adoptionCount +1）
- *   6. 临时目录清理完成
+ *   1. SkillRegistry.queryByTags 正确匹配技能（fix 标签）
+ *   2. registerSkillPipeline 事件订阅成功
+ *   3. FixAgent (react) 实际修复 tsconfig.json
+ *   4. CodeAgent (direct) 产出有意义的回答（多 Agent 共存）
+ *   5. PipelineObserver 捕获 NodeStart/NodeComplete/SchedulerDone 事件
+ *   6. 评价回流：recordFeedback → weight 更新 + feedbackHistory 追加
+ *   7. 临时目录清理完成
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { AgentType, type Tag, type TaskNode, type SkillTemplate } from "@cortex/shared";
-import { LlmAdapter } from "@cortex/llm";
+import {
+  type Tag,
+  type TaskNode,
+  type SkillTemplate,
+  type FeedbackEntry,
+} from "@cortex/shared";
 import {
   SkillRegistry,
-  SkillExecutor,
+  deriveStatus,
+  registerSkillPipeline,
   TaskBoard,
   AgentPool,
   Scheduler,
@@ -32,9 +45,12 @@ import {
   ConfirmGate,
   Toolkit,
   MemoryStore,
-  createAgent} from "@cortex/engine";
+  createAgent,
+} from "@cortex/engine";
+import { LlmAdapter } from "@cortex/llm";
 import type { AgentFactoryConfig } from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 
 // ══════════════════════════════════════════════
 // 0. 配置
@@ -73,7 +89,7 @@ function info(label: string, value: string): void { console.log(`  📋 ${label}
 function dbg(msg: string): void { if (VERBOSE) console.log(`  🔍 ${msg}`); }
 
 // ══════════════════════════════════════════════
-// 2. Agent 配置
+// 2. Agent 配置（多 Agent）
 // ══════════════════════════════════════════════
 
 const FIX_SYSTEM_PROMPT = [
@@ -88,22 +104,46 @@ const FIX_SYSTEM_PROMPT = [
   "",
   "【沙箱边界】你只能操作项目目录内的文件。给你的路径就是项目根目录。",
   "",
-  "【任务】skill 注入块已经告诉你要做什么。照步骤执行，不要偏离。",
-  "修复完成后输出最终结果即可。",
+  "【技能经验池——可参考的历史经验】",
+  "  {skill_context}",
+  "",
+  "【任务】请按上述经验步骤修复配置文件。修复完成后输出最终结果。",
+].join("\n");
+
+const CODE_SYSTEM_PROMPT = [
+  "你是阿贝多，Cortex Code Agent。你正在一个最小化测试环境中工作。",
+  "",
+  "【可用工具】你只有 4 个工具：",
+  "  · read_file  读取文件内容",
+  "  · write_file  写入文件内容",
+  "  · run_shell  执行命令（仅 pnpm/npm/node/tsc/dir/cat/type/echo）",
+  "  · list_files  列出目录内容",
+  "",
+  "【技能经验池——可参考的历史经验】",
+  "  {skill_context}",
+  "",
+  "【任务】简洁回答即可，不需要写代码。",
 ].join("\n");
 
 const FIX_CONFIG: AgentFactoryConfig = {
-  type: AgentType.Fix,
+  type: "fix" as any,
   systemPrompt: FIX_SYSTEM_PROMPT,
-  maxLoops: 5};
+  maxLoops: 5,
+};
+
+const CODE_CONFIG: AgentFactoryConfig = {
+  type: "code" as any,
+  systemPrompt: CODE_SYSTEM_PROMPT,
+  maxLoops: 2,
+};
 
 // ══════════════════════════════════════════════
-// 3. 技能定义
+// 3. 技能定义（v2.6.0 SkillTemplate）
 // ══════════════════════════════════════════════
 
 const CI_FIX_SKILL: SkillTemplate = {
   id: "skill-ci-deps-fix",
-  agentType: AgentType.Fix,
+  kind: "action",
   name: "CI 依赖修复流程",
   triggerTags: ["fix", "config", "ci"] as Tag[],
   trigger: "当项目依赖或配置文件导致构建失败时触发",
@@ -116,10 +156,13 @@ const CI_FIX_SKILL: SkillTemplate = {
   ],
   expectedOutput: "修复后的配置文件 + 依赖安装成功",
   status: "active",
-  adoptionCount: 3,
-  rejectionCount: 0,
+  weight: 3,
+  feedbackHistory: [
+    { agentId: "LoopAgent", rating: 1, timestamp: Date.now() - 86400000, suggestion: "CI 修复验证通过" },
+  ],
   discoveredBy: "LoopAgent",
-  createdAt: Date.now()};
+  createdAt: Date.now(),
+};
 
 // ══════════════════════════════════════════════
 // 4. 临时项目与工具
@@ -138,8 +181,10 @@ function createTempProject(): { root: string; fixTarget: string } {
       moduleResolution: "bundler",
       outDr: "./dist", // ← 拼写错误：应为 outDir
       strict: true,
-      declaration: true},
-    include: ["src"]};
+      declaration: true,
+    },
+    include: ["src"],
+  };
   fs.writeFileSync(path.join(root, "tsconfig.json"), JSON.stringify(badTsconfig, null, 2), "utf-8");
 
   fs.writeFileSync(
@@ -165,9 +210,19 @@ function registerTools(toolkit: Toolkit, projectRoot: string) {
     if (path.isAbsolute(normalized) && normalized.toLowerCase().startsWith(projectRoot.toLowerCase() + path.sep)) {
       return normalized;
     }
-    const clean = p.replace(/^[a-zA-Z]:[\\/]/, '').replace(/^[\\/]+/, '');
-    return path.resolve(projectRoot, clean || '.');
+    const clean = p.replace(/^[a-zA-Z]:[\\/]/, "").replace(/^[\\/]+/, "");
+    return path.resolve(projectRoot, clean || ".");
   };
+
+  // 注入工具元数据——补全 JSON Schema，防止 DeepSeek API 因 type:null 拒绝
+  toolkit.setToolMeta({
+    read_file: { parameters: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] } },
+    write_file: { parameters: { type: "object", properties: { file_path: { type: "string" }, content_blob: { type: "string" } }, required: ["file_path", "content_blob"] } },
+    run_shell: { parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] } },
+    list_files: { parameters: { type: "object", properties: { dir_path: { type: "string" } }, required: [] } },
+    search_code: { parameters: { type: "object", properties: {} } },
+    grep_code: { parameters: { type: "object", properties: {} } },
+  });
 
   toolkit.register("read_file", async (params: any) => {
     const fp = resolve(params.file_path as string);
@@ -207,7 +262,8 @@ function registerTools(toolkit: Toolkit, projectRoot: string) {
       const { execSync } = await import("node:child_process");
       const output = execSync(cmd, {
         cwd: projectRoot, timeout: 30_000, encoding: "utf-8",
-        maxBuffer: 256 * 1024, stdio: ["ignore", "pipe", "pipe"]});
+        maxBuffer: 256 * 1024, stdio: ["ignore", "pipe", "pipe"],
+      });
       dbg(`run_shell ${cmd} OK`);
       return { success: true, output: output || "(exit 0)" };
     } catch (e: any) {
@@ -226,7 +282,8 @@ function registerTools(toolkit: Toolkit, projectRoot: string) {
     const entries = fs.readdirSync(dp, { withFileTypes: true });
     return {
       success: true,
-      output: entries.map((e) => `${e.isDirectory() ? "[D]" : "[F]"} ${e.name}`).join("\n")};
+      output: entries.map((e) => `${e.isDirectory() ? "[D]" : "[F]"} ${e.name}`).join("\n"),
+    };
   });
 
   // search_code/grep_code 存根——引导 Agent 用 read_file + list_files
@@ -236,7 +293,31 @@ function registerTools(toolkit: Toolkit, projectRoot: string) {
 }
 
 // ══════════════════════════════════════════════
-// 5. 节点构建
+// 5. 技能上下文构建（替代旧 injectSkillContext）
+// ══════════════════════════════════════════════
+
+/**
+ * v2.6.0：技能不再注入 prompt，Agent 自主参照。
+ * 但 E2E 中为了验证技能确实对 Agent 可见，我们预先查询匹配的技能，
+ * 将其序列化后填充到 systemPrompt 的 {skill_context} 占位符中。
+ *
+ * 这模拟了 MetaAgent 拆解任务时"提前热加载技能进 plan context"的行为。
+ */
+function buildSkillContext(registry: SkillRegistry, tags: Tag[]): string {
+  const matched = registry.queryByTags(tags);
+  if (matched.length === 0) return "（无匹配经验）";
+  return matched
+    .map(
+      (s, i) =>
+        `[经验 ${i + 1}] ${s.name} (weight=${s.weight}, status=${deriveStatus(s.weight, s.feedbackHistory)})\n` +
+        `  触发: ${s.trigger}\n` +
+        `  步骤:\n${s.steps.map((st) => `    · ${st}`).join("\n")}`,
+    )
+    .join("\n\n");
+}
+
+// ══════════════════════════════════════════════
+// 6. 节点构建
 // ══════════════════════════════════════════════
 
 function makeFixNode(id: string, projectRoot: string, strategy?: "react" | "direct"): TaskNode {
@@ -257,11 +338,89 @@ function makeFixNode(id: string, projectRoot: string, strategy?: "react" | "dire
     ].join("\n"),
     results: [],
     createdAt: Date.now(),
-    preferredStrategy: strategy};
+    preferredStrategy: strategy,
+  };
+}
+
+function makeCodeNode(id: string): TaskNode {
+  return {
+    id,
+    type: "code",
+    tags: ["code"] as Tag[],
+    needsMultiPerspective: false,
+    status: "pending",
+    claimedBy: [],
+    payload: "What is TypeScript? Explain in 1-2 sentences.",
+    results: [],
+    createdAt: Date.now(),
+    preferredStrategy: "direct",
+  };
 }
 
 // ══════════════════════════════════════════════
-// 6. 主流程
+// 7. 事件追踪器
+// ══════════════════════════════════════════════
+
+interface TrackedEvents {
+  nodeStart: number;
+  nodeComplete: number;
+  nodeFailed: number;
+  schedulerDone: number;
+  layerStart: number;
+  all: string[];
+}
+
+function createEventTracker(observer: PipelineObserver): {
+  events: TrackedEvents;
+  unsubscribe: () => void;
+} {
+  const events: TrackedEvents = {
+    nodeStart: 0,
+    nodeComplete: 0,
+    nodeFailed: 0,
+    schedulerDone: 0,
+    layerStart: 0,
+    all: [],
+  };
+
+  const handler = (evt: any) => {
+    events.all.push(evt.type);
+    switch (evt.type) {
+      case PipelineEventType.NodeStart:
+        events.nodeStart++;
+        break;
+      case PipelineEventType.NodeComplete:
+        events.nodeComplete++;
+        break;
+      case PipelineEventType.NodeFailed:
+        events.nodeFailed++;
+        break;
+      case PipelineEventType.SchedulerDone:
+        events.schedulerDone++;
+        break;
+      case PipelineEventType.SchedulerLayerStart:
+        events.layerStart++;
+        break;
+    }
+  };
+
+  // 订阅全部优先级以覆盖完整管线
+  observer.on(PipelinePriority.CRITICAL, handler);
+  observer.on(PipelinePriority.HIGH, handler);
+  observer.on(PipelinePriority.NORMAL, handler);
+
+  return {
+    events,
+    unsubscribe: () => {
+      observer.off(PipelinePriority.CRITICAL, handler);
+      observer.off(PipelinePriority.HIGH, handler);
+      observer.off(PipelinePriority.NORMAL, handler);
+    },
+  };
+}
+
+// ══════════════════════════════════════════════
+// 8. 主流程
 // ══════════════════════════════════════════════
 
 async function main() {
@@ -274,7 +433,7 @@ async function main() {
   const WORKSPACE = process.cwd();
 
   console.log("╔══════════════════════════════════════════════════╗");
-  console.log("║  🔧 Skill Fix + Pipeline Strategy E2E          ║");
+  console.log("║  🔧 Skill v2.6 + Multi-Agent + Events E2E       ║");
   console.log("╚══════════════════════════════════════════════════╝\n");
   console.log(`  Model: ${CHAT_MODEL}`);
   console.log(`  Skill: ${CI_FIX_SKILL.name} (${CI_FIX_SKILL.id})\n`);
@@ -284,13 +443,14 @@ async function main() {
 
   try {
     // ── Phase 1: 引擎初始化 ──
-    header("Phase 1/5 — 引擎初始化");
+    header("Phase 1/6 — 引擎初始化");
 
     const adapter = new LlmAdapter({
       apiKey: API_KEY,
       baseUrl: BASE_URL,
       chatModel: CHAT_MODEL,
-      reasonerModel: llmCfg.reasonerModel});
+      reasonerModel: llmCfg.reasonerModel,
+    });
     adapter.setCacheEnabled(true);
 
     const observer = new PipelineObserver();
@@ -301,153 +461,257 @@ async function main() {
     await memory.init(MEMORY_DB);
     info("MemoryStore", MEMORY_DB);
 
-    // ── 技能系统 ──
+    // ── 技能系统（v2.6.0：仅 SkillRegistry） ──
     const skillRegistry = new SkillRegistry();
-    const skillExecutor = new SkillExecutor(skillRegistry);
     skillRegistry.register(CI_FIX_SKILL);
     passed(`技能已注册: ${CI_FIX_SKILL.name} (${skillRegistry.totalCount} 个)`);
 
-    // ── Phase 2: 技能匹配验证 ──
-    header("Phase 2/5 — 技能匹配验证");
+    // ── 事件管线注册技能自动提取 ──
+    const unregisterSkillPipe = registerSkillPipeline(observer, skillRegistry, memory);
+    passed("registerSkillPipeline 事件订阅成功");
+
+    // ── 事件追踪 ──
+    const tracker = createEventTracker(observer);
+
+    // ── Phase 2: 技能查询验证（替代旧 matchSkill） ──
+    header("Phase 2/6 — 标签查询技能（queryByTags）");
 
     const fixTags: Tag[] = ["fix", "config"];
-    const matched = skillExecutor.matchSkill(fixTags);
-    if (matched) {
-      passed(`技能匹配成功: ${matched.name} (${matched.id})`);
-      const injected = skillExecutor.injectSkillContext(matched.id);
-      if (injected) {
-        passed("技能上下文注入成功");
-        dbg(`注入预览:\n${injected.slice(0, 300)}...`);
-      } else {
-        failed("技能上下文注入失败");
-        allPassed = false;
-      }
+    const matched = skillRegistry.queryByTags(fixTags);
+    if (matched.length === 1 && matched[0].id === CI_FIX_SKILL.id) {
+      passed(`技能匹配成功: ${matched[0].name} (weight=${matched[0].weight})`);
     } else {
-      failed("技能匹配失败");
+      failed("技能匹配失败", `matched.length=${matched.length}`);
       allPassed = false;
     }
 
-    // ── Phase 3: react 策略 + 技能 ──
-    header("Phase 3/5 — react 策略 + 技能闭环");
+    // 验证技能上下文可构建
+    const ctx = buildSkillContext(skillRegistry, fixTags);
+    if (ctx.includes("CI 依赖修复流程") && ctx.includes("read_file 读取")) {
+      passed("技能上下文构建正确（含步骤序列）");
+      dbg(`技能上下文:\n${ctx}`);
+    } else {
+      failed("技能上下文构建异常");
+      allPassed = false;
+    }
+
+    // ── Phase 3: FixAgent 执行（技能辅助修复） ──
+    header("Phase 3/6 — FixAgent 执行修复");
+
+    // 构建带技能上下文的 prompt
+    const fixConfigWithSkill: AgentFactoryConfig = {
+      ...FIX_CONFIG,
+      systemPrompt: FIX_SYSTEM_PROMPT.replace("{skill_context}", buildSkillContext(skillRegistry, fixTags)),
+    };
 
     const board1 = new TaskBoard();
     const pool1 = new AgentPool();
-    pool1.register({ type: AgentType.Fix, maxInstances: 1 });
+    pool1.register({ type: "fix" as any, maxInstances: 1 });
     const scheduler1 = new Scheduler(board1, pool1, observer);
-    scheduler1.setSkillExecutor(skillExecutor);
+    scheduler1.setMemoryStore(memory);
 
     const toolkit1 = new Toolkit(gate);
     registerTools(toolkit1, tmp.root);
-    const fixAgent1 = createAgent(FIX_CONFIG, adapter, toolkit1);
-    await fixAgent1.wakeup();
-    scheduler1.register(AgentType.Fix, fixAgent1, CHAT_MODEL);
-    passed("FixAgent (react) 就绪");
+    const fixAgent = createAgent(fixConfigWithSkill, adapter, toolkit1, memory);
+    await fixAgent.wakeup();
+    scheduler1.register("fix", fixAgent, CHAT_MODEL);
+    passed("FixAgent 就绪（含技能上下文）");
 
     // 重置 tsconfig 为脏状态
     const badTsconfig = {
       compilerOptions: {
         target: "ES2022", module: "ESNext", moduleResolution: "bundler",
-        outDr: "./dist", strict: true, declaration: true},
-      include: ["src"]};
+        outDr: "./dist", strict: true, declaration: true,
+      },
+      include: ["src"],
+    };
     fs.writeFileSync(tmp.fixTarget, JSON.stringify(badTsconfig, null, 2), "utf-8");
 
-    const ciFixInitialAdoption = skillRegistry.get(CI_FIX_SKILL.id)!.adoptionCount;
+    const skillBeforeFix = skillRegistry.get(CI_FIX_SKILL.id)!;
+    const weightBeforeFix = skillBeforeFix.weight;
+    const feedbackCountBeforeFix = skillBeforeFix.feedbackHistory.length;
+
     board1.addNode(makeFixNode("fix-react", tmp.root, "react"));
 
     const start1 = Date.now();
     await scheduler1.executeAll();
     const elapsed1 = Date.now() - start1;
 
-    const nodeReact = board1.getNode("fix-react");
-    if (nodeReact?.status === "done" && nodeReact.results[0]?.success) {
-      passed(`react 策略完成 (${elapsed1}ms)`);
-      const output = (nodeReact.results[0].output ?? "").slice(0, 200);
+    const nodeFix = board1.getNode("fix-react");
+    if (nodeFix?.status === "done" && nodeFix.results[0]?.success) {
+      passed(`FixAgent 执行完成 (${elapsed1}ms)`);
+      const output = (nodeFix.results[0].output ?? "").slice(0, 300);
       info("输出", output.replace(/\n/g, " "));
     } else {
-      failed("react 策略", nodeReact?.results[0]?.error ?? `status=${nodeReact?.status}`);
+      failed("FixAgent 执行", nodeFix?.results[0]?.error ?? `status=${nodeFix?.status}`);
       allPassed = false;
     }
 
-    // 验证修复
+    // 验证修复结果
     const content1 = fs.readFileSync(tmp.fixTarget, "utf-8");
     if (content1.includes('"outDir"') && !content1.includes('"outDr"')) {
       passed("tsconfig.json 已修复 (outDr → outDir)");
     } else {
-      console.log(`  ⚠️ tsconfig 未完全修复，当前内容:\n${content1.slice(0, 300)}`);
+      console.log(`  ⚠️ tsconfig 可能未完全修复，当前内容:\n${content1.slice(0, 300)}`);
     }
 
-    // 反馈闭环
-    const after1 = skillRegistry.get(CI_FIX_SKILL.id)!;
-    const delta1 = after1.adoptionCount - ciFixInitialAdoption;
-    if (delta1 >= 1) {
-      passed(`react 反馈闭环: adoption ${ciFixInitialAdoption}→${after1.adoptionCount} (+${delta1})`);
+    // ── Phase 4: 评价回流（recordFeedback） ──
+    header("Phase 4/6 — 评价回流（recordFeedback）");
+
+    const fixSuccess = nodeFix?.status === "done" && nodeFix?.results[0]?.success;
+    const feedbackRating = fixSuccess ? 1 : -1;
+    const feedbackSuggestion = fixSuccess
+      ? "CI 修复流程在真实 E2E 中验证通过"
+      : "修复未成功，需检查 Agent 配置或 LLM 响应";
+
+    const recorded = skillRegistry.recordFeedback(
+      CI_FIX_SKILL.id,
+      "FixAgent",
+      feedbackRating,
+      feedbackSuggestion,
+    );
+    passed(`recordFeedback 调用${recorded ? "成功" : "失败"}`);
+
+    const skillAfterFix = skillRegistry.get(CI_FIX_SKILL.id)!;
+    const weightAfterFix = skillAfterFix.weight;
+    const feedbackCountAfterFix = skillAfterFix.feedbackHistory.length;
+
+    if (weightAfterFix === weightBeforeFix + feedbackRating) {
+      passed(`weight 更新: ${weightBeforeFix}→${weightAfterFix} (Δ=${feedbackRating})`);
     } else {
-      failed("react 反馈未触发", `delta=${delta1}`);
+      failed("weight 未正确更新", `expected Δ=${feedbackRating}, got Δ=${weightAfterFix - weightBeforeFix}`);
       allPassed = false;
     }
 
-    // ── Phase 4: direct 策略 + 纯问答（DirectStep 无工具，不做修复）──
-    header("Phase 4/5 — direct 策略 + 纯问答");
+    if (feedbackCountAfterFix === feedbackCountBeforeFix + 1) {
+      passed(`feedbackHistory 追加: ${feedbackCountBeforeFix}→${feedbackCountAfterFix}`);
+      const lastEntry = skillAfterFix.feedbackHistory[skillAfterFix.feedbackHistory.length - 1];
+      if (lastEntry.agentId === "FixAgent" && lastEntry.rating === feedbackRating) {
+        passed("反馈条目内容正确");
+      } else {
+        failed("反馈条目内容异常", JSON.stringify(lastEntry));
+        allPassed = false;
+      }
+    } else {
+      failed("feedbackHistory 未正确追加");
+      allPassed = false;
+    }
 
-    // DirectStep 无工具能力，用于简单问答——不需要 skill 匹配的标签
+    // 验证状态推导
+    const derivedStatus = deriveStatus(skillAfterFix.weight, skillAfterFix.feedbackHistory);
+    info("deriveStatus", `${derivedStatus} (weight=${skillAfterFix.weight}, feedbacks=${skillAfterFix.feedbackHistory.length})`);
+
+    // ── Phase 5: CodeAgent 执行（多 Agent 共存验证） ──
+    header("Phase 5/6 — CodeAgent 执行（多 Agent 共存）");
+
+    const codeConfigWithSkill: AgentFactoryConfig = {
+      ...CODE_CONFIG,
+      systemPrompt: CODE_SYSTEM_PROMPT.replace("{skill_context}", "（无匹配经验——code 标签暂无技能）"),
+    };
+
     const board2 = new TaskBoard();
     const pool2 = new AgentPool();
-    pool2.register({ type: AgentType.Code, maxInstances: 1 });
+    pool2.register({ type: "code" as any, maxInstances: 1 });
     const scheduler2 = new Scheduler(board2, pool2, observer);
-    scheduler2.setSkillExecutor(skillExecutor);
+    scheduler2.setMemoryStore(memory);
 
     const toolkit2 = new Toolkit(gate);
     registerTools(toolkit2, tmp.root);
-    const directNode: TaskNode = {
-      id: "direct-qa",
-      type: "code",
-      tags: ["code"] as Tag[],
-      needsMultiPerspective: false,
-      status: "pending",
-      claimedBy: [],
-      payload: "What is TypeScript? Explain in 1-2 sentences.",
-      results: [],
-      createdAt: Date.now(),
-      preferredStrategy: "direct"};
-    const codeAgent = createAgent({
-      type: AgentType.Code,
-      systemPrompt: "You are a helpful coding assistant. Answer concisely.",
-      maxLoops: 1}, adapter, toolkit2);
+    const codeAgent = createAgent(codeConfigWithSkill, adapter, toolkit2, memory);
     await codeAgent.wakeup();
-    scheduler2.register(AgentType.Code, codeAgent, CHAT_MODEL);
-    passed("CodeAgent (direct) 就绪");
+    scheduler2.register("code", codeAgent, CHAT_MODEL);
+    passed("CodeAgent 就绪");
 
-    board2.addNode(directNode);
-
+    board2.addNode(makeCodeNode("code-qa"));
     const start2 = Date.now();
     await scheduler2.executeAll();
     const elapsed2 = Date.now() - start2;
 
-    const nodeDirect = board2.getNode("direct-qa");
-    if (nodeDirect?.status === "done" && nodeDirect.results[0]?.success) {
-      passed(`direct 策略完成 (${elapsed2}ms)`);
-      const output = (nodeDirect.results[0].output ?? "").slice(0, 200);
+    const nodeCode = board2.getNode("code-qa");
+    if (nodeCode?.status === "done" && nodeCode.results[0]?.success) {
+      passed(`CodeAgent 执行完成 (${elapsed2}ms)`);
+      const output = (nodeCode.results[0].output ?? "").slice(0, 200);
       info("输出", output.replace(/\n/g, " "));
-      // 验证 direct 策略产出有意义内容
-      if (output.length > 20 && /typescript|TypeScript|language/i.test(output)) {
-        passed("direct 策略产出合理回答");
+      if (output.length > 20 && /typescript|TypeScript|language|JavaScript/i.test(output)) {
+        passed("CodeAgent 产出合理回答");
       } else {
-        console.log(`  ⚠️ direct 回答可能不完整: ${output.slice(0, 100)}`);
+        console.log(`  ⚠️ CodeAgent 回答可能不完整: ${output.slice(0, 100)}`);
       }
     } else {
-      failed("direct 策略", nodeDirect?.results[0]?.error ?? `status=${nodeDirect?.status}`);
+      failed("CodeAgent 执行", nodeCode?.results[0]?.error ?? `status=${nodeCode?.status}`);
       allPassed = false;
     }
 
-    // ── Phase 5: 记忆系统诊断 ──
-    header("Phase 5/5 — 诊断");
+    // ── Phase 6: 事件管线验证 ──
+    header("Phase 6/6 — 事件管线验证");
+
+    // 取消技能管线订阅
+    unregisterSkillPipe();
+    tracker.unsubscribe();
+
+    const evt = tracker.events;
+    info("事件统计", `NodeStart=${evt.nodeStart}, NodeComplete=${evt.nodeComplete}, NodeFailed=${evt.nodeFailed}, SchedulerDone=${evt.schedulerDone}`);
+
+    // 两个节点各启动一次 + 可能的重规划
+    if (evt.nodeStart >= 2) {
+      passed(`NodeStart 事件: ${evt.nodeStart} 次 (≥2)`);
+    } else {
+      failed(`NodeStart 事件不足`, `只有 ${evt.nodeStart} 次，预期 ≥2`);
+      allPassed = false;
+    }
+
+    if (evt.nodeComplete >= 2) {
+      passed(`NodeComplete 事件: ${evt.nodeComplete} 次 (≥2)`);
+    } else {
+      failed(`NodeComplete 事件不足`, `只有 ${evt.nodeComplete} 次，预期 ≥2`);
+      allPassed = false;
+    }
+
+    if (evt.schedulerDone >= 2) {
+      passed(`SchedulerDone 事件: ${evt.schedulerDone} 次 (两次 executeAll)`);
+    } else {
+      failed(`SchedulerDone 事件不足`, `只有 ${evt.schedulerDone} 次，预期 ≥2`);
+      allPassed = false;
+    }
+
+    if (evt.nodeFailed === 0) {
+      passed(`NodeFailed 事件: 0 次（无失败）`);
+    } else {
+      console.log(`  ⚠️ NodeFailed 事件: ${evt.nodeFailed} 次`);
+    }
+
+    // 验证事件顺序：NodeStart 在 NodeComplete 之前出现
+    const startIndices: number[] = [];
+    const completeIndices: number[] = [];
+    evt.all.forEach((type, i) => {
+      if (type === PipelineEventType.NodeStart) startIndices.push(i);
+      if (type === PipelineEventType.NodeComplete) completeIndices.push(i);
+    });
+    if (startIndices.length > 0 && completeIndices.length > 0) {
+      const allStartBeforeComplete = startIndices.every(
+        (si) => completeIndices.some((ci) => ci > si),
+      );
+      if (allStartBeforeComplete) {
+        passed("事件顺序正确: NodeStart → NodeComplete");
+      }
+    }
+
+    if (VERBOSE) {
+      console.log(`\n  📋 完整事件序列 (${evt.all.length} 个):`);
+      evt.all.forEach((t, i) => console.log(`     [${i}] ${t}`));
+    }
+
+    // ── 诊断 ──
+    header("诊断");
 
     const allMem = await memory.read({});
     const fixMems = allMem.filter((m: any) => m.kind === "TaskLog");
     info("总记忆", `${allMem.length} 条 (episodic=${fixMems.length})`);
 
-    info("技能 adoptionCount", `${skillRegistry.get(CI_FIX_SKILL.id)!.adoptionCount}`);
-    info("技能 rejectionCount", `${skillRegistry.get(CI_FIX_SKILL.id)!.rejectionCount}`);
+    const finalSkill = skillRegistry.get(CI_FIX_SKILL.id)!;
+    info("技能 weight", `${weightBeforeFix} → ${finalSkill.weight}`);
+    info("技能 feedbackHistory", `${feedbackCountBeforeFix} → ${finalSkill.feedbackHistory.length} 条`);
+    info("技能 status", deriveStatus(finalSkill.weight, finalSkill.feedbackHistory));
 
   } finally {
     // ── 清理 ──
@@ -463,9 +727,9 @@ async function main() {
   // ── 最终判定 ──
   console.log(`\n${SEP}`);
   if (allPassed) {
-    console.log("  🎉 Skill + Pipeline Strategy E2E 全部通过");
+    console.log("  🎉 Skill v2.6 + Multi-Agent + Events E2E 全部通过");
   } else {
-    console.log("  ❌ Skill + Pipeline Strategy E2E 存在问题");
+    console.log("  ❌ Skill v2.6 + Multi-Agent + Events E2E 存在问题");
   }
   console.log(`${SEP}\n`);
 

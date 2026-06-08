@@ -1,5 +1,4 @@
-import type { MemoryEntry, MemoryQuery } from "@cortex/shared";
-import { type LinkType } from "@cortex/shared";
+import { type LinkType, type MemoryEntry, type MemoryQuery } from "@cortex/shared";
 import type { MemoryStorage } from "./storage.js";
 import { THIRTY_DAYS_MS, EMBEDDING_DIM, BFS_WEIGHT_THRESHOLD, MAX_LINKS_PER_NODE } from "./schema.js";
 
@@ -31,25 +30,29 @@ export class MemoryQueryEngine {
     }
 
     if (query.agentTypes && query.agentTypes.length > 0) {
-      results = results.filter((m) => query.agentTypes!.includes(m.source.agentType));
+      const agentTypes = query.agentTypes;
+      results = results.filter((m) => agentTypes.includes(m.source.agentType));
     }
 
     if (query.timeRange) {
+      const timeRange = query.timeRange;
       results = results.filter(
-        (m) => m.createdAt >= query.timeRange!.start && m.createdAt <= query.timeRange!.end,
+        (m) => m.createdAt >= timeRange.start && m.createdAt <= timeRange.end,
       );
     }
 
     if (query.keywords && query.keywords.length > 0) {
+      const keywords = query.keywords;
       results = results.filter((m) => {
         const searchText = (m.summary + " " + m.semantic_gist + " " + JSON.stringify(m.content_blob)).toLowerCase();
-        return query.keywords!.every((kw) => searchText.includes(kw.toLowerCase()));
+        return keywords.every((kw) => searchText.includes(kw.toLowerCase()));
       });
     }
 
     if (query.metadataFilter && Object.keys(query.metadataFilter).length > 0) {
+      const metadataFilter = query.metadataFilter;
       results = results.filter((m) => {
-        return Object.entries(query.metadataFilter!).every(
+        return Object.entries(metadataFilter).every(
           ([k, v]) => m.content_blob[k as string] === v,
         );
       });

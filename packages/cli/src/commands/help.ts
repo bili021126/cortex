@@ -10,15 +10,33 @@ import type { CommandHandler, CommandResult } from "../types.js";
 import type { CommandRegistry } from "./index.js";
 
 export function createHelpHandler(registry: CommandRegistry): CommandHandler {
-  return async (args, options, context): Promise<CommandResult> => {
+  return async (args, _options, _context): Promise<CommandResult> => {
     // 如果指定了命令名，显示该命令的帮助
     const cmdName = args[0];
     if (cmdName) {
       const cmd = registry.find(cmdName);
       if (cmd) {
-        // 委托给命令自身的 handler（通过 --help 选项）
-        const helpResult = await cmd.handler(["--help"], {}, { ...context });
-        return helpResult;
+        // 从命令元数据构造帮助文本
+        const lines: string[] = [];
+        lines.push("");
+        lines.push(`命令: cortex ${cmd.name}`);
+        if (cmd.alias) lines.push(`别名: ${cmd.alias}`);
+        lines.push(`描述: ${cmd.description}`);
+
+        if (cmd.subcommands && Object.keys(cmd.subcommands).length > 0) {
+          lines.push("");
+          lines.push("子命令:");
+          for (const [subName, sub] of Object.entries(cmd.subcommands)) {
+            lines.push(`  ${subName.padEnd(12)} ${sub.description}`);
+            if (sub.usage) lines.push(`    用法: ${sub.usage}`);
+          }
+        }
+
+        return {
+          success: true,
+          output: lines.join("\n"),
+          exitCode: 0,
+        };
       }
       return {
         success: false,

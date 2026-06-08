@@ -62,7 +62,9 @@ function appendChangelogEntry(content: string, proposal: AmendmentProposal): str
   if (!match) return content;
 
   const fullLine = match[0];
-  const insertionIndex = match.index! + fullLine.length;
+  const idx = match.index;
+  if (idx === undefined) return content;
+  const insertionIndex = idx + fullLine.length;
   const before = content.slice(0, insertionIndex);
   const after = content.slice(insertionIndex);
 

@@ -4,8 +4,8 @@
 // ============================================================
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { type SkillDefinition, SkillCategory } from "../src/types.js";
-import { DefaultSkillCache } from "../src/cache.js";
+import { type SkillDefinition, SkillCategory } from "../dist/types.js";
+import { DefaultSkillCache } from "../dist/cache.js";
 
 // ── 辅助函数 ──────────────────────────────────────────────────
 

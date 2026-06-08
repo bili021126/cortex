@@ -14,7 +14,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import {
   SkillRegistry,
-  SkillExecutor,
+  SkillTemplateEngine,
   TaskBoard,
   AgentPool,
   PipelineObserver,
@@ -40,15 +40,15 @@ function mockAdapter(output: string) {
 function makeSkill(overrides: Partial<SkillTemplate> = {}): SkillTemplate {
   return {
     id: overrides.id ?? "skill-test-1",
-    agentType: overrides.agentType ?? AgentType.Fix,
+    kind: overrides.kind ?? "action",
     name: overrides.name ?? "Test Skill",
     triggerTags: (overrides.triggerTags ?? ["fix", "bugfix"]) as Tag[],
     trigger: overrides.trigger ?? "Trigger on build or config error",
     steps: overrides.steps ?? ["Locate error file", "Analyze root cause", "Apply fix"],
     expectedOutput: overrides.expectedOutput ?? "Fixed code",
     status: overrides.status ?? "trial",
-    adoptionCount: overrides.adoptionCount ?? 0,
-    rejectionCount: overrides.rejectionCount ?? 0,
+    weight: overrides.weight ?? 0,
+    feedbackHistory: overrides.feedbackHistory ?? [],
     discoveredBy: overrides.discoveredBy ?? "LoopAgent",
     createdAt: overrides.createdAt ?? Date.now()};
 }
@@ -64,7 +64,7 @@ describe("Skill Bootstrap Full Pipeline Integration", () => {
   let scheduler: Scheduler;
   let metaAgent: MetaAgent;
   let registry: SkillRegistry;
-  let executor: SkillExecutor;
+  let templateEngine: SkillTemplateEngine;
 
   beforeEach(() => {
     board = new TaskBoard();
@@ -78,10 +78,10 @@ describe("Skill Bootstrap Full Pipeline Integration", () => {
     scheduler = new Scheduler(board, pool, observer, metaAgent);
 
     registry = new SkillRegistry();
-    executor = new SkillExecutor(registry);
+    templateEngine = new SkillTemplateEngine();
 
-    // Wire SkillExecutor into Scheduler
-    scheduler.setSkillExecutor(executor);
+    // Wire SkillRegistry into MetaAgent
+    metaAgent.setSkillRegistry(registry);
   });
 
   it("full pipeline: register skill -> match by tags -> inject -> execute agent -> feedback", async () => {
@@ -95,17 +95,21 @@ describe("Skill Bootstrap Full Pipeline Integration", () => {
       status: "active"}));
 
     // Verify registration
-    expect(executor.availableCount).toBe(1);
+    expect(registry.totalCount).toBe(1);
 
-    // Match by tags
-    const matched = executor.matchSkill(["fix", "ci"] as Tag[]);
-    expect(matched).not.toBeNull();
-    expect(matched!.id).toBe("bootstrap-skill-1");
+    // Match by tags (using SkillRegistry.queryByTags)
+    const matched = registry.queryByTags(["fix", "ci"] as Tag[]);
+    expect(matched.length).toBeGreaterThan(0);
+    expect(matched[0].id).toBe("bootstrap-skill-1");
 
-    // Inject context
-    const injected = executor.injectSkillContext("bootstrap-skill-1");
+    // Inject context via template engine
+    const skill = registry.get("bootstrap-skill-1")!;
+    const injected = templateEngine.render(
+      "[技能注入: {{ name }}]\n触发: {{ trigger }}\n步骤:\n{{#each steps}}- {{ this }}\n{{/each}}",
+      { name: skill.name, trigger: skill.trigger, steps: skill.steps },
+    );
     expect(injected).toContain("[技能注入: Bootstrap CI Fix]");
-    expect(injected).toContain("1. Check lock file");
+    expect(injected).toContain("Check lock file");
 
     // Execute agent
     const node = {
@@ -132,9 +136,11 @@ describe("Skill Bootstrap Full Pipeline Integration", () => {
     expect(finalNode!.status).toBe("done");
     expect(finalNode!.results[0].success).toBe(true);
 
-    // Feedback：Scheduler 在 _executeAndCleanup 中自动调用 recordFeedback
-    const skill = registry.get("bootstrap-skill-1")!;
-    expect(skill.adoptionCount).toBe(1);
+    // Feedback：手动调用 recordFeedback 模拟评价回流
+    const feedbackOk = registry.recordFeedback("bootstrap-skill-1", "fix-agent", 1, "effective");
+    expect(feedbackOk).toBe(true);
+    const updatedSkill = registry.get("bootstrap-skill-1")!;
+    expect(updatedSkill.weight).toBeGreaterThanOrEqual(1);
   });
 
   it("MetaAgent.setSkillRegistry -> skills available for planning", () => {
@@ -157,9 +163,9 @@ describe("Skill Bootstrap Full Pipeline Integration", () => {
       makeSkill({ id: "s3", name: "Code A", triggerTags: ["code"] as Tag[], steps: ["c"] }),
     ]);
 
-    expect(executor.matchSkill(["fix"] as any)!.id).toBe("s1");
-    expect(executor.matchSkill(["review"] as any)!.id).toBe("s2");
-    expect(executor.matchSkill(["code"] as any)!.id).toBe("s3");
+    expect(registry.queryByTags(["fix"] as Tag[])[0].id).toBe("s1");
+    expect(registry.queryByTags(["review"] as Tag[])[0].id).toBe("s2");
+    expect(registry.queryByTags(["code"] as Tag[])[0].id).toBe("s3");
   });
 });
 

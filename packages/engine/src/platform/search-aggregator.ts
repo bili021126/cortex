@@ -132,7 +132,8 @@ export class SearchAggregator {
     for (const [_urlKey, item] of seen) {
       const source = item.source;
       if (!sourceBuckets.has(source)) sourceBuckets.set(source, []);
-      sourceBuckets.get(source)!.push(item);
+      const bucket = sourceBuckets.get(source);
+      if (bucket) bucket.push(item);
     }
 
     // 3. 交叉交织
@@ -141,7 +142,8 @@ export class SearchAggregator {
     while (deduped.length < maxResults && buckets.length > 0) {
       const bucket = buckets[bucketIdx % buckets.length];
       if (bucket.length > 0) {
-        deduped.push(bucket.shift()!);
+        const item = bucket.shift();
+        if (item) deduped.push(item);
       }
       bucketIdx++;
 

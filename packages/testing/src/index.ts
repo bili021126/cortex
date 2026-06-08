@@ -5,8 +5,7 @@
 // 适配：移除 uuid 依赖，使用内置 crypto.randomUUID
 
 import * as crypto from "node:crypto";
-import { AgentType } from "@cortex/shared";
-import type { TaskNode, Tag, MemoryKind, SemanticState } from "@cortex/shared";
+import { AgentType, type TaskNode, type Tag, type MemoryKind, type SemanticState } from "@cortex/shared";
 
 // ═══════════════════════════════════════════════════════════
 // 合成 TaskNode

@@ -1,5 +1,4 @@
-import type { TaskNode, Agent } from "@cortex/shared";
-import { AGENT_TAGS } from "@cortex/shared";
+import { AGENT_TAGS, type Agent, type TaskNode } from "@cortex/shared";
 
 /** 别名归一化：MetaAgent 可能生成简写别名 */
 const TYPE_ALIASES: Record<string, string> = {

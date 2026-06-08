@@ -1,0 +1,23 @@
+{
+  "name": "my-test 前后端全栈协同分析",
+  "tasks": [
+    {
+      "id": "nahida-fullstack",
+      "type": "analysis",
+      "tags": ["analysis", "research"],
+      "payload": "你是纳西妲，Cortex 的 Analysis Agent。\n\n对 d:\\Projects\\study\\my-test 做**前后端架构分析**：\n\n【后端】\n1. 扫描 backend/springboot/src 完整目录结构，分析四层架构（controller→service→dao→mapper）的边界清晰度\n2. 分析 SecurityConfig 的过滤链设计——哪些路径被保护、哪些放行、认证机制是否合理\n3. 检查是否存在循环依赖——画出 Service 层的依赖关系图\n4. 分析缓存策略（Redis 使用模式、过期策略、防雪崩/穿透/击穿机制）\n\n【前端】\n5. 扫描 admin/ 和 show/ 两个前端项目的目录结构和组件树\n6. 分析路由配置——admin 和 show 分别有哪些页面路由，前端路由是否与后端 API 对应\n7. 检查前端是否有未对接后端 API 的页面（如缺失的登录页）\n\n工作区已通过 --dir 指向 d:\\Projects\\study\\my-test。\n⚠️ 铁律：每条发现必须有工具调用支撑。绝不出现「待确认」。"
+    },
+    {
+      "id": "alhaitham-data",
+      "type": "data",
+      "tags": ["data", "data_model", "schema", "storage"],
+      "payload": "你是艾尔海森，Cortex 的 Data Agent。\n\n对 d:\\Projects\\study\\my-test 做**数据层分析**：\n\n【后端数据】\n1. 读 SQL 初始化脚本（根目录的 .sql 文件），分析数据库表结构和表关系\n2. 分析 Mapper XML 中的 SQL——是否有 N+1 查询风险\n3. 检查 MyBatis 映射完整性——Mapper 接口方法 vs XML SQL 一一对应\n4. 分析分页策略——PageHelper 使用是否规范\n5. 检查 Redis 缓存键命名规范、TTL 策略、数据结构选型\n\n【前端数据流】\n6. 分析前端 API 调用层——axios 封装、请求拦截器、响应处理、错误码映射\n7. 检查前端 package.json 依赖版本——是否有已知 CVE 或弃用警告\n\n工作区已通过 --dir 指向 d:\\Projects\\study\\my-test。\n⚠️ 铁律：每条发现必须有工具调用支撑。绝不出现「待确认」。\n⚠️ 优先用 list_files+read_file，少用 search_code（grep 回退太慢容易超时）。"
+    },
+    {
+      "id": "kuki-api",
+      "type": "api",
+      "tags": ["api", "api_design", "endpoint", "api_integration"],
+      "payload": "你是久岐忍，Cortex 的 API Agent。\n\n对 d:\\Projects\\study\\my-test 做**API 契约 + 前后端对接分析**：\n\n【后端 API】\n1. 枚举所有 Controller 的全部 REST API 端点——方法、路径、参数、返回类型\n2. 检查 API 设计一致性——URL 命名风格、请求/响应格式、错误码体系\n3. 分析入参校验——@Valid/@Validated 覆盖率，自定义校验器正确性\n4. 检查统一响应体——所有 Controller 是否都用 AjaxResult/Result 包装\n\n【前后端对接】\n5. 分析前端 API 调用代码——admin/ 和 show/ 中的 api/ 目录，检查前端调用是否与后端接口匹配\n6. 检查是否有后端定义但前端未调用的\"僵尸 API\"\n7. 检查前端调用的 API 是否都有对应的后端 Controller\n\n工作区已通过 --dir 指向 d:\\Projects\\study\\my-test。\n⚠️ 铁律：每条发现必须有工具调用支撑。绝不出现「待确认」。\n⚠️ 优先用 list_files+read_file，少用 search_code。"
+    }
+  ]
+}

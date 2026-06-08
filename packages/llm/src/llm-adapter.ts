@@ -57,7 +57,7 @@ export class LlmAdapter {
     LlmAdapter._auditQueue.push(line);
     if (!LlmAdapter._auditDraining) {
       LlmAdapter._auditDraining = true;
-      this._drainAudit();
+      void this._drainAudit();
     }
   }
 
@@ -65,7 +65,9 @@ export class LlmAdapter {
     while (LlmAdapter._auditQueue.length > 0) {
       const batch = LlmAdapter._auditQueue.splice(0, LlmAdapter._auditQueue.length);
       try {
-        await fs.promises.appendFile(LlmAdapter._auditLogPath!, batch.join(""), "utf-8");
+        const auditPath = LlmAdapter._auditLogPath;
+        if (!auditPath) return;
+        await fs.promises.appendFile(auditPath, batch.join(""), "utf-8");
       } catch {
         // 审计日志写入失败不阻塞主流程
       }
@@ -154,7 +156,7 @@ export class LlmAdapter {
 
   /** Get reasoner model name (MetaAgent specific). Falls back to chatModel if not set. */
   get reasonerModel(): string {
-    return this.config.reasonerModel ?? this.config.chatModel ?? "deepseek-chat";
+    return this.config.reasonerModel ?? this.config.chatModel ?? "deepseek-v4-flash";
   }
 
   /** Send chat request, returns text or tool calls. Returns cached response on hit. */

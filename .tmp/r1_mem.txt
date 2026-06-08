@@ -1,0 +1,98 @@
+﻿diff --git a/packages/engine/src/memory/memory-store.ts b/packages/engine/src/memory/memory-store.ts
+index a63cd2d2..d59db914 100644
+--- a/packages/engine/src/memory/memory-store.ts
++++ b/packages/engine/src/memory/memory-store.ts
+@@ -67,6 +67,8 @@ export class MemoryStore implements IMemoryStore {
+   private _queryEngine: MemoryQueryEngine;
+   private _observer?: IPipelineObserver;
+   private readonly _embedder: IEmbeddingService;
++  /** 褰撳墠杩愯浼氳瘽鏍囪瘑鈥斺€攂eginSession() 鐢熸垚锛宔ndSession() 娓呴櫎 */
++  private _sessionId?: string;
+ 
+   /** P1-鍏眰闃插尽锛氬啓鍓嶆牎楠岄挬瀛愶紙鐢?ConsistencyLayer 娉ㄥ叆锛?*/
+   private _preWriteHook?: (input: MemoryWriteInput) => MemoryWriteInput;
+@@ -96,6 +98,73 @@ export class MemoryStore implements IMemoryStore {
+     return this._persistence.isEnabled;
+   }
+ 
++  /** 褰撳墠杩愯浼氳瘽鏍囪瘑銆倁ndefined 涓烘湭鍒濆鍖栨垨鍚戝悗鍏煎 */
++  get sessionId(): string | undefined {
++    return this._sessionId;
++  }
++
++  /**
++   * 寮€濮嬫柊浼氳瘽鈥斺€旂敓鎴愬敮涓€ sessionId锛屽悗缁?write/writePending 鑷姩娉ㄥ叆銆?+   * 姣忔 executeAll() 璋冪敤鍓嶇敱璋冨害灞傝Е鍙戙€?+   */
++  beginSession(): string {
++    this._sessionId = `mem-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
++    return this._sessionId;
++  }
++
++  /**
++   * 缁堢粨褰撳墠浼氳瘽鈥斺€斿綊妗ｆ湰 session 鐨?Active 璁板繂锛屾巩鐏?Pending 璁板繂銆?+   * @returns 娓呯悊鐨勮蹇嗘暟閲?+   */
++  async endSession(): Promise<number> {
++    if (!this._sessionId) return 0;
++    let cleaned = 0;
++    const sessionEntries = this._getBySessionInternal(this._sessionId);
++    for (const m of sessionEntries) {
++      if ((m as any)._pending) {
++        // Pending 鎬佺洿鎺ユ巩鐏€斺€擜gent 涓€斿啓鍏ヤ絾鏈?commit
++        this._lifecycle.obliterate(this._storage, m.id, this._statePersistFn("endSession-obliterate"));
++        cleaned++;
++      } else if (m.semantic_state === "Active") {
++        // Active 鎬佸綊妗ｂ€斺€斿凡瀹屾垚鐨勪换鍔¤蹇嗕繚鐣欎絾鏍囪
++        this._lifecycle.archive(this._storage, m.id, this._statePersistFn("endSession-archive"));
++        cleaned++;
++      }
++    }
++    this._sessionId = undefined;
++    return cleaned;
++  }
++
++  /**
++   * 鎸?sessionId 鏌ヨ鎸囧畾浼氳瘽鐨勬墍鏈夎蹇嗐€?+   * 鐢ㄤ簬璺?run 璁ょ煡鍏变韩鍜屾薄鏌撹瘖鏂€?+   */
++  getBySession(sessionId: string): MemoryEntry[] {
++    return this._getBySessionInternal(sessionId);
++  }
++
++  /**
++   * 鏄惧紡鍥炴粴鈥斺€斿皢鎸囧畾 Pending 璁板繂鐩存帴婀伃銆?+   * 涓ら樁娈垫彁浜ょ殑缁堟璺緞锛歱repare 鈫?rollback锛堜笉璧?commit鈫扐ctive 璺緞锛?+   */
++  rollback(memoryId: string): boolean {
++    const m = this._storage.memories.get(memoryId);
++    if (!m) return false;
++    if (!(m as any)._pending) return false;
++    const ok = this._lifecycle.obliterate(this._storage, memoryId, this._statePersistFn("rollback"));
++    if (ok) delete (m as any)._pending;
++    return ok;
++  }
++
++  /** 鍐呴儴锛氭寜 sessionId 鎵弿瀛樺偍 */
++  private _getBySessionInternal(sessionId: string): MemoryEntry[] {
++    const results: MemoryEntry[] = [];
++    for (const m of this._storage.memories.values()) {
++      if (m.sessionId === sessionId) results.push(m);
++    }
++    return results;
++  }
++
+   /**
+    * P1-鍏眰闃插尽锛氭敞鍏ュ啓鍓嶆牎楠岄挬瀛愶紙鐢?ConsistencyLayer 娉ㄥ叆锛夈€?    * 鍦?write()/writePending() 澶勭悊鍓嶈皟鐢紝鎵ц SchemaEnforcer 鏍￠獙 + IntentFactWall 鏍囪銆?@@ -114,6 +183,10 @@ export class MemoryStore implements IMemoryStore {
+    */
+   async write(input: MemoryWriteInput): Promise<string> {
+     input = this._validateWrite(input);
++    // v2.5.41: 鑷姩娉ㄥ叆 sessionId鈥斺€斿綋鍓嶄細璇濆瓨鍦ㄦ椂娉ㄥ叆锛屽悜鍚庡吋瀹?+    if (this._sessionId && !input.sessionId) {
++      input.sessionId = this._sessionId;
++    }
+ 
+     // 鈹€鈹€ embedding 鐢熸垚锛堥潤榛橀檷绾э細澶辫触涓嶉樆濉炲啓鍏ワ級鈹€鈹€
+     if (input.embedding === undefined) {
+@@ -421,6 +494,10 @@ export class MemoryStore implements IMemoryStore {
+    */
+   writePending(input: MemoryWriteInput): string {
+     input = this._validateWrite(input);
++    // v2.5.41: 鑷姩娉ㄥ叆 sessionId
++    if (this._sessionId && !input.sessionId) {
++      input.sessionId = this._sessionId;
++    }
+ 
+     const contentHash = this._computeContentHash(input);
+     const exactDup = this._tryDedup(contentHash);

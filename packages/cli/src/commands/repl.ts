@@ -19,12 +19,13 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import type { CommandRegistry } from "./index.js";
-import type { ICortexApi } from "@cortex/shared";
+import { AGENT_CHINESE_ROLE, AgentType, type ICortexApi, type TaskNode } from "@cortex/shared";
 import {
   CORTEX_VERSION,
   CORTEX_PHASE,
   DIR_CORTEX,
   FILE_REPL_HISTORY,
+  CLI_EXIT_SUCCESS,
 } from "@cortex/config";
 import * as readline from "node:readline";
 import * as fs from "node:fs";
@@ -32,10 +33,10 @@ import * as path from "node:path";
 import * as os from "node:os";
 
 import {
-  ReplMode,
   MODE_LABELS,
   getAgentDisplay,
-  PlanExecutionContext,
+  type ReplMode,
+  type PlanExecutionContext,
 } from "./repl/types.js";
 import { parseAgentPrefix, buildPrompt } from "./repl/display.js";
 import {
@@ -50,7 +51,6 @@ import {
 import { handleInternalCommand } from "./repl/commands.js";
 import { createPartyState } from "./repl/party.js";
 import { getFormatter, detectDefaultFormat } from "../formatters/index.js";
-import { AgentType, AGENT_CHINESE_ROLE } from "@cortex/shared";
 
 // 重新导出 injectAgentDisplayFromConfig 供外部使用
 export { injectAgentDisplayFromConfig } from "./repl/types.js";
@@ -75,7 +75,7 @@ export function createReplHandler(
     let running = true;
 
     // ── Plan Mode 状态 ──
-    let planNodes: import("@cortex/shared").TaskNode[] = [];
+    let planNodes: TaskNode[] = [];
     let planIntent = "";
     let sessionGeneration = 0;
     let busy = false;
@@ -93,7 +93,7 @@ export function createReplHandler(
     if (replMode === "chat") {
       const display = getAgentDisplay(chatAgent);
       console.log(`   当前对话: ${display.emoji}${display.name} 「${display.signature}」`);
-      console.log(`   切换: .agent <名称> | 临时指定: @<名称> <消息>`);
+      console.log(`   切换: .agent <名称> | @<名称> <消息> 也会持久切换`);
     }
     if (replMode === "talk") {
       const display = getAgentDisplay(AgentType.Butler);
@@ -144,7 +144,7 @@ export function createReplHandler(
     if (!noHistory && fs.existsSync(historyFile)) {
       try {
         const history = fs.readFileSync(historyFile, "utf-8").split("\n").filter(Boolean);
-        (rl as any).history = history.slice(-100);
+        (rl as unknown as { history: string[] }).history = history.slice(-100);
       } catch { /* 忽略 */ }
     }
 
@@ -156,22 +156,24 @@ export function createReplHandler(
         return;
       }
 
-      // 内部命令：始终立即可用，不阻塞
+      // 内部命令：所有 . 命令串行化，防止 approve 执行期间新意图抢 stdin
       if (trimmed.startsWith(".")) {
         // Plan 模式专属命令
         if (replMode === "plan") {
-          const planResult = await handlePlanCommand(trimmed, bridge, {
-            getPlanNodes: () => planNodes,
-            setPlanNodes: (nodes: import("@cortex/shared").TaskNode[]) => { planNodes = nodes; },
-            getPlanIntent: () => planIntent,
-            setPlanIntent: (intent: string) => { planIntent = intent; },
-            getFormat: () => replFormat,
-            getVerbose: () => context.verbose,
-            bumpGeneration: () => bumpGeneration(),
-          });
-          if (planResult === "handled") {
-            rl.prompt();
-            return;
+          busy = true;
+          try {
+            const planResult = await handlePlanCommand(trimmed, bridge, {
+              getPlanNodes: () => planNodes,
+              setPlanNodes: (nodes: TaskNode[]) => { planNodes = nodes; },
+              getPlanIntent: () => planIntent,
+              setPlanIntent: (intent: string) => { planIntent = intent; },
+              getFormat: () => replFormat,
+              getVerbose: () => context.verbose,
+              bumpGeneration: () => bumpGeneration(),
+            });
+            if (planResult === "handled") { rl.prompt(); return; }
+          } finally {
+            busy = false;
           }
         }
 
@@ -209,6 +211,17 @@ export function createReplHandler(
         return;
       }
 
+      // chat/talk 模式下 @agent 持久切换
+      if ((replMode === "chat" || replMode === "talk") && trimmed.startsWith("@")) {
+        const { agent: parsedAgent } = parseAgentPrefix(trimmed, chatAgent);
+        if (parsedAgent !== chatAgent) {
+          chatAgent = parsedAgent;
+          rl.setPrompt(buildPrompt(replMode, chatAgent, promptStr));
+          const name = AGENT_CHINESE_ROLE[parsedAgent] ?? parsedAgent;
+          console.log(`  ↳ 对话已切换到: ${name}`);
+        }
+      }
+
       // LLM 调用：串行化，防重叠
       if (busy) {
         console.log("⏳ 上一个操作仍在处理中，请稍候...");
@@ -217,15 +230,17 @@ export function createReplHandler(
       }
       busy = true;
       const startGen = sessionGeneration;
+      const askUser = (q: string): Promise<string> =>
+        new Promise((resolve) => rl.question(q, resolve));
       try {
         await executeLine(trimmed, registry, bridge, context, replFormat, replMode, chatAgent, talkCompanion, partyState, {
           getPlanNodes: () => planNodes,
-          setPlanNodes: (nodes: import("@cortex/shared").TaskNode[]) => { planNodes = nodes; },
+          setPlanNodes: (nodes: TaskNode[]) => { planNodes = nodes; },
           getPlanIntent: () => planIntent,
           setPlanIntent: (intent: string) => { planIntent = intent; },
           getGeneration: () => sessionGeneration,
           startGeneration: startGen,
-        });
+        }, askUser);
       } finally {
         busy = false;
         if (running) rl.prompt();
@@ -239,7 +254,7 @@ export function createReplHandler(
           try {
             const dir = path.dirname(historyFile);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            const history = (rl as any).history?.slice(-100) ?? [];
+            const history = (rl as unknown as { history?: string[] }).history?.slice(-100) ?? [];
             fs.writeFileSync(historyFile, history.join("\n"), "utf-8");
           } catch { /* 忽略 */ }
         }
@@ -251,8 +266,8 @@ export function createReplHandler(
     // eslint-disable-next-line @typescript-eslint/return-await
     return new Promise(() => {
       rl.on("close", () => {
-        bridge.shutdown();
-        process.exit(0);
+        void bridge.shutdown();
+        process.exit(CLI_EXIT_SUCCESS);
       });
     });
   };
@@ -278,6 +293,7 @@ async function executeLine(
   talkCompanion: AgentType | null,
   partyState: ReturnType<typeof createPartyState>,
   planCtx?: PlanExecutionContext,
+  askUser?: (question: string) => Promise<string>,
 ): Promise<void> {
   const fmt = getFormatter(format);
 
@@ -295,7 +311,7 @@ async function executeLine(
 
   // ── plan 模式 ──
   if (mode === "plan") {
-    await executePlanInput(line, bridge, context, fmt, planCtx);
+    await executePlanInput(line, bridge, context, fmt, planCtx, askUser);
     return;
   }
 

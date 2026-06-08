@@ -1,6 +1,4 @@
-import type { MemoryEntry, MemoryLink, MemoryWriteInput, AgentType, MemorySource, MemoryKind, SemanticState } from "@cortex/shared";
-import { PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type AgentType, type IPipelineObserver, type MemoryEntry, type MemoryKind, type MemoryLink, type MemorySource, type MemoryWriteInput, type SemanticState } from "@cortex/shared";
 import * as crypto from "node:crypto";
 import { EMBEDDING_DIM } from "./schema.js";
 
@@ -20,6 +18,7 @@ export class MemoryStorage {
   readonly links = new Map<string, MemoryLink[]>();
 
   private _observer?: IPipelineObserver;
+  private _deserializeFailures: Array<{ id: string; reason: string }> = [];
 
   constructor(observer?: IPipelineObserver) {
     this._observer = observer;
@@ -46,6 +45,7 @@ export class MemoryStorage {
       embedding: input.embedding,
       content_hash: contentHash ?? input.content_hash ?? "",
       expires_at: input.expires_at,
+      sessionId: input.sessionId,
     };
     this.memories.set(id, entry);
     return entry;
@@ -108,6 +108,7 @@ export class MemoryStorage {
         embedding: _parseEmbeddingBlob(raw.embedding),
         content_hash: (raw.content_hash as string) || "",
         expires_at: (raw.expires_at as number) || undefined,
+        sessionId: (raw.session_id as string) || undefined,
       };
       return entry;
     } catch (e) {
@@ -117,6 +118,8 @@ export class MemoryStorage {
   }
 
   private _emitDeserializeFailed(id: string, reason: string, preview?: string): void {
+    // 收集失败，不逐行日志 spam——由 flushDeserializeErrors() 统一输出
+    this._deserializeFailures.push({ id, reason });
     if (this._observer) {
       this._observer.emit({
         type: PipelineEventType.MemoryDeserializeFailed,
@@ -125,9 +128,23 @@ export class MemoryStorage {
         timestamp: Date.now(),
         notificationType: "WARNING",
       });
-    } else {
-      console.error(`[MemoryStore] ${reason}，跳过行 ${id}${preview ? `: ${preview}` : ""}`);
     }
+  }
+
+  /**
+   * 输出反序列化失败汇总，返回损坏的 ID 列表（供持久化层清理）。
+   * 调用时机：SQLite 数据加载完成后一次性调用。
+   */
+  flushDeserializeErrors(): string[] {
+    if (this._deserializeFailures.length === 0) return [];
+    const ids = this._deserializeFailures.map((f) => f.id);
+    const sampleReasons = this._deserializeFailures.slice(0, 3).map((f) => f.reason);
+    const sampleMsg = sampleReasons.length > 0 ? `（示例: ${sampleReasons.join(" / ")}）` : "";
+    console.warn(
+      `[MemoryStore] ${this._deserializeFailures.length} 条记忆 content_blob JSON 损坏，已跳过并将在 DB 中清理。${sampleMsg}`
+    );
+    this._deserializeFailures = [];
+    return ids;
   }
 
   // ── 基础访问 ─────────────────────────────────

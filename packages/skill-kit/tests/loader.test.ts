@@ -4,7 +4,7 @@
 // ============================================================
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { DynamicImportLoader } from "../src/loader.js";
+import { DynamicImportLoader } from "../dist/loader.js";
 
 describe("DynamicImportLoader — 注册与映射", () => {
   let loader: DynamicImportLoader;

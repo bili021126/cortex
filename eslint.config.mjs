@@ -19,9 +19,9 @@ export default tseslint.config(
     rules: {
       // ── 类型安全（error 级——不允许漂移） ──
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-require-imports": "error",
-      "@typescript-eslint/no-floating-promises": "warn",
+      "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/no-misused-promises": ["warn", { checksVoidReturn: false }],
       "@typescript-eslint/await-thenable": "warn",
       "@typescript-eslint/prefer-optional-chain": "warn",
@@ -45,8 +45,15 @@ export default tseslint.config(
 
       // ── 代码质量 ──
       "no-debugger": "error",
-      "no-duplicate-imports": "warn",
-      "@typescript-eslint/no-non-null-assertion": "warn",
+      "no-duplicate-imports": "error",
+      "@typescript-eslint/no-non-null-assertion": "error",
+
+      // ── 类型导入规范 ──
+      "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
+
+      // ── 函数复杂度 ──
+      "max-params": ["warn", 3],
+      "max-lines-per-function": ["warn", { max: 30, skipBlankLines: true, skipComments: true }],
     },
   },
   // ── 测试文件豁免（e2e / 单元测试允许裸 console） ──

@@ -19,6 +19,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@cortex/config": "workspace:*",
     "@cortex/shared": "workspace:*",
     "@cortex/notification": "workspace:*"
   },

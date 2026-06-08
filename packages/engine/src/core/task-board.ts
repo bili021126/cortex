@@ -1,6 +1,4 @@
-import type { AgentType, TaskNode, InvariantViolation, InvariantReporter } from "@cortex/shared";
-import { getAgentTags, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, getAgentTags, type AgentType, type IPipelineObserver, type InvariantReporter, type InvariantViolation, type TaskNode } from "@cortex/shared";
 
 /**
  * ITaskBoard —— TaskBoard 抽象接口。
@@ -303,7 +301,8 @@ export class TaskBoard implements ITaskBoard {
     const toRemove: string[] = [nodeId];
     const queue = [nodeId];
     while (queue.length > 0) {
-      const currentId = queue.shift()!;
+      const currentId = queue.shift();
+      if (!currentId) break;
       for (const [id, node] of this.nodes) {
         if (node.parentId === currentId) {
           toRemove.push(id);

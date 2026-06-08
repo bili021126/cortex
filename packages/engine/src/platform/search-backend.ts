@@ -51,7 +51,7 @@ export class McpSearchBackend implements SearchBackend {
 
   constructor(config: McpServerConfig) {
     this.id = config.id;
-    this.enabled = config.enabled;
+    this.enabled = config.enabled ?? true;
     this.client = new McpClient(config);
   }
 
@@ -98,6 +98,11 @@ export class McpSearchBackend implements SearchBackend {
   /** MCP Server 名称（来自 initialize 响应） */
   get serverName(): string {
     return this.client.serverName;
+  }
+
+  /** 获取底层 McpClient——供 Toolkit 注册 MCP 通用工具（非搜索）用 */
+  getMcpClient(): McpClient {
+    return this.client;
   }
 
   /** 将 MCP tool/call 返回的 JSON 字符串解析为 SearchResult[] */

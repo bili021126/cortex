@@ -1,89 +1,35 @@
 // ============================================================
-// @cortex/shared — Agent 标签域
+// @cortex/shared — Agent 标签域（重导出层）
 //
-// TAG_VOCABULARY + AGENT_TAGS —— Scheduler/TaskBoard 的标签匹配基础。
-// 运行时可通过 setAgentRegistry() 从 cortex-agents.json 覆写。
+// TAG_VOCABULARY + AGENT_TAGS 的实际定义已迁移至 @cortex/config。
+// 本文件保留为向后兼容的重导出层，并提供运行时覆写 API。
 // ============================================================
 
+import { TAG_VOCABULARY, AGENT_TAGS as CONFIG_AGENT_TAGS, type Tag } from "@cortex/config";
 import { AgentType } from "./agent-enums.js";
 
-/** 标签词汇表（封闭集合） */
-export const TAG_VOCABULARY = [
-  "code",
-  "implementation",
-  "bugfix",
-  "refactor",
-  "test",
-  "config",
-  "review",
-  "audit",
-  "research",
-  "analysis",
-  "deploy",
-  "ops",
-  "loop",
-  "pattern_scan",
-  "skill_precipitate",
-  "plan_review",
-  "doc_audit",
-  "constitution_check",
-  "constitution_propose",
-  "inspector",
-  "inspect",
-  "doc-govern",
-  "browser",
-  "ui_verify",
-  "fix",
-  "repair",
-  "diagnose",
-  "heal",
-  // Core-2
-  "api",
-  "data",
-  "api_design",
-  "api_integration",
-  "endpoint",
-  "data_model",
-  "migration",
-  "storage",
-  "schema",
-  "strategy",
-  "strategist",
-  "contract",
-  "direction",
-] as const;
-
-export type Tag = (typeof TAG_VOCABULARY)[number];
+export { TAG_VOCABULARY };
+export type { Tag };
 
 /**
- * 每个 Agent 类型对应的认领标签。
- *
- * @contract AGENT_TAGS 契约（久岐忍 P1-5：模块边界缺少显式契约化定义 -> 已闭合）
- *
- *   此表是 Scheduler._findMatchingAgent 的匹配基础。
- *   变更规则：
- *   - 新增 AgentType 时必须同步添加标签
- *   - 删除/重命名标签时需同步更新 TAG_VOCABULARY
- *   - 标签不得跨 Agent 共享语义矛盾的定义
- *   - 平局打破依赖匹配密度（matching / |tags|），标签少的 Agent 在窄标签匹配上
- *     天然优于标签多的 Agent——不要通过增加无关标签来"扩大匹配范围"
+ * Agent 类型 → 认领标签（AgentType 键版本）。
+ * 从 config 的 string-key 版本经 AgentType 映射转换生成。
  */
 export const AGENT_TAGS: Record<AgentType, readonly Tag[]> = {
-  [AgentType.Meta]:      ["plan_review"],   // Meta
-  [AgentType.Code]:      ["code", "implementation", "refactor", "test", "config"],  // Code
-  [AgentType.Review]:    ["review", "audit"],  // Review
-  [AgentType.Analysis]:  ["analysis", "research"],  // Analysis
-  [AgentType.Ops]:       ["ops", "deploy", "test"],  // Ops
-  [AgentType.Loop]:      ["loop", "pattern_scan", "skill_precipitate"],  // Loop
-  [AgentType.DocGovern]: ["doc-govern", "audit", "plan_review", "doc_audit", "constitution_check", "constitution_propose"],
-  [AgentType.Butler]:    [],  // Butler
-  [AgentType.Inspector]: ["inspector", "inspect"],  // Inspector
-  [AgentType.Browser]:   ["browser", "ui_verify"],  // Browser
-  [AgentType.Fix]:       ["fix", "bugfix", "repair", "diagnose", "heal"],  // Fix
-  // Core-2 预埋
-  [AgentType.Api]:        ["api", "api_design", "api_integration", "endpoint", "review", "research", "analysis"],
-  [AgentType.Data]:       ["data", "data_model", "migration", "storage", "schema", "review", "research", "analysis"],
-  [AgentType.Strategist]: ["strategy", "contract"],  // Strategist
+  [AgentType.Meta]:      CONFIG_AGENT_TAGS.Meta,
+  [AgentType.Code]:      CONFIG_AGENT_TAGS.Code,
+  [AgentType.Review]:    CONFIG_AGENT_TAGS.Review,
+  [AgentType.Analysis]:  CONFIG_AGENT_TAGS.Analysis,
+  [AgentType.Ops]:       CONFIG_AGENT_TAGS.Ops,
+  [AgentType.Loop]:      CONFIG_AGENT_TAGS.Loop,
+  [AgentType.DocGovern]: CONFIG_AGENT_TAGS.DocGovern,
+  [AgentType.Butler]:    CONFIG_AGENT_TAGS.Butler,
+  [AgentType.Inspector]: CONFIG_AGENT_TAGS.Inspector,
+  [AgentType.Browser]:   CONFIG_AGENT_TAGS.Browser,
+  [AgentType.Fix]:       CONFIG_AGENT_TAGS.Fix,
+  [AgentType.Api]:       CONFIG_AGENT_TAGS.Api,
+  [AgentType.Data]:      CONFIG_AGENT_TAGS.Data,
+  [AgentType.Strategist]: CONFIG_AGENT_TAGS.Strategist,
 };
 
 // ─── 运行时标签覆写表 ──────────────────────────────

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * commands/schedule.ts — `cortex schedule` 调度系统命令
  *
  * 任务调度编排——从文件生成计划、执行计划、查看调度状态。
@@ -8,7 +8,7 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import type { ICortexApi } from "@cortex/shared";
+import { type ICortexApi, type Tag, type TaskNode } from "@cortex/shared";
 import type { ITaskBoard, IScheduler } from "@cortex/engine";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -79,7 +79,7 @@ async function handleSchedulePlan(
     return { success: false, error: `读取失败: ${msg}`, exitCode: 1 };
   }
 
-  let plan: any;
+  let plan: Record<string, unknown>;
   try {
     plan = JSON.parse(content);
   } catch {
@@ -90,14 +90,14 @@ async function handleSchedulePlan(
   const showParallel = options["parallel"] as boolean;
   const outputPath = (options["output"] ?? options["o"]) as string | undefined;
 
-  const layers = plan.tasks ? [plan.tasks.map((_: any, i: number) => `task-${i}`)] : [["task-0"]];
+  const layers = (plan.tasks as unknown[]) ? [(plan.tasks as unknown[]).map((_: unknown, i: number) => `task-${i}`)] : [["task-0"]];
 
   const planOutput = {
-    name: plan.name ?? "未命名计划",
-    totalTasks: plan.tasks?.length ?? 1,
+    name: (plan.name as string | undefined) ?? "未命名计划",
+    totalTasks: (plan.tasks as unknown[] | undefined)?.length ?? 1,
     layers: showTopo ? layers : undefined,
     parallelGroups: showParallel ? layers.length : undefined,
-    estimatedDuration: `${(plan.tasks?.length ?? 1) * 5}s`,
+    estimatedDuration: `${((plan.tasks as unknown[] | undefined)?.length ?? 1) * 5}s`,
   };
 
   if (outputPath) {
@@ -147,7 +147,7 @@ async function handleScheduleRun(
         board.addNode({
           id: t.id ?? `sched-${Date.now()}-${i}`,
           type: t.type ?? "analysis",
-          tags: t.tags ?? ["analysis"],
+          tags: (t.tags ?? ["analysis"]) as Tag[],
           needsMultiPerspective: false,
           status: "pending",
           claimedBy: [],
@@ -185,9 +185,9 @@ async function handleScheduleStatus(
     taskBoard: {
       total: allNodes.length,
       pending: pendingNodes.length,
-      active: allNodes.filter((n: any) => n.status === "claimed" || n.status === "running").length,
-      done: allNodes.filter((n: any) => n.status === "done").length,
-      failed: allNodes.filter((n: any) => n.status === "failed").length,
+      active: allNodes.filter((n: TaskNode) => n.status === "claimed" || n.status === "running").length,
+      done: allNodes.filter((n: TaskNode) => n.status === "done").length,
+      failed: allNodes.filter((n: TaskNode) => n.status === "failed").length,
     },
   };
 

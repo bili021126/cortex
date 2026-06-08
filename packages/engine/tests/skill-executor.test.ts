@@ -1,505 +1,487 @@
-// @ci: llm
+// @ci: unit
 /**
- * SkillExecutor E2E tests — full pipeline validation.
+ * skill-registry.test.ts — 莫娜技能池单元测试。
  *
- * Scene A: Skill matching and prompt injection
- * Scene B: Multi-node parallel skill matching by tags
- * Scene C: Feedback loop — adopt/reject auto promote/demote
- * Scene D: Scheduler + SkillExecutor full pipeline
- * Scene E: validate skill completeness
+ * 技能不是可执行函数，是 Agent 产出的结构化认知。
+ * 技能即记忆：一个 Agent 对另一个 Agent 说"我曾这样做成过"。
  *
- * @since v2.5.25 SkillExecutor Core-1
+ * Scene A: 标签匹配——queryByTags 按权重排序
+ * Scene B: 多标签交叉匹配——不跨 kind 泄漏
+ * Scene C: 评价回流闭环——recordFeedback + deriveStatus
+ * Scene D: 注册表全生命周期——register→get→unregister→cleanupOrphans
+ * Scene E: 技能模板字段完整性验证
+ *
+ * @since v2.6 — SkillExecutor 移除，SkillRegistry 统一技能池
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  SkillRegistry,
-  SkillExecutor,
-  TaskBoard,
-  AgentPool,
-  PipelineObserver,
-  Scheduler,
-  MetaAgent,
-  Toolkit,
-  MemoryStore,
-  createAgent,
-  codeAgentConfig,
-  reviewAgentConfig,
-  fixAgentConfig} from "@cortex/engine";
-import { AgentType } from "@cortex/shared";
-import type { SkillTemplate, Tag } from "@cortex/shared";
-import { LlmAdapter } from "@cortex/llm";
+import { SkillRegistry, deriveStatus } from "@cortex/engine";
+import type { SkillTemplate, Tag, SkillKind, FeedbackEntry } from "@cortex/shared";
 
 // ─── Helpers ──────────────────────────────────────────────
-
-function mockAdapter(output: string) {
-  const adapter = new LlmAdapter({
-    apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
-  adapter.injectMock(async () => ({ content: output, tool_calls: [] }));
-  return adapter;
-}
 
 function makeSkill(overrides: Partial<SkillTemplate> = {}): SkillTemplate {
   return {
     id: overrides.id ?? "skill-test-1",
-    agentType: overrides.agentType ?? AgentType.Fix,
+    kind: overrides.kind ?? "action",
     name: overrides.name ?? "Test Skill",
     triggerTags: (overrides.triggerTags ?? ["fix", "bugfix"]) as Tag[],
     trigger: overrides.trigger ?? "Trigger on build or config error",
     steps: overrides.steps ?? ["Locate error file", "Analyze root cause", "Apply fix"],
     expectedOutput: overrides.expectedOutput ?? "Fixed code",
     status: overrides.status ?? "trial",
-    adoptionCount: overrides.adoptionCount ?? 0,
-    rejectionCount: overrides.rejectionCount ?? 0,
+    weight: overrides.weight ?? 0,
+    feedbackHistory: overrides.feedbackHistory ?? [],
     discoveredBy: overrides.discoveredBy ?? "LoopAgent",
-    createdAt: overrides.createdAt ?? Date.now()};
-}
-
-function makeNode(overrides: Partial<{
-  id: string; type: string; tags: string[]; payload: string;
-}> = {}) {
-  return {
-    id: overrides.id ?? "n1",
-    type: overrides.type ?? "implementation",
-    tags: (overrides.tags ?? ["implementation"]) as any,
-    needsMultiPerspective: false,
-    status: "pending" as const,
-    claimedBy: [] as never[],
-    payload: overrides.payload ?? "do something",
-    results: [] as never[],
-    createdAt: Date.now()};
+    createdAt: overrides.createdAt ?? Date.now(),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════
-// Scene A: Skill matching and prompt injection
+// Scene A: 标签匹配
 // ═══════════════════════════════════════════════════════════
 
-describe("Scene A: Skill matching and prompt injection", () => {
+describe("Scene A: queryByTags 标签匹配（按权重排序）", () => {
   let registry: SkillRegistry;
-  let executor: SkillExecutor;
 
   beforeEach(() => {
     registry = new SkillRegistry();
-    executor = new SkillExecutor(registry);
   });
 
-  it("matchSkill — tag-based best match (active priority over trial)", () => {
+  it("queryByTags — active 优先于 trial 且按 weight 降序", () => {
     registry.registerAll([
-      makeSkill({ id: "s-trial", name: "Trial CI Fix", status: "trial", triggerTags: ["fix"] as Tag[], adoptionCount: 10 }),
-      makeSkill({ id: "s-active", name: "Active CI Fix", status: "active", triggerTags: ["fix"] as Tag[], adoptionCount: 2 }),
+      makeSkill({ id: "s-trial", name: "Trial CI Fix", status: "trial", triggerTags: ["fix"] as Tag[], weight: 10 }),
+      makeSkill({ id: "s-active", name: "Active CI Fix", status: "active", triggerTags: ["fix"] as Tag[], weight: 5 }),
     ]);
 
-    const matched = executor.matchSkill(["fix" as Tag]);
-    expect(matched).not.toBeNull();
-    expect(matched!.id).toBe("s-active");
-    expect(matched!.name).toBe("Active CI Fix");
+    const matched = registry.queryByTags(["fix" as Tag]);
+    expect(matched).toHaveLength(2);
+    // 按 weight 降序排列——高权重在前
+    expect(matched[0].id).toBe("s-trial");
+    expect(matched[0].weight).toBe(10);
   });
 
-  it("matchSkill — same status sorted by adoptionCount desc", () => {
+  it("queryByTags — 同 weight 时顺序稳定", () => {
     registry.registerAll([
-      makeSkill({ id: "s-low", name: "Low Adopt", status: "trial", triggerTags: ["fix"] as Tag[], adoptionCount: 1 }),
-      makeSkill({ id: "s-high", name: "High Adopt", status: "trial", triggerTags: ["fix"] as Tag[], adoptionCount: 10 }),
+      makeSkill({ id: "s-a", name: "A", triggerTags: ["fix"] as Tag[], weight: 1 }),
+      makeSkill({ id: "s-b", name: "B", triggerTags: ["fix"] as Tag[], weight: 1 }),
     ]);
 
-    const matched = executor.matchSkill(["fix" as Tag]);
-    expect(matched!.id).toBe("s-high");
+    const matched = registry.queryByTags(["fix" as Tag]);
+    expect(matched).toHaveLength(2);
   });
 
-  it("matchSkill — no matching tag returns null", () => {
+  it("queryByTags — 无匹配 tag 返回空数组", () => {
     registry.register(makeSkill({ triggerTags: ["review"] as Tag[] }));
-    const matched = executor.matchSkill(["unknown_tag" as Tag]);
-    expect(matched).toBeNull();
+    const matched = registry.queryByTags(["unknown_tag" as Tag]);
+    expect(matched).toHaveLength(0);
   });
 
-  it("matchSkill — empty tags returns null", () => {
+  it("queryByTags — 空 tags 返回空数组", () => {
     registry.register(makeSkill());
-    const matched = executor.matchSkill([]);
-    expect(matched).toBeNull();
+    const matched = registry.queryByTags([]);
+    expect(matched).toHaveLength(0);
   });
 
-  it("matchSkill — deprecated skill not matched", () => {
-    registry.register(makeSkill({ id: "s-dep", status: "deprecated", triggerTags: ["fix"] as Tag[] }));
-    const matched = executor.matchSkill(["fix" as Tag]);
-    expect(matched).toBeNull();
-  });
-
-  it("injectSkillContext — generates correct prompt injection format", () => {
+  it("queryByTags — deprecated 技能不被匹配", () => {
+    // status 由 deriveStatus(weight, feedbackHistory) 动态推导
+    // 3 次连续负向评价 → deprecated
     registry.register(makeSkill({
-      id: "ci-fix-flow",
-      name: "CI Build Fix Flow",
-      trigger: "CI build fails with dependency or config error",
-      steps: [
-        "read_file package.json to check dependency versions",
-        "run_shell pnpm install to verify dependency resolution",
-        "read_file tsconfig.json to check compile config",
-        "Locate and fix the specific file based on error",
-        "run_shell pnpm build to verify the fix",
+      id: "s-dep",
+      status: "deprecated",
+      triggerTags: ["fix"] as Tag[],
+      weight: -3,
+      feedbackHistory: [
+        { agentId: "a1", rating: -1, timestamp: Date.now() - 3000 },
+        { agentId: "a2", rating: -1, timestamp: Date.now() - 2000 },
+        { agentId: "a3", rating: -1, timestamp: Date.now() - 1000 },
       ],
-      expectedOutput: "Fixed config + CI pass",
-      status: "active"}));
-
-    const injected = executor.injectSkillContext("ci-fix-flow");
-    expect(injected).not.toBeNull();
-    expect(injected!).toContain("[技能注入: CI Build Fix Flow]");
-    expect(injected!).toContain("触发条件: CI build fails with dependency or config error");
-    expect(injected!).toContain("1. read_file package.json to check dependency versions");
-    expect(injected!).toContain("5. run_shell pnpm build to verify the fix");
-    expect(injected!).toContain("预期产出: Fixed config + CI pass");
-    expect(injected!).toContain("技能状态: 已验证");
+    }));
+    const matched = registry.queryByTags(["fix" as Tag]);
+    expect(matched).toHaveLength(0);
   });
 
-  it("injectSkillContext — deprecated skill returns null", () => {
-    registry.register(makeSkill({ id: "old-skill", status: "deprecated" }));
-    const injected = executor.injectSkillContext("old-skill");
-    expect(injected).toBeNull();
-  });
-
-  it("injectSkillContext — nonexistent skill returns null", () => {
-    const injected = executor.injectSkillContext("nonexistent");
-    expect(injected).toBeNull();
-  });
-
-  it("injectByTags — combined tag matching and injection", () => {
+  it("queryByTags — 多条 tag 匹配同一技能不重复", () => {
     registry.register(makeSkill({
-      id: "combo-test",
-      name: "Combo Test Skill",
-      trigger: "Combo operation detected",
-      steps: ["Step 1", "Step 2"],
-      triggerTags: ["ops", "deploy"] as Tag[]}));
+      id: "multi-tag",
+      triggerTags: ["fix", "review", "ops"] as Tag[],
+      weight: 3,
+    }));
 
-    const injected = executor.injectByTags(["ops" as Tag]);
-    expect(injected).toContain("[技能注入: Combo Test Skill]");
-    expect(injected).toContain("技能状态: 试用期");
+    const matched = registry.queryByTags(["fix", "review"] as Tag[]);
+    expect(matched).toHaveLength(1);
+    expect(matched[0].id).toBe("multi-tag");
+  });
+
+  it("queryByTags — 组合标签查询返回交集最大者", () => {
+    registry.registerAll([
+      makeSkill({ id: "s-review", triggerTags: ["review", "audit"] as Tag[], weight: 2 }),
+      makeSkill({ id: "s-fix", triggerTags: ["fix", "bugfix"] as Tag[], weight: 2 }),
+    ]);
+
+    const matched = registry.queryByTags(["fix", "review"] as Tag[]);
+    expect(["s-review", "s-fix"]).toContain(matched[0].id);
   });
 });
 
 // ═══════════════════════════════════════════════════════════
-// Scene B: Multi-node parallel — skill matching by tags
+// Scene B: 多标签交叉匹配
 // ═══════════════════════════════════════════════════════════
 
-describe("Scene B: Multi-node parallel skill matching", () => {
+describe("Scene B: 多标签交叉匹配（不跨 kind 泄漏）", () => {
   let registry: SkillRegistry;
-  let executor: SkillExecutor;
 
   beforeEach(() => {
     registry = new SkillRegistry();
-    executor = new SkillExecutor(registry);
 
     registry.registerAll([
       makeSkill({
         id: "skill-fix", name: "Bug Fix Skill",
         triggerTags: ["fix", "bugfix"] as Tag[],
-        steps: ["Locate bug", "Fix code", "Verify fix"]}),
+        steps: ["Locate bug", "Fix code", "Verify fix"],
+      }),
       makeSkill({
         id: "skill-review", name: "Code Review Skill",
-        agentType: AgentType.Review,
+        kind: "thought",
         triggerTags: ["review", "audit"] as Tag[],
-        steps: ["Check code style", "Review logic correctness", "Output review report"]}),
+        steps: ["Check code style", "Review logic correctness", "Output review report"],
+      }),
       makeSkill({
         id: "skill-code", name: "Feature Implementation Skill",
-        agentType: AgentType.Code,
+        kind: "action",
         triggerTags: ["implementation", "feature"] as Tag[],
-        steps: ["Understand requirements", "Design solution", "Implement code"]}),
+        steps: ["Understand requirements", "Design solution", "Implement code"],
+      }),
     ]);
   });
 
-  it("fix tag matches fix skill not review skill", () => {
-    const matched = executor.matchSkill(["fix" as Tag]);
-    expect(matched!.id).toBe("skill-fix");
+  it("fix tag 匹配 fix skill 而非 review skill", () => {
+    const matched = registry.queryByTags(["fix" as Tag]);
+    expect(matched[0].id).toBe("skill-fix");
   });
 
-  it("review tag matches review skill", () => {
-    const matched = executor.matchSkill(["review" as Tag]);
-    expect(matched!.id).toBe("skill-review");
+  it("review tag 匹配 review skill", () => {
+    const matched = registry.queryByTags(["review" as Tag]);
+    expect(matched[0].id).toBe("skill-review");
   });
 
-  it("implementation tag matches code skill", () => {
-    const matched = executor.matchSkill(["implementation" as Tag]);
-    expect(matched!.id).toBe("skill-code");
+  it("implementation tag 匹配 code skill", () => {
+    const matched = registry.queryByTags(["implementation" as Tag]);
+    expect(matched[0].id).toBe("skill-code");
   });
 
-  it("cross-domain tags do not leak skills", () => {
-    const reviewMatch = executor.matchSkill(["audit" as Tag]);
-    expect(reviewMatch!.id).toBe("skill-review");
-    expect(reviewMatch!.agentType).toBe(AgentType.Review);
+  it("跨域标签不泄漏技能——audit 只匹配 review", () => {
+    const reviewMatch = registry.queryByTags(["audit" as Tag]);
+    expect(reviewMatch[0].id).toBe("skill-review");
 
-    const fixMatch = executor.matchSkill(["bugfix" as Tag]);
-    expect(fixMatch!.id).toBe("skill-fix");
-    expect(fixMatch!.agentType).toBe(AgentType.Fix);
+    const fixMatch = registry.queryByTags(["bugfix" as Tag]);
+    expect(fixMatch[0].id).toBe("skill-fix");
   });
 
-  it("multi-tag query returns best match", () => {
-    const matched = executor.matchSkill(["fix", "review"]);
-    expect(matched).not.toBeNull();
-    expect(["skill-fix", "skill-review"]).toContain(matched!.id);
+  it("多标签查询返回所有匹配结果", () => {
+    const matched = registry.queryByTags(["fix", "review"] as Tag[]);
+    expect(matched.length).toBeGreaterThanOrEqual(2);
+    const ids = matched.map((m) => m.id);
+    expect(ids).toContain("skill-fix");
+    expect(ids).toContain("skill-review");
   });
 });
 
 // ═══════════════════════════════════════════════════════════
-// Scene C: Feedback loop — adopt/reject auto promote/demote
+// Scene C: 评价回流闭环 —— recordFeedback + deriveStatus
 // ═══════════════════════════════════════════════════════════
 
-describe("Scene C: Feedback loop — adopt/reject auto promote/demote", () => {
+describe("Scene C: 评价回流闭环 — recordFeedback + deriveStatus", () => {
   let registry: SkillRegistry;
-  let executor: SkillExecutor;
 
   beforeEach(() => {
     registry = new SkillRegistry();
-    executor = new SkillExecutor(registry);
   });
 
-  it("5 consecutive adopts: trial -> active", () => {
+  it("累计权重——5 次正向评价后 weight=5, status=active", () => {
     registry.register(makeSkill({
       id: "trial-to-active",
       status: "trial",
-      adoptionCount: 0}));
+      weight: 0}));
 
     for (let i = 1; i <= 5; i++) {
-      executor.recordFeedback("trial-to-active", true);
-      const skill = registry.get("trial-to-active");
-      expect(skill!.adoptionCount).toBe(i);
-      expect(skill!.rejectionCount).toBe(0);
+      registry.recordFeedback("trial-to-active", `agent-${i}`, 1);
+      const skill = registry.get("trial-to-active")!;
+      expect(skill.weight).toBe(i);
+      expect(skill.feedbackHistory.length).toBe(i);
     }
 
-    const skill = registry.get("trial-to-active");
-    expect(skill!.status).toBe("active");
-    expect(skill!.adoptionCount).toBe(5);
+    const skill = registry.get("trial-to-active")!;
+    expect(skill.weight).toBe(5);
+    // deriveStatus: weight >= 1 && at least one rating=1 → active
+    const status = deriveStatus(skill.weight, skill.feedbackHistory);
+    expect(status).toBe("active");
   });
 
-  it("adopt resets rejectionCount", () => {
+  it("正向评价不会清零历史", () => {
     registry.register(makeSkill({
-      id: "reset-reject",
-      status: "trial",
-      rejectionCount: 2}));
+      id: "keep-history",
+      weight: 3,
+      feedbackHistory: [
+        { agentId: "a1", rating: 1, timestamp: Date.now() },
+      ]}));
 
-    executor.recordFeedback("reset-reject", true);
-    const skill = registry.get("reset-reject")!;
-    expect(skill.rejectionCount).toBe(0);
-    expect(skill.adoptionCount).toBe(1);
+    registry.recordFeedback("keep-history", "a2", 1);
+    const skill = registry.get("keep-history")!;
+    expect(skill.weight).toBe(4);
+    expect(skill.feedbackHistory.length).toBe(2);
   });
 
-  it("3 consecutive rejects -> deprecated", () => {
+  it("3 次连续负向评价 → deprecated", () => {
     registry.register(makeSkill({
       id: "will-deprecate",
       status: "trial",
-      rejectionCount: 0}));
+      weight: 0}));
 
     for (let i = 1; i <= 3; i++) {
-      executor.recordFeedback("will-deprecate", false);
-      const skill = registry.get("will-deprecate");
-      expect(skill!.rejectionCount).toBe(i);
+      registry.recordFeedback("will-deprecate", `agent-${i}`, -1);
     }
 
-    const skill = registry.get("will-deprecate");
-    expect(skill!.status).toBe("deprecated");
+    const skill = registry.get("will-deprecate")!;
+    const status = deriveStatus(skill.weight, skill.feedbackHistory);
+    expect(status).toBe("deprecated");
   });
 
-  it("reject resets adoptionCount", () => {
+  it("负向评价后正向评价 → 重置连续负向计数，状态回归", () => {
     registry.register(makeSkill({
-      id: "reset-adopt",
+      id: "recover",
       status: "trial",
-      adoptionCount: 4}));
+      weight: 2,
+      feedbackHistory: [
+        { agentId: "a1", rating: -1, timestamp: Date.now() - 2000 },
+        { agentId: "a2", rating: -1, timestamp: Date.now() - 1000 },
+      ]}));
 
-    executor.recordFeedback("reset-adopt", false);
-    const skill = registry.get("reset-adopt")!;
-    expect(skill.adoptionCount).toBe(0);
-    expect(skill.rejectionCount).toBe(1);
-    expect(skill.status).toBe("trial");
+    // 正向评价打破连续负向
+    registry.recordFeedback("recover", "a3", 1);
+    const skill = registry.get("recover")!;
+    const status = deriveStatus(skill.weight, skill.feedbackHistory);
+    // weight=3, at least one positive → active
+    expect(status).toBe("active");
   });
 
-  it("active skill can still be adopted (no regression)", () => {
+  it("active 技能持续接受正向评价（不退化为 trial）", () => {
     registry.register(makeSkill({
       id: "stay-active",
       status: "active",
-      adoptionCount: 10,
-      rejectionCount: 0}));
+      weight: 10}));
 
-    executor.recordFeedback("stay-active", true);
+    registry.recordFeedback("stay-active", "a", 1);
     const skill = registry.get("stay-active")!;
-    expect(skill.status).toBe("active");
-    expect(skill.adoptionCount).toBe(11);
+    const status = deriveStatus(skill.weight, skill.feedbackHistory);
+    expect(status).toBe("active");
+    expect(skill.weight).toBe(11);
   });
 
-  it("nonexistent skill does not throw", () => {
-    expect(() => executor.recordFeedback("nonexistent", true)).not.toThrow();
+  it("不存在的技能 recordFeedback 返回 false 不抛异常", () => {
+    expect(registry.recordFeedback("nonexistent", "a", 1)).toBe(false);
   });
 
-  it("full lifecycle: trial -> adopt5x -> active -> reject3x -> deprecated", () => {
-    registry.register(makeSkill({ id: "full-lifecycle", status: "trial" }));
+  it("完整生命周期: trial → 正向 5 次 → active → 连续 3 次负向 → deprecated", () => {
+    registry.register(makeSkill({ id: "full-lifecycle", status: "trial", weight: 0 }));
 
-    for (let i = 0; i < 5; i++) executor.recordFeedback("full-lifecycle", true);
-    expect(registry.get("full-lifecycle")!.status).toBe("active");
+    // 5 次正向
+    for (let i = 0; i < 5; i++) registry.recordFeedback("full-lifecycle", `agent-${i}`, 1);
+    let skill = registry.get("full-lifecycle")!;
+    expect(deriveStatus(skill.weight, skill.feedbackHistory)).toBe("active");
 
-    for (let i = 0; i < 3; i++) executor.recordFeedback("full-lifecycle", false);
-    expect(registry.get("full-lifecycle")!.status).toBe("deprecated");
+    // 3 次连续负向
+    for (let i = 0; i < 3; i++) registry.recordFeedback("full-lifecycle", `agent-bad-${i}`, -1);
+    skill = registry.get("full-lifecycle")!;
+    expect(deriveStatus(skill.weight, skill.feedbackHistory)).toBe("deprecated");
+  });
+
+  it("评价携带建议可被保留", () => {
+    registry.register(makeSkill({ id: "with-suggestion" }));
+    registry.recordFeedback("with-suggestion", "fixer", 1, "步骤 2 的 read_file 可以改用 glob 匹配");
+    const skill = registry.get("with-suggestion")!;
+    expect(skill.feedbackHistory[0].suggestion).toBe("步骤 2 的 read_file 可以改用 glob 匹配");
   });
 });
 
 // ═══════════════════════════════════════════════════════════
-// Scene D: Scheduler + SkillExecutor full pipeline
+// Scene D: 注册表全生命周期
 // ═══════════════════════════════════════════════════════════
 
-describe("Scene D: Scheduler + SkillExecutor pipeline", () => {
-  let board: TaskBoard;
-  let pool: AgentPool;
-  let observer: PipelineObserver;
-  let scheduler: Scheduler;
+describe("Scene D: 注册表全生命周期 — register→get→unregister→cleanupOrphans", () => {
   let registry: SkillRegistry;
-  let executor: SkillExecutor;
 
   beforeEach(() => {
-    board = new TaskBoard();
-    pool = new AgentPool();
-    observer = new PipelineObserver();
-
-    pool.register({ type: AgentType.Fix, maxInstances: 3 });
-    pool.register({ type: AgentType.Code, maxInstances: 3 });
-    pool.register({ type: AgentType.Review, maxInstances: 3 });
-
-    const metaAgent = new MetaAgent(mockAdapter("plan: [fix-n1]"));
-    scheduler = new Scheduler(board, pool, observer, metaAgent);
-
     registry = new SkillRegistry();
-    executor = new SkillExecutor(registry);
   });
 
-  it("FixAgent execution — SkillExecutor injects matching skill", async () => {
-    registry.register(makeSkill({
-      id: "ci-build-fix",
-      name: "CI Build Fix Flow",
-      triggerTags: ["fix", "config"] as Tag[],
-      trigger: "CI build failed",
-      steps: ["Check package.json", "Run pnpm install", "Verify fix"],
-      status: "active"}));
-
-    const node = makeNode({
-      id: "fix-n1",
-      type: "fix",
-      tags: ["fix", "config", "ci"],
-      payload: "CI build failed: module not found"});
-    board.addNode(node);
-
-    const matched = executor.matchSkill(["fix", "config", "ci"] as Tag[]);
-    expect(matched).not.toBeNull();
-    expect(matched!.id).toBe("ci-build-fix");
-
-    const injected = executor.injectSkillContext("ci-build-fix");
-    expect(injected).toContain("[技能注入: CI Build Fix Flow]");
-
-    const fixAdapter = mockAdapter("Fixed package.json dependency updated to workspace:*, pnpm install success");
-    const fixAgent = createAgent(fixAgentConfig("You are a test agent."), fixAdapter, new Toolkit());
-    await fixAgent.wakeup();
-
-    scheduler.register(AgentType.Fix, fixAgent, "mock");
-
-    await scheduler.executeAll();
-
-    const finalNode = board.getNode("fix-n1");
-    expect(finalNode!.status).toBe("done");
-    expect(finalNode!.results.length).toBeGreaterThan(0);
-    expect(finalNode!.results[0].success).toBe(true);
-
-    executor.recordFeedback("ci-build-fix", true);
-    const skill = registry.get("ci-build-fix")!;
-    expect(skill.adoptionCount).toBe(1);
+  it("register + get 闭环", () => {
+    registry.register(makeSkill({ id: "my-skill", name: "My Skill" }));
+    const skill = registry.get("my-skill")!;
+    expect(skill).toBeDefined();
+    expect(skill.name).toBe("My Skill");
   });
 
-  it("skill matching should not cross Agent types — FixAgent does not match Review skill", () => {
+  it("同名 register 覆盖旧模板", () => {
+    registry.register(makeSkill({ id: "dup", name: "Old" }));
+    registry.register(makeSkill({ id: "dup", name: "New" }));
+    expect(registry.get("dup")!.name).toBe("New");
+    expect(registry.totalCount).toBe(1);
+  });
+
+  it("unregister 移除技能并从标签索引清除", () => {
+    registry.register(makeSkill({ id: "removable", triggerTags: ["fix"] as Tag[] }));
+    expect(registry.get("removable")).toBeDefined();
+
+    expect(registry.unregister("removable")).toBe(true);
+    expect(registry.get("removable")).toBeUndefined();
+    expect(registry.queryByTags(["fix" as Tag])).toHaveLength(0);
+  });
+
+  it("unregister 不存在的技能返回 false", () => {
+    expect(registry.unregister("ghost")).toBe(false);
+  });
+
+  it("registerAll 批量注册", () => {
     registry.registerAll([
-      makeSkill({
-        id: "fix-skill", name: "Fix", agentType: AgentType.Fix,
-        triggerTags: ["fix"] as Tag[], steps: ["Fix step"]}),
-      makeSkill({
-        id: "review-skill", name: "Review", agentType: AgentType.Review,
-        triggerTags: ["review"] as Tag[], steps: ["Review step"]}),
+      makeSkill({ id: "a" }),
+      makeSkill({ id: "b" }),
+      makeSkill({ id: "c" }),
     ]);
-
-    const fixMatch = executor.matchSkill(["fix" as Tag]);
-    expect(fixMatch!.agentType).toBe(AgentType.Fix);
-
-    const reviewMatch = executor.matchSkill(["review" as Tag]);
-    expect(reviewMatch!.agentType).toBe(AgentType.Review);
-
-    expect(fixMatch!.id).not.toBe(reviewMatch!.id);
+    expect(registry.totalCount).toBe(3);
+    expect(registry.get("a")).toBeDefined();
+    expect(registry.get("b")).toBeDefined();
+    expect(registry.get("c")).toBeDefined();
   });
 
-  it("prompt injection can be safely appended to system prompt", () => {
+  it("clear 清空所有技能", () => {
+    registry.registerAll([makeSkill({ id: "a" }), makeSkill({ id: "b" })]);
+    expect(registry.totalCount).toBe(2);
+    registry.clear();
+    expect(registry.totalCount).toBe(0);
+  });
+
+  it("cleanupOrphans 清理 weight=0 且过期的技能", () => {
+    // 创建 7 天前的孤技能
+    const oldDate = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    registry.register(makeSkill({ id: "orphan-old", weight: 0, createdAt: oldDate }));
+    registry.register(makeSkill({ id: "keep-new", weight: 0, createdAt: Date.now() }));
+    registry.register(makeSkill({ id: "keep-active", weight: 3, createdAt: oldDate }));
+
+    const removed = registry.cleanupOrphans(7 * 24 * 60 * 60 * 1000);
+    expect(removed).toContain("orphan-old");
+    expect(removed).not.toContain("keep-new");
+    expect(removed).not.toContain("keep-active");
+    expect(registry.totalCount).toBe(2);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// Scene E: 技能模板字段完整性
+// ═══════════════════════════════════════════════════════════
+
+describe("Scene E: 技能模板字段完整性", () => {
+  let registry: SkillRegistry;
+
+  beforeEach(() => {
+    registry = new SkillRegistry();
+  });
+
+  it("完整技能模板包含所有必填字段", () => {
+    const skill = makeSkill({ id: "valid-skill" });
+    registry.register(skill);
+
+    const retrieved = registry.get("valid-skill")!;
+    expect(retrieved.id).toBe("valid-skill");
+    expect(retrieved.kind).toBe("action");
+    expect(retrieved.name).not.toBe("");
+    expect(retrieved.triggerTags.length).toBeGreaterThan(0);
+    expect(retrieved.steps.length).toBeGreaterThan(0);
+    expect(retrieved.weight).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(retrieved.feedbackHistory)).toBe(true);
+  });
+
+  it("缺少 name 的技能可注册但 queryByTags 仍能命中", () => {
+    // 技能系统不强制校验——校验在入池前（外源导入时）由 SkillLoader 完成
+    registry.register(makeSkill({ id: "no-name", name: "", triggerTags: ["fix"] as Tag[] }));
+    const matched = registry.queryByTags(["fix" as Tag]);
+    expect(matched).toHaveLength(1);
+    expect(matched[0].name).toBe("");
+  });
+
+  it("缺少 triggerTags 的技能可注册", () => {
+    registry.register(makeSkill({ id: "no-tags", triggerTags: [] }));
+    expect(registry.get("no-tags")).toBeDefined();
+    // 但 queryByTags 无法通过标签命中它
+    expect(registry.queryByTags(["any" as Tag])).toHaveLength(0);
+  });
+
+  it("缺少 steps 的技能可注册", () => {
+    registry.register(makeSkill({ id: "no-steps", steps: [] }));
+    expect(registry.get("no-steps")!.steps).toHaveLength(0);
+  });
+
+  it("deprecated 技能可被 get 但不可被 queryByTags 命中", () => {
+    registry.register(makeSkill({
+      id: "dep-skill",
+      status: "deprecated",
+      triggerTags: ["fix"] as Tag[],
+      weight: -3,
+      feedbackHistory: [
+        { agentId: "a1", rating: -1, timestamp: Date.now() - 3000 },
+        { agentId: "a2", rating: -1, timestamp: Date.now() - 2000 },
+        { agentId: "a3", rating: -1, timestamp: Date.now() - 1000 },
+      ],
+    }));
+    expect(registry.get("dep-skill")).toBeDefined();
+    expect(registry.queryByTags(["fix" as Tag])).toHaveLength(0);
+  });
+
+  it("activeCount 统计 trial + active 技能数", () => {
+    // status 是衍生标签，由 deriveStatus(weight, feedbackHistory) 动态推导
+    registry.register(makeSkill({ id: "a1", status: "active", weight: 5, feedbackHistory: [{ agentId: "x", rating: 1, timestamp: Date.now() }] }));
+    registry.register(makeSkill({ id: "a2", status: "active", weight: 3, feedbackHistory: [{ agentId: "x", rating: 1, timestamp: Date.now() }] }));
+    // deprecated: 3 次连续负向
+    registry.register(makeSkill({ id: "d1", status: "deprecated", weight: -3, feedbackHistory: [{ agentId: "x", rating: -1, timestamp: Date.now() - 3000 }, { agentId: "x", rating: -1, timestamp: Date.now() - 2000 }, { agentId: "x", rating: -1, timestamp: Date.now() - 1000 }] }));
+    registry.register(makeSkill({ id: "t1", status: "trial", weight: 0, feedbackHistory: [] }));
+
+    expect(registry.activeCount).toBe(3); // a1, a2, t1
+    expect(registry.totalCount).toBe(4);
+  });
+
+  it("getAll 返回所有已注册技能", () => {
+    registry.registerAll([
+      makeSkill({ id: "s1" }),
+      makeSkill({ id: "s2" }),
+    ]);
+    const all = registry.getAll();
+    expect(all).toHaveLength(2);
+    expect(all.map((s) => s.id).sort()).toEqual(["s1", "s2"]);
+  });
+
+  it("技能结构可以被注入到 system prompt 中", () => {
     registry.register(makeSkill({
       id: "append-safe",
       name: "Append Safety Test",
       trigger: "Test scenario",
       steps: ["Verify append safety"],
-      triggerTags: ["test"] as Tag[]}));
+      triggerTags: ["test"] as Tag[],
+    }));
 
+    const skill = registry.get("append-safe")!;
     const systemPrompt = "You are a code review agent. Check code quality.";
-    const injected = executor.injectSkillContext("append-safe")!;
-    const combined = systemPrompt + "\n\n" + injected;
 
+    // 技能不再是强制注入——由 Agent 自己决定是否参照
+    // 但技能信息可以被结构化地附加到上下文中
+    const skillContext = [
+      `[技能参照: ${skill.name}]`,
+      `触发条件: ${skill.trigger}`,
+      ...skill.steps.map((s, i) => `${i + 1}. ${s}`),
+      `预期产出: ${skill.expectedOutput}`,
+    ].join("\n");
+
+    const combined = systemPrompt + "\n\n" + skillContext;
     expect(combined).toContain(systemPrompt);
-    expect(combined).toContain("[技能注入: Append Safety Test]");
+    expect(combined).toContain("[技能参照: Append Safety Test]");
     expect(combined).toContain("1. Verify append safety");
-  });
-});
-
-// ═══════════════════════════════════════════════════════════
-// Scene E: validate skill completeness
-// ═══════════════════════════════════════════════════════════
-
-describe("Scene E: validate skill completeness", () => {
-  let registry: SkillRegistry;
-  let executor: SkillExecutor;
-
-  beforeEach(() => {
-    registry = new SkillRegistry();
-    executor = new SkillExecutor(registry);
-  });
-
-  it("complete skill passes validation", () => {
-    registry.register(makeSkill({ id: "valid-skill" }));
-    const result = executor.validate("valid-skill");
-    expect(result.valid).toBe(true);
-    expect(result.errors).toHaveLength(0);
-  });
-
-  it("missing name returns error", () => {
-    registry.register(makeSkill({ id: "no-name", name: "" }));
-    const result = executor.validate("no-name");
-    expect(result.valid).toBe(false);
-    expect(result.errors).toContain("技能 no-name: 缺少 name");
-  });
-
-  it("missing triggerTags returns error", () => {
-    registry.register(makeSkill({ id: "no-tags", triggerTags: [] }));
-    const result = executor.validate("no-tags");
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e: string) => e.includes("缺少 triggerTags"))).toBe(true);
-  });
-
-  it("missing steps returns error", () => {
-    registry.register(makeSkill({ id: "no-steps", steps: [] }));
-    const result = executor.validate("no-steps");
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e: string) => e.includes("缺少 steps"))).toBe(true);
-  });
-
-  it("deprecated skill fails validation", () => {
-    registry.register(makeSkill({ id: "dep-skill", status: "deprecated" }));
-    const result = executor.validate("dep-skill");
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e: string) => e.includes("已废弃"))).toBe(true);
-  });
-
-  it("nonexistent skill fails validation", () => {
-    const result = executor.validate("ghost-skill");
-    expect(result.valid).toBe(false);
-    expect(result.errors[0]).toContain("不在注册表中");
-  });
-
-  it("available skill count is accurate", () => {
-    registry.register(makeSkill({ id: "a1", status: "active" }));
-    registry.register(makeSkill({ id: "a2", status: "active" }));
-    registry.register(makeSkill({ id: "d1", status: "deprecated" }));
-    registry.register(makeSkill({ id: "t1", status: "trial" }));
-
-    expect(executor.availableCount).toBe(3);
   });
 });

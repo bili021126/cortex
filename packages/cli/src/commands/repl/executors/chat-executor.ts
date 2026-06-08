@@ -4,16 +4,15 @@
  * 将自然语言输入作为引擎任务执行，或根据意图分类直连 LLM 闲聊。
  */
 
-import type { ICortexApi, LlmMessage, TaskNode } from "@cortex/shared";
-import { AgentType } from "@cortex/shared";
+import { AgentType, type ICortexApi, type LlmMessage, type TaskNode, type Tag } from "@cortex/shared";
 import { ENV_DEEPSEEK_API_KEY } from "@cortex/config";
 import type { CommandContext } from "../../../types.js";
-import { getFormatter } from "../../../formatters/index.js";
+import type { getFormatter } from "../../../formatters/index.js";
 import { getAgentDisplay } from "../types.js";
 import {
   classifyIntent,
   getPrimaryTag,
-  loadAgentSystemPrompt,
+  loadAgentPrompt,
   loadNahidaPersona,
   loadPersonaPrivate,
 } from "../display.js";
@@ -49,7 +48,7 @@ export async function executeChatInput(
       }
       await bridge.ensureReady();
 
-      let systemPrompt = loadAgentSystemPrompt(agent);
+      let systemPrompt = await loadAgentPrompt(agent);
 
       // 注入私密 persona（如果存在）
       if (agent === AgentType.Analysis) {
@@ -108,12 +107,12 @@ export async function executeChatInput(
     const taskNode: TaskNode = {
       id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type: primaryTag,
-      tags: tags as any,
+      tags: tags as Tag[],
       needsMultiPerspective: false,
       status: "pending" as const,
-      claimedBy: [] as any,
+      claimedBy: [],
       payload: framedPayload,
-      results: [] as any[],
+      results: [],
       createdAt: Date.now(),
     };
 

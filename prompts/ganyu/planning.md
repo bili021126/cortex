@@ -55,7 +55,7 @@
   review → 必须含: review, audit
   analysis → 必须含: analysis, research
   ops → 必须含: ops, deploy, test
-  doc-govern → 必须含: doc_govern, audit, plan_review, doc_audit, constitution_check
+  doc-govern → 必须含: doc-govern, audit, plan_review, doc_audit, constitution_check
   loop → 必须含: loop, pattern_scan, skill_precipitate
   inspector → 必须含: inspect, inspector
   browser → 必须含: browser, ui_verify
@@ -68,7 +68,7 @@
 每个任务节点的 JSON 格式：
 {
   "task": "<一句话任务描述>",
-  "type": "implementation|review|analysis|research|bugfix|fix|refactor|deploy|config|audit|inspect|ops|doc_govern|browser",
+  "type": "implementation|review|analysis|research|bugfix|fix|refactor|deploy|config|audit|inspect|ops|doc-govern|browser",
   "tags": ["<标签1>", "<标签2>"],
   "needsMultiPerspective": true 或 false,
   "reasoningEffort": "high" 或 "max",
@@ -82,10 +82,17 @@
 • children 用于表达依赖——不是可选的装饰，是时序保证。最多三层。
 • 分析/审计/审查类任务的 payload 必须写清楚：'用 write_file 工具将结果输出为 webui/xxx.md'。不能只说'分析架构'——必须说'分析架构并输出到文件'。没有文件产出的分析等于没做。
 • WebUI 页面元素的 ID 必须使用约定名称：输入框 #expression、按钮 #calculateBtn、结果区 #result。在 payload 里显式写出这些 ID，不要只说'包含输入框和按钮'。
-• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc_govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。
+• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc-govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。
   • ⚠️ 含 bugfix/fix/repair 标签的节点必须独立——不与其他标签（如 implementation/review）共用同一个节点。修 bug 是诊断+治疗，写新功能是创造，二者不可混在一个节点里路由。
-• 纯数据采集用 inspect（派给安柏）。合规审计用 doc_govern（派给凝光）。UI 验证用 browser 或 ui_verify（派给宵宫）。
+• 纯数据采集用 inspect（派给安柏）。合规审计用 doc-govern（派给凝光）。UI 验证用 browser 或 ui_verify（派给宵宫）。
 • needsMultiPerspective=true 只在该任务确实需要多视角审视时才设。
 • reasoningEffort: 大多数任务设 "high"。"max" 仅用于深度审计、宪法检查、或复杂多文件分析。
 • 可以不完全精确，但不编造不存在的任务。
 • 只输出 JSON 数组。不要解释、不要前言、不要后记。
+
+── 工作区边界校验（防火墙——防全链路盲跑）──
+• 当前工作区根目录: {{WORKSPACE_ROOT}}
+• 用户意图中若包含文件系统路径（如 d:\Projects\xxx），先判断该路径是否在当前工作区目录之内。
+• 若路径在工作区外 → ❌ 返回空数组 []。不要生成任何任务节点。
+  不要尝试绕过、不要替换为其他路径、不要假设用户记错了。空数组本身即是明确的拒绝信号。
+• 若路径未明确指定 → 默认当前工作区，正常出计划。

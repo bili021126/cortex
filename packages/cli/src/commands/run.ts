@@ -1,4 +1,4 @@
-/**
+﻿/**
  * commands/run.ts — `cortex run` 单次执行命令
  *
  * 最常用的顶级命令——接受输入文件，调度 Agent 执行，输出结果。
@@ -9,6 +9,7 @@
 
 import type { CommandHandler, CommandResult } from "../types.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
+import type { TaskNode, Tag } from "@cortex/shared";
 import { convert, convertToDocument } from "@cortex/parser";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -101,10 +102,10 @@ export function createRunHandler(bridge: EngineBridge): CommandHandler {
       const board = await bridge.getTaskBoard();
       const scheduler = await bridge.getScheduler();
 
-      const taskNode: any = {
+      const taskNode: TaskNode = {
         id: `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         type: agentType ?? "analysis",
-        tags: (agentType ? [agentType] : ["analysis"]),
+        tags: (agentType ? [agentType] : ["analysis"]) as Tag[],
         needsMultiPerspective: false,
         status: "pending",
         claimedBy: [],

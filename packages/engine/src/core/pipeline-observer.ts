@@ -1,5 +1,4 @@
-import type { ObservableEvent, PipelineHandler, SafeErrorReporter, SafeErrorContext, HandlerErrorContext, HandlerErrorReporter, IPipelineObserver } from "@cortex/shared";
-import { PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type ObservableEvent, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter } from "@cortex/shared";
 
 // HandlerErrorContext + HandlerErrorReporter 已迁移至 @cortex/shared —— 从 shared import 即可
 // 迁移原因（艾尔海森 P1）：PipelineObserver 的 handler 异常回调类型供外部注入自定义错误上报后端使用，
@@ -36,7 +35,8 @@ export class PipelineObserver implements IPipelineObserver {
     if (!this.handlers.has(priority)) {
       this.handlers.set(priority, []);
     }
-    this.handlers.get(priority)!.push(handler);
+    const handlers = this.handlers.get(priority);
+    if (handlers) handlers.push(handler);
   }
 
   /**

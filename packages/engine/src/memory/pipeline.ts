@@ -1,8 +1,9 @@
-import type { TaskNode, NodeResult, MemoryQuery, AgentType, SafeErrorReporter, MemoryEntry, ReadMode, MemoryKind } from "@cortex/shared";
-import { LinkType } from "@cortex/shared";
+import { LinkType, PRESET_CONTEXT_POLICIES, type AgentType, type MemoryEntry, type MemoryKind, type MemoryQuery, type NodeResult, type ReadMode, type SafeErrorReporter, type TaskNode } from "@cortex/shared";
 import type { MemoryStore } from "./memory-store.js";
 import { runReActLoop, type ReActContext } from "../components/react-loop.js";
 import { PipelineRunner, type PipelineCtx, type IStep } from "../core/pipeline-runner.js";
+import { ContextBuilder } from "./context-builder.js";
+import { recordTelemetry } from "../telemetry/engine-telemetry.js";
 
 /**
  * 默认记忆检索策略——调用统一入口 makeMemoryQuery。
@@ -76,8 +77,38 @@ export class MemoryRetrievalStep implements IStep {
       return ctx;
     }
 
-    const query = memoryQuery ? memoryQuery(node) : defaultMemoryQuery(node);
     try {
+      // ── Core-2: ContextPolicy 驱动上下文构建 ──
+      const contextPolicyId = node.contextPolicyId;
+      if (contextPolicyId && PRESET_CONTEXT_POLICIES[contextPolicyId]) {
+        const policy = PRESET_CONTEXT_POLICIES[contextPolicyId];
+        const builder = new ContextBuilder(memory);
+        const result = await builder.build(policy, node);
+
+        // ── 遥测：记录上下文构建统计 ──
+        void recordTelemetry("context.builder.total_retrieved", result.totalRetrieved, [
+          { key: "policy", value: contextPolicyId },
+          { key: "agent", value: agentType },
+        ], {
+          afterDedup: result.afterDedup,
+          injected: result.injected,
+          charCount: result.charCount,
+          tierCounts: result.tierCounts,
+        });
+
+        if (result.injected > 0) {
+          ctx.enrichedNode = {
+            ...node,
+            payload: `上下文记忆（${result.injected}/${result.totalRetrieved} 条，${result.charCount} 字符）：\n${result.context}\n\n任务：${node.payload}`,
+          };
+        } else {
+          ctx.enrichedNode = node;
+        }
+        return ctx;
+      }
+
+      // ── 回退：关键词检索（无 ContextPolicy） ──
+      const query = memoryQuery ? memoryQuery(node) : defaultMemoryQuery(node);
       const ctxRecords = await memory.read(query);
       const filtered = filterRead ? filterRead(ctxRecords, "CSA") : ctxRecords;
       if (filtered.length > 0) {

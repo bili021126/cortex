@@ -1,0 +1,11 @@
+{
+  "name": "alhaitham 数据层分析",
+  "tasks": [
+    {
+      "id": "alhaitham-data",
+      "type": "data",
+      "tags": ["data", "data_model", "schema", "storage"],
+      "payload": "你是艾尔海森，对 d:\\Projects\\study\\my-test 做数据层分析。\n\n【后端数据】\n1. list_files 找根目录 .sql 文件，read_file 读 SQL 初始化脚本——分析表结构、外键、索引\n2. list_files 列出所有 Mapper.java 和对应的 Mapper.xml，read_file 逐个读——检查 N+1 查询风险\n3. 对比 Mapper 接口方法 vs XML 中 SQL 语句数量，检查映射完整性\n4. read_file 读 PageHelper 使用代码——分页策略是否规范\n5. read_file 读 Redis 配置和缓存注解——键命名规范、TTL 策略\n\n【前端数据流】\n6. list_files 扫描 admin/src/api/ 和 show/src/api/，read_file 读 axios 封装\n7. read_file 读前端 package.json——列出所有依赖及版本，标注弃用/CVE 风险\n8. read_file 读 store（如 vuex/pinia）——分析前端数据管理架构\n\n工作区已通过 --dir 指向 d:\\Projects\\study\\my-test。\n\n⚠️ 禁止使用 search_code（太慢会超时）——只用 list_files + read_file。\n⚠️ 铁律：每条发现必须有工具调用支撑。绝不出现「待确认」。\n⚠️ 末尾输出完整的 markdown 分析报告。"
+    }
+  ]
+}

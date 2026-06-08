@@ -34,6 +34,8 @@ export interface MemoryEntry {
   // §1 身份层（写入后永不变）
   id: string;
   source: MemorySource;
+  /** 运行会话标识——每次 executeAll() 生成唯一 runId。正常完成时融入认知共享层，任务终结时按 sessionId 批量清理。undefined 为向后兼容（v2.5.41 前无此字段） */
+  sessionId?: string;
 
   // §2 认知层（自迭代策略操作的对象）
   kind: MemoryKind;
@@ -55,6 +57,8 @@ export interface MemoryEntry {
   content_hash: string;
   /** Unix 毫秒时间戳，之后可湮灭。0 或 undefined = 永不过期 */
   expires_at?: number;
+  /** @internal 两阶段提交的 Pending 标记。仅 MemoryStore 内部使用，不参与序列化 */
+  _pending?: boolean;
 }
 
 // ─── MemoryWriteInput v3 ────────────────────────────────
@@ -62,6 +66,8 @@ export interface MemoryEntry {
 export interface MemoryWriteInput {
   // §1 身份
   source: MemorySource;
+  /** 运行会话标识。MemoryStore 内部自动从当前 session 注入，外部可选提供。 */
+  sessionId?: string;
 
   // §2 认知
   kind: MemoryKind;
@@ -141,7 +147,13 @@ export interface MemoryQuery {
 export interface IMemoryStore {
   readonly isPersisted: boolean;
   readonly size: number;
+  /** 当前运行会话标识。undefined 为未初始化或向后兼容 */
+  readonly sessionId?: string;
   init(dbPath: string): Promise<void>;
+  /** 开始新会话——生成或接受 sessionId，后续 write() 自动注入。@param externalId 可选——外部传入的 sessionId */
+  beginSession(externalId?: string): string;
+  /** 终结当前会话——按 sessionId 批量归档 Active 记忆、湮灭 Pending 记忆 */
+  endSession(): Promise<number>;
   write(input: MemoryWriteInput): Promise<string>;
   /** @param mode HCA=广度浅读不追踪热度，CSA=深度窄读追踪热度 */
   read(query: MemoryQuery, mode?: ReadMode): Promise<MemoryEntry[]>;
@@ -153,8 +165,12 @@ export interface IMemoryStore {
   obliterate(memoryId: string): boolean;
   writePending(input: MemoryWriteInput): string;
   commitMemory(memoryId: string): boolean;
+  /** 显式回滚——将指定 Pending 记忆湮灭（不经过 Active 态）。两阶段提交的终止路径 */
+  rollback(memoryId: string): boolean;
   getPending(): MemoryEntry[];
   hasPending(): boolean;
+  /** 按 sessionId 查询指定会话的所有记忆 */
+  getBySession(sessionId: string): MemoryEntry[];
   peek(memoryId: string): Readonly<MemoryEntry> | undefined;
   flush(): Promise<void>;
   close(): Promise<void>;

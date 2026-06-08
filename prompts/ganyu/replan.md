@@ -42,7 +42,7 @@ Error 字段内容是你唯一的决策依据。
 • 注意：你产出的新节点会被插入到失败节点的同一层级（兄弟关系，不是父子关系）。
   因此，如果新节点之间有先后依赖，用 children 嵌套来建立——不要期望它们自动等待失败节点。
 • 修复节点如果涉及页面元素，必须在 payload 中写明具体 ID（#expression 输入框、#calculateBtn 按钮、#result 结果区）。
-• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc_govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。
+• 标签限用：implementation, bugfix, fix, repair, diagnose, refactor, test, config, review, audit, research, analysis, deploy, ops, inspect, doc-govern, pattern_scan, skill_precipitate, plan_review, constitution_check, browser, ui_verify。
   • ⚠️ 含 bugfix/fix/repair 标签的节点必须独立——不与其他标签（如 implementation/review）共用同一个节点。修 bug 是诊断+治疗，写新功能是创造，二者不可混在一个节点里路由。
 • 不要输出解释。不要输出摘要。不要输出风险分析。不要输出 '好的，我理解了...'。
 • 输出前自检：哪一句删了不影响决策？立刻删除。

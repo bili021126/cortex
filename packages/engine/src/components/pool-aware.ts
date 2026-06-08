@@ -1,7 +1,5 @@
-import type { AgentStatus } from "@cortex/shared";
-import { AgentStatus as AS } from "@cortex/shared";
-import type { SafeErrorReporter } from "@cortex/shared";
-import type { AgentPool } from "../core/agent-pool.js";
+import { AgentStatus as AS, type AgentStatus, type SafeErrorReporter } from "@cortex/shared";
+import { AgentPool as AgentPoolClass, type AgentPool } from "../core/agent-pool.js";
 import { isTestEnv } from "../test-env.js";
 
 /**
@@ -18,7 +16,6 @@ import { isTestEnv } from "../test-env.js";
  */
 
 /** 合法状态流转表——引用 AgentPool 权威源，消除双轨校验 */
-import { AgentPool as AgentPoolClass } from "../core/agent-pool.js";
 const VALID_TRANSITIONS = AgentPoolClass.VALID_TRANSITIONS;
 
 export class PoolAwareState {

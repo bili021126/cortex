@@ -23,3 +23,11 @@ export type { SkillExtractResult } from "./skill-extractor.js";
 // ── 技能持久化 ──────────────────────────────────
 export { persistSkillsToMemory, loadSkillsFromMemory, scanOutputFilesForSkills, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence } from "./skill-persister.js";
 export type { CrystallizeOptions, CrystallizeResult, KnowledgeMetadata, ExternalSearcher, VerifyOptions, VerifyResult } from "./skill-persister.js";
+
+// ── 外源技能 JSON 校验与转化 ────────────────────
+export { validateExternalSkillJson, externalJsonToSkillTemplate, importExternalSkill } from "./skill-json-validator.js";
+export type { SkillJsonValidationResult, SkillJsonValidationError, SkillJsonValidationWarning, SkillJsonValidationInfo, SkillJsonValidator, SkillStatus } from "./skill-json-validator.js";
+
+// ── 技能步骤模板渲染引擎 ──────────────────────────
+export { SkillTemplateEngine } from "./skill-template-engine.js";
+export type { TemplateEngineOptions, TemplateContext } from "./skill-template-engine.js";

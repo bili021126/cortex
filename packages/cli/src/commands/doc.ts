@@ -1,4 +1,4 @@
- 
+
 /**
  * commands/doc.ts — `cortex doc` 文档工具命令
  *
@@ -127,7 +127,14 @@ function handleDocServe(
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://localhost:${port}`);
-    let filePath = path.join(rootDir, url.pathname);
+    // @fix B1 (code-review) — 路径穿越保护
+    const normalizedRoot = path.resolve(rootDir);
+    let filePath = path.resolve(normalizedRoot, "." + url.pathname);
+    if (!filePath.startsWith(normalizedRoot + path.sep) && filePath !== normalizedRoot) {
+      res.writeHead(403);
+      res.end("403 Forbidden");
+      return;
+    }
 
     if (!fs.existsSync(filePath)) {
       res.writeHead(404, { "Content-Type": "text/plain" });
@@ -162,6 +169,21 @@ function handleDocServe(
     console.log(`📖 文档服务器启动: http://localhost:${port}`);
     console.log(`   根目录: ${rootDir}`);
   });
+
+  // @fix P1-4 (code-review) — 注册 SIGINT/SIGTERM 清理路径，
+  // 避免 `cortex doc serve` 退出后端口仍被占用。
+  // @fix S2 — process.once + _cleanedUp 幂等防护，防止重复执行。
+  let _cleanedUp = false;
+  const cleanup = () => {
+    if (_cleanedUp) return;
+    _cleanedUp = true;
+    server.close(() => {
+      console.log("\n📖 文档服务器已关闭");
+      process.exit(0);
+    });
+  };
+  process.once("SIGINT", cleanup);
+  process.once("SIGTERM", cleanup);
 
   // 在原型阶段，serve 命令保持进程运行
   return {

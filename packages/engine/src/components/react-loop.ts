@@ -48,7 +48,7 @@ export async function runReActLoop(
   const TOOL_DISCIPLINE = [
     "──── ⚠️ 工具使用硬约束（违反将导致任务失败）────",
     "",
-    "· 文件搜索 → 必须用 search_code，禁止用 run_shell 执行 grep/findstr/rg/dir",
+    "· 文件搜索 → 优先用 search_code。若 search_code 返回错误，立即改用 list_files + read_file。禁止用 run_shell 执行 grep/findstr/rg/dir",
     "· 目录浏览 → 必须用 list_files，禁止用 run_shell 执行 ls/dir/Get-ChildItem",
     "· 文件读取 → 必须用 read_file，禁止用 run_shell 执行 cat/type/Get-Content",
     "· 文件写入 → 必须用 write_file，禁止用 run_shell 执行 echo/copy/Out-File",
@@ -59,6 +59,7 @@ export async function runReActLoop(
     "  或 Unix/bash 语法（如 mkdir -p, ls -la, find . -name）。",
     "",
     "违反此约束 = 你根本没在执行任务，是在浪费时间。",
+    "工具报错一次就换方案——不要反复重试同一个已失败的工具调用。",
   ].join("\n");
 
   const messages: LlmMessage[] = [

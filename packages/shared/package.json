@@ -20,6 +20,9 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "@cortex/config": "workspace:*"
+  },
   "devDependencies": {
     "eslint": "^10.3.0",
     "typescript": "^5.7.0",

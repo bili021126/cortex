@@ -10,7 +10,7 @@ export default defineConfig({
     env: {
       DEEPSEEK_API_KEY: "",
       DEEPSEEK_BASE_URL: "https://api.deepseek.com/v1",
-      DEEPSEEK_CHAT_MODEL: "deepseek-chat",
+      DEEPSEEK_CHAT_MODEL: "deepseek-v4-flash",
     },
   },
 });

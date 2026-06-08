@@ -12,15 +12,12 @@
  * @since v2.9 调度系统组件化与管线可组合
  */
 
-import type { ExecutionReport, Agent } from "@cortex/shared";
+import { type Agent, type ExecutionReport, type IPipelineObserver } from "@cortex/shared";
 import type { ITaskBoard } from "./task-board.js";
 import type { ISchedulerAgentPool } from "./agent-pool.js";
-import type { IPipelineObserver } from "@cortex/shared";
 import type { MetaAgent } from "./meta-agent.js";
-import type { SkillExecutor } from "./skill-executor.js";
 import { ReplanManager } from "./replan-manager.js";
-import type { EngineConfig } from "@cortex/config";
-import { resolveConfig } from "@cortex/config";
+import { resolveConfig, type EngineConfig } from "@cortex/config";
 import type { IScheduler } from "./scheduler.js";
 
 import type {
@@ -30,9 +27,7 @@ import type {
   CompositeSchedulerConfig,
   LoopContext,
 } from "./scheduling-types.js";
-import { TagMatchingStrategy } from "./scheduling-implementations.js";
-import { TopologicalLayeredDriver } from "./scheduling-implementations.js";
-import { PipelineModel } from "./scheduling-implementations.js";
+import { PipelineModel, TagMatchingStrategy, TopologicalLayeredDriver } from "./scheduling-implementations.js";
 
 /**
  * CompositeScheduler —— 组合式调度器。
@@ -59,7 +54,6 @@ export class CompositeScheduler implements IScheduler {
   private models = new Map<string, string>();
   private readonly replanManager: ReplanManager;
   private readonly config: Required<EngineConfig>;
-  private _skillExecutor?: SkillExecutor;
 
   // 三抽象组件
   readonly strategy: IScheduleStrategy;
@@ -79,7 +73,6 @@ export class CompositeScheduler implements IScheduler {
 
     this.strategy = schedulerConfig?.strategy ?? new TagMatchingStrategy();
     this.loopDriver = schedulerConfig?.loopDriver ?? new TopologicalLayeredDriver();
-    // PipelineModel needs skillExecutor reference
     this.executionModel = schedulerConfig?.executionModel ?? new PipelineModel();
   }
 
@@ -87,15 +80,6 @@ export class CompositeScheduler implements IScheduler {
   register(agentType: string, agent: Agent, model: string): void {
     this.agents.set(agentType, agent);
     this.models.set(agentType, model);
-  }
-
-  /** 注入技能执行器 */
-  setSkillExecutor(executor: SkillExecutor): void {
-    this._skillExecutor = executor;
-    // 如果用的是 PipelineModel，同步 skillExecutor
-    if (this.executionModel instanceof PipelineModel) {
-      (this.executionModel as PipelineModel).skillExecutor = executor;
-    }
   }
 
   /**
@@ -116,7 +100,6 @@ export class CompositeScheduler implements IScheduler {
       config: this.config,
       strategy: this.strategy,
       executionModel: this.executionModel,
-      skillExecutor: this._skillExecutor,
     };
 
     const loopResult = await this.loopDriver.run(loopCtx);

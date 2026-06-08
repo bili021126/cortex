@@ -1,0 +1,160 @@
+{
+  "description": "工具元数据定义——每把工具的声明式描述：分类、可逆级别、参数 Schema。供 Toolkit.setToolMeta() 注入。",
+  "tools": {
+    "read_file": {
+      "category": "Read",
+      "description": "Read the contents of a file at the given path.",
+      "level": "L0",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to file"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    "write_file": {
+      "category": "Write",
+      "description": "Write content to a file at the given path.",
+      "level": "L2",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to file"
+          },
+          "content": {
+            "type": "string",
+            "description": "Content to write"
+          }
+        },
+        "required": [
+          "file_path",
+          "content"
+        ]
+      }
+    },
+    "search_code": {
+      "category": "Search",
+      "description": "Search for code patterns in the project.",
+      "level": "L0",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Code pattern to search"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    "run_shell": {
+      "category": "Shell",
+      "description": "Run a shell command and return its output.",
+      "level": "L3",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Shell command to run"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    "list_files": {
+      "category": "Read",
+      "description": "List files and directories at the given path.",
+      "level": "L0",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "dir_path": {
+            "type": "string",
+            "description": "Absolute path to directory (default: current workspace)"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Glob filter pattern (optional, e.g. '*.ts')"
+          }
+        },
+        "required": []
+      }
+    },
+    "delete_file": {
+      "category": "Write",
+      "description": "Delete a file at the given path. Irreversible — use with caution.",
+      "level": "L3",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to file to delete"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    "parse_ast": {
+      "category": "Read",
+      "description": "Parse a source file and return its AST (Abstract Syntax Tree).",
+      "level": "L0",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to the source file to parse"
+          },
+          "max_depth": {
+            "type": "number",
+            "description": "Maximum AST depth to return (default: 6, max: 12)"
+          },
+          "include_text": {
+            "type": "boolean",
+            "description": "Include source text snippets in AST nodes (default: true)"
+          }
+        },
+        "required": [
+          "file_path"
+        ]
+      }
+    },
+    "web_search": {
+      "category": "Search",
+      "description": "Search the web and return structured results.",
+      "level": "L0",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query"
+          },
+          "max_results": {
+            "type": "number",
+            "description": "Maximum number of results (default: 5, max: 10)"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  }
+}

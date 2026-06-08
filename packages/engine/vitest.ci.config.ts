@@ -1,20 +1,26 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * CI 专用 vitest 配置。
- * 排除规则已迁移至 ci-gate.ts 的 @ci 标签动态扫描——
- * 测试文件以 `// @ci: unit | llm | integration | e2e | manual` 自声明类别，
- * ci-gate.ts 运行时通过 --exclude 参数动态注入。
- * 此文件仅保留 include 和 env 配置，不硬编码排除列表。
+ * CI 快速单元测试——排除需要全引擎启动（ONNX + SQLite + bootstrap）的集成测试。
+ * 慢速测试由 vitest.ci-slow.config.ts 单独跑。
+ *
+ * ⚠️ vitest 2.1.9 的 exclude（config 字段和 CLI --exclude）均不可靠，
+ * 故改用 include 的 picomatch ! 否定 glob 来排除。
  */
 export default defineConfig({
   test: {
-    include: ["tests/**/*.test.ts"],
-    // exclude 由 ci-gate.ts 动态注入，不在此硬编码
+    include: [
+      "tests/**/*.test.ts",
+      "!tests/bootstrap-integration*",
+      "!tests/skill-bootstrap*",
+      "!tests/skill-system-integration*",
+      "!tests/system-stress*",
+      "!tests/e2e/**",
+    ],
     env: {
       DEEPSEEK_API_KEY: "",
       DEEPSEEK_BASE_URL: "https://api.deepseek.com/v1",
-      DEEPSEEK_CHAT_MODEL: "deepseek-chat",
+      DEEPSEEK_CHAT_MODEL: "deepseek-v4-flash",
     },
   },
 });

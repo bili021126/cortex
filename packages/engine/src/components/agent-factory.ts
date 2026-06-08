@@ -1,8 +1,15 @@
-import type {
-  Agent, TaskNode, NodeResult, AgentType, MemoryQuery,
-  SafeErrorReporter, AgentStatus, MemoryEntry, ReadMode,
+import {
+  AgentStatus as AS,
+  type Agent,
+  type TaskNode,
+  type NodeResult,
+  type AgentType,
+  type MemoryQuery,
+  type SafeErrorReporter,
+  type AgentStatus,
+  type MemoryEntry,
+  type ReadMode,
 } from "@cortex/shared";
-import { AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";
@@ -94,7 +101,16 @@ export function createAgent(
     },
 
     async execute(node: TaskNode, model: string): Promise<NodeResult> {
-      state.transition(AS.Active);
+      // @fix N3 (enhancement-review) — transition(Active) 失败时拒绝执行，
+      // 防止池配额耗尽后 Agent 仍绕过限制执行任务。
+      if (!state.transition(AS.Active)) {
+        return {
+          nodeId: node.id,
+          success: false,
+          output: `[${config.type}] 状态转换拒绝: 无法进入 Active（池配额耗尽或非法状态）`,
+          error: "AGENT_TRANSITION_DENIED",
+        };
+      }
       try {
         const enrichedNode = config.preExecuteHook
           ? await config.preExecuteHook(node)

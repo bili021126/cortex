@@ -1,5 +1,4 @@
-import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry, ReadMode } from "@cortex/shared";
-import { AgentType as AT } from "@cortex/shared";
+import { AgentType as AT, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "../platform/toolkit.js";
 import type { MemoryStore } from "../memory/memory-store.js";

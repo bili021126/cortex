@@ -10,7 +10,7 @@
         "implementation_complete",
         "code_committed"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 2,
       "tags": [
@@ -54,7 +54,7 @@
         "code_reviewed",
         "defect_found"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 2,
       "tags": [
@@ -92,7 +92,7 @@
         "pattern_discovered",
         "architecture_finding"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -130,7 +130,7 @@
         "ci_result",
         "test_complete"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -169,7 +169,7 @@
         "pattern_identified",
         "loop_training_complete"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -208,7 +208,7 @@
         "constitution_reviewed",
         "compliance_check_complete"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -250,7 +250,7 @@
         "issue_diagnosed",
         "repair_complete"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -287,7 +287,7 @@
         "api_verified",
         "contract_validated"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -329,7 +329,7 @@
         "data_integrity_checked",
         "migration_applied"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -372,7 +372,7 @@
         "inspection_complete",
         "factsheet_generated"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 2,
       "tags": [
@@ -407,7 +407,7 @@
         "browser_verified",
         "ui_checked"
       ],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
       "maxInstances": 1,
       "tags": [
@@ -440,7 +440,7 @@
       "type": "butler",
       "role": "昔涟 — 记忆命途守望者，开拓者代言人，兼管CLI交互",
       "produces": [],
-      "model": "deepseek-chat",
+      "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CYRENE",
       "maxInstances": 1,
       "tags": ["cli", "talk"],
@@ -464,7 +464,7 @@
         "plan_generated",
         "replan_executed"
       ],
-      "model": "deepseek-reasoner",
+      "model": "deepseek-v4-pro",
       "key": "DEEPSEEK_REASONER",
       "maxInstances": 1,
       "tags": [
@@ -499,7 +499,7 @@
         "contract_reviewed",
         "phase_gate_decided"
       ],
-      "model": "deepseek-reasoner",
+      "model": "deepseek-v4-pro",
       "key": "DEEPSEEK_REASONER",
       "maxInstances": 1,
       "tags": [
@@ -533,7 +533,7 @@
         "contradiction_exposed",
         "coherence_validated"
       ],
-      "model": "deepseek-reasoner",
+      "model": "deepseek-v4-pro",
       "key": "DEEPSEEK_REASONER",
       "maxInstances": 1,
       "tags": [

@@ -1,46 +1,165 @@
 // ============================================================
 // @cortex/factory — Agent 配置加载器
 //
-// 读取 cortex-agents.json，解析为 AgentDefinition[]。
-// 顺带校验每个字段的完整性。
+// 从 @cortex/config 包的拆分 JSON 文件加载配置域，
+// 组装为 CortexAgentsConfig，并解析 prompt 文件引用。
 // ============================================================
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { resolveConfigDataDir, loadConfigDomain, type ConfigFileReader } from "@cortex/config";
 import type { CortexAgentsConfig, AgentDefinition } from "../types.js";
 
+/** 基于 Node fs 的文件读取器 */
+const readFileNode: ConfigFileReader = (fp: string) => fs.readFileSync(fp, "utf-8");
+
 /**
- * 加载 cortex-agents.json。
- * @param projectRoot 项目根目录
+ * 加载所有配置域（agents + eventRouting + roundtable + ...）。
+ * @param projectRoot 项目根目录（用于解析 prompt 文件路径）
+ * @param dataDirOverride 可选——覆盖 config data 目录路径（测试用）
  * @returns 解析后的配置
- * @throws 若文件不存在、JSON 解析失败、或必填字段缺失
+ * @throws 若必需文件缺失、JSON 解析失败、或必填字段缺失
  */
-export function loadAgentsConfig(projectRoot: string): CortexAgentsConfig {
-  const filePath = path.join(projectRoot, "cortex-agents.json");
+export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string): CortexAgentsConfig {
+  const dataDir = dataDirOverride ?? resolveConfigDataDir();
 
-  if (!fs.existsSync(filePath)) {
-    throw new Error(
-      `cortex-agents.json 不存在: ${filePath}。请确保项目根目录下有该配置文件。`,
+  // ── 加载各配置域 ──────────────────────────────
+
+  // 1. Agent 定义（必需）
+  let agentsRaw: Record<string, AgentDefinition>;
+  try {
+    agentsRaw = loadConfigDomain<Record<string, AgentDefinition>>(
+      "agents",
+      readFileNode,
+      dataDir,
     );
-  }
-
-  let raw: string;
-  try {
-    raw = fs.readFileSync(filePath, "utf-8");
   } catch (e) {
-    throw new Error(`读取 cortex-agents.json 失败: ${String(e)}`, { cause: e });
+    throw new Error(`加载 agents.json 失败: ${String(e)}`, { cause: e });
   }
 
-  let config: unknown;
+  // 2. 事件路由（必需）
+  let eventRouting: CortexAgentsConfig["eventRouting"];
   try {
-    config = JSON.parse(raw);
+    const raw = loadConfigDomain<CortexAgentsConfig["eventRouting"]>(
+      "eventRouting",
+      readFileNode,
+      dataDir,
+    );
+    eventRouting = raw;
   } catch (e) {
-    throw new Error(`cortex-agents.json JSON 解析失败: ${String(e)}`, { cause: e });
+    throw new Error(`加载 event-routing.json 失败: ${String(e)}`, { cause: e });
   }
 
-  const validated = _validateStructure(config as CortexAgentsConfig);
-  _resolvePromptFiles(validated, projectRoot);
-  return validated;
+  // 3. 圆桌模板（可选）
+  let roundtableTemplates: CortexAgentsConfig["roundtableTemplates"];
+  try {
+    const raw = loadConfigDomain<CortexAgentsConfig["roundtableTemplates"]>(
+      "roundtable",
+      readFileNode,
+      dataDir,
+    );
+    roundtableTemplates = raw ?? [];
+  } catch {
+    roundtableTemplates = [];
+  }
+
+  // 4. 搜索提供商（可选）
+  let searchProviders: CortexAgentsConfig["searchProviders"];
+  try {
+    searchProviders = loadConfigDomain<CortexAgentsConfig["searchProviders"]>(
+      "searchProviders",
+      readFileNode,
+      dataDir,
+    );
+  } catch {
+    searchProviders = undefined;
+  }
+
+  // 5. 自审视（可选）
+  let selfExamination: CortexAgentsConfig["selfExamination"];
+  try {
+    selfExamination = loadConfigDomain<CortexAgentsConfig["selfExamination"]>(
+      "selfExamination",
+      readFileNode,
+      dataDir,
+    );
+  } catch {
+    selfExamination = undefined;
+  }
+
+  // 6. 交叉验证（可选）
+  let crossVerification: CortexAgentsConfig["crossVerification"];
+  try {
+    crossVerification = loadConfigDomain<CortexAgentsConfig["crossVerification"]>(
+      "crossVerification",
+      readFileNode,
+      dataDir,
+    );
+  } catch {
+    crossVerification = undefined;
+  }
+
+  // 7. 种子记忆（可选）
+  let seedMemories: CortexAgentsConfig["seedMemories"];
+  try {
+    seedMemories = loadConfigDomain<CortexAgentsConfig["seedMemories"]>(
+      "seedMemories",
+      readFileNode,
+      dataDir,
+    );
+  } catch {
+    seedMemories = undefined;
+  }
+
+  // 8. 治理管线（可选）
+  let governancePipeline: CortexAgentsConfig["governancePipeline"];
+  try {
+    governancePipeline = loadConfigDomain<CortexAgentsConfig["governancePipeline"]>(
+      "governancePipeline",
+      readFileNode,
+      dataDir,
+    );
+  } catch {
+    governancePipeline = undefined;
+  }
+
+  // 9. 工具元数据（可选）
+  let tools: CortexAgentsConfig["tools"];
+  try {
+    const raw = loadConfigDomain<Record<string, unknown>>(
+      "tools",
+      readFileNode,
+      dataDir,
+    );
+    // tools.json 的 dataKey 是 "tools"，但顶层就一个 key
+    // loadConfigDomain 提取出 dataKey 后返回的是工具对象本身
+    if (raw && typeof raw === "object") {
+      tools = raw as Record<string, unknown>;
+    }
+  } catch {
+    tools = undefined;
+  }
+
+  // ── 组装 ──────────────────────────────────────
+
+  const config: CortexAgentsConfig = {
+    agents: agentsRaw,
+    eventRouting,
+    roundtableTemplates,
+    searchProviders,
+    selfExamination,
+    crossVerification,
+    seedMemories,
+    governancePipeline,
+    tools,
+  };
+
+  // ── 校验 + 解析 prompt 文件 ──────────────────
+
+  _validateStructure(config);
+  _resolvePromptFiles(config, projectRoot);
+
+  return config;
 }
 
 /** 校验基本结构 */
@@ -50,11 +169,11 @@ function _validateStructure(config: CortexAgentsConfig): CortexAgentsConfig {
   }
 
   if (!config.agents || typeof config.agents !== "object") {
-    throw new Error("cortex-agents.json: 缺少 agents 字段");
+    throw new Error("agents.json: 缺少 agents 字段");
   }
 
   if (!config.eventRouting || typeof config.eventRouting !== "object") {
-    throw new Error("cortex-agents.json: 缺少 eventRouting 字段");
+    throw new Error("event-routing.json: 缺少 eventRouting 字段");
   }
 
   // 校验每个 Agent 定义
@@ -64,7 +183,7 @@ function _validateStructure(config: CortexAgentsConfig): CortexAgentsConfig {
 
   // 校验 eventRouting
   if (!config.eventRouting.routeTable || typeof config.eventRouting.routeTable !== "object") {
-    throw new Error("cortex-agents.json: eventRouting 缺少 routeTable");
+    throw new Error("event-routing.json: eventRouting 缺少 routeTable");
   }
 
   return config;
@@ -72,7 +191,7 @@ function _validateStructure(config: CortexAgentsConfig): CortexAgentsConfig {
 
 /** 校验单个 Agent 定义 */
 function _validateAgent(id: string, agent: AgentDefinition): void {
-  const prefix = `cortex-agents.json → agents.${id}`;
+  const prefix = `agents.json → agents.${id}`;
 
   if (!agent.type) {
     throw new Error(`${prefix}: 缺少 type`);

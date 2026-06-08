@@ -9,7 +9,8 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import { DEFAULT_TASK_TIMEOUT_SEC } from "@cortex/config";
-import type { ICortexApi } from "@cortex/shared";
+import { type ICortexApi, type TaskNode, type Tag } from "@cortex/shared";
+import type { ITaskBoard, IScheduler } from "@cortex/engine";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -46,8 +47,8 @@ export function createTaskHandler(bridge: ICortexApi): CommandHandler {
     const subcommand = args[0];
 
     try {
-      const board = await bridge.getTaskBoard();
-      const scheduler = await bridge.getScheduler();
+      const board = await bridge.getTaskBoard() as ITaskBoard;
+      const scheduler = await bridge.getScheduler() as IScheduler;
 
       switch (subcommand) {
         case "submit":
@@ -75,8 +76,8 @@ export function createTaskHandler(bridge: ICortexApi): CommandHandler {
 }
 
 async function handleTaskSubmit(
-  board: any,
-  scheduler: any,
+  board: ITaskBoard,
+  scheduler: IScheduler,
   filePath: string | undefined,
   options: Record<string, unknown>,
   _context: CommandContext,
@@ -99,10 +100,10 @@ async function handleTaskSubmit(
   const wait = options["wait"] || options["w"];
   const _timeout = parseInt(String(options["timeout"] ?? String(DEFAULT_TASK_TIMEOUT_SEC)), 10);
 
-  const taskNode: any = {
+  const taskNode: TaskNode = {
     id: `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     type: agentType ?? "analysis",
-    tags: (label ? [label] : agentType ? [agentType] : ["analysis"]),
+    tags: (label ? [label] : agentType ? [agentType] : ["analysis"]) as Tag[],
     needsMultiPerspective: false,
     status: "pending",
     claimedBy: [],
@@ -115,7 +116,7 @@ async function handleTaskSubmit(
 
   if (wait) {
     const report = await scheduler.executeAll();
-    const taskResult = report.results.find((r: any) => r.nodeId === taskNode.id);
+    const taskResult = report.results.find((r: { nodeId: string }) => r.nodeId === taskNode.id);
     return {
       success: report.completed > 0,
       output: taskResult?.output ?? `完成: ${report.completed}/${report.totalNodes}`,
@@ -133,7 +134,7 @@ async function handleTaskSubmit(
 }
 
 async function handleTaskList(
-  board: any,
+  board: ITaskBoard,
   options: Record<string, unknown>,
   _context: CommandContext,
 ): Promise<CommandResult> {
@@ -144,12 +145,12 @@ async function handleTaskList(
   let nodes = allNodes;
 
   if (statusFilter) {
-    nodes = nodes.filter((n: any) => n.status === statusFilter);
+    nodes = nodes.filter((n: TaskNode) => n.status === statusFilter);
   }
 
   nodes = nodes.slice(0, limit);
 
-  const summaries = nodes.map((n: any) => ({
+  const summaries = nodes.map((n: TaskNode) => ({
     id: n.id,
     type: n.type,
     status: n.status,
@@ -166,7 +167,7 @@ async function handleTaskList(
 }
 
 async function handleTaskStatus(
-  board: any,
+  board: ITaskBoard,
   taskId: string | undefined,
   options: Record<string, unknown>,
   _context: CommandContext,
@@ -207,7 +208,7 @@ async function handleTaskStatus(
 }
 
 async function handleTaskCancel(
-  board: any,
+  board: ITaskBoard,
   taskId: string | undefined,
   _options: Record<string, unknown>,
   _context: CommandContext,
@@ -230,8 +231,8 @@ async function handleTaskCancel(
 }
 
 async function handleTaskRedo(
-  board: any,
-  scheduler: any,
+  board: ITaskBoard,
+  scheduler: IScheduler,
   taskId: string | undefined,
   _options: Record<string, unknown>,
   _context: CommandContext,
@@ -254,7 +255,7 @@ async function handleTaskRedo(
 
   // 重新调度
   const report = await scheduler.executeAll();
-  const redoResult = report.results.find((r: any) => r.nodeId === taskId);
+  const redoResult = report.results.find((r: { nodeId: string }) => r.nodeId === taskId);
 
   return {
     success: report.completed > 0,

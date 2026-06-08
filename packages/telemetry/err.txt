@@ -1,0 +1,28 @@
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Failed Suites 5 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/batcher.test.ts[2m [ tests/batcher.test.ts ][22m
+[31m[1m[7m FAIL [27m[22m[39m tests/collector-registry.test.ts[2m [ tests/collector-registry.test.ts ][22m
+[31m[1m[7m FAIL [27m[22m[39m tests/console-collector.test.ts[2m [ tests/console-collector.test.ts ][22m
+[31m[1m[7m FAIL [27m[22m[39m tests/file-collector.test.ts[2m [ tests/file-collector.test.ts ][22m
+[31m[1m[7m FAIL [27m[22m[39m tests/sampler.test.ts[2m [ tests/sampler.test.ts ][22m
+[31m[1mError[22m: Transform failed with 1 error:
+D:/cortex/packages/telemetry/src/sampler.ts:27:40: ERROR: Unexpected "}"[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mD:/cortex/packages/telemetry/src/sampler.ts[39m:27:40
+[33m  
+  [33mUnexpected "}"[33m
+  25 |   * const sampler = new RateSampler(0.1); // 10% 采样
+  26 |   * const decision = sampler.decide(data);
+  27 |   * if (decision.accept) { /* collect */ }
+     |                                          ^
+  28 |   * ```
+  29 |   */
+  [39m
+[90m [2m❯[22m failureErrorWithLog ../../node_modules/.pnpm/esbuild@0.21.5/node_modules/esbuild/lib/main.js:[2m1472:15[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/esbuild@0.21.5/node_modules/esbuild/lib/main.js:[2m755:50[22m[39m
+[90m [2m❯[22m responseCallbacks.<computed> ../../node_modules/.pnpm/esbuild@0.21.5/node_modules/esbuild/lib/main.js:[2m622:9[22m[39m
+[90m [2m❯[22m handleIncomingPacket ../../node_modules/.pnpm/esbuild@0.21.5/node_modules/esbuild/lib/main.js:[2m677:12[22m[39m
+[90m [2m❯[22m Socket.readFromStdout ../../node_modules/.pnpm/esbuild@0.21.5/node_modules/esbuild/lib/main.js:[2m600:7[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+

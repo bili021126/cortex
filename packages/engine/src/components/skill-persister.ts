@@ -11,8 +11,7 @@
  */
 
 import type { MemoryStore } from "../memory/memory-store.js";
-import type { SkillTemplate, Tag } from "@cortex/shared";
-import { AgentType, LinkType } from "@cortex/shared";
+import { AgentType, LinkType, type SkillKind, type SkillTemplate, type Tag } from "@cortex/shared";
 import type { SearchResult } from "../platform/search-backend.js";
 import { extractSkillsFromOutput } from "./skill-extractor.js";
 import * as fs from "node:fs";
@@ -105,7 +104,7 @@ export async function crystallizeSkillToKnowledge(
     // 5. 写入新 Knowledge
     const summaryPrefix = verified ? "[已验证技能知识]" : "[未验证技能知识]";
     const memId = memory.writePending({
-      source: { agentType: skill.agentType, taskId: "" },
+      source: { agentType: AgentType.Loop, taskId: "" },
       kind: "Insight",
       content_blob: {
         skillId: skill.id,
@@ -114,16 +113,16 @@ export async function crystallizeSkillToKnowledge(
         steps: skill.steps,
         expectedOutput: skill.expectedOutput,
         triggerTags: skill.triggerTags,
-        agentType: skill.agentType,
+        kind: skill.kind,
         version,
         verified,
         verifiedBy: opts?.verifiedBy,
         verifiedAt: opts?.verifiedBy ? Date.now() : undefined,
         evidenceIds,
-        adoptionCount: skill.adoptionCount,
+        weight: skill.weight,
       },
-      summary: `${summaryPrefix} ${skill.agentType}:${skill.name} — ${skill.trigger}`,
-      semantic_gist: `${skill.agentType}:${skill.name} — ${skill.trigger}`.slice(0, 200),
+      summary: `${summaryPrefix} [${skill.kind}] ${skill.name} — ${skill.trigger}`,
+      semantic_gist: `[${skill.kind}] ${skill.name} — ${skill.trigger}`.slice(0, 200),
       weight: verified ? 5 : 3,
       content_hash: "",
     });
@@ -139,7 +138,7 @@ export async function crystallizeSkillToKnowledge(
     return { memId, isUpdate: existing.length > 0, version, verified };
   } catch (e) {
     console.error(
-      `[skill-persister] 技能结晶为知识失败: ${skill.agentType}:${skill.name}`,
+      `[skill-persister] 技能结晶为知识失败: [${skill.kind}] ${skill.name}`,
       e instanceof Error ? e.message : String(e),
     );
     return null;
@@ -257,7 +256,7 @@ export async function verifySkillKnowledge(
     }
   } else {
     report = `知识未通过事实认证 (${verifier}): 缺少情景记忆佐证。` +
-      `技能 ${skill.name} 虽被采纳 ${skill.adoptionCount} 次，但无情景记忆可追溯。`;
+      `技能 ${skill.name} 虽权重 ${skill.weight}，但无情景记忆可追溯。`;
     if (externalResults && externalResults.length > 0) {
       report += `\n提示: web_search 找到 ${externalResults.length} 条外部结果，可辅助人工审核。` +
         externalResults.slice(0, 3).map((r) => `\n  - [${r.title}](${r.url})`).join("");
@@ -284,11 +283,11 @@ export function persistSkillsToMemory(
   for (const skill of skills) {
     try {
       const memId = memory.writePending({
-        source: { agentType: skill.agentType, taskId: "" },
+        source: { agentType: AgentType.Loop, taskId: "" },
         kind: "Skill",
         content_blob: skill as unknown as Record<string, unknown>,
-        summary: `[技能沉淀] ${skill.agentType}:${skill.name} — ${skill.trigger}`,
-        semantic_gist: `${skill.agentType}:${skill.name} — ${skill.trigger}`.slice(0, 200),
+        summary: `[技能沉淀] [${skill.kind}] ${skill.name} — ${skill.trigger}`,
+        semantic_gist: `[${skill.kind}] ${skill.name} — ${skill.trigger}`.slice(0, 200),
         weight: 5,
         content_hash: "",
       });
@@ -296,7 +295,7 @@ export function persistSkillsToMemory(
       count++;
     } catch (e) {
       console.error(
-        `[skill-persister] 写入技能失败: ${skill.agentType}:${skill.name}`,
+        `[skill-persister] 写入技能失败: [${skill.kind}] ${skill.name}`,
         e instanceof Error ? e.message : String(e),
       );
     }
@@ -345,12 +344,12 @@ export async function loadSkillsFromMemory(memory: MemoryStore): Promise<SkillTe
 
 // ─── 3. 文件回溯扫描 ────────────────────────────────────
 
-const SCAN_PATTERNS: { glob: string; agentType: AgentType }[] = [
-  { glob: "**/pattern*.md", agentType: AgentType.Loop },
-  { glob: "**/design*.md", agentType: AgentType.Analysis },
-  { glob: "**/review*.md", agentType: AgentType.Review },
-  { glob: "**/audit*.md", agentType: AgentType.DocGovern },
-  { glob: "**/architecture*.md", agentType: AgentType.Analysis },
+const SCAN_PATTERNS: { glob: string; kind: SkillKind }[] = [
+  { glob: "**/pattern*.md", kind: "workflow" },
+  { glob: "**/design*.md", kind: "thought" },
+  { glob: "**/review*.md", kind: "action" },
+  { glob: "**/audit*.md", kind: "thought" },
+  { glob: "**/architecture*.md", kind: "thought" },
 ];
 
 /**
@@ -363,12 +362,12 @@ export function scanOutputFilesForSkills(workspaceDir: string): SkillTemplate[] 
   const allSkills: SkillTemplate[] = [];
   const seenIds = new Set<string>();
 
-  for (const { glob, agentType } of SCAN_PATTERNS) {
+  for (const { glob, kind } of SCAN_PATTERNS) {
     const matches = findFiles(workspaceDir, glob);
     for (const filePath of matches) {
       try {
         const content = fs.readFileSync(filePath, "utf-8");
-        const skills = extractSkillsFromMarkdown(content, agentType, filePath);
+        const skills = extractSkillsFromMarkdown(content, kind, filePath);
         for (const skill of skills) {
           if (!seenIds.has(skill.id)) {
             seenIds.add(skill.id);
@@ -441,7 +440,7 @@ function matchFileName(fileName: string, pattern: string): boolean {
 
 function extractSkillsFromMarkdown(
   content: string,
-  agentType: AgentType,
+  kind: SkillKind,
   filePath: string,
 ): SkillTemplate[] {
   if (!content || content.trim().length === 0) return [];
@@ -451,11 +450,11 @@ function extractSkillsFromMarkdown(
   if (skills.length > 0) return skills;
 
   // 策略 2：P0-P9 段落提取
-  const pnSections = extractPNSections(content, agentType);
+  const pnSections = extractPNSections(content, kind);
   if (pnSections.length > 0) return pnSections;
 
   // 策略 3：模式段落提取
-  const patterns = extractPatternSections(content, agentType);
+  const patterns = extractPatternSections(content, kind);
   if (patterns.length > 0) return patterns;
 
   // 策略 4：文件标题兜底
@@ -467,15 +466,15 @@ function extractSkillsFromMarkdown(
   return [
     {
       id: `${fileName}-${timestamp}`,
-      agentType,
+      kind,
       name: `从文件提取: ${firstLine.slice(0, 50)}`,
       triggerTags: ["research", "analysis"] as Tag[],
       trigger: `文件: ${fileName}`,
       steps: [`参考该设计文档: ${filePath}`],
       expectedOutput: "理解设计意图后执行",
       status: "trial" as const,
-      adoptionCount: 0,
-      rejectionCount: 0,
+      weight: 0,
+      feedbackHistory: [],
       discoveredBy: "file-scanner",
       createdAt: timestamp,
     },
@@ -486,7 +485,7 @@ function extractSkillsFromMarkdown(
  * 从 Markdown 内容中提取 P0-P9 格式的段落，转换为 SkillTemplate。
  * 匹配 "## P0 — 名称 (English Name)" 或 "## P9 — 名称" 格式。
  */
-function extractPNSections(content: string, agentType: AgentType): SkillTemplate[] {
+function extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
   const patterns: SkillTemplate[] = [];
   const timestamp = Date.now();
 
@@ -516,7 +515,7 @@ function extractPNSections(content: string, agentType: AgentType): SkillTemplate
     const triggerMatch = sectionContent.match(/Trigger[：:]\s*(.+)/);
     const trigger = triggerMatch
       ? triggerMatch[1].trim()
-      : `P${pNumber}:${agentType}`;
+      : `P${pNumber}:${kind}`;
 
     // 提取 steps（查找 "Steps:" 或 "Recipe:" 后的行）
     const recipeMatch = sectionContent.match(/Recipe[：:]\s*([\s\S]*?)(?:\n(?:#{1,3}|\n)|$)/);
@@ -547,15 +546,15 @@ function extractPNSections(content: string, agentType: AgentType): SkillTemplate
 
     patterns.push({
       id,
-      agentType,
+      kind,
       name: `P${pNumber}:${name}`,
       triggerTags,
       trigger,
       steps,
       expectedOutput,
       status: "trial" as const,
-      adoptionCount: 0,
-      rejectionCount: 0,
+      weight: 0,
+      feedbackHistory: [],
       discoveredBy: "file-scanner-pattern",
       createdAt: timestamp,
     });
@@ -568,7 +567,7 @@ function extractPNSections(content: string, agentType: AgentType): SkillTemplate
  * 从 Markdown 内容中提取"模式 N"格式的段落，转换为 SkillTemplate。
  * 匹配 "## 模式 N：名称" 或 "## 模式 N: 名称" 格式。
  */
-function extractPatternSections(content: string, agentType: AgentType): SkillTemplate[] {
+function extractPatternSections(content: string, kind: SkillKind): SkillTemplate[] {
   const patterns: SkillTemplate[] = [];
   const timestamp = Date.now();
 
@@ -597,7 +596,7 @@ function extractPatternSections(content: string, agentType: AgentType): SkillTem
     const triggerMatch2 = sectionContent.match(/Trigger[：:]s*(.+)/);
     const trigger2 = triggerMatch2
       ? triggerMatch2[1].trim()
-      : `模式${patternNumber}:${agentType}`;
+      : `模式${patternNumber}:${kind}`;
     
     // 提取 steps（多个可能的模式）
     const stepLines2 =
@@ -628,15 +627,15 @@ function extractPatternSections(content: string, agentType: AgentType): SkillTem
 
     patterns.push({
       id,
-      agentType,
+      kind,
       name: `模式${patternNumber}:${name}`,
       triggerTags: triggerTags2,
       trigger: trigger2,
       steps: steps2,
       expectedOutput,
       status: "trial" as const,
-      adoptionCount: 0,
-      rejectionCount: 0,
+      weight: 0,
+      feedbackHistory: [],
       discoveredBy: "file-scanner-pattern",
       createdAt: timestamp,
     });

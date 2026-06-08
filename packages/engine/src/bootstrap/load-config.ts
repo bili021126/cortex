@@ -2,13 +2,11 @@
 // @cortex/engine/bootstrap/load-config —— 配置加载 & 工具函数
 // ============================================================
 
-import { bootstrap, type BootstrapResult } from "@cortex/factory";
-import type { AgentDefinition } from "@cortex/factory";
-import { setAgentRegistry } from "@cortex/shared";
+import { bootstrap, type AgentDefinition, type BootstrapResult } from "@cortex/factory";
+import { setAgentRegistry, type MemoryQuery, type TaskNode } from "@cortex/shared";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { LlmAdapter } from "@cortex/llm";
-import type { TaskNode, MemoryQuery } from "@cortex/shared";
 import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 import {
   codeMemoryQuery,
@@ -28,7 +26,9 @@ let _codingStandardsCache: string | undefined;
 
 export function resolveCodingStandards(projectRoot: string): string {
   if (_codingStandardsCache !== undefined) return _codingStandardsCache;
-  const path = join(projectRoot, DEFAULT_ENGINE_CONFIG.filePaths.codingStandards!);
+  const codingStandardsPath = DEFAULT_ENGINE_CONFIG.filePaths.codingStandards;
+  if (!codingStandardsPath) return "";
+  const path = join(projectRoot, codingStandardsPath);
   if (existsSync(path)) {
     _codingStandardsCache = readFileSync(path, "utf-8");
   } else {
@@ -47,7 +47,10 @@ export function injectStandards(systemPrompt: string | undefined, standards: str
 // ─── LLM 解析 ──────────────────────────────────────
 
 export function resolveLlm(llms: Map<string, LlmAdapter>, key?: string): LlmAdapter {
-  if (key && llms.has(key)) return llms.get(key)!;
+  if (key) {
+    const result = llms.get(key);
+    if (result) return result;
+  }
   const first = llms.values().next().value;
   if (!first) throw new Error("[bootstrapEngine] llms 映射为空，无法创建 Agent");
   return first;

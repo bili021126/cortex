@@ -53,9 +53,9 @@ describe("Toolkit sandbox", () => {
   it("P0-5 regression: agent without tool permission is denied", async () => {
     tk.setWorkspaceRoot(__dirname);
 
-    // Butler 无任何工具权限
+    // Butler 无 write_file 权限
     const result = await tk.execute(
-      { toolName: "read_file", params: { file_path: "toolkit.test.ts" } },
+      { toolName: "write_file", params: { file_path: "toolkit.test.ts", content: "x" } },
       AgentType.Butler,
     );
     expect(result.success).toBe(false);

@@ -66,6 +66,8 @@ export interface CommandContext {
   configPath?: string;
   /** 命令行参数的原始键值对 */
   rawOptions: Record<string, unknown>;
+  /** 项目/工作区根目录（--dir 全局选项），默认 process.cwd() */
+  projectRoot?: string;
 }
 
 /** 命令执行结果 */

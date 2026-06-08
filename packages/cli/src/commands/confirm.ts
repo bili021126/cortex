@@ -8,7 +8,8 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import type { ICortexApi } from "@cortex/shared";
+import type { ICortexApi, IConfirmGate } from "@cortex/shared";
+import { CLI_EXIT_SUCCESS, CLI_EXIT_CONFIRM_DENIED } from "@cortex/config";
 
 export function createConfirmHandler(bridge: ICortexApi): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
@@ -60,7 +61,7 @@ export function createConfirmHandler(bridge: ICortexApi): CommandHandler {
 }
 
 function handleConfirmPending(
-  gate: any,
+  gate: IConfirmGate,
   _options: Record<string, unknown>,
   _context: CommandContext,
 ): CommandResult {
@@ -77,7 +78,7 @@ function handleConfirmPending(
 }
 
 function handleConfirmApprove(
-  gate: any,
+  gate: IConfirmGate,
   requestId: string | undefined,
   _options: Record<string, unknown>,
   _context: CommandContext,
@@ -101,7 +102,7 @@ function handleConfirmApprove(
 }
 
 function handleConfirmReject(
-  gate: any,
+  gate: IConfirmGate,
   requestId: string | undefined,
   _options: Record<string, unknown>,
   _context: CommandContext,
@@ -119,6 +120,6 @@ function handleConfirmReject(
     success: result,
     output: result ? `✓ 已拒绝: ${requestId}` : `拒绝失败: ${requestId}（请求不存在或已处理）`,
     data: { requestId, approved: false },
-    exitCode: result ? 0 : 6, // 退出码 6 = 权限不足/确认被拒
+    exitCode: result ? CLI_EXIT_SUCCESS : CLI_EXIT_CONFIRM_DENIED,
   };
 }

@@ -186,7 +186,7 @@
     },
     "searchProviders": {
       "type": "object",
-      "description": "搜索后端与聚合配置"
+      "description": "搜索后端与聚合配置（旧格式。MCP Server 配置已迁至 packages/config/data/mcp-servers.json）"
     },
     "selfExamination": {
       "type": "object",

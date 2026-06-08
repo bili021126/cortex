@@ -9,10 +9,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { AgentType } from "@cortex/shared";
 import {
-  ReplContext,
   CHAT_AGENT_ALIASES,
   MODE_LABELS,
   getAgentDisplay,
+  type ReplContext,
 } from "./types.js";
 import {
   getActiveGroup,
@@ -75,7 +75,7 @@ export function handleInternalCommand(input: string, ctx: ReplContext): boolean 
         "",
         "当前模式: " + MODE_LABELS[ctx.getMode()] +
         (ctx.getMode() === "chat" ? ` → ${getAgentDisplay(ctx.getAgent()).emoji}${getAgentDisplay(ctx.getAgent()).name}` : "") +
-        (ctx.getMode() === "talk" && ctx.getTalkCompanion() ? ` → 🍀昔涟 & ${getAgentDisplay(ctx.getTalkCompanion()!).emoji}${getAgentDisplay(ctx.getTalkCompanion()!).name}` : "") +
+        (ctx.getMode() === "talk" ? (() => { const tc = ctx.getTalkCompanion(); return tc ? ` → 🍀昔涟 & ${getAgentDisplay(tc).emoji}${getAgentDisplay(tc).name}` : ""; })() : "") +
         (ctx.getMode() === "party" ? (() => { const g = getActiveGroup(ctx.getPartyState()); return g ? ` → 👥 ${g.name}（${getGroupMembers(ctx.getPartyState()).length} 人）` : ""; })() : ""),
       ].join("\n"));
       return true;
@@ -165,10 +165,11 @@ export function handleInternalCommand(input: string, ctx: ReplContext): boolean 
         return true;
       }
       const withDisplay = getAgentDisplay(withResolved);
-      if (ctx.getTalkCompanion()) {
-        const prevDisplay = getAgentDisplay(ctx.getTalkCompanion()!);
-        console.log(`  ${prevDisplay.emoji}${prevDisplay.name} 先行告退。`);
-      }
+        const companion = ctx.getTalkCompanion();
+        if (companion) {
+          const prevDisplay = getAgentDisplay(companion);
+          console.log(`  ${prevDisplay.emoji}${prevDisplay.name} 先行告退。`);
+        }
       ctx.setTalkCompanion(withResolved);
       ctx.getTalkCompanion(); // 触发状态刷新
       console.log(`\n  🍀昔涟 & ${withDisplay.emoji}${withDisplay.name} 现在一起陪你。\n  「${withDisplay.signature}」\n`);
@@ -180,7 +181,9 @@ export function handleInternalCommand(input: string, ctx: ReplContext): boolean 
         console.log("当前无人陪伴——只有你和昔涟两个人。");
         return true;
       }
-      const leavingDisplay = getAgentDisplay(ctx.getTalkCompanion()!);
+      const companion = ctx.getTalkCompanion();
+      if (!companion) return true;
+      const leavingDisplay = getAgentDisplay(companion);
       ctx.setTalkCompanion(null);
       console.log(`\n  ${leavingDisplay.emoji}${leavingDisplay.name} 已离开。🍀昔涟 回到你身边。\n`);
       return true;
@@ -397,7 +400,7 @@ export function handleInternalCommand(input: string, ctx: ReplContext): boolean 
     }
 
     case ".history": {
-      const history = (ctx.rl as any).history ?? [];
+      const history = (ctx.rl as unknown as { history?: string[] }).history ?? [];
       console.log(history.map((h: string, i: number) => `  ${i + 1}  ${h}`).join("\n") || "  (空)");
       return true;
     }
@@ -439,7 +442,7 @@ export function handleInternalCommand(input: string, ctx: ReplContext): boolean 
         return true;
       }
       try {
-        const history = (ctx.rl as any).history ?? [];
+        const history = (ctx.rl as unknown as { history?: string[] }).history ?? [];
         const content = history.join("\n");
         fs.writeFileSync(path.resolve(filePath), content, "utf-8");
         console.log(`会话已保存: ${filePath}`);

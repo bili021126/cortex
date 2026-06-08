@@ -7,8 +7,7 @@
 //   - 失败策略（escalate vs retry vs log vs drop）
 // ============================================================
 
-import { NotificationChannel, DEFAULT_CHANNEL_CONFIGS } from "./types.js";
-import type { NotificationEvent, ChannelConfig, NotificationHandler } from "./types.js";
+import { NotificationChannel, DEFAULT_CHANNEL_CONFIGS, type NotificationEvent, type ChannelConfig, type NotificationHandler } from "./types.js";
 import type { NotificationPersistence } from "./persistence.js";
 
 // ─── 通道基类 ────────────────────────────────────────
@@ -40,7 +39,7 @@ abstract class BaseChannel {
   protected notify(event: NotificationEvent): void {
     for (const handler of this.handlers) {
       try {
-        handler(event);
+        void handler(event);
       } catch {
         // 单 handler 异常不阻断其他 handler
       }

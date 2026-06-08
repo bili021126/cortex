@@ -11,7 +11,7 @@
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
 import type { DocRegistry } from "@cortex/engine";
-import type { LlmMessage } from "@cortex/shared";
+import { type LlmMessage, type AgentType } from "@cortex/shared";
 import { getAgentDisplay } from "./repl/types.js";
 
 /** 圆桌会议模板（与 @cortex/factory RoundtableTemplate 同构） */
@@ -239,7 +239,7 @@ async function handleRoundtableStart(
 /** 构建圆桌辩论 system prompt——让 LLM 扮演多位 Agent 进行多轮对话 */
 function buildRoundtableSystemPrompt(template: RoundtableTemplate, topic: string): string {
   const agentProfiles = template.agents.map((a) => {
-    const display = getAgentDisplay(a as any);
+    const display = getAgentDisplay(a as AgentType);
     return `- ${display.emoji} ${display.name}: ${display.signature}`;
   }).join("\n");
 

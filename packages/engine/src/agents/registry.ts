@@ -7,8 +7,7 @@
 // @version 3.0.0 — 声明式重构：消灭 9 个独立 agent 文件
 // ============================================================
 
-import type { TaskNode, MemoryQuery, MemoryKind, LinkType, ReadMode } from "@cortex/shared";
-import { AgentType } from "@cortex/shared";
+import { AgentType, type TaskNode, type MemoryQuery, type MemoryKind, type LinkType, type ReadMode } from "@cortex/shared";
 import type { AgentFactoryConfig } from "../components/agent-factory.js";
 import { makeMemoryQuery } from "../memory/pipeline.js";
 
@@ -35,7 +34,7 @@ export interface AgentRegistration {
   /** 简短描述（用于调试/日志） */
   description: string;
   /** 可选的 Agent 类（ApiAgent/DataAgent 等有自定义子类的） */
-  AgentClass?: new (...args: any[]) => any;
+  AgentClass?: new (...args: unknown[]) => unknown;
 }
 
 // ─── 通用工厂函数 ──────────────────────────────────
@@ -162,7 +161,7 @@ export function getAutoRegisterable(): AgentRegistration[] {
 
 // ─── OpsAgent 特殊逻辑（额外需要节点标签作为关键词） ──
 
-const opsReg = AGENT_REGISTRY.find((r) => r.type === AgentType.Ops)!;
+const opsReg = AGENT_REGISTRY.find((r) => r.type === AgentType.Ops) ?? (() => { throw new Error("Ops agent not found in registry"); })();
 
 // ─── 向后兼容：具名导出 ──
 

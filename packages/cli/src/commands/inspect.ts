@@ -7,8 +7,7 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
-import { findProjectRoot, collectPackages, collectDeps, buildEdges, detectCycles, generateDot } from "@cortex/tools";
-import { collectDependencies, detectDrift } from "@cortex/tools";
+import { buildEdges, collectDependencies, collectDeps, collectPackages, detectCycles, detectDrift, findProjectRoot, generateDot } from "@cortex/tools";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -73,9 +72,15 @@ function handleInspectDir(
     return { success: false, error: `目录不存在: ${target}`, exitCode: 1 };
   }
 
-  function scanDir(dir: string, currentDepth: number): any[] {
+  interface DirEntry {
+    name: string;
+    type: "directory" | "file";
+    children?: DirEntry[];
+  }
+
+  function scanDir(dir: string, currentDepth: number): DirEntry[] {
     if (currentDepth > depth) return [];
-    const entries: any[] = [];
+    const entries: DirEntry[] = [];
     try {
       const items = fs.readdirSync(dir, { withFileTypes: true });
       for (const item of items) {

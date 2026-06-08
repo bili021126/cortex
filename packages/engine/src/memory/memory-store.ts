@@ -1,15 +1,17 @@
-import type {
-  IMemoryStore,
-  MaintainReport,
-  MemoryEntry,
-  MemoryLink,
-  MemoryQuery,
-  MemoryWriteInput,
-  ReadMode,
-} from "@cortex/shared";
-import { LinkType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { IPipelineObserver } from "@cortex/shared";
+import {
+  PipelineEventType,
+  PipelinePriority,
+  type IPipelineObserver,
+  type IMemoryStore,
+  type MaintainReport,
+  type MemoryEntry,
+  type MemoryLink,
+  type MemoryQuery,
+  type MemoryWriteInput,
+  type ReadMode,
+ type LinkType} from "@cortex/shared";
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
 
 import { SCHEMA_VERSION, EMBEDDING_DIM, LINK_WEIGHTS, CONTENT_HASH_ALGO, VECTOR_DEDUP_THRESHOLD, WEIGHT_AGING_FACTOR, MAX_TOTAL_MEMORIES, STALE_FREEZE_DAYS, FROZEN_OBLITERATE_DAYS, MAINTENANCE_WEIGHT_THRESHOLD } from "./schema.js";
 import { MemoryStorage } from "./storage.js";
@@ -67,6 +69,8 @@ export class MemoryStore implements IMemoryStore {
   private _queryEngine: MemoryQueryEngine;
   private _observer?: IPipelineObserver;
   private readonly _embedder: IEmbeddingService;
+  /** 当前运行会话标识——beginSession() 生成，endSession() 清除 */
+  private _sessionId?: string;
 
   /** P1-六层防御：写前校验钩子（由 ConsistencyLayer 注入） */
   private _preWriteHook?: (input: MemoryWriteInput) => MemoryWriteInput;
@@ -86,14 +90,103 @@ export class MemoryStore implements IMemoryStore {
   /**
    * 初始化持久化层（SQLite 建表 + 加载数据）
    * @fix D4 — 防止两次 init() 导致 DB 连接泄漏
+   * @fix DB-corruption — 检测 DB 损坏后自动删除并重建
    */
   async init(dbPath: string): Promise<void> {
-    await this._persistence.init(dbPath, this._storage);
+    try {
+      await this._persistence.init(dbPath, this._storage);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/disk image is malformed|file is not a database|database.*corrupt/i.test(msg)) {
+        console.warn(
+          `[MemoryStore] SQLite DB 损坏 (${msg.slice(0, 100)})，将删除并重建: ${dbPath}`
+        );
+        // 关闭已损坏的 DB 连接（忽略关闭错误——DB 已不可靠）
+        try { (this._persistence as unknown as { _db?: { close(): void } })._db?.close(); } catch { /* DB 已不可用 */ }
+        // 删除损坏的 DB 文件及 WAL/SHM 残留
+        for (const suffix of ["", "-wal", "-shm"]) {
+          try { fs.unlinkSync(dbPath + suffix); } catch { /* 文件可能不存在 */ }
+        }
+        // 重建持久层并重试
+        this._persistence = new MemoryPersistence(this._observer);
+        await this._persistence.init(dbPath, this._storage);
+        return;
+      }
+      throw err;
+    }
   }
 
   /** 持久化是否已启用 */
   get isPersisted(): boolean {
     return this._persistence.isEnabled;
+  }
+
+  /** 当前运行会话标识。undefined 为未初始化或向后兼容 */
+  get sessionId(): string | undefined {
+    return this._sessionId;
+  }
+
+  /**
+   * 开始新会话——生成或接受唯一 sessionId，后续 write/writePending 自动注入。
+   * 每次 executeAll() 调用前由调度层触发。
+   * @param externalId 可选——外部传入的 sessionId（如 Scheduler 生成的 run-*），传入时优先使用
+   */
+  beginSession(externalId?: string): string {
+    this._sessionId = externalId ?? `mem-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+    return this._sessionId;
+  }
+
+  /**
+   * 终结当前会话——归档本 session 的 Active 记忆，湮灭 Pending 记忆。
+   * @returns 清理的记忆数量
+   */
+  async endSession(): Promise<number> {
+    if (!this._sessionId) return 0;
+    let cleaned = 0;
+    const sessionEntries = this._getBySessionInternal(this._sessionId);
+    for (const m of sessionEntries) {
+      if (m._pending) {
+        // Pending 态直接湮灭——Agent 中途写入但未 commit
+        this._lifecycle.obliterate(this._storage, m.id, this._statePersistFn("endSession-obliterate"));
+        cleaned++;
+      } else if (m.semantic_state === "Active") {
+        // Active 态归档——已完成的任务记忆保留但标记
+        this._lifecycle.archive(this._storage, m.id, this._statePersistFn("endSession-archive"));
+        cleaned++;
+      }
+    }
+    this._sessionId = undefined;
+    return cleaned;
+  }
+
+  /**
+   * 按 sessionId 查询指定会话的所有记忆。
+   * 用于跨 run 认知共享和污染诊断。
+   */
+  getBySession(sessionId: string): MemoryEntry[] {
+    return this._getBySessionInternal(sessionId);
+  }
+
+  /**
+   * 显式回滚——将指定 Pending 记忆直接湮灭。
+   * 两阶段提交的终止路径：prepare → rollback（不走 commit→Active 路径）
+   */
+  rollback(memoryId: string): boolean {
+    const m = this._storage.memories.get(memoryId);
+    if (!m) return false;
+    if (!m._pending) return false;
+    const ok = this._lifecycle.obliterate(this._storage, memoryId, this._statePersistFn("rollback"));
+    if (ok) delete m._pending;
+    return ok;
+  }
+
+  /** 内部：按 sessionId 扫描存储 */
+  private _getBySessionInternal(sessionId: string): MemoryEntry[] {
+    const results: MemoryEntry[] = [];
+    for (const m of this._storage.memories.values()) {
+      if (m.sessionId === sessionId) results.push(m);
+    }
+    return results;
   }
 
   /**
@@ -114,6 +207,10 @@ export class MemoryStore implements IMemoryStore {
    */
   async write(input: MemoryWriteInput): Promise<string> {
     input = this._validateWrite(input);
+    // v2.5.41: 自动注入 sessionId——当前会话存在时注入，向后兼容
+    if (this._sessionId && !input.sessionId) {
+      input.sessionId = this._sessionId;
+    }
 
     // ── embedding 生成（静默降级：失败不阻塞写入）──
     if (input.embedding === undefined) {
@@ -250,32 +347,9 @@ export class MemoryStore implements IMemoryStore {
       );
     }
 
-    // ── 权重自然老化：每 7 天未访问衰减 5% ──
-    const MS_PER_DAY = 24 * 60 * 60 * 1000;
-    const agedEntries: Array<{ id: string; oldWeight: number; newWeight: number }> = [];
-    for (const m of results) {
-      const daysSinceAccess = (now - m.lastAccessedAt) / MS_PER_DAY;
-      if (daysSinceAccess > 0) {
-        const aged = m.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
-        if (Math.abs(aged - m.weight) > 0.0001) {
-          agedEntries.push({ id: m.id, oldWeight: m.weight, newWeight: aged });
-          m.weight = aged;
-        }
-      }
-    }
-    // 老化权重持久化（失败静默降级）
-    if (agedEntries.length > 0 && this._persistence.isEnabled) {
-      try {
-        this._persistence.runBatch(
-          "UPDATE memories SET weight = ? WHERE id = ?",
-          agedEntries.map((e) => [e.newWeight, e.id]),
-          "read.weightAging"
-        );
-        this._persistence.scheduleFlush();
-      } catch { /* 权重老化持久化失败静默降级 */ }
-    }
-
     // 追踪访问（csa 模式下记录 accessCount + lastAccessedAt）
+    // ⚠️ 必须在权重老化之前执行：权重老化会浅拷贝 results，
+    // 若在此之后做访问追踪，peek() 返回的 _storage 原始对象 accessCount 永远为 0。
     if (resolvedTrackAccess) {
       // 记录变更前的值，用于持久化
       const originals = new Map(results.map((m) => [m.id, { accessCount: m.accessCount, lastAccessedAt: m.lastAccessedAt }]));
@@ -314,6 +388,38 @@ export class MemoryStore implements IMemoryStore {
           }
         }
       }
+    }
+
+    // ── 权重自然老化：每 7 天未访问衰减 5% ──
+    const MS_PER_DAY = 24 * 60 * 60 * 1000;
+    const agedEntries: Array<{ id: string; oldWeight: number; newWeight: number }> = [];
+    // @fix M11 — 浅拷贝 results 避免时间衰减修改原始 MemoryEntry 对象
+    // 反复调用 read() 不应持续衰减 weight
+    results = results.map((m) => ({
+      ...m,
+      weight: (() => {
+        const daysSinceAccess = (now - m.lastAccessedAt) / MS_PER_DAY;
+        if (daysSinceAccess > 0) {
+          const aged = m.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
+          if (Math.abs(aged - m.weight) > 0.0001) {
+            agedEntries.push({ id: m.id, oldWeight: m.weight, newWeight: aged });
+            return aged;
+          }
+        }
+        return m.weight;
+      })(),
+    }));
+
+    // 老化权重持久化（失败静默降级）
+    if (agedEntries.length > 0 && this._persistence.isEnabled) {
+      try {
+        this._persistence.runBatch(
+          "UPDATE memories SET weight = ? WHERE id = ?",
+          agedEntries.map((e) => [e.newWeight, e.id]),
+          "read.weightAging"
+        );
+        this._persistence.scheduleFlush();
+      } catch { /* 权重老化持久化失败静默降级 */ }
     }
 
     // 按 weight 降序排列
@@ -421,6 +527,10 @@ export class MemoryStore implements IMemoryStore {
    */
   writePending(input: MemoryWriteInput): string {
     input = this._validateWrite(input);
+    // v2.5.41: 自动注入 sessionId
+    if (this._sessionId && !input.sessionId) {
+      input.sessionId = this._sessionId;
+    }
 
     const contentHash = this._computeContentHash(input);
     const exactDup = this._tryDedup(contentHash);
@@ -430,7 +540,7 @@ export class MemoryStore implements IMemoryStore {
     const m = this._storage.memories.get(pendingEntry.id);
     if (m) {
       // v3: Pending 为工程态标记，不影响 semantic_state
-      (m as any)._pending = true;
+      m._pending = true;
     }
 
     this._persistInsert(pendingEntry, "writePending");
@@ -442,7 +552,7 @@ export class MemoryStore implements IMemoryStore {
     if (!m) return false;
     const ok = this._lifecycle.commit(this._storage, memoryId, this._statePersistFn("commitMemory"));
     if (ok) {
-      delete (m as any)._pending;
+      delete m._pending;
       if (this._persistence.isEnabled) {
         try {
           this._persistence.run(
@@ -452,7 +562,7 @@ export class MemoryStore implements IMemoryStore {
           );
           this._persistence.scheduleFlush();
         } catch (e) {
-          (m as any)._pending = true;
+          m._pending = true;
           if (this._observer) {
             this._observer.emit({
               type: PipelineEventType.MemoryPersistFailed,
@@ -471,14 +581,14 @@ export class MemoryStore implements IMemoryStore {
   getPending(): MemoryEntry[] {
     const results: MemoryEntry[] = [];
     for (const m of this._storage.memories.values()) {
-      if ((m as any)._pending) results.push(m);
+      if (m._pending) results.push(m);
     }
     return results;
   }
 
   hasPending(): boolean {
     for (const m of this._storage.memories.values()) {
-      if ((m as any)._pending) return true;
+      if (m._pending) return true;
     }
     return false;
   }
@@ -632,7 +742,7 @@ export class MemoryStore implements IMemoryStore {
     if (!e) return;
     try {
       this._persistence.run(
-        `INSERT INTO memories (id, semantic_state, kind, source, summary, semantic_gist, content_blob, content_hash, embedding, weight, access_count, created_at, last_accessed_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO memories (id, semantic_state, kind, source, summary, semantic_gist, content_blob, content_hash, embedding, weight, access_count, created_at, last_accessed_at, expires_at, session_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           e.id,
           e.semantic_state,
@@ -648,6 +758,8 @@ export class MemoryStore implements IMemoryStore {
           e.createdAt,
           e.lastAccessedAt,
           e.expires_at ?? null,
+          e.sessionId ?? null,
+          Date.now(),
         ],
         opName
       );
@@ -675,9 +787,10 @@ export class MemoryStore implements IMemoryStore {
         if (entry) rows.push(entry);
       }
 
-      if (query.metadataFilter && Object.keys(query.metadataFilter).length > 0) {
+      const metadataFilter = query.metadataFilter;
+      if (metadataFilter && Object.keys(metadataFilter).length > 0) {
         return rows.filter((m) => {
-          return Object.entries(query.metadataFilter!).every(([k, v]) => m.content_blob[k as string] === v);
+          return Object.entries(metadataFilter).every(([k, v]) => m.content_blob[k as string] === v);
         });
       }
 

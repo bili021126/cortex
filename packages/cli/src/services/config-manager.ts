@@ -16,6 +16,26 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { DEFAULT_OUTPUT_FORMAT, DEFAULT_AGENT_QUOTA, DEFAULT_CLI_CHAT_MODEL, DIR_CORTEX, DIR_GLOBAL_CONFIG, FILE_LOCAL_CONFIG, FILE_ENGINE_DB, FILE_REPL_HISTORY } from "@cortex/config";
 
+// ── 深度合并工具 ────────────────────────────────────────
+
+/** 递归深度合并 source 到 target（原地修改 target）。
+ *  仅处理普通对象；数组和原始值直接覆盖。 */
+function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): void {
+  for (const key of Object.keys(source)) {
+    const srcVal = source[key];
+    const tgtVal = target[key];
+    if (isPlainObject(srcVal) && isPlainObject(tgtVal)) {
+      deepMerge(tgtVal, srcVal);
+    } else if (srcVal !== undefined) {
+      target[key] = srcVal;
+    }
+  }
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
 export interface CliConfig {
   version: string;
   cli: {
@@ -46,7 +66,7 @@ const DEFAULT_CONFIG: CliConfig = {
   },
   llm: {
     chatModel: DEFAULT_CLI_CHAT_MODEL,
-    reasoningEffort: "high",
+    reasoningEffort: "max",
   },
 };
 
@@ -153,7 +173,8 @@ export class ConfigManager {
     try {
       const content = fs.readFileSync(filePath, "utf-8");
       const parsed = JSON.parse(content) as Partial<CliConfig>;
-      Object.assign(config, parsed);
+       
+      deepMerge(config as unknown as Record<string, unknown>, parsed as Record<string, unknown>);
     } catch {
       // 文件不存在或格式错误 — 静默忽略
     }
