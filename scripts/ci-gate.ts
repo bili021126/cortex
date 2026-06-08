@@ -450,7 +450,7 @@ function validateConfig(): boolean {
 
 function runLint(): boolean {
   console.log("\n📏 ESLint 代码规范…");
-  const r = run("pnpm", ["-r", "lint"], ROOT);
+  const r = run("pnpm", ["-r", "--if-present", "lint"], ROOT);
   if (r.ok) {
     console.log("   ✅ lint 通过");
   } else {
