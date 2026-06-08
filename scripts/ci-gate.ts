@@ -70,6 +70,7 @@ const PACKAGES: PackageInfo[] = [
   { name: "data",         dir: join(ROOT, "packages", "data"),         filter: "@cortex/data" },
   { name: "tools",        dir: join(ROOT, "packages", "tools"),        filter: "@cortex/tools" },
   { name: "llm",          dir: join(ROOT, "packages", "llm"),          filter: "@cortex/llm" },
+  { name: "telemetry",    dir: join(ROOT, "packages", "telemetry"),    filter: "@cortex/telemetry" },
   { name: "engine",       dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine",       config: "vitest.ci.config.ts",
     hardExcludes: ["tests/bootstrap-integration*", "tests/skill-bootstrap*", "tests/skill-system-integration*", "tests/system-stress*"],
   },
