@@ -68,14 +68,14 @@ const PACKAGES: PackageInfo[] = [
   { name: "parser",       dir: join(ROOT, "packages", "parser"),       filter: "@cortex/parser" },
   { name: "pm",           dir: join(ROOT, "packages", "pm"),           filter: "@cortex/pm" },
   { name: "data",         dir: join(ROOT, "packages", "data"),         filter: "@cortex/data" },
-  { name: "skill-kit",    dir: join(ROOT, "packages", "skill-kit"),    filter: "@cortex/skill-kit" },
   { name: "tools",        dir: join(ROOT, "packages", "tools"),        filter: "@cortex/tools" },
   { name: "llm",          dir: join(ROOT, "packages", "llm"),          filter: "@cortex/llm" },
-  { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
   { name: "engine",       dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine",       config: "vitest.ci.config.ts",
     hardExcludes: ["tests/bootstrap-integration*", "tests/skill-bootstrap*", "tests/skill-system-integration*", "tests/system-stress*"],
   },
   { name: "engine-slow",  dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine",       config: "vitest.ci-slow.config.ts", testOnly: true },
+  { name: "skill-kit",    dir: join(ROOT, "packages", "skill-kit"),    filter: "@cortex/skill-kit" },
+  { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
   { name: "cli",          dir: join(ROOT, "packages", "cli"),          filter: "@cortex/cli" },
 ];
 
