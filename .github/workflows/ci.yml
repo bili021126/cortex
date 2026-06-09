@@ -19,6 +19,25 @@ jobs:
         with:
           node-version: 24
       - run: pnpm install --frozen-lockfile
+      - name: "诊断: workspace 链接"
+        run: |
+          echo "=== node_modules/@cortex ==="
+          ls -la node_modules/@cortex/ 2>&1 || echo "(目录不存在)"
+          echo "=== packages/config/src ==="
+          ls packages/config/src/index.ts 2>&1
+          echo "=== node_modules/@cortex/config 解析 ==="
+          readlink -f node_modules/@cortex/config 2>&1 || echo "(不是 symlink)"
+      - name: "诊断: 仅构建 config"
+        run: |
+          pnpm --filter @cortex/config build
+          echo "=== config dist 产物 ==="
+          ls -la packages/config/dist/ 2>&1 | head -20
+          echo "=== dist/index.d.ts 存在? ==="
+          test -f packages/config/dist/index.d.ts && echo "YES" || echo "NO"
+      - name: "诊断: shared tsc 能否解析 config"
+        run: |
+          cd packages/shared
+          npx tsc --noEmit 2>&1 | head -30
       - run: node --import tsx/esm scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
