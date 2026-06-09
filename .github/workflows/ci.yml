@@ -34,10 +34,17 @@ jobs:
           ls -la packages/config/dist/ 2>&1 | head -20
           echo "=== dist/index.d.ts 存在? ==="
           test -f packages/config/dist/index.d.ts && echo "YES" || echo "NO"
-      - name: "诊断: shared tsc 能否解析 config"
+      - name: "诊断: tsc 编译范围"
         run: |
           cd packages/shared
-          pnpm exec tsc 2>&1 | head -30
+          echo "=== tsc --listFiles | grep @cortex ==="
+          pnpm exec tsc --listFiles --noEmit 2>&1 | grep "@cortex" | head -20
+          echo ""
+          echo "=== tsc --showConfig ==="
+          pnpm exec tsc --showConfig 2>&1 | head -40
+          echo ""
+          echo "=== tsc traceResolution for @cortex/config ==="
+          pnpm exec tsc --noEmit --traceResolution 2>&1 | grep -B2 -A5 "@cortex/config" | head -30
       - run: pnpm tsx scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
