@@ -208,6 +208,21 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
+  packages/fsm-compiler:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      eslint:
+        specifier: ^10.3.0
+        version: 10.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
   packages/llm:
     dependencies:
       '@cortex/shared':
@@ -248,6 +263,25 @@ importers:
 
   packages/parser:
     devDependencies:
+      eslint:
+        specifier: ^10.3.0
+        version: 10.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/plugin-runner:
+    dependencies:
+      '@cortex/engine':
+        specifier: workspace:*
+        version: link:../engine
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
       eslint:
         specifier: ^10.3.0
         version: 10.3.0
