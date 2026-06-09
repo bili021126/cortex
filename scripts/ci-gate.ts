@@ -20,7 +20,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, readlinkSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
 // ─── 类型 ────────────────────────────────────────────────
@@ -554,6 +554,30 @@ async function main() {
   if (!result.configValid) {
     console.error("\n❌ 配置校验失败，请修正 cortex-agents.json 后重试");
     process.exit(1);
+  }
+
+  // 0.5 预检：确认 pnpm workspace 链接完整、config 包可解析
+  console.log("\n🔬 预检 — workspace 模块解析…");
+  {
+    const configLink = join(ROOT, "node_modules", "@cortex", "config");
+    const hasLink = existsSync(configLink);
+    console.log(`   node_modules/@cortex/config 链接: ${hasLink ? "✅" : "❌ 不存在"}`);
+    if (hasLink) {
+      try {
+        const real = readFileSync(configLink, "utf-8");
+        console.log(`   → 内容: ${real.slice(0, 200)}`);
+      } catch {
+        try {
+          const target = readlinkSync(configLink);
+          console.log(`   → symlink 目标: ${target}`);
+        } catch { /* not a symlink */ }
+      }
+    }
+    const srcExists = existsSync(join(ROOT, "packages", "config", "src", "index.ts"));
+    console.log(`   packages/config/src/index.ts: ${srcExists ? "✅" : "❌ 缺失"}`);
+    // 用 node 直接尝试解析 @cortex/config
+    const nodeCheck = run("node", ["-e", `try{const p=require('@cortex/config/package.json');console.log('CJS package.json:',p.name,p.version)}catch(e){console.log('CJS failed:',e.message)}`], ROOT);
+    console.log(`   node require: ${nodeCheck.ok ? nodeCheck.stdout.trim() : nodeCheck.stdout.trim().slice(-120)}`);
   }
 
   // 1. 构建
