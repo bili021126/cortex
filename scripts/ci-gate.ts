@@ -64,6 +64,7 @@ const ROOT = resolve(import.meta.dirname, "..");
 const PACKAGES: PackageInfo[] = [
   { name: "config",       dir: join(ROOT, "packages", "config"),       filter: "@cortex/config" },
   { name: "shared",       dir: join(ROOT, "packages", "shared"),       filter: "@cortex/shared" },
+  { name: "policy-validator",dir: join(ROOT, "packages", "policy-validator"),filter: "@cortex/policy-validator" },
   { name: "notification", dir: join(ROOT, "packages", "notification"), filter: "@cortex/notification" },
   { name: "factory",      dir: join(ROOT, "packages", "factory"),      filter: "@cortex/factory" },
   { name: "parser",       dir: join(ROOT, "packages", "parser"),       filter: "@cortex/parser" },
@@ -76,6 +77,9 @@ const PACKAGES: PackageInfo[] = [
     hardExcludes: ["tests/bootstrap-integration*", "tests/skill-bootstrap*", "tests/skill-system-integration*", "tests/system-stress*"],
   },
   { name: "engine-slow",  dir: join(ROOT, "packages", "engine"),       filter: "@cortex/engine",       config: "vitest.ci-slow.config.ts", testOnly: true },
+  { name: "fsm-compiler", dir: join(ROOT, "packages", "fsm-compiler"), filter: "@cortex/fsm-compiler" },
+  { name: "plugin-runner",dir: join(ROOT, "packages", "plugin-runner"),filter: "@cortex/plugin-runner" },
+  { name: "skill-validator",dir: join(ROOT, "packages", "skill-validator"),filter: "@cortex/skill-validator" },
   { name: "skill-kit",    dir: join(ROOT, "packages", "skill-kit"),    filter: "@cortex/skill-kit" },
   { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
   { name: "prompt-kit",   dir: join(ROOT, "packages", "prompt-kit"),   filter: "@cortex/prompt-kit" },

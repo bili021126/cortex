@@ -1,6 +1,7 @@
-// @ci: removed — skill-kit 核心逻辑已迁移至 @cortex/engine（TUI 深化 v2.6.4）
 /**
  * @cortex/skill-kit — 端到端（E2E）验证脚本
+ *
+ * ⚠️ 此测试已停用：核心逻辑已迁移至 @cortex/engine（TUI 深化 v2.6.4）
  *
  * 覆盖完整闭环：
  *   1. 注册 .ts 技能 → 动态加载 → 校验 → 缓存 → 执行 → 断言
