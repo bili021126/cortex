@@ -43,7 +43,6 @@ cortex/
 ├── cortex-agents.json    # Agent 注册表（1254 行）
 ├── cortex-cognition.json # 认知配置：激活矩阵 + 注意力策略
 ├── cortex-docs.json      # 文档治理注册表
-└── cyrene-constitution.md # 昔涟人格宪章（最高治理文件）
 ```
 
 ## 核心概念
@@ -59,17 +58,6 @@ cortex/
 5. **TrustModel** 根据历史成功率动态调整 Agent 自主权
 
 Agent 定义见 `cortex-agents.json`——9 种类型、每个有独立的模型/工具权限/记忆查询策略。
-
-### 宪法体系
-
-`cyrene-constitution.md` 是项目的最高治理文件。它定义了：
-- 昔涟人格完整性与多形态本体论
-- Agent 行为边界与工具权限约束
-- 技能系统设计原则（§13 "技能即记忆"）
-- 确认门可逆性等级模型
-- 交融三柱架构（确认门 / 信任模型 / 分流网关）
-
-宪法修正通过圆桌会议 → 代码审查 → CI 门禁全绿 → 合并的四步闭环执行。
 
 ### TUI 终端
 
