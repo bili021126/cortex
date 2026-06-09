@@ -109,7 +109,10 @@ export class FileCollector implements ITelemetryCollector {
       this._buffer = [];
     } catch (e) {
       // 写入失败时保留缓冲区数据，上层可选择重试或丢弃
-      throw e;
+      throw new Error(
+        `Failed to flush telemetry: ${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
+      );
     }
   }
 

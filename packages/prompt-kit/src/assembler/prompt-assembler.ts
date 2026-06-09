@@ -7,14 +7,14 @@
  * @see DESIGN.md §3.2 PromptAssembler
  */
 
-import type {
-  PromptBlock,
-  PromptTemplate,
-  PromptAssembly,
-  PromptContext,
-  PromptResult,
+import {
+  PromptBlockType,
+  type PromptBlock,
+  type PromptTemplate,
+  type PromptAssembly,
+  type PromptContext,
+  type PromptResult,
 } from "../types.js";
-import { PromptBlockType } from "../types.js";
 import type { PromptTemplateEngine } from "../template-engine/prompt-template-engine.js";
 
 /**

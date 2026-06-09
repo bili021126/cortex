@@ -52,7 +52,7 @@ const PASCAL_CASE_REGEX = /^[A-Z][a-zA-Z0-9]*$/;
 const UPPER_SNAKE_CASE_REGEX = /^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$/;
 
 /** 私有字段前缀 _ */
-const PRIVATE_FIELD_REGEX = /^_[a-z][a-zA-Z0-9]*$/;
+const _PRIVATE_FIELD_REGEX = /^_[a-z][a-zA-Z0-9]*$/;
 
 // ============================================================
 // NamingConventionRule

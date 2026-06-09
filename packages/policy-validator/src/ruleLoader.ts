@@ -613,10 +613,10 @@ export class RuleLoader implements IRuleLoader {
 
   async loadFromJson(
     jsonPath: string,
-    options?: RuleLoadOptions,
+    _options?: RuleLoadOptions,
   ): Promise<number> {
-    const startTime = Date.now();
-    const strict = options?.strict ?? true;
+    const _startTime = Date.now();
+    const _strict = _options?.strict ?? true;
 
     // 实际实现使用 fs.readFile + JSON.parse
     // 这里抛出一个清晰的错误，表明需要实际文件系统支持
@@ -662,15 +662,16 @@ export class RuleLoader implements IRuleLoader {
       throw new Error(
         `Failed to load module: ${modulePath}. ` +
         `${e instanceof Error ? e.message : String(e)}`,
+        { cause: e },
       );
     }
   }
 
   async loadFromMarkdown(
     mdPath: string,
-    options?: RuleLoadOptions,
+    _options?: RuleLoadOptions,
   ): Promise<number> {
-    const startTime = Date.now();
+    const _startTime = Date.now();
 
     // 实际实现应解析 Markdown 表格提取规则
     // 这里抛出清晰的未实现错误

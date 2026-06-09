@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, MemoryStore, Scheduler } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, MemoryStore, Scheduler, ManifoldGate } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 
 /** 创建 Mock Adapter */
@@ -36,6 +36,7 @@ describe("DocGovernAgent 执行", () => {
   let scheduler: Scheduler;
 
   beforeEach(async () => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();

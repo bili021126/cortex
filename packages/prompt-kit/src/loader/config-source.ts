@@ -7,8 +7,7 @@
  * @see DESIGN.md §3.1 ConfigSource
  */
 
-import type { PromptTemplate } from "../types.js";
-import { PromptBlockType } from "../types.js";
+import { PromptBlockType, type PromptTemplate } from "../types.js";
 import type { PromptSource } from "./prompt-loader.js";
 
 /**

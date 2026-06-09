@@ -120,7 +120,7 @@ export class ExportRule implements PolicyValidatorComponent {
 
         // 如果有公开导出但没有对应的 barrel 文件
         if (publicExports.length > 0) {
-          const dir = filePath.substring(0, Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\")));
+          const _dir = filePath.substring(0, Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\")));
           infoMessages.push(
             `Info: File has ${publicExports.length} public export(s): ${publicExports.join(", ")}. ` +
             `Ensure barrel file re-exports them.`,

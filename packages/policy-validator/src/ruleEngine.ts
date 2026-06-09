@@ -393,7 +393,7 @@ export class RuleEngine implements IRuleEngine {
     return Array.from(fileSet);
   }
 
-  private async _readFile(filePath: string): Promise<string> {
+  private async _readFile(_filePath: string): Promise<string> {
     // 实际实现使用 fs.readFile
     // 为便于测试，返回空字符串
     return "";

@@ -1,8 +1,8 @@
 // @ci: unit
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AgentType, AgentStatus, type TaskNode, type NodeResult, PipelinePriority, PipelineEventType } from "@cortex/shared";
 import type { Agent } from "@cortex/shared";
-import { Scheduler, TaskBoard, AgentPool, PipelineObserver } from "@cortex/engine";
+import { Scheduler, TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/engine";
 
 function makeNode(overrides: Partial<TaskNode> = {}): TaskNode {
   return {
@@ -34,12 +34,17 @@ describe("Scheduler._dispatchNode", () => {
   let scheduler: Scheduler;
 
   beforeEach(() => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
     scheduler = new Scheduler(board, pool, observer);
     // 注册 pool 配置，否则 spawn 失败
     pool.register({ type: AgentType.Code, maxInstances: 3 });
+  });
+
+  afterEach(() => {
+    ManifoldGate.reset();
   });
 
   it("handles empty board with zero results", async () => {
@@ -138,12 +143,17 @@ describe("Scheduler._findMatchingAgent 密度平局打破", () => {
   }
 
   beforeEach(() => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
     scheduler = new Scheduler(board, pool, observer);
     pool.register({ type: AgentType.Review, maxInstances: 3 });
     pool.register({ type: AgentType.Code, maxInstances: 3 });
+  });
+
+  afterEach(() => {
+    ManifoldGate.reset();
   });
 
   // ── P2-5 回归：密度平局打破 ──

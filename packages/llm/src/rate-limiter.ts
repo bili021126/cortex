@@ -124,7 +124,7 @@ export class RateLimiter {
     if (dayQuota) {
       const today = new Date().toISOString().slice(0, 10);
       let quota = this._dayQuotas.get(keyFingerprint);
-      if (!quota || quota.date !== today) {
+      if (quota?.date !== today) {
         quota = { date: today, tokens: 0 };
         this._dayQuotas.set(keyFingerprint, quota);
       }
@@ -156,7 +156,7 @@ export class RateLimiter {
   getTodayUsage(keyFingerprint: string): number {
     const quota = this._dayQuotas.get(keyFingerprint);
     const today = new Date().toISOString().slice(0, 10);
-    if (quota && quota.date === today) return quota.tokens;
+    if (quota?.date === today) return quota.tokens;
     return 0;
   }
 

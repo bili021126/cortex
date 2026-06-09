@@ -1,12 +1,17 @@
 /**
  * 独自飞翔 E2E —— 冷启动：空目录起步，Agent 从零建造一个完整项目
  *
- * 用法: npx tsx tests/manual/e2e/solo-flight.ts
+ * 用法:
+ *   npx tsx tests/manual/e2e/solo-flight.ts                          # 默认：自主决策造什么
+ *   npx tsx tests/manual/e2e/solo-flight.ts --intent plugin-runner    # 挑战 1: 插件运行器
+ *   npx tsx tests/manual/e2e/solo-flight.ts --intent scheduler-docs   # 挑战 2: 调度文档
+ *   npx tsx tests/manual/e2e/solo-flight.ts --intent fsm-compiler     # 挑战 3: FSM 编译器
+ *   npx tsx tests/manual/e2e/solo-flight.ts --intent "自定义意图..."  # 自由意图
  * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY
  *
  * 与 closed-loop-collab 的区别:
  *   - 无任何参照代码库 —— Agent 面对的是空目录
- *   - 意图开放但明确 —— "造一个你认为值得造的项目"
+ *   - 意图开放但明确
  *   - 全工具开放 —— 读写、shell 全部可用，但限定区域
  *   - 冷启动验证 —— 没有宪法、没有 MemoryStore 种子、没有先例
  *
@@ -772,10 +777,158 @@ async function main() {
     const idx = args.indexOf(flag);
     return idx >= 0 ? args[idx + 1] : null;
   };
-  const userIntent = getArg("--intent");
+  const userIntentArg = getArg("--intent");
   const cliStrategy = getArg("--strategy");
   const cliDriver = getArg("--driver");
   const cliExec = getArg("--exec");
+
+  // ═══════════════════════════════════════════════
+  // 具名意图（solo-flight 三大挑战用例）
+  //   用法: npx tsx tests/manual/e2e/solo-flight.ts --intent <名称>
+  // ═══════════════════════════════════════════════
+  const NAMED_INTENTS: Record<string, string> = {
+    "plugin-runner": [
+      "在 monorepo 中建造 @cortex/plugin-runner 包。",
+      "",
+      "=== 核心交付 ===",
+      "1. Plugin 接口 —— 含 init()/execute()/destroy() 生命周期钩子，每个钩子返回 Promise<void>",
+      "2. PluginRegistry —— 按文件路径/glob 模式发现和注册插件的 Registry 机制",
+      "3. PluginRunner(Sandboxed) —— 执行前校验插件合规性，执行后清理资源，异常隔离（单插件崩不杀进程）",
+      "4. PluginSchema —— 每个插件类型定义独立校验 schema（用 zod 或手写 validator）",
+      "5. PluginConfig —— 支持 JSON 配置外部化，插件通过构造函数注入配置",
+      "6. src/ 下至少 3 个独立模块（plugin.ts / registry.ts / runner.ts），职责单一",
+      "7. tests/ 下每个模块一个单元测试文件，首行 // @ci: unit",
+      "8. 一个集成测试（integration.test.ts）验证全链路：注册→校验→执行→销毁",
+      "9. PACKAGE_POSITIONING.md 说明包补足了什么、定位是什么",
+      "",
+      "=== 架构要求 ===",
+      "- 依赖倒置：Registry 依赖 Plugin interface，不依赖具体实现",
+      "- 开闭原则：新增插件 = 实现 Plugin + 调用 registry.register()，不改已有代码",
+      "- 单一职责：每个模块只做一件事，方法体不超过 30 行",
+      "- 防御式设计：公开方法验证输入参数，异步操作有超时",
+      "",
+      "=== 编码规范（强制）===",
+      "- 禁止 any 类型（公开 API）、非空断言 !、空 catch {}、var 声明",
+      "- 禁止硬编码魔法数字/路径/环境变量名",
+      "- 所有公开 API 带 JSDoc（@param/@returns/@throws）",
+      "- 模块间依赖必须单向无环",
+      "",
+      "=== 验收标准 ===",
+      "- tsc --noEmit 零错误",
+      "- vitest run 全部通过，覆盖率 ≥ 80% lines",
+      "- 每个测试文件首行 // @ci: unit",
+      "- package.json name 为 @cortex/plugin-runner，依赖用 workspace:*",
+    ].join("\n"),
+
+    "scheduler-docs": [
+      "读取 @cortex/engine 包中 Scheduler 相关核心源码，为其产出四份完整文档。",
+      "",
+      "=== 你必须先探索 ===",
+      "1. 用 list_files 扫描 packages/engine/src/ 目录结构",
+      "2. 用 read_file 逐一读取 scheduler 相关源文件（Scheduler/CompositeScheduler/TaskBoard/AgentPool 等）",
+      "3. 用 search_code 搜索 export 语句，提取全部公开 API 签名",
+      "4. 用 read_file 读取现有测试文件，了解测试覆盖的模块",
+      "",
+      "=== 产出文件（全部写入 packages/engine/docs/scheduler/）===",
+      "",
+      "1. ARCHITECTURE.md —— 调度系统架构文档",
+      "   - 系统整体架构概览（组件关系图用 Mermaid）",
+      "   - TaskBoard / AgentPool / Scheduler / CompositeScheduler / ConfirmGate 的职责与交互",
+      "   - IScheduleStrategy / ILoopDriver / IExecutionModel 的扩展点设计",
+      "   - PipelineModel vs SimpleExecuteModel 的区别与适用场景",
+      "   - 完整 Mermaid 流程图：从 addNode → executeAll → 完成的全调度链路",
+      "",
+      "2. API_REFERENCE.md —— 公开 API 参考文档",
+      "   - 所有 export 的 class/interface/type/function 的完整签名",
+      "   - 每个 API 含 JSDoc 说明、参数表、返回值、使用示例",
+      "   - 区分公开 API 与内部实现细节",
+      "",
+      "3. SEQUENCE_DIAGRAM.md —— 执行序列详解",
+      "   - 用 Mermaid sequenceDiagram 绘制关键执行序列",
+      "   - 包含：任务提交→Agent 匹配→Spawn→Execute→Cleanup 完整时序",
+      "   - 包含：并行执行场景（多 Agent 多节点并发）的时序",
+      "   - 包含：错误重试/重规划场景的时序",
+      "",
+      "4. TEST_COVERAGE.md —— 测试覆盖率分析报告",
+      "   - 列出所有测试文件及其覆盖的模块",
+      "   - 标注已知未覆盖的模块/函数（如有）",
+      "   - 给出补测建议（优先补哪些模块的测试）",
+      "",
+      "=== 要求 ===",
+      "- 每份文档至少 300 行，内容充实，不可空洞",
+      "- Mermaid 图必须语法正确、可渲染",
+      "- 所有文档写入 packages/engine/docs/scheduler/ 目录",
+      "- 写完之后运行 npx tsc --noEmit 确认没有破坏编译（文档不影响编译，但确保没有误改源码）",
+    ].join("\n"),
+
+    "fsm-compiler": [
+      "在 monorepo 中建造 @cortex/fsm-compiler 包——一个有限状态机编译器。",
+      "",
+      "=== 核心功能 ===",
+      "读取 FSM 定义（声明式描述：states/transitions/guards/actions），输出类型安全的 TypeScript 代码。",
+      "",
+      "=== 必须支持的特性 ===",
+      "1. 层级 FSM —— 子状态嵌套（parent state 含 child states），支持进入/退出子状态时触发父状态回调",
+      "2. 状态进入/退出动作 —— onEntry/onExit 钩子，每个状态可选",
+      "3. 转换守卫 —— guard 函数，返回 boolean，决定转换是否允许执行",
+      "4. 转换动作 —— transition action，转换发生时执行的副作用",
+      "5. 编译期 schema 校验 —— FSM 定义在编译时验证完整性（不允许悬空引用、缺失初始状态）",
+      "6. 输出 TypeScript —— 生成的代码 tsc --noEmit 零错，可直接 import 使用",
+      "",
+      "=== 包结构 ===",
+      "- src/types.ts —— FSM 定义的类型（StateDef/TransitionDef/FsmDef）",
+      "- src/compiler.ts —— 编译器核心（读定义→校验→生成 TS 代码字符串）",
+      "- src/runtime.ts —— 运行时引擎（解释执行已编译的 FSM）",
+      "- src/index.ts —— barrel 导出",
+      "- tests/types.test.ts —— 类型定义测试（首行 // @ci: unit）",
+      "- tests/compiler.test.ts —— 编译器测试（首行 // @ci: unit）",
+      "- tests/runtime.test.ts —— 运行时测试（首行 // @ci: unit）",
+      "- tests/integration.test.ts —— 全链路：定义→编译→执行 集成测试",
+      "- PACKAGE_POSITIONING.md",
+      "",
+      "=== 示例输入 ===",
+      "```typescript",
+      "const lightFsm: FsmDef = {",
+      "  initialState: 'green',",
+      "  states: {",
+      "    green: {",
+      "      onEntry: () => console.log('绿灯'),",
+      "      transitions: [{ event: 'NEXT', target: 'yellow' }],",
+      "    },",
+      "    yellow: {",
+      "      transitions: [{ event: 'NEXT', target: 'red', guard: () => count > 0 }],",
+      "    },",
+      "    red: {",
+      "      transitions: [{ event: 'NEXT', target: 'green' }],",
+      "    },",
+      "  },",
+      "};",
+      "```",
+      "",
+      "以上定义经编译器处理后，应生成可执行的 TypeScript Runtime，直接 import 即用。",
+      "",
+      "=== 架构要求 ===",
+      "- types/compiler/runtime 三层职责分明，互相不越界",
+      "- compiler 模块不依赖 runtime（编译期与运行期解耦）",
+      "- 依赖倒置：runtime 依赖 types 的 interface，不依赖 compiler",
+      "- 防御式：非法 FSM 定义在编译阶段报清晰错误，不静默吞掉",
+      "",
+      "=== 编码规范（强制）===",
+      "- 禁止 any / 非空断言 ! / 空 catch {} / var",
+      "- 公开 API 全带 JSDoc",
+      "- 模块间无循环依赖",
+      "",
+      "=== 验收标准 ===",
+      "- tsc --noEmit 零错误",
+      "- vitest run 全部通过",
+      "- 每个测试文件首行 // @ci: unit",
+      "- 交通灯 FSM 示例可成功编译并运行",
+      "- PACKAGE_POSITIONING.md 三问完整",
+    ].join("\n"),
+  };
+
+  // 具名意图解析：--intent <名称> → 完整意图文本
+  const userIntent = NAMED_INTENTS[userIntentArg ?? ""] ?? userIntentArg;
 
   if (cliStrategy || cliDriver || cliExec) {
     console.log(`   🎛️  CLI 覆盖调度: ${cliStrategy ?? "auto"} | ${cliDriver ?? "auto"} | ${cliExec ?? "auto"}\n`);

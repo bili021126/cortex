@@ -1,7 +1,7 @@
 // @ci: unit
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, Scheduler, topologicalSort } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, Scheduler, topologicalSort, ManifoldGate } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 
 // ─── Mock Agent ────────────────────────────
@@ -72,6 +72,7 @@ describe("Scheduler", () => {
   let scheduler: Scheduler;
 
   beforeEach(async () => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
@@ -88,6 +89,10 @@ describe("Scheduler", () => {
     scheduler.register(AgentType.Code, await mockAgentByType(AgentType.Code), "mock");
     scheduler.register(AgentType.Review, await mockAgentByType(AgentType.Review), "mock");
     scheduler.register(AgentType.Analysis, await mockAgentByType(AgentType.Analysis), "mock");
+  });
+
+  afterEach(() => {
+    ManifoldGate.reset();
   });
 
   it("单节点单 Agent 执行成功", async () => {

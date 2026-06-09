@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "../src/commands/repl/executors/plan-executor.js";
+import { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "../src/tui/modes/plan-utils.js";
 import type { TaskNode } from "@cortex/shared";
 import type { IntentClarification } from "@cortex/engine";
 

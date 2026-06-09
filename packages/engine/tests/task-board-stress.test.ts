@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, Scheduler, topologicalSort } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, Scheduler, topologicalSort, ManifoldGate } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 
 // ─── Test helpers ───────────────────────────────
@@ -35,6 +35,11 @@ function mockAdapter(output: string) {
   adapter.injectMock(async () => ({ content: output, toolCalls: [] }));
   return adapter;
 }
+
+// ─── mHC 流约束状态隔离 (ManifoldGate 全局单例需要每次测试前清理) ───
+beforeEach(() => {
+  ManifoldGate.reset();
+});
 
 // ═══════════════════════════════════════════════════
 // 暗雷 1：并发 claim 安全性（同一层多节点竞争）

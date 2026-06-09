@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, createInspectorAgent, Scheduler } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, createInspectorAgent, Scheduler, ManifoldGate } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 
 // ─── Mock helpers ────────────────────────────────
@@ -55,6 +55,7 @@ describe("串行协作 CodeAgent → ReviewAgent", () => {
   let scheduler: Scheduler;
 
   beforeEach(() => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
@@ -170,6 +171,7 @@ describe("开会 needsMultiPerspective 并行", () => {
   let scheduler: Scheduler;
 
   beforeEach(() => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
@@ -288,6 +290,7 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
   let scheduler: Scheduler;
 
   beforeEach(() => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
@@ -467,6 +470,7 @@ describe("InspectorAgent 认领 inspect 节点", () => {
   let scheduler: Scheduler;
 
   beforeEach(() => {
+    ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();

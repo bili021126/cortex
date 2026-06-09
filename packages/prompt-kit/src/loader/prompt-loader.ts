@@ -7,7 +7,7 @@
  * @see DESIGN.md §3.1 PromptLoader
  */
 
-import type { PromptTemplate, PromptLoadOptions } from "../types.js";
+import { PromptErrorCode, type PromptTemplate, type PromptLoadOptions, PromptBlockType } from "../types.js";
 import { PromptError } from "../errors.js";
 
 /**
@@ -49,7 +49,7 @@ export class PromptLoader {
     }
 
     // 2. 遍历来源查找
-    for (const [name, source] of this.sources) {
+    for (const [, source] of this.sources) {
       const template = await source.load(templateId);
       if (template) {
         // 写入缓存
@@ -66,7 +66,7 @@ export class PromptLoader {
     // 3. 未找到
     throw new PromptError(
       `Prompt 模板 "${templateId}" 未在任何来源中找到`,
-      "PROMPT_TEMPLATE_NOT_FOUND" as any,
+      PromptErrorCode.TEMPLATE_NOT_FOUND,
       { templateId },
     );
   }
@@ -75,13 +75,13 @@ export class PromptLoader {
    * 从文件路径加载 PromptTemplate。
    * 等价于 load(templateId)，但 id 从文件路径推导。
    */
-  async loadFromFile(filePath: string, options?: PromptLoadOptions): Promise<PromptTemplate> {
+  async loadFromFile(filePath: string, _options?: PromptLoadOptions): Promise<PromptTemplate> {
     // 查找 file-source 并委托
     const fileSource = this.sources.get("file");
     if (!fileSource) {
       throw new PromptError(
         "文件来源未注册，无法从文件加载",
-        "PROMPT_LOAD_FAILED" as any,
+        PromptErrorCode.LOAD_FAILED,
         { filePath },
       );
     }
@@ -90,7 +90,7 @@ export class PromptLoader {
     if (!template) {
       throw new PromptError(
         `文件加载失败: ${filePath}`,
-        "PROMPT_LOAD_FAILED" as any,
+        PromptErrorCode.LOAD_FAILED,
         { filePath },
       );
     }
@@ -100,12 +100,12 @@ export class PromptLoader {
   /**
    * 从配置加载（如 PLANNING_SYSTEM 常量）。
    */
-  async loadFromConfig(configKey: string, options?: PromptLoadOptions): Promise<PromptTemplate> {
+  async loadFromConfig(configKey: string, _options?: PromptLoadOptions): Promise<PromptTemplate> {
     const configSource = this.sources.get("config");
     if (!configSource) {
       throw new PromptError(
         "配置来源未注册，无法从配置加载",
-        "PROMPT_LOAD_FAILED" as any,
+        PromptErrorCode.LOAD_FAILED,
         { configKey },
       );
     }
@@ -113,7 +113,7 @@ export class PromptLoader {
     if (!template) {
       throw new PromptError(
         `配置键 "${configKey}" 未找到对应模板`,
-        "PROMPT_TEMPLATE_NOT_FOUND" as any,
+        PromptErrorCode.TEMPLATE_NOT_FOUND,
         { configKey },
       );
     }
@@ -123,12 +123,12 @@ export class PromptLoader {
   /**
    * 从内联字符串加载。
    */
-  loadFromInline(id: string, content: string, options?: PromptLoadOptions): PromptTemplate {
+  loadFromInline(id: string, content: string, _options?: PromptLoadOptions): PromptTemplate {
     const inlineSource = this.sources.get("inline");
     if (!inlineSource) {
       throw new PromptError(
         "内联来源未注册",
-        "PROMPT_LOAD_FAILED" as any,
+        PromptErrorCode.LOAD_FAILED,
         { id },
       );
     }
@@ -140,7 +140,7 @@ export class PromptLoader {
       blocks: [
         {
           id: `${id}-content`,
-          type: "instruction" as any,
+          type: PromptBlockType.Instruction,
           content,
           priority: 10,
         },

@@ -22,7 +22,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { AgentPool, PipelineObserver, BaseAgent, ButlerAgent, Toolkit } from "@cortex/engine";
+import { AgentPool, PipelineObserver, BaseAgent, ButlerAgent, Toolkit, ManifoldGate } from "@cortex/engine";
 import type { TaskNode, NodeResult, AgentType as AT } from "@cortex/shared";
 import { AgentType, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
@@ -37,6 +37,7 @@ describe("AgentPool 状态所有权 (方案B)", () => {
   let pool: AgentPool;
 
   beforeEach(() => {
+    ManifoldGate.reset();
     pool = new AgentPool();
     pool.register({ type: AgentType.Code, maxInstances: 5 });
   });

@@ -204,7 +204,7 @@ export class RuleRegistry implements IRuleRegistry {
 
     // 按标签筛选（任意匹配一个即可）
     if (filter.tags && filter.tags.length > 0) {
-      if (!rule.tags.some(t => filter.tags!.includes(t))) {
+      if (!rule.tags.some(t => (filter.tags ?? []).includes(t))) {
         return false;
       }
     }
@@ -212,7 +212,7 @@ export class RuleRegistry implements IRuleRegistry {
     // 按 AgentType 筛选
     if (filter.agentTypes && filter.agentTypes.length > 0) {
       if (!rule.targetAgentTypes ||
-          !rule.targetAgentTypes.some(t => filter.agentTypes!.includes(t))) {
+          !rule.targetAgentTypes.some(t => (filter.agentTypes ?? []).includes(t))) {
         return false;
       }
     }

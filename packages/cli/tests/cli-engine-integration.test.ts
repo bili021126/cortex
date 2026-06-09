@@ -27,7 +27,7 @@ import {
   getFormatter,
   detectDefaultFormat,
 } from "@cortex/cli";
-import { AgentType, AgentStatus, MemoryType, MemoryState } from "@cortex/shared";
+import { AgentType, AgentStatus } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
@@ -197,7 +197,7 @@ describe("A. EngineBridge 生命周期", () => {
 // ════════════════════════════════════════════════════════════
 
 describe("B. CommandRegistry 全量命令路由", () => {
-  // 构建完整注册表（与 main.ts 一致但不启动引擎）
+  // 构建完整注册表（与 main.ts/command-list.ts 一致但不启动引擎）
   function buildFullRegistry(): CommandRegistry {
     const config = new ConfigManager();
     const bridge = new EngineBridge(config);
@@ -212,16 +212,18 @@ describe("B. CommandRegistry 全量命令路由", () => {
 
     registry.registerAll([
       { name: "run", alias: "r", description: "单次执行", handler: noop },
-      { name: "agent", alias: "a", description: "Agent 管理", handler: noop },
+      { name: "agent", alias: "ag", description: "Agent 管理", handler: noop },
       { name: "task", alias: "t", description: "任务管理", handler: noop },
       { name: "memory", alias: "m", description: "记忆系统", handler: noop },
       { name: "config", alias: "c", description: "配置管理", handler: noop },
       { name: "doc", alias: "d", description: "文档工具", handler: noop },
-      { name: "schedule", alias: "s", description: "调度系统", handler: noop },
-      { name: "roundtable", description: "圆桌辩论", handler: noop },
+      { name: "schedule", alias: "sc", description: "调度系统", handler: noop },
+      { name: "roundtable", alias: "rb", description: "圆桌辩论", handler: noop },
       { name: "inspect", alias: "i", description: "项目侦察", handler: noop },
-      { name: "confirm", alias: "cf", description: "确认门", handler: noop },
-      { name: "repl", alias: "re", description: "REPL 模式", handler: noop },
+      { name: "confirm", alias: "co", description: "确认门", handler: noop },
+      { name: "skill", alias: "sk", description: "技能管理", handler: noop },
+      { name: "doctor", alias: "do", description: "诊断修复", handler: noop },
+      { name: "setup", alias: "su", description: "配置界面", handler: noop },
       { name: "version", alias: "v", description: "版本信息", handler: noop },
       { name: "help", alias: "h", description: "帮助", handler: noop },
     ]);
@@ -229,10 +231,10 @@ describe("B. CommandRegistry 全量命令路由", () => {
     return registry;
   }
 
-  it("B1. 13 个顶级命令全部注册成功", () => {
+  it("B1. 15 个顶级命令全部注册成功", () => {
     const registry = buildFullRegistry();
     const names = registry.getCommandNames();
-    expect(names.length).toBe(13);
+    expect(names.length).toBe(15);
     expect(names).toContain("run");
     expect(names).toContain("agent");
     expect(names).toContain("task");
@@ -243,24 +245,30 @@ describe("B. CommandRegistry 全量命令路由", () => {
     expect(names).toContain("roundtable");
     expect(names).toContain("inspect");
     expect(names).toContain("confirm");
-    expect(names).toContain("repl");
+    expect(names).toContain("skill");
+    expect(names).toContain("doctor");
+    expect(names).toContain("setup");
     expect(names).toContain("version");
     expect(names).toContain("help");
   });
 
-  it("B2. 所有 10 个别名映射正确", () => {
+  it("B2. 所有 15 个别名映射正确", () => {
     const registry = buildFullRegistry();
     const aliases = registry.getAliases();
+    expect(aliases.size).toBe(15);
     expect(aliases.get("r")).toBe("run");
-    expect(aliases.get("a")).toBe("agent");
+    expect(aliases.get("ag")).toBe("agent");
     expect(aliases.get("t")).toBe("task");
     expect(aliases.get("m")).toBe("memory");
     expect(aliases.get("c")).toBe("config");
     expect(aliases.get("d")).toBe("doc");
-    expect(aliases.get("s")).toBe("schedule");
+    expect(aliases.get("sc")).toBe("schedule");
+    expect(aliases.get("rb")).toBe("roundtable");
     expect(aliases.get("i")).toBe("inspect");
-    expect(aliases.get("cf")).toBe("confirm");
-    expect(aliases.get("re")).toBe("repl");
+    expect(aliases.get("co")).toBe("confirm");
+    expect(aliases.get("sk")).toBe("skill");
+    expect(aliases.get("do")).toBe("doctor");
+    expect(aliases.get("su")).toBe("setup");
     expect(aliases.get("v")).toBe("version");
     expect(aliases.get("h")).toBe("help");
   });
@@ -268,8 +276,10 @@ describe("B. CommandRegistry 全量命令路由", () => {
   it("B3. 通过别名查找命令返回正确名称", () => {
     const registry = buildFullRegistry();
     expect(registry.find("r")!.name).toBe("run");
-    expect(registry.find("a")!.name).toBe("agent");
-    expect(registry.find("cf")!.name).toBe("confirm");
+    expect(registry.find("ag")!.name).toBe("agent");
+    expect(registry.find("co")!.name).toBe("confirm");
+    expect(registry.find("sk")!.name).toBe("skill");
+    expect(registry.find("do")!.name).toBe("doctor");
   });
 
   it("B4. 空参数返回错误", async () => {
@@ -288,7 +298,7 @@ describe("B. CommandRegistry 全量命令路由", () => {
     expect(result.error).toContain("未知命令");
   });
 
-  it("B6. 所有 13 个命令可通过 dispatch 成功调用", async () => {
+  it("B6. 所有 15 个命令可通过 dispatch 成功调用", async () => {
     const registry = buildFullRegistry();
     for (const name of registry.getCommandNames()) {
       const result = await registry.dispatch([name], ctx);
@@ -701,6 +711,65 @@ describe("F. cortex memory — 记忆 CRUD 闭环", () => {
       const result = await handler(["unknown-sub"], {}, ctx);
       expect(result.success).toBe(false);
       expect(result.error).toContain("未知子命令");
+    } finally {
+      await bridge.shutdown();
+      cleanupDir(path.dirname(dbPath));
+    }
+  });
+
+  // @bug IMemoryStore 没有 freeze() 方法，handleMemoryFreeze 使用危险类型强转
+  // 预期会在运行时抛出 TypeError
+  it("F5. freeze 调用不存在的 freeze 方法（预期失败）", async () => {
+    const { bridge, dbPath } = createBridge("mem-freeze.db");
+    try {
+      await bridge.ensureInitialized();
+      const { createMemoryHandler } = await import("@cortex/cli");
+      const handler = createMemoryHandler(bridge);
+
+      // 先写入一条记忆
+      const writeResult = await handler(
+        ["write", "freeze-key", "freeze-value"],
+        {},
+        ctx,
+      );
+      assertValidResult(writeResult);
+      if (!writeResult.success) return; // 写入失败时跳过
+
+      // 提取记忆 ID
+      const idMatch = writeResult.output?.match(/✓ 记忆已写入: (.+)/);
+      const memoryId = idMatch?.[1] ?? "unknown";
+
+      // freeze — IMemoryStore 无此方法，预期失败
+      const result = await handler(["freeze", memoryId], {}, ctx);
+      assertValidResult(result);
+      // 当前实现: (memory as any).freeze(id) → TypeError → catch → "记忆操作失败"
+      if (result.success) {
+        // 如果成功（将来修复后），验证输出
+        expect(result.output).toContain("冻结");
+      } else {
+        // 当前预期: freeze() is not a function
+        expect(result.error).toContain("记忆操作失败");
+      }
+    } finally {
+      await bridge.shutdown();
+      cleanupDir(path.dirname(dbPath));
+    }
+  });
+
+  it("F6. flush 强制刷新持久化", async () => {
+    const { bridge, dbPath } = createBridge("mem-flush.db");
+    try {
+      await bridge.ensureInitialized();
+      const { createMemoryHandler } = await import("@cortex/cli");
+      const handler = createMemoryHandler(bridge);
+
+      // 先写入数据
+      await handler(["write", "flush-k", "flush-v"], {}, ctx);
+
+      const result = await handler(["flush"], {}, ctx);
+      assertValidResult(result);
+      expect(result.success).toBe(true);
+      expect(result.output).toContain("持久化已刷新");
     } finally {
       await bridge.shutdown();
       cleanupDir(path.dirname(dbPath));

@@ -11,10 +11,10 @@
  */
 
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { join, relative, resolve, dirname, basename, extname } from "node:path";
+import { join, relative, resolve, basename, extname } from "node:path";
 import { DIR_PROMPTS } from "@cortex/config";
-import type { PromptTemplate, PromptBlock } from "../types.js";
-import { PromptBlockType } from "../types.js";
+import { PromptBlockType, type PromptTemplate, type PromptBlock, PromptErrorCode } from "../types.js";
+import { PromptError } from "../errors.js";
 import type { PromptSource } from "./prompt-loader.js";
 
 /**
@@ -149,7 +149,11 @@ export class FilePromptSource implements PromptSource {
    */
   private parseFile(filePath: string, templateId: string): PromptTemplate {
     if (!existsSync(filePath)) {
-      return null as any;
+      throw new PromptError(
+        `文件不存在: ${filePath}`,
+        PromptErrorCode.LOAD_FAILED,
+        { filePath, templateId },
+      );
     }
 
     const content = readFileSync(filePath, "utf-8");

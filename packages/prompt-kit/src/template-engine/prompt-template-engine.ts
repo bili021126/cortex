@@ -17,8 +17,7 @@
  * @see DESIGN.md §3.3 PromptTemplateEngine
  */
 
-import type { PromptBlock, PromptContext, TemplateEngineOptions } from "../types.js";
-import { PromptBlockType } from "../types.js";
+import { PromptErrorCode, type PromptBlock, type PromptContext, type TemplateEngineOptions } from "../types.js";
 import { PromptError } from "../errors.js";
 
 // 默认选项
@@ -92,7 +91,7 @@ export class PromptTemplateEngine {
     if (depth > this.options.maxNestingDepth) {
       throw new PromptError(
         `模板嵌套超过最大深度 ${this.options.maxNestingDepth}`,
-        "PROMPT_CIRCULAR_REFERENCE" as any,
+        PromptErrorCode.CIRCULAR_REFERENCE,
         { depth, maxDepth: this.options.maxNestingDepth },
       );
     }

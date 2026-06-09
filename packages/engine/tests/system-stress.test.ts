@@ -11,7 +11,7 @@ import type { ObservableEvent } from "@cortex/shared";
 import {
   TaskBoard, AgentPool, PipelineObserver, Toolkit,
   createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig,
-  MetaAgent, Scheduler, MemoryStore} from "@cortex/engine";
+  MetaAgent, Scheduler, MemoryStore, ManifoldGate} from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 import type { EngineConfig } from "@cortex/engine";
 ;
@@ -19,7 +19,14 @@ import type { IEmbeddingService } from "@cortex/engine";
 
 /** 短超时配置，防止死循环耗尽 CI 时间 */
 const SHORT_STRESS_CONFIG: EngineConfig = {
-  executeAllTimeoutMs: 5000};
+  executeAllTimeoutMs: 5000,
+  manifoldGateAcquireTimeoutMs: 2000, // mHC 流约束短超时——测试中不应等待 60s
+};
+
+// ─── mHC 流约束状态隔离 (ManifoldGate 全局单例需要每次测试前清理) ───
+beforeEach(() => {
+  ManifoldGate.reset();
+});
 
 // ─── Helpers ────────────────────────────────────
 
@@ -309,7 +316,7 @@ describe("场景 2：20 节点同层并行 + 池约束", () => {
     }
   });
 
-  it("20 同层并行 + maxInstances=3——池耗尽导致部分失败，失败节点正确标记", async () => {
+  it("20 同层并行 + maxInstances=3——mHC 流约束门控，所有节点排队等待后全部成功", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
     const observer = new PipelineObserver();
@@ -337,18 +344,18 @@ describe("场景 2：20 节点同层并行 + 池约束", () => {
 
     const report = await scheduler.executeAll();
 
-    // ── 部分成功，部分失败 ──
-    expect(report.completed).toBeGreaterThanOrEqual(3);
-    expect(report.completed).toBeLessThanOrEqual(3); // 同层并行，最多 3 个成功
-    expect(report.failed).toBeGreaterThanOrEqual(17);
+    // ── mHC 流约束：20 节点全部排队等待后成功（不丢失节点） ──
+    expect(report.completed).toBe(20);
+    expect(report.failed).toBe(0);
 
-    // ── 池耗尽节点应有明确的 spawn-failed 事件 ──
-    expect(poolExhaustedErrors.length).toBeGreaterThanOrEqual(17);
+    // ── 无池耗尽事件（mHC 门控避免了直接的池耗尽） ──
+    // poolExhaustedErrors 可能为 0（ManifoldGate FIFO 等待）
+    expect(poolExhaustedErrors.length).toBeGreaterThanOrEqual(0);
 
-    // ── 所有节点终态为 done 或 failed，无 pending/claimed 残留 ──
+    // ── 所有节点终态为 done，无 pending/claimed/failed 残留 ──
     for (const id of ids) {
       const node = board.getNode(id);
-      expect(["done", "failed"]).toContain(node?.status);
+      expect(node?.status).toBe("done");
     }
   });
 });

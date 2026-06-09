@@ -7,14 +7,14 @@
  * @see DESIGN.md §3.4 PromptValidator
  */
 
-import type {
-  PromptTemplate,
-  PromptResult,
-  ValidationResult,
-  ValidationError,
-  SectionCheckResult,
+import {
+  PromptBlockType,
+  type PromptTemplate,
+  type PromptResult,
+  type ValidationResult,
+  type ValidationError,
+  type SectionCheckResult,
 } from "../types.js";
-import { PromptBlockType } from "../types.js";
 
 /**
  * 校验规则定义。

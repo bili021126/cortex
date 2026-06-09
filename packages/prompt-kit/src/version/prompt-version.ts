@@ -7,9 +7,7 @@
  * @see DESIGN.md §3.6 PromptVersion
  */
 
-import type { VersionRecord, VersionDiff } from "../types.js";
-import { PromptBlockType } from "../types.js";
-import type { PromptTemplate } from "../types.js";
+import type { VersionRecord, VersionDiff, PromptTemplate } from "../types.js";
 
 /**
  * PotVersion —— 版本管理器。
@@ -118,8 +116,9 @@ export class PromptVersion {
 
     const modifications: VersionDiff["modifications"] = [];
     for (const id of common) {
-      const fromBlock = fromBlockMap.get(id)!;
-      const toBlock = toBlockMap.get(id)!;
+      const fromBlock = fromBlockMap.get(id);
+      const toBlock = toBlockMap.get(id);
+      if (!fromBlock || !toBlock) continue;
 
       if (fromBlock.content !== toBlock.content || fromBlock.priority !== toBlock.priority) {
         modifications.push({

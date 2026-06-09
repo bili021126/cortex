@@ -18,7 +18,6 @@ import type {
   CacheStats,
   OrchestratorOptions,
 } from "../types.js";
-import { PromptBlockType } from "../types.js";
 import { PromptLoader } from "../loader/prompt-loader.js";
 import { FilePromptSource } from "../loader/file-source.js";
 import { ConfigPromptSource } from "../loader/config-source.js";
@@ -28,7 +27,6 @@ import { PromptTemplateEngine } from "../template-engine/prompt-template-engine.
 import { PromptValidator } from "../validator/prompt-validator.js";
 import { PromptCache } from "../cache/prompt-cache.js";
 import { PromptVersion } from "../version/prompt-version.js";
-import { PromptError } from "../errors.js";
 
 /**
  * PromptOrchestrator —— 提示词编排器。
@@ -86,7 +84,7 @@ export class PromptOrchestrator {
 
     if (assembly.baseTemplateId) {
       // 从缓存获取
-      let cached = this.cache.get(assembly.baseTemplateId);
+      const cached = this.cache.get(assembly.baseTemplateId);
       if (!cached) {
         template = await this.loader.load(assembly.baseTemplateId);
         this.cache.set(assembly.baseTemplateId, template);
@@ -113,8 +111,9 @@ export class PromptOrchestrator {
     if (!validation.valid) {
       // 校验失败时，返回结果但包含错误信息（不阻断渲染）
       // 调用方可通过 result.metadata?.validationErrors 获取
-      (result as any).metadata = {
-        ...(result as any).metadata,
+      const _result = result as { metadata?: Record<string, unknown> };
+      _result.metadata = {
+        ..._result.metadata,
         validationErrors: validation.errors,
         validationWarnings: validation.warnings,
       };
@@ -164,11 +163,9 @@ export class PromptOrchestrator {
 
     // 检查 baseTemplateId 对应的模板是否存在（不加载，仅检查缓存）
     if (assembly.baseTemplateId && !this.cache.has(assembly.baseTemplateId)) {
-      warnings.push({
-        path: "baseTemplateId",
-        message: `基础模板 "${assembly.baseTemplateId}" 未在缓存中找到，将在渲染时加载`,
-        severity: "warning",
-      } as any);
+      warnings.push(
+        `基础模板 "${assembly.baseTemplateId}" 未在缓存中找到，将在渲染时加载`,
+      );
     }
 
     return {

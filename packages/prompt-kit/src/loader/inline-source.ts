@@ -5,8 +5,7 @@
  * 用于 CLI 中用户自定义 prompt、动态生成的指令等场景。
  */
 
-import type { PromptTemplate, PromptBlock } from "../types.js";
-import { PromptBlockType } from "../types.js";
+import { PromptBlockType, type PromptTemplate, type PromptBlock } from "../types.js";
 import type { PromptSource } from "./prompt-loader.js";
 
 /**
