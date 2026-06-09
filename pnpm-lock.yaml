@@ -347,10 +347,6 @@ importers:
         version: 2.1.9(@types/node@22.19.17)
 
   packages/shared:
-    dependencies:
-      '@cortex/config':
-        specifier: workspace:*
-        version: link:../config
     devDependencies:
       eslint:
         specifier: ^10.3.0
