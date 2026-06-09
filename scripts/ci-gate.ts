@@ -79,6 +79,7 @@ const PACKAGES: PackageInfo[] = [
   { name: "skill-kit",    dir: join(ROOT, "packages", "skill-kit"),    filter: "@cortex/skill-kit" },
   { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
   { name: "prompt-kit",   dir: join(ROOT, "packages", "prompt-kit"),   filter: "@cortex/prompt-kit" },
+  { name: "doctor",       dir: join(ROOT, "packages", "doctor"),       filter: "@cortex/doctor" },
   { name: "cli",          dir: join(ROOT, "packages", "cli"),          filter: "@cortex/cli" },
   { name: "plugin-runner", dir: join(ROOT, "packages", "plugin-runner"), filter: "@cortex/plugin-runner" },
   { name: "fsm-compiler",  dir: join(ROOT, "packages", "fsm-compiler"),  filter: "@cortex/fsm-compiler" },
