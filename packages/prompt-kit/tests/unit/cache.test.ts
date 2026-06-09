@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/prompt-kit — PromptCache 单元测试
  */

@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/prompt-kit — 错误类型单元测试
  */

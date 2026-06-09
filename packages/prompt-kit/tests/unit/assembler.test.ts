@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/prompt-kit — PromptAssembler 单元测试
  */

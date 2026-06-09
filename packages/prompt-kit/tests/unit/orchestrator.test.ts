@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/prompt-kit — PromptOrchestrator 单元测试
  */

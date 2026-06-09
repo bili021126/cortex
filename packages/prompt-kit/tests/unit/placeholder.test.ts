@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/prompt-kit — 占位测试
  *

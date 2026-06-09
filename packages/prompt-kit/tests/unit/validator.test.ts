@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/prompt-kit — PromptValidator 单元测试
  */
