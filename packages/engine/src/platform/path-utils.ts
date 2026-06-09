@@ -46,6 +46,16 @@ export function validatePath(filePath: string, projectRoot: string | null): Path
 
   // ── 解析路径（展开 ..、符号链接等） ──
   const resolvedRoot = path.resolve(projectRoot);
+
+  // ── 显式阻断 Windows 绝对路径（含盘符），防范跨平台绕过 ──
+  // 在 Unix 上，"C:\Windows" 会被 path.resolve() 当作普通相对路径，
+  // 绕过跨根检查。此处仅在 projectRoot 非 Windows 路径时检测。
+  // Windows 上的跨盘符由下方的 path.parse().root 比对处理。
+  const WIN_ABS_PATH_RE = /^[A-Za-z]:[\\/]/;
+  if (WIN_ABS_PATH_RE.test(filePath) && !WIN_ABS_PATH_RE.test(resolvedRoot)) {
+    return { ok: false, reason: `路径越界: Windows 绝对路径绕过 "${filePath}"`, input: filePath };
+  }
+
   const resolved = path.resolve(resolvedRoot, filePath);
 
   // ── 跨盘符/跨根检测（替代早期 Windows 绝对路径硬拦截） ──
