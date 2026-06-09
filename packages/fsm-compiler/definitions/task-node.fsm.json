@@ -1,0 +1,25 @@
+{
+  "id": "task_node",
+  "displayName": "Task Node Lifecycle",
+  "version": "1.0.0",
+  "description": "Lifecycle of a task node from creation to completion or failure",
+  "states": [
+    { "id": "pending",  "displayName": "Pending",  "style": "initial", "description": "Task created, awaiting claim" },
+    { "id": "claimed",  "displayName": "Claimed",  "description": "Task claimed by an agent, about to run" },
+    { "id": "running",  "displayName": "Running",  "description": "Task is being executed" },
+    { "id": "done",     "displayName": "Done",     "style": "final",   "description": "Task completed successfully" },
+    { "id": "failed",   "displayName": "Failed",   "style": "final",   "description": "Task failed or cancelled" }
+  ],
+  "transitions": [
+    { "id": "pending_to_claimed",  "from": "pending", "to": "claimed", "event": "claim",   "guard": "canClaim" },
+    { "id": "claimed_to_running",  "from": "claimed", "to": "running", "event": "execute", "action": "onExecute" },
+    { "id": "claimed_to_pending",  "from": "claimed", "to": "pending", "event": "release", "guard": "canRelease" },
+    { "id": "running_to_done",     "from": "running", "to": "done",    "event": "complete","guard": "isAllPerspectivesDone", "action": "onComplete" },
+    { "id": "running_to_failed",   "from": "running", "to": "failed",  "event": "fail",    "action": "onFail" },
+    { "id": "pending_to_failed",   "from": "pending", "to": "failed",  "event": "cancel",  "action": "onCancel" },
+    { "id": "claimed_to_failed",   "from": "claimed", "to": "failed",  "event": "cancel",  "action": "onCancel" },
+    { "id": "running_to_running",  "from": "running", "to": "running", "event": "progress","type": "internal", "description": "Progress update within running state" }
+  ],
+  "initialState": "pending",
+  "finalStates": ["done", "failed"]
+}

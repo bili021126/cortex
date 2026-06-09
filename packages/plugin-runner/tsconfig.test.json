@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "rootDir": ".",
+    "outDir": "./dist-test",
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true
+  },
+  "include": ["src", "tests", "vitest.config.ts", "vitest.ci.config.ts"],
+  "references": [
+    { "path": "../engine/tsconfig.src.json" }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "id": "trust_model",
+  "displayName": "Trust Model Level Lifecycle",
+  "version": "1.0.0",
+  "description": "Trust level escalation and decay model for agent trust scoring",
+  "states": [
+    { "id": "L0", "displayName": "Level 0", "style": "initial", "description": "Initial trust level (untrusted)" },
+    { "id": "L1", "displayName": "Level 1", "description": "Basic trust level" },
+    { "id": "L2", "displayName": "Level 2", "description": "Intermediate trust level" },
+    { "id": "L3", "displayName": "Level 3", "style": "final",   "description": "Maximum trust level" }
+  ],
+  "transitions": [
+    { "id": "L0_to_L1", "from": "L0", "to": "L1", "event": "approve", "guard": "canEscalate", "action": "onEscalate" },
+    { "id": "L1_to_L2", "from": "L1", "to": "L2", "event": "approve", "guard": "canEscalate", "action": "onEscalate" },
+    { "id": "L2_to_L3", "from": "L2", "to": "L3", "event": "approve", "guard": "canEscalate", "action": "onEscalate" },
+    { "id": "L1_to_L0", "from": "L1", "to": "L0", "event": "reject",  "action": "onDeescalate" },
+    { "id": "L2_to_L1", "from": "L2", "to": "L1", "event": "reject",  "action": "onDeescalate" },
+    { "id": "L3_to_L2", "from": "L3", "to": "L2", "event": "reject",  "action": "onDeescalate" },
+    { "id": "L1_to_L0_decay", "from": "L1", "to": "L0", "event": "decay", "guard": "canDecay", "action": "onDecay" },
+    { "id": "L2_to_L1_decay", "from": "L2", "to": "L1", "event": "decay", "guard": "canDecay", "action": "onDecay" },
+    { "id": "L3_to_L2_decay", "from": "L3", "to": "L2", "event": "decay", "guard": "canDecay", "action": "onDecay" }
+  ],
+  "initialState": "L0",
+  "finalStates": ["L3"]
+}

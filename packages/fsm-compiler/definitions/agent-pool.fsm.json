@@ -1,0 +1,25 @@
+{
+  "id": "agent_pool",
+  "displayName": "Agent Pool Lifecycle",
+  "version": "1.0.0",
+  "description": "Manages the lifecycle of agent instances in the pool",
+  "states": [
+    { "id": "created",  "displayName": "Created",  "style": "initial" },
+    { "id": "awake",    "displayName": "Awake",    "description": "Idle, ready to accept work" },
+    { "id": "active",   "displayName": "Active",   "description": "Currently executing a task" },
+    { "id": "draining", "displayName": "Draining", "description": "Shutting down, no new work" },
+    { "id": "destroyed","displayName": "Destroyed","style": "final" }
+  ],
+  "transitions": [
+    { "id": "create_to_awake",   "from": "created",   "to": "awake",    "event": "wakeup",   "action": "onWakeup" },
+    { "id": "create_to_destroy", "from": "created",   "to": "destroyed","event": "destroy",  "action": "onDestroy" },
+    { "id": "awake_to_active",   "from": "awake",     "to": "active",   "event": "execute",  "guard": "canExecute" },
+    { "id": "active_to_awake",   "from": "active",    "to": "awake",    "event": "complete", "action": "onComplete" },
+    { "id": "active_to_active",  "from": "active",    "to": "active",   "event": "execute",  "guard": "canExecute", "type": "internal", "description": "Re-enter Active (no-op for concurrent dispatch)" },
+    { "id": "awake_to_draining", "from": "awake",     "to": "draining", "event": "shutdown" },
+    { "id": "active_to_draining","from": "active",    "to": "draining", "event": "shutdown" },
+    { "id": "draining_to_destroy","from": "draining", "to": "destroyed","event": "complete" }
+  ],
+  "initialState": "created",
+  "finalStates": ["destroyed"]
+}

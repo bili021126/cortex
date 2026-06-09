@@ -1,0 +1,17 @@
+{
+  "id": "confirm_gate",
+  "displayName": "Confirm Gate Request Lifecycle",
+  "version": "1.0.0",
+  "description": "Lifecycle of a confirmation gate request",
+  "states": [
+    { "id": "pending",  "displayName": "Pending",  "style": "initial", "description": "Request awaiting approval or rejection" },
+    { "id": "approved", "displayName": "Approved", "style": "final",   "description": "Request approved" },
+    { "id": "rejected", "displayName": "Rejected", "style": "final",   "description": "Request rejected" }
+  ],
+  "transitions": [
+    { "id": "pending_to_approved", "from": "pending", "to": "approved", "event": "approve", "action": "onResolve" },
+    { "id": "pending_to_rejected", "from": "pending", "to": "rejected", "event": "reject",  "action": "onResolve" }
+  ],
+  "initialState": "pending",
+  "finalStates": ["approved", "rejected"]
+}

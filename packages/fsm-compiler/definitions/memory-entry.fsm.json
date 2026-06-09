@@ -1,0 +1,19 @@
+{
+  "id": "memory_entry",
+  "displayName": "Memory Entry Lifecycle",
+  "version": "1.0.0",
+  "description": "Lifecycle of a memory entry from active to archived to obliterated",
+  "states": [
+    { "id": "active",     "displayName": "Active",     "style": "initial", "description": "Memory entry is active and searchable" },
+    { "id": "archived",   "displayName": "Archived",   "description": "Memory entry archived (kept but not primary)" },
+    { "id": "obliterated","displayName": "Obliterated","style": "final",   "description": "Memory entry permanently deleted" }
+  ],
+  "transitions": [
+    { "id": "active_to_archived",    "from": "active",     "to": "archived",    "event": "archive",    "guard": "canArchive",  "action": "onArchive" },
+    { "id": "archived_to_active",    "from": "archived",   "to": "active",      "event": "restore",    "action": "onRestore" },
+    { "id": "active_to_obliterated", "from": "active",     "to": "obliterated", "event": "obliterate", "action": "onObliterate" },
+    { "id": "archived_to_obliterated","from": "archived",  "to": "obliterated", "event": "obliterate", "action": "onObliterate" }
+  ],
+  "initialState": "active",
+  "finalStates": ["obliterated"]
+}

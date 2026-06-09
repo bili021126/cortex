@@ -1,0 +1,21 @@
+{
+  "id": "manifold_gate",
+  "displayName": "Manifold Gate Slot Lifecycle",
+  "version": "1.0.0",
+  "description": "Lifecycle of a manifold gate slot (semaphore-based concurrency control)",
+  "states": [
+    { "id": "waiting",  "displayName": "Waiting",  "style": "initial", "description": "Slot waiting to be acquired" },
+    { "id": "acquired", "displayName": "Acquired", "description": "Slot acquired and executing" },
+    { "id": "released", "displayName": "Released", "style": "final",   "description": "Slot released after completion" },
+    { "id": "timeout",  "displayName": "Timeout",  "style": "final",   "description": "Slot timed out" }
+  ],
+  "transitions": [
+    { "id": "waiting_to_acquired",  "from": "waiting",  "to": "acquired", "event": "acquire", "guard": "canAcquire", "action": "onAcquire" },
+    { "id": "acquired_to_released", "from": "acquired", "to": "released", "event": "release", "action": "onRelease" },
+    { "id": "acquired_to_timeout",  "from": "acquired", "to": "timeout",  "event": "timeout",  "action": "onTimeout" },
+    { "id": "waiting_to_released",  "from": "waiting",  "to": "released", "event": "cancel",   "action": "onCancel" },
+    { "id": "waiting_to_timeout",   "from": "waiting",  "to": "timeout",  "event": "timeout",  "action": "onTimeout" }
+  ],
+  "initialState": "waiting",
+  "finalStates": ["released", "timeout"]
+}
