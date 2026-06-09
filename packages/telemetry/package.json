@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc",
     "test": "vitest run",
     "test:watch": "vitest"
   },

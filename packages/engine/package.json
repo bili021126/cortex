@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.src.json",
     "dev": "tsc -p tsconfig.src.json --watch",
-    "typecheck": "tsc -p tsconfig.src.json --noEmit",
+    "typecheck": "tsc -p tsconfig.src.json",
     "lint": "eslint src/",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc && node -e \"const fs=require('fs');const p=require('path');const src='data';const dst=p.join('dist','data');if(!fs.existsSync(dst))fs.mkdirSync(dst,{recursive:true});fs.readdirSync(src).forEach(f=>fs.copyFileSync(p.join(src,f),p.join(dst,f)))\"",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc",
     "lint": "eslint src/"
   },
   "dependencies": {},
