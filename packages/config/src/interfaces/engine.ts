@@ -19,6 +19,8 @@ export interface EngineConfig {
   maxTotalReplans?: number;
   /** executeAll 全局超时 (ms)。默认 600_000 (10分钟) */
   executeAllTimeoutMs?: number;
+  /** mHC 流约束获取槽位超时 (ms)。默认 60_000 (1分钟)——超时后节点优雅失败 */
+  manifoldGateAcquireTimeoutMs?: number;
   /** 单 Agent ReAct 循环墙钟超时 (ms)。默认 300_000 (5分钟) */
   reactLoopTimeoutMs?: number;
 

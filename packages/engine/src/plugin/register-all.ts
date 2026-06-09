@@ -14,6 +14,7 @@ import "./pipeline-observer.plugin.js";
 import "./task-board.plugin.js";
 import "./agent-pool.plugin.js";
 import "./confirm-gate.plugin.js";
+import "./trust-model.plugin.js";
 import "./memory-store.plugin.js";
 import "./meta-agent.plugin.js";
 import "./consistency-layer.plugin.js";

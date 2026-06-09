@@ -30,5 +30,5 @@ export { generateId } from './utils/id.js';
 export { nowISO, formatDate, nowMs } from './utils/date.js';
 
 // 配置
-export { config, loadConfig } from './config/index.js';
+export { loadConfig } from './config/index.js';
 export type { AppConfig } from './config/index.js';

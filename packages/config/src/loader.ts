@@ -209,30 +209,7 @@ export function resolveConfigDataDir(): string {
 /** 缓存已解析的 data 目录路径 */
 let _cachedDataDir: string | null = null;
 
-/**
- * 获取 config 包 data 目录的绝对路径（推荐方式）。
- *
- * 在 Node.js 环境中通过 import.meta.url 推导，
- * 调用方也可以直接构造路径传入。
- *
- * @param importMetaUrl 调用方的 import.meta.url（用于路径推导）
- * @returns data 目录的绝对路径
- * @deprecated 推荐使用 resolveConfigDataDir()，无需传参
- */
-export function getConfigDataPath(importMetaUrl?: string): string {
-  if (importMetaUrl) {
-    const url = new URL(importMetaUrl);
-    if (url.protocol === "file:") {
-      let dirPath = url.pathname;
-      const lastSlash = dirPath.lastIndexOf("/");
-      if (lastSlash !== -1) {
-        dirPath = dirPath.substring(0, lastSlash);
-      }
-      return `${dirPath}/../data`;
-    }
-  }
-  return resolveConfigDataDir();
-}
+
 
 // ─── 加载器核心 ────────────────────────────────────────
 

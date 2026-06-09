@@ -121,15 +121,65 @@ export interface IConfirmGate {
 
 // ─── 信任模型 ──────────────────────────────────────────────
 
+/** Agent 信任等级——决定 L1 操作是否免确认 */
+export enum TrustLevel {
+  L0 = 0, // 不可信——强制确认
+  L1 = 1, // 冷启动——每次确认
+  L2 = 2, // 可信——连续 5 次接受后晋升
+  L3 = 3, // 高度可信——L1 操作免确认
+}
+
 export type RiskDomain =
   | "file_write"
   | "shell_exec"
   | "network"
   | "config_change";
 
+/** 工具名 → RiskDomain 映射 */
+export function toolNameToRiskDomain(toolName: string): RiskDomain | null {
+  if (toolName === "write_file" || toolName === "delete_file") return "file_write";
+  if (toolName === "run_shell") return "shell_exec";
+  if (toolName === "web_search" || toolName.startsWith("mcp:")) return "network";
+  return null;
+}
+
+/** 信任条目——内部追踪数据 */
+export interface TrustEntry {
+  readonly agentType: AgentType;
+  readonly domain: RiskDomain;
+  level: TrustLevel;
+  consecutiveAccepts: number;
+  totalConfirmations: number;
+  lastAcceptedAt: number;
+  updatedAt: number;
+}
+
 export interface TrustScore {
   agentType: AgentType;
   domain: RiskDomain;
   score: number; // 0..1
   historyCount: number;
+}
+
+/**
+ * ITrustModel —— 信任模型接口（§九 外部接口抽象具体化）。
+ *
+ * 按 (AgentType, RiskDomain) 二维聚合接受率。
+ * 冷启动从 L1 起。连续接受晋升，拒绝重置。7天无活动衰减。
+ */
+export interface ITrustModel {
+  /** 查询 (agent, domain) 的信任等级 */
+  getTrustLevel(agentType: AgentType, domain: RiskDomain): TrustLevel;
+
+  /** 根据工具名推导 RiskDomain 并查询信任等级 */
+  getTrustLevelForTool(agentType: AgentType, toolName: string): TrustLevel;
+
+  /** 记录一次确认结果 */
+  recordDecision(agentType: AgentType, toolName: string, approved: boolean): void;
+
+  /** 模型变更时重置所有信任等级 */
+  resetAll(): void;
+
+  /** 获取信任快照（诊断用） */
+  snapshot(): ReadonlyMap<string, TrustEntry>;
 }

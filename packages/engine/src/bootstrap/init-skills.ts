@@ -12,9 +12,6 @@ import { crystallizeSkillToKnowledge, loadSkillsFromMemory, persistSkillsToMemor
 import type { MemoryStore } from "../memory/memory-store.js";
 import { type IMemoryStore, type IPipelineObserver, type SkillTemplate } from "@cortex/shared";
 import type { MetaAgent } from "../core/meta-agent.js";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import { DEFAULT_ENGINE_CONFIG, DIR_CORTEX } from "@cortex/config";
 
 export async function initSkillSystem(
   observer: IPipelineObserver,
@@ -24,10 +21,6 @@ export async function initSkillSystem(
   externalSearch?: ExternalSearcher,
 ): Promise<SkillRegistry> {
   const skillRegistry = new SkillRegistry();
-  const skillRegistryPath = DEFAULT_ENGINE_CONFIG.filePaths.skillRegistry;
-  if (!skillRegistryPath) throw new Error("[bootstrapEngine] skillRegistry path not configured");
-  const skillJsonPath = join(projectRoot, DIR_CORTEX, skillRegistryPath);
-
   const onSkillStatusChange = async (skill: SkillTemplate, oldStatus: string) => {
     if (memory) {
       try {
@@ -39,7 +32,7 @@ export async function initSkillSystem(
         );
       }
 
-      // 结晶为知识：trial → active 时，先事实认证再写入 MemoryType.Knowledge（幂等更新）
+      // 结晶为知识：trial → active 时，先事实认证再写入 MemoryKind.Knowledge（幂等更新）
       const currentStatus = deriveStatus(skill.weight, skill.feedbackHistory);
       if (currentStatus === "active" && oldStatus !== "active") {
         try {
@@ -89,19 +82,6 @@ export async function initSkillSystem(
       }
     } catch (e) {
       console.warn("[bootstrapEngine] 从记忆库加载技能失败（非致命）:", e);
-    }
-  }
-
-  // [DEPRECATED] JSON 文件冷启动兜底——仅用于从旧版本 MemoryStore 迁移
-  if (skillRegistry.totalCount === 0 && existsSync(skillJsonPath)) {
-    try {
-      const fileRegistry = SkillRegistry.loadJson(skillJsonPath);
-      if (fileRegistry.totalCount > 0) {
-        skillRegistry.registerAll(fileRegistry.getAll());
-        console.log(`[bootstrapEngine] 从 JSON 文件恢复 ${fileRegistry.getAll().length} 个技能模板（迁移兜底）`);
-      }
-    } catch (e) {
-      console.warn("[bootstrapEngine] 从 JSON 文件加载技能失败（非致命）:", e);
     }
   }
 

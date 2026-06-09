@@ -1,10 +1,11 @@
 {
-  "description": "引擎插件加载清单——声明 Core-1 激活的 9 个插件（按依赖拓扑排序）",
+  "description": "引擎插件加载清单——声明 Core-2 激活的 10 个插件（按依赖拓扑排序）",
   "plugins": [
     "pipelineObserver",
     "taskBoard",
     "agentPool",
     "confirmGate",
+    "trustModel",
     "memoryStore",
     "metaAgent",
     "consistencyLayer",

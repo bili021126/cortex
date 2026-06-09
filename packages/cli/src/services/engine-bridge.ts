@@ -31,11 +31,12 @@ import {
   type EngineConfig,
   type BootstrapEngineResult,
 } from "@cortex/engine";
-import { AgentStatus, type AgentConfig, type AgentType, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode } from "@cortex/shared";
+import { AgentStatus, AgentType, type AgentConfig, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
 import { LLM_KEY_NAMES } from "@cortex/config";
+import type { TuiEvent } from "../tui/types.js";
 
 export interface BridgeContext {
   scheduler?: IScheduler;
@@ -55,7 +56,7 @@ export interface BridgeContext {
 
 /**
  * 最小 AgentPool 兼容包装。
- * 原型阶段使用简单的内存存储，模拟 AgentPool 的接口。
+ * 轻量模式下使用简单的内存存储，满足 IAgentPool 接口。
  */
 export class MiniAgentPool implements IAgentPool {
   private configs = new Map<string, AgentConfig>();
@@ -66,6 +67,13 @@ export class MiniAgentPool implements IAgentPool {
     this.configs.set(config.type, config);
     if (!this.instances.has(config.type)) {
       this.instances.set(config.type, new Set());
+    }
+  }
+
+  setMaxInstances(agentType: AgentType, newMax: number): void {
+    const config = this.configs.get(agentType);
+    if (config) {
+      config.maxInstances = newMax;
     }
   }
 
@@ -329,6 +337,46 @@ export class EngineBridge implements ICortexApi {
     return this.llm?.reasonerModel ?? "";
   }
 
+  /**
+   * 执行工具调用——TUI 层通过此方法将 LLM 产出的 tool_call 转发到引擎 Toolkit。
+   *
+   * 默认以 "code" Agent 身份调用（TUI chat 模式的工具调用权限与 CodeAgent 一致）。
+   */
+  async executeToolCall(name: string, args: Record<string, unknown>): Promise<{ success: boolean; output: string }> {
+    const toolkit = this._bootstrapConfig?.toolkit;
+    if (!toolkit) {
+      return { success: false, output: "Toolkit 未初始化——请通过 setBootstrapConfig() 注入 Toolkit" };
+    }
+    const result = await toolkit.execute({ toolName: name, params: args }, AgentType.Code);
+    return { success: result.success, output: result.success ? (result.output ?? "") : (result.error ?? "未知错误") };
+  }
+
+  /**
+   * 流式 LLM 对话——供 TUI queryLoop 使用。
+   *
+   * 通过 LlmAdapter.chatStream() 实现真正的 SSE 流式回调，
+   * 每个 token chunk 即时推送给 TUI 渲染层。
+   *
+   * @param model 模型名
+   * @param messages 完整消息列表（含 system）
+   * @param tools 工具定义（可选，用于 function calling）
+   * @param onChunk 每次收到文本 chunk 时回调
+   * @param opts 推理选项
+   * @returns LLM 完整响应
+   */
+  async streamChat(
+    model: string,
+    messages: LlmMessage[],
+    tools: { name: string; description: string; parameters?: Record<string, unknown> }[] | undefined,
+    onChunk: (content: string, reasoning?: string) => void,
+    opts?: { reasoningEffort?: "high" | "max" },
+  ): Promise<{ content: string | null; tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[]; usage?: { prompt_tokens: number; completion_tokens: number } }> {
+    const l = this.llm;
+    if (!l) throw new Error("LLM 未配置——请设置 DEEPSEEK_API_KEY 环境变量");
+
+    return await l.chatStream(model, messages, tools as ToolDef[] | undefined, onChunk, opts?.reasoningEffort);
+  }
+
   /** 提交任务节点到 TaskBoard（ICortexApi） */
   async submitTask(node: TaskNode): Promise<void> {
     const ctx = await (this.ctx.bootstrapped ? this._ensureBootstrapped() : this.ensureInitialized());
@@ -341,6 +389,73 @@ export class EngineBridge implements ICortexApi {
   async executeAll(): Promise<ExecutionReport> {
     const scheduler = await this.getScheduler();
     return await scheduler.executeAll();
+  }
+
+  /**
+   * 流式执行——将 executeAll 的结果拆解为 TUI 事件流。
+   *
+   * 提交节点 → 发射 node_start → await scheduler.executeAll() →
+   * 发射 node_complete/node_failed 事件。
+   *
+   * @param nodes 要执行的任务节点列表
+   * @param onEvent 事件回调——引擎每完成一个节点就调用一次
+   * @returns 完整执行报告
+   */
+  async executeWithStream(
+    nodes: TaskNode[],
+    onEvent: (event: TuiEvent) => void,
+  ): Promise<ExecutionReport> {
+    const ctx = await (this.ctx.bootstrapped ? this._ensureBootstrapped() : this.ensureInitialized());
+    const board = ctx.taskBoard;
+    const scheduler = ctx.scheduler;
+
+    if (!board || !scheduler) {
+      throw new Error("[EngineBridge] executeWithStream 需要初始化的 taskBoard 和 scheduler");
+    }
+
+    // 1. 发射任务树更新事件
+    onEvent({ type: "task_tree_update", nodes });
+
+    // 2. 提交所有节点
+    for (const node of nodes) {
+      board.addNode(node as unknown as TaskNode);
+      onEvent({
+        type: "node_start",
+        nodeId: node.id,
+        nodeType: node.type,
+        agent: (node.claimedBy?.[0] ?? "code") as AgentType,
+        description: node.payload,
+        parentId: node.parentId,
+      });
+    }
+
+    // 3. 执行全部
+    const _startMs = Date.now();
+    const report = await scheduler.executeAll();
+
+    // 4. 发射各节点完成/失败事件
+    for (const result of report.results) {
+      const durationMs = report.durationMs;
+      if (result.success) {
+        onEvent({
+          type: "node_complete",
+          nodeId: result.nodeId,
+          agent: result.agentType ?? ("code" as AgentType),
+          output: result.output ?? "",
+          durationMs,
+        });
+      } else {
+        onEvent({
+          type: "node_failed",
+          nodeId: result.nodeId,
+          agent: result.agentType ?? ("code" as AgentType),
+          error: result.error ?? "未知错误",
+          durationMs,
+        });
+      }
+    }
+
+    return report;
   }
 
   /** 读取 Talk 专属记忆（ICortexApi） */

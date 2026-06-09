@@ -29,7 +29,6 @@ import {
   FILE_DOTENV,
   FILE_CORTEX_AGENTS_JSON,
   CLI_EXIT_INTERNAL_ERROR,
-  CLI_EXIT_SUCCESS,
   WINDOWS_CHCP_UTF8,
 } from "@cortex/config";
 
@@ -40,7 +39,7 @@ import { bootstrapMcp } from "./bootstrap/mcp.js";
 // ── 命令 ─────────────────────────────────────────
 import { CommandRegistry } from "./commands/index.js";
 import { registerCommands } from "./commands/command-list.js";
-import { createReplHandler } from "./commands/repl.js";
+import { tuiReplHandler } from "./tui/tui-repl.js";
 import { createVersionHandler } from "./commands/version.js";
 import { createHelpHandler } from "./commands/help.js";
 
@@ -154,15 +153,14 @@ export async function main(): Promise<number> {
     return r.exitCode;
   }
 
-  // bare cortex → REPL
+  // bare cortex → TUI REPL（v3 全量替换）
   if (argv.length === 0) {
     if (!hasAnyLlmKey()) {
       console.log("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
       console.log("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。");
       console.log("   command 模式无需 Key——输入 .mode command 切换。\n");
     }
-    await createReplHandler(registry, engineBridge)([], {}, createDefaultContext(PROJECT_ROOT));
-    return CLI_EXIT_SUCCESS;
+    return await tuiReplHandler(registry, engineBridge, createDefaultContext(PROJECT_ROOT));
   }
 
   // --help / -h

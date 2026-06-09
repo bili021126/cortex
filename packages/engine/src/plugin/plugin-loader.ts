@@ -95,6 +95,7 @@ export class PluginLoader {
         if (!plugin) throw new Error(`[PluginLoader] 插件 "${name}" 未加载`);
         return plugin as unknown as T;
       },
+      has: (name: string): boolean => this._plugins.has(name),
       shutdown: async () => {
         // 逆序停止
         for (let i = sorted.length - 1; i >= 0; i--) {

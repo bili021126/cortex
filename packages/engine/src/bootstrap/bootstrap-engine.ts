@@ -31,6 +31,7 @@ import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.
 import type { TaskBoardPlugin } from "../plugin/task-board.plugin.js";
 import type { AgentPoolPlugin } from "../plugin/agent-pool.plugin.js";
 import type { ConfirmGatePlugin } from "../plugin/confirm-gate.plugin.js";
+import type { TrustModelPlugin } from "../plugin/trust-model.plugin.js";
 import type { MemoryStorePlugin } from "../plugin/memory-store.plugin.js";
 import type { ConsistencyLayerPlugin } from "../plugin/consistency-layer.plugin.js";
 import type { MetaAgentPlugin } from "../plugin/meta-agent.plugin.js";
@@ -116,6 +117,11 @@ export async function bootstrapEngine(
   const pool = container.get<AgentPoolPlugin>("agentPool").getInstance();
   const gate = container.get<ConfirmGatePlugin>("confirmGate").getInstance();
   const cliAdapter = container.get<ConfirmGatePlugin>("confirmGate").getCliAdapter();
+  // 信任模型可选注入——不在插件清单中时静默跳过
+  if (container.has("trustModel")) {
+    const trustModel = container.get<TrustModelPlugin>("trustModel").getInstance();
+    gate.setTrustModel(trustModel);
+  }
   const memory = container.get<MemoryStorePlugin>("memoryStore").getInstance();
   const consistencyLayer = container.get<ConsistencyLayerPlugin>("consistencyLayer").getInstance();
   const metaAgent = container.get<MetaAgentPlugin>("metaAgent").getInstance();

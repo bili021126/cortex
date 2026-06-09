@@ -6,9 +6,10 @@
  *   统一 —— 本地 `npx tsx scripts/ci-gate.ts` 与 GitHub Actions 完全一致
  *
  * 用法:
- *   npx tsx scripts/ci-gate.ts           正常门禁（只跑 @ci: unit）
- *   npx tsx scripts/ci-gate.ts --all     全量（包括 @ci: llm / integration）
- *   npx tsx scripts/ci-gate.ts --dry-run 仅扫描，不执行
+ *   npx tsx scripts/ci-gate.ts                正常门禁（只跑 @ci: unit）
+ *   npx tsx scripts/ci-gate.ts --all          全量（包括 @ci: llm / integration）
+ *   npx tsx scripts/ci-gate.ts --dry-run      仅扫描，不执行
+ *   npx tsx scripts/ci-gate.ts --scope=pkg1,pkg2  仅扫描指定包（并发 solo-flight 隔离）
  *
  * @ci 标签规范（写在测试文件第一行注释中）:
  *   // @ci: unit         CI 必跑（默认值，不写标签等同 unit）
@@ -79,6 +80,8 @@ const PACKAGES: PackageInfo[] = [
   { name: "testing",      dir: join(ROOT, "packages", "testing"),      filter: "@cortex/testing" },
   { name: "prompt-kit",   dir: join(ROOT, "packages", "prompt-kit"),   filter: "@cortex/prompt-kit" },
   { name: "cli",          dir: join(ROOT, "packages", "cli"),          filter: "@cortex/cli" },
+  { name: "plugin-runner", dir: join(ROOT, "packages", "plugin-runner"), filter: "@cortex/plugin-runner" },
+  { name: "fsm-compiler",  dir: join(ROOT, "packages", "fsm-compiler"),  filter: "@cortex/fsm-compiler" },
 ];
 
 const TEST_FILE_PATTERN = /\.test\.ts$/;
@@ -472,6 +475,22 @@ async function main() {
   const runAll = args.includes("--all");
   const dryRun = args.includes("--dry-run");
   const jsonMode = args.includes("--json");
+
+  // ─── --scope 并发隔离：仅扫描指定包 ───
+  const scopeArg = args.find((a) => a.startsWith("--scope=")) ?? args.find((a) => a === "--scope");
+  let scopeNames: Set<string> | null = null;
+  if (scopeArg) {
+    const scopeValue = scopeArg.includes("=") ? scopeArg.split("=")[1] : "";
+    scopeNames = new Set(scopeValue.split(",").map((s) => s.trim()).filter(Boolean));
+    // 过滤全局 PACKAGES 为仅指定的包
+    const filtered = PACKAGES.filter((p) => scopeNames!.has(p.name));
+    if (filtered.length === 0) {
+      console.error(`❌ --scope 指定的包不存在于 PACKAGES 列表中: ${scopeValue}`);
+      process.exit(1);
+    }
+    PACKAGES.length = 0;
+    PACKAGES.push(...filtered);
+  }
 
   console.log("╔══════════════════════════════╗");
   console.log("║  🔒 Cortex CI 门禁          ║");

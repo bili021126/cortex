@@ -224,82 +224,113 @@ export class LlmAdapter {
     }
 
     try {
-      const res = await this._fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
-      status = res.status;
-      reqId = res.headers.get("x-request-id") ?? res.headers.get("x-ds-request-id") ?? undefined;
+      // ── 请求 + 读取响应体（含一次 body-read 重试）──
+      const MAX_BODY_READ_RETRIES = 1;
+      let bodyReadAttempt = 0;
+      let response: LlmResponse | null = null;
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`LLM API error ${res.status}: ${errText}`);
-      }
+      while (bodyReadAttempt <= MAX_BODY_READ_RETRIES) {
+        try {
+          const res = await this._fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${this.config.apiKey}`,
+            },
+            body: JSON.stringify(body),
+          });
+          status = res.status;
+          reqId = res.headers.get("x-request-id") ?? res.headers.get("x-ds-request-id") ?? undefined;
 
-      const json = (await res.json()) as {
-        choices: Array<{
-          message: {
-            content: string | null;
-            reasoning_content?: string | null;
-            tool_calls?: Array<{
-              id: string;
-              function: { name: string; arguments: string };
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`LLM API error ${res.status}: ${errText}`);
+          }
+
+          const json = (await res.json()) as {
+            choices: Array<{
+              message: {
+                content: string | null;
+                reasoning_content?: string | null;
+                tool_calls?: Array<{
+                  id: string;
+                  function: { name: string; arguments: string };
+                }>;
+              };
             }>;
+            usage?: {
+              prompt_tokens: number;
+              completion_tokens: number;
+              total_tokens: number;
+            };
           };
-        }>;
-        usage?: {
-          prompt_tokens: number;
-          completion_tokens: number;
-          total_tokens: number;
-        };
-      };
 
-      const msg = json.choices[0]?.message;
-      if (!msg) throw new Error("LLM returned no choices");
+          const msg = json.choices[0]?.message;
+          if (!msg) throw new Error("LLM returned no choices");
 
-      const toolCalls: LlmToolCall[] = (msg.tool_calls ?? []).map((tc) => ({
-        id: tc.id,
-        name: tc.function.name,
-        arguments: JSON.parse(tc.function.arguments),
-      }));
+          const toolCalls: LlmToolCall[] = (msg.tool_calls ?? []).map((tc) => ({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: JSON.parse(tc.function.arguments),
+          }));
 
-      const response: LlmResponse = {
-        content: msg.content,
-        tool_calls: toolCalls,
-        reasoning_content: msg.reasoning_content ?? undefined,
-        usage: json.usage ? { prompt_tokens: json.usage.prompt_tokens, completion_tokens: json.usage.completion_tokens } : undefined,
-      };
+          response = {
+            content: msg.content,
+            tool_calls: toolCalls,
+            reasoning_content: msg.reasoning_content ?? undefined,
+            usage: json.usage ? { prompt_tokens: json.usage.prompt_tokens, completion_tokens: json.usage.completion_tokens } : undefined,
+          };
 
-      if (this._cacheEnabled) {
-        if (this._cache.size >= LlmAdapter.MAX_CACHE) {
-          const oldest = this._cache.keys().next().value;
-          if (oldest) this._cache.delete(oldest);
+          if (this._cacheEnabled) {
+            if (this._cache.size >= LlmAdapter.MAX_CACHE) {
+              const oldest = this._cache.keys().next().value;
+              if (oldest) this._cache.delete(oldest);
+            }
+            this._cache.set(cacheKey, { response, ts: Date.now() });
+          }
+
+          this._auditLog({
+            key: this._keyFingerprint(),
+            model,
+            status,
+            duration_ms: Date.now() - t0,
+            messages_count: messages.length,
+            tool_count: tools?.length ?? 0,
+            req_id: reqId,
+            prompt_tokens: json.usage?.prompt_tokens ?? 0,
+            completion_tokens: json.usage?.completion_tokens ?? 0,
+            total_tokens: json.usage?.total_tokens ?? 0,
+            error: null,
+          });
+
+          // 记录 token 消耗（权限配额追踪）
+          limiter.recordTokens(fp, json.usage?.total_tokens ?? 0);
+
+          return response;
+        } catch (bodyReadErr) {
+          const errMsg = bodyReadErr instanceof Error ? bodyReadErr.message : String(bodyReadErr);
+          const isBodyReadFailure = /terminated|aborted|connection reset|network error|fetch failed/i.test(errMsg);
+
+          if (isBodyReadFailure && bodyReadAttempt < MAX_BODY_READ_RETRIES) {
+            bodyReadAttempt++;
+            const delay = LlmAdapter.RETRY_BASE_MS * Math.pow(2, bodyReadAttempt);
+            console.warn(`  🔄 [LLM] 响应体读取失败 (${errMsg.slice(0, 80)})——${delay}ms 后重试 (${bodyReadAttempt}/${MAX_BODY_READ_RETRIES})`);
+            await new Promise((r) => setTimeout(r, delay));
+            continue;
+          }
+
+          // 不可重试或重试已用完——包装为友好错误
+          throw new Error(
+            isBodyReadFailure
+              ? `LLM API 连接中断（服务器返回 200 但响应体读取失败: ${errMsg}）。请重试。`
+              : errMsg,
+            { cause: bodyReadErr },
+          );
         }
-        this._cache.set(cacheKey, { response, ts: Date.now() });
       }
 
-      this._auditLog({
-        key: this._keyFingerprint(),
-        model,
-        status,
-        duration_ms: Date.now() - t0,
-        messages_count: messages.length,
-        tool_count: tools?.length ?? 0,
-        req_id: reqId,
-        prompt_tokens: json.usage?.prompt_tokens ?? 0,
-        completion_tokens: json.usage?.completion_tokens ?? 0,
-        total_tokens: json.usage?.total_tokens ?? 0,
-        error: null,
-      });
-
-      // 记录 token 消耗（权限配额追踪）
-      limiter.recordTokens(fp, json.usage?.total_tokens ?? 0);
-
-      return response;
+      // 理论上不会到这里（循环内必定 return 或 throw），但 TypeScript 需要
+      throw new Error("LLM chat: 意外的内部状态");
     } catch (e) {
       this._auditLog({
         key: this._keyFingerprint(),
@@ -322,12 +353,12 @@ export class LlmAdapter {
     model: string,
     messages: LlmMessage[],
     tools: ToolDef[] | undefined,
-    onChunk: (text: string) => void,
+    onChunk: (content: string, reasoning?: string) => void,
     reasoningEffort?: "high" | "max",
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       const resp = await this._mockRespond(messages, tools);
-      if (resp.content) onChunk(resp.content);
+      if (resp.content) onChunk(resp.content, resp.reasoning_content);
       return resp;
     }
 
@@ -389,7 +420,9 @@ export class LlmAdapter {
       const decoder = new TextDecoder();
       let buffer = "";
       let fullContent = "";
+      let fullReasoning = "";
       const collectedToolCalls: Array<{ id: string; function: { name: string; arguments: string } }> = [];
+      let streamUsage: { prompt_tokens: number; completion_tokens: number } | undefined;
 
       let streamError: string | null = null;
       try {
@@ -409,12 +442,27 @@ export class LlmAdapter {
 
             try {
               const chunk = JSON.parse(data);
+
+              // 收集 usage（通常位于最后一个 chunk）
+              if (chunk.usage) {
+                streamUsage = {
+                  prompt_tokens: chunk.usage.prompt_tokens,
+                  completion_tokens: chunk.usage.completion_tokens,
+                };
+              }
+
               const delta = chunk.choices?.[0]?.delta;
               if (!delta) continue;
 
               if (delta.content) {
                 fullContent += delta.content;
                 onChunk(delta.content);
+              }
+
+              // reasoning_content (DeepSeek R1 等推理模型)
+              if (delta.reasoning_content) {
+                fullReasoning += delta.reasoning_content;
+                onChunk("", delta.reasoning_content);
               }
 
               if (delta.tool_calls) {
@@ -454,6 +502,8 @@ export class LlmAdapter {
       const response: LlmResponse = {
         content: fullContent || null,
         tool_calls: toolCalls,
+        reasoning_content: fullReasoning || undefined,
+        usage: streamUsage,
       };
 
       this._auditLog({

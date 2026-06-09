@@ -184,7 +184,7 @@ export class Toolkit {
 
     // ── ConfirmGate 拦截 ──
     const level = this.reversibilityOf(inv.toolName);
-    if (this.gate?.needsConfirmation(level)) {
+    if (this.gate?.needsConfirmation(level, { agentType: callerType, toolName: inv.toolName })) {
       const reqId = this.gate.request({
         id: `confirm-${inv.toolName}-${Date.now()}`,
         level,
@@ -195,6 +195,10 @@ export class Toolkit {
 
       // L2/L3 阻塞等待用户确认（默认 5 分钟超时，防永久挂死）
       const approved = await this.gate.waitFor(reqId, this.config.toolTimeouts.confirmWait);
+
+      // 将确认结果反馈给信任模型（含拒绝和批准）
+      this.gate.recordDecision(callerType, inv.toolName, approved);
+
       if (!approved) {
         return { success: false, error: `Rejected by ConfirmGate: ${inv.toolName}` };
       }

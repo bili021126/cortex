@@ -177,32 +177,18 @@ describe("SkillRegistry", () => {
       expect(restored.get("s2")?.kind).toBe("action");
     });
 
-    it("should save and load via JSON file", () => {
+    it("should round-trip via toJSON/fromJSON", () => {
       registry.register(makeSkill({ id: "s1", name: "Saved Skill" }));
       registry.register(makeSkill({ id: "s2", name: "Second Skill" }));
 
-      const filePath = path.join(tmpDir, "skills.json");
-      registry.saveJson(filePath);
-
-      expect(fs.existsSync(filePath)).toBe(true);
-
-      const loaded = SkillRegistry.loadJson(filePath);
+      const json = registry.toJSON();
+      const loaded = SkillRegistry.fromJSON(json);
       expect(loaded.totalCount).toBe(2);
       expect(loaded.get("s1")?.name).toBe("Saved Skill");
-      expect(loaded.queryByTags(["implementation"]).length).toBe(2);
     });
 
-    it("should create directory when saving if not exists", () => {
-      registry.register(makeSkill({ id: "s1" }));
-      const filePath = path.join(tmpDir, "nested", "dir", "skills.json");
-
-      expect(() => registry.saveJson(filePath)).not.toThrow();
-      expect(fs.existsSync(filePath)).toBe(true);
-    });
-
-    it("should return empty registry when loading nonexistent file", () => {
-      const filePath = path.join(tmpDir, "nonexistent.json");
-      const loaded = SkillRegistry.loadJson(filePath);
+    it("should return empty registry from empty JSON", () => {
+      const loaded = SkillRegistry.fromJSON({ version: 1, templates: [] });
       expect(loaded.totalCount).toBe(0);
     });
 
@@ -211,10 +197,8 @@ describe("SkillRegistry", () => {
       registry.register(makeSkill({ id: "s2", kind: "thought", triggerTags: ["review"] }));
       registry.register(makeSkill({ id: "s3", kind: "action", triggerTags: ["refactor"] }));
 
-      const filePath = path.join(tmpDir, "skills.json");
-      registry.saveJson(filePath);
-
-      const loaded = SkillRegistry.loadJson(filePath);
+      const json = registry.toJSON();
+      const loaded = SkillRegistry.fromJSON(json);
       expect(loaded.queryByTags(["implementation"]).length).toBe(1);
       expect(loaded.queryByTags(["review"]).length).toBe(1);
       // queryByAgent 已移除，改用 getAll + filter

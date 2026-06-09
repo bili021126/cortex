@@ -21,8 +21,6 @@
  * @moved-from @cortex/shared/src/skill-registry.ts
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
 import {
   type SkillTemplate,
   type SerializedSkillRegistry,
@@ -246,31 +244,10 @@ export class SkillRegistry {
   }
 
   /**
-   * 保存注册表到 JSON 文件。
-   *
-   * @deprecated 自 v2.6 起，MemoryStore 是唯一持久化源。
-   *             保留此方法仅用于测试和手动迁移。
+   * 序列化为 JSON 字符串。
    */
-  saveJson(filePath: string): void {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const data = this.toJSON();
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
-  }
-
-  /**
-   * 从 JSON 文件恢复注册表。
-   *
-   * @deprecated 自 v2.6 起，MemoryStore 是唯一持久化源。
-   *             保留此方法仅用于测试和冷启动迁移兜底。
-   */
-  static loadJson(filePath: string): SkillRegistry {
-    if (!fs.existsSync(filePath)) {
-      return new SkillRegistry();
-    }
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const data = JSON.parse(raw) as SerializedSkillRegistry;
-    return SkillRegistry.fromJSON(data);
+  toJSONString(): string {
+    return JSON.stringify(this.toJSON(), null, 2);
   }
 }
 

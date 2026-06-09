@@ -13,7 +13,7 @@
 // @since v2.6 — 技能系统重构：压扁重复实现，回归记忆本质
 // ============================================================
 
-import type { Tag } from "./agent-tags.js";
+import type { Tag } from "./agent-registry.js";
 
 /** 经验种类——认知的三种形态 */
 export type SkillKind = "action" | "thought" | "workflow";

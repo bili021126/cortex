@@ -1,5 +1,6 @@
 import { AgentStatus, PipelineEventType, PipelinePriority, type AgentConfig, type AgentType, type IPipelineObserver, type InvariantReporter } from "@cortex/shared";
 import { isTestEnv } from "../test-env.js";
+import { ManifoldGate } from "./dispatch-steps/manifold-gate.js";
 
 /**
  * ISchedulerAgentPool —— Scheduler 依赖的 AgentPool 最小契约。
@@ -22,6 +23,8 @@ export interface ISchedulerAgentPool {
  */
 export interface IAgentPool extends ISchedulerAgentPool {
   register(config: AgentConfig): void;
+  /** 动态调整 AgentType 最大并发数（热扩容/缩容） */
+  setMaxInstances(agentType: AgentType, newMax: number): void;
   setObserver(observer: IPipelineObserver): void;
   getStatuses(agentType: AgentType): AgentStatus[];
   hasAwake(agentType: AgentType): boolean;
@@ -64,6 +67,8 @@ export class AgentPool implements IAgentPool {
   /** 注入 PipelineObserver（与 onInvariant 互补的双通道模式） */
   setObserver(observer: IPipelineObserver): void {
     this._observer = observer;
+    // mHC 流形约束：注入 observer 用于流控事件上报
+    ManifoldGate.setObserver(observer);
   }
 
   /** 合法状态流转表（pool-aware.ts 共享引用，与 AgentPool 同源）
@@ -82,6 +87,20 @@ export class AgentPool implements IAgentPool {
     if (!this.active.has(config.type)) {
       this.active.set(config.type, new Set());
     }
+    // mHC 流形约束注册：同步 ManifoldGate 的 maxInstances
+    ManifoldGate.register(config.type, config.maxInstances ?? 1);
+  }
+
+  /**
+   * 动态更新 AgentType 的最大并发数（热扩容/缩容）。
+   * 同步更新本地 configs 和 ManifoldGate 流控上限。
+   */
+  setMaxInstances(agentType: AgentType, newMax: number): void {
+    const config = this.configs.get(agentType);
+    if (config) {
+      config.maxInstances = newMax;
+    }
+    ManifoldGate.updateMax(agentType, newMax);
   }
 
   /** 启动一个 Agent 实例。超限返回 false。新实例初始状态为 Created。 */

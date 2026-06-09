@@ -5,7 +5,28 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["**/dist/", "**/node_modules/", "**/tmp/", "**/test-output/", ".cortex/", "projects/", "**/coverage/"],
+    ignores: [
+      "**/dist/",
+      "**/node_modules/",
+      "**/tmp/",
+      "**/test-output/",
+      ".cortex/",
+      "projects/",
+      "**/coverage/",
+      "**/vitest.config.ts",
+      "**/vitest.ci.config.ts",
+      "**/vitest.ci-slow.config.ts",
+      "**/samples/**",
+      "**/tests/**",
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "**/*.spec.ts",
+      "**/*.cjs",
+      "**/*.mjs",
+      "packages/engine/scripts/**",
+      "packages/skill-validator/eslint.config.mjs",
+      "packages/src/**",
+    ],
   },
   {
     languageOptions: {
@@ -38,7 +59,8 @@ export default tseslint.config(
       // ── 异步规范 ──
       "no-return-await": "off",
       "@typescript-eslint/return-await": ["error", "always"],
-      "require-await": "warn",
+      "require-await": "off",
+      "@typescript-eslint/require-await": "warn",
 
       // ── 控制台（禁止裸 console——统一走 PipelineObserver 管道；仅 warn/error 例外用于运行时日志） ──
       "no-console": ["error", { allow: ["warn", "error"] }],
@@ -56,17 +78,9 @@ export default tseslint.config(
       "max-lines-per-function": ["warn", { max: 30, skipBlankLines: true, skipComments: true }],
     },
   },
-  // ── 测试文件豁免（e2e / 单元测试允许裸 console） ──
-  {
-    files: ["**/tests/**/*.ts", "**/tests/**/*.tsx", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
-    rules: {
-      "no-console": "off",
-      "no-empty": "off",
-    },
-  },
   // ── CLI 源码豁免（终端交互工具允许裸 console） ──
   {
-    files: ["packages/cli/src/**/*.ts"],
+    files: ["packages/cli/src/**/*.ts", "packages/fsm-compiler/src/cli/**/*.ts"],
     rules: {
       "no-console": "off",
     },

@@ -119,20 +119,32 @@ fetchData().catch(e => console.warn("非关键操作失败:", e));
 ```
 ✅ 所有常量定义必须在 @cortex/config 包中（packages/config/src/constants/）
 ❌ 禁止：任何模块中直接书写魔法数字、路径字面量、环境变量名、版本号字符串
-❌ 禁止：在 engine/shared/cli 中定义 Agent 标签/身份/展示/别名常量——统一迁入 config
+✅ Agent 域映射常量（标签/展示/权限/别名）统一在 @cortex/shared agent-registry.ts 中定义
+  — config 存原始数据（JSON），shared 管映射转化（string→AgentType-key）
 ```
 
-**已抽离到 @cortex/config 的常量域**：
+**@cortex/config 中的常量域（基础设施）**：
 
 | 域 | 文件 | 内容 |
 |---|---|---|
-| Agent 标签 | `constants/agent-tags.ts` | TAG_VOCABULARY, AGENT_TAGS |
-| Agent 展示 | `constants/agent-display.ts` | AGENT_CHINESE_ROLE, AGENT_DISPLAY, CHAT_AGENT_ALIASES, buildChineseRoleMap |
+| 版本/默认值 | `constants/version.ts` | CORTEX_VERSION, CORTEX_PHASE, DEFAULT_* |
+| LLM | `constants/llm.ts` | DEFAULT_LLM_BASE_URL, DEFAULT_LLM_CHAT_MODEL 等 |
+| 环境变量 | `constants/env.ts` | ENV_DEEPSEEK_*, ENV_CORTEX_* 等 |
+| 文件路径 | `constants/file-paths.ts` | FILE_CORTEX_AGENTS_JSON, DIR_CONSTITUTION 等 |
+| 超时 | `constants/timeouts.ts` | DEFAULT_TASK_TIMEOUT_SEC, DEFAULT_COMMAND_TIMEOUT_SEC |
 | MetaAgent 提示词 | `constants/meta-agent.ts` | PLANNING_SYSTEM, REPLAN_SYSTEM, buildPlanningSystem(workspaceRoot) |
 | 管线上下文 | `constants/pipeline.ts` | PIPELINE_CTX_MAX_OUTPUT_LEN, PIPELINE_CTX_RECENT_LIMIT 等 |
-| 环境/路径 | `constants/env.ts` | ENV_DEEPSEEK_*, FILE_CORTEX_AGENTS_JSON 等 |
-| 版本/默认值 | `constants/version.ts` | CORTEX_VERSION, CORTEX_PHASE, DEFAULT_* |
 | RLM/Density | `constants/rlm.ts` | RLM_MIN_CONFIDENCE, DENSITY_* 等 |
+| 技能/修宪 | `constants/skills.ts` / `constants/amendment.ts` | DEFAULT_SKILL_TIMEOUT_MS, DEFAULT_AMENDMENT_TIMEOUT |
+| Agent 配额 | `constants/agent-quota.ts` | DEFAULT_AGENT_QUOTA |
+
+**@cortex/shared 中的 Agent 域（映射+转化）**：
+
+| 域 | 文件 | 内容 |
+|---|---|---|
+| Agent 注册表 | `src/agent-registry.ts` | TAG_VOCABULARY, AGENT_TAGS, AGENT_CHINESE_ROLE, CHINESE_NAME_TO_TYPE, AGENT_DISPLAY, AGENT_DISPLAY_BY_TYPE, CHAT_AGENT_ALIASES, AGENT_TOOL_PERMISSIONS, resolveAgentPermissions, buildChineseRoleMap, setAgentRegistry（运行时覆写 API） |
+
+> **架构原则**：config 层 = 配置 GUI/CLI（存取原始数据），shared 层 = 映射转化引擎（string→AgentType-key 转换 + 运行时覆写）。Agent 域的硬编码 fallback 在 shared，运行时真相源在 cortex-agents.json。
 
 **禁止字面量类型**：
 - (a) 环境变量名（如 `DEEPSEEK_API_KEY`）→ 用 `ENV_DEEPSEEK_API_KEY`
@@ -206,18 +218,21 @@ await page.setViewportSize(BROWSER_DEFAULT_VIEWPORT);
 
 ```
 ✅ 只需修改：
-  1. @cortex/config：constants/agent-tags.ts（TAG_VOCABULARY + AGENT_TAGS）
-  2. @cortex/config：constants/agent-display.ts（AGENT_CHINESE_ROLE + AGENT_DISPLAY + CHAT_AGENT_ALIASES）
-  3. @cortex/config：constants/meta-agent.ts（PLANNING_SYSTEM 的"可用兵种"部分）
-  4. @cortex/config：interfaces/agent.ts（AgentDefinition 类型如有新增字段）
-  5. cortex-agents.json（agent 运行时定义）
-  6. engine：bootstrap/register-agents.ts（如新类型需要特殊工厂逻辑）
+  1. @cortex/shared：src/agent-registry.ts（TAG_VOCABULARY + AGENT_TAGS + AGENT_CHINESE_ROLE + CHINESE_NAME_TO_TYPE + AGENT_DISPLAY + AGENT_DISPLAY_BY_TYPE + CHAT_AGENT_ALIASES + AGENT_TOOL_PERMISSIONS）
+  2. @cortex/config：constants/meta-agent.ts（PLANNING_SYSTEM 的"可用兵种"部分）
+  3. @cortex/config：interfaces/agent.ts（AgentDefinition 类型如有新增字段）
+  4. cortex-agents.json（agent 运行时定义）
+  5. engine：bootstrap/register-agents.ts（如新类型需要特殊工厂逻辑）
 
-❌ 不再需要修改：
-  - shared/agent-tags.ts（已改为重导出层）
-  - shared/agent-display.ts（已改为重导出层）
-  - cli/repl/types.ts（AGENT_DISPLAY/CHAT_AGENT_ALIASES 已从 config 派生）
+✅ 不再需要修改：
+  - cli/repl/types.ts（AGENT_DISPLAY/CHAT_AGENT_ALIASES 已从 @cortex/shared 直接引用，无需手动维护副本）
   - engine/core/meta-agent.ts（PLANNING_SYSTEM/REPLAN_SYSTEM 已从 config 导入）
+
+> v2.6.3 架构收敛：config 层 agent-tags.ts/agent-display.ts 已删除，
+> shared 层 agent-tags.ts/agent-display.ts/agent-permissions.ts 已删除，
+> 统一收口至 shared/src/agent-registry.ts（从 5 文件碎片收敛为 1 文件）。
+> 运行时真相源 = cortex-agents.json（经 engine bootstrap load-config.ts → setAgentRegistry 注入）。
+> 零向后兼容——无 re-export shim、无 @deprecated 注释、无 barrel 重导出。
 ```
 
 ---
@@ -276,7 +291,7 @@ prompts/
 > 
 > 治理篇（架构规范、Agent 交互协议）见 `prompts/coding-standards-governance.md`。
 > 
-> **宪法依据**：Cortex 概念顶层设计 v2.6.1——七条不可变原则（含子约束9 类型安全保障）
+> **宪法依据**：Cortex 概念顶层设计 v2.6.3——七条不可变原则（含子约束9 类型安全保障）
 
 ---
 

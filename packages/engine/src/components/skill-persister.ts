@@ -2,7 +2,7 @@
  * skill-persister.ts —— SkillRegistry ↔ MemoryStore 双向持久化桥。
  *
  * 技能沉淀闭环的核心基建：
- *   1. persistSkillsToMemory():   SkillRegistry → MemoryStore (MemoryType.Skill)
+ *   1. persistSkillsToMemory():   SkillRegistry → MemoryStore (kind="Skill")
  *   2. loadSkillsFromMemory():    MemoryStore → SkillTemplate[] → SkillRegistry.registerAll()
  *   3. scanOutputFilesForSkills(): 扫描已产出文件（pattern/design/review），
  *      从 Markdown 提取技能模板（文件回溯扫描）。
@@ -54,7 +54,7 @@ export interface CrystallizeResult {
 }
 
 /**
- * 将已验证技能结晶为 MemoryType.Knowledge 记忆。支持幂等更新与版本追踪。
+ * 将已验证技能结晶为 kind="Knowledge" 记忆。支持幂等更新与版本追踪。
  *
  * 行为：
  *   - 首次结晶（无同名 Knowledge）→ 新建，version=1
@@ -270,7 +270,7 @@ export async function verifySkillKnowledge(
 
 /**
  * 将 SkillRegistry 中的所有技能模板持久化到 MemoryStore。
- * 每个模板作为一条 MemoryType.Skill 记忆写入。
+ * 每个模板作为一条 kind="Skill" 记忆写入。
  *
  * @returns 成功持久化的技能数量。
  */
@@ -307,7 +307,7 @@ export function persistSkillsToMemory(
 // ─── 2. 读取：MemoryStore → SkillTemplate[] ───────────
 
 /**
- * 从 MemoryStore 读取所有 MemoryType.Skill 记忆，反序列化为 SkillTemplate 列表。
+ * 从 MemoryStore 读取所有 kind="Skill" 记忆，反序列化为 SkillTemplate 列表。
  *
  * @returns 反序列化后的技能模板列表（异常时返回空数组）。
  */

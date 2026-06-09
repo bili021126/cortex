@@ -1,4 +1,4 @@
-﻿/**
+/**
  * commands/schedule.ts — `cortex schedule` 调度系统命令
  *
  * 任务调度编排——从文件生成计划、执行计划、查看调度状态。
@@ -81,23 +81,27 @@ async function handleSchedulePlan(
 
   let plan: Record<string, unknown>;
   try {
-    plan = JSON.parse(content);
+    plan = JSON.parse(content) as Record<string, unknown>;
   } catch {
     plan = { raw: content, hint: "非 JSON 格式，作为原始任务描述" };
   }
+
+  const tasks = Array.isArray(plan.tasks) ? plan.tasks as Array<unknown> : ["task-0"];
+  const planName = typeof plan.name === "string" ? plan.name : "未命名计划";
+  const taskCount = tasks.length;
 
   const showTopo = options["topo"] as boolean;
   const showParallel = options["parallel"] as boolean;
   const outputPath = (options["output"] ?? options["o"]) as string | undefined;
 
-  const layers = (plan.tasks as unknown[]) ? [(plan.tasks as unknown[]).map((_: unknown, i: number) => `task-${i}`)] : [["task-0"]];
+  const layers = tasks.length > 0 && plan.tasks ? [tasks.map((_, i: number) => `task-${i}`)] : [["task-0"]];
 
   const planOutput = {
-    name: (plan.name as string | undefined) ?? "未命名计划",
-    totalTasks: (plan.tasks as unknown[] | undefined)?.length ?? 1,
+    name: planName,
+    totalTasks: taskCount,
     layers: showTopo ? layers : undefined,
     parallelGroups: showParallel ? layers.length : undefined,
-    estimatedDuration: `${((plan.tasks as unknown[] | undefined)?.length ?? 1) * 5}s`,
+    estimatedDuration: `${taskCount * 5}s`,
   };
 
   if (outputPath) {

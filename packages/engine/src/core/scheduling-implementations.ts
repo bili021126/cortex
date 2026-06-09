@@ -294,10 +294,39 @@ export class TopologicalLayeredDriver implements ILoopDriver {
     // 退订边界违规监听
     observer.off(PipelinePriority.HIGH, boundaryHandler);
 
+    // ─── 悬空节点兜底 ───
+    const allTopNodes = board.getAllNodes();
+    const orphaned = allTopNodes.filter(
+      (n) => n.status !== "done" && n.status !== "failed",
+    );
+    if (orphaned.length > 0) {
+      observer.emit({
+        type: PipelineEventType.SchedulerLoopCrashed,
+        priority: PipelinePriority.CRITICAL,
+        payload: {
+          round,
+          error: "Scheduler done — orphaned nodes auto-cancelled",
+          pendingAtCrash: orphaned.length,
+          hint: `${orphaned.length} 个节点在调度器退出时仍处于非终态，自动标记为失败`,
+        },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+      for (const n of orphaned) {
+        try { board.failNode(n.id); } catch { /* best-effort */ }
+        allResults.push({
+          nodeId: n.id,
+          success: false,
+          error: `Scheduler done — orphaned node in status ${n.status}`,
+        });
+        failed++;
+      }
+    }
+
     observer.emit({
       type: PipelineEventType.SchedulerDone,
       priority: PipelinePriority.CRITICAL,
-      payload: { total: allResults.length, completed, failed, durationMs: Date.now() - startTime, rounds: round },
+      payload: { total: allResults.length, completed, failed, durationMs: Date.now() - startTime, rounds: round, orphanedNodes: orphaned.length },
       timestamp: Date.now(),
       notificationType: "FYI",
     });
@@ -384,10 +413,27 @@ export class SequentialDriver implements ILoopDriver {
     if (replanFlight) await replanFlight;
     replanManager.resolveChains(allResults);
 
+    // ─── 悬空节点兜底 ───
+    const allSeqNodes = board.getAllNodes();
+    const orphaned = allSeqNodes.filter(
+      (n) => n.status !== "done" && n.status !== "failed",
+    );
+    if (orphaned.length > 0) {
+      for (const n of orphaned) {
+        try { board.failNode(n.id); } catch { /* best-effort */ }
+        allResults.push({
+          nodeId: n.id,
+          success: false,
+          error: `Scheduler done — orphaned node in status ${n.status}`,
+        });
+        failed++;
+      }
+    }
+
     observer.emit({
       type: PipelineEventType.SchedulerDone,
       priority: PipelinePriority.CRITICAL,
-      payload: { total: allResults.length, completed, failed, durationMs: Date.now() - startTime, rounds: 1 },
+      payload: { total: allResults.length, completed, failed, durationMs: Date.now() - startTime, rounds: 1, orphanedNodes: orphaned.length },
       timestamp: Date.now(),
       notificationType: "FYI",
     });
@@ -555,10 +601,39 @@ export class WaveDriver implements ILoopDriver {
     if (replanFlight) await replanFlight;
     replanManager.resolveChains(allResults);
 
+    // ─── 悬空节点兜底 ───
+    const allWaveNodes = board.getAllNodes();
+    const orphaned = allWaveNodes.filter(
+      (n) => n.status !== "done" && n.status !== "failed",
+    );
+    if (orphaned.length > 0) {
+      observer.emit({
+        type: PipelineEventType.SchedulerLoopCrashed,
+        priority: PipelinePriority.CRITICAL,
+        payload: {
+          round,
+          error: "Scheduler done — orphaned nodes auto-cancelled",
+          pendingAtCrash: orphaned.length,
+          hint: `${orphaned.length} 个节点在调度器退出时仍处于非终态，自动标记为失败`,
+        },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+      for (const n of orphaned) {
+        try { board.failNode(n.id); } catch { /* best-effort */ }
+        allResults.push({
+          nodeId: n.id,
+          success: false,
+          error: `Scheduler done — orphaned node in status ${n.status}`,
+        });
+        failed++;
+      }
+    }
+
     observer.emit({
       type: PipelineEventType.SchedulerDone,
       priority: PipelinePriority.CRITICAL,
-      payload: { total: allResults.length, completed, failed, durationMs: Date.now() - startTime, rounds: round },
+      payload: { total: allResults.length, completed, failed, durationMs: Date.now() - startTime, rounds: round, orphanedNodes: orphaned.length },
       timestamp: Date.now(),
       notificationType: "FYI",
     });

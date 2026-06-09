@@ -297,10 +297,45 @@ export class Scheduler implements IScheduler {
     const durationMs = Date.now() - startTime;
     const allNodes = this.board.getAllNodes();
 
+    // ─── 悬空节点兜底：正常退出后仍处于非终态的节点自动取消 ───
+    const orphaned = allNodes.filter(
+      (n) => n.status !== "done" && n.status !== "failed",
+    );
+    if (orphaned.length > 0) {
+      this.observer.emit({
+        type: PipelineEventType.SchedulerLoopCrashed,
+        priority: PipelinePriority.CRITICAL,
+        payload: {
+          round,
+          error: "Scheduler done — orphaned nodes auto-cancelled",
+          pendingAtCrash: orphaned.length,
+          hint: `${orphaned.length} 个节点在调度器退出时仍处于非终态，自动标记为失败`,
+        },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+      for (const n of orphaned) {
+        try { this.board.failNode(n.id); } catch { /* best-effort */ }
+        allResults.push({
+          nodeId: n.id,
+          success: false,
+          error: `Scheduler done — orphaned node in status ${n.status}`,
+        });
+        failed++;
+      }
+    }
+
     this.observer.emit({
       type: PipelineEventType.SchedulerDone,
       priority: PipelinePriority.CRITICAL,
-      payload: { total: allNodes.length, completed, failed, durationMs, rounds: round },
+      payload: {
+        total: allNodes.length,
+        completed,
+        failed,
+        durationMs,
+        rounds: round,
+        orphanedNodes: orphaned.length,
+      },
       timestamp: Date.now(),
       notificationType: "FYI",
     });
@@ -401,7 +436,7 @@ export class Scheduler implements IScheduler {
 
     const steps: IDispatchStep[] = [
       new ClaimStep(),
-      new SpawnStep(),
+      new SpawnStep(this.config.manifoldGateAcquireTimeoutMs),
       new RlmExecuteStep(),
       new BoundaryGuardStep(),
       new CleanupStep(),
@@ -448,7 +483,7 @@ export class Scheduler implements IScheduler {
       innerCtx.model = this.models.get(at) ?? "mock";
 
       const steps: IDispatchStep[] = [
-        new SpawnStep(),
+        new SpawnStep(this.config.manifoldGateAcquireTimeoutMs),
         new RlmExecuteStep(),
         new BoundaryGuardStep(),
         new CleanupStep(),

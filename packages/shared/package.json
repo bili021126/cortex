@@ -21,7 +21,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cortex/config": "workspace:*"
   },
   "devDependencies": {
     "eslint": "^10.3.0",

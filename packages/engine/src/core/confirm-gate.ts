@@ -1,4 +1,4 @@
-import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel } from "@cortex/shared";
+import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL } from "@cortex/shared";
 import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_NODE_ENV } from "@cortex/config";
 
 /**
@@ -38,6 +38,7 @@ export class ConfirmGate {
   private rejecters = new Map<string, (reason: Error) => void>();
   private bridge?: PlatformBridge;
   private _bypass = false;
+  private trustModel?: ITrustModel;
   private defaultTimeoutMs: number;
 
   /**
@@ -66,15 +67,56 @@ export class ConfirmGate {
   /**
    * 判断给定等级是否需要用户确认。
    * bypass 模式下跳过所有确认。
+   *
+   * 当注入 TrustModel 后，L1 操作不再无条件放行：
+   *   - TrustLevel ≥ L3 → 免确认（高度可信 agent 在该域已建立信任）
+   *   - TrustLevel < L3 → 仍需确认（冷启动 / 衰减 / 拒绝后重建）
+   *
+   * L2/L3 始终需要确认——信任模型不覆盖不可逆操作。
+   *
+   * @param level        工具可逆性等级
+   * @param trustContext  可选——AgentType + toolName，用于查询信任模型
    */
-  needsConfirmation(level: ReversibilityLevel): boolean {
+  needsConfirmation(
+    level: ReversibilityLevel,
+    trustContext?: { agentType: AgentType; toolName: string },
+  ): boolean {
     if (this._bypass) return false;
-    return level === RL.L2 || level === RL.L3;
+
+    // L0 永不确认
+    if (level === RL.L0) return false;
+
+    // L2/L3 永远确认
+    if (level === RL.L2 || level === RL.L3) return true;
+
+    // L1：信任模型判定
+    if (!this.trustModel || !trustContext) {
+      // 无信任模型时保守放行（保持旧行为）
+      return false;
+    }
+    const trustLevel = this.trustModel.getTrustLevelForTool(
+      trustContext.agentType,
+      trustContext.toolName,
+    );
+
+    // TrustLevel ≥ L3 → L1 免确认
+    return trustLevel < TL.L3;
   }
 
   /** 注入用户交互通道。 */
   setBridge(bridge: PlatformBridge): void {
     this.bridge = bridge;
+  }
+
+  /** 注入信任模型——使 L1 操作从静态放行变为动态信任判定 */
+  setTrustModel(tm: ITrustModel): void {
+    this.trustModel = tm;
+  }
+
+  /** 记录一次确认决定到信任模型——由调用方在确认完成后调用 */
+  recordDecision(agentType: AgentType, toolName: string, approved: boolean): void {
+    if (!this.trustModel) return;
+    this.trustModel.recordDecision(agentType, toolName, approved);
   }
 
   // ── 请求/等待/确认 核心协议 ──────────────────────────

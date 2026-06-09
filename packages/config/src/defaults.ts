@@ -20,6 +20,7 @@ export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
   maxTotalReplans: 3,
   executeAllTimeoutMs: 600_000,
   reactLoopTimeoutMs: 300_000,
+  manifoldGateAcquireTimeoutMs: 60_000,
 
   toolTimeouts: {
     searchCode: 15_000,
@@ -157,6 +158,7 @@ export function resolveConfig(partial?: EngineConfig): Required<EngineConfig> {
     maxTotalReplans: partial.maxTotalReplans ?? DEFAULT_ENGINE_CONFIG.maxTotalReplans,
     executeAllTimeoutMs: partial.executeAllTimeoutMs ?? DEFAULT_ENGINE_CONFIG.executeAllTimeoutMs,
     reactLoopTimeoutMs: partial.reactLoopTimeoutMs ?? DEFAULT_ENGINE_CONFIG.reactLoopTimeoutMs,
+    manifoldGateAcquireTimeoutMs: partial.manifoldGateAcquireTimeoutMs ?? DEFAULT_ENGINE_CONFIG.manifoldGateAcquireTimeoutMs,
 
     toolTimeouts: mergeToolTimeouts(partial.toolTimeouts),
     inspector: mergeInspector(partial.inspector),

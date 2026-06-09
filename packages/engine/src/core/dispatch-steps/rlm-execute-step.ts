@@ -13,6 +13,9 @@ import {
   densityToStrategy,
 } from "../density-compress.js";
 
+/** RLM 同层子任务最大并行数——超过上限的子任务改为串行执行 */
+const MAX_PARALLEL_SUBTASKS = 5;
+
 /**
  * RlmExecuteStep —— RLM 递归分层执行步骤。
  *
@@ -137,18 +140,21 @@ export class RlmExecuteStep implements IDispatchStep {
       // 构建此层的上下文（来自之前层的压缩产出）
       const layerContext = mergeContext(allAnnotations);
 
-      // 同层子任务并行执行
-      const layerPromises = layer.map((st) =>
-        this._executeOneSubTask(ctx, agent, agentType, st, layerContext, model),
-      );
-      const settled = await Promise.allSettled(layerPromises);
+      // 同层子任务分批并行执行（扇出上限 MAX_PARALLEL_SUBTASKS）
+      for (let si = 0; si < layer.length; si += MAX_PARALLEL_SUBTASKS) {
+        const batch = layer.slice(si, si + MAX_PARALLEL_SUBTASKS);
+        const batchPromises = batch.map((st) =>
+          this._executeOneSubTask(ctx, agent, agentType, st, layerContext, model),
+        );
+        const settled = await Promise.allSettled(batchPromises);
 
-      // 收集产出并做 DENSITY 标注
-      for (const s of settled) {
-        if (s.status === "fulfilled" && s.value) {
-          allAnnotations.push(s.value);
+        // 收集产出并做 DENSITY 标注
+        for (const s of settled) {
+          if (s.status === "fulfilled" && s.value) {
+            allAnnotations.push(s.value);
+          }
+          // 失败的子任务不阻塞同层其他子任务，但不产出上下文
         }
-        // 失败的子任务不阻塞同层其他子任务，但不产出上下文
       }
     }
 

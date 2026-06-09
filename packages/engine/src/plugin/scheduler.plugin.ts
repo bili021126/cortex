@@ -93,6 +93,7 @@ export class SchedulerPlugin implements EnginePlugin {
     const observer = ctx.get<PipelineObserverPlugin>("pipelineObserver").getInstance();
     const memory = ctx.get<MemoryStorePlugin>("memoryStore").getInstance();
     const filterRead = ctx.get<ConsistencyLayerPlugin>("consistencyLayer").getFilterRead();
+    const pool = ctx.get<AgentPoolPlugin>("agentPool").getInstance();
 
     // 注册表注入已在 bootstrap 阶段完成（bootstrap-engine.ts §2），此处不再重复调用
 
@@ -143,8 +144,11 @@ export class SchedulerPlugin implements EnginePlugin {
           );
           continue;
         }
-        const modelKey = def.key ?? "default";
-        this.instance.register(agentType, agent, modelKey);
+        this.instance.register(agentType, agent, def.model);
+        pool.register({
+          type: agentType as AgentType,
+          maxInstances: def.maxInstances ?? 1,
+        });
         this._agents.set(agentType, agent);
       }
     }

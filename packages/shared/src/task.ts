@@ -115,6 +115,12 @@ export interface TaskNode {
    * @since Cortex Core-2 — 上下文生命周期管理协议
    */
   contextPolicyId?: string;
+  /**
+   * ManifoldGate 流控槽位获取超时（ms），覆盖全局默认值。
+   * 关键节点可设更长等待时间避免超时失败。
+   * @since mHC 流约束 per-node override
+   */
+  acquireTimeoutMs?: number;
 }
 
 /**

@@ -119,14 +119,6 @@ export {
   RLM_MIN_COMPLEXITY_CHARS,
   DENSITY_LIGHT_MAX_CHARS,
   DENSITY_MEDIUM_MAX_CHARS,
-  TAG_VOCABULARY,
-  AGENT_TAGS,
-  AGENT_CHINESE_ROLE,
-  CHINESE_NAME_TO_TYPE,
-  AGENT_DISPLAY,
-  AGENT_DISPLAY_FALLBACK,
-  CHAT_AGENT_ALIASES,
-  buildChineseRoleMap,
   PLANNING_SYSTEM,
   REPLAN_SYSTEM,
   WORKSPACE_PLACEHOLDER,
@@ -160,7 +152,6 @@ export {
   loadConfigDomain,
   loadAllConfig,
   // 路径工具
-  getConfigDataPath,
   resolveConfigDataDir,
   // 错误类型
   ConfigLoadError,
@@ -173,5 +164,3 @@ export type {
   CortexConfig,
 } from "./loader.js";
 
-export type { Tag } from "./constants/index.js";
-export type { AgentDisplayInfo, AgentDisplayEntry } from "./constants/index.js";

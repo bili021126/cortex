@@ -184,35 +184,3 @@ export interface MaintainReport {
   orphanedLinks: number;
   skipped?: string;
 }
-
-// ─── v2 兼容层（@deprecated，迁移期间保留）──────────────
-
-/**
- * @deprecated 使用 MemoryKind 替代。v2 兼容保留，consumer 迁移完成后移除。
- */
-export enum MemoryType {
-  Episodic = "EPISODIC",
-  Conceptual = "CONCEPTUAL",
-  Knowledge = "KNOWLEDGE",
-  Skill = "SKILL",
-}
-
-/**
- * @deprecated 使用 SemanticState 替代。v2 兼容保留。
- */
-export enum MemoryState {
-  Active = "ACTIVE",
-  Pending = "PENDING",
-  Archived = "ARCHIVED",
-  Frozen = "FROZEN",
-  Obliterated = "OBLITERATED",
-}
-
-/**
- * @deprecated 意图/事实区分由 pipeline 内部处理，不再作为检索维度。
- * v2 兼容保留。
- */
-export enum MemorySubType {
-  Intent = "INTENT",
-  Fact = "FACT",
-}

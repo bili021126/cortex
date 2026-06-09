@@ -12,10 +12,10 @@
 // 违反者：导入路径越写越长，终至不可维护。
 //
 // @contract 类型中枢契约
-// - agent.ts: AgentType 枚举、AGENT_TAGS 标签词汇表、状态机、工具权限、
+// - agent.ts: AgentType 枚举、统一注册表（标签/展示/权限/运行时覆写）、
 //   技能模板接口、能力协议——是整个 Agent 体系的类型脊梁
 // - task.ts: TaskNode、PipelineEventType、PipelinePriority 等任务管线类型
-// - memory.ts: MemoryEntry、MemoryState、MemoryQuery 等记忆域类型
+// - memory.ts: MemoryEntry、SemanticState、MemoryQuery 等记忆域类型
 // - toolkit.ts/infra.ts/cli-adapter.ts/file-lock-manager.ts/skill-registry.ts:
 //   工具/基础设施/CLI/文件锁/技能注册的辅助类型
 // - fs-adapter.ts: 文件系统适配器接口（纳西妲增强建议：解耦 Toolkit 与 Node.js API）
@@ -24,7 +24,6 @@
 // ============================================================
 
 export * from "./agent.js";
-export * from "./agent-display.js";
 export * from "./task.js";
 export * from "./memory.js";
 export * from "./toolkit.js";

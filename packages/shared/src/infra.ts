@@ -64,6 +64,13 @@ export enum PipelineEventType {
   Analysis = "analysis",
   // ── Boundary Guard ──
   AgentBoundaryViolation = "agent.boundary_violation",
+  // ── ManifoldGate 流控 ──
+  ManifoldGateWaitStart = "manifold_gate.wait_start",
+  ManifoldGateWaitEnd = "manifold_gate.wait_end",
+  ManifoldGateAcquireTimeout = "manifold_gate.acquire_timeout",
+  ManifoldGateReleased = "manifold_gate.released",
+  ManifoldGateInvariantViolation = "manifold_gate.invariant_violation",
+  ManifoldGateReleaseOrphan = "manifold_gate.release_orphan",
 }
 
 /**
@@ -112,6 +119,13 @@ export type EventPayloadMap = {
     reason: string;
     expectedScope: string;
   };
+  // ── ManifoldGate 流控 ──
+  [PipelineEventType.ManifoldGateWaitStart]: { agentType: string; queuePosition: number; active: number; max: number; requestId: string };
+  [PipelineEventType.ManifoldGateWaitEnd]: { agentType: string; remainingWaiters: number; requestId: string };
+  [PipelineEventType.ManifoldGateAcquireTimeout]: { agentType: string; timeoutMs: number; requestId: string };
+  [PipelineEventType.ManifoldGateReleased]: { agentType: string; active: number; waiting: number; requestId: string };
+  [PipelineEventType.ManifoldGateInvariantViolation]: { agentType: string; message: string };
+  [PipelineEventType.ManifoldGateReleaseOrphan]: { agentType: string; message: string };
 };
 
 /** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定

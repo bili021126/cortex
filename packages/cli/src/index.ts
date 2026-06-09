@@ -46,6 +46,13 @@ export { createConfirmHandler } from "./commands/confirm.js";
 export { createScheduleHandler } from "./commands/schedule.js";
 export { createSetupHandler } from "./commands/setup.js";
 export { createHelpHandler } from "./commands/help.js";
+export { createVersionHandler } from "./commands/version.js";
+export { createConfigHandler } from "./commands/config.js";
+export { createDocHandler } from "./commands/doc.js";
+export { createSkillHandler } from "./commands/skill.js";
+export { createInspectHandler } from "./commands/inspect.js";
+export { createDoctorHandler } from "./commands/doctor.js";
+export { createRoundtableHandler } from "./commands/roundtable.js";
 
 // ── 格式器 ─────────────────────────────────────────
 export { getFormatter, detectDefaultFormat } from "./formatters/index.js";
@@ -54,8 +61,8 @@ export type { Formatter } from "./formatters/index.js";
 // ── 工具函数 ───────────────────────────────────────
 export { parseGlobalFormat, createDefaultContext, outputResult, stripGlobalOptions, isDirectRun } from "./utils.js";
 
-// ── Plan 执行器 ────────────────────────────────────
-export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm, executePlanInput, handlePlanCommand } from "./commands/repl/executors/plan-executor.js";
+// ── Plan 工具函数 ────────────────────────────────
+export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "./tui/modes/plan-utils.js";
 
 // ── Platform ───────────────────────────────────────
 export { getPlatformBridge, closePlatformBridge } from "./platform.js";

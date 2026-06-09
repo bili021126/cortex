@@ -69,6 +69,4 @@ export function getConfig(): AppConfig {
   return { ..._config };
 }
 
-// 保留向后兼容——使用 getConfig() 替代
-/** @deprecated 使用 getConfig() 替代 */
-export const config = loadConfig();
+

@@ -91,24 +91,6 @@ export {
   DENSITY_MEDIUM_MAX_CHARS,
 } from "./rlm.js";
 
-// ── Agent 标签域 ──
-export {
-  TAG_VOCABULARY,
-  AGENT_TAGS,
-} from "./agent-tags.js";
-export type { Tag } from "./agent-tags.js";
-
-// ── Agent 展示域 ──
-export {
-  AGENT_CHINESE_ROLE,
-  CHINESE_NAME_TO_TYPE,
-  AGENT_DISPLAY,
-  AGENT_DISPLAY_FALLBACK,
-  CHAT_AGENT_ALIASES,
-  buildChineseRoleMap,
-} from "./agent-display.js";
-export type { AgentDisplayInfo, AgentDisplayEntry } from "./agent-display.js";
-
 // ── MetaAgent 提示词 ──
 export {
   PLANNING_SYSTEM,

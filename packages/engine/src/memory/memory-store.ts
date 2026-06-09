@@ -35,7 +35,7 @@ import { type IEmbeddingService, defaultEmbeddingService } from "./embedding.js"
  * @depends  memory/storage.ts（Map 内存存储 + 反序列化 + peek 冻结副本）
  * @depends  memory/lifecycle.ts（四态状态机 CAS + archive/freeze/obliterate）
  * @depends  memory/query.ts（内存扫描 + BFS 图遍历 + 向量召回）
- * @depends  @cortex/shared（MemoryEntry, MemoryState, MemoryQuery, LinkType 等类型）
+ * @depends  @cortex/shared（MemoryEntry, SemanticState, MemoryQuery, LinkType 等类型）
  * @dataflow write(input) → MemoryStorage.insert → MemoryPersistence.run (write-through)
  *           → scheduleFlush (防抖) → flush (WAL checkpoint)
  *           read(query) → MemoryQueryEngine.memScanRead/vectorRecall/bfsExpand

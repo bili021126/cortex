@@ -7,7 +7,6 @@
 // 3. 新增子模块同步更新。
 //
 // @contract 公共 API 稳定性承诺
-// - 标记 @deprecated 的导出将在下个次版本移除
 // - 标记 @experimental 的导出（Core-2 预留）语义可能调整
 // - 未标记的导出为稳定 API
 //
@@ -57,6 +56,7 @@ export type { ITaskBoard } from "./core/task-board.js";
 export { AgentPool } from "./core/agent-pool.js";
 export type { ISchedulerAgentPool, IAgentPool } from "./core/agent-pool.js";
 export { ConfirmGate } from "./core/confirm-gate.js";
+export { TrustModel } from "./core/trust-model.js";
 export { PipelineObserver } from "./core/pipeline-observer.js";
 export { PipelineRunner } from "./core/pipeline-runner.js";
 export type { IStep, PipelineCtx } from "./core/pipeline-runner.js";
@@ -70,6 +70,7 @@ export { RlmExecuteStep } from "./core/dispatch-steps/rlm-execute-step.js";
 export { CleanupStep } from "./core/dispatch-steps/cleanup-step.js";
 export { BoundaryGuardStep, BOUNDARY_RULES } from "./core/dispatch-steps/boundary-guard-step.js";
 export type { AgentBoundaryRule } from "./core/dispatch-steps/boundary-guard-step.js";
+export { ManifoldGate } from "./core/dispatch-steps/manifold-gate.js";
 export type { DispatchCtx, IDispatchStep } from "./core/dispatch-steps/types.js";
 
 // ── RLM 递归拆解 + DENSITY 密度压缩（思考执行体系总纲 §四/§六）──

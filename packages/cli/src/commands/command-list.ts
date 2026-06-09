@@ -19,7 +19,6 @@ import { createConfigHandler } from "./config.js";
 import { createDocHandler } from "./doc.js";
 import { createVersionHandler } from "./version.js";
 import { createHelpHandler } from "./help.js";
-import { createReplHandler } from "./repl.js";
 import { createScheduleHandler } from "./schedule.js";
 import { createRoundtableHandler } from "./roundtable.js";
 import { createSetupHandler } from "./setup.js";
@@ -103,11 +102,6 @@ export const COMMAND_DEFS: readonly CommandDef[] = [
     description: "交互式配置界面 — 管理 cortex-agents.json / cortex-cognition.json / cortex-docs.json",
   },
   {
-    name: "repl",
-    alias: "re",
-    description: "进入 REPL 交互模式（--mode command|chat 指定模式）",
-  },
-  {
     name: "version",
     alias: "v",
     description: "版本信息",
@@ -144,7 +138,6 @@ export function registerCommands(
     doctor: createDoctorHandler(),
     doc: createDocHandler(),
     setup: createSetupHandler(),
-    repl: createReplHandler(registry, engineBridge),
     version: createVersionHandler(),
     help: createHelpHandler(registry),
   };

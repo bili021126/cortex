@@ -11,8 +11,6 @@ import {
   ReversibilityLevel,
   TaskNode,
   NodeResult,
-  MemoryType,
-  MemoryState,
   SemanticState,
   MemoryEntry,
   MemoryLink,
@@ -28,7 +26,7 @@ import {
   AGENT_TOOL_PERMISSIONS,
   getTagVocabulary,
 } from "../src/index.js";
-import { resolveAgentPermissions } from "../src/agent-permissions.js";
+import { resolveAgentPermissions } from "../src/agent-registry.js";
 import { AgentContext } from "../src/agent-enums.js";
 
 describe("@cortex/shared v2.0 types", () => {
@@ -65,24 +63,6 @@ describe("@cortex/shared v2.0 types", () => {
       AgentStatus.Draining, AgentStatus.Destroyed,
     ];
     expect(states).toHaveLength(5);
-  });
-
-  it("MemoryType uses v2.0 EPISODIC/CONCEPTUAL/KNOWLEDGE/SKILL naming", () => {
-    const types: MemoryType[] = [
-      MemoryType.Episodic, MemoryType.Conceptual,
-      MemoryType.Knowledge, MemoryType.Skill,
-    ];
-    expect(types).toHaveLength(4);
-  });
-
-  it("MemoryState has four-state machine: Active/Archived/Frozen/Obliterated (deprecated v2 enum)", () => {
-    // v3: SemanticState 为三态 "Active"|"Archived"|"Obliterated"
-    // MemoryState.Frozen 为 v2 残留，freeze() 现在转为 Archived
-    const states: MemoryState[] = [
-      MemoryState.Active, MemoryState.Archived,
-      MemoryState.Frozen, MemoryState.Obliterated,
-    ];
-    expect(states).toHaveLength(4);
   });
 
   it("SemanticState (v3) is three-state: Active/Archived/Obliterated", () => {

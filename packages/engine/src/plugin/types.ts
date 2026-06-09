@@ -110,6 +110,9 @@ export interface PluginContainer {
   /** 按名称获取插件实例 */
   get<T>(name: string): T;
 
+  /** 检查插件是否已加载 */
+  has(name: string): boolean;
+
   /** 逆序停止全部插件 */
   shutdown(): Promise<void>;
 }

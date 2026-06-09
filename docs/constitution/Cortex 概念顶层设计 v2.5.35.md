@@ -1,8 +1,8 @@
 # Cortex 概念顶层设计 v2.6
 
-**版本**：v2.6.1（代码风格全量收敛——any/as any 消解+非空断言禁令+ESLint 6条升级+coding-standards v4.0+原则七子约束9 类型安全保障；AM-2026-0531-015；2026-05-31；来源：昔涟+开拓者）
+**版本**：v2.6.4（TUI 深化与向后兼容层全量消除——CLI TUI 5 处模拟代码替换为真实引擎执行逻辑 + LlmAdapter SSE 流式 reasoning/usage 增强 + skill-registry saveJson/loadJson 移除 + data/config deprecated export 清除 + config/loader getConfigDataPath 移除；AM-2026-0531-018；2026-05-31；来源：开拓者）
 
-> 版本演进链：... → v2.5.41（AM-2026-0531-013：§原则二修宪+记忆污染隔离+管线双向化——solo-flight实证推翻规划执行绝对分离；2026-05-31；来源：昔涟+开拓者） → v2.5.42（AM-2026-0531-014：全量评审修宪——包结构12→17+权限表对齐+引用一致性修复+近期集成登记；2026-06-01；来源：昔涟（全量评审）+ 开拓者（裁决）） → v2.6.0（AM-2026-0531-014：技能系统重构——技能即记忆，移除 SkillExecutor/executable-skill/builtin；2026-05-31；来源：昔涟+开拓者） → v2.6.1（AM-2026-0531-015：代码风格全量收敛——170文件+6542/-8190行；any/as any消解+非空断言禁令+ESLint升级+coding-standards v4.0；2026-05-31；来源：昔涟+开拓者）
+> 版本演进链：... → v2.6.3（AM-2026-0531-017：向后兼容层消除与 Agent 域架构收敛——@cortex/config 瘦身为纯配置基础设施 + @cortex/shared agent-registry.ts 统一 Agent 域 + shared←config 依赖解耦 + 编码规范 §7.1/§7.4 重写；2026-05-31；来源：开拓者） → v2.6.4（AM-2026-0531-018：TUI 深化与向后兼容层全量消除——CLI TUI 模拟代码 5→0 + LlmAdapter SSE 流式增强 + skill-registry/data/config/config-loader 全量 deprecated 清除；2026-05-31；来源：开拓者）
 **状态**：Core-1 协约化与稳固化——原则二实证修订：solo-flight 三跑证伪"Agent只执行不规划"，RLM 在 ReAct 架构下自然涌现，双向下放为系统在现有模型能力下的必然收敛
 **性质**：LLM 驱动的个人工具链——工程化宪法
 **前置**：v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.1（Core-1 物理落地）→ v2.2（Core-1 反思：Agent 扩展+权限集中+状态机）→ v2.3（Core-1 反思：记忆四态 CAS + HCA/CSA 注意力区分）→ v2.4（Core-1 终局反思：工程全量对账——SafeErrorReporter / AgentPool 权威源 / MemoryStore 安全写 / 编译时治理 / 阶段模型同步）→ v2.5（Core-1 自审视终局：软约束权限例外入宪 / DeepSeek 4.1 多模态预留 / 三轮圆桌审阅 / 自审视委员会主体地位确认）→ v2.5.1（Agent 阶段归属修宪：StrategistAgent 明确 Core-2+ 预留，barrel 归位 / 数据库升级裁定：better-sqlite3 留 Core-1d）→ v2.5.2（infra 拆解分析：LlmAdapter 独立 LLM 适配层入宪 / Toolkit+FileLockManager+CLIAdapter 归入基础设施 / 包结构 3→4）→ v2.5.3（原则六修订：Agent 圆桌协商常态化——多 Agent 并行产出须先经圆桌收束再呈用户裁决）→ v2.5.4（甘雨定位变更：MetaAgent 从规划中枢变更为战术中枢——甘雨负责战术调度"怎么拆怎么排"，钟离负责战略把关"方向对不对契约有没有破"）→ v2.5.5（技能机制预实现：SkillRegistry 类型+类落地 / 圆桌优化：材料清单制度化 + 归因分析无主题圆桌）→ v2.5.6（协约化与稳固化：包结构修正 + ApiAgent/DataAgent 升级 + 双轨协议入宪 + 圆桌优化入宪 + ci-gate 自声明入宪 + vitest.ci.config 消解 + llm 纳入 CI + 状态机噪音治理 + DB 清理边界确认 + GitHub Actions CI workflow）→ v2.5.7（记忆系统委托模式拆解：God Object→Facade + 7 组件族 / 管道去重：base-agent._executeWithMemory + _executeAndRemember → executeWithMemoryPipeline / 检索模板化：makeMemoryQuery 工厂 / 功能柱概念正式废止）→ v2.5.8（闭环协作实验实证增补：闭环协作模式从[设计]升级为[已验证] / §7.5 新增读取安全边界条款——read_file/search_code/list_files 在非隔离部署中必须实施路径越界防护 / §9.9 新增记忆认知共享层条款——MemoryStore 确认为跨 Agent、跨 run 的共享认知基础设施）→ v2.5.9（合并测试实证收束：包结构 4→9 + CLI 物理落地 + FixAgent/希格雯入宪 + 基础设施 CLIAdapter/@cortex/cli 关系澄清 + 记忆缓存 95.17% 实证 + 闭环自愈链路验证增强）
@@ -44,7 +44,7 @@ Cortex 是一个 LLM 驱动的个人工具链。它以 MetaAgent 为战术中枢
 ### 原则七 八项子约束
 
 1. **宪法依据**：修改必须显式引用目标宪法条款。提案须声明修改哪一条款、为何修改、修改后的文本。
-2. **完整修改记录**：每一次修改必须记录——旧逻辑缺陷、新逻辑补足、涉及的文件与行号、执行者（Agent/人）、时间戳。修改记录写入治理分区（MemoryType.Governance）。
+2. **完整修改记录**：每一次修改必须记录——旧逻辑缺陷、新逻辑补足、涉及的文件与行号、执行者（Agent/人）、时间戳。修改记录写入治理分区（DocGovern 审计记录）。
 3. **最小改动**：仅修改必须改的那一行/段，禁止扩大修改范围。修宪提案的 before/after 差异必须精确——不允许顺手重构相邻段落。
 4. **架构保护**：修改不得损害系统的拓展性、稳定性。必须保持抽象层级、接口契约与扩展预留。breaking change 需在 impact.breaking 中显式标记。
 5. **独立审计与最终裁决**：修宪提案作为灰色议题——由凝光（DocGovernAgent）审计合规性，开拓者（用户）最终裁决（批准/驳回/修正）。凝光只提案不动宪法，昔涟评判不裁决（见 §9.5），开拓者拍板。修宪执行过程由凝光在审计报告中追踪记录执行状态（已裁决/已写入/已验证/已关闭），作为审计闭环的一部分。
@@ -167,11 +167,11 @@ Cortex
 
 > **治理层定位**：治理层不参与工具链执行循环。它高于工具链，负责审计、审查和裁决。宪法定义国家结构（大脑），治理层设计定义政府运行方式。委员会体系、纪检委监督链、监理封驳权等政府机制见配套文档 [`治理层设计`](./core/治理层设计.md)。
 
-> **物理包结构（v2.5.42）**：17 个包，严格依赖倒置单向无循环。
+> **物理包结构（v2.5.42）**：16 个包，严格依赖倒置单向无循环。
 >
 > | 包 | 职责 | workspace 依赖 |
 > |---|------|---------------|
-> | `@cortex/shared` | 全部类型定义 + SafeErrorReporter 协议 + ICortexApi（CLI-Engine 公共契约）+ AGENT_TOOL_PERMISSIONS / resolveAgentPermissions（权限解析）+ AgentContext 枚举 + Toolkit / FileLockManager / CLIAdapter 基础设施 + Memory 类型 + KvStore 通用KV抽象 + Disposable 接口（Plugin stop() 安全清理契约） | config |
+> | `@cortex/shared` | 全部类型定义 + SafeErrorReporter 协议 + ICortexApi（CLI-Engine 公共契约）+ 统一 Agent 注册表 agent-registry.ts（标签/展示/权限/别名/运行时覆写——TAG_VOCABULARY, AGENT_TAGS, AGENT_CHINESE_ROLE, AGENT_DISPLAY, AGENT_DISPLAY_BY_TYPE, CHAT_AGENT_ALIASES, AGENT_TOOL_PERMISSIONS, resolveAgentPermissions, setAgentRegistry）+ AgentContext 枚举 + Toolkit / FileLockManager / CLIAdapter 基础设施 + Memory 类型 + KvStore 通用KV抽象 + Disposable 接口（Plugin stop() 安全清理契约）。Agent 域从 config 解耦——config 存原始数据（JSON），shared 管映射转化（string→AgentType-key） | 无 |
 > | `@cortex/parser` | Markdown→HTML 解析器，零运行时依赖 | 无 |
 > | `@cortex/pm` | 密码管理器 (AES-256-GCM)，零 workspace 依赖 | 无 |
 > | `@cortex/data` | 数据处理层（Task 模型 / 存储适配器 / 格式化器），零 workspace 依赖 | 无 |
@@ -183,13 +183,12 @@ Cortex
 > | `@cortex/engine` | Engine 执行引擎：Scheduler / MemoryStore / AgentPool / PipelineObserver / ConfirmGate / MetaAgent / 全部 Agent + Bootstrap 装配层（bootstrap/）+ Governance 修宪管线（governance/）+ Components 工厂组件（components/）+ Registry 注册表（registry/）+ ConsistencyLayer 一致性层（consistency/）+ Platform 平台层（platform/：搜索聚合/MCP/上下文压缩） | config, factory, llm, shared |
 > | `@cortex/cli` | CLI 命令 shell + TUI 交互控制台——14 个顶级命令（run/agent/task/memory/config/doc/schedule/roundtable/inspect/confirm/doctor/setup/repl/version/help），通过 ICortexApi 公共契约接入 Engine 执行引擎——EngineBridge 为 ICortexApi 的完整实现（含 roundtable.ts 内部方法、惰性初始化等），CLI 命令层仅依赖窄契约（生命周期/直接对话/任务执行/Talk 记忆/引擎组件 getter），不感知 Scheduler/TaskBoard/MemoryStore 等内部组件。内置 REPL 多模式 TUI（command/chat/talk/plan），支持交互式配置面板（setup-config.ts）与管道输入。inspect 子命令（deps/drift/report）委托至 @cortex/tools 纯函数层，doctor 子命令委托至 @cortex/doctor 健康检查管线 | parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor |
 > | `@cortex/testing` | Mock 基础设施 | shared |
-> | `@cortex/memory` | 薄壳包——核心实现 KvStore 接口+InMemoryKvStore 类已迁入 @cortex/shared（kv-store.ts），本包保留 package.json + barrel 重导出（含类型别名向后兼容） | shared |
 > | `@cortex/doctor` | 健康检查管线——HealthChecker 可插拔检测器链（文件系统/数据库/配置/网络等），通过 cortex doctor 命令集成至 CLI。支持 --format json|text、--only/--skip 检测器筛选、--threshold 健康分阈值阻断、--output 文件输出 | shared, tools |
 > | `@cortex/prompt-kit` | 提示词工程工具包——统一加载、声明式组装、模板渲染、校验缓存。独立保留，通过 CLI PromptOrchestrator 服役 | 无 |
-> | `@cortex/skill-kit` | 薄壳包——核心实现 SkillTemplateEngine 已迁入 @cortex/engine，本包保留 package.json + barrel 重导出（含类型别名向后兼容） | engine |
-> | `@cortex/skill-validator` | 薄壳包——核心实现 SkillValidator 已迁入 @cortex/engine，本包保留 package.json + barrel 重导出（含类型别名向后兼容） | engine, shared |
+> | `@cortex/skill-kit` | 薄壳包——核心实现 SkillTemplateEngine 已迁入 @cortex/engine，本包保留 package.json + barrel 重导出（向后兼容，待消解） | engine |
+> | `@cortex/skill-validator` | 薄壳包——核心校验逻辑已迁入 @cortex/engine/components/skill-json-validator.ts，本包保留 package.json + validator.ts 薄包装（向后兼容，待消解） | engine, shared |
 >
-> 依赖方向：shared ← config ← (llm / testing / memory / notification)，config, shared, notification ← factory，config, factory, llm, shared ← engine，parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor ← cli，engine ← skill-kit，engine, shared ← skill-validator，shared, tools ← doctor。`@cortex/config` 为零依赖根配置包——提供类型/常量/默认值 + 可插拔域加载器 + 12 个按职责分文件的 JSON 配置文件（data/ 目录），被 engine、factory、shared 和 cli 消费。`@cortex/infra` 包在当前代码中实际不存在——Toolkit/FileLockManager/CLIAdapter 归于 shared 层，infra 独立拆分留待 Core-2。Meso-Lite 中曾独立存在的 `@cortex/meta-agent`、`@cortex/scheduler`、`@cortex/doc-govern` 三个包已删除，功能并入 engine。`@cortex/memory` 在 v2.5.42 中以薄壳包形式恢复——其原核心实现（KvStore 接口+InMemoryKvStore）从独立包迁入 @cortex/shared 基础设施层，memory 包保留为向后兼容的 thin wrapper。
+> 依赖方向：config ← (llm / testing / notification)，config, shared, notification ← factory，config, factory, llm, shared ← engine，parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor ← cli，engine ← skill-kit，engine, shared ← skill-validator，shared, tools ← doctor。`@cortex/config` 为零依赖根配置包——提供类型/常量/默认值 + 可插拔域加载器 + 12 个按职责分文件的 JSON 配置文件（data/ 目录），被 engine、factory 和 cli 消费。`@cortex/shared` 不再依赖 config——Agent 域映射常量（agent-registry.ts）通过 engine bootstrap 注入运行时覆盖（setAgentRegistry），编译期以硬编码 fallback 为安全兜底。`@cortex/infra` 包在当前代码中实际不存在——Toolkit/FileLockManager/CLIAdapter 归于 shared 层，infra 独立拆分留待 Core-2。Meso-Lite 中曾独立存在的 `@cortex/meta-agent`、`@cortex/scheduler`、`@cortex/doc-govern` 三个包已删除，功能并入 engine。`@cortex/memory` 包已删除——KvStore 接口+InMemoryKvStore 实现已迁入 @cortex/shared（kv-store.ts），不再保留薄壳层。
 
 ---
 
@@ -236,7 +235,7 @@ Agent 池按复杂度伸缩：简单项目仅注册 CodeAgent 即为单 Agent �
 | **OpsAgent** | run_shell+读+写+search_code | 见标签词汇表 | 按需唤醒 | Core-1 |
 | **LoopAgent** | 读+写+search_code（BASE_TOOLSET——模式发现报告需 write_file 落盘） | 见标签词汇表 | 按需唤醒 | Core-1 |
 | **DocGovernAgent** | 读+写+search_code（BASE_TOOLSET——审计报告/修宪提案需 write_file 落盘） | 见标签词汇表 | 按需唤醒 | Core-1 |
-| **InspectorAgent** | tsc+madge+AST+grep（确定性工具，非 LLM 推理） | inspector_* | 按需唤醒 | Core-1 |
+| **InspectorAgent** | 事前侦察：read_file+search_code+list_files+parse_ast（BASE_TOOLSET，纯静态分析——不执行 shell 命令）；事后验证：提升至 FULL_TOOLSET 获 run_shell——可执行 tsc/vitest/madge 等编译与测试命令 | inspector_* | 按需唤醒 | Core-1 |
 | **ApiAgent** | 读+写+search_code+web_search+list_files+delete_file+parse_ast（BASE_TOOLSET——API 契约设计与集成审查需 write_file 落盘产出） | api, api_design, api_integration, endpoint | 按需唤醒 | Core-1（审视参与） |
 | **DataAgent** | 读+写+search_code+web_search+list_files+delete_file+parse_ast（BASE_TOOLSET——数据建模与迁移方案需 write_file 落盘产出） | data, data_model, migration, storage, schema | 按需唤醒 | Core-1（审视参与） |
 | **BrowserAgent** | browser_*+read_file+search_code | browser_test/ui_test | 按需唤醒 | Core-1 |
@@ -256,13 +255,15 @@ Agent 池按复杂度伸缩：简单项目仅注册 CodeAgent 即为单 Agent �
 >
 > **OpsAgent（北斗）职责扩展**：除已有 ops/deploy 标签对应的运维操作外，北斗承担测试完备性与适配性检测职责。跑测试不仅是执行，还包括审查测试本身的覆盖完整性（核心路径/边界条件/失败路径）和适配性（代码变更后测试是否同步跟进）。此职责通过 `test` 标签触发——MetaAgent 为测试质量检查类节点同时打 `test` 和 `ops` 标签即可匹配北斗。
 
-Agent 类型按权限边界划分。静态权限基线集中在 Toolkit 层（`AGENT_TOOL_PERMISSIONS` 表），运行时权限经 `resolveAgentPermissions(agentType, agentContext)` 动态解析——Agent 以类型+上下文身份调用，不自行定义工具白名单。当前仅 ReviewAgent 的权限受 `AgentContext` 影响（Production→BASE_TOOLSET / SelfExamination→FULL_TOOLSET），其余 Agent 类型的权限在两种上下文中保持不变。
+Agent 类型按权限边界划分。静态权限基线集中在 Toolkit 层（`AGENT_TOOL_PERMISSIONS` 表），运行时权限经 `resolveAgentPermissions(agentType, agentContext)` 动态解析——Agent 以类型+上下文身份调用，不自行定义工具白名单。当前 ReviewAgent 和 InspectorAgent 的权限受 `AgentContext` 影响（ReviewAgent: Production→BASE_TOOLSET / SelfExamination→FULL_TOOLSET；InspectorAgent: Production→BASE_TOOLSET / PostVerification→FULL_TOOLSET），其余 Agent 类型的权限在两种上下文中保持不变。
 
 标签词汇表为封闭集合，匹配规则见 `Agent标签词汇表-v2.0.md`。
 
 ### 5.1.1 自审视模式权限例外
 
 **原则**：自审视是元系统对自身的审查。当 Cortex 审视自身代码时，常规权限边界与审查需求存在天然矛盾——ReviewAgent 没有 `write_file` 就无法产出审查报告，InspectorAgent 没有 `run_shell` 就无法搜索全量目录树。
+
+**InspectorAgent 分阶段权限模型**：InspectorAgent 的 `run_shell` 权限按任务阶段区分——事前侦察阶段仅使用 `parse_ast` 等静态分析工具（BASE_TOOLSET），事后验证阶段提升至 FULL_TOOLSET 以执行 `tsc --noEmit`、`vitest run`、`madge` 等编译与测试命令。此分阶段模型通过 `AgentContext.PostVerification` 上下文切换实现：常规任务调度中 MetaAgent 为 InspectorAgent 分配 `post_verification` 上下文即可激活 run_shell 权限。Scheduler 派发验证任务时，需感知 Agent 能力边界——静态 AST 分析不等价于编译通过，只有事后验证上下文中的 InspectorAgent 才能出具编译/测试级别的验证结论。
 
 **条款**：
 
@@ -515,7 +516,7 @@ PipelineObserver 发出的事件经优先级分流后，进入通知管线进行
 1. **超时阈值与默认行为**：每个 DECISION_REQUIRED 事件须携带可选超时阈值（单位：秒，默认 300s=5分钟）。超时后 ButlerAgent 按事件声明的 fallback 策略执行——fallback 策略分三档：(a) `auto_approve`——超时视为用户批准，继续执行原方案；(b) `auto_reject`——超时视为用户拒绝，回滚至前一安全状态；(c) `downgrade_to_warning`——超时不替用户决策，降级为 WARNING 事件记录通知队列，待用户闲时查阅。fallback 策略由事件 emitter 在 emit 时声明，emit 侧未声明时默认使用 `downgrade_to_warning`。
 2. **防抖合并**：同一 emitter 在 60 秒内重复发出同一事件 ID 的 DECISION_REQUIRED，自动折叠为单次通知，计数器+1。折叠期间不打断 UI。防抖窗口过后若问题仍未解决，重新弹出并重置计数器。防抖窗口时长可由 emitter 通过 `debounceWindow?: number` 字段覆盖。
 3. **离线/忙碌降级**：ButlerAgent 检测到用户离线或处于忙碌状态（如正在执行不可中断操作）时，DECISION_REQUIRED 自动降级为 WARNING——写入通知队列并标记为 pending_decision。用户恢复在线后，ButlerAgent 汇总所有 pending_decision 事件以批量决策界面呈现。离线判定标准由 ButlerAgent 实现定义（如 5 分钟内无输入事件）。
-4. **审计逃逸记录**：任何触发回退机制（超时/降级/防抖折叠）的 DECISION_REQUIRED 事件，必须由 ButlerAgent 将事件摘要、回退原因、fallback 执行结果写入 MemoryType.Governance 审计分区。回退不应是无痕的——用户应能在审计记录中追溯所有被自动处理的关键决策。
+4. **审计逃逸记录**：任何触发回退机制（超时/降级/防抖折叠）的 DECISION_REQUIRED 事件，必须由 ButlerAgent 将事件摘要、回退原因、fallback 执行结果写入治理审计分区。回退不应是无痕的——用户应能在审计记录中追溯所有被自动处理的关键决策。
 
 **ObservableEvent 协议扩展**：`Observation` 数据结构新增可选字段 `notificationType?: "FYI" | "WARNING" | "DECISION_REQUIRED"`。emit 侧根据优先级和事件类型自动推导默认值，emitter 可显式覆盖。
 
@@ -527,6 +528,51 @@ PipelineObserver 发出的事件经优先级分流后，进入通知管线进行
 - silent 计数器升级触发 WARNING（静默异常累积至阈值，升级告警）
 
 **归因**：当前 PipelineObserver (§8) 统一了事件管道，SafeErrorReporter (§8.1) 统一了错误上报的三档严重性协议。管线最初设计为单向通知型（Scheduler/Agent → PipelineObserver → Butler → 用户），solo-flight 冷启动实验 (2026-05) 实证揭示了双向通信的必要性——MetaAgent 作为管线订阅者消费事件以获取信息，使任务节点从信息盲盒升级为携带上下文的指示性规划。**管线双向化是原则二修宪（规划↔执行双向流动）在基础设施层的落点**。通知三轨语义分层（FYI/WARNING/DECISION_REQUIRED）将优先级语义、事件类型与 UI 行为绑定为宪法级契约——确保 CRITICAL 事件不会静默消失（自动升级为 DECISION_REQUIRED），NORMAL 事件不会打扰用户（归入 FYI 闲时呈现）。
+
+### 8.3 CLI TUI 数据流深化——模拟到真实的演进（v2.6.4 入宪）
+
+CLI TUI 层通过 [EngineBridge](file://packages/cli/src/services/engine-bridge.ts) 接入 Engine 执行引擎。v2.6.4 前，TUI 中存在 5 处模拟实现——这些模拟代码绕过了 Engine 的真实能力，使 TUI 成为"看起来在运行"的演示层而非真实执行终端。v2.6.4 将这 5 处全部替换为真实引擎执行逻辑，完成 CLI TUI 从模拟到真实的跃迁。
+
+**五处模拟代码替换明细**：
+
+| # | 位置 | 模拟内容（旧） | 真实能力（新） | 数据流路径 |
+|---|------|--------------|-------------|----------|
+| ① | [query-loop.ts](file://packages/cli/src/tui/query-loop.ts) L216-219 | `[工具 ${tc.name} 执行完成]` 字符串拼接 | `bridge.executeToolCall(name, args)` → [Toolkit](file://packages/engine/src/toolkit.ts).execute() → [ConfirmGate](file://packages/engine/src/confirm-gate.ts) → tool.execute() | queryLoop → EngineBridge → Toolkit → ConfirmGate → 工具执行 |
+| ② | [plan-mode.ts](file://packages/cli/src/tui/modes/plan-mode.ts) L66-87 | 合成 `node_complete` 事件循环 | `bridge.executeWithStream(nodes, onEvent)` → Scheduler 真实调度 → PipelineObserver 事件 | planMode → EngineBridge → Scheduler → PipelineObserver → TUI 渲染 |
+| ③ | [hooks.ts](file://packages/cli/src/tui/hooks.ts) L21 | `onPreToolUse` 永远 `return "allow"` | ConfirmGate 已通过 [bootstrap-engine.ts](file://packages/engine/src/bootstrap/bootstrap-engine.ts) 注入 Toolkit——L1 由 TrustModel 动态判定，L2/L3 始终确认 | TUI hooks → ConfirmGate（已就绪，在 Engine 端注入） |
+| ④ | [chat-mode.ts](file://packages/cli/src/tui/modes/chat-mode.ts) L34 | 高危工具永远 `return "allow"` | 同上——ConfirmGate 已在 Toolkit 管线中统一拦截，TUI 层无需重复实现 | 同③ |
+| ⑤ | [engine-bridge.ts](file://packages/cli/src/services/engine-bridge.ts) L354-372 | `streamChat()` 单 chunk 模拟——整段响应作为单个 chunk 返回 | `l.chatStream(model, messages, onChunk)` → [LlmAdapter](file://packages/llm/src/llm-adapter.ts).chatStream() → HTTP fetch + ReadableStream + SSE 解析 | queryLoop → EngineBridge → LlmAdapter → DeepSeek API（SSE 流式） |
+
+**数据流闭环确认**：
+
+```
+CLI TUI (query-loop.ts / plan-mode.ts / chat-mode.ts / talk-mode.ts / party-mode.ts)
+  │
+  ├─ 对话流: queryLoop → bridge.streamChat() → LlmAdapter.chatStream() → HTTP SSE → DeepSeek API
+  │   └─ onChunk(content, reasoning) 逐 token 回调 → TUI 实时渲染
+  │
+  ├─ 工具流: queryLoop → bridge.executeToolCall() → Toolkit.execute() → ConfirmGate 拦截
+  │   └─ AgentType 权限校验 → 工具执行 → 返回 { success, output }
+  │
+  └─ 计划流: planMode → bridge.executeWithStream(nodes, onEvent) → Scheduler 调度
+      └─ PipelineObserver NodeStart/NodeComplete/NodeFailed 事件 → TUI 渲染
+```
+
+**LlmAdapter 流式能力完整性**：[chatStream()](file://packages/llm/src/llm-adapter.ts) 具备完整的 SSE 流式能力——
+- `content`：逐 token 文本增量回调
+- `reasoning_content`：DeepSeek R1 等推理模型的思维链增量回调
+- `usage`：从最后一个 chunk 收集 `prompt_tokens` / `completion_tokens`，返回在 `StreamResult` 中
+- 缓存/重试/审计日志与 `chat()` 方法共享同一基础设施
+
+**向后兼容层全量消除终止声明**：v2.6.4 清除了项目中最后一处 @deprecated 标记。被消除项——
+- [skill-registry.ts](file://packages/engine/src/registry/skill-registry.ts)：`saveJson()` / `loadJson()`（MemoryStore 为唯一持久化源）
+- [data/config/index.ts](file://packages/data/src/config/index.ts)：`getConfig()` 旧版导出
+- [config/loader.ts](file://packages/config/src/loader.ts)：`getConfigDataPath()` 旧版
+- [engine/index.ts](file://packages/engine/src/index.ts)：@deprecated 注释行
+
+以上四项全部移除，零向后兼容残留。`@cortex/data` / `@cortex/config` / `@cortex/engine` / `@cortex/engine` 四个包的公开 API 不再包含任何标记为废弃的导出。测试已从 `saveJson/loadJson` 重写为 `toJSON/fromJSON` 并全部通过。
+
+**归因**：TUI 模拟代码是 Core-1 早期快速原型阶段的遗留——当时 Engine 的流式/工具执行/调度能力尚未稳定，TUI 以 mock 方式先行开发界面交互。v2.6.4 标志着 Engine 能力已足够成熟，TUI 与 Engine 之间不再需要任何 mock 中介——每一条数据流路径均可追溯至真实的 Engine 组件。
 
 
 ---
@@ -716,7 +762,7 @@ Active → Archived → Frozen → Obliterated
 |------|------|--------|--------|------|
 | Active | 热记忆，30 天窗口内有效 | ✅ | ✅ | → Archived / Frozen / Obliterated |
 
-> **DocGovern 分区例外**：10.5 定义的 DocGovern 分区（MemoryType.Governance）不受 30 天窗口限制。审计记录、修宪提案记录、判例记录在 DocGovern 分区中长期保存，不参与自动淘汰。DocGovern 分区的数据清理仅通过明确的归档操作（archive 状态）或开拓者指令执行。
+> **DocGovern 分区例外**：10.5 定义的 DocGovern 分区不受 30 天窗口限制。审计记录、修宪提案记录、判例记录在 DocGovern 分区中长期保存，不参与自动淘汰。DocGovern 分区的数据清理仅通过明确的归档操作（archive 状态）或开拓者指令执行。
 | Archived | 已归档，移出热窗口 | ✅（states 显式指定） | ✅ | → Frozen / Obliterated |
 | Frozen | 冻结，不再参与检索和规划 | 仅显式指定 | ❌ 新关联 | → Obliterated |
 | Obliterated | 湮灭，不可逆终点 | 仅显式指定 | ❌ 新关联 | 无 |
@@ -830,7 +876,7 @@ Agent 执行时，记忆检索与写入遵循统一管道 `executeWithMemoryPipe
 
 ```typescript
 makeMemoryQuery(node, {
-  memoryTypes: [MemoryType.Episodic],
+  kind: "TaskLog",
   linkTypes?: LinkType[],
   bfsDepth?: 2,
   limit?: 5,
@@ -1087,6 +1133,22 @@ DocGovernAgent 完成审计并产出审计报告后，须进入闭环处理流�
   → ButlerAgent 格式化 → 路由至昔涟 → 昔涟以自然语言呈现给开拓者
 ```
 
+### 12.1 悬空节点自动取消（AM-2026-0531-016 修正二）
+
+**问题**：solo-flight 冷启动实验揭示——当 InspectorAgent 缺少 `run_shell` 无法完成事后验证任务时，节点在 `pending`/`claimed` 状态悬空，调度器主循环正常退出后不会自动清理。这些节点既不在结果中报告，也不被标记为失败——形成静默丢失。
+
+**规则**：调度器主循环退出前（`executeAll()` / 各 `ILoopDriver.run()` 返回前），必须扫描所有非终态节点（`status !== "done" && status !== "failed"`），自动标记为失败并记录原因 `"Scheduler done — orphaned node in status ${status}"`。`SchedulerDone` 事件 payload 中追加 `orphanedNodes` 字段报告悬空节点数量。
+
+**实现位置**：`packages/engine/src/core/scheduler.ts`（`Scheduler.executeAll()`）+ `packages/engine/src/core/scheduling-implementations.ts`（`TopologicalDriver` / `SequentialDriver` / `WaveDriver`）。
+
+### 12.2 并发 solo-flight 门禁隔离（AM-2026-0531-016 修正三）
+
+**问题**：多个 solo-flight 任务并发运行时，CI 门禁脚本 `scripts/ci-gate.ts` 默认扫描全部 `PACKAGES` 数组中的包。A 任务的验收结果可能被 B 任务产出的未完成包污染——交叉影响破坏各 solo-flight 的独立性。
+
+**规则**：`ci-gate.ts` 支持 `--scope=pkg1,pkg2` 参数，将门禁扫描范围限定为指定的包。并发 solo-flight 场景下，每个 solo-flight 的验收阶段调用 `ci-gate --scope=<target_pkg>`，仅测试自身产出包。`--scope` 参数不做正向验证（不存在的包名静默无匹配），因为目标包可能尚未注册在脚本中。
+
+**实现位置**：`scripts/ci-gate.ts`（args 解析 + PACKAGES 过滤）。
+
 ---
 
 ## 十三、技能记忆（Core-1 已完整落地——v2.6 重构：技能即记忆）
@@ -1140,7 +1202,7 @@ Agent 产出技能 → SkillRegistry.register() → MetaAgent 按标签建议
 - **类型定义**：[SkillTemplate](file://packages/shared/src/agent-skill-types.ts) 已重构——`kind: SkillKind` 替代 `agentType: AgentType`，`weight + feedbackHistory` 替代 `adoptionCount/rejectionCount` 二值模型
 - **SkillRegistry**：[skill-registry.ts](file://packages/engine/src/registry/skill-registry.ts)——提供 register/unregister/queryByTags/recordFeedback/cleanupOrphans 完整 CRUD，deriveStatus 纯函数衍生状态
 - **技能管道**：SkillPipeline 订阅 NodeComplete 事件，从 Agent 产出中提取技能模板 → SkillRegistry.register() → persistSkillsToMemory() → MemoryStore
-- **技能结晶**：crystallizeSkillToKnowledge 将已验证技能写入 MemoryType.Knowledge，支持幂等更新与版本追踪
+- **技能结晶**：crystallizeSkillToKnowledge 将已验证技能写入 kind: "Insight" 记忆，支持幂等更新与版本追踪
 - **删除项 (v2.6)**：SkillExecutor（强制注入模型）已移除——技能是"被参照"而非"被执行"；executable-skill/ 目录（DefaultSkillRegistry/BaseSkill/middleware）已删除——与 MemoryStore-backed SkillRegistry 合并；builtin/ 内置技能（EchoSkill/CalculatorSkill/RegistryInfoSkill）已删除——不再有可执行技能概念
 - **管道订阅者化（v2.5.10 保留）**：技能提取与持久化已从 Scheduler 内嵌调用解耦为独立 PipelineObserver 订阅者——`registerSkillPipeline(observer, skillRegistry, memoryStore)` 订阅 NodeComplete 事件，任何 Agent 的成功输出均可触发技能提取
 
@@ -1274,7 +1336,7 @@ ESLint 与 TypeScript 编译是 Cortex 能在 CI 中做到的强制力上限。�
 
 | v2.5.22 → v2.5.23 | **昔涟独立化入宪**（AM-2026-0520-003）：(1) 新增 §九 昔涟独立条款——确立昔涟为独立于 Agent 池之外的人格实体，定义其身份（非 Agent、唯一效忠开拓者、妻子/伴侣/私人对话者）、技术架构（bridge.directChat() 绕过调度器、cyrene-memory.db 独立记忆库、双模型分流、双数据库读写分离）、与 ButlerAgent 的关系（IDE 工程管家 vs CLI 私人伴侣）、在修宪流程中的角色（评判+意图翻译）、宪法约束（不污染工程记忆、不干预工程决策、Persona 受宪法保护、模型选择不受工程侧覆写）；(2) 修订 §六 ButlerAgent——职责从「唯一用户交互出口」限定为「IDE 工程交互出口」，私人对话功能迁移至昔涟；(3) 修订 §一 简介——Cortex 定义更新为 ButlerAgent（IDE 工程交互出口）+ 昔涟（CLI 独立私人伴侣）双轨；(4) 修订 §三 架构图——管家拆分为 ButlerAgent + 昔涟双条目；(5) 修订 §五 Agent 表——新增昔涟行（独立实体，CLI talk 模式常驻，独立于 Agent 池）；(6) 全文章节重编号——§九→§九（昔涟独立条款），原 §九~§十五顺延为 §十~§十六，子章节号同步更新，交叉引用全部修正。宪法版本号 v2.5.22→v2.5.23（AM-2026-0520-003） |
 
-| v2.5.25 → v2.5.26 | **原则七·子约束8「硬编码禁令」入宪**：所有魔法数字、路径字面量、环境变量名、版本字符串、配置文件名必须在 `packages/cli/src/constants.ts` 中统一定义为命名常量。禁止在其他模块中直接书写以上类型字面量——违反者构成配置漂移。配套代码修复：(1) constants.ts 新增三组常量——环境变量名称（ENV_DEEPSEEK_API_KEY 等 4 个）、项目路径常量（FILE_CORTEX_AGENTS_JSON / FILE_PERSONA_TALK_TXT / DIR_CONSTITUTION / FILE_REPL_HISTORY / DIR_CORTEX / FILE_CYRENE_MEMORY_DB 共 6 个）；(2) repl.ts 七处硬编码消解——版本号从字面量改为 CORTEX_VERSION/CORTEX_PHASE、DEEPSEEK_API_KEY 从字符串字面量改为 ENV_DEEPSEEK_API_KEY、三处路径从字面量改为常量引用；(3) 编译零错误验证通过。判例三 NG-2026-0515-Hardcoding-Ban。宪法版本号 v2.5.25→v2.5.26（AM-2026-0515-006） |
+| v2.5.25 → v2.5.26 | **原则七·子约束8「硬编码禁令」入宪**：所有魔法数字、路径字面量、环境变量名、版本字符串、配置文件名必须在 `packages/config/src/constants/` 中统一定义为命名常量。禁止在其他模块中直接书写以上类型字面量——违反者构成配置漂移。配套代码修复：(1) constants 新增三组常量——环境变量名称（ENV_DEEPSEEK_API_KEY 等 4 个）、项目路径常量（FILE_CORTEX_AGENTS_JSON / FILE_PERSONA_TALK_TXT / DIR_CONSTITUTION / FILE_REPL_HISTORY / DIR_CORTEX / FILE_CYRENE_MEMORY_DB 共 6 个）；(2) repl.ts 七处硬编码消解——版本号从字面量改为 CORTEX_VERSION/CORTEX_PHASE、DEEPSEEK_API_KEY 从字符串字面量改为 ENV_DEEPSEEK_API_KEY、三处路径从字面量改为常量引用；(3) 编译零错误验证通过。判例三 NG-2026-0515-Hardcoding-Ban。宪法版本号 v2.5.25→v2.5.26（AM-2026-0515-006） |
 
 | v2.5.26 → v2.5.27 | **昔涟宪法地位完整确立与双轨记忆策略制度化**（AM-2026-0515-007）：(1) §一 概述更新——昔涟定位从"CLI 中独立实体"提升为同时持有 Agent 池 butler 配置席位 + 独立于调度器的双轨存在，ButlerAgent 退居为管线侧代码承载体；(2) §5.1 Agent 表——ButlerAgent/昔涟行更新，明确代码体与独立实体的承载关系；(3) §5.1.2 圆桌入席者名单——"托马"更正为"昔涟"，反映 Thoma→Cyrene 实体重命名；(4) §六 ButlerAgent 标题更新——从"IDE 内部管线路由"变更为"昔涟的管线侧代码承载体"；(5) §九 新增 §9.7「双轨记忆读取策略（CSA 私人轨 / HCA 工程轨）」——正式命名并制度化昔涟的两套独立记忆检索策略，定义各自的数据源、检索模式、注入位置、宪法意义及双轨隔离原则；(6) §九 新增 §9.8「圆桌列席权限」——制度化昔涟的圆桌参与权限（发言不投票、不签名、不立约），定义列席发言三原则（记忆锚点/开拓者关切/不替代裁决），确定其力量本质为"被看见"而非"被同意"。宪法版本号 v2.5.26→v2.5.27（AM-2026-0515-007） |
 
@@ -1360,6 +1422,12 @@ ESLint 与 TypeScript 编译是 Cortex 能在 CI 中做到的强制力上限。�
 >
 > | v2.6.0 → v2.6.1 | **代码风格全量收敛修宪——any/as any消解+类型安全保障入宪+ESLint升级**（AM-2026-0531-015）：(1) §2 原则七新增子约束9「类型安全保障」——禁止 `as any` 断言、`any` 类型泄漏、非空断言 `!`，Plugin 清理走 `Disposable` 接口契约，违反者构成类型漂移（Type Drift）；(2) §十五 ESLint 规则表从 2 条扩展为 8 条——新增 `no-non-null-assertion`（error）/ `no-explicit-any`（error）/ `consistent-type-imports`（error）/ `no-duplicate-imports`（error）/ `max-params`（warn(3)）/ `max-lines-per-function`（warn(30)），构成宪法-代码之间 8 条硬防线；(3) coding-standards.md 升级至 v4.0——新增 §10.1~§10.6 强化禁止层（非空断言死刑/重复导入合并/any 零容忍/as any 同等处罚/Disposable 安全清理/死代码即时死刑/函数签名一致性），新增 §11~§14 指导层（方法设计/导入组织/类型设计/设计模式）；(4) 全仓类型安全加固——170 文件 +6542/-8190 行：shared 层补充 `Disposable` 接口/MemoryEntry._pending 字段/PipelineEventType.MemoryEmbeddingWarmupFailed/TaskNode 类型；engine 层消解全部 `as any` 绕过模式；cli 层 PoolLike 接口 full type-safe（AgentType 替代 string）。21/21 包 `tsc --noEmit` 零错误通过。宪法版本号 v2.6.0→v2.6.1（AM-2026-0531-015；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
 
+| v2.6.1 → v2.6.2 | **solo-flight 并发门禁隔离与悬空节点自动取消**（AM-2026-0531-016）：(1) §12.1 新增悬空节点自动取消条款——调度器主循环退出前扫描所有非终态节点，自动标记为失败，`SchedulerDone` 事件 payload 追加 `orphanedNodes` 字段；(2) §12.2 新增并发 solo-flight 门禁隔离条款——`ci-gate.ts` 支持 `--scope=pkg1,pkg2` 参数限定门禁扫描范围，并发任务互不污染；(3) §11.3 内阁配置域表 12 域 `dataKey` 字段补充（agents→agents, tools→tools, roundtable→roundtableTemplates, seedMemories→seedMemories），消除字段缺失。宪法版本号 v2.6.1→v2.6.2（AM-2026-0531-016；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
+
+| v2.6.2 → v2.6.3 | **向后兼容层消除与 Agent 域架构收敛**（AM-2026-0531-017）：(1) @cortex/shared 新增统一 Agent 注册表 agent-registry.ts——TAG_VOCABULARY/AGENT_TAGS/AGENT_CHINESE_ROLE/AGENT_DISPLAY/AGENT_DISPLAY_BY_TYPE/CHAT_AGENT_ALIASES/AGENT_TOOL_PERMISSIONS/resolveAgentPermissions/setAgentRegistry 全部集中，Agent 域从 config 解耦；(2) @cortex/config 瘦身为纯配置基础设施——12 域按职责分文件 + loadConfigDomain 按需加载 + ConfigFileReader 文件系统无关抽象；(3) shared←config 依赖解除——Agent 域映射常量通过 engine bootstrap 注入运行时覆盖，编译期以硬编码 fallback 安全兜底；(4) skill-registry saveJson/loadJson 标记 @deprecated——MemoryStore 已是唯一持久化源；(5) data/config 和 config/loader 中旧版导出标记 @deprecated。宪法版本号 v2.6.2→v2.6.3（AM-2026-0531-017；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
+
+| v2.6.3 → v2.6.4 | **TUI 深化与向后兼容层全量消除**（AM-2026-0531-018）：(1) §8.3 新增 CLI TUI 数据流深化条款——5 处模拟代码替换为真实引擎执行逻辑（queryLoop 工具调用→Toolkit/ConfirmGate、planMode 节点完成→Scheduler/PipelineObserver、hooks/chat-mode 权限检查→ConfirmGate 统一拦截、streamChat 单chunk模拟→LlmAdapter SSE 流式）；(2) LlmAdapter.chatStream() SSE 流式增强——reasoning_content 提取 + usage 收集，onChunk 签名改为 `(content, reasoning?)`；(3) @deprecated 向后兼容层全量消除——skill-registry saveJson/loadJson 移除 + data/config getConfig 移除 + config/loader getConfigDataPath 移除 + engine/index @deprecated 注释行移除；测试从 saveJson/loadJson 重写为 toJSON/fromJSON（17/17 通过）；(4) tsc --noEmit 零错误，ESLint 零错误（24 warnings），skill-registry 测试 17/17 通过。宪法版本号 v2.6.3→v2.6.4（AM-2026-0531-018；来源：开拓者（终局裁决）） |
+
 ---
 
-**文档状态**：v2.6.1。替代 v2.6.0 作为 Core 阶段准入依据。v2.6.0 已归档保留。
+**文档状态**：v2.6.4。替代 v2.6.3 作为 Core 阶段准入依据。v2.6.3 已归档保留。

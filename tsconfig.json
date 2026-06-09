@@ -15,6 +15,11 @@
     { "path": "packages/cli" },
     { "path": "packages/telemetry" },
     { "path": "packages/skill-validator" },
+    { "path": "packages/plugin-runner/tsconfig.src.json" },
+    { "path": "packages/fsm-compiler/tsconfig.src.json" },
+    { "path": "packages/policy-validator" },
+    { "path": "packages/prompt-kit" },
+    { "path": "packages/doctor" },
     { "path": "scripts" }
   ]
 }
