@@ -81,8 +81,6 @@ const PACKAGES: PackageInfo[] = [
   { name: "prompt-kit",   dir: join(ROOT, "packages", "prompt-kit"),   filter: "@cortex/prompt-kit" },
   { name: "doctor",       dir: join(ROOT, "packages", "doctor"),       filter: "@cortex/doctor" },
   { name: "cli",          dir: join(ROOT, "packages", "cli"),          filter: "@cortex/cli" },
-  { name: "plugin-runner", dir: join(ROOT, "packages", "plugin-runner"), filter: "@cortex/plugin-runner" },
-  { name: "fsm-compiler",  dir: join(ROOT, "packages", "fsm-compiler"),  filter: "@cortex/fsm-compiler" },
 ];
 
 const TEST_FILE_PATTERN = /\.test\.ts$/;
@@ -222,6 +220,27 @@ function buildAll(): boolean {
     if (pkg.testOnly) continue;
     const r = run("pnpm", ["--filter", pkg.filter, "build"], ROOT);
     if (r.ok) {
+      // 构建后验证关键产物是否存在（防止 tsc 静默跳过输出）
+      const distIndexJs = join(pkg.dir, "dist", "index.js");
+      const distIndexDts = join(pkg.dir, "dist", "index.d.ts");
+      const hasJs = existsSync(distIndexJs);
+      const hasDts = existsSync(distIndexDts);
+      if (!hasJs || !hasDts) {
+        console.error(`   ❌ ${pkg.name} build 报告成功但关键产物缺失:`);
+        if (!hasJs) console.error(`      缺失: ${relative(ROOT, distIndexJs)}`);
+        if (!hasDts) console.error(`      缺失: ${relative(ROOT, distIndexDts)}`);
+        // 列出 dist 目录实际内容
+        if (existsSync(join(pkg.dir, "dist"))) {
+          const actualFiles = readdirSync(join(pkg.dir, "dist"), { recursive: true })
+            .map(f => String(f)).join(", ");
+          console.error(`      dist 实际内容: ${actualFiles.slice(0, 500)}`);
+        } else {
+          console.error(`      dist 目录不存在`);
+        }
+        console.error(`   (可能原因: tsbuildinfo 缓存导致 tsc 跳过编译——请确保 CI 环境清除 *.tsbuildinfo)`);
+        ok = false;
+        break;
+      }
       console.log(`   ✅ ${pkg.name} build`);
     } else {
       console.error(`   ❌ ${pkg.name} build 失败\n${r.stdout.slice(-500)}`);

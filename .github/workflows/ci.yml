@@ -18,9 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npx tsx scripts/ci-gate.ts
+      - run: node --import tsx/esm scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
