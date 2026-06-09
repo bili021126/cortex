@@ -37,8 +37,8 @@ jobs:
       - name: "诊断: shared tsc 能否解析 config"
         run: |
           cd packages/shared
-          pnpm exec tsc --noEmit 2>&1 | head -30
-      - run: node --import tsx/esm scripts/ci-gate.ts
+          pnpm exec tsc 2>&1 | head -30
+      - run: pnpm tsx scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
