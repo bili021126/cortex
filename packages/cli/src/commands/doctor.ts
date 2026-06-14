@@ -12,102 +12,93 @@ import { HealthChecker, type DoctorOptions, type HealthReport } from "@cortex/do
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+const DOCTOR_HELP = [
+  "用法: cortex doctor [选项]",
+  "",
+  "对 monorepo 执行全面健康诊断，检查 package.json 字段完整性、",
+  "定位文档存在性、测试文件首行标注等。",
+  "",
+  "选项:",
+  "  --format <fmt>     输出格式（text/json），默认 text",
+  "  --output, -o <p>   输出报告到文件",
+  "  --only <names>     仅运行指定检查器（逗号分隔）",
+  "  --skip <names>     跳过指定检查器（逗号分隔）",
+  "  --threshold <n>    健康分阈值（低于此值退出码 1）",
+  "  --verbose, -v      输出所有发现（含 info 级别）",
+  "",
+  "内置检查器:",
+  "  package-json         检查各包 package.json 必须字段",
+  "  positioning-doc      检查各包 PACKAGE_POSITIONING.md 存在性",
+  "  test-header          检查测试文件首行 @ci 标注",
+  "",
+  "示例:",
+  "  cortex doctor",
+  "  cortex doctor --only package-json,test-header",
+  "  cortex doctor --format json --output report.json",
+].join("\n");
+
+/** 解析 doctor 命令行选项 → DoctorOptions */
+function _parseDoctorOpts(options: Record<string, unknown>): DoctorOptions {
+  const format = (options["format"] as string) ?? "text";
+  const only = options["only"] as string | undefined;
+  const skip = options["skip"] as string | undefined;
+  const threshold = options["threshold"] !== undefined
+    ? parseInt(String(options["threshold"]), 10)
+    : undefined;
+  const verbose = (options["verbose"] ?? options["v"]) as boolean | undefined;
+
+  return {
+    format: format === "json" ? "json" : "text",
+    ...(only ? { only } : {}),
+    ...(skip ? { skip } : {}),
+    ...(threshold !== undefined ? { threshold } : {}),
+    ...(verbose !== undefined ? { verbose } : {}),
+  };
+}
+
+/** 根据健康报告状态判定退出码 */
+function _doctorExitCode(report: HealthReport): number {
+  if (report.status === "healthy") return 0;
+  if (report.status === "warning") return 0; // warning 不阻断，但建议关注
+  return 1; // unhealthy / error
+}
+
 export function createDoctorHandler(): CommandHandler {
-  return async (args, options, context): Promise<CommandResult> => {
+  const handler: CommandHandler = async (args, options, context): Promise<CommandResult> => {
     if (args.length > 0 && (args[0] === "--help" || args[0] === "-h")) {
-      return {
-        success: true,
-        output: [
-          "用法: cortex doctor [选项]",
-          "",
-          "对 monorepo 执行全面健康诊断，检查 package.json 字段完整性、",
-          "定位文档存在性、测试文件首行标注等。",
-          "",
-          "选项:",
-          "  --format <fmt>     输出格式（text/json），默认 text",
-          "  --output, -o <p>   输出报告到文件",
-          "  --only <names>     仅运行指定检查器（逗号分隔）",
-          "  --skip <names>     跳过指定检查器（逗号分隔）",
-          "  --threshold <n>    健康分阈值（低于此值退出码 1）",
-          "  --verbose, -v      输出所有发现（含 info 级别）",
-          "",
-          "内置检查器:",
-          "  package-json         检查各包 package.json 必须字段",
-          "  positioning-doc      检查各包 PACKAGE_POSITIONING.md 存在性",
-          "  test-header          检查测试文件首行 @ci 标注",
-          "",
-          "示例:",
-          "  cortex doctor",
-          "  cortex doctor --only package-json,test-header",
-          "  cortex doctor --format json --output report.json",
-        ].join("\n"),
-        exitCode: 0,
-      };
+      return { success: true, output: DOCTOR_HELP, exitCode: 0 };
     }
 
     const projectRoot = context.projectRoot ?? process.cwd();
-    const format = (options["format"] as string) ?? "text";
     const outputPath = (options["output"] ?? options["o"]) as string | undefined;
-    const only = options["only"] as string | undefined;
-    const skip = options["skip"] as string | undefined;
-    const threshold = options["threshold"] !== undefined
-      ? parseInt(String(options["threshold"]), 10)
-      : undefined;
-    const verbose = (options["verbose"] ?? options["v"]) as boolean | undefined;
-
-    const doctorOptions: DoctorOptions = {
-      format: format === "json" ? "json" : "text",
-      ...(only ? { only } : {}),
-      ...(skip ? { skip } : {}),
-      ...(threshold !== undefined ? { threshold } : {}),
-      ...(verbose !== undefined ? { verbose } : {}),
-    };
+    const doctorOpts = _parseDoctorOpts(options);
 
     const checker = new HealthChecker();
-    const report = await checker.diagnose(projectRoot, doctorOptions);
+    const report = await checker.diagnose(projectRoot, doctorOpts);
 
-    // 输出报告
-    let output: string;
-    if (format === "json") {
-      output = JSON.stringify(report, null, 2);
-    } else {
-      output = formatTextReport(report);
-    }
+    const output = doctorOpts.format === "json"
+      ? JSON.stringify(report, null, 2)
+      : formatTextReport(report);
 
-    // 写入文件
     if (outputPath) {
-      const resolvedPath = path.resolve(outputPath);
-      fs.writeFileSync(resolvedPath, output, "utf-8");
+      fs.writeFileSync(path.resolve(outputPath), output, "utf-8");
     }
 
-    // 判定退出码（与 CI 门禁对齐）
-    const exitCode = report.status === "healthy"
-      ? 0
-      : report.status === "warning"
-        ? 0 // warning 不阻断，但建议关注
-        : 1; // unhealthy / error
-
-    // 阈值阻断
+    const threshold = doctorOpts.threshold;
     if (threshold !== undefined) {
       const score = computeTotalScore(report);
       if (score < threshold) {
         return {
           success: true,
           error: `健康分 ${score} 低于阈值 ${threshold}，CI 阻断`,
-          data: report,
-          output,
-          exitCode: 1,
+          data: report, output, exitCode: 1,
         };
       }
     }
 
-    return {
-      success: true, // 诊断总是成功完成——exitCode 表达健康状态
-      data: report,
-      output,
-      exitCode,
-    };
+    return { success: true, data: report, output, exitCode: _doctorExitCode(report) };
   };
+  return handler;
 }
 
 /** 计算总健康分（所有检查器评分的平均值） */

@@ -15,12 +15,12 @@ import {
   Scheduler,
   PipelineObserver,
   ConfirmGate,
-  Toolkit,
   createAgent,
   codeAgentConfig,
   reviewAgentConfig,
   analysisAgentConfig,
   docGovernAgentConfig} from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
 import { createE2eMockFactory } from "../fixtures/mock-llm-factory.js";
 
 describe("多 Agent 协作 Mock E2E", () => {

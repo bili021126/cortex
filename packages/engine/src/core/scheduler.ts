@@ -1,29 +1,11 @@
-import { AgentStatus, PipelineEventType, PipelinePriority, type Agent, type AgentType, type ExecutionReport, type IMemoryStore, type IPipelineObserver, type NodeResult, type PipelineHandler, type TaskNode } from "@cortex/shared";
-import type { ITaskBoard } from "./task-board.js";
-import type { ISchedulerAgentPool } from "./agent-pool.js";
+import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import type { Agent, AgentType, ExecutionReport, IMemoryStore, IPipelineObserver, NodeResult, TaskNode } from "@cortex/shared";
 import type { MetaAgent } from "./meta-agent.js";
-import { topologicalSort } from "./topological-sort.js";
-import { findAllMatchingAgents } from "./agent-matcher.js";
-import { ReplanManager } from "./replan-manager.js";
+import { MetaAgentReplanAdapter } from "./meta-agent-adapter.js";
+import { ReplanManager, findAllMatchingAgents, ClaimStep, SpawnStep, RlmExecuteStep, BoundaryGuardStep, CleanupStep, TagMatchingStrategy, TopologicalLayeredDriver, PipelineModel, FixedModelRouter, type ITaskBoard, type ISchedulerAgentPool, type DispatchCtx, type IDispatchStep, type LlmCallable, type IScheduler, type IScheduleStrategy, type ILoopDriver, type IExecutionModel, type IModelRouter, type CompositeSchedulerConfig, type LoopContext } from "@cortex/scheduler";
 import { isTestEnv } from "../test-env.js";
-import { type EngineConfig, resolveConfig } from "@cortex/config";
-import type { DispatchCtx, IDispatchStep } from "./dispatch-steps/types.js";
-import type { LlmCallable } from "./rlm-decompose.js";
-import { ClaimStep } from "./dispatch-steps/claim-step.js";
-import { SpawnStep } from "./dispatch-steps/spawn-step.js";
-import { RlmExecuteStep } from "./dispatch-steps/rlm-execute-step.js";
-import { BoundaryGuardStep } from "./dispatch-steps/boundary-guard-step.js";
-import { CleanupStep } from "./dispatch-steps/cleanup-step.js";
-
-/**
- * IScheduler —— 调度器公开接口。
- * Scheduler 实现此接口，CLI/EngineBridge/Bootstrap 通过此接口依赖 Scheduler。
- * @since v2.8 核心组件接口化与组合式重构
- */
-export interface IScheduler {
-  register(agentType: string, agent: Agent, model: string): void;
-  executeAll(): Promise<ExecutionReport>;
-}
+import { resolveConfig } from "@cortex/config";
+import type { EngineConfig } from "@cortex/config";
 
 /**
  * Scheduler —— 调度引擎。
@@ -35,6 +17,11 @@ export interface IScheduler {
  * 4. 产出 ExecutionReport
  *
  * @contract 模块边界契约（久岐忍 P1-5：模块边界缺少显式契约化定义 → 已闭合）
+ *
+ * @merge-complete Core-1 调度器双实现合并（v2.6.6→v2.6.7）：
+ *   CompositeScheduler 的三抽象（IScheduleStrategy/ILoopDriver/IExecutionModel/IModelRouter）
+ *   已全部吸收进 Scheduler。CompositeScheduler 类已从 @cortex/scheduler 移除。
+ *   schedulerConfig?: CompositeSchedulerConfig 可选参数保留三抽象可替换性。
  *
  * @depends  task-board.ts（claim/release/complete/failNode/getPendingNodes）
  * @depends  agent-pool.ts（spawn/destroy，实例生命周期）
@@ -78,6 +65,11 @@ export class Scheduler implements IScheduler {
   private models = new Map<string, string>();
   private readonly replanManager: ReplanManager;
   private readonly config: Required<EngineConfig>;
+  // 四抽象组件（默认行为与原 Scheduler 完全一致）
+  readonly strategy: IScheduleStrategy;
+  readonly loopDriver: ILoopDriver;
+  readonly executionModel: IExecutionModel;
+  readonly modelRouter: IModelRouter;
   /** 当前运行会话标识——executeAll() 启动时生成 */
   private _sessionId?: string;
   /** MemoryStore 引用——用于 beginSession/endSession 生命周期管理 */
@@ -89,9 +81,14 @@ export class Scheduler implements IScheduler {
     private readonly observer: IPipelineObserver,
     private readonly metaAgent?: MetaAgent,
     engineConfig?: EngineConfig,
+    schedulerConfig?: CompositeSchedulerConfig,
   ) {
     this.config = resolveConfig(engineConfig);
-    this.replanManager = new ReplanManager(board, observer, metaAgent, this.config);
+    this.replanManager = new ReplanManager(board, observer, metaAgent ? new MetaAgentReplanAdapter(metaAgent) : undefined, this.config);
+    this.strategy = schedulerConfig?.strategy ?? new TagMatchingStrategy();
+    this.loopDriver = schedulerConfig?.loopDriver ?? new TopologicalLayeredDriver();
+    this.executionModel = schedulerConfig?.executionModel ?? new PipelineModel();
+    this.modelRouter = schedulerConfig?.modelRouter ?? new FixedModelRouter();
   }
 
   /** 注册一个 AgentRunner 及其所用模型 */
@@ -127,224 +124,35 @@ export class Scheduler implements IScheduler {
     this._sessionId = `run-${startTime}-${Math.random().toString(36).slice(2, 8)}`;
     // 激活 MemoryStore 会话——后续 write/writePending 自动注入此 sessionId
     this._memoryStore?.beginSession(this._sessionId);
-    const allResults: NodeResult[] = [];
-    let completed = 0;
-    let failed = 0;
-    let round = 0;
-    let replanFlight: Promise<void> | null = null;
-    const deadline = startTime + this.config.executeAllTimeoutMs;
 
-    // ─── 边界违规事件监听：Agent 越界写文件 → 入队 replanManager → MetaAgent 重规划 ───
-    const boundaryHandler: PipelineHandler = (event) => {
-      if (event.type === PipelineEventType.AgentBoundaryViolation) {
-        const payload = event.payload as { nodeId: string; reason: string };
-        const node = this.board.getNode(payload.nodeId);
-        if (node) {
-          this.replanManager.enqueue(node, payload.reason, "boundary_violation");
-        }
-      }
+    // 构建 LoopContext，注入 dispatchNode 保留完整 RLM 拆解管线
+    const loopCtx: LoopContext = {
+      board: this.board,
+      pool: this.pool,
+      observer: this.observer,
+      agents: this.agents,
+      models: this.models,
+      replanProvider: this.metaAgent ? new MetaAgentReplanAdapter(this.metaAgent) : undefined,
+      replanManager: this.replanManager,
+      config: this.config,
+      strategy: this.strategy,
+      executionModel: this.executionModel,
+      modelRouter: this.modelRouter,
+      dispatchNode: (node) => this._dispatchNode(node.id),
     };
-    this.observer.on(PipelinePriority.HIGH, boundaryHandler);
 
-    while (true) {
-      // ── 全局超时检查 ──
-      if (Date.now() >= deadline) {
-        const remaining = this.board.getPendingNodes();
-        for (const n of remaining) {
-          allResults.push({ nodeId: n.id, success: false, error: `Scheduler global timeout (round ${round})` });
-          try { this.board.failNode(n.id); } catch { /* best-effort */ }
-          failed++;
-        }
-        this.observer.emit({
-          type: PipelineEventType.SchedulerLoopCrashed,
-          priority: PipelinePriority.CRITICAL,
-          payload: {
-            round,
-            error: "ExecuteAll timeout",
-            pendingAtCrash: remaining.length,
-            hint: `全局超时 ${this.config.executeAllTimeoutMs}ms，${remaining.length} 个节点标记为失败`,
-          },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-        break;
-      }
+    const loopResult = await this.loopDriver.run(loopCtx);
 
-      try {
-      round++;
-      const pendingNodes = this.board.getPendingNodes();
-
-      if (pendingNodes.length === 0) {
-        if (replanFlight) {
-          await replanFlight;
-          replanFlight = null;
-        }
-        if (this.board.getPendingNodes().length > 0) continue;
-        if (this.replanManager.hasPending) {
-          replanFlight = this.replanManager.tryFireReplan();
-          continue;
-        }
-        break;
-      }
-
-      const layers = topologicalSort(pendingNodes, this.observer);
-
-      if (layers.length === 0 && pendingNodes.length > 0) {
-        const msg = `Circular dependency detected among ${pendingNodes.length} pending nodes — marking all as failed`;
-        this.observer.emit({
-          type: PipelineEventType.SchedulerInvariantViolation,
-          priority: PipelinePriority.CRITICAL,
-          payload: {
-            nodeId: pendingNodes[0].id,
-            message: msg,
-          },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-        for (const n of pendingNodes) {
-          try { this.board.failNode(n.id); } catch { /* best-effort */ }
-          allResults.push({ nodeId: n.id, success: false, error: "Circular dependency detected — node cannot be scheduled" });
-          failed++;
-        }
-        continue;
-      }
-
-      for (let li = 0; li < layers.length; li++) {
-        const layer = layers[li];
-        this.observer.emit({
-          type: PipelineEventType.SchedulerLayerStart,
-          priority: PipelinePriority.HIGH,
-          payload: { layer: li, nodes: layer.length, round },
-          timestamp: Date.now(),
-          notificationType: "FYI",
-        });
-
-        const layerPromises = layer.map((nodeId) => this._dispatchNode(nodeId));
-        const settled = await Promise.allSettled(layerPromises);
-
-        for (let si = 0; si < settled.length; si++) {
-          const r = settled[si];
-          if (r.status === "fulfilled") {
-            allResults.push(r.value);
-            if (r.value.success) completed++;
-            else failed++;
-          } else {
-            const nodeId = layer[si];
-            try { this.board.failNode(nodeId); } catch { /* best-effort */ }
-            allResults.push({ nodeId, success: false, error: `Promise rejected: ${String(r.reason).slice(0, 200)}` });
-            failed++;
-          }
-        }
-      }
-
-      if (this.replanManager.hasPending && !replanFlight) {
-        replanFlight = this.replanManager.tryFireReplan();
-      }
-      } catch (loopErr) {
-        const snappedPending = this.board.getPendingNodes();
-        this.observer.emit({
-          type: PipelineEventType.SchedulerLoopCrashed,
-          priority: PipelinePriority.CRITICAL,
-          payload: {
-            round,
-            error: String(loopErr).slice(0, 300),
-            pendingAtCrash: snappedPending.length,
-            hint: "当前轮次因未预期异常中断，pending 节点将标记为失败",
-          },
-          timestamp: Date.now(),
-          notificationType: "WARNING",
-        });
-        for (const n of snappedPending) {
-          try { this.board.failNode(n.id); } catch (e) {
-            if (this.observer) {
-              this.observer.emit({
-                type: PipelineEventType.SchedulerInvariantViolation,
-                priority: PipelinePriority.HIGH,
-                payload: { nodeId: n.id, message: `failNode best-effort failed: ${String(e)}`, error: String(e).slice(0, 200) },
-                timestamp: Date.now(),
-                notificationType: "WARNING",
-              });
-            }
-            console.error(`[scheduler] failNode best-effort failed for ${n.id}: ${String(e)}`);
-          }
-          allResults.push({ nodeId: n.id, success: false, error: `Scheduler loop crashed at round ${round}` });
-          failed++;
-        }
-        this.replanManager.reset();
-        break;
-      }
-    }
-
-    if (replanFlight) await replanFlight;
-
-    this.replanManager.resolveChains(allResults);
-    let actualCompleted = 0;
-    let actualFailed = 0;
-    for (const r of allResults) {
-      if (r.success) actualCompleted++;
-      else actualFailed++;
-    }
-    completed = actualCompleted;
-    failed = actualFailed;
-    this.replanManager.reset();
-
-    // 退订边界违规监听
-    this.observer.off(PipelinePriority.HIGH, boundaryHandler);
-
-    // 终结 MemoryStore 会话——归档 Active 记忆，湮灭 Pending 记忆
-    this._memoryStore?.endSession().catch(() => { /* best-effort */ });
+    // MemoryStore endSession 已迁移至 ShutdownWarden（统一管理 shutdown 生命周期）
 
     const durationMs = Date.now() - startTime;
     const allNodes = this.board.getAllNodes();
 
-    // ─── 悬空节点兜底：正常退出后仍处于非终态的节点自动取消 ───
-    const orphaned = allNodes.filter(
-      (n) => n.status !== "done" && n.status !== "failed",
-    );
-    if (orphaned.length > 0) {
-      this.observer.emit({
-        type: PipelineEventType.SchedulerLoopCrashed,
-        priority: PipelinePriority.CRITICAL,
-        payload: {
-          round,
-          error: "Scheduler done — orphaned nodes auto-cancelled",
-          pendingAtCrash: orphaned.length,
-          hint: `${orphaned.length} 个节点在调度器退出时仍处于非终态，自动标记为失败`,
-        },
-        timestamp: Date.now(),
-        notificationType: "WARNING",
-      });
-      for (const n of orphaned) {
-        try { this.board.failNode(n.id); } catch { /* best-effort */ }
-        allResults.push({
-          nodeId: n.id,
-          success: false,
-          error: `Scheduler done — orphaned node in status ${n.status}`,
-        });
-        failed++;
-      }
-    }
-
-    this.observer.emit({
-      type: PipelineEventType.SchedulerDone,
-      priority: PipelinePriority.CRITICAL,
-      payload: {
-        total: allNodes.length,
-        completed,
-        failed,
-        durationMs,
-        rounds: round,
-        orphanedNodes: orphaned.length,
-      },
-      timestamp: Date.now(),
-      notificationType: "FYI",
-    });
-
     return {
       totalNodes: allNodes.length,
-      completed,
-      failed,
-      results: allResults,
+      completed: loopResult.completed,
+      failed: loopResult.failed,
+      results: loopResult.results,
       durationMs,
       sessionId: this._sessionId,
     };
@@ -432,6 +240,7 @@ export class Scheduler implements IScheduler {
       isTestEnv: isTestEnv(),
       node,
       llmChat: this._buildLlmChat(),
+      modelRouter: this.modelRouter,
     };
 
     const steps: IDispatchStep[] = [
@@ -475,6 +284,7 @@ export class Scheduler implements IScheduler {
         agentType: at,
         agent,
         llmChat: this._buildLlmChat(),
+        modelRouter: this.modelRouter,
       };
 
       const claimed = this.board.claim(node.id, at as AgentType);

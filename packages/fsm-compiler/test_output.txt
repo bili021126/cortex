@@ -1,0 +1,295 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/cortex/packages/fsm-compiler[39m
+
+ [32m✓[39m tests/types.test.ts [2m([22m[2m35 tests[22m[2m)[22m[90m 8[2mms[22m[39m
+ [32m✓[39m tests/compiler.test.ts [2m([22m[2m45 tests[22m[2m)[22m[90m 27[2mms[22m[39m
+ [31m❯[39m tests/runtime.test.ts [2m([22m[2m44 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[90m 31[2mms[22m[39m
+[31m   [31m×[31m StateMachine — advanced[2m > [22mshould throw TransitionError on invalid event for current state[90m 5[2mms[22m[31m[39m
+[31m     → expected error to be instance of TransitionError[39m
+[31m   [31m×[31m StateMachine — advanced[2m > [22mshould retain error cause in TransitionError when guard rejects[90m 1[2mms[22m[31m[39m
+[31m     → expected error to be instance of TransitionError[39m
+[31m   [31m×[31m StateMachine — advanced[2m > [22mshould throw GuardError when guard function throws[90m 1[2mms[22m[31m[39m
+[31m     → expected error to be instance of GuardError[39m
+[31m   [31m×[31m HistoryRecorder[2m > [22mshould deserialize with custom options[90m 2[2mms[22m[31m[39m
+[31m     → expected 3 to be 2 // Object.is equality[39m
+ [31m❯[39m tests/integration.test.ts [2m([22m[2m28 tests[22m[2m | [22m[31m14 failed[39m[2m)[22m[90m 31[2mms[22m[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould execute the happy path through the StateMachine runtime[90m 4[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould execute the failure path[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould execute the cancellation path from pending[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould execute the cancellation path from running[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould enforce guard conditions[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould allow transition when guard passes[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould execute actions on transitions[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould create a complete audit trail with HistoryRecorder[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Full Pipeline: Task Node FSM[2m > [22mshould serialize and restore machine state correctly across full lifecycle[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Multiple independent StateMachine instances[2m > [22mshould maintain independent state for each machine instance[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Error recovery and edge cases[2m > [22mshould not change state on invalid transition attempt[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Error recovery and edge cases[2m > [22mshould not transition when guard throws[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Error recovery and edge cases[2m > [22mshould handle can() check correctly for all states and events[90m 0[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+[31m   [31m×[31m Top-level index.ts barrel re-exports[2m > [22mshould export StateMachine from index.ts[90m 1[2mms[22m[31m[39m
+[31m     → StateMachine is not defined[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 18 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould execute the happy path through the StateMachine runtime
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m155:21[22m[39m
+    [90m153| [39m
+    [90m154| [39m  [34mit[39m([32m"should execute the happy path through the StateMachine runtime"[39m[33m,[39m…
+    [90m155| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m156| [39m
+    [90m157| [39m    [90m// pending → running[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould execute the failure path
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m179:21[22m[39m
+    [90m177| [39m
+    [90m178| [39m  [34mit[39m([32m"should execute the failure path"[39m[33m,[39m () [33m=>[39m {
+    [90m179| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m180| [39m
+    [90m181| [39m    machine[33m.[39m[34mdispatch[39m([32m"execute"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould execute the cancellation path from pending
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m190:21[22m[39m
+    [90m188| [39m
+    [90m189| [39m  [34mit[39m([32m"should execute the cancellation path from pending"[39m[33m,[39m () [33m=>[39m {
+    [90m190| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m191| [39m
+    [90m192| [39m    machine[33m.[39m[34mdispatch[39m([32m"cancel"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould execute the cancellation path from running
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m199:21[22m[39m
+    [90m197| [39m
+    [90m198| [39m  [34mit[39m([32m"should execute the cancellation path from running"[39m[33m,[39m () [33m=>[39m {
+    [90m199| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m200| [39m
+    [90m201| [39m    machine[33m.[39m[34mdispatch[39m([32m"execute"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould enforce guard conditions
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m213:21[22m[39m
+    [90m211| [39m    guards[33m.[39m[34mregister[39m([32m"isFailure"[39m[33m,[39m () [33m=>[39m [35mtrue[39m)[33m;[39m
+    [90m212| [39m
+    [90m213| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m214| [39m
+    [90m215| [39m    [90m// Guard "canExecute" returns false → should reject[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould allow transition when guard passes
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m226:21[22m[39m
+    [90m224| [39m    guards[33m.[39m[34mregister[39m([32m"isFailure"[39m[33m,[39m () [33m=>[39m [35mfalse[39m)[33m;[39m [90m// will block failure p[39m…
+    [90m225| [39m
+    [90m226| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m227| [39m
+    [90m228| [39m    machine[33m.[39m[34mdispatch[39m([32m"execute"[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould execute actions on transitions
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m253:21[22m[39m
+    [90m251| [39m    guards[33m.[39m[34mregister[39m([32m"isFailure"[39m[33m,[39m () [33m=>[39m [35mtrue[39m)[33m;[39m
+    [90m252| [39m
+    [90m253| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(
+    [90m   | [39m                    [31m^[39m
+    [90m254| [39m      taskNodeDef[33m,[39m [32m"pending"[39m[33m,[39m
+    [90m255| [39m      { guards[33m,[39m actions[33m:[39m actionRegistry }[33m,[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould create a complete audit trail with HistoryRecorder
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m270:21[22m[39m
+    [90m268| [39m  [34mit[39m([32m"should create a complete audit trail with HistoryRecorder"[39m[33m,[39m () [33m=[39m…
+    [90m269| [39m    [35mconst[39m recorder [33m=[39m [35mnew[39m [33mHistoryRecorder[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m,[39m { step[33m:[39m…
+    [90m270| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m271| [39m
+    [90m272| [39m    [90m// Run through a sequence, recording each step[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mFull Pipeline: Task Node FSM[2m > [22mshould serialize and restore machine state correctly across full lifecycle
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m298:21[22m[39m
+    [90m296| [39m
+    [90m297| [39m  [34mit[39m([32m"should serialize and restore machine state correctly across full[39m…
+    [90m298| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m299| [39m
+    [90m300| [39m    [90m// Run halfway[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mMultiple independent StateMachine instances[2m > [22mshould maintain independent state for each machine instance
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m346:16[22m[39m
+    [90m344| [39m
+    [90m345| [39m  [34mit[39m([32m"should maintain independent state for each machine instance"[39m[33m,[39m ()…
+    [90m346| [39m    [35mconst[39m m1 [33m=[39m [35mnew[39m [33mStateMachine[39m(simpleDef[33m,[39m [32m"off"[39m)[33m;[39m
+    [90m   | [39m               [31m^[39m
+    [90m347| [39m    [35mconst[39m m2 [33m=[39m [35mnew[39m [33mStateMachine[39m(simpleDef[33m,[39m [32m"off"[39m)[33m;[39m
+    [90m348| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mError recovery and edge cases[2m > [22mshould not change state on invalid transition attempt
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m368:21[22m[39m
+    [90m366| [39m[34mdescribe[39m([32m"Error recovery and edge cases"[39m[33m,[39m () [33m=>[39m {
+    [90m367| [39m  [34mit[39m([32m"should not change state on invalid transition attempt"[39m[33m,[39m () [33m=>[39m {
+    [90m368| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m(taskNodeDef[33m,[39m [32m"pending"[39m)[33m;[39m
+    [90m   | [39m                    [31m^[39m
+    [90m369| [39m
+    [90m370| [39m    [90m// "complete" is not valid from "pending"[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mError recovery and edge cases[2m > [22mshould not transition when guard throws
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m381:21[22m[39m
+    [90m379| [39m    })[33m;[39m
+    [90m380| [39m
+    [90m381| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m382| [39m
+    [90m383| [39m    [34mexpect[39m(() [33m=>[39m machine[33m.[39m[34mdispatch[39m([32m"execute"[39m))[33m.[39m[34mtoThrow[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mError recovery and edge cases[2m > [22mshould handle can() check correctly for all states and events
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m389:21[22m[39m
+    [90m387| [39m
+    [90m388| [39m  [34mit[39m([32m"should handle can() check correctly for all states and events"[39m[33m,[39m …
+    [90m389| [39m    [35mconst[39m machine [33m=[39m [35mnew[39m [33mStateMachine[39m[33m<[39m[33mTaskState[39m[33m,[39m [33mTaskEvent[39m[33m>[39m(taskNodeDef…
+    [90m   | [39m                    [31m^[39m
+    [90m390| [39m
+    [90m391| [39m    [90m// From "pending"[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/integration.test.ts[2m > [22mTop-level index.ts barrel re-exports[2m > [22mshould export StateMachine from index.ts
+[31m[1mReferenceError[22m: StateMachine is not defined[39m
+[36m [2m❯[22m tests/integration.test.ts:[2m451:35[22m[39m
+    [90m449| [39m  [34mit[39m([32m"should export StateMachine from index.ts"[39m[33m,[39m [35masync[39m () [33m=>[39m {
+    [90m450| [39m    [35mconst[39m mod [33m=[39m [35mawait[39m [35mimport[39m([32m"../src/index.js"[39m)[33m;[39m
+    [90m451| [39m    [34mexpect[39m(mod[33m.[39m[33mStateMachine[39m)[33m.[39m[34mtoBe[39m([33mStateMachine[39m)[33m;[39m
+    [90m   | [39m                                  [31m^[39m
+    [90m452| [39m  })[33m;[39m
+    [90m453| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/runtime.test.ts[2m > [22mStateMachine — advanced[2m > [22mshould throw TransitionError on invalid event for current state
+[31m[1mAssertionError[22m: expected error to be instance of TransitionError[39m
+
+[32m- Expected:[39m 
+[Function TransitionError]
+
+[31m+ Received:[39m 
+[TransitionError: Invalid transition: idle -> finish]
+
+[36m [2m❯[22m tests/runtime.test.ts:[2m128:55[22m[39m
+    [90m126| [39m
+    [90m127| [39m    [90m// "finish" is not valid from "idle"[39m
+    [90m128| [39m    [34mexpect[39m(() [33m=>[39m machine[33m.[39m[34mdispatch[39m([32m"finish"[39m [35mas[39m [35mconst[39m))[33m.[39m[34mtoThrow[39m([33mTransiti[39m…
+    [90m   | [39m                                                      [31m^[39m
+    [90m129| [39m  })[33m;[39m
+    [90m130| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/runtime.test.ts[2m > [22mStateMachine — advanced[2m > [22mshould retain error cause in TransitionError when guard rejects
+[31m[1mAssertionError[22m: expected error to be instance of TransitionError[39m
+
+[32m- Expected:[39m 
+[Function TransitionError]
+
+[31m+ Received:[39m 
+[TransitionError: Guard "canStart" rejected transition: idle -> start -> active]
+
+[36m [2m❯[22m tests/runtime.test.ts:[2m141:54[22m[39m
+    [90m139| [39m    )[33m;[39m
+    [90m140| [39m
+    [90m141| [39m    [34mexpect[39m(() [33m=>[39m machine[33m.[39m[34mdispatch[39m([32m"start"[39m [35mas[39m [35mconst[39m))[33m.[39m[34mtoThrow[39m([33mTransitio[39m…
+    [90m   | [39m                                                     [31m^[39m
+    [90m142| [39m    [35mtry[39m {
+    [90m143| [39m      machine[33m.[39m[34mdispatch[39m([32m"start"[39m [35mas[39m [35mconst[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/runtime.test.ts[2m > [22mStateMachine — advanced[2m > [22mshould throw GuardError when guard function throws
+[31m[1mAssertionError[22m: expected error to be instance of GuardError[39m
+
+[32m- Expected:[39m 
+[Function GuardError]
+
+[31m+ Received:[39m 
+[GuardError: Guard "canStart" threw an error]
+
+[36m [2m❯[22m tests/runtime.test.ts:[2m163:54[22m[39m
+    [90m161| [39m    )[33m;[39m
+    [90m162| [39m
+    [90m163| [39m    [34mexpect[39m(() [33m=>[39m machine[33m.[39m[34mdispatch[39m([32m"start"[39m [35mas[39m [35mconst[39m))[33m.[39m[34mtoThrow[39m([33mGuardErro[39m…
+    [90m   | [39m                                                     [31m^[39m
+    [90m164| [39m  })[33m;[39m
+    [90m165| [39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/18]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/runtime.test.ts[2m > [22mHistoryRecorder[2m > [22mshould deserialize with custom options
+[31m[1mAssertionError[22m: expected 3 to be 2 // Object.is equality[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[32m- 2[39m
+[31m+ 3[39m
+
+[36m [2m❯[22m tests/runtime.test.ts:[2m610:27[22m[39m
+    [90m608| [39m    [35mconst[39m recorder [33m=[39m [33mHistoryRecorder[39m[33m.[39m[34mfromJSON[39m(json[33m,[39m { maxRecords[33m:[39m [34m2[39m })[33m;[39m
+    [90m609| [39m
+    [90m610| [39m    [34mexpect[39m(recorder[33m.[39msize)[33m.[39m[34mtoBe[39m([34m2[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m611| [39m    [34mexpect[39m(recorder[33m.[39mall[[34m0[39m][33m.[39mid)[33m.[39m[34mtoBe[39m([32m"2"[39m)[33m;[39m
+    [90m612| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/18]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m2 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[31m18 failed[39m[22m[2m | [22m[1m[32m134 passed[39m[22m[90m (152)[39m
+[2m   Start at [22m 02:24:19
+[2m   Duration [22m 847ms[2m (transform 291ms, setup 0ms, collect 442ms, tests 95ms, environment 1ms, prepare 687ms)[22m
+

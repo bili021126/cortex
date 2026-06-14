@@ -25,6 +25,9 @@
     "@cortex/config": "workspace:*",
     "@cortex/doctor": "workspace:*",
     "@cortex/engine": "workspace:*",
+        "@cortex/memory-store": "workspace:*",
+        "@cortex/platform": "workspace:*",
+    "@cortex/scheduler": "workspace:*",
     "@cortex/llm": "workspace:*",
     "@cortex/parser": "workspace:*",
     "@cortex/pm": "workspace:*",
@@ -34,7 +37,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "eslint": "^10.3.0",
+    "eslint": "^10.4.1",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

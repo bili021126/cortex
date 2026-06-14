@@ -27,7 +27,7 @@ import {
   updateProposalStatus,
   judgeProposals,
   applyApproved,
-  summarizeGovernance} from "@cortex/engine";
+  summarizeGovernance} from "@cortex/governance";
 import type { AmendmentProposal, JudgmentResult } from "@cortex/shared";
 
 // ══════════════════════════════════════════════

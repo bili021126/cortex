@@ -8,9 +8,10 @@
 
 import { SkillRegistry, deriveStatus } from "../registry/skill-registry.js";
 import { registerSkillPipeline } from "../memory/skill-pipeline.js";
-import { crystallizeSkillToKnowledge, loadSkillsFromMemory, persistSkillsToMemory, verifySkillKnowledge, type ExternalSearcher } from "../components/skill-persister.js";
-import type { MemoryStore } from "../memory/memory-store.js";
-import { type IMemoryStore, type IPipelineObserver, type SkillTemplate } from "@cortex/shared";
+import { crystallizeSkillToKnowledge, loadSkillsFromMemory, persistSkillsToMemory, verifySkillKnowledge } from "../components/skill-persister.js";
+import type { ExternalSearcher } from "../components/skill-persister.js";
+import type { MemoryStore } from "@cortex/memory-store";
+import type { IMemoryStore, IPipelineObserver, SkillTemplate } from "@cortex/shared";
 import type { MetaAgent } from "../core/meta-agent.js";
 
 export async function initSkillSystem(

@@ -72,7 +72,7 @@ export class ConsoleCollector implements ITelemetryCollector {
       // eslint-disable-next-line no-console
       console.log(output);
     } else {
-      // eslint-disable-next-line no-console
+       
       process.stdout.write(output);
     }
 

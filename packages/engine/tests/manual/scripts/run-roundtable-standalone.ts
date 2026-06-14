@@ -11,7 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LlmAdapter } from "@cortex/llm";
-import { compressForRoundtable } from "@cortex/engine";
+import { compressForRoundtable } from "@cortex/platform";
 import { runMeeting, SOFT_CONSENSUS_ROUNDTABLE, Persona } from "../config/roundtable-config";
 import { resolveLlmConfig } from "../config/llm-defaults";
 import { AgentType } from "@cortex/shared";

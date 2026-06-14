@@ -153,7 +153,7 @@ export class PromptOrchestrator {
     const errors: ValidationResult["errors"] = [];
     const warnings: ValidationResult["warnings"] = [];
 
-    if (!assembly.context || !assembly.context.variables) {
+    if (!assembly.context?.variables) {
       errors.push({
         path: "context.variables",
         message: "Assembly 缺少 context.variables",

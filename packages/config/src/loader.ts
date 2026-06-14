@@ -227,7 +227,7 @@ export function loadConfigDomain<T = unknown>(
   domainName: string,
   readFile: ConfigFileReader,
   dataDir: string,
-): T {
+): T | undefined {
   const domain = CONFIG_DOMAINS.find((d) => d.name === domainName);
   if (!domain) {
     throw new ConfigLoadError(
@@ -236,7 +236,7 @@ export function loadConfigDomain<T = unknown>(
     );
   }
 
-  const filePath = `${dataDir}/${domain.fileName}`;
+  const filePath = path.join(dataDir, domain.fileName);
 
   let raw: string;
   try {
@@ -303,12 +303,18 @@ export function loadAllConfig(
 
   for (const domain of CONFIG_DOMAINS) {
     try {
-      config[domain.name] = loadConfigDomain(domain.name, readFile, dataDir);
+      const result = loadConfigDomain(domain.name, readFile, dataDir);
+      if (result !== undefined) {
+        config[domain.name] = result;
+      }
     } catch (e) {
       if (domain.required) {
         throw e;
       }
-      // 可选域缺失——静默跳过
+      // 可选域解析失败——记录警告而非静默丢弃
+      console.warn(
+        `[ConfigLoader] 可选域 "${domain.name}" 加载失败: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 

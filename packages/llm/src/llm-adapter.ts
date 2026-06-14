@@ -1,9 +1,11 @@
 /* eslint-disable no-console */
 import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter } from "@cortex/shared";
+import { SimpleCircuitBreaker } from "@cortex/resilience";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getRateLimiter } from "./rate-limiter.js";
+import { accumulateToolCalls, finalizeToolCalls, type StreamToolCallAccumulator } from "./tool-call-stream.js";
 
 // ─── Adapter ─────────────────────────────────────────────────────
 
@@ -31,6 +33,11 @@ export class LlmAdapter {
   private static readonly MAX_RETRIES = 3;
   private static readonly RETRY_BASE_MS = 1000;
   private static readonly REQUEST_TIMEOUT_MS = 30_000;
+
+  // ── 断路器：保护 DeepSeek API 熔断止损 ──
+  // 连续 5 次失败 → OPEN（快速失败，跳过 retry）
+  // 熔断 30s 后 → HALF_OPEN（试探一次）
+  private _circuitBreaker: SimpleCircuitBreaker;
 
   // ── 审计日志 ──
   private static _auditEnabled = false;
@@ -73,10 +80,22 @@ export class LlmAdapter {
       }
     }
     LlmAdapter._auditDraining = false;
+    // 防止竞态：draining 期间新推入的条目未被处理
+    if (LlmAdapter._auditQueue.length > 0) {
+      LlmAdapter._auditDraining = true;
+      void this._drainAudit();
+    }
   }
 
   constructor(config: LlmAdapterConfig) {
     this.config = config;
+
+    // ── 初始化断路器：5 次连续失败熔断，30s 后试探 ──
+    this._circuitBreaker = new SimpleCircuitBreaker({
+      name: `llm-${config.label ?? 'unknown'}`,
+      threshold: 5,
+      halfOpenAfterMs: 30_000,
+    });
   }
 
   /** Enable/disable LLM response cache (saves cost during testing) */
@@ -231,14 +250,16 @@ export class LlmAdapter {
 
       while (bodyReadAttempt <= MAX_BODY_READ_RETRIES) {
         try {
-          const res = await this._fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${this.config.apiKey}`,
-            },
-            body: JSON.stringify(body),
-          });
+          const res = await this._circuitBreaker.call(
+            () => this._fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${this.config.apiKey}`,
+              },
+              body: JSON.stringify(body),
+            }),
+          );
           status = res.status;
           reqId = res.headers.get("x-request-id") ?? res.headers.get("x-ds-request-id") ?? undefined;
 
@@ -303,8 +324,8 @@ export class LlmAdapter {
             error: null,
           });
 
-          // 记录 token 消耗（权限配额追踪）
-          limiter.recordTokens(fp, json.usage?.total_tokens ?? 0);
+          // 记录 token 消耗（权限配额追踪，异步 fire-and-forget）
+          void limiter.recordTokens(fp, json.usage?.total_tokens ?? 0);
 
           return response;
         } catch (bodyReadErr) {
@@ -399,14 +420,16 @@ export class LlmAdapter {
     }
 
     try {
-      const res = await this._fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify(body),
-      });
+      const res = await this._circuitBreaker.call(
+        () => this._fetchWithRetry(`${this.config.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.config.apiKey}`,
+          },
+          body: JSON.stringify(body),
+        }),
+      );
       status = res.status;
 
       if (!res.ok) {
@@ -417,93 +440,20 @@ export class LlmAdapter {
       const reader = res.body?.getReader();
       if (!reader) throw new Error("LLM streaming not supported");
 
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let fullContent = "";
-      let fullReasoning = "";
-      const collectedToolCalls: Array<{ id: string; function: { name: string; arguments: string } }> = [];
-      let streamUsage: { prompt_tokens: number; completion_tokens: number } | undefined;
-
-      let streamError: string | null = null;
+      let sse: SseStreamState;
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed?.startsWith("data: ")) continue;
-            const data = trimmed.slice(6);
-            if (data === "[DONE]") break;
-
-            try {
-              const chunk = JSON.parse(data);
-
-              // 收集 usage（通常位于最后一个 chunk）
-              if (chunk.usage) {
-                streamUsage = {
-                  prompt_tokens: chunk.usage.prompt_tokens,
-                  completion_tokens: chunk.usage.completion_tokens,
-                };
-              }
-
-              const delta = chunk.choices?.[0]?.delta;
-              if (!delta) continue;
-
-              if (delta.content) {
-                fullContent += delta.content;
-                onChunk(delta.content);
-              }
-
-              // reasoning_content (DeepSeek R1 等推理模型)
-              if (delta.reasoning_content) {
-                fullReasoning += delta.reasoning_content;
-                onChunk("", delta.reasoning_content);
-              }
-
-              if (delta.tool_calls) {
-                for (const tc of delta.tool_calls) {
-                  let existing = collectedToolCalls.find((c) => c.id === tc.id);
-                  if (!existing) {
-                    existing = { id: tc.id, function: { name: "", arguments: "" } };
-                    collectedToolCalls.push(existing);
-                  }
-                  if (tc.function?.name) existing.function.name += tc.function.name;
-                  if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-                }
-              }
-            } catch {
-              // skip malformed JSON chunks
-            }
-          }
-        }
-      } catch (e) {
-        streamError = String(e).slice(0, 200);
-        // 流中断——若有部分内容则降级返回，否则重新抛出
-        if (fullContent || collectedToolCalls.length > 0) {
-          console.warn(`[LlmAdapter] chatStream 流中断，返回部分内容: ${streamError}`);
-        } else {
-          throw e;
-        }
+        sse = await _readSseStream(reader, onChunk);
       } finally {
         reader.releaseLock();
       }
 
-      const toolCalls: LlmToolCall[] = collectedToolCalls.map((tc) => ({
-        id: tc.id,
-        name: tc.function.name,
-        arguments: tc.function.arguments ? JSON.parse(tc.function.arguments) : {},
-      }));
+      const toolCalls = finalizeToolCalls(sse.collectedToolCalls) as LlmToolCall[];
 
       const response: LlmResponse = {
-        content: fullContent || null,
+        content: sse.fullContent || null,
         tool_calls: toolCalls,
-        reasoning_content: fullReasoning || undefined,
-        usage: streamUsage,
+        reasoning_content: sse.fullReasoning || undefined,
+        usage: sse.streamUsage,
       };
 
       this._auditLog({
@@ -514,9 +464,13 @@ export class LlmAdapter {
         messages_count: messages.length,
         tool_count: tools?.length ?? 0,
         stream: true,
-        stream_degraded: !!streamError,
+        stream_degraded: sse.degraded,
         error: null,
       });
+
+      // 流式调用消耗配额（异步 fire-and-forget）
+      const totalTokens = (sse.streamUsage?.prompt_tokens ?? 0) + (sse.streamUsage?.completion_tokens ?? 0);
+      void limiter.recordTokens(fp, totalTokens);
 
       return response;
     } catch (e) {
@@ -572,15 +526,16 @@ export class LlmAdapter {
       controller.abort();
     }, LlmAdapter.REQUEST_TIMEOUT_MS);
 
+    let hardTimeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const res = await Promise.race([
         fetch(url, { ...options, signal: controller.signal }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
+        new Promise<never>((_, reject) => {
+          hardTimeout = setTimeout(
             () => reject(new Error(`LLM API timeout after ${LlmAdapter.REQUEST_TIMEOUT_MS / 1000}s (硬兜底)`)),
             LlmAdapter.REQUEST_TIMEOUT_MS + 5000, // 比 AbortController 多 5s 兜底
-          ),
-        ),
+          );
+        }),
       ]);
       console.log(`  🌐 [LLM] 响应——状态码 ${res.status}`);
       if (!res.ok && (res.status >= 500 || res.status === 429) && attempt < LlmAdapter.MAX_RETRIES) {
@@ -604,8 +559,94 @@ export class LlmAdapter {
       throw err;
     } finally {
       clearTimeout(timeout);
+      if (hardTimeout) clearTimeout(hardTimeout);
     }
   }
+}
+
+// ─── Helper: SSE stream reader ────────────────────────────────────
+
+interface SseStreamState {
+  fullContent: string;
+  fullReasoning: string;
+  collectedToolCalls: ReadonlyArray<StreamToolCallAccumulator>;
+  streamUsage?: { prompt_tokens: number; completion_tokens: number };
+  /** 流中断降级（有部分内容可返回）时为 true */
+  degraded: boolean;
+}
+
+/** 从 ReadableStream 读取 SSE 行，累积 content / reasoning / tool_calls */
+async function _readSseStream(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  onChunk: (content: string, reasoning?: string) => void,
+): Promise<SseStreamState> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullContent = "";
+  let fullReasoning = "";
+  let collectedToolCalls: ReadonlyArray<StreamToolCallAccumulator> = [];
+  let streamUsage: { prompt_tokens: number; completion_tokens: number } | undefined;
+
+  let skippedChunks = 0;
+
+  try {
+    outer: while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed?.startsWith("data: ")) continue;
+        const data = trimmed.slice(6);
+        if (data === "[DONE]") break outer;
+
+        try {
+          const chunk = JSON.parse(data);
+
+          if (chunk.usage) {
+            streamUsage = {
+              prompt_tokens: chunk.usage.prompt_tokens,
+              completion_tokens: chunk.usage.completion_tokens,
+            };
+          }
+
+          const delta = chunk.choices?.[0]?.delta;
+          if (!delta) continue;
+
+          if (delta.content) {
+            fullContent += delta.content;
+            onChunk(delta.content);
+          }
+
+          if (delta.reasoning_content) {
+            fullReasoning += delta.reasoning_content;
+            onChunk("", delta.reasoning_content);
+          }
+
+          if (delta.tool_calls) {
+            collectedToolCalls = accumulateToolCalls(collectedToolCalls, delta.tool_calls);
+          }
+        } catch {
+          skippedChunks++;
+        }
+      }
+    }
+  } catch (e) {
+    if (fullContent || fullReasoning || collectedToolCalls.length > 0) {
+      console.warn(`[LlmAdapter] chatStream 流中断，返回部分内容: ${String(e).slice(0, 200)}`);
+      return { fullContent, fullReasoning, collectedToolCalls, streamUsage, degraded: true };
+    }
+    throw e;
+  }
+
+  if (skippedChunks > 0) {
+    console.warn(`[LlmAdapter] 流式解析跳过 ${skippedChunks} 个异常 SSE chunk`);
+  }
+  return { fullContent, fullReasoning, collectedToolCalls, streamUsage, degraded: false };
 }
 
 // ─── Helper: serialize message ───────────────────────────────────
@@ -615,7 +656,7 @@ function _serializeMessage(m: LlmMessage): Record<string, unknown> {
   if (m.tool_call_id) base.tool_call_id = m.tool_call_id;
   if (m.tool_calls && m.tool_calls.length > 0) {
     base.tool_calls = m.tool_calls.map((tc) => ({
-      id: tc.id,
+      id: tc.id || `tc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       type: "function",
       function: {
         name: tc.name,

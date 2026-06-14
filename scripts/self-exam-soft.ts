@@ -16,7 +16,9 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { bootstrapEngine, LlmAdapter, Toolkit } from "@cortex/engine";
+import { bootstrapEngine } from "@cortex/engine";
+import { LlmAdapter } from "@cortex/llm";
+import { Toolkit } from "@cortex/platform";
 import type { TaskNode } from "@cortex/shared";
 import type { ExecutionReport } from "@cortex/shared";
 
@@ -215,7 +217,7 @@ const parsedTasks: { type: string; direction: string; output: string }[] = [];
 for (const line of ganyuText.split("\n")) {
   const trimmed = line.trim();
   if (!trimmed) continue;
-  const parts = trimmed.split("|").map(s => s.trim());
+  const parts = trimmed.split("|").map((s: string) => s.trim());
   if (parts.length >= 3) {
     const type = parts[0].toLowerCase();
     if (AGENT_TYPES.includes(type)) {

@@ -22,13 +22,13 @@ import {
   Scheduler,
   PipelineObserver,
   ConfirmGate,
-  Toolkit,
   createAgent,
   codeAgentConfig,
   fixAgentConfig,
   analysisAgentConfig,
   opsAgentConfig,
   loopAgentConfig} from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
 import { createE2eMockFactory, mockScriptAdapter } from "../fixtures/mock-llm-factory.js";
 
 describe("Solo Flight Mock E2E", () => {

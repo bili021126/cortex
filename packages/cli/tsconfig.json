@@ -9,7 +9,11 @@
     { "path": "../config" },
     { "path": "../parser" },
     { "path": "../engine/tsconfig.src.json" },
+        { "path": "../memory-store/tsconfig.src.json" },
+        { "path": "../platform/tsconfig.src.json" },
     { "path": "../llm" },
-    { "path": "../shared" }
+    { "path": "../shared" },
+    { "path": "../tools" },
+    { "path": "../pm" }
   ]
 }

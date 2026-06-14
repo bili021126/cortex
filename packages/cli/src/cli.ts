@@ -93,27 +93,23 @@ function parseArgs(argv: string[]): CliOptions | null {
   return options;
 }
 
-function main(): void {
-  const options = parseArgs(process.argv);
-  if (!options) {
+/** 验证输入文件存在性 + 扩展名校验 + 读取内容，失败时直接 process.exit */
+function _readMarkdownInput(inputPath: string): string {
+  const resolved = path.resolve(inputPath);
+
+  if (!fs.existsSync(resolved)) {
+    console.error(`✗ 错误: 文件不存在 — "${resolved}"`);
     process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
-  const inputPath = path.resolve(options.input);
-
-  if (!fs.existsSync(inputPath)) {
-    console.error(`✗ 错误: 文件不存在 — "${inputPath}"`);
-    process.exit(CLI_EXIT_INTERNAL_ERROR);
-  }
-
-  const ext = path.extname(inputPath).toLowerCase();
+  const ext = path.extname(resolved).toLowerCase();
   if (ext !== '.md' && ext !== '.markdown') {
     console.error(`⚠  警告: 输入文件扩展名为 "${ext}"，预期为 .md 或 .markdown`);
   }
 
   let markdown: string;
   try {
-    markdown = fs.readFileSync(inputPath, 'utf-8');
+    markdown = fs.readFileSync(resolved, 'utf-8');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`✗ 错误: 读取文件失败 — ${msg}`);
@@ -125,27 +121,37 @@ function main(): void {
     process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
-  let outputPath: string;
-  if (options.output) {
-    outputPath = path.resolve(options.output);
-  } else {
-    const dir = path.dirname(inputPath);
-    const basename = path.basename(inputPath, path.extname(inputPath));
-    outputPath = path.join(dir, `${basename}.html`);
-  }
+  return markdown;
+}
 
-  let html: string;
+/** 解析输出路径：显式指定 → 绝对路径，未指定 → 同目录同名 .html */
+function _resolveOutputPath(inputPath: string, outputArg?: string): string {
+  if (outputArg) return path.resolve(outputArg);
+  const dir = path.dirname(inputPath);
+  const basename = path.basename(inputPath, path.extname(inputPath));
+  return path.join(dir, `${basename}.html`);
+}
+
+/** 执行 Markdown → HTML 转换，失败时直接 process.exit */
+function _convertMarkdown(markdown: string, options: CliOptions): string {
   try {
-    if (options.document) {
-      html = convertToDocument(markdown, options.title);
-    } else {
-      html = convert(markdown);
-    }
+    if (options.document) return convertToDocument(markdown, options.title);
+    return convert(markdown);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`✗ 错误: 转换失败 — ${msg}`);
     process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
+}
+
+function main(): void {
+  const options = parseArgs(process.argv);
+  if (!options) process.exit(CLI_EXIT_INTERNAL_ERROR);
+
+  const resolvedInput = path.resolve(options.input);
+  const markdown = _readMarkdownInput(resolvedInput);
+  const outputPath = _resolveOutputPath(resolvedInput, options.output);
+  const html = _convertMarkdown(markdown, options);
 
   try {
     fs.writeFileSync(outputPath, html, 'utf-8');
@@ -155,7 +161,7 @@ function main(): void {
     process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
-  console.log(`✓ 转换完成: ${path.basename(inputPath)} → ${path.basename(outputPath)}`);
+  console.log(`✓ 转换完成: ${path.basename(resolvedInput)} → ${path.basename(outputPath)}`);
   console.log(`  输出路径: ${outputPath}`);
   console.log(`  输出大小: ${html.length} 字节`);
 }

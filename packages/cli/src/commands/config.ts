@@ -8,58 +8,63 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import { isHelpRequest } from "../utils.js";
 import { ConfigManager } from "../services/config-manager.js";
 import * as path from "node:path";
 import * as os from "node:os";
 
+const CONFIG_HELP = [
+  "用法: cortex config <子命令> [选项]",
+  "",
+  "子命令:",
+  "  list                 列出配置项",
+  "  get <key>            获取配置值",
+  "  set <key> <val>      设置配置值",
+  "  init                 初始化配置文件",
+  "  validate             校验配置正确性",
+  "",
+  "选项:",
+  "  --prefix <p>         按前缀过滤（如 engine., llm.）",
+  "  --format <fmt>       输出格式",
+  "  --global             写入全局配置",
+  "  --local              写入本地配置",
+  "  --force, -f          覆盖已有配置",
+  "  --strict             严格模式",
+].join("\n");
+
 export function createConfigHandler(configManager: ConfigManager): CommandHandler {
-  return async (args, options, context): Promise<CommandResult> => {
-    if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
-      return {
-        success: true,
-        output: [
-          "用法: cortex config <子命令> [选项]",
-          "",
-          "子命令:",
-          "  list                 列出配置项",
-          "  get <key>            获取配置值",
-          "  set <key> <val>      设置配置值",
-          "  init                 初始化配置文件",
-          "  validate             校验配置正确性",
-          "",
-          "选项:",
-          "  --prefix <p>         按前缀过滤（如 engine., llm.）",
-          "  --format <fmt>       输出格式",
-          "  --global             写入全局配置",
-          "  --local              写入本地配置",
-          "  --force, -f          覆盖已有配置",
-          "  --strict             严格模式",
-        ].join("\n"),
-        exitCode: 0,
-      };
+  const handler: CommandHandler = async (args, options, context): Promise<CommandResult> => {
+    if (isHelpRequest(args)) {
+      return { success: true, output: CONFIG_HELP, exitCode: 0 };
     }
-
     const subcommand = args[0];
-
     switch (subcommand) {
-      case "list":
-        return handleConfigList(configManager, options, context);
-      case "get":
-        return handleConfigGet(configManager, args[1], context);
-      case "set":
-        return handleConfigSet(configManager, args[1], args.slice(2).join(" "), options, context);
-      case "init":
-        return handleConfigInit(options, context);
-      case "validate":
-        return handleConfigValidate(configManager, options, context);
+      case "list":     return handleConfigList(configManager, options, context);
+      case "get":      return handleConfigGet(configManager, args[1], context);
+      case "set":      return handleConfigSet(configManager, args[1], args.slice(2).join(" "));
+      case "init":     return handleConfigInit(options, context);
+      case "validate": return handleConfigValidate(configManager, options, context);
       default:
-        return {
-          success: false,
-          error: `未知子命令: "${subcommand}"。可用子命令: list, get, set, init, validate`,
-          exitCode: 1,
-        };
+        return { success: false, error: `未知子命令: "${subcommand}"。可用子命令: list, get, set, init, validate`, exitCode: 1 };
     }
   };
+  return handler;
+}
+
+/** 扁平化嵌套配置对象 */
+function _flattenConfig(obj: unknown, prefix = ""): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  if (obj && typeof obj === "object" && !Array.isArray(obj)) {
+    for (const [key, value] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        Object.assign(result, _flattenConfig(value, fullKey));
+      } else {
+        result[fullKey] = value;
+      }
+    }
+  }
+  return result;
 }
 
 function handleConfigList(
@@ -69,24 +74,7 @@ function handleConfigList(
 ): CommandResult {
   const prefix = options["prefix"] as string | undefined;
   const all = config.getAll();
-
-  // 扁平化配置
-  const flatten = (obj: unknown, prefix = ""): Record<string, unknown> => {
-    const result: Record<string, unknown> = {};
-    if (obj && typeof obj === "object" && !Array.isArray(obj)) {
-      for (const [key, value] of Object.entries(obj)) {
-        const fullKey = prefix ? `${prefix}.${key}` : key;
-        if (value && typeof value === "object" && !Array.isArray(value)) {
-          Object.assign(result, flatten(value, fullKey));
-        } else {
-          result[fullKey] = value;
-        }
-      }
-    }
-    return result;
-  };
-
-  const flat = flatten(all);
+  const flat = _flattenConfig(all);
   let entries = Object.entries(flat);
 
   if (prefix) {
@@ -127,8 +115,6 @@ function handleConfigSet(
   config: ConfigManager,
   key: string | undefined,
   value: string | undefined,
-  _options: Record<string, unknown>,
-  _context: CommandContext,
 ): CommandResult {
   if (!key || value === undefined) {
     return { success: false, error: "请指定 key 和 value。用法: cortex config set <key> <val>", exitCode: 1 };

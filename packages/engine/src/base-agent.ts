@@ -1,12 +1,11 @@
 import { AgentStatus as AS, type TaskNode, type NodeResult, type AgentType, type MemoryQuery, type SafeErrorReporter, type MemoryEntry, type ReadMode, type Agent } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "./platform/toolkit.js";
-import type { MemoryStore } from "./memory/memory-store.js";
-import type { AgentPool } from "./core/agent-pool.js";
+import type { Toolkit } from "@cortex/platform";
+import type { MemoryStore } from "@cortex/memory-store";
+import type { AgentPool, IStep } from "@cortex/scheduler";
 import { executeWithMemoryPipeline, resolvePipeline } from "./memory/pipeline.js";
 import { PoolAwareState } from "./components/pool-aware.js";
 import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
-import type { IStep } from "./core/pipeline-runner.js";
 
 /**
  * BaseAgent —— 所有 Agent 的抽象基类。

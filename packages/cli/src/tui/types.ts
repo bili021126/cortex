@@ -9,6 +9,8 @@
  */
 
 import type { AgentType, LlmMessage, TaskNode } from "@cortex/shared";
+import type { CompactionResult } from "./context-compactor.js";
+import type { SessionSnapshot } from "./session-store.js";
 
 // ─── 复用 REPL 模式类型 ───────────────────────
 
@@ -33,6 +35,7 @@ export type TuiEvent =
   | TuiPermissionRequiredEvent
   | TuiTaskTreeUpdateEvent
   | TuiTokenUsageEvent
+  | TuiCompactionEvent
   | TuiLifecycleEvent;
 
 /** 工具调用开始 */
@@ -121,6 +124,19 @@ export interface TuiTokenUsageEvent {
   contextWindowSize: number;
 }
 
+/** 上下文压缩事件 */
+export interface TuiCompactionEvent {
+  type: "compaction";
+  /** 被压缩/移除的消息数 */
+  compactedCount: number;
+  /** 压缩摘要（供渲染层展示） */
+  summary: string;
+  /** 应用了哪些压缩层 */
+  appliedLayers: number[];
+  /** 压缩后估算 token 数 */
+  estimatedTokens: number;
+}
+
 /** 生命周期事件 */
 export interface TuiLifecycleEvent {
   type: "session_start" | "session_end" | "mode_change";
@@ -133,23 +149,77 @@ export interface TuiLifecycleEvent {
 /**
  * TuiHooks — 查询循环生命周期钩子。
  *
+ * 对标 Claude Code 的 26 个可编程 Hook 事件。
  * 各 mode 通过配置不同的 hooks 实现差异化行为，
  * 而非写不同的执行路径。
  */
 export interface TuiHooks {
-  /** 工具调用前的权限拦截 */
-  onPreToolUse?: (event: TuiToolStartEvent) => Promise<"allow" | "deny" | "skip">;
+  // ── 会话级（4）──
+  /** 会话启动 */
+  onSessionStart?: (mode: ReplMode, agent: AgentType) => void;
+  /** 会话结束（退出前清理） */
+  onSessionEnd?: () => Promise<void>;
+  /** 会话持久化前 */
+  onSessionSave?: (snapshot: SessionSnapshot) => void;
+  /** 会话恢复后 */
+  onSessionRestore?: (snapshot: SessionSnapshot) => void;
 
-  /** 工具调用后的审计记录 */
+  // ── 请求级（4）──
+  /** LLM 请求发送前（可修改 messages） */
+  onPreModelRequest?: (messages: LlmMessage[]) => Promise<LlmMessage[]>;
+  /** LLM 请求返回后 */
+  onPostModelRequest?: (response: { content: string | null; tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[]; usage?: { prompt_tokens: number; completion_tokens: number } }) => void;
+  /** 工具调用前的权限拦截（已有） */
+  onPreToolUse?: (event: TuiToolStartEvent) => Promise<"allow" | "deny" | "skip">;
+  /** 工具调用后的审计记录（已有） */
   onPostToolUse?: (event: TuiToolResultEvent) => Promise<void>;
 
-  /** LLM 输出 chunk 的自定义处理 */
+  // ── 压缩级（3）──
+  /** 上下文压缩前 */
+  onPreCompact?: (messages: LlmMessage[]) => Promise<void>;
+  /** 上下文压缩后 */
+  onPostCompact?: (result: CompactionResult) => void;
+  /** 上下文用量警告（50%/80% 阈值） */
+  onCompactionWarning?: (percent: number) => void;
+
+  // ── 错误级（3）──
+  /** 通用错误 */
+  onError?: (error: Error, context: string) => void;
+  /** 工具执行错误 */
+  onToolError?: (tool: string, error: Error) => void;
+  /** 达到最大工具调用轮次 */
+  onMaxToolRounds?: () => void;
+
+  // ── 输入级（3）──
+  /** 用户原始输入 */
+  onUserInput?: (input: string) => Promise<string>;
+  /** 输入预处理 */
+  onPreProcessInput?: (input: string) => Promise<string>;
+  /** 输出后处理 */
+  onPostProcessOutput?: (output: string) => Promise<string>;
+
+  // ── 模式级（3）──
+  /** 模式切换 */
+  onModeChange?: (from: ReplMode, to: ReplMode) => void;
+  /** Agent 切换 */
+  onAgentSwitch?: (from: AgentType, to: AgentType) => void;
+  /** 三人模式切换 */
+  onTalkTrioToggle?: (enabled: boolean) => void;
+
+  // ── 流式级（3）──
+  /** 流式开始 */
+  onStreamStart?: () => void;
+  /** 流式结束 */
+  onStreamEnd?: () => void;
+  /** LLM 输出 chunk 的自定义处理（已有） */
   onChunk?: (event: TuiLlmChunkEvent) => void;
 
-  /** 节点完成后的回调 */
+  // ── 节点级（3）──
+  /** 节点开始 */
+  onNodeStart?: (nodeId: string, nodeType: string, agent: AgentType) => void;
+  /** 节点完成后的回调（已有） */
   onNodeComplete?: (event: TuiNodeCompleteEvent) => void;
-
-  /** 节点失败后的回调 */
+  /** 节点失败后的回调（已有） */
   onNodeFailed?: (event: TuiNodeFailedEvent) => void;
 }
 
@@ -204,10 +274,14 @@ export interface LlmStreamBridge {
     content: string | null;
     tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[];
     usage?: { prompt_tokens: number; completion_tokens: number };
+    reasoning_content?: string;
   }>;
 
   /** 执行工具调用——TUI 层通过此方法将 LLM 产出的 tool_call 转发到引擎 Toolkit */
   executeToolCall(name: string, args: Record<string, unknown>): Promise<{ success: boolean; output: string }>;
+
+  /** 获取 Agent 可用的工具定义（供 LLM function calling）。返回 ToolDef 兼容格式 */
+  getToolDefs(agent: AgentType): { name: string; description: string; parameters?: Record<string, unknown> }[];
 
   /** 获取模型名 */
   getChatModelName(): string;

@@ -14,16 +14,16 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { bootstrapEngine } from "@cortex/engine";
+import { LlmAdapter } from "@cortex/llm";
+import { Toolkit } from "@cortex/platform";
 import {
-  bootstrapEngine,
-  LlmAdapter,
-  Toolkit,
   evaluateAmendment,
   applyAmendment,
   loadPendingProposals,
   saveProposal,
   judgeProposals,
-} from "@cortex/engine";
+} from "@cortex/governance";
 import type { AmendmentProposal } from "@cortex/shared";
 
 // ════════════════════════════════════════════════════════

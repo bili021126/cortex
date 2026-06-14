@@ -1,0 +1,189 @@
+import {
+  LockType,
+  PipelineEventType,
+  PipelinePriority,
+  BaseLifecycle,
+  type IPipelineObserver,
+} from "@cortex/shared";
+
+/** 锁超时默认值：30s。Agent 崩溃后锁自动回收 */
+const DEFAULT_LOCK_TIMEOUT_MS = 30_000;
+
+/** 周期性清理过期锁间隔 */
+const CLEANUP_INTERVAL_MS = 60_000;
+
+interface LockEntry {
+  type: LockType;
+  holders: Set<string>;
+  acquiredAt: number;
+}
+
+/**
+ * FileLockManager —— 文件级读写锁
+ * 写锁排斥所有，读锁共存。L2/L3 确认等待期间不持锁。
+ * 内置锁超时回收：Agent 崩溃后 30s 自动释放过期锁。
+ *
+ * @implements ILifecycle — 通过 BaseLifecycle 获得标准生命周期管理
+ * @fix M4 — init() 中启动周期性清理定时器，防止无界内存增长。
+ * @fix S4-05 — dispose() 后设置 _disposed 标记，后续操作立即抛错，防止僵尸锁。
+ * @fix H-03 — console.warn 替换为 PipelineObserver emit，消除裸 console。
+ */
+export class FileLockManager extends BaseLifecycle {
+  private locks = new Map<string, LockEntry>();
+  private readonly timeoutMs: number;
+  private _cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private _disposed = false;
+  private readonly _observer?: IPipelineObserver;
+
+  constructor(
+    timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS,
+    observer?: IPipelineObserver,
+  ) {
+    super();
+    this.timeoutMs = timeoutMs;
+    this._observer = observer;
+  }
+
+  // ══════════════════════════════════════════════
+  // ILifecycle 实现（通过 BaseLifecycle）
+  // ══════════════════════════════════════════════
+
+  protected async doInit(): Promise<void> {
+    this._cleanupTimer = setInterval(() => {
+      this.cleanStaleLocks();
+    }, CLEANUP_INTERVAL_MS);
+    // 允许 Node.js 在仅剩此定时器时退出进程
+    if (this._cleanupTimer && typeof this._cleanupTimer === "object" && "unref" in this._cleanupTimer) {
+      this._cleanupTimer.unref();
+    }
+  }
+
+  protected doDispose(): void {
+    if (this._cleanupTimer) {
+      clearInterval(this._cleanupTimer);
+      this._cleanupTimer = null;
+    }
+    this.locks.clear();
+    this._disposed = true;
+  }
+
+  // ══════════════════════════════════════════════
+  // 锁操作
+  // ══════════════════════════════════════════════
+
+  /**
+   * 尝试获取锁。holderId 通常为 Agent 实例 ID。
+   * 返回 true 表示获取成功。
+   * 遇到过期锁时自动回收后重新尝试获取。
+   */
+  acquire(filePath: string, type: LockType, holderId: string): boolean {
+    this._checkDisposed("acquire");
+    // 先清理该文件上的过期锁
+    this._cleanStaleLock(filePath);
+
+    const existing = this.locks.get(filePath);
+    if (!existing) {
+      this.locks.set(filePath, {
+        type,
+        holders: new Set([holderId]),
+        acquiredAt: Date.now(),
+      });
+      return true;
+    }
+    // 写锁排斥一切
+    if (existing.type === LockType.Write) return false;
+    // 读锁排斥写锁
+    if (type === LockType.Write && existing.type === LockType.Read) return false;
+    // 读锁共存（同类型），续期以保持活跃
+    if (type === LockType.Read && existing.type === LockType.Read) {
+      existing.holders.add(holderId);
+      existing.acquiredAt = Date.now();
+      return true;
+    }
+    return false;
+  }
+
+  /** 释放锁 */
+  release(filePath: string, holderId: string): void {
+    this._checkDisposed("release");
+    const existing = this.locks.get(filePath);
+    if (!existing) return;
+    existing.holders.delete(holderId);
+    if (existing.holders.size === 0) {
+      this.locks.delete(filePath);
+    }
+  }
+
+  /** 刷新锁活跃时间（持锁 Agent 心跳，防止被误回收） */
+  touch(filePath: string, holderId: string): void {
+    this._checkDisposed("touch");
+    const existing = this.locks.get(filePath);
+    if (existing?.holders.has(holderId)) {
+      existing.acquiredAt = Date.now();
+    }
+  }
+
+  /** 检查是否被锁（不含过期锁） */
+  isLocked(filePath: string): boolean {
+    this._checkDisposed("isLocked");
+    this._cleanStaleLock(filePath);
+    return this.locks.has(filePath);
+  }
+
+  /** 检查 holder 是否持有某文件的锁 */
+  holds(filePath: string, holderId: string): boolean {
+    this._checkDisposed("holds");
+    return this.locks.get(filePath)?.holders.has(holderId) ?? false;
+  }
+
+  /** 全局清理所有过期锁（由周期性定时器调用） */
+  cleanStaleLocks(): number {
+    if (this._disposed) return 0;
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [filePath, entry] of this.locks) {
+      if (now - entry.acquiredAt > this.timeoutMs) {
+        this.locks.delete(filePath);
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      this._observer?.emit({
+        type: PipelineEventType.InfraFileLockExpiredReclaimed,
+        priority: PipelinePriority.NORMAL,
+        payload: { count: cleaned, detail: `回收 ${cleaned} 个过期锁` },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
+    }
+    return cleaned;
+  }
+
+  /** 内部：检查是否已释放，是则抛错 */
+  private _checkDisposed(method: string): void {
+    if (this._disposed) {
+      throw new Error(`FileLockManager 已释放，拒绝操作: ${method}`);
+    }
+  }
+
+  /** 内部：清理特定文件上的过期锁 */
+  private _cleanStaleLock(filePath: string): void {
+    const entry = this.locks.get(filePath);
+    if (entry && Date.now() - entry.acquiredAt > this.timeoutMs) {
+      const holders = [...entry.holders].join(", ");
+      this._observer?.emit({
+        type: PipelineEventType.InfraFileLockExpiredReclaimed,
+        priority: PipelinePriority.NORMAL,
+        payload: {
+          count: 1,
+          path: filePath,
+          holders,
+          detail: `锁超时回收: ${filePath}（持有者崩溃？holders: ${holders}）`,
+        },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
+      this.locks.delete(filePath);
+    }
+  }
+}

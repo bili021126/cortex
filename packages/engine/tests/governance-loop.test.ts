@@ -21,7 +21,7 @@ import {
   judgeProposals,
   applyApproved,
   summarizeGovernance,
-  findConstitutionPath} from "@cortex/engine";
+  findConstitutionPath} from "@cortex/governance";
 import type { AmendmentProposal } from "@cortex/shared";
 
 // ─── 辅助函数 ───────────────────────────────────

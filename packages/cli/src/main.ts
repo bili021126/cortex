@@ -22,7 +22,8 @@ import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 
 // ── Workspace packages ───────────────────────────
-import { DocRegistry, NodeFileSystemAdapter, Toolkit } from "@cortex/engine";
+import { DocRegistry } from "@cortex/engine";
+import { NodeFileSystemAdapter, Toolkit } from "@cortex/platform";
 
 // ── Config 常量 ──────────────────────────────────
 import {
@@ -135,7 +136,7 @@ const docRegistry = new DocRegistry(fs, CONFIG_ROOT);
 // ═══════════════════════════════════════════════════
 
 const registry = new CommandRegistry();
-registerCommands(registry, engineBridge, configManager, docRegistry);
+registerCommands(registry, { engineBridge, configManager, docRegistry });
 
 // ═══════════════════════════════════════════════════
 // 入口函数

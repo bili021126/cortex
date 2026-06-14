@@ -24,8 +24,8 @@ import {
   setAgentRegistry,
   buildChineseRoleMap,
   type AgentDefinition,
-} from "../src/index.js";
-import { AgentContext } from "../src/agent-enums.js";
+} from "@cortex/shared";
+import { AgentContext } from "@cortex/shared";
 
 describe("agent-registry — TAG_VOCABULARY", () => {
   it("包含核心调度标签", () => {

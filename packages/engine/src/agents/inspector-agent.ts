@@ -1,11 +1,14 @@
-import { AgentType as AT, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode } from "@cortex/shared";
+import { AgentType as AT } from "@cortex/shared";
+import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry, ReadMode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../platform/toolkit.js";
-import type { MemoryStore } from "../memory/memory-store.js";
-import type { AgentPool } from "../core/agent-pool.js";
-import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
+import type { Toolkit } from "@cortex/platform";
+import type { MemoryStore } from "@cortex/memory-store";
+import type { AgentPool } from "@cortex/scheduler";
+import { createAgent } from "../components/agent-factory.js";
+import type { AgentFactoryConfig } from "../components/agent-factory.js";
 import { execSync } from "node:child_process";
-import { type EngineConfig, resolveConfig, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
+import { resolveConfig, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
+import type { EngineConfig } from "@cortex/config";
 
 /**
  * M9 — 提取为独立模块函数，工厂版本和类版本共同调用，消除 80 行重复代码。

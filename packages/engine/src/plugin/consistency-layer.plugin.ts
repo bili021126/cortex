@@ -9,7 +9,7 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import type { MemoryEntry, MemoryWriteInput, ReadMode } from "@cortex/shared";
-import { ConsistencyLayer } from "../consistency/consistency-layer.js";
+import { ConsistencyLayer } from "@cortex/consistency";
 
 /* eslint-disable no-console */
 

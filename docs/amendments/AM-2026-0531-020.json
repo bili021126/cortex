@@ -1,0 +1,36 @@
+{
+  "id": "AM-2026-0531-020",
+  "version": "v2.6.6",
+  "section": "§3 系统架构（物理包结构 + 架构图 Components） + §13 技能记忆（新增 §13.7 两层提取架构） + §15 修正记录表",
+  "category": "modify",
+  "supersedes": null,
+  "status": "merged",
+  "merged_into": "v2.6.6（宪法文本已直接修正——§3 + §13 + §15）",
+  "summary": "莫娜技能提取管线两层拆分入宪——注册 @cortex/pattern-extractor + @cortex/resilience 为第 18-19 个物理包；追加本次会话 resilience 断路器集成（保护 DeepSeek API）；在 §13 新增 §13.7「两层模式提取架构」：第 1 层机械提取（pattern-extractor 确定性算法——扫描文件、解析结构、去重排序、置信度评分）→ 第 2 层语义裁决（莫娜 LLM 判断——「两次才算模式，三次值得提笔」）；更新 §3 架构图和包表",
+  "rationale": "在讨论 @cortex/pattern-extractor 与莫娜（LoopAgent）的集成路径时，确认以下架构事实：\n\n**当前状态（v2.6.5）**：莫娜的技能提取全流程为 LLM 单体管道——从 pattern.md 文件扫描到 SkillTemplate 输出，全部依赖 LLM 解释语义。@cortex/pattern-extractor 包已生产（190/190 测试通过），但未被宪法注册为正式包，也未定义其在莫娜管线中的角色。\n\n**集成分析结论**：pattern-extractor 目前仅实现 JsonPatternExtractor（1408 行），缺失莫娜核心所需的 MarkdownPatternExtractor。直接替换莫娜管线为降级——会失去语义裁决能力。正确路径是两层拆分：pattern-extractor 承担第 1 层机械提取（文件扫描、结构解析、去重排序、置信度评分），莫娜承担第 2 层语义裁决（「两次才是模式」的判断、MemoryStore 历史交叉验证、SkillTemplate 最终输出）。\n\n**两层拆分的架构意义**：\n1. 确定性层（pattern-extractor）：可重现、可测试、无 LLM 幻觉风险\n2. 语义层（莫娜）：保留 LLM 的模式判断能力——模式发现不可完全算法化\n3. 两层之间以 ExtractionResult → 莫娜 prompt 注入为接口，不改莫娜既有契约\n\n本提案在宪法层面正式确立此架构——不改变莫娜现有管线行为，为 MarkdownPatternExtractor 实现预留宪法位。",
+  "before": "【§3 物理包结构】\n> **物理包结构（v2.6.5）**：17 个包，严格依赖倒置单向无循环。\n>\n> | 包 | 职责 | workspace 依赖 |\n> |---|------|---------------|\n> （共 17 行，不含 @cortex/pattern-extractor）\n\n【§3 架构图 Engine→Components】\n> │   ├── Components (Agent 工厂与执行组件)\n> │   │   ├── agent-factory (createAgent——Agent 通用创建工厂)\n> │   │   ├── react-loop (runReActLoop——ReAct 执行循环)\n> │   │   ├── skill-extractor (extractSkillsFromOutput/scanOutputFilesForSkills)\n> │   │   ├── skill-persister (persistSkillsToMemory/loadSkillsFromMemory/crystallizeSkillToKnowledge)\n> │   │   └── pool-aware (PoolAwareState——Agent 池感知状态封装)\n\n【§13 技能记忆——末尾】\n（§13.6 落地状态为最后一节，无两层架构条款）\n\n【§15 修正记录表】\n（最后一条为 v2.6.4→v2.6.5）",
+  "after": "【§3 物理包结构】\n> **物理包结构（v2.6.6）**：18 个包，严格依赖倒置单向无循环。\n>\n> | 包 | 职责 | workspace 依赖 |\n> |---|------|---------------|\n> | （前 17 行不变） |\n> | `@cortex/pattern-extractor` | 模式提取基础设施——接口契约层（PatternExtractor 统一接口 + PatternDefinition 标准化数据结构 + ExtractionContext 上下文模型 + ExtractionResult 判别联合）+ 预定义提取器（JsonPatternExtractor——JSON 结构/命名/类型/数组模式提取）+ 管线编排（PatternScanner/PatternPipeline）+ 注册表（PatternExtractorRegistry）；MarkdownPatternExtractor 预留在 predefined/ 目录（接口已定义，实现待 Core-1 后续）。两层架构的第 1 层（机械提取层）物理承载体 | shared |\n>\n> 依赖方向补充：shared ← pattern-extractor。\n\n【§3 架构图 Engine→Components】\n> │   ├── Components (Agent 工厂与执行组件)\n> │   │   ├── agent-factory (createAgent——Agent 通用创建工厂)\n> │   │   ├── react-loop (runReActLoop——ReAct 执行循环)\n> │   │   ├── skill-extractor (extractSkillsFromOutput/scanOutputFilesForSkills——第 2 层语义裁决入口，内部委托 @cortex/pattern-extractor 第 1 层机械提取)\n> │   │   ├── skill-persister (persistSkillsToMemory/loadSkillsFromMemory/crystallizeSkillToKnowledge)\n> │   │   └── pool-aware (PoolAwareState——Agent 池感知状态封装)\n\n【§13 技能记忆——新增 §13.7】\n在 §13.6 落地状态之后、§14 阶段模型之前新增：\n\n### 13.7 两层模式提取架构（v2.6.6 新增）\n\n莫娜的技能提取管线从 LLM 单体管道拆分为两层：\n\n```\n┌──────────────────────────────────────────────┐\n│ 第 1 层：机械提取（@cortex/pattern-extractor） │\n│ · 扫描 pattern.md / patterns.md 文件           │\n│ · 多策略解析：JSON 块 → P0-P9 格式 → 段落       │\n│ · 去重归并（id 唯一键）                         │\n│ · 置信度评分（算法驱动，非 LLM 估计）            │\n│ · 输出 ExtractionResult（PatternDefinition[]）  │\n│ · 确定性、可重现、零 LLM 幻觉                    │\n├──────────────────────────────────────────────┤\n│ 第 2 层：语义裁决（莫娜·LoopAgent）             │\n│ · 接收第 1 层 ExtractionResult                 │\n│ · 「回家」查 MemoryStore 历史模式               │\n│ · 执行「两次才算模式，三次值得提笔」判断          │\n│ · 输出 SkillTemplate JSON（标准格式）           │\n│ · LLM 参与——但输入是预提取结果而非原始文件        │\n└──────────────────────────────────────────────┘\n\n**层级职责边界**：\n\n| 维度 | 第 1 层（pattern-extractor） | 第 2 层（莫娜） |\n|------|---------------------------|---------------|\n| 做什么 | 从文件中找候选模式 | 从候选中决定哪些是真正的模式 |\n| 怎么做 | 确定性算法 | LLM 语义判断 |\n| 输出 | PatternDefinition[] + confidence | SkillTemplate JSON |\n| 可测试性 | 单元测试全覆盖 | 端到端验证 |\n| 判定标准 | 置信度 > 阈值 | 两次 = 模式，三次 = 提笔 |\n\n**接口契约**：第 1 层 → 第 2 层通过 ExtractionResult 传递。莫娜的 system prompt 中注入「水镜初筛报告」——含候选模式名称、置信度、源码位置、重复次数。莫娜基于此报告做语义裁决，不改动其既有判定逻辑。\n\n**实现状态**：\n- `JsonPatternExtractor`：已实现（1408 行，190/190 测试通过）\n- `MarkdownPatternExtractor`：接口已定义（RegexExtractorOptions / HeuristicExtractorOptions），实现待 Core-1 后续\n- 两层拆分的架构决策已入宪，莫娜管线暂维持 LLM 单体行为——第 1 层在 MarkdownPatternExtractor 实现后集成\n\n【§15 修正记录表】\n在现有记录表末尾追加本提案条目：\n| v2.6.5 → v2.6.6 | **莫娜技能提取管线两层拆分入宪**（AM-2026-0531-020）：(1) §3 包结构 17→18——新增 @cortex/pattern-extractor 包登记；(2) §3 架构图 Components 更新——skill-extractor 注解补充两层委托说明；(3) §13 新增 §13.7「两层模式提取架构」——第 1 层机械提取（pattern-extractor）→ 第 2 层语义裁决（莫娜），含层级职责边界表、接口契约、实现状态；(4) §3 依赖方向补充 pattern-extractor→shared；2026-05-31；来源：昔涟（提案+评判）+ 开拓者（裁决） |",
+  "impact": {
+    "principles": [
+      "原则二（规划与执行双向流动）——第 1 层确定性算法属基础设施层，不改变 Agent 语义裁决权",
+      "原则七·子约束2（完整修改记录）——本次修宪记录包含全部 before/after 差异"
+    ],
+    "crossReferences": [
+      "§3 系统架构（物理包结构 + Components）",
+      "§13 技能记忆（§13.7 两层提取架构）",
+      "§5.1 LoopAgent（莫娜）",
+      "§10.9.2 知识继承与加速",
+      "§15 宪法修正记录"
+    ],
+    "agents": [
+      "莫娜（LoopAgent）",
+      "凝光（DocGovernAgent——合规审计）"
+    ],
+    "breaking": false,
+    "rationale": "本次修宪不改变任何现有契约或运行时行为。莫娜管线当前仍为 LLM 单体——两层拆分为架构声明，第 1 层在 MarkdownPatternExtractor 实现后集成。§3 包结构新增 pattern-extractor 为加法操作，不影响已有 17 个包的依赖方向。breaking=false。"
+  },
+  "source": {
+    "agent": "昔涟",
+    "trace": "2026-05-31——对 @cortex/pattern-extractor 与莫娜管线集成路径分析后，确认直接集成为降级（缺失 MarkdownExtractor），正确路径为两层架构拆分。此提案将分析结论宪法化，为后续 MarkdownPatternExtractor 实现预留架构位。详见本次对话上下文。"
+  }
+}

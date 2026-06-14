@@ -8,8 +8,8 @@
 // ============================================================
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
-import { ConfirmGate } from "../core/confirm-gate.js";
-import { CLIAdapter } from "../platform/cli-adapter.js";
+import { ConfirmGate } from "@cortex/scheduler";
+import { CLIAdapter } from "@cortex/platform";
 
 export class ConfirmGatePlugin implements EnginePlugin {
   readonly name = "confirmGate";

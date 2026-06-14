@@ -82,12 +82,12 @@ export class RateSampler implements Sampler {
   private _hashString(str: string): number {
     let hash = 5381;
     for (let i = 0; i < str.length; i++) {
-      // eslint-disable-next-line no-bitwise
+       
       hash = ((hash << 5) + hash) + str.charCodeAt(i);
-      // eslint-disable-next-line no-bitwise
+       
       hash = hash & hash; // Convert to 32-bit integer
     }
-    // eslint-disable-next-line no-bitwise
+     
     return Math.abs(hash);
   }
 }

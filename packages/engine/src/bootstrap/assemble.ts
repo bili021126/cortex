@@ -2,18 +2,16 @@
 // @cortex/engine/bootstrap/assemble —— 最终组装 BootstrapResult
 // ============================================================
 
-import { type Agent, type IMemoryStore, type IPipelineObserver } from "@cortex/shared";
+import type { Agent, IMemoryStore, IPipelineObserver } from "@cortex/shared";
 import { ButlerAgent } from "../agents/butler-agent.js";
-import type { IScheduler } from "../core/scheduler.js";
-import type { IAgentPool } from "../core/agent-pool.js";
-import type { ITaskBoard } from "../core/task-board.js";
-import type { ConfirmGate } from "../core/confirm-gate.js";
-import type { CLIAdapter } from "../platform/cli-adapter.js";
+import type { IScheduler, IAgentPool, ITaskBoard, ConfirmGate } from "@cortex/scheduler";
+import type { CLIAdapter } from "@cortex/platform";
 import type { MetaAgent } from "../core/meta-agent.js";
 import type { StrategistAgent } from "../agents/strategist-agent.js";
 import type { SkillRegistry } from "../registry/skill-registry.js";
-import type { ConsistencyLayer } from "../consistency/consistency-layer.js";
+import type { ConsistencyLayer } from "@cortex/consistency";
 import type { BootstrapResult } from "@cortex/factory";
+import type { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 
 export interface BootstrapEngineResult {
   scheduler: IScheduler;
@@ -30,6 +28,8 @@ export interface BootstrapEngineResult {
   config: BootstrapResult;
   agents: Map<string, Agent>;
   consistencyLayer?: ConsistencyLayer;
+  /** LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期 */
+  lifecycleManager?: LifecycleManager;
   /** 优雅关闭——逆序释放所有引擎资源 */
   shutdown(): Promise<void>;
 }

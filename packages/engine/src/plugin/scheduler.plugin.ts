@@ -15,9 +15,9 @@ import { createAgent, type AgentFactoryConfig } from "../components/agent-factor
 import { createInspectorAgent } from "../agents/inspector-agent.js";
 import { createBrowserAgent } from "../agents/browser-agent.js";
 import { ButlerAgent } from "../agents/butler-agent.js";
-import type { MemoryStore } from "../memory/memory-store.js";
-import type { Toolkit } from "../platform/toolkit.js";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import type { MemoryStore } from "@cortex/memory-store";
+import type { Toolkit } from "@cortex/platform";
+import type { PipelineObserver } from "@cortex/scheduler";
 import type { LlmAdapter } from "@cortex/llm";
 import { resolveLlm, injectStandards, MEMORY_QUERY_REGISTRY } from "../bootstrap/load-config.js";
 import {

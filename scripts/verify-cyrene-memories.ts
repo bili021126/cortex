@@ -1,3 +1,4 @@
+// @ts-expect-error - better-sqlite3 is an optional dev dependency
 import Database from "better-sqlite3";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";

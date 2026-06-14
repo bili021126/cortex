@@ -9,11 +9,11 @@
 // @since v3.0 — 引擎插件化解耦
 // ============================================================
 
-import type { IPipelineObserver, IFileSystemAdapter } from "@cortex/shared";
+import type { IPipelineObserver, IFileSystemAdapter, IMemoryStore } from "@cortex/shared";
 import type { EngineConfig } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { BootstrapResult } from "@cortex/factory";
-import type { Toolkit } from "../platform/toolkit.js";
+import type { Toolkit } from "@cortex/platform";
 
 // ─── 插件健康状态 ─────────────────────────────────
 
@@ -39,6 +39,8 @@ export interface PluginExternals {
   dbPath?: string;
   /** 可选：文件系统适配器 */
   fs?: IFileSystemAdapter;
+  /** 可选：外部预构建的 MemoryStore（测试注入 mock embedder） */
+  memory?: IMemoryStore;
 }
 
 // ─── 插件基础契约 ─────────────────────────────────

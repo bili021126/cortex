@@ -73,6 +73,8 @@ export class JsonFileAdapter implements TaskRepository {
     if (!fileExists) {
       this.tasks = new Map();
       this.loaded = true;
+      // 创建空文件，确保后续 reopen 可正常加载
+      await this.persist();
       return;
     }
 

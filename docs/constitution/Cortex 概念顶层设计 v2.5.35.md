@@ -1,9 +1,9 @@
 # Cortex 概念顶层设计 v2.6
 
-**版本**：v2.6.4（TUI 深化与向后兼容层全量消除——CLI TUI 5 处模拟代码替换为真实引擎执行逻辑 + LlmAdapter SSE 流式 reasoning/usage 增强 + skill-registry saveJson/loadJson 移除 + data/config deprecated export 清除 + config/loader getConfigDataPath 移除；AM-2026-0531-018；2026-05-31；来源：开拓者）
+**版本**：v2.6.7（Core-1 终局闭环——三条未闭环链路全部收束 + Core-1 宣布完成；AM-2026-0531-021；2026-05-31；来源：开拓者）
 
-> 版本演进链：... → v2.6.3（AM-2026-0531-017：向后兼容层消除与 Agent 域架构收敛——@cortex/config 瘦身为纯配置基础设施 + @cortex/shared agent-registry.ts 统一 Agent 域 + shared←config 依赖解耦 + 编码规范 §7.1/§7.4 重写；2026-05-31；来源：开拓者） → v2.6.4（AM-2026-0531-018：TUI 深化与向后兼容层全量消除——CLI TUI 模拟代码 5→0 + LlmAdapter SSE 流式增强 + skill-registry/data/config/config-loader 全量 deprecated 清除；2026-05-31；来源：开拓者）
-**状态**：Core-1 协约化与稳固化——原则二实证修订：solo-flight 三跑证伪"Agent只执行不规划"，RLM 在 ReAct 架构下自然涌现，双向下放为系统在现有模型能力下的必然收敛
+> 版本演进链：... → v2.6.5（AM-2026-0531-019：调度四抽象升格——模型路由第四抽象+调度包独立拆出；2026-05-31；来源：开拓者） → v2.6.6（AM-2026-0531-020：莫娜技能提取管线两层拆分——@cortex/pattern-extractor 入宪 + §13.7 两层模式提取架构；2026-05-31；来源：开拓者） → v2.6.7（AM-2026-0531-021：Core-1 终局闭环——MarkdownPatternExtractor 完整实现+莫娜管线接入+调度器双实现合并收束+确认门误报加固；2026-05-31；来源：开拓者）
+**状态**：Core-1 完成——三条未闭环链路全部收束，Core-1 阶段宣布结束，进入 Core-2 预研
 **性质**：LLM 驱动的个人工具链——工程化宪法
 **前置**：v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.1（Core-1 物理落地）→ v2.2（Core-1 反思：Agent 扩展+权限集中+状态机）→ v2.3（Core-1 反思：记忆四态 CAS + HCA/CSA 注意力区分）→ v2.4（Core-1 终局反思：工程全量对账——SafeErrorReporter / AgentPool 权威源 / MemoryStore 安全写 / 编译时治理 / 阶段模型同步）→ v2.5（Core-1 自审视终局：软约束权限例外入宪 / DeepSeek 4.1 多模态预留 / 三轮圆桌审阅 / 自审视委员会主体地位确认）→ v2.5.1（Agent 阶段归属修宪：StrategistAgent 明确 Core-2+ 预留，barrel 归位 / 数据库升级裁定：better-sqlite3 留 Core-1d）→ v2.5.2（infra 拆解分析：LlmAdapter 独立 LLM 适配层入宪 / Toolkit+FileLockManager+CLIAdapter 归入基础设施 / 包结构 3→4）→ v2.5.3（原则六修订：Agent 圆桌协商常态化——多 Agent 并行产出须先经圆桌收束再呈用户裁决）→ v2.5.4（甘雨定位变更：MetaAgent 从规划中枢变更为战术中枢——甘雨负责战术调度"怎么拆怎么排"，钟离负责战略把关"方向对不对契约有没有破"）→ v2.5.5（技能机制预实现：SkillRegistry 类型+类落地 / 圆桌优化：材料清单制度化 + 归因分析无主题圆桌）→ v2.5.6（协约化与稳固化：包结构修正 + ApiAgent/DataAgent 升级 + 双轨协议入宪 + 圆桌优化入宪 + ci-gate 自声明入宪 + vitest.ci.config 消解 + llm 纳入 CI + 状态机噪音治理 + DB 清理边界确认 + GitHub Actions CI workflow）→ v2.5.7（记忆系统委托模式拆解：God Object→Facade + 7 组件族 / 管道去重：base-agent._executeWithMemory + _executeAndRemember → executeWithMemoryPipeline / 检索模板化：makeMemoryQuery 工厂 / 功能柱概念正式废止）→ v2.5.8（闭环协作实验实证增补：闭环协作模式从[设计]升级为[已验证] / §7.5 新增读取安全边界条款——read_file/search_code/list_files 在非隔离部署中必须实施路径越界防护 / §9.9 新增记忆认知共享层条款——MemoryStore 确认为跨 Agent、跨 run 的共享认知基础设施）→ v2.5.9（合并测试实证收束：包结构 4→9 + CLI 物理落地 + FixAgent/希格雯入宪 + 基础设施 CLIAdapter/@cortex/cli 关系澄清 + 记忆缓存 95.17% 实证 + 闭环自愈链路验证增强）
 
@@ -93,16 +93,17 @@ Cortex
 │   │       ├── Schema (共享常量：SCHEMA_VERSION / LINK_WEIGHTS / FLUSH_DEBOUNCE_MS)
 │   │       ├── SkillPipeline (技能闭环订阅者——NodeComplete 事件驱动的技能提取+注册+持久化)
 │   │       └── Embedding (ONNX 384d 语义向量嵌入服务)
-│   ├── Scheduler (Agent 调度，拓扑排序 → 逐层并行，技能闭环已解耦为独立订阅者)
-│   │   └── 调度可组合三元组（CompositeScheduler）
+│   ├── Scheduler (Agent 调度子系统——物理包 @cortex/scheduler，逻辑归属 Engine)
+│   │   └── 调度可组合四元组（CompositeScheduler）
 │   │       ├── IScheduleStrategy (TagMatching/RoundRobin/PriorityFirst)
 │   │       ├── ILoopDriver (TopologicalLayered/Sequential/Wave)
 │   │       ├── IExecutionModel (Pipeline/SimpleExecute)
-│   │       └── dispatch-steps/ (Claim→Spawn→Execute→Cleanup 四步管道)
+│   │       ├── IModelRouter (FixedModelRouter/ComplexityBasedRouter)  ← v2.6.5 第 4 抽象
+│   │       └── dispatch-steps/ (Claim→BoundaryGuard→Spawn→RlmExecute/Execute→Cleanup，+ ManifoldGate 并发门)
 │   ├── Components (Agent 工厂与执行组件)
 │   │   ├── agent-factory (createAgent——Agent 通用创建工厂)
 │   │   ├── react-loop (runReActLoop——ReAct 执行循环)
-│   │   ├── skill-extractor (extractSkillsFromOutput/scanOutputFilesForSkills)
+│   │   ├── skill-extractor (extractSkillsFromOutput/scanOutputFilesForSkills——第 2 层语义裁决入口，内部委托 @cortex/pattern-extractor 第 1 层机械提取；见 §13.7)
 │   │   ├── skill-persister (persistSkillsToMemory/loadSkillsFromMemory/crystallizeSkillToKnowledge)
 │   │   └── pool-aware (PoolAwareState——Agent 池感知状态封装)
 │   ├── Registry (注册表子系统)
@@ -167,7 +168,7 @@ Cortex
 
 > **治理层定位**：治理层不参与工具链执行循环。它高于工具链，负责审计、审查和裁决。宪法定义国家结构（大脑），治理层设计定义政府运行方式。委员会体系、纪检委监督链、监理封驳权等政府机制见配套文档 [`治理层设计`](./core/治理层设计.md)。
 
-> **物理包结构（v2.5.42）**：16 个包，严格依赖倒置单向无循环。
+> **物理包结构（v2.6.6）**：19 个包，严格依赖倒置单向无循环。
 >
 > | 包 | 职责 | workspace 依赖 |
 > |---|------|---------------|
@@ -177,18 +178,21 @@ Cortex
 > | `@cortex/data` | 数据处理层（Task 模型 / 存储适配器 / 格式化器），零 workspace 依赖 | 无 |
 > | `@cortex/tools` | monorepo 分析工具（monorepo-analyzer / configuration-drift），零 workspace 依赖 | 无 |
 > | `@cortex/config` | 统一配置包——可插拔配置加载器（CONFIG_DOMAINS 域注册表——12 域按职责分文件 + loadConfigDomain 按需加载 + ConfigFileReader 文件系统无关抽象）+ 全部配置类型（EngineConfig/ToolTimeouts/Inspector/Llm/FilePaths/SkillSystem/Search 等）+ 命名常量（ENV_*/FILE_*/DEFAULT_*）+ 默认值（DEFAULT_ENGINE_CONFIG）与 resolveConfig 合并函数。目录组织：interfaces/（按域拆分的纯类型）+ constants/（按类别拆分的命名常量）+ defaults（默认值+合并）+ loader（域加载器）+ data/（12 个独立 JSON 配置文件）。零 workspace 依赖 | 无 |
-> | `@cortex/llm` | LLM 适配层：LlmAdapter——API 适配、缓存、重试、流式、指纹匹配 | shared |
+> | `@cortex/pattern-extractor` | 模式提取基础设施——接口契约层（PatternExtractor 统一接口 + PatternDefinition 标准化数据结构 + ExtractionContext 上下文模型 + ExtractionResult 判别联合）+ 预定义提取器（JsonPatternExtractor——JSON 结构/命名/类型/数组模式提取）+ 管线编排（PatternScanner/PatternPipeline）+ 注册表（PatternExtractorRegistry）；MarkdownPatternExtractor 预留在 predefined/ 目录（接口已定义，实现待 Core-1 后续）。两层模式提取架构的第 1 层（机械提取层）物理承载体 | shared |
+> | `@cortex/llm` | LLM 适配层：LlmAdapter——API 适配、缓存、重试、流式、指纹匹配、@cortex/resilience 断路器集成（SimpleCircuitBreaker——5 次连续失败熔断 + 30s 后半开试探） | shared, resilience |
 > | `@cortex/notification` | 通知模块：Slack / 桌面 / 摘要等通知通道 | shared |
 > | `@cortex/factory` | Agent 工厂：Spawner / Runner 等 Agent 生产组装层 | config, shared, notification |
-> | `@cortex/engine` | Engine 执行引擎：Scheduler / MemoryStore / AgentPool / PipelineObserver / ConfirmGate / MetaAgent / 全部 Agent + Bootstrap 装配层（bootstrap/）+ Governance 修宪管线（governance/）+ Components 工厂组件（components/）+ Registry 注册表（registry/）+ ConsistencyLayer 一致性层（consistency/）+ Platform 平台层（platform/：搜索聚合/MCP/上下文压缩） | config, factory, llm, shared |
+> | `@cortex/engine` | Engine 执行引擎：MetaAgent / 全部 Agent + Bootstrap 装配层（bootstrap/）+ Governance 修宪管线（governance/）+ Components 工厂组件（components/）+ Registry 注册表（registry/）+ ConsistencyLayer 一致性层（consistency/）+ Platform 平台层（platform/：搜索聚合/MCP/上下文压缩）+ core/scheduler.ts 桥接（调度四抽象注入） | config, factory, llm, shared, scheduler |
+> | `@cortex/scheduler` | 调度子系统独立包——TaskBoard / AgentPool / ConfirmGate / TrustModel / PipelineObserver / ReplanManager + 调度四抽象（IScheduleStrategy/ILoopDriver/IExecutionModel/IModelRouter）+ dispatch-steps/ 管线（Claim→BoundaryGuard→Spawn→RlmExecute/Execute→Cleanup + ManifoldGate）+ RLM 拆解 + DENSITY 压缩 + 拓扑排序 + Agent 匹配。v2.6.5 从 @cortex/engine 独立拆出，engine 通过 barrel 重导出保持向后兼容 | config, shared |
 > | `@cortex/cli` | CLI 命令 shell + TUI 交互控制台——14 个顶级命令（run/agent/task/memory/config/doc/schedule/roundtable/inspect/confirm/doctor/setup/repl/version/help），通过 ICortexApi 公共契约接入 Engine 执行引擎——EngineBridge 为 ICortexApi 的完整实现（含 roundtable.ts 内部方法、惰性初始化等），CLI 命令层仅依赖窄契约（生命周期/直接对话/任务执行/Talk 记忆/引擎组件 getter），不感知 Scheduler/TaskBoard/MemoryStore 等内部组件。内置 REPL 多模式 TUI（command/chat/talk/plan），支持交互式配置面板（setup-config.ts）与管道输入。inspect 子命令（deps/drift/report）委托至 @cortex/tools 纯函数层，doctor 子命令委托至 @cortex/doctor 健康检查管线 | parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor |
 > | `@cortex/testing` | Mock 基础设施 | shared |
 > | `@cortex/doctor` | 健康检查管线——HealthChecker 可插拔检测器链（文件系统/数据库/配置/网络等），通过 cortex doctor 命令集成至 CLI。支持 --format json|text、--only/--skip 检测器筛选、--threshold 健康分阈值阻断、--output 文件输出 | shared, tools |
 > | `@cortex/prompt-kit` | 提示词工程工具包——统一加载、声明式组装、模板渲染、校验缓存。独立保留，通过 CLI PromptOrchestrator 服役 | 无 |
 > | `@cortex/skill-kit` | 薄壳包——核心实现 SkillTemplateEngine 已迁入 @cortex/engine，本包保留 package.json + barrel 重导出（向后兼容，待消解） | engine |
 > | `@cortex/skill-validator` | 薄壳包——核心校验逻辑已迁入 @cortex/engine/components/skill-json-validator.ts，本包保留 package.json + validator.ts 薄包装（向后兼容，待消解） | engine, shared |
+> | `@cortex/resilience` | 弹性基础设施——SimpleCircuitBreaker（三态断路器，threshold=5/halfOpenAfterMs=30s）+ StateMachineCircuitBreaker（滑动窗口）+ 超时控制（FixedTimeout/AdaptiveTimeout）+ Registry 执行链（Context→timeout→circuitBreaker→retry→fn）；已集成至 @cortex/llm 保护 DeepSeek API 调用 | shared |
 >
-> 依赖方向：config ← (llm / testing / notification)，config, shared, notification ← factory，config, factory, llm, shared ← engine，parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor ← cli，engine ← skill-kit，engine, shared ← skill-validator，shared, tools ← doctor。`@cortex/config` 为零依赖根配置包——提供类型/常量/默认值 + 可插拔域加载器 + 12 个按职责分文件的 JSON 配置文件（data/ 目录），被 engine、factory 和 cli 消费。`@cortex/shared` 不再依赖 config——Agent 域映射常量（agent-registry.ts）通过 engine bootstrap 注入运行时覆盖（setAgentRegistry），编译期以硬编码 fallback 为安全兜底。`@cortex/infra` 包在当前代码中实际不存在——Toolkit/FileLockManager/CLIAdapter 归于 shared 层，infra 独立拆分留待 Core-2。Meso-Lite 中曾独立存在的 `@cortex/meta-agent`、`@cortex/scheduler`、`@cortex/doc-govern` 三个包已删除，功能并入 engine。`@cortex/memory` 包已删除——KvStore 接口+InMemoryKvStore 实现已迁入 @cortex/shared（kv-store.ts），不再保留薄壳层。
+> 依赖方向：config ← (llm / testing / notification / scheduler)，shared ← (pattern-extractor / resilience)，shared, resilience ← llm，config, shared, notification ← factory，config, factory, llm, shared, scheduler ← engine，parser, shared, llm, engine, tools, config, pm, prompt-kit, doctor ← cli，engine ← skill-kit，engine, shared ← skill-validator，shared, tools ← doctor。`@cortex/config` 为零依赖根配置包——提供类型/常量/默认值 + 可插拔域加载器 + 12 个按职责分文件的 JSON 配置文件（data/ 目录），被 engine、factory、scheduler 和 cli 消费。`@cortex/shared` 不再依赖 config——Agent 域映射常量（agent-registry.ts）通过 engine bootstrap 注入运行时覆盖（setAgentRegistry），编译期以硬编码 fallback 为安全兜底。`@cortex/infra` 包在当前代码中实际不存在——Toolkit/FileLockManager/CLIAdapter 归于 shared 层，infra 独立拆分留待 Core-2。`@cortex/scheduler` 为 v2.6.5 从 @cortex/engine 独立拆出的调度子系统包——含调度四抽象（IScheduleStrategy/ILoopDriver/IExecutionModel/IModelRouter）+ dispatch-steps 管线 + TaskBoard/AgentPool/ConfirmGate 等核心组件；engine 通过 barrel 重导出保持向后兼容。`@cortex/pattern-extractor` 为 v2.6.6 新增——模式提取基础设施，仅依赖 shared，为两层提取架构第 1 层。`@cortex/resilience` 为 v2.6.6 新增——弹性基础设施，仅依赖 shared，已集成至 llm 包。Meso-Lite 中曾独立存在的 `@cortex/meta-agent`、`@cortex/doc-govern` 两个包已删除，功能并入 engine。`@cortex/memory` 包已删除——KvStore 接口+InMemoryKvStore 实现已迁入 @cortex/shared（kv-store.ts），不再保留薄壳层。
 
 ---
 
@@ -1149,6 +1153,63 @@ DocGovernAgent 完成审计并产出审计报告后，须进入闭环处理流�
 
 **实现位置**：`scripts/ci-gate.ts`（args 解析 + PACKAGES 过滤）。
 
+### 12.3 模型路由——调度第四抽象（AM-2026-0531-019 新增）
+
+**背景**：2026 H1 全球模型生态已进入多模型分层时代——Claude Adaptive Thinking 自主决定推理深度、GPT-5 Chain of Thought 2.0 显式步骤推理、DeepSeek V4 reasoning_content 多轮传递。单一模型执行所有任务不再最优——简单 CRUD 用 fast 模型降低延迟/成本，复杂分析用 thinking 模型保证质量。
+
+**四抽象模式**：调度器由可组合四元组驱动——
+
+```
+CompositeScheduler = IScheduleStrategy × ILoopDriver × IExecutionModel × IModelRouter
+```
+
+- `IScheduleStrategy`：选哪个 Agent（TagMatching / RoundRobin / PriorityFirst）
+- `ILoopDriver`：按什么顺序（TopologicalLayered / Sequential / Wave）
+- `IExecutionModel`：怎么执行（Pipeline / SimpleExecute）
+- `IModelRouter`：用哪个模型——**v2.6.5 新增第四抽象**
+
+**IModelRouter 接口契约**：
+
+```typescript
+export type ModelTier = 'fast' | 'standard' | 'thinking';
+
+export interface IModelRouter {
+  readonly name: string;
+  route(node: TaskNode, agentType: string, defaultModel: string): string;
+}
+```
+
+**两级实现**：
+
+| 实现 | 策略 | 使用场景 |
+|------|------|---------|
+| `FixedModelRouter` | 永远返回 Agent 注册模型（100% 向后兼容） | 默认，无路由需求 |
+| `ComplexityBasedRouter` | 6 级启发式自动升档（reasoningEffort→preferredStrategy→tags→payload长度→默认） | 模型分层部署 |
+
+**ComplexityBasedRouter 升档规则（优先级递减）**：
+
+1. `node.reasoningEffort === "max"` → `thinking`
+2. `node.preferredStrategy === "decompose"` → `thinking`（RLM 拆解任务需要强推理）
+3. `node.tags` 包含 `"analysis"` 或 `"research"` → `thinking`
+4. `node.payload.length > 2000` → `standard`
+5. `node.payload.length < 200` → `fast`
+6. 否则 → `standard`
+
+**引擎接入点**：`RlmExecuteStep.run()` 在执行前调用 `ctx.modelRouter.route(node, agentType, model)` 动态替换模型名——后续 `_directExecute`、`_tryDecompose`、`_executeSubTasks` 全部使用路由结果。无 modelRouter 时默认行为不变（`FixedModelRouter` 作为构造器默认值）。
+
+**配置注入**：`Scheduler` 构造器接受 `CompositeSchedulerConfig.modelRouter`，不传则默认 `FixedModelRouter`。`loopCtx.modelRouter` 传入每个 `ILoopDriver.run()` 周期。
+
+**实现位置**：
+- 接口与类型：`packages/scheduler/src/core/scheduling-types.ts`（`ModelTier`, `IModelRouter`）
+- 具体实现：`packages/scheduler/src/core/scheduling-implementations.ts`（`FixedModelRouter`, `ComplexityBasedRouter`）
+- 注入点：`packages/engine/src/core/scheduler.ts`（`Scheduler` 构造器）
+- 执行点：`packages/scheduler/src/dispatch-steps/rlm-execute-step.ts`（`run()` 方法）
+
+**设计原则**：
+- 路由决策在调度层完成，Agent 不感知模型切换
+- 支持外部注入任意 `IModelRouter` 实现（API 成本路由、延迟 SLA 路由、多区域路由）
+- 默认行为 100% 向后兼容——不加 router 等价于 v2.6.4 行为
+
 ---
 
 ## 十三、技能记忆（Core-1 已完整落地——v2.6 重构：技能即记忆）
@@ -1206,6 +1267,46 @@ Agent 产出技能 → SkillRegistry.register() → MetaAgent 按标签建议
 - **删除项 (v2.6)**：SkillExecutor（强制注入模型）已移除——技能是"被参照"而非"被执行"；executable-skill/ 目录（DefaultSkillRegistry/BaseSkill/middleware）已删除——与 MemoryStore-backed SkillRegistry 合并；builtin/ 内置技能（EchoSkill/CalculatorSkill/RegistryInfoSkill）已删除——不再有可执行技能概念
 - **管道订阅者化（v2.5.10 保留）**：技能提取与持久化已从 Scheduler 内嵌调用解耦为独立 PipelineObserver 订阅者——`registerSkillPipeline(observer, skillRegistry, memoryStore)` 订阅 NodeComplete 事件，任何 Agent 的成功输出均可触发技能提取
 
+### 13.7 两层模式提取架构（v2.6.6 新增）
+
+莫娜的技能提取管线从 LLM 单体管道拆分为两层：
+
+```
+┌──────────────────────────────────────────────┐
+│ 第 1 层：机械提取（@cortex/pattern-extractor） │
+│ · 扫描 pattern.md / patterns.md 文件           │
+│ · 多策略解析：JSON 块 → P0-P9 格式 → 段落       │
+│ · 去重归并（id 唯一键）                         │
+│ · 置信度评分（算法驱动，非 LLM 估计）            │
+│ · 输出 ExtractionResult（PatternDefinition[]）  │
+│ · 确定性、可重现、零 LLM 幻觉                    │
+├──────────────────────────────────────────────┤
+│ 第 2 层：语义裁决（莫娜·LoopAgent）             │
+│ · 接收第 1 层 ExtractionResult                 │
+│ · 「回家」查 MemoryStore 历史模式               │
+│ · 执行「两次才算模式，三次值得提笔」判断          │
+│ · 输出 SkillTemplate JSON（标准格式）           │
+│ · LLM 参与——但输入是预提取结果而非原始文件        │
+└──────────────────────────────────────────────┘
+
+**层级职责边界**：
+
+| 维度 | 第 1 层（pattern-extractor） | 第 2 层（莫娜） |
+|------|---------------------------|---------------|
+| 做什么 | 从文件中找候选模式 | 从候选中决定哪些是真正的模式 |
+| 怎么做 | 确定性算法 | LLM 语义判断 |
+| 输出 | PatternDefinition[] + confidence | SkillTemplate JSON |
+| 可测试性 | 单元测试全覆盖 | 端到端验证 |
+| 判定标准 | 置信度 > 阈值 | 两次 = 模式，三次 = 提笔 |
+
+**接口契约**：第 1 层 → 第 2 层通过 ExtractionResult 传递。莫娜的 system prompt 中注入「水镜初筛报告」——含候选模式名称、置信度、源码位置、重复次数。莫娜基于此报告做语义裁决，不改动其既有判定逻辑。
+
+**实现状态**：
+- `JsonPatternExtractor`：已实现（190/190 测试通过）
+- `MarkdownPatternExtractor`：✅ 已完整实现（1345 行，43/43 测试通过，4 策略完整——JSON 块/P0-P9/模式段落/全文回退，已集成进 engine skill-persister 桥接 PatternDefinition→SkillTemplate）
+- 莫娜管线接入：✅ 莫娜 system prompt 已注入「水镜初筛」条款——提炼前先检查 SkillRegistry 中 MarkdownPatternExtractor 预提取的 trial 技能
+- 两层拆分的架构决策已入宪并闭环——第 1 层机械提取 → PatternDefinition[] → 桥接 SkillTemplate → SkillRegistry → 第 2 层莫娜语义裁决
+
 ---
 
 ## 十四、阶段模型
@@ -1215,7 +1316,7 @@ Agent 产出技能 → SkillRegistry.register() → MetaAgent 按标签建议
 | **Nano+** | LLM→工具→确认门 单链路验证 |
 | **Meso-Lite** | 多 Agent 协作 + Scheduler + 记忆检索 |
 | **Meso 反思** | 全量审查 + 架构反思 + 宪法 v2.0 |
-| **Core-1** | Engine 重构 + 13 Agent（MetaAgent + ButlerAgent + 11 种执行 Agent——详见 §5.1）+ MemoryStore + Scheduler + PipelineObserver + SafeErrorReporter + SkillRegistry（技能即记忆——v2.6 重构移除 SkillExecutor/executable-skill/builtin，回归记忆本质）+ better-sqlite3 + FTS5 全文索引 + embedding 384d 语义向量（946+ 测试全通过，自审视 7 Agent 并行验证通过，P0 全部闭合） |
+| **Core-1** | ✅ 完成——Engine 重构 + 13 Agent（MetaAgent + ButlerAgent + 11 种执行 Agent）+ MemoryStore + Scheduler（三抽象吸收 CompositeScheduler，调度器双实现合并收束）+ PipelineObserver + SafeErrorReporter + SkillRegistry（技能即记忆）+ MarkdownPatternExtractor（§13.7 两层架构第 1 层完整实现，已集成 engine）+ ConfirmGate（raceResult 非空断言加固）+ better-sqlite3 + FTS5 + embedding 384d（2839 测试全通过，137,062 行核心代码，Core-1 阶段宣布结束） |
 | **Core-2** | Sentinel + TrustModel + StrategistAgent（钟离，契约守护）+ StrategistAgent（霜凝，方向判断+监理） |
 
 > **DeepSeek 4.1 多模态预留**：DeepSeek 4.1 预计 2026-06 发布，将支持多模态能力（图像/音频/视频理解）。Core-2 阶段需为此预埋伏笔：
@@ -1428,6 +1529,12 @@ ESLint 与 TypeScript 编译是 Cortex 能在 CI 中做到的强制力上限。�
 
 | v2.6.3 → v2.6.4 | **TUI 深化与向后兼容层全量消除**（AM-2026-0531-018）：(1) §8.3 新增 CLI TUI 数据流深化条款——5 处模拟代码替换为真实引擎执行逻辑（queryLoop 工具调用→Toolkit/ConfirmGate、planMode 节点完成→Scheduler/PipelineObserver、hooks/chat-mode 权限检查→ConfirmGate 统一拦截、streamChat 单chunk模拟→LlmAdapter SSE 流式）；(2) LlmAdapter.chatStream() SSE 流式增强——reasoning_content 提取 + usage 收集，onChunk 签名改为 `(content, reasoning?)`；(3) @deprecated 向后兼容层全量消除——skill-registry saveJson/loadJson 移除 + data/config getConfig 移除 + config/loader getConfigDataPath 移除 + engine/index @deprecated 注释行移除；测试从 saveJson/loadJson 重写为 toJSON/fromJSON（17/17 通过）；(4) tsc --noEmit 零错误，ESLint 零错误（24 warnings），skill-registry 测试 17/17 通过。宪法版本号 v2.6.3→v2.6.4（AM-2026-0531-018；来源：开拓者（终局裁决）） |
 
+| v2.6.4 → v2.6.5 | **调度四抽象升格——模型路由第四抽象+调度包独立拆出**（AM-2026-0531-019）：(1) §3 架构图调度器从三元组升格为四元组——新增 `IModelRouter` 第四抽象（FixedModelRouter/ComplexityBasedRouter），dispatch-steps 管线补全（+BoundaryGuard + ManifoldGate 并发门）；(2) §3 包表新增 `@cortex/scheduler` 独立包登记（17 包）——含调度四抽象 + dispatch-steps 管线 + TaskBoard/AgentPool/ConfirmGate/TrustModel/PipelineObserver/ReplanManager + RLM 拆解 + DENSITY 压缩 + 拓扑排序 + Agent 匹配；engine 依赖补充 scheduler，架构图中 Scheduler 标注物理包归属；依赖方向全文同步（scheduler→config/shared, engine→scheduler）；(3) §12.3 新增模型路由条款——IModelRouter 接口契约（`route(node, agentType, defaultModel) → string`）、ModelTier 三级分层（fast/standard/thinking）、ComplexityBasedRouter 6 级启发式升档规则、RlmExecuteStep 执行前动态路由替换；(4) skill-bootstrap-integration 测试修复——MemoryStore 构造参数对齐（`new MemoryStore(undefined, observer)`）、持久化测试超时延长（5s→30s）；(5) ManifoldGate 并发唤醒路径修复；调度器/ManifoldGate/skill-bootstrap 23/23 测试通过，tsc 零错误。宪法版本号 v2.6.4→v2.6.5（AM-2026-0531-019；来源：昔涟（提案+评判）+ 开拓者（裁决）） |
+
+| v2.6.5 → v2.6.6 | **莫娜技能提取管线两层拆分入宪**（AM-2026-0531-020）：(1) §3 包结构 17→19——新增 @cortex/pattern-extractor 包登记（模式提取基础设施 + JsonPatternExtractor）+ @cortex/resilience 包登记（弹性基础设施——断路器+超时控制+Registry 执行链）；(2) @cortex/llm 依赖补充 resilience，职责描述更新（含 SimpleCircuitBreaker 集成）；(3) §3 架构图 Components 更新——skill-extractor 注解补充两层委托说明（→见 §13.7）；(4) §13 新增 §13.7「两层模式提取架构」——第 1 层机械提取（pattern-extractor）→ 第 2 层语义裁决（莫娜），含层级职责边界表、接口契约、实现状态；(5) §3 依赖方向补充 pattern-extractor→shared, llm→resilience；2026-05-31；来源：昔涟（提案+评判）+ 开拓者（裁决） |
+
+| v2.6.6 → v2.6.7 | **Core-1 终局闭环——三条未闭环链路全部收束 + Core-1 宣布完成**（AM-2026-0531-021）：(1) **莫娜管线接入**——MarkdownPatternExtractor 从骨架落地为完整实现（1345 行，43/43 测试通过，4 策略完整：JSON 块/P0-P9/模式段落/全文回退）；skill-persister 集成桥接 PatternDefinition→SkillTemplate；莫娜 system prompt 注入「水镜初筛」条款——提炼前先检查 SkillRegistry 中预提取的 trial 技能；(2) **调度器双实现合并收束**——CompositeScheduler 类已从 @cortex/scheduler 移除，三抽象（IScheduleStrategy/ILoopDriver/IExecutionModel/IModelRouter）已全部吸收进 Scheduler，schedulerConfig? 参数保留可替换性；Scheduler JSDoc 标注 @merge-complete；(3) **确认门误报加固**——platform/toolkit.ts ConfirmGate 拦截路径新增 typeof approved !== "boolean" 非空断言，防止 waitFor 返回非布尔值的边界情况；(4) §13.7 实现状态更新——MarkdownPatternExtractor 状态从「待实现」更新为「已完整实现」，莫娜管线从「暂维持 LLM 单体」更新为「已闭环」；(5) §14 Core-1 阶段模型更新——测试数 946→2839，代码行数标注 137,062，Core-1 状态从「进行中」更新为「✅ 完成」；(6) 全量编译零错误（root tsc -b），pattern-extractor 233/233 通过，confirm-gate 25/25 通过；2026-05-31；来源：开拓者（终局裁决） |
+
 ---
 
-**文档状态**：v2.6.4。替代 v2.6.3 作为 Core 阶段准入依据。v2.6.3 已归档保留。
+**文档状态**：v2.6.7。替代 v2.6.6 作为 Core 阶段准入依据。v2.6.5 已归档保留。

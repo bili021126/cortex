@@ -7,9 +7,15 @@
   "include": ["src"],
   "references": [
     { "path": "../config" },
+    { "path": "../governance/tsconfig.src.json" },
+    { "path": "../memory-store/tsconfig.src.json" },
+    { "path": "../consistency/tsconfig.src.json" },
+    { "path": "../platform/tsconfig.src.json" },
+    { "path": "../scheduler/tsconfig.src.json" },
     { "path": "../shared" },
     { "path": "../llm" },
     { "path": "../factory" },
-    { "path": "../telemetry" }
+    { "path": "../telemetry" },
+    { "path": "../memory" }
   ]
 }

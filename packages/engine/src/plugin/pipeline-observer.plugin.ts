@@ -9,7 +9,7 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import type { Disposable } from "@cortex/shared";
-import { PipelineObserver } from "../core/pipeline-observer.js";
+import { PipelineObserver } from "@cortex/scheduler";
 
 export class PipelineObserverPlugin implements EnginePlugin {
   readonly name = "pipelineObserver";

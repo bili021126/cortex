@@ -36,4 +36,7 @@ export * from "./modification-record.js";
 export * from "./doc-registry.js";
 export * from "./amendment.js";
 export * from "./kv-store.js";
+export * from "./id-utils.js";
+export * from "./json-utils.js";
 export * from "./context-policy.js";
+export * from "./lifecycle.js";

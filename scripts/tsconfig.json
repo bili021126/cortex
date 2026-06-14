@@ -7,13 +7,19 @@
     "types": ["node"],
     "lib": ["ES2022"],
     "paths": {
+      "@cortex/llm": ["../packages/llm/src/index.ts"],
       "@cortex/engine": ["../packages/engine/src/index.ts"],
-      "@cortex/shared": ["../packages/shared/src/index.ts"]
+      "@cortex/shared": ["../packages/shared/src/index.ts"],
+      "@cortex/platform": ["../packages/platform/src/index.ts"],
+      "@cortex/governance": ["../packages/governance/src/index.ts"]
     }
   },
   "include": ["*.ts"],
   "references": [
+    { "path": "../packages/llm" },
     { "path": "../packages/engine/tsconfig.src.json" },
-    { "path": "../packages/shared" }
+    { "path": "../packages/shared" },
+    { "path": "../packages/platform" },
+    { "path": "../packages/governance" }
   ]
 }

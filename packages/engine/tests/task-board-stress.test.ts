@@ -7,7 +7,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, Scheduler, topologicalSort, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MetaAgent, Scheduler, topologicalSort, ManifoldGate } from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
 import { LlmAdapter } from "@cortex/llm";
 
 // ─── Test helpers ───────────────────────────────
@@ -40,6 +43,14 @@ function mockAdapter(output: string) {
 beforeEach(() => {
   ManifoldGate.reset();
 });
+
+// ─── mock embedder ───
+function mockEmbedder() {
+  const dim = 384;
+  function hash(s: string) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return h; }
+  function vec(seed: number) { let v = new Array(dim), s = seed; for (let i = 0; i < dim; i++) { s = (1664525 * s + 1013904223) | 0; v[i] = s / 2147483647; } let n = 0; for (let x of v) n += x * x; n = Math.sqrt(n); for (let i = 0; i < dim; i++) v[i] /= n; return v; }
+  return { async embedText(t: string) { return vec(hash(t)); }, async embedBatch(ts: string[]) { return ts.map(t => vec(hash(t))); } };
+}
 
 // ═══════════════════════════════════════════════════
 // 暗雷 1：并发 claim 安全性（同一层多节点竞争）
@@ -168,7 +179,7 @@ describe("暗雷 R3：重规划节点插入运行中层", () => {
     const pool = new AgentPool();
     const observer = new PipelineObserver();
     const gate = new ConfirmGate();
-    const memory = new MemoryStore();
+    const memory = new MemoryStore(new InMemoryMemoryStore());
 
     pool.register({ type: AgentType.Code, maxInstances: 3 });
     pool.register({ type: AgentType.Analysis, maxInstances: 3 });
@@ -212,7 +223,7 @@ describe("暗雷 R3：重规划节点插入运行中层", () => {
     const pool = new AgentPool();
     const observer = new PipelineObserver();
     const gate = new ConfirmGate();
-    const memory = new MemoryStore();
+    const memory = new MemoryStore(new InMemoryMemoryStore());
 
     pool.register({ type: AgentType.Code, maxInstances: 3 });
 
@@ -267,7 +278,7 @@ describe("暗雷 R5：CircuitBreaker 熔断机制", () => {
     const pool = new AgentPool();
     const observer = new PipelineObserver();
     const gate = new ConfirmGate();
-    const memory = new MemoryStore();
+    const memory = new MemoryStore(new InMemoryMemoryStore());
 
     pool.register({ type: AgentType.Code, maxInstances: 3 });
     pool.register({ type: AgentType.Analysis, maxInstances: 3 });
@@ -287,7 +298,7 @@ describe("暗雷 R5：CircuitBreaker 熔断机制", () => {
       toolCalls: []}));
     const metaAgent = new MetaAgent(metaAdapter);
 
-    const scheduler = new Scheduler(board, pool, observer, metaAgent);
+    const scheduler = new Scheduler(board, pool, observer, metaAgent, { maxReplanPerNode: 3 });
 
     // 只注册 Analysis（不匹配 implementation → 重规划节点持续失败）
     const analysisAgent = createAgent(analysisAgentConfig("test"),mockAdapter("irrelevant"), new Toolkit());
@@ -569,7 +580,8 @@ describe("暗雷 R8：claim-release 竞态压测", () => {
 
 describe("暗雷 R9：MemoryStore CAS 并发防改写", () => {
   it("peek() 返回冻结副本——修改抛 TypeError", async () => {
-    const store = new MemoryStore();
+    const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder());
+    await store.init(":memory:");
     const id = await store.write({
       kind: "episodic" as any,
       content_blob: { key: "original" },
@@ -588,7 +600,8 @@ describe("暗雷 R9：MemoryStore CAS 并发防改写", () => {
   });
 
   it("peek() content 冻结——嵌套对象不可改", async () => {
-    const store = new MemoryStore();
+    const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder());
+    await store.init(":memory:");
     const id = await store.write({
       kind: "episodic" as any,
       content_blob: { key: "a", nested: { deep: true } },
@@ -607,7 +620,8 @@ describe("暗雷 R9：MemoryStore CAS 并发防改写", () => {
   });
 
   it("CAS 是唯一状态变更路径", async () => {
-    const store = new MemoryStore();
+    const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder());
+    await store.init(":memory:");
     const id = await store.write({
       kind: "episodic" as any,
       content_blob: {},
@@ -628,7 +642,8 @@ describe("暗雷 R9：MemoryStore CAS 并发防改写", () => {
   });
 
   it("concurrent CAS 竞态——expected 不匹配则失败", async () => {
-    const store = new MemoryStore();
+    const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder());
+    await store.init(":memory:");
     const id = await store.write({
       kind: "episodic" as any,
       content_blob: {},

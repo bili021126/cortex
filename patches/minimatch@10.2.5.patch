@@ -1,0 +1,12 @@
+diff --git a/package.json b/package.json
+index 211875c62b724978194945224d6d845c48d44955..c5a5f7ea4fd499cee6794a06371294c2446b04cc 100644
+--- a/package.json
++++ b/package.json
+@@ -65,7 +65,6 @@
+     },
+     "selfLink": false
+   },
+-  "type": "module",
+   "module": "./dist/esm/index.js",
+   "dependencies": {
+     "brace-expansion": "^5.0.5"

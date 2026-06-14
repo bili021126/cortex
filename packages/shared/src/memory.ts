@@ -162,6 +162,8 @@ export interface IMemoryStore {
   has(memoryId: string): boolean;
   cas(memoryId: string, expected: SemanticState, newState: SemanticState): boolean;
   archive(memoryId: string): boolean;
+  /** 冻结记忆——语义等同于 archive（映射到 Archived 状态），幂等。Core-2 将引入独立 Frozen 态 */
+  freeze(memoryId: string): boolean;
   obliterate(memoryId: string): boolean;
   writePending(input: MemoryWriteInput): string;
   commitMemory(memoryId: string): boolean;

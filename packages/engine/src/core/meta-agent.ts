@@ -1,4 +1,4 @@
-import { PRESET_CONTEXT_POLICIES, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
+import { extractJsonBlock, PRESET_CONTEXT_POLICIES, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import {
   buildPlanningSystem,
@@ -282,7 +282,14 @@ export class MetaAgent {
         unclear: parsed.unclear && typeof parsed.unclear === "string" ? parsed.unclear : undefined,
         originalIntent,
       };
-    } catch {
+    } catch (err) {
+      this._observer?.emit({
+        type: "infra.component_degraded" as PipelineEventType,
+        priority: PipelinePriority.NORMAL,
+        payload: { component: "MetaAgent", operation: "_parseClarification", detail: `意图解析JSON失败: ${String(err)}` },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
       return {
         goal: originalIntent.slice(0, 80),
         actionType: "inquiry",
@@ -364,55 +371,9 @@ export class MetaAgent {
     return parts.join("\n");
   }
 
-  /** 从 LLM 输出提取 JSON（```json ... ``` 或纯字符串）。
-   * 先尝试标记围栏，再尝试提取最外层平衡数组。
-   * 括号匹配时识别 JSON 字符串边界，避免 payload 内的 [ ] 字符误导计数器。 */
+  /** 从 LLM 输出提取 JSON（委托 @cortex/shared 统一实现，失败时回退原始字符串）。 */
   private _extractJson(raw: string): string {
-    // 优先匹配 ```json ... ``` 标记围栏（非贪婪，匹配最近的闭合）
-    const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-    if (fenceMatch) return fenceMatch[1];
-
-    // 回退：提取最外层平衡 [ ... ] 数组
-    const startIdx = raw.indexOf("[");
-    if (startIdx === -1) return raw;
-
-    let depth = 0;
-    let inString = false;
-    let stringChar = ""; // 当前字符串的引号字符（" 或 '）
-    let escaped = false;
-
-    for (let i = startIdx; i < raw.length; i++) {
-      const ch = raw[i];
-
-      if (inString) {
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        if (ch === "\\") {
-          escaped = true;
-          continue;
-        }
-        if (ch === stringChar) {
-          inString = false;
-          stringChar = "";
-        }
-        continue;
-      }
-
-      if (ch === "\"" || ch === "'") {
-        inString = true;
-        stringChar = ch;
-        continue;
-      }
-
-      if (ch === "[") depth++;
-      else if (ch === "]") {
-        depth--;
-        if (depth === 0) return raw.slice(startIdx, i + 1);
-      }
-    }
-    return raw;
+    return extractJsonBlock(raw) ?? raw;
   }
 
   /** 构造兜底 TaskNode（JSON 解析失败时） */
@@ -453,8 +414,14 @@ export class MetaAgent {
     const msg = `JSON 解析失败 (${raw.length} chars)，回退为单 generic 节点。原始输出前200字: ${raw.slice(0, 200)}`;
     if (this._safeReporter) {
       this._safeReporter({ source: "MetaAgent._parsePlan", error: msg, severity: "degraded" });
-    } else {
-      console.warn(`[meta-agent] ${msg}`);
+    } else if (this._observer) {
+      this._observer.emit({
+        type: "infra.component_degraded" as PipelineEventType,
+        priority: PipelinePriority.NORMAL,
+        payload: { component: "MetaAgent", operation: "_parsePlan", detail: msg },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
     }
     return [this._fallbackNode(raw, parentId)];
   }
@@ -508,6 +475,7 @@ export class MetaAgent {
       results: [],
       createdAt: now,
       reasoningEffort,
+      recommendedTier: _validTier(item.recommendedTier),
       contextPolicyId: _resolveContextPolicy(item.type, item.tags),
     };
 
@@ -529,7 +497,14 @@ export class MetaAgent {
         (!Array.isArray(parsed) && parsed.impactScope === "subtree") ? "subtree" : "local";
       const nodes = items.flatMap((item, i) => this._toTaskNode(item, parentId, i));
       return { nodes, impactScope };
-    } catch {
+    } catch (err) {
+      this._observer?.emit({
+        type: "infra.component_degraded" as PipelineEventType,
+        priority: PipelinePriority.NORMAL,
+        payload: { component: "MetaAgent", operation: "_parseReplanResult", detail: `Replan JSON解析失败: ${String(err)}` },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
       return { nodes: [this._fallbackNode(raw, parentId)], impactScope: "local" };
     }
   }
@@ -543,6 +518,7 @@ interface PlanItem {
   tags?: string[];
   needsMultiPerspective?: boolean;
   reasoningEffort?: "high" | "max";
+  recommendedTier?: "fast" | "standard" | "thinking";
   children?: PlanItem[];
 }
 
@@ -594,4 +570,10 @@ function _resolveContextPolicy(type?: string, tags?: string[]): string {
 
   // 规则 3: 回退
   return "single-step";
+}
+
+/** 校验并归一化 recommendedTier：非法值 → undefined，防止甘雨 prompt 漂移注入脏数据 */
+const _VALID_TIERS = new Set(["fast", "standard", "thinking"]);
+function _validTier(t?: string): "fast" | "standard" | "thinking" | undefined {
+  return t && _VALID_TIERS.has(t) ? t as "fast" | "standard" | "thinking" : undefined;
 }

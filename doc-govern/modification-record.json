@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "projectFingerprint": "fp-3a7e2c1b",
   "createdAt": 1747700000000,
-  "updatedAt": 1747771200000,
+  "updatedAt": 1748680000000,
   "records": [
     {
       "id": "MOD-schema-enforce-001",
@@ -390,6 +390,24 @@
       ],
       "reversibility": "reversible",
       "schemaVersion": 1
+    },
+    {
+      "id": "MOD-constitution-amendment-019",
+      "runId": "constitution-amendment-019",
+      "type": "file_modified",
+      "agentType": "Cyrene",
+      "description": "AM-2026-0531-019 修宪——调度四抽象升格（三元组→四元组 + IModelRouter）+ @cortex/scheduler 独立包登记：(1) §3 架构图 & 包表 更新——调度器从三元组升格为四元组（新增 IModelRouter：FixedModelRouter/ComplexityBasedRouter），dispatch-steps 补全 BoundaryGuard + ManifoldGate；包表 16→17 包——新增 @cortex/scheduler 独立包，engine 依赖补充 scheduler；(2) §12.3 新增模型路由条款——IModelRouter 接口契约、ModelTier 三级分层、ComplexityBasedRouter 6 级启发式升档规则；(3) 版本历史 & 文档状态更新——v2.6.4→v2.6.5",
+      "filePaths": [
+        "docs/constitution/Cortex 概念顶层设计 v2.5.35.md"
+      ],
+      "factAnchors": [
+        {
+          "timestampSource": "system_clock",
+          "timestamp": 1748680000000
+        }
+      ],
+      "reversibility": "reversible",
+      "schemaVersion": 1
     }
   ],
   "sessions": [
@@ -442,6 +460,17 @@
         "MOD-rlm-density-006",
         "MOD-rlm-density-007",
         "MOD-rlm-density-008"
+      ]
+    },
+    {
+      "sessionId": "constitution-amendment-019",
+      "startedAt": 1748680000000,
+      "agentTypes": ["Cyrene"],
+      "projectFingerprint": "fp-3a7e2c1b",
+      "startCommitHash": "HEAD",
+      "status": "completed",
+      "recordIds": [
+        "MOD-constitution-amendment-019"
       ]
     }
   ]

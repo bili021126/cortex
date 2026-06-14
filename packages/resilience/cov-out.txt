@@ -1,0 +1,21 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/cortex/packages/resilience[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Unhandled Error [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+[31m[1mReferenceError[22m: exports is not defined in ES module scope
+This file is being treated as an ES module because it has a '.js' file extension and 'D:\cortex\node_modules\.pnpm\glob@10.4.5\node_modules\glob\package.json' contains "type": "module". To treat it as a CommonJS script, rename it to use the '.cjs' file extension.[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/glob@10.4.5/node_modules/glob/dist/commonjs/index.js:[2m2:23[22m[39m
+[90m [2m❯[22m ModuleJobSync.runSync node:internal/modules/esm/module_job:[2m517:37[22m[39m
+[90m [2m❯[22m ModuleLoader.importSyncForRequire node:internal/modules/esm/loader:[2m388:47[22m[39m
+[90m [2m❯[22m loadESMFromCJS node:internal/modules/cjs/loader:[2m1578:24[22m[39m
+[90m [2m❯[22m Module._compile node:internal/modules/cjs/loader:[2m1743:5[22m[39m
+[90m [2m❯[22m Object..js node:internal/modules/cjs/loader:[2m1893:10[22m[39m
+[90m [2m❯[22m Module.load node:internal/modules/cjs/loader:[2m1481:32[22m[39m
+[90m [2m❯[22m Module._load node:internal/modules/cjs/loader:[2m1300:12[22m[39m
+[90m [2m❯[22m TracingChannel.traceSync node:diagnostics_channel:[2m328:14[22m[39m
+[90m [2m❯[22m wrapModuleLoad node:internal/modules/cjs/loader:[2m245:24[22m[39m
+
+
+
+

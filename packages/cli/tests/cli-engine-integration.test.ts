@@ -682,7 +682,7 @@ describe("F. cortex memory — 记忆 CRUD 闭环", () => {
       await bridge.shutdown();
       cleanupDir(path.dirname(dbPath));
     }
-  });
+  }, 15_000);
 
   it("F3. stats 返回统计信息", async () => {
     const { bridge, dbPath } = createBridge("mem-stats.db");
@@ -701,7 +701,7 @@ describe("F. cortex memory — 记忆 CRUD 闭环", () => {
       await bridge.shutdown();
       cleanupDir(path.dirname(dbPath));
     }
-  });
+  }, 15_000);
 
   it("F4. 未知子命令返回错误", async () => {
     const { bridge, dbPath } = createBridge("mem-unknown.db");

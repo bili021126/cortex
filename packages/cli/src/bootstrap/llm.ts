@@ -12,6 +12,7 @@ import type { PasswordEntry } from "@cortex/pm";
 import {
   ENV_DEEPSEEK_BASE_URL,
   ENV_DEEPSEEK_CHAT_MODEL,
+  ENV_DEEPSEEK_CYRENE_CHAT_MODEL,
   ENV_DEEPSEEK_REASONER_MODEL,
   ENV_DEEPSEEK_REASONING_EFFORT,
   ENV_DEEPSEEK_API_KEY,
@@ -63,6 +64,8 @@ export async function bootstrapLlm(): Promise<LlmBootstrapResult> {
   // 共享的模型/URL 配置
   const llmBaseUrl = process.env[ENV_DEEPSEEK_BASE_URL] || DEFAULT_LLM_BASE_URL;
   const llmChatModel = process.env[ENV_DEEPSEEK_CHAT_MODEL] || DEFAULT_LLM_CHAT_MODEL;
+  // 昔涟独立 Chat 模型——若未设置则回退到通用 Chat 模型
+  const llmCyreneChatModel = process.env[ENV_DEEPSEEK_CYRENE_CHAT_MODEL] || llmChatModel;
   const llmReasonerModel = process.env[ENV_DEEPSEEK_REASONER_MODEL] || DEFAULT_LLM_REASONER_MODEL;
   const llmReasoningEffort = (process.env[ENV_DEEPSEEK_REASONING_EFFORT] as "high" | "max") || undefined;
 
@@ -78,27 +81,27 @@ export async function bootstrapLlm(): Promise<LlmBootstrapResult> {
     }
   }
 
-  const adapter = (key: string, label: string) =>
+  const adapter = (key: string, label: string, chatModelOverride?: string, extra?: Partial<{ reasoningEffort: "high" | "max" }>) =>
     new LlmAdapter({
       apiKey: key,
       baseUrl: llmBaseUrl,
-      chatModel: llmChatModel,
+      chatModel: chatModelOverride ?? llmChatModel,
       reasonerModel: llmReasonerModel,
-      reasoningEffort: llmReasoningEffort,
+      reasoningEffort: extra?.reasoningEffort,
       label,
     });
 
-  // 昔涟独立 Key
+  // 昔涟独立 Key + 独立 Chat 模型（不谈 reasoning，不注入 reasoning_effort）
   const cyreneKey = resolveKey(pmStore, LLM_KEY_NAMES.CYRENE, ENV_DEEPSEEK_CYRENE_API_KEY, fallbackKey);
-  if (cyreneKey) llms.set(LLM_KEY_NAMES.CYRENE, adapter(cyreneKey, "cyrene"));
+  if (cyreneKey) llms.set(LLM_KEY_NAMES.CYRENE, adapter(cyreneKey, "cyrene", llmCyreneChatModel));
 
-  // Chat 池 Key
+  // Chat 池 Key（通用 Chat 模型，不注入 reasoning_effort——会破坏 function calling）
   const chatKey = resolveKey(pmStore, LLM_KEY_NAMES.CHAT, ENV_DEEPSEEK_CHAT_API_KEY, fallbackKey);
   if (chatKey) llms.set(LLM_KEY_NAMES.CHAT, adapter(chatKey, "chat"));
 
-  // Reasoner Key
+  // Reasoner Key——仅此路注入 reasoning_effort
   const reasonerKey = resolveKey(pmStore, LLM_KEY_NAMES.REASONER, ENV_DEEPSEEK_REASONER_API_KEY, fallbackKey);
-  if (reasonerKey) llms.set(LLM_KEY_NAMES.REASONER, adapter(reasonerKey, "reasoner"));
+  if (reasonerKey) llms.set(LLM_KEY_NAMES.REASONER, adapter(reasonerKey, "reasoner", undefined, { reasoningEffort: llmReasoningEffort }));
 
   return llms;
 }

@@ -8,12 +8,13 @@
  *      从 Markdown 提取技能模板（文件回溯扫描）。
  *
  * @since 技能沉淀机制 Core-1
+ * @integration v2.6.6 — 机械提取层委托 @cortex/pattern-extractor (MarkdownPatternExtractor)
  */
 
-import type { MemoryStore } from "../memory/memory-store.js";
+import type { MemoryStore } from "@cortex/memory-store";
 import { AgentType, LinkType, type SkillKind, type SkillTemplate, type Tag } from "@cortex/shared";
-import type { SearchResult } from "../platform/search-backend.js";
-import { extractSkillsFromOutput } from "./skill-extractor.js";
+import type { SearchResult } from "@cortex/platform";
+import { MarkdownPatternExtractor, type PatternDefinition } from "@cortex/pattern-extractor";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -436,8 +437,64 @@ function matchFileName(fileName: string, pattern: string): boolean {
   return fileName.includes(pattern);
 }
 
-// ─── 5. Markdown 技能提取 ───────────────────────────────
+// ─── 5. Markdown 技能提取（v2.6.6 重构——委托 @cortex/pattern-extractor） ──
 
+/** 模块级单例——避免每次调用重新解析选项 */
+const markdownExtractor = new MarkdownPatternExtractor({
+  strategyJsonBlock: true,
+  strategyP0P9Format: true,
+  strategyPatternParagraph: true,
+  strategyFallbackFullFile: false, // 全文回退由旧逻辑处理
+  headingLevels: [2, 3],
+  minConfidence: 0.3,
+  minStepsForP0P9: 2,
+  enableMerge: true,
+  maxCandidates: 50,
+});
+
+/**
+ * 将 PatternDefinition 转换为 SkillTemplate。
+ *
+ * 这是两层提取架构的桥接函数：
+ * - 第 1 层（MarkdownPatternExtractor）输出 PatternDefinition[]
+ * - 第 2 层（莫娜语义裁决）消费 SkillTemplate[]
+ *
+ * 当前桥接为机械映射——字段含义在两层间一致，
+ * 未来莫娜可在第 2 层进行语义过滤/重排。
+ */
+function patternDefinitionToSkillTemplate(
+  p: PatternDefinition,
+  kind: SkillKind,
+): SkillTemplate {
+  // 从 description 中提取 trigger 文本
+  // description 格式: "[{strategy}] trigger: {triggerText}"
+  const triggerMatch = p.description.match(/trigger:\s*(.+)/);
+  const trigger = triggerMatch ? triggerMatch[1].trim() : "";
+
+  return {
+    id: p.id,
+    kind,
+    name: p.name,
+    triggerTags: p.tags as Tag[],
+    trigger,
+    steps: p.body.rules,
+    expectedOutput: p.body.examples?.[0]?.code ?? "",
+    status: "trial",
+    weight: p.weight,
+    feedbackHistory: [],
+    discoveredBy: "markdown-extractor",
+    createdAt: p.extractedAt,
+  };
+}
+
+/**
+ * 从 Markdown 内容提取技能模板（v2.6.6 重构版）。
+ *
+ * 执行流程：
+ *   1. MarkdownPatternExtractor（4 策略机械提取 → PatternDefinition[]）
+ *   2. 桥接转换（PatternDefinition → SkillTemplate）
+ *   3. 若无产出，回退到旧版全文兜底逻辑
+ */
 function extractSkillsFromMarkdown(
   content: string,
   kind: SkillKind,
@@ -445,19 +502,23 @@ function extractSkillsFromMarkdown(
 ): SkillTemplate[] {
   if (!content || content.trim().length === 0) return [];
 
-  // 策略 1：JSON 块提取（SkillTemplate 格式）
-  const { skills } = extractSkillsFromOutput(content);
-  if (skills.length > 0) return skills;
+  // 步骤 1：MarkdownPatternExtractor 机械提取
+  const result = markdownExtractor.extract(content);
 
-  // 策略 2：P0-P9 段落提取
-  const pnSections = extractPNSections(content, kind);
-  if (pnSections.length > 0) return pnSections;
+  if (result.success && result.patterns.length > 0) {
+    const skills = result.patterns.map((p) =>
+      patternDefinitionToSkillTemplate(p, kind),
+    );
 
-  // 策略 3：模式段落提取
-  const patterns = extractPatternSections(content, kind);
-  if (patterns.length > 0) return patterns;
+    // 过滤掉无效技能（无 name 或 无 steps）
+    const valid = skills.filter(
+      (s) => s.name.length > 0 && s.steps.length > 0,
+    );
 
-  // 策略 4：文件标题兜底
+    if (valid.length > 0) return valid;
+  }
+
+  // 步骤 2：无产出 → 旧版全文兜底
   const fileName = path.basename(filePath, ".md");
   const firstLine =
     content.split("\n")[0]?.replace(/^#+\s*/, "") ?? fileName;
@@ -481,11 +542,13 @@ function extractSkillsFromMarkdown(
   ];
 }
 
+// ─── 6. 旧版提取函数（保留兼容，已不再使用）─────────────────
+
 /**
  * 从 Markdown 内容中提取 P0-P9 格式的段落，转换为 SkillTemplate。
  * 匹配 "## P0 — 名称 (English Name)" 或 "## P9 — 名称" 格式。
  */
-function extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
+function _extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
   const patterns: SkillTemplate[] = [];
   const timestamp = Date.now();
 
@@ -567,7 +630,7 @@ function extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
  * 从 Markdown 内容中提取"模式 N"格式的段落，转换为 SkillTemplate。
  * 匹配 "## 模式 N：名称" 或 "## 模式 N: 名称" 格式。
  */
-function extractPatternSections(content: string, kind: SkillKind): SkillTemplate[] {
+function _extractPatternSections(content: string, kind: SkillKind): SkillTemplate[] {
   const patterns: SkillTemplate[] = [];
   const timestamp = Date.now();
 

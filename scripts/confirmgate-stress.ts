@@ -13,7 +13,9 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { bootstrapEngine, LlmAdapter, Toolkit, ConfirmGate } from "@cortex/engine";
+import { bootstrapEngine, ConfirmGate } from "@cortex/engine";
+import { LlmAdapter } from "@cortex/llm";
+import { Toolkit } from "@cortex/platform";
 import { ReversibilityLevel as RL, AgentType } from "@cortex/shared";
 
 // ════════════════════════════════════════════════════════

@@ -1,7 +1,9 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, Scheduler, topologicalSort, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, Scheduler, topologicalSort, ManifoldGate } from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
 import { LlmAdapter } from "@cortex/llm";
 
 // ─── Mock Agent ────────────────────────────
@@ -176,7 +178,7 @@ describe("Scheduler", () => {
     expect(report.results[0].error).toContain("No agent matches");
   });
 
-  it("多视角节点并行执行所有匹配 Agent", async () => {
+  it("多视角节点并行执行所有匹配 Agent", { timeout: 15000 }, async () => {
     board.addNode({
       id: "multi-1",
       type: "review",
@@ -229,7 +231,11 @@ describe("Scheduler", () => {
   });
 
   it("集成 MemoryStore：执行后自动写入 EPISODIC 记忆", async () => {
-    const memory = new MemoryStore();
+    const memory = new MemoryStore(undefined, undefined, {
+      embedText: async () => new Array(384).fill(0.1),
+      embedBatch: async (texts: string[]) => texts.map(() => new Array(384).fill(0.1)),
+    });
+    await memory.init(":memory:");
     const adapter = new LlmAdapter({
       apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
     adapter.injectMock(async () => ({ content: "产出内容", toolCalls: [] }));

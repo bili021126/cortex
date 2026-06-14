@@ -21,10 +21,10 @@ import {
   Scheduler,
   PipelineObserver,
   ConfirmGate,
-  Toolkit,
-  MemoryStore,
   createAgent,
   codeAgentConfig} from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ═══════════════════════════════════════════════

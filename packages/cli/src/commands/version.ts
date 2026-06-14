@@ -7,49 +7,37 @@
 import type { CommandHandler, CommandResult } from "../types.js";
 import { CORTEX_VERSION, CORTEX_PHASE, DEPENDENCY_VERSIONS } from "@cortex/config";
 
+/** 构建版本信息对象 */
+function _buildVersionInfo(): Record<string, string> {
+  return {
+    version: `${CORTEX_VERSION} (${CORTEX_PHASE})`,
+    ...DEPENDENCY_VERSIONS,
+    runtime: `Node.js ${process.version}`,
+    platform: `${process.platform}-${process.arch}`,
+  };
+}
+
+/** 格式化版本信息为文本行 */
+function _formatVersionLines(info: Record<string, string>, full: boolean): string {
+  const lines = [
+    `cortex v${CORTEX_VERSION} (${CORTEX_PHASE})`,
+    `引擎:      ${info.engine}`,
+    `LLM:       ${info.llm}`,
+    `共享类型:   ${info.shared}`,
+    `运行时:    ${info.runtime}`,
+    `平台:      ${info.platform}`,
+  ];
+  if (full) lines.push(`配置:      ${process.env["CORTEX_CONFIG"] ?? "默认路径"}`);
+  return lines.join("\n");
+}
+
 export function createVersionHandler(): CommandHandler {
   return async (args, options, _context): Promise<CommandResult> => {
-    const jsonOutput = options["json"] as boolean;
+    const json = options["json"] as boolean;
     const full = options["full"] as boolean;
+    const info = _buildVersionInfo();
 
-    const nodeVersion = process.version;
-    const platform = `${process.platform}-${process.arch}`;
-
-    const versionInfo: Record<string, string> = {
-      version: `${CORTEX_VERSION} (${CORTEX_PHASE})`,
-      ...DEPENDENCY_VERSIONS,
-      runtime: `Node.js ${nodeVersion}`,
-      platform,
-    };
-
-    if (jsonOutput) {
-      return {
-        success: true,
-        data: versionInfo,
-        output: JSON.stringify(versionInfo, null, 2),
-        exitCode: 0,
-      };
-    }
-
-    const lines = [
-      `cortex v${CORTEX_VERSION} (${CORTEX_PHASE})`,
-      `引擎:      ${versionInfo.engine}`,
-      `LLM:       ${versionInfo.llm}`,
-      `共享类型:   ${versionInfo.shared}`,
-      `运行时:    ${versionInfo.runtime}`,
-      `平台:      ${versionInfo.platform}`,
-    ];
-
-    if (full) {
-      // 在完整模式下附加更多信息
-      lines.push(`配置:      ${process.env["CORTEX_CONFIG"] ?? "默认路径"}`);
-    }
-
-    return {
-      success: true,
-      output: lines.join("\n"),
-      data: versionInfo,
-      exitCode: 0,
-    };
+    if (json) return { success: true, data: info, output: JSON.stringify(info, null, 2), exitCode: 0 };
+    return { success: true, output: _formatVersionLines(info, full), data: info, exitCode: 0 };
   };
 }

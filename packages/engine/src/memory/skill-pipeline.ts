@@ -13,8 +13,72 @@
  */
 import { PipelineEventType, PipelinePriority, type AgentType, type IMemoryStore, type IPipelineObserver, type PipelineHandler, type SkillTemplate } from "@cortex/shared";
 import type { SkillRegistry } from "../registry/skill-registry.js";
-import type { MemoryStore } from "./memory-store.js"; // for cast only
+import type { MemoryStore } from "@cortex/memory-store"; // for cast only
 import { extractSkillsFromOutput, persistSkillsToMemory } from "../components/index.js";
+
+// ─── 技能参照事件发射 ───────────────────────────────────────
+
+/**
+ * 当技能被查询/匹配到某个节点时，向管线发射 SkillReferenced 事件。
+ *
+ * 这是技能可观测性的核心：记录"哪些技能被提供给哪个 Agent/节点"——
+ * 独立于 Agent 是否实际采信。事后结合 NodeComplete 结果即可回推效用。
+ *
+ * @param observer     可观测管道
+ * @param matchedSkills 通过 queryByTags 匹配到的技能列表
+ * @param nodeId       任务节点 ID
+ * @param agentType    执行 Agent 类型
+ */
+export function emitSkillReferenced(
+  observer: IPipelineObserver,
+  matchedSkills: SkillTemplate[],
+  nodeId: string,
+  agentType: AgentType,
+): void {
+  for (const skill of matchedSkills) {
+    observer.emit({
+      type: PipelineEventType.SkillReferenced,
+      priority: PipelinePriority.NORMAL,
+      payload: {
+        nodeId,
+        agentType,
+        skillId: skill.id,
+        skillName: skill.name,
+      },
+      timestamp: Date.now(),
+    });
+  }
+}
+
+/**
+ * 从 Agent 输出中尝试提取技能使用声明。
+ *
+ * Agent 可以在输出中声明使用了哪些技能步骤，格式：
+ *   [技能参照: skillName] used=[0,1,2] skipped=[3] adaptation="..."
+ *
+ * @returns 提取到的使用信息，失败返回 null
+ */
+export function extractSkillUsageFromOutput(output: string): Array<{
+  skillName: string;
+  stepsUsed?: number[];
+  stepsSkipped?: number[];
+  adaptation?: string;
+}> | null {
+  const pattern = /\[技能参照:\s*([^\]]+)\]\s*used=\[([^\]]*)\]\s*skipped=\[([^\]]*)\]\s*adaptation="([^"]*)"/g;
+  const results: Array<{ skillName: string; stepsUsed?: number[]; stepsSkipped?: number[]; adaptation?: string }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(output)) !== null) {
+    const used = match[2] ? match[2].split(",").map(Number).filter((n) => !isNaN(n)) : undefined;
+    const skipped = match[3] ? match[3].split(",").map(Number).filter((n) => !isNaN(n)) : undefined;
+    results.push({
+      skillName: match[1].trim(),
+      stepsUsed: used && used.length > 0 ? used : undefined,
+      stepsSkipped: skipped && skipped.length > 0 ? skipped : undefined,
+      adaptation: match[4] || undefined,
+    });
+  }
+  return results.length > 0 ? results : null;
+}
 
 /**
  * 从节点输出中提取技能并注册+持久化。

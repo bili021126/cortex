@@ -25,8 +25,6 @@ import {
   Scheduler,
   PipelineObserver,
   ConfirmGate,
-  Toolkit,
-  MemoryStore,
   MetaAgent,
   createAgent,
   codeAgentConfig,
@@ -39,9 +37,10 @@ import {
   dataAgentConfig,
   fixAgentConfig,
   createInspectorAgent,
-  ButlerAgent,
-  evaluateAmendment,
-  summarizeGovernance} from "@cortex/engine";
+  ButlerAgent} from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
+import { evaluateAmendment, summarizeGovernance } from "@cortex/governance";
 import type { AmendmentProposal } from "@cortex/shared";
 import { resolveLlmConfig } from "../config/llm-defaults";
 

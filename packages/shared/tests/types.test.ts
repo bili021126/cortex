@@ -25,9 +25,9 @@ import {
   AGENT_TAGS,
   AGENT_TOOL_PERMISSIONS,
   getTagVocabulary,
-} from "../src/index.js";
-import { resolveAgentPermissions } from "../src/agent-registry.js";
-import { AgentContext } from "../src/agent-enums.js";
+} from "@cortex/shared";
+import { resolveAgentPermissions } from "@cortex/shared";
+import { AgentContext } from "@cortex/shared";
 
 describe("@cortex/shared v2.0 types", () => {
   it("AgentType includes Meta, Code, Review, Analysis, Ops, DocGovern, Inspector, Browser", () => {

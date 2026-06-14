@@ -1,44 +1,40 @@
 // @ci: unit
 /**
- * 测试文件: MemoryStore 写路径 DB 失败回滚测试
+ * 测试文件: MemoryStore 写路径后端失败回滚测试
  *
  * 测试范围:
- * - write() DB 失败回滚：DB INSERT 失败时内存中的 entry 被删除
- * - link() DB 失败回滚：DB INSERT 失败时 link 从数组弹出
- * - cas() DB 失败回滚：DB UPDATE 失败时 state 恢复为 expected
- * - obliterate() DB 失败回滚：DB UPDATE 失败时 state 恢复原值
- * - close() 后 _scheduleFlush 静默跳过
+ * - write() 后端失败回滚：backend.write() 失败时内存中无残留
+ * - link() 后端失败回滚：backend.link() 失败时 link 回滚
+ * - cas() 后端失败回滚：backend.cas() 失败时 state 不变
+ * - obliterate() 后端失败回滚：backend.obliterate() 失败时 state 不变
+ * - close() 后拒绝写入（幂等关闭）
  *
- * 治理判例: NG-2026-0509-Persist-False-Positive（假阳性禁止原则）
- *
- * 测试数据用例:
- *   用例1: write() — 正常持久化写入后可检索
- *   用例2: write() — 模拟 DB 写入失败，内存回滚后 has() 返回 false
- *   用例3: link() — 正常建立关联边
- *   用例4: link() — DB 写入失败，link 从数组回滚
- *   用例5: cas() — CAS 状态变更后 DB 失败，state 回滚到 expected
- *   用例6: obliterate() — 湮灭操作 DB 失败，state 回滚到 previousState
- *   用例7: close() — 关闭后 _scheduleFlush 不触发新写盘
- *   用例8: close() — closing 状态拒绝新写入
+ * @since v3.0.0 — 适配器委托 @cortex/memory 后端
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, LinkType, PipelinePriority } from "@cortex/shared";
-import { MemoryStore, PipelineObserver } from "@cortex/engine";
+import { PipelineObserver } from "@cortex/engine";
+import { MemoryStore, type IEmbeddingService } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
 
-describe("MemoryStore 写路径 DB 失败回滚", () => {
+const mockEmbedder: IEmbeddingService = {
+  embedText: async () => { throw new Error("mock embedding unavailable"); },
+  embedBatch: async () => { throw new Error("mock embedding unavailable"); },
+};
+
+describe("MemoryStore 写路径后端失败回滚", () => {
   let store: MemoryStore;
   let observer: PipelineObserver;
 
   beforeEach(() => {
     observer = new PipelineObserver();
-    store = new MemoryStore(observer);
+    store = new MemoryStore(new InMemoryMemoryStore(), observer, mockEmbedder);
   });
 
-  // ─── 用例1: write() 正常持久化 ─────────────────────────
+  // ─── 用例1: write() 正常写入 ─────────────────────────
 
-  it("用例1: write() 正常持久化写入后可通过 read() 检索", async () => {
-    // 初始化持久化
+  it("用例1: write() 正常写入后可通过 read() 检索", async () => {
     await store.init(":memory:");
 
     const id = await store.write({
@@ -49,7 +45,7 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
       content_hash: "",
       source: { agentType: AgentType.Code, taskId: "" }});
 
-    expect(id).toMatch(/^mem-/);
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4/);
     const results = await store.read({ keywords: ["正常写入"] });
     expect(results).toHaveLength(1);
     expect(results[0].summary).toBe("正常写入测试");
@@ -57,19 +53,15 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     await store.close();
   });
 
-  // ─── 用例2: write() DB 失败回滚内存 ─────────────────
+  // ─── 用例2: write() 后端失败回滚 ─────────────────
 
-  it("用例2: write() — 模拟 DB INSERT 失败，内存中的 entry 被删除", async () => {
+  it("用例2: write() — 模拟后端写入失败，内存中的 entry 被回滚", async () => {
     await store.init(":memory:");
 
-    // Arrange: 劫持 _db.prepare 让 INSERT INTO memories 抛异常
-    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
-    (store as any)._persistence.db.prepare = (sql: string) => {
-      if (sql.includes("INSERT INTO memories")) {
-        throw new Error("SIMULATED_DISK_FULL");
-      }
-      return origPrepare(sql);
-    };
+    // Arrange: mock backend.write 抛异常
+    vi.spyOn((store as any)._backend, "write").mockRejectedValueOnce(
+      new Error("SIMULATED_DISK_FULL"),
+    );
 
     // Act: 写入——应抛异常
     await expect(store.write({
@@ -115,9 +107,9 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     await store.close();
   });
 
-  // ─── 用例4: link() DB 失败回滚 ─────────────────────
+  // ─── 用例4: link() 后端失败回滚 ─────────────────────
 
-  it("用例4: link() — DB INSERT 失败，link 从数组回滚", async () => {
+  it("用例4: link() — 后端 link 失败，link 回滚", async () => {
     await store.init(":memory:");
 
     const a = await store.write({
@@ -135,14 +127,10 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
       content_hash: "",
       source: { agentType: AgentType.Review, taskId: "" }});
 
-    // 劫持 _db.prepare 让 links INSERT 抛异常
-    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
-    (store as any)._persistence.db.prepare = (sql: string) => {
-      if (sql.includes("INSERT INTO links")) {
-        throw new Error("SIMULATED_LINK_DB_FAIL");
-      }
-      return origPrepare(sql);
-    };
+    // 劫持 backend.link 抛异常
+    vi.spyOn((store as any)._backend, "link").mockImplementation(() => {
+      throw new Error("SIMULATED_LINK_DB_FAIL");
+    });
 
     // Act: link 应抛异常
     expect(() => {
@@ -155,9 +143,9 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     await store.close();
   });
 
-  // ─── 用例5: cas() DB 失败回滚 ─────────────────────
+  // ─── 用例5: cas() 后端失败回滚 ─────────────────────
 
-  it("用例5: cas() — DB UPDATE 失败，state 回滚到 expected", async () => {
+  it("用例5: cas() — 后端 cas 失败，state 回滚到 expected", async () => {
     await store.init(":memory:");
 
     const id = await store.write({
@@ -171,14 +159,10 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     // 确认初始状态
     expect(store.peek(id)!.semantic_state).toBe("Active");
 
-    // 劫持 _db.prepare 让 cas 的 UPDATE 抛异常
-    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
-    (store as any)._persistence.db.prepare = (sql: string) => {
-      if (sql.includes("UPDATE memories SET semantic_state")) {
-        throw new Error("SIMULATED_CAS_DB_FAIL");
-      }
-      return origPrepare(sql);
-    };
+    // 劫持 backend.cas 抛异常
+    vi.spyOn((store as any)._backend, "cas").mockImplementation(() => {
+      throw new Error("SIMULATED_CAS_DB_FAIL");
+    });
 
     // Act: cas 应抛异常
     expect(() => {
@@ -191,9 +175,9 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     await store.close();
   });
 
-  // ─── 用例6: obliterate() DB 失败回滚 ───────────────
+  // ─── 用例6: obliterate() 后端失败回滚 ───────────────
 
-  it("用例6: obliterate() — DB UPDATE 失败，state 回滚到 previousState", async () => {
+  it("用例6: obliterate() — 后端 obliterate 失败，state 回滚到 previousState", async () => {
     await store.init(":memory:");
 
     const id = await store.write({
@@ -208,14 +192,10 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     store.archive(id);
     expect(store.peek(id)!.semantic_state).toBe("Archived");
 
-    // 劫持 _db.prepare 让 obliterate 的 UPDATE 抛异常
-    const origPrepare = (store as any)._persistence.db.prepare.bind((store as any)._persistence.db);
-    (store as any)._persistence.db.prepare = (sql: string) => {
-      if (sql.includes("UPDATE memories SET semantic_state")) {
-        throw new Error("SIMULATED_OBLITERATE_DB_FAIL");
-      }
-      return origPrepare(sql);
-    };
+    // 劫持 backend.obliterate 抛异常
+    vi.spyOn((store as any)._backend, "obliterate").mockImplementation(() => {
+      throw new Error("SIMULATED_OBLITERATE_DB_FAIL");
+    });
 
     // Act: obliterate 应抛异常
     expect(() => {
@@ -228,19 +208,12 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
     await store.close();
   });
 
-  // ─── 用例7: close() 后 _scheduleFlush 静默跳过 ───
+  // ─── 用例7: close() 后拒绝写入 ───
 
-  it("用例7: close() 后 _scheduleFlush 不触发新写盘", async () => {
-    // 使用真实文件路径以验证完整生命周期
-    const dbPath = "test-output/memory-store-lifecycle-test.db";
-    // 清理旧文件
-    try { require("fs").unlinkSync(dbPath); } catch {}
+  it("用例7: close() 后拒绝写入（幂等关闭）", async () => {
+    await store.init(":memory:");
 
-    const store2 = new MemoryStore(observer);
-    await store2.init(dbPath);
-
-    // 写入一条记忆触发 _scheduleFlush
-    await store2.write({
+    await store.write({
       kind: "TaskLog",
       content_blob: { x: 1 },
       summary: "预关闭记忆",
@@ -249,22 +222,22 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
       source: { agentType: AgentType.Code, taskId: "" }});
 
     // 关闭 store
-    await store2.close();
+    await store.close();
 
-    // 确认已关闭
-    expect((store2 as any)._persistence.lifecycle).toBe("closed");
-    expect((store2 as any)._persistence.db).toBeUndefined();
+    // 确认关闭后写入被拒绝
+    await expect(store.write({
+      kind: "TaskLog",
+      content_blob: { x: 2 },
+      summary: "关闭后写入",
+      semantic_gist: "关闭后写入",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }})).rejects.toThrow(/已关闭/);
 
-    // 手动触发 _scheduleFlush：应静默返回（不抛异常）
-    expect(() => {
-      (store2 as any)._persistence.scheduleFlush();
-    }).not.toThrow();
-
-    // 清理
-    try { require("fs").unlinkSync(dbPath); } catch {}
+    // 二次 close 不抛异常（幂等）
+    await expect(store.close()).resolves.toBeUndefined();
   });
 
-  // ─── 用例8: close() closing 状态拒绝新写入 ────────
+  // ─── 用例8: close() closing 状态 ────────
 
   it("用例8: close() closing 状态拒绝二次关闭但不拒绝已调用 close", async () => {
     await store.init(":memory:");
@@ -279,7 +252,9 @@ describe("MemoryStore 写路径 DB 失败回滚", () => {
 
     // 第一次 close
     await store.close();
-    expect((store as any)._persistence.lifecycle).toBe("closed");
+
+    // 关闭后 read() 被拒绝
+    await expect(store.read({ keywords: ["关闭前"] })).rejects.toThrow(/已关闭/);
 
     // 第二次 close 不抛异常（幂等）
     await expect(store.close()).resolves.toBeUndefined();

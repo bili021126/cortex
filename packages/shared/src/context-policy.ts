@@ -67,7 +67,7 @@ export interface RetrievalPolicy {
  * - relevance:    按向量相似度降序
  * - weighted:     加权组合（confidence × 时效衰减 × 命中率）
  */
-export type SortMode = "confidence" | "recency" | "relevance" | "weighted";
+export type SortMode = "confidence" | "recency" | "relevance" | "weighted" | "cognitive";
 
 export interface SortPolicy {
   /** 排序模式 */
@@ -123,6 +123,12 @@ export interface PipelinePolicy {
   readonly assemble: AssemblePolicy;
   /** 检索源 token 预算分配 */
   readonly tokenBudget: TokenBudget;
+  /** cognitive 模式: 贝叶斯先验强度 (0..1, 默认 0.3) */
+  readonly bayesianPrior?: number;
+  /** cognitive 模式: 傅里叶谐波振幅 (默认 0.15) */
+  readonly fourierAlpha?: number;
+  /** cognitive 模式: 联想链激活深度 (默认 3) */
+  readonly linkActivationDepth?: number;
 }
 
 // ─── ContextPolicy ────────────────────────────────────────

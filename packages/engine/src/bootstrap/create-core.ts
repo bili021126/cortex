@@ -2,13 +2,9 @@
 // @cortex/engine/bootstrap/create-core —— 引擎核心组件创建
 // ============================================================
 
-import { type ToolMeta, type Toolkit } from "../platform/toolkit.js";
+import { CLIAdapter, type Toolkit, type ToolMeta } from "@cortex/platform";
 import { Scheduler } from "../core/scheduler.js";
-import { TaskBoard } from "../core/task-board.js";
-import { AgentPool } from "../core/agent-pool.js";
-import { PipelineObserver } from "../core/pipeline-observer.js";
-import { ConfirmGate } from "../core/confirm-gate.js";
-import { CLIAdapter } from "../platform/cli-adapter.js";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { MetaAgent } from "../core/meta-agent.js";
 import { StrategistAgent } from "../agents/strategist-agent.js";
 import type { LlmAdapter } from "@cortex/llm";

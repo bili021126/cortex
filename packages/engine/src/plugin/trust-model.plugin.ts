@@ -8,7 +8,7 @@
 // ============================================================
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
-import { TrustModel } from "../core/trust-model.js";
+import { TrustModel } from "@cortex/scheduler";
 
 export class TrustModelPlugin implements EnginePlugin {
   readonly name = "trustModel";

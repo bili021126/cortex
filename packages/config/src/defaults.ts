@@ -16,8 +16,8 @@ import type {
 export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
   defaultMaxLoops: 64,
   inspectorMaxLoops: 48,
-  maxReplanPerNode: 3,
-  maxTotalReplans: 3,
+  maxReplanPerNode: 10,
+  maxTotalReplans: 50,
   executeAllTimeoutMs: 600_000,
   reactLoopTimeoutMs: 300_000,
   manifoldGateAcquireTimeoutMs: 60_000,

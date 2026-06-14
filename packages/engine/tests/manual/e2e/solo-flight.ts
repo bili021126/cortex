@@ -32,18 +32,14 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AgentType, PipelinePriority, type SemanticState, type TaskNode } from "@cortex/shared";
-import { loadSkillsFromMemory, scanOutputFilesForSkills } from "@cortex/engine";
+import { AgentType, PipelinePriority, PipelineEventType, type SemanticState, type TaskNode } from "@cortex/shared";
+import { loadSkillsFromMemory, scanOutputFilesForSkills, emitSkillReferenced } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 import {
   TaskBoard,
   AgentPool,
-  Scheduler,
   PipelineObserver,
   ConfirmGate,
-  Toolkit,
-  ConsistencyLayer,
-  NodeFileSystemAdapter,
   MetaAgent,
   SkillRegistry,
   deriveStatus,
@@ -59,10 +55,13 @@ import {
   dataAgentConfig,
   fixAgentConfig,
   createInspectorAgent,
-  MemoryStore,
-  defaultEmbeddingService,
-  // 🧪 组合式调度器
-  CompositeScheduler,
+  Scheduler,
+} from "@cortex/engine";
+import { Toolkit, NodeFileSystemAdapter, SearchAggregator, DdgSearchBackend, McpSearchBackend } from "@cortex/platform";
+import type { SearchBackend } from "@cortex/platform";
+import { ConsistencyLayer } from "@cortex/consistency";
+import { MemoryStore, defaultEmbeddingService } from "@cortex/memory-store";
+import {
   TagMatchingStrategy,
   RoundRobinStrategy,
   PriorityFirstStrategy,
@@ -71,13 +70,19 @@ import {
   WaveDriver,
   PipelineModel,
   SimpleExecuteModel,
-  SearchAggregator,
-  DdgSearchBackend,
-  McpSearchBackend} from "@cortex/engine";
-import type { IScheduleStrategy, ILoopDriver, IExecutionModel } from "@cortex/engine";
-import type { SearchBackend } from "@cortex/engine";
+  SemanticModelRouter,
+  TrustModel,
+  type RouteDecision,
+} from "@cortex/scheduler";
+import type { IScheduleStrategy, ILoopDriver, IExecutionModel } from "@cortex/scheduler";
 import type { Agent } from "@cortex/shared";
+import {
+  getTelemetry,
+  shutdownTelemetry,
+} from "@cortex/engine";
+import { installConsoleBridge, uninstallConsoleBridge } from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
+import type { EngineConfig } from "@cortex/config";
 
 // ══════════════════════════════════════════════
 // 0. 环境变量
@@ -524,6 +529,15 @@ async function main() {
   // ── Phase 1: 基础设施 ──
   console.log("🟢 [Phase 1] 初始化基础设施...\n");
 
+  // ═════ v3.1 引擎配置：replan 配额 + 超时 + ManifoldGate ═════
+  const engineConfig: EngineConfig = {
+    maxReplanPerNode: 5,
+    maxTotalReplans: 20,
+    executeAllTimeoutMs: 1_800_000,
+    manifoldGateAcquireTimeoutMs: 120_000,
+  };
+  console.log(`   引擎配置: maxReplanPerNode=${engineConfig.maxReplanPerNode} maxTotalReplans=${engineConfig.maxTotalReplans}`);
+
   const adapter = new LlmAdapter({
     apiKey: API_KEY,
     baseUrl: BASE_URL,
@@ -554,7 +568,24 @@ async function main() {
   const gate = new ConfirmGate();
   gate.bypassAll();
 
-  const memory = new MemoryStore(undefined, defaultEmbeddingService);
+  // ═════ TrustModel：信任评分（驱动 ConfirmGate 可逆性判断） ═════
+  const trustModel = new TrustModel();
+  gate.setTrustModel(trustModel);
+  console.log(`   TrustModel: 信任评分引擎已就绪`);
+
+  // ═════ FileLockManager：并发文件访问保护 ═════
+  const fileLock = new (await import("@cortex/platform")).FileLockManager();
+  console.log(`   FileLockManager: 并发文件锁已就绪`);
+
+  // ═════ Telemetry：全链路遥测初始化 ═════
+  // 调用 getTelemetry() 自动创建 ConsoleCollector，无需手动 setTelemetry
+  getTelemetry();
+  console.log(`   Telemetry: 全链路遥测已启动（ConsoleCollector）`);
+
+
+
+  // ── MemoryStore ──
+  const memory = new MemoryStore(undefined, undefined, defaultEmbeddingService);
   const MEMORY_DB = path.resolve(WORKSPACE, ".cortex", `memory-solo-flight-${Date.now()}.db`);
   await memory.init(MEMORY_DB);
   console.log(`   MemoryStore: ${MEMORY_DB}`);
@@ -586,6 +617,20 @@ async function main() {
   // ═════ v2.6.0 技能事件管线：NodeComplete → 自动技能提取入池 ═════
   const unregisterSkillPipe = registerSkillPipeline(observer, skillRegistry, memory);
   console.log(`   registerSkillPipeline: NodeComplete → 自动技能提取已启用`);
+
+  // ═════ SkillReferenced 可观测性：追踪技能参照事件 ═════
+  const skillReferencedEvents: Array<{
+    nodeId: string;
+    skillId: string;
+    skillName: string;
+  }> = [];
+  const skillRefTracker = (e: any) => {
+    if (e.type === "skill.referenced") {
+      const p = e.payload;
+      skillReferencedEvents.push({ nodeId: p.nodeId, skillId: p.skillId, skillName: p.skillName });
+    }
+  };
+  observer.on(PipelinePriority.NORMAL, skillRefTracker);
 
   // ═════ v2.6.0 技能经验上下文：注入 MetaAgent 规划视图 ═════
   const availableSkills = skillRegistry.getAll();
@@ -1181,20 +1226,76 @@ async function main() {
 
   console.log(`\n   🧪 调度组合: ${strategy.name} × ${driver.name} × ${execModel.name}\n`);
 
-  const scheduler = new CompositeScheduler(board, pool, observer, metaAgent, undefined, {
+  // ═════ v2.6.6 模型路由：语义路由 + Agent floor 保护 ═════
+  const modelRoutingDecisions: import("@cortex/scheduler").RouteDecision[] = [];
+  const modelRouter = new SemanticModelRouter({
+    catalog: {
+      fast: CHAT_MODEL,
+      standard: CHAT_MODEL,
+      thinking: REASONER_MODEL,
+    },
+    modelsOrGetter: () => {
+      const m = new Map<string, string>();
+      for (const [type] of builtAgents) m.set(type, CHAT_MODEL);
+      return m;
+    },
+    classifier: SemanticModelRouter.createSimpleClassifier(
+      async (model: string, messages: Array<{ role: string; content: string }>) => {
+        const result = await (adapter.chat as any)(messages, { model });
+        return typeof result === "string" ? result : (result?.content ?? "");
+      },
+      CHAT_MODEL,
+    ),
+    onDecision: (d) => {
+      modelRoutingDecisions.push(d);
+      console.log(`   🧠 路由 [${d.nodeId.slice(0, 20)}] ${d.agentType}: ${d.floorTier}→${d.effectiveTier}(${d.source}) → ${d.model}`);
+    },
+  });
+  console.log(`   🧠 模型路由: SemanticModelRouter 已启用 (catalog: fast=${CHAT_MODEL}, standard=${CHAT_MODEL}, thinking=${REASONER_MODEL})\n`);
+
+  const scheduler = new Scheduler(board, pool, observer, metaAgent, engineConfig, {
     strategy,
     loopDriver: driver,
-    executionModel: execModel});
+    executionModel: execModel,
+    modelRouter,
+  });
 
-  // 注册全部 Agent 到调度器
+  // 注册全部 Agent 到调度器（分层模型：思考密集型用 REASONER_MODEL）
+  const THINKING_AGENTS = new Set([AgentType.Code, AgentType.Review, AgentType.Analysis]);
   for (const [type, agent] of builtAgents) {
-    scheduler.register(type, agent, CHAT_MODEL);
+    const model = THINKING_AGENTS.has(type) ? REASONER_MODEL : CHAT_MODEL;
+    scheduler.register(type, agent, model);
   }
+  console.log(`   模型分层: thinking=[${[...THINKING_AGENTS].join(",")}] → ${REASONER_MODEL}`);
 
   for (const n of plan) {
     board.addNode(n);
   }
   console.log(`\n   ${plan.length} 个节点已入板。\n`);
+  
+    // ═════ 标签维度覆盖检查：确保每个 Agent 类型至少有一个指派任务 ═════
+    const ALL_AGENT_TAGS = ["code", "review", "analysis", "ops", "loop", "doc-govern", "api", "data", "fix", "inspect"];
+    const plannedTags = new Set(plan.flatMap(n => n.tags.map(t => String(t).toLowerCase())));
+    const missingTags = ALL_AGENT_TAGS.filter(t => !plannedTags.has(t));
+    if (missingTags.length > 0) {
+      console.log(`   ⚠️  标签覆盖缺口: ${missingTags.join(", ")} — 甘雨未为这些 Agent 分配独立任务`);
+    } else {
+      console.log(`   ✅ 标签维度全覆盖: ${ALL_AGENT_TAGS.join(", ")} 全部有指派任务`);
+    }
+    console.log(`   标签分布: ${ALL_AGENT_TAGS.map(t => `${t}=${plannedTags.has(t) ? "✓" : "✗"}`).join(" ")}`);
+
+  // ═════ SkillReferenced: 为每个节点发射技能参照事件 ═════
+  let skillRefEmittedCount = 0;
+  for (const n of plan) {
+    const matched = skillRegistry.queryByTags(n.tags);
+    if (matched.length > 0) {
+      emitSkillReferenced(observer, matched, n.id, AgentType.Code); // 用 Code 占位——实际 agentType 在执行时确定
+      skillRefEmittedCount += matched.length;
+    }
+  }
+  if (skillRefEmittedCount > 0) {
+    console.log(`   SkillReferenced: ${skillRefEmittedCount} 条技能参照事件已发射\n`);
+  }
 
   // ── Phase 4: 执行 ──
   console.log("🟢 [Phase 4] Scheduler 执行...\n");
@@ -1214,8 +1315,22 @@ async function main() {
     }
   });
 
+  // ═════ 扩展可观测性：ManifoldGate / RLM 拆解 / 上下文压缩 / Replan ═════
+  let mfgEvents = 0, rlmDecomposeEvents = 0, contextCompressEvents = 0, replanEvents = 0;
+  observer.on(PipelinePriority.NORMAL, (e) => {
+    const t = String(e.type);
+    if (t.startsWith("manifold_gate")) mfgEvents++;
+    else if (t === PipelineEventType.RlmDecompose) rlmDecomposeEvents++;
+    else if (t === PipelineEventType.RlmContextCompress) contextCompressEvents++;
+    else if (t === PipelineEventType.NodeReplan) replanEvents++;
+  });
+
   const execStart = Date.now();
+  // ═════ Console → Observer 桥接：拦截 Agent 执行期间的噪声输出 ═════
+  installConsoleBridge(observer);
   const report = await scheduler.executeAll();
+  // ═════ 卸载桥接：恢复 console.log 以便输出 Phase 5 诊断结果 ═════
+  uninstallConsoleBridge();
   const execDuration = Date.now() - execStart;
 
   // ── Phase 5: 结果 ──
@@ -1650,9 +1765,75 @@ async function main() {
     }
   }
   console.log(`   📊 技能池: ${finalSkills.length} 个 (trial=${finalSkills.filter((s) => deriveStatus(s.weight, s.feedbackHistory) === "trial").length}, active=${finalSkills.filter((s) => deriveStatus(s.weight, s.feedbackHistory) === "active").length}, deprecated=${finalSkills.filter((s) => deriveStatus(s.weight, s.feedbackHistory) === "deprecated").length})`);
+
+  // ── SkillReferenced 可观测性诊断 ──
+  console.log(`\n   ── SkillReferenced 可观测性 ──`);
+  console.log(`   发射事件: ${skillRefEmittedCount} 条`);
+  console.log(`   管线捕获: ${skillReferencedEvents.length} 条`);
+  if (skillReferencedEvents.length > 0) {
+    // 按节点 ID 分组
+    const byNode = new Map<string, string[]>();
+    for (const e of skillReferencedEvents) {
+      const nodeKey = e.nodeId.slice(0, 40);
+      const list = byNode.get(nodeKey) ?? [];
+      list.push(e.skillName);
+      byNode.set(nodeKey, list);
+    }
+    console.log(`   技能-节点关联:`);
+    for (const [nodeKey, skills] of byNode) {
+      console.log(`      [${nodeKey}] ← ${skills.join(", ")}`);
+    }
+    console.log(`   可观测性: ✅ 技能参照事件正常流转`);
+  } else {
+    console.log(`   ⚠️ 未捕获到 SkillReferenced 事件（技能池/节点标签未匹配）`);
+  }
+
   unregisterSkillPipe();
+  observer.off(PipelinePriority.NORMAL, skillRefTracker);
+
+  // ── v2.6.6 模型路由最终诊断 ──
+  console.log(`\n   ── v2.6.6 模型路由诊断 ──`);
+  console.log(`   路由决策: ${modelRoutingDecisions.length} 条`);
+  if (modelRoutingDecisions.length > 0) {
+    const byTier = { fast: 0, standard: 0, thinking: 0 };
+    const bySource = { recommended: 0, classifier: 0, "classifier-cached": 0, fallback: 0 };
+    for (const d of modelRoutingDecisions) {
+      byTier[d.effectiveTier] = (byTier[d.effectiveTier] ?? 0) + 1;
+      bySource[d.source] = (bySource[d.source] ?? 0) + 1;
+    }
+    console.log(`   等级分布: fast=${byTier.fast}, standard=${byTier.standard}, thinking=${byTier.thinking}`);
+    console.log(`   来源分布: recommended=${bySource.recommended}, classifier=${bySource.classifier}, cached=${bySource["classifier-cached"]}, fallback=${bySource.fallback}`);
+    const upgraded = modelRoutingDecisions.filter(d => d.effectiveTier !== d.floorTier);
+    if (upgraded.length > 0) {
+      console.log(`   🔺 升级决策: ${upgraded.length} 条 (floor→effective)`);
+      for (const d of upgraded) {
+        console.log(`      [${d.nodeId.slice(0, 20)}] ${d.agentType}: ${d.floorTier}→${d.effectiveTier} (${d.source})`);
+      }
+    }
+  } else {
+    console.log(`   ⚠️ 无路由决策记录（可能 ModelRouter 未生效）`);
+  }
+
+  // ── 标签维度覆盖最终诊断 ──
+  console.log(`\n   ── 标签维度覆盖诊断 ──`);
+  const finalMissingTags = ALL_AGENT_TAGS.filter(t => !plannedTags.has(t));
+  console.log(`   ${finalMissingTags.length > 0 ? `⚠️ 覆盖缺口: ${finalMissingTags.join(", ")}` : "✅ 全覆盖"}`);
+
+  // ── v3.1 全链路能力诊断 ──
+  console.log(`\n   ── v3.1 全链路能力诊断 ──`);
+  console.log(`   ManifoldGate 槽位事件: ${mfgEvents}`);
+  console.log(`   RLM 递归拆解事件:  ${rlmDecomposeEvents}`);
+  console.log(`   上下文压缩事件:    ${contextCompressEvents}`);
+  console.log(`   Replan 重规划事件: ${replanEvents}`);
+  console.log(`   TrustModel:        已接入 ConfirmGate`);
+
+  // ═════ Telemetry 遥测报告 ═════
+  console.log(`\n   ── Telemetry 全链路遥测 ──`);
+  console.log(`   采集器: ConsoleCollector (stdout 输出)`);
 
   // ── 收尾 ──
+  uninstallConsoleBridge();
+  shutdownTelemetry();
   await memory.close();
 
   console.log("\n╔══════════════════════════════════════════════════╗");
@@ -1667,7 +1848,8 @@ async function main() {
   console.log(`   产出文件: ${sourceFiles.length} 个`);
   console.log(`   验收结果: ${acceptancePassed ? "✅" : "❌"} (结构 ${hasSrcIndex && hasTests ? "✅" : "❌"} | CI ${ciAnnotationsOk ? "✅" : "❌"} | 编译 ${compileOk ? "✅" : "❌"} | 测试 ${testOk ? "✅" : "❌"})`);
   console.log(`   合并门禁: ${mergeReady ? "✅ 可合入" : "❌ 未就绪"} (定位 ${positioningOk ? "✅" : "❌"} | 规范 ${codingStandardsOk ? "✅" : "❌"} | 注册 ${moduleRegOk ? "✅" : "❌"})`);
-  console.log(`   六层防御: P0-Pending隔离 ${pendingIsolated ? "✅" : "❌"} | P1-InitVerifier ${consistencyReport && !consistencyReport.fatal ? "✅" : "⚠️"} | P2-技能沉淀 ${skillPrecipitated ? "✅" : "⚠️"} | v2.6.0-自动提取 ${newSkills ? newSkills.length : 0}个新技能`);
+  console.log(`   六层防御: P0-Pending隔离 ${pendingIsolated ? "✅" : "❌"} | P1-InitVerifier ${consistencyReport && !consistencyReport.fatal ? "✅" : "⚠️"} | P2-技能沉淀 ${skillPrecipitated ? "✅" : "⚠️"} | v2.6.0-自动提取 ${newSkills.length}个新技能 | SkillRef追踪 ${skillReferencedEvents.length}条`);
+  console.log(`   全链路: ManifoldGate ${mfgEvents} | RLM ${rlmDecomposeEvents} | 上下文压缩 ${contextCompressEvents} | Replan ${replanEvents} | 模型路由 ${modelRoutingDecisions.length} | TrustModel 已接入`);
   console.log();
 
   if (!acceptancePassed || !mergeReady || report.failed > 0) {

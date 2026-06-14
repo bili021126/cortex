@@ -1,21 +1,23 @@
 import {
   AgentStatus as AS,
-  type Agent,
-  type TaskNode,
-  type NodeResult,
-  type AgentType,
-  type MemoryQuery,
-  type SafeErrorReporter,
-  type AgentStatus,
-  type MemoryEntry,
-  type ReadMode,
+} from "@cortex/shared";
+import type {
+  Agent,
+  TaskNode,
+  NodeResult,
+  AgentType,
+  MemoryQuery,
+  SafeErrorReporter,
+  AgentStatus,
+  MemoryEntry,
+  ReadMode,
 } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../platform/toolkit.js";
-import type { MemoryStore } from "../memory/memory-store.js";
-import type { AgentPool } from "../core/agent-pool.js";
+import type { Toolkit } from "@cortex/platform";
+import type { MemoryStore } from "@cortex/memory-store";
+import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "./pool-aware.js";
-import { type ReActContext } from "./react-loop.js";
+import type { ReActContext } from "./react-loop.js";
 import { executeWithMemoryPipeline, resolvePipeline } from "../memory/pipeline.js";
 import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 
@@ -46,6 +48,8 @@ export interface AgentFactoryConfig {
   memoryLimit?: number;
   /** P0-六层防御：读路径 Intent 过滤回调 */
   filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[];
+  /** 创建后钩子——执行额外注入（如 setWorkspaceRoot）。返回增强后的 Agent */
+  postCreateHook?: (agent: Agent) => Agent;
 }
 
 /**
@@ -156,5 +160,5 @@ export function createAgent(
     },
   };
 
-  return agent;
+  return (config.postCreateHook ? config.postCreateHook(agent) : agent) as typeof agent;
 }

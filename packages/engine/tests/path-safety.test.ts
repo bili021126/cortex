@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { validatePath, resolveSafePath } from "@cortex/engine";
+import { validatePath, resolveSafePath } from "@cortex/platform";
 import * as path from "node:path";
 
 const PROJECT_ROOT = path.resolve("/home/project/cortex");

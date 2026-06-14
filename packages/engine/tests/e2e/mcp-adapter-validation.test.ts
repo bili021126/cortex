@@ -17,8 +17,8 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { McpClient, McpToolAdapter } from "../../src/platform/mcp-client.js";
-import type { McpServerConfig, McpToolDef } from "../../src/platform/mcp-client.js";
+import { McpClient, McpToolAdapter } from "@cortex/platform";
+import type { McpServerConfig, McpToolDef } from "@cortex/platform";
 import type { Tool } from "@cortex/shared";
 import { ToolCategory, ReversibilityLevel } from "@cortex/shared";
 

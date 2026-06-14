@@ -15,7 +15,7 @@ import {
   DdgSearchBackend,
   type McpServerConfig,
   type Toolkit,
-} from "@cortex/engine";
+} from "@cortex/platform";
 import {
   ENV_CORTEX_NO_SEARCH,
   ENV_VITEST,
@@ -39,23 +39,15 @@ export interface McpBootstrapResult {
  *
  * 设置 CORTEX_NO_SEARCH=1 可跳过整个初始化流程。
  */
-export async function bootstrapMcp(
-  toolkit: Toolkit,
-  configRoot: string,
-): Promise<McpBootstrapResult> {
-  if (process.env[ENV_CORTEX_NO_SEARCH] === "1") {
-    return { aggregator: null, startedCount: 0 };
-  }
-
-  let mcpConfigs: McpServerConfig[] = [];
-
+/** 加载 MCP 服务端配置（优先新格式 mcpServers，回退旧格式 searchProviders） */
+function _loadMcpConfigs(configRoot: string): McpServerConfig[] {
   // 1) 优先 mcpServers 域（config 包 data/mcp-servers.json）
   try {
     const dataDir = resolveConfigDataDir();
     const readFile: ConfigFileReader = (fp) => nodeFs.readFileSync(fp, "utf-8");
     const servers = loadConfigDomain<Record<string, McpServerEntry>>("mcpServers", readFile, dataDir);
     if (servers) {
-      mcpConfigs = Object.entries(servers)
+      return Object.entries(servers)
         .filter(([key]) => !key.startsWith("_"))
         .map(([id, cfg]) => ({ id, ...cfg } as McpServerConfig))
         .filter((c) => c.enabled !== false);
@@ -65,26 +57,28 @@ export async function bootstrapMcp(
   }
 
   // 2) 回退 searchProviders（旧格式，从 cortex-agents.json 读取）
-  if (mcpConfigs.length === 0) {
-    const configPath = nodePath.join(configRoot, FILE_CORTEX_AGENTS_JSON);
-    if (nodeFs.existsSync(configPath)) {
-      const raw = JSON.parse(nodeFs.readFileSync(configPath, "utf-8"));
-      const searchProviders = raw?.searchProviders;
-      if (searchProviders?.backends && Array.isArray(searchProviders.backends)) {
-        mcpConfigs = (searchProviders.backends as McpServerConfig[])
-          .filter((b) => b.enabled !== false);
-      }
+  const configPath = nodePath.join(configRoot, FILE_CORTEX_AGENTS_JSON);
+  if (nodeFs.existsSync(configPath)) {
+    const raw = JSON.parse(nodeFs.readFileSync(configPath, "utf-8"));
+    const searchProviders = raw?.searchProviders;
+    if (searchProviders?.backends && Array.isArray(searchProviders.backends)) {
+      return (searchProviders.backends as McpServerConfig[])
+        .filter((b) => b.enabled !== false);
     }
   }
 
-  if (mcpConfigs.length === 0) {
-    return { aggregator: null, startedCount: 0 };
-  }
+  return [];
+}
 
+/** 启动 MCP 后端并构建搜索聚合器 */
+async function _startMcpBackends(
+  configs: McpServerConfig[],
+  toolkit: Toolkit,
+): Promise<McpBootstrapResult> {
   const ddgBackend = new DdgSearchBackend();
   const started: McpSearchBackend[] = [];
 
-  for (const cfg of mcpConfigs) {
+  for (const cfg of configs) {
     const backend = new McpSearchBackend({ ...cfg, env: {} });
     try {
       await backend.start();
@@ -107,4 +101,20 @@ export async function bootstrapMcp(
   }
 
   return { aggregator: null, startedCount: 0 };
+}
+
+export async function bootstrapMcp(
+  toolkit: Toolkit,
+  configRoot: string,
+): Promise<McpBootstrapResult> {
+  if (process.env[ENV_CORTEX_NO_SEARCH] === "1") {
+    return { aggregator: null, startedCount: 0 };
+  }
+
+  const mcpConfigs = _loadMcpConfigs(configRoot);
+  if (mcpConfigs.length === 0) {
+    return { aggregator: null, startedCount: 0 };
+  }
+
+  return await _startMcpBackends(mcpConfigs, toolkit);
 }

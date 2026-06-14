@@ -3,8 +3,6 @@ import { describe, it, expect } from "vitest";
 import { AgentType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import {
-  Toolkit,
-  MemoryStore,
   PipelineObserver,
   PipelineRunner,
   executeWithMemoryPipeline,
@@ -16,6 +14,8 @@ import {
   type ReActContext,
   type PipelineCtx,
   type IStep} from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
 
 function mockLlm() {
   const adapter = new LlmAdapter({
@@ -101,7 +101,11 @@ describe("executeWithMemoryPipeline (with memory)", () => {
   it("should execute with memory and write to MemoryStore on success", async () => {
     const adapter = mockLlm();
     const tk = new Toolkit();
-    const memory = new MemoryStore(new PipelineObserver());
+    const memory = new MemoryStore(undefined, new PipelineObserver(), {
+      embedText: async () => new Array(384).fill(0.1),
+      embedBatch: async (texts: string[]) => texts.map(() => new Array(384).fill(0.1)),
+    });
+    await memory.init(":memory:");
     const ctx: ReActContext = {
       agentType: AgentType.Code,
       llm: adapter,
@@ -129,7 +133,11 @@ describe("executeWithMemoryPipeline (with memory)", () => {
       throw new Error("Fatal error");
     });
 
-    const memory = new MemoryStore(new PipelineObserver());
+    const memory = new MemoryStore(undefined, new PipelineObserver(), {
+      embedText: async () => new Array(384).fill(0.1),
+      embedBatch: async (texts: string[]) => texts.map(() => new Array(384).fill(0.1)),
+    });
+    await memory.init(":memory:");
 
     const ctx: ReActContext = {
       agentType: AgentType.Code,

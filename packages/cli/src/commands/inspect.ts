@@ -7,57 +7,66 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import { isHelpRequest } from "../utils.js";
 import { buildEdges, collectDependencies, collectDeps, collectPackages, detectCycles, detectDrift, findProjectRoot, generateDot } from "@cortex/tools";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+const INSPECT_HELP = [
+  "用法: cortex inspect <子命令> [选项]",
+  "",
+  "子命令:",
+  "  dir <path>            侦察目录结构",
+  "  deps                  侦察依赖拓扑",
+  "  drift                 侦察配置漂移",
+  "  report                生成完整侦察报告",
+  "",
+  "选项:",
+  "  --depth <n>           递归深度（默认 3）",
+  "  --pattern <g>         glob 过滤模式",
+  "  --format <fmt>        输出格式（text/json/tree）",
+  "  --graph               输出 Graphviz DOT 格式",
+  "  --cycles               检测循环依赖",
+  "  --baseline <file>     基准配置文件",
+  "  --output, -o <path>   输出路径",
+  "  --sections <list>     包含的章节",
+].join("\n");
+
 export function createInspectHandler(): CommandHandler {
-  return async (args, options, context): Promise<CommandResult> => {
-    if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
-      return {
-        success: true,
-        output: [
-          "用法: cortex inspect <子命令> [选项]",
-          "",
-          "子命令:",
-          "  dir <path>            侦察目录结构",
-          "  deps                  侦察依赖拓扑",
-          "  drift                 侦察配置漂移",
-          "  report                生成完整侦察报告",
-          "",
-          "选项:",
-          "  --depth <n>           递归深度（默认 3）",
-          "  --pattern <g>         glob 过滤模式",
-          "  --format <fmt>        输出格式（text/json/tree）",
-          "  --graph               输出 Graphviz DOT 格式",
-          "  --cycles               检测循环依赖",
-          "  --baseline <file>     基准配置文件",
-          "  --output, -o <path>   输出路径",
-          "  --sections <list>     包含的章节",
-        ].join("\n"),
-        exitCode: 0,
-      };
+  const handler: CommandHandler = async (args, options, context): Promise<CommandResult> => {
+    if (isHelpRequest(args)) {
+      return { success: true, output: INSPECT_HELP, exitCode: 0 };
     }
-
     const subcommand = args[0];
-
     switch (subcommand) {
-      case "dir":
-        return handleInspectDir(args[1], options, context);
-      case "deps":
-        return handleInspectDeps(options, context);
-      case "drift":
-        return handleInspectDrift(options, context);
-      case "report":
-        return handleInspectReport(options, context);
+      case "dir":    return handleInspectDir(args[1], options, context);
+      case "deps":   return handleInspectDeps(options, context);
+      case "drift":  return handleInspectDrift(options, context);
+      case "report": return handleInspectReport(options, context);
       default:
-        return {
-          success: false,
-          error: `未知子命令: "${subcommand}"。可用子命令: dir, deps, drift, report`,
-          exitCode: 1,
-        };
+        return { success: false, error: `未知子命令: "${subcommand}"。可用子命令: dir, deps, drift, report`, exitCode: 1 };
     }
   };
+  return handler;
+}
+
+interface DirEntry { name: string; type: "directory" | "file"; children?: DirEntry[]; }
+
+/** 递归扫描目录结构 */
+function _scanDir(dir: string, currentDepth: number, maxDepth: number): DirEntry[] {
+  if (currentDepth > maxDepth) return [];
+  const entries: DirEntry[] = [];
+  try {
+    for (const item of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (item.name.startsWith(".") || item.name === "node_modules") continue;
+      entries.push({
+        name: item.name,
+        type: item.isDirectory() ? "directory" : "file",
+        ...(item.isDirectory() ? { children: _scanDir(path.join(dir, item.name), currentDepth + 1, maxDepth) } : {}),
+      });
+    }
+  } catch { /* 权限错误忽略 */ }
+  return entries;
 }
 
 function handleInspectDir(
@@ -67,36 +76,10 @@ function handleInspectDir(
 ): CommandResult {
   const target = dirPath ? path.resolve(dirPath) : process.cwd();
   const depth = parseInt(String(options["depth"] ?? "3"), 10);
-
   if (!fs.existsSync(target)) {
     return { success: false, error: `目录不存在: ${target}`, exitCode: 1 };
   }
-
-  interface DirEntry {
-    name: string;
-    type: "directory" | "file";
-    children?: DirEntry[];
-  }
-
-  function scanDir(dir: string, currentDepth: number): DirEntry[] {
-    if (currentDepth > depth) return [];
-    const entries: DirEntry[] = [];
-    try {
-      const items = fs.readdirSync(dir, { withFileTypes: true });
-      for (const item of items) {
-        if (item.name.startsWith(".") || item.name === "node_modules") continue;
-        entries.push({
-          name: item.name,
-          type: item.isDirectory() ? "directory" : "file",
-          ...(item.isDirectory() ? { children: scanDir(path.join(dir, item.name), currentDepth + 1) } : {}),
-        });
-      }
-    } catch { /* 权限错误忽略 */ }
-    return entries;
-  }
-
-  const tree = scanDir(target, 0);
-
+  const tree = _scanDir(target, 0, depth);
   return {
     success: true,
     data: { root: target, depth, entries: tree },
@@ -114,50 +97,42 @@ function handleInspectDeps(
 
   const root = findProjectRoot(process.cwd());
   const packages = collectPackages(root);
-  const allDeps = collectDeps(root, packages);
-  const edges = buildEdges(packages, allDeps, false);
-
-  // 构建包名→workspace依赖映射
-  const deps: Record<string, string[]> = {};
-  for (const pkg of packages) {
-    if (pkg.isRoot) continue;
-    const pkgEdges = edges.filter((e) => e.from === pkg.id);
-    deps[pkg.name] = pkgEdges.map((e) => e.to);
-  }
+  const edges = buildEdges(packages, collectDeps(root, packages), false);
+  const deps = _buildDepsMap(packages, edges);
 
   if (graphFormat) {
     const cycles = detectCyclesOpt ? detectCycles(edges) : [];
     const dot = generateDot(packages, edges, cycles);
-    return {
-      success: true,
-      output: dot,
-      data: { dot, deps, edges },
-      exitCode: 0,
-    };
+    return { success: true, output: dot, data: { dot, deps, edges }, exitCode: 0 };
   }
 
+  const cycles = detectCyclesOpt ? detectCycles(edges) : [];
+  return { success: true, data: { deps, edges }, output: _formatDepsOutput(deps, cycles), exitCode: 0 };
+}
+
+/** 构建包名→workspace依赖映射 */
+function _buildDepsMap(packages: { id: string; name: string; isRoot: boolean }[], edges: { from: string; to: string }[]): Record<string, string[]> {
+  const deps: Record<string, string[]> = {};
+  for (const pkg of packages) {
+    if (pkg.isRoot) continue;
+    deps[pkg.name] = edges.filter((e) => e.from === pkg.id).map((e) => e.to);
+  }
+  return deps;
+}
+
+/** 格式化依赖输出文本 */
+function _formatDepsOutput(deps: Record<string, string[]>, cycles: { path: string[] }[]): string {
   let output = Object.entries(deps)
     .map(([pkg, targets]) => `  ${pkg} → ${targets.join(", ") || "(无 workspace 依赖)"}`)
     .join("\n");
 
-  if (detectCyclesOpt) {
-    const cycles = detectCycles(edges);
-    if (cycles.length > 0) {
-      output += "\n\n⚠️ 循环依赖:";
-      for (const cycle of cycles) {
-        output += `\n  ${cycle.path.join(" → ")}`;
-      }
-    } else {
-      output += "\n\n✅ 未发现循环依赖";
-    }
+  if (cycles.length > 0) {
+    output += "\n\n⚠️ 循环依赖:";
+    for (const cycle of cycles) output += `\n  ${cycle.path.join(" → ")}`;
+  } else {
+    output += "\n\n✅ 未发现循环依赖";
   }
-
-  return {
-    success: true,
-    data: { deps, edges },
-    output,
-    exitCode: 0,
-  };
+  return output;
 }
 
 function handleInspectDrift(

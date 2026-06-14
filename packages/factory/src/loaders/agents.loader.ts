@@ -28,11 +28,13 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
   // 1. Agent 定义（必需）
   let agentsRaw: Record<string, AgentDefinition>;
   try {
-    agentsRaw = loadConfigDomain<Record<string, AgentDefinition>>(
+    const loaded = loadConfigDomain<Record<string, AgentDefinition>>(
       "agents",
       readFileNode,
       dataDir,
     );
+    if (!loaded) throw new Error("agents 配置为空");
+    agentsRaw = loaded;
   } catch (e) {
     throw new Error(`加载 agents.json 失败: ${String(e)}`, { cause: e });
   }
@@ -45,6 +47,7 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
       readFileNode,
       dataDir,
     );
+    if (!raw) throw new Error("eventRouting 配置为空");
     eventRouting = raw;
   } catch (e) {
     throw new Error(`加载 event-routing.json 失败: ${String(e)}`, { cause: e });

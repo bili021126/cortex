@@ -1,4 +1,4 @@
-import { getTagVocabulary, type FeedbackEntry, type SkillKind, type SkillTemplate, type Tag } from "@cortex/shared";
+import { extractJsonBlock, getTagVocabulary, type FeedbackEntry, type SkillKind, type SkillTemplate, type Tag } from "@cortex/shared";
 
 /** 解析 outputFile 模板变量：{date} → YYYY-MM-DD, {time} → HH-MM-SS */
 export function resolveOutputFile(template: string): string {
@@ -43,7 +43,7 @@ export function extractSkillsFromOutput(raw: string): SkillExtractResult {
   }
 
   // 步骤1：提取 JSON 文本
-  const jsonStr = extractJson(raw);
+  const jsonStr = extractJsonBlock(raw);
   if (!jsonStr) {
     diagnostics.push(`无法从 ${raw.length} 字符的输出中提取 JSON`);
     return { skills, diagnostics };
@@ -148,49 +148,6 @@ function normalizeSkillTemplate(
     discoveredBy: typeof raw.discoveredBy === "string" ? raw.discoveredBy : "LoopAgent",
     createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
   };
-}
-
-/** 从 LLM 原始输出提取 JSON 子串 */
-function extractJson(raw: string): string | null {
-  // 优先 ```json ... ``` 围栏
-  const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenceMatch) return fenceMatch[1].trim();
-
-  // 回退：最外层 { } 或 [ ]
-  const trimmed = raw.trim();
-  const startChar = trimmed[0];
-  const endChar = startChar === "{" ? "}" : startChar === "[" ? "]" : null;
-  if (!endChar) {
-    // 尝试找到第一个 { 或 [
-    const objStart = trimmed.indexOf("{");
-    const arrStart = trimmed.indexOf("[");
-    if (objStart === -1 && arrStart === -1) return null;
-    const start = objStart === -1 ? arrStart :
-      arrStart === -1 ? objStart :
-      Math.min(objStart, arrStart);
-    return extractBalanced(trimmed, start);
-  }
-
-  return extractBalanced(trimmed, 0);
-}
-
-/** 提取从 startIdx 开始的平衡括号内容 */
-function extractBalanced(text: string, startIdx: number): string | null {
-  const stack: string[] = [];
-  for (let i = startIdx; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === "{" || ch === "[") {
-      stack.push(ch === "{" ? "}" : "]");
-    } else if (ch === "}" || ch === "]") {
-      if (stack.length === 0) return null; // 不平衡
-      const expected = stack.pop();
-      if (expected === undefined) return null; // 不平衡
-      if (stack.length === 0) {
-        return text.slice(startIdx, i + 1);
-      }
-    }
-  }
-  return null; // 未闭合
 }
 
 /** 规范化 skillKind */

@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
 import { LlmAdapter } from "@cortex/llm";
-import { resolveLlm } from "../src/bootstrap/bootstrap-engine.js";
+import { resolveLlm } from "@cortex/engine";
 
 function mockAdapter(label: string) {
   return new LlmAdapter({ apiKey: `key-${label}`, baseUrl: "mock", chatModel: "mock-chat", reasonerModel: "mock-reasoner" });

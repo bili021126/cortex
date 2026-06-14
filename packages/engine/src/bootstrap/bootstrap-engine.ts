@@ -18,13 +18,15 @@ import { ButlerAgent } from "../agents/butler-agent.js";
 // 副作用导入：触发全部插件自注册至 PluginLoader（无需调用任何函数）
 import "../plugin/register-all.js";
 import { PluginLoader, type EnginePluginLoadConfig } from "../plugin/plugin-loader.js";
-import type { Toolkit } from "../platform/toolkit.js";
-import { preloadModel } from "../memory/embedding.js";
+import type { Toolkit } from "@cortex/platform";
+import { preloadModel } from "@cortex/memory-store";
 import type { LlmAdapter } from "@cortex/llm";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ReadMode } from "@cortex/shared";
 import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
+import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
+import { installConsoleBridge, uninstallConsoleBridge } from "../observer/console-bridge.js";
 
 // 插件类型引用
 import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.js";
@@ -104,6 +106,7 @@ export async function bootstrapEngine(
       factoryConfig: config,
       dbPath: options.dbPath,
       fs: options.fs,
+      memory: options.memory,
     },
   };
 
@@ -128,6 +131,12 @@ export async function bootstrapEngine(
   const scheduler = container.get<SchedulerPlugin>("scheduler").getInstance();
   const agents = container.get<SchedulerPlugin>("scheduler").getAgents();
   const butler = container.get<SchedulerPlugin>("scheduler").getButler();
+
+  // §6.0 ConsoleBridge —— PipelineObserver 就绪后安装，拦截裸 console
+  installConsoleBridge(observer);
+
+  // §6.0.1 LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期
+  const lifecycleManager = new LifecycleManager();
 
   // §6.1 技能系统初始化——不再通过插件，直接在 bootstrap 中装配
   const skillRegistry = await initSkillSystem(
@@ -179,6 +188,14 @@ export async function bootstrapEngine(
     config,
     agents,
     consistencyLayer,
-    shutdown: () => container.shutdown(),
+    lifecycleManager,
+    shutdown: async () => {
+      // 先优雅关闭 ILifecycle 组件
+      await lifecycleManager.shutdown();
+      // 再关闭插件容器（反向顺序 stop 各插件）
+      await container.shutdown();
+      // 最后卸载 ConsoleBridge，恢复原始 console
+      uninstallConsoleBridge();
+    },
   };
 }

@@ -26,6 +26,5 @@ export { ButlerAgent } from "./butler-agent.js";
 export { MetaAgent, type IntentClarification } from "../core/meta-agent.js";
 export { StrategistAgent } from "./strategist-agent.js";
 
-// @experimental Core-2 预留
-export { ApiAgent } from "./api-agent.js";
-export { DataAgent } from "./data-agent.js";
+// ApiAgent/DataAgent 已配置化——通过 AGENT_REGISTRY + MEMORY_QUERY_REGISTRY 驱动
+// 不再需要独立类文件，createAgent 工厂 + apiAgentConfig/dataAgentConfig 全覆盖

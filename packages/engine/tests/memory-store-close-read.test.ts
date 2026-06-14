@@ -7,14 +7,21 @@
  * 2. close() 后 write() 抛出 Error（已有保护，验证一致性）
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { MemoryStore } from "@cortex/engine";
+import { MemoryStore, type IEmbeddingService } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
 import { AgentType } from "@cortex/shared";
+
+const mockEmbedder: IEmbeddingService = {
+  embedText: async () => { throw new Error("mock embedding unavailable"); },
+  embedBatch: async () => { throw new Error("mock embedding unavailable"); },
+};
 
 describe("D3: MemoryStore read() 关闭保护", () => {
   let store: MemoryStore;
 
-  beforeEach(() => {
-    store = new MemoryStore();
+  beforeEach(async () => {
+    store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder);
+    await store.init(":memory:");
   });
 
   it("正常状态下 read() 正常工作", async () => {

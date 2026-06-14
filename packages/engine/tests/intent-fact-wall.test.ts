@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { AgentType } from "@cortex/shared";
 import type { MemoryEntry, MemoryWriteInput } from "@cortex/shared";
-import { IntentFactWall } from "@cortex/engine";
+import { IntentFactWall } from "@cortex/consistency";
 
 /** 创建测试用 MemoryEntry 辅助函数 */
 function makeEntry(overrides: Partial<MemoryEntry> = {}): MemoryEntry {

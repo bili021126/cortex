@@ -1,0 +1,230 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/cortex/packages/memory[39m
+
+[2m05:22:54[22m [33m[1m[vite][22m[39m [33mwarning: [33mDuplicate member "rollback" in class body[33m
+651|    }
+652|  
+653|    async rollback(txn: TransactionContext): Promise<TransactionResult<void>> {
+   |          ^
+654|      this._ensureInitialized();
+655|  
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mD:/cortex/packages/memory/src/implementations/InMemoryMemoryStore.ts[39m
+[2m05:22:54[22m [33m[1m[vite][22m[39m [33mwarning: [33mDuplicate member "rollback" in class body[33m
+719|    }
+720|  
+721|    async rollback(txn: TransactionContext): Promise<TransactionResult<void>> {
+   |          ^
+722|      this._ensureInitialized();
+723|  
+[39m
+  Plugin: [35mvite:esbuild[39m
+  File: [36mD:/cortex/packages/memory/src/implementations/FileBasedMemoryStore.ts[39m
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mregister[2m > [22mshould register a store instance
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mregister[2m > [22mshould throw when registering a different instance with the same name
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mregister[2m > [22mshould allow re-registering the same instance
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mregister[2m > [22mshould set the first registered store as default
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mregisterFactory[2m > [22mshould register a factory function
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mregisterFactory[2m > [22mshould lazily initialize on first get()
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mregisterFactory[2m > [22mshould throw when registering a factory with an existing name
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mget[2m > [22mshould return undefined for unknown name
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mget[2m > [22mshould return registered instance
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mget[2m > [22mshould initialize factory on first get
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mgetDefault[2m > [22mshould return the first registered store by default
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mgetDefault[2m > [22mshould throw if no store is registered
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mgetDefault[2m > [22mshould return the switched default store
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mswitchDefault[2m > [22mshould switch to a registered store
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mswitchDefault[2m > [22mshould throw if the name is not registered
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22munregister[2m > [22mshould remove a registered store and call close
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22munregister[2m > [22mshould not throw when unregistering non-existent store
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22munregister[2m > [22mshould reset default if the default store is unregistered
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mflushAll[2m > [22mshould flush all initialized stores
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mflushAll[2m > [22mshould not initialize factory stores
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mshutdownAll[2m > [22mshould shut down all initialized stores and clear registry
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mshutdownAll[2m > [22mshould handle empty registry gracefully
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mgetNames / has / isInitialized[2m > [22mshould return empty array for new registry
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mgetNames / has / isInitialized[2m > [22mshould return all registered names
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mgetNames / has / isInitialized[2m > [22mshould check initialization status
+ [32m✓[39m tests/MemoryStoreRegistry.test.ts[2m > [22mMemoryStoreRegistry[2m > [22mworking with InMemoryMemoryStore[2m > [22mshould integrate with InMemoryMemoryStore
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22minit / isReady[2m > [22mshould be ready after init
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22minit / isReady[2m > [22mshould not be persisted
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22minit / isReady[2m > [22mshould have size 0 initially
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mwrite / get[2m > [22mshould write and retrieve a memory entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mwrite / get[2m > [22mshould return undefined for non-existent id
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mwrite / get[2m > [22mshould return a clone, not the internal reference
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mhas / peek[2m > [22mshould return true for existing entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mhas / peek[2m > [22mshould return false for non-existing entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mhas / peek[2m > [22mpeek should return the internal reference
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mdelete[2m > [22mshould delete an existing entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mdelete[2m > [22mshould return false for non-existing entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mread / query[2m > [22mshould return all entries when query is empty
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mread / query[2m > [22mshould filter by kind
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mread / query[2m > [22mshould filter by keywords
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mread / query[2m > [22mshould sort by weight descending
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mread / query[2m > [22mshould limit results
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mread / query[2m > [22mshould filter by timeRange
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mread / query[2m > [22mshould filter by metadata
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22msession management[2m > [22mshould manage sessions
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22msession management[2m > [22mshould auto-generate sessionId when not provided
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22msession management[2m > [22mshould associate written entries with current session
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22msession management[2m > [22mshould archive session entries on endSession
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mlink management[2m > [22mshould create a link between two entries
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mlink management[2m > [22mshould return null if source or target does not exist
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtwo-phase commit (pending)[2m > [22mshould write pending entries
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtwo-phase commit (pending)[2m > [22mshould commit a pending entry
+ [31m×[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtwo-phase commit (pending)[2m > [22mshould rollback a pending entry
+[31m   → expected Promise{…} to be true // Object.is equality[39m
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mlifecycle management[2m > [22mshould archive an entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mlifecycle management[2m > [22mshould obliterate an entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mlifecycle management[2m > [22mshould cas an entry
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mlifecycle management[2m > [22mshould fail cas if expected state does not match
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtransactions[2m > [22mshould begin and commit a transaction
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtransactions[2m > [22mshould rollback a transaction
+ [31m×[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtransactions[2m > [22mshould throw when writing to a committed transaction
+[31m   → expected [Function] to throw error including 'expected active' but got 'Transaction not found or already comp…'[39m
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtransactions[2m > [22mshould provide active transactions list
+ [32m✓[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mclose[2m > [22mshould clear all data on close
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22minit / isReady[2m > [22mshould be ready after init
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22minit / isReady[2m > [22mshould be persisted
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22minit / isReady[2m > [22mshould have size 0 initially
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mwrite / get[2m > [22mshould write and retrieve a memory entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mwrite / get[2m > [22mshould return undefined for non-existent id
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mwrite / get[2m > [22mshould persist entry to disk
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mhas / peek[2m > [22mshould return true for existing entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mhas / peek[2m > [22mshould return false for non-existing entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mdelete[2m > [22mshould delete an existing entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mdelete[2m > [22mshould return false for non-existing entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mread / query[2m > [22mshould return all entries when query is empty
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mread / query[2m > [22mshould filter by kind
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mread / query[2m > [22mshould filter by keywords
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mread / query[2m > [22mshould limit results
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22msession management[2m > [22mshould manage sessions
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22msession management[2m > [22mshould associate written entries with current session
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mlink management[2m > [22mshould create a link between two entries
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mlink management[2m > [22mshould return null if source or target does not exist
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mtwo-phase commit (pending)[2m > [22mshould write and commit pending entries
+ [31m×[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mtwo-phase commit (pending)[2m > [22mshould rollback a pending entry
+[31m   → expected Promise{…} to be true // Object.is equality[39m
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mlifecycle management[2m > [22mshould archive an entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mlifecycle management[2m > [22mshould obliterate an entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mlifecycle management[2m > [22mshould cas an entry
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mtransactions[2m > [22mshould begin and commit a transaction
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mtransactions[2m > [22mshould rollback a transaction
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mtransactions[2m > [22mshould provide active transactions list
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mdata persistence across restarts[2m > [22mshould reload data from disk on re-init
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mflush / close[2m > [22mshould flush data to disk
+ [32m✓[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mflush / close[2m > [22mshould clear data on close
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 3 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/FileBasedMemoryStore.test.ts[2m > [22mFileBasedMemoryStore[2m > [22mtwo-phase commit (pending)[2m > [22mshould rollback a pending entry
+[31m[1mAssertionError[22m: expected Promise{…} to be true // Object.is equality[39m
+
+[32m- Expected:[39m 
+true
+
+[31m+ Received:[39m 
+Promise {}
+
+[36m [2m❯[22m tests/FileBasedMemoryStore.test.ts:[2m206:26[22m[39m
+    [90m204| [39m
+    [90m205| [39m      [35mconst[39m rolledback [33m=[39m store[33m.[39m[34mrollback[39m(id)[33m;[39m
+    [90m206| [39m      [34mexpect[39m(rolledback)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m207| [39m      [34mexpect[39m(store[33m.[39m[34mhasPending[39m())[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m208| [39m    })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtwo-phase commit (pending)[2m > [22mshould rollback a pending entry
+[31m[1mAssertionError[22m: expected Promise{…} to be true // Object.is equality[39m
+
+[32m- Expected:[39m 
+true
+
+[31m+ Received:[39m 
+Promise {}
+
+[36m [2m❯[22m tests/InMemoryMemoryStore.test.ts:[2m261:26[22m[39m
+    [90m259| [39m
+    [90m260| [39m      [35mconst[39m rolledback [33m=[39m store[33m.[39m[34mrollback[39m(id)[33m;[39m
+    [90m261| [39m      [34mexpect[39m(rolledback)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+    [90m   | [39m                         [31m^[39m
+    [90m262| [39m      [34mexpect[39m(store[33m.[39m[34mhasPending[39m())[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+    [90m263| [39m      [34mexpect[39m(store[33m.[39m[34mhas[39m(id))[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/InMemoryMemoryStore.test.ts[2m > [22mInMemoryMemoryStore[2m > [22mtransactions[2m > [22mshould throw when writing to a committed transaction
+[31m[1mAssertionError[22m: expected [Function] to throw error including 'expected active' but got 'Transaction not found or already comp…'[39m
+
+Expected: [32m"expected active"[39m
+Received: [31m"Transaction not found or already completed"[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Unhandled Errors [27m[22m⎯⎯⎯⎯⎯⎯[39m
+[31m[1m
+Vitest caught 2 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.[22m[39m
+
+[31m⎯⎯⎯⎯[1m[7m Unhandled Rejection [27m[22m⎯⎯⎯⎯⎯[39m
+[31m[1mTransactionError[22m: Transaction not found[39m
+[36m [2m❯[22m InMemoryMemoryStore.rollback src/implementations/InMemoryMemoryStore.ts:[2m658:13[22m[39m
+    [90m656| [39m    [35mconst[39m internal [33m=[39m [35mthis[39m[33m.[39m_transactions[33m.[39m[35mget[39m(txn[33m.[39mid)[33m;[39m
+    [90m657| [39m    [35mif[39m ([33m![39minternal) {
+    [90m658| [39m      [35mthrow[39m [35mnew[39m [33mTransactionError[39m([32m"Transaction not found"[39m[33m,[39m txn[33m.[39mid)[33m;[39m
+    [90m   | [39m            [31m^[39m
+    [90m659| [39m    }
+    [90m660| [39m
+[90m [2m❯[22m tests/InMemoryMemoryStore.test.ts:[2m260:32[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m146:14[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m533:11[22m[39m
+[90m [2m❯[22m runWithTimeout ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m39:7[22m[39m
+[90m [2m❯[22m runTest ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1056:17[22m[39m
+[90m [2m❯[22m processTicksAndRejections node:internal/process/task_queues:[2m103:5[22m[39m
+[90m [2m❯[22m runSuite ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1205:15[22m[39m
+[90m [2m❯[22m runSuite ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1205:15[22m[39m
+[90m [2m❯[22m runSuite ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1205:15[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ code: 'TRANSACTION_FAILED', context: { transactionId: undefined }, transactionId: undefined, toLogString: 'Function<toLogString>' }[39m
+[31mThis error originated in "[1mtests/InMemoryMemoryStore.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31mThe latest test that might've caused the error is "[1mtests/InMemoryMemoryStore.test.ts[22m". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+
+[31m⎯⎯⎯⎯[1m[7m Unhandled Rejection [27m[22m⎯⎯⎯⎯⎯[39m
+[31m[1mTransactionError[22m: Transaction not found[39m
+[36m [2m❯[22m FileBasedMemoryStore.rollback src/implementations/FileBasedMemoryStore.ts:[2m726:13[22m[39m
+    [90m724| [39m    [35mconst[39m internal [33m=[39m [35mthis[39m[33m.[39m_transactions[33m.[39m[35mget[39m(txn[33m.[39mid)[33m;[39m
+    [90m725| [39m    [35mif[39m ([33m![39minternal) {
+    [90m726| [39m      [35mthrow[39m [35mnew[39m [33mTransactionError[39m([32m"Transaction not found"[39m[33m,[39m txn[33m.[39mid)[33m;[39m
+    [90m   | [39m            [31m^[39m
+    [90m727| [39m    }
+    [90m728| [39m
+[90m [2m❯[22m tests/FileBasedMemoryStore.test.ts:[2m205:32[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m146:14[22m[39m
+[90m [2m❯[22m ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m533:11[22m[39m
+[90m [2m❯[22m runWithTimeout ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m39:7[22m[39m
+[90m [2m❯[22m runTest ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1056:17[22m[39m
+[90m [2m❯[22m runSuite ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1205:15[22m[39m
+[90m [2m❯[22m runSuite ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1205:15[22m[39m
+[90m [2m❯[22m runSuite ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1205:15[22m[39m
+[90m [2m❯[22m runFiles ../../node_modules/.pnpm/@vitest+runner@2.1.9/node_modules/@vitest/runner/dist/index.js:[2m1262:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22m[39m
+[31m[1mSerialized Error:[22m[39m [90m{ code: 'TRANSACTION_FAILED', context: { transactionId: undefined }, transactionId: undefined, toLogString: 'Function<toLogString>' }[39m
+[31mThis error originated in "[1mtests/FileBasedMemoryStore.test.ts[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31mThe latest test that might've caused the error is "[1mshould rollback a pending entry[22m". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.[39m
+[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m88 passed[39m[22m[90m (91)[39m
+[2m     Errors [22m [1m[31m2 errors[39m[22m
+[2m   Start at [22m 05:22:53
+[2m   Duration [22m 1.29s[2m (transform 356ms, setup 0ms, collect 803ms, tests 246ms, environment 0ms, prepare 700ms)[22m
+

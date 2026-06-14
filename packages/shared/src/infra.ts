@@ -62,8 +62,13 @@ export enum PipelineEventType {
   ErrorSilentUpgraded = "error.silent_upgraded",
   // ── Analysis ──
   Analysis = "analysis",
+  // ── Skill ──
+  SkillReferenced = "skill.referenced",
   // ── Boundary Guard ──
   AgentBoundaryViolation = "agent.boundary_violation",
+  // ── RLM 递归分层执行 ──
+  RlmDecompose = "rlm.decompose",
+  RlmContextCompress = "context.compress",
   // ── ManifoldGate 流控 ──
   ManifoldGateWaitStart = "manifold_gate.wait_start",
   ManifoldGateWaitEnd = "manifold_gate.wait_end",
@@ -71,6 +76,10 @@ export enum PipelineEventType {
   ManifoldGateReleased = "manifold_gate.released",
   ManifoldGateInvariantViolation = "manifold_gate.invariant_violation",
   ManifoldGateReleaseOrphan = "manifold_gate.release_orphan",
+  ManifoldGateMaxUpdated = "manifold_gate.max_updated",
+  // ── Infrastructure ──
+  InfraFileLockExpiredReclaimed = "infra.file_lock.expired_reclaimed",
+  InfraComponentDegraded = "infra.component_degraded",
 }
 
 /**
@@ -112,12 +121,38 @@ export type EventPayloadMap = {
   [PipelineEventType.ErrorReported]: { source: string; severity: string; error: string; hint?: string };
   [PipelineEventType.ErrorSilentUpgraded]: { source: string; consecutive: number; threshold: number; lastError: string; hint?: string };
   [PipelineEventType.Analysis]: unknown;
+  [PipelineEventType.SkillReferenced]: {
+    nodeId: string;
+    agentType: AgentType;
+    skillId: string;
+    skillName: string;
+    /** 实际采信的步骤索引（0-based） */
+    stepsUsed?: number[];
+    /** 跳过的步骤索引 */
+    stepsSkipped?: number[];
+    /** Agent 对步骤的临时调整说明 */
+    adaptation?: string;
+  };
   [PipelineEventType.AgentBoundaryViolation]: {
     nodeId: string;
     agentType: AgentType;
     violatingFiles: string[];
     reason: string;
     expectedScope: string;
+  };
+  // ── RLM 递归分层执行 ──
+  [PipelineEventType.RlmDecompose]: {
+    nodeId: string;
+    subTaskCount: number;
+    depth: number;
+    confidence: number;
+    rationale?: string;
+  };
+  [PipelineEventType.RlmContextCompress]: {
+    nodeId: string;
+    density: string;
+    originalLength: number;
+    compressedLength: number;
   };
   // ── ManifoldGate 流控 ──
   [PipelineEventType.ManifoldGateWaitStart]: { agentType: string; queuePosition: number; active: number; max: number; requestId: string };
@@ -126,6 +161,9 @@ export type EventPayloadMap = {
   [PipelineEventType.ManifoldGateReleased]: { agentType: string; active: number; waiting: number; requestId: string };
   [PipelineEventType.ManifoldGateInvariantViolation]: { agentType: string; message: string };
   [PipelineEventType.ManifoldGateReleaseOrphan]: { agentType: string; message: string };
+  // ── Infrastructure ──
+  [PipelineEventType.InfraFileLockExpiredReclaimed]: { count: number; path?: string; holders?: string; detail: string };
+  [PipelineEventType.InfraComponentDegraded]: { component: string; operation: string; detail: string };
 };
 
 /** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定

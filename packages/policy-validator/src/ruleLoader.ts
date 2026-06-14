@@ -69,7 +69,27 @@ export interface IRuleLoader {
  */
 export function getBuiltinRules(): PolicyRule[] {
   return [
-    // §一 异常处理
+    ..._buildExceptionRules(),
+    ..._buildDeclarationRules(),
+    ..._buildAsyncRules(),
+    ..._buildImportPathRules(),
+    ..._buildConsoleRules(),
+    ..._buildStyleRules(),
+    ..._buildHardcodedRules(),
+    ..._buildPromptsRules(),
+    ..._buildArchitectureRules(),
+    ..._buildFunctionRules(),
+    ..._buildImportModuleRules(),
+    ..._buildInterfaceRules(),
+    ..._buildPatternRules(),
+  ];
+}
+
+// ── 内置规则按 § 分节工厂函数 ──
+
+/** §一 异常处理 */
+function _buildExceptionRules(): PolicyRule[] {
+  return [
     {
       id: "exception/no-empty-catch",
       domain: "exception",
@@ -108,8 +128,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["exception", "style"],
       standardRef: "§一",
     },
+  ];
+}
 
-    // §二 变量声明
+/** §二 变量声明 */
+function _buildDeclarationRules(): PolicyRule[] {
+  return [
     {
       id: "declaration/no-var",
       domain: "declaration",
@@ -130,8 +154,12 @@ export function getBuiltinRules(): PolicyRule[] {
       standardRef: "§二",
       fixSuggestion: "将 let 改为 const（若变量未被重新赋值）",
     },
+  ];
+}
 
-    // §三 异步规范
+/** §三 异步规范 */
+function _buildAsyncRules(): PolicyRule[] {
+  return [
     {
       id: "async/return-await",
       domain: "async",
@@ -159,8 +187,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["async", "safety"],
       standardRef: "§三",
     },
+  ];
+}
 
-    // §四 导入路径
+/** §四 导入路径 */
+function _buildImportPathRules(): PolicyRule[] {
+  return [
     {
       id: "import/barrel-only",
       domain: "import",
@@ -188,8 +220,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["import", "structure"],
       standardRef: "§四",
     },
+  ];
+}
 
-    // §五 控制台输出
+/** §五 控制台输出 */
+function _buildConsoleRules(): PolicyRule[] {
+  return [
     {
       id: "console/no-raw-error",
       domain: "console",
@@ -208,8 +244,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["console", "logging"],
       standardRef: "§五",
     },
+  ];
+}
 
-    // §六 + §十 代码风格
+/** §六 + §十 代码风格 */
+function _buildStyleRules(): PolicyRule[] {
+  return [
     {
       id: "style/require-no-require",
       domain: "style",
@@ -293,8 +333,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["style", "design"],
       standardRef: "§11.1",
     },
+  ];
+}
 
-    // §七 硬编码禁令
+/** §七 硬编码禁令 */
+function _buildHardcodedRules(): PolicyRule[] {
+  return [
     {
       id: "hardcoded/no-magic-number",
       domain: "hardcoded",
@@ -331,8 +375,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["hardcoded", "config"],
       standardRef: "§七",
     },
+  ];
+}
 
-    // §八 提示词管理
+/** §八 提示词管理 */
+function _buildPromptsRules(): PolicyRule[] {
+  return [
     {
       id: "prompts/double-source-sync",
       domain: "prompts",
@@ -360,8 +408,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["prompts", "structure"],
       standardRef: "§8.1",
     },
+  ];
+}
 
-    // §九 架构设计原则
+/** §九 架构设计原则 */
+function _buildArchitectureRules(): PolicyRule[] {
+  return [
     {
       id: "architecture/no-interface-leak",
       domain: "architecture",
@@ -407,8 +459,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["architecture", "governance"],
       standardRef: "§9.4",
     },
+  ];
+}
 
-    // §十一 函数设计
+/** §十一 函数设计 */
+function _buildFunctionRules(): PolicyRule[] {
+  return [
     {
       id: "function/positional-max-3",
       domain: "function",
@@ -445,8 +501,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["function", "style"],
       standardRef: "§11.4",
     },
+  ];
+}
 
-    // §十二 导入路径与模块组织
+/** §十二 导入路径与模块组织 */
+function _buildImportModuleRules(): PolicyRule[] {
+  return [
     {
       id: "import/sort-order",
       domain: "import",
@@ -483,8 +543,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["import", "style"],
       standardRef: "§12.3",
     },
+  ];
+}
 
-    // §十三 接口与类型设计
+/** §十三 接口与类型设计 */
+function _buildInterfaceRules(): PolicyRule[] {
+  return [
     {
       id: "interface/isp-max-8-methods",
       domain: "interface",
@@ -521,8 +585,12 @@ export function getBuiltinRules(): PolicyRule[] {
       tags: ["interface", "style"],
       standardRef: "§13.4",
     },
+  ];
+}
 
-    // §十四 设计模式约定
+/** §十四 设计模式约定 */
+function _buildPatternRules(): PolicyRule[] {
+  return [
     {
       id: "pattern/adapter-convention",
       domain: "pattern",

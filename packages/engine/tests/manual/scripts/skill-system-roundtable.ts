@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { AgentType, type MemoryKind } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { MemoryStore } from "@cortex/engine";
+import { MemoryStore } from "@cortex/memory-store";
 import {
   getPersonaPrompts,
   QUALITY_RULES,

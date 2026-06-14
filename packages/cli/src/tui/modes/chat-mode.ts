@@ -40,5 +40,5 @@ export async function* chatMode(
     },
   };
 
-  return yield* queryLoop(input, bridge, "chat", agent, hooks, history);
+  return yield* queryLoop({ input, bridge, mode: "chat", agent, hooks, history });
 }

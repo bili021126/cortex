@@ -103,7 +103,7 @@ export class ToolLogRenderer {
       : style("✗", ColorCode.red);
     const detail = success
       ? style(truncate(output ?? ""), StyleCode.dim)
-      : style(truncate(error ?? "未知错误"), ColorCode.red);
+      : style(truncate(error ?? output ?? "未知错误"), ColorCode.red);
 
     writeln(
       `  ${statusIcon} ${style(timeStr, StyleCode.dim)} ${detail}`,

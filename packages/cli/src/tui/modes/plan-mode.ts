@@ -11,6 +11,61 @@
 import type { AgentType, LlmMessage, ICortexApi, TaskNode, ExecutionReport } from "@cortex/shared";
 import type { TuiEvent, TuiHooks, LlmStreamBridge } from "../types.js";
 import { queryLoop } from "../query-loop.js";
+import * as nodeFs from "node:fs";
+import * as nodePath from "node:path";
+
+/** Plan 模式状态持久化文件路径 */
+const PLAN_STATE_FILE = ".cortex/plan-state.json";
+
+/**
+ * 从项目根目录加载持久化的 Plan 状态。
+ * @returns 已持久化的 PlanModeState，或 null（文件不存在/损坏/过期）
+ */
+export function loadPlanState(projectRoot: string): PlanModeState | null {
+  try {
+    const filePath = nodePath.join(projectRoot, PLAN_STATE_FILE);
+    if (!nodeFs.existsSync(filePath)) return null;
+    const raw = nodeFs.readFileSync(filePath, "utf-8");
+    const state = JSON.parse(raw) as PlanModeState;
+    // 基本合法性校验：至少得有 nodes 数组和 intent
+    if (!state || !Array.isArray(state.nodes) || typeof state.intent !== "string") {
+      return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 将 PlanModeState 持久化到项目根目录。
+ */
+export function savePlanState(projectRoot: string, state: PlanModeState): void {
+  try {
+    const cortexDir = nodePath.join(projectRoot, ".cortex");
+    if (!nodeFs.existsSync(cortexDir)) {
+      nodeFs.mkdirSync(cortexDir, { recursive: true });
+    }
+    const filePath = nodePath.join(projectRoot, PLAN_STATE_FILE);
+    nodeFs.writeFileSync(filePath, JSON.stringify(state, null, 2), "utf-8");
+  } catch {
+    // 持久化失败不应阻塞用户操作
+  }
+}
+
+/**
+ * 删除持久化的 Plan 状态文件（计划执行完成或用户退出时调用）。
+ */
+export function clearPlanState(projectRoot: string): void {
+  try {
+    const filePath = nodePath.join(projectRoot, PLAN_STATE_FILE);
+    if (nodeFs.existsSync(filePath)) {
+      nodeFs.unlinkSync(filePath);
+    }
+  } catch {
+    // 静默失败
+  }
+}
 
 /** Plan 模式扩展桥接——增加 executeWithStream 用于计划执行 */
 interface PlanModeBridge extends LlmStreamBridge, Pick<ICortexApi, "chat" | "submitTask" | "executeAll"> {
@@ -80,5 +135,5 @@ export async function* planMode(
   }
 
   // 否则：生成计划
-  return yield* queryLoop(input, bridge, "plan", agent, hooks, history);
+  return yield* queryLoop({ input, bridge, mode: "plan", agent, hooks, history });
 }

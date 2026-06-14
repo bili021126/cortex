@@ -2,7 +2,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MemoryStore, MetaAgent, createInspectorAgent, Scheduler, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MetaAgent, createInspectorAgent, Scheduler, ManifoldGate } from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
 import { LlmAdapter } from "@cortex/llm";
 
 // ─── Mock helpers ────────────────────────────────
@@ -294,7 +297,7 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
     board = new TaskBoard();
     pool = new AgentPool();
     observer = new PipelineObserver();
-    memory = new MemoryStore();
+    memory = new MemoryStore(new InMemoryMemoryStore());
 
     pool.register({ type: AgentType.Code, maxInstances: 3 });
     pool.register({ type: AgentType.Analysis, maxInstances: 3 });
@@ -370,7 +373,7 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
       toolCalls: []}));
 
     const metaAgent = new MetaAgent(metaAdapter);
-    scheduler = new Scheduler(board, pool, observer, metaAgent);
+    scheduler = new Scheduler(board, pool, observer, metaAgent, { maxReplanPerNode: 3 });
 
     // 只注册 Analysis runner（永远不匹配 implementation 标签 → 新节点持续失败）
     const analysisRunner2 = await mockAgent(AgentType.Analysis, mockAdapter("unsolvable"));

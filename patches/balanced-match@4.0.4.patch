@@ -1,0 +1,12 @@
+diff --git a/package.json b/package.json
+index 48f1a638d0b67d3187e9d6dbaee454df4b302f23..eb90287b02ed0b1625f3bd5e59cfd45f2b8ef07d 100644
+--- a/package.json
++++ b/package.json
+@@ -22,7 +22,6 @@
+       }
+     }
+   },
+-  "type": "module",
+   "scripts": {
+     "preversion": "npm test",
+     "postversion": "npm publish",

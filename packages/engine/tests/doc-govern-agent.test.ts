@@ -1,8 +1,19 @@
 // @ci: unit
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, Toolkit, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, MemoryStore, Scheduler, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, Scheduler, ManifoldGate } from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
 import { LlmAdapter } from "@cortex/llm";
+
+/** mock embedder: 生成伪向量 */
+function mockEmbedder() {
+  const dim = 384;
+  function hash(s: string) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return h; }
+  function vec(seed: number) { let v = new Array(dim), s = seed; for (let i = 0; i < dim; i++) { s = (1664525 * s + 1013904223) | 0; v[i] = s / 2147483647; } let n = 0; for (let x of v) n += x * x; n = Math.sqrt(n); for (let i = 0; i < dim; i++) v[i] /= n; return v; }
+  return { async embedText(t: string) { return vec(hash(t)); }, async embedBatch(ts: string[]) { return ts.map(t => vec(hash(t))); } };
+}
 
 /** 创建 Mock Adapter */
 function mockAdapter(output: string) {
@@ -132,7 +143,8 @@ describe("DocGovernAgent 执行", () => {
   });
 
   it("DocGovernAgent 产出写入 EPISODIC 记忆", async () => {
-    const memory = new MemoryStore();
+    const memory = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder());
+    await memory.init(":memory:");
 
     const adapter = new LlmAdapter({
       apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});

@@ -1,0 +1,27 @@
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90mD:/cortex/packages/resilience[39m
+
+ [31m❯[39m tests/registry.test.ts [2m([22m[2m58 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 397[2mms[22m[39m
+[31m   [31m×[31m Registry[2m > [22mintegration[2m > [22mshould work with AdaptiveTimeout in chain[90m 4[2mms[22m[31m[39m
+[31m     → this._clamp is not a function[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 1 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m tests/registry.test.ts[2m > [22mRegistry[2m > [22mintegration[2m > [22mshould work with AdaptiveTimeout in chain
+[31m[1mTypeError[22m: this._clamp is not a function[39m
+[36m [2m❯[22m new AdaptiveTimeout src/timeout/AdaptiveTimeout.ts:[2m305:35[22m[39m
+    [90m303| [39m    [35mthis[39m[33m.[39m_initialEma [33m=[39m initialEma[33m;[39m
+    [90m304| [39m    [35mthis[39m[33m.[39m_ema [33m=[39m initialEma[33m;[39m
+    [90m305| [39m    [35mthis[39m[33m.[39m_currentTimeoutMs [33m=[39m [35mthis[39m[33m.[39m[34m_clamp[39m([33mMath[39m[33m.[39m[34mround[39m(initialEma [33m*[39m multi…
+    [90m   | [39m                                  [31m^[39m
+    [90m306| [39m  }
+    [90m307| [39m
+[90m [2m❯[22m tests/registry.test.ts:[2m835:18[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m57 passed[39m[22m[90m (58)[39m
+[2m   Start at [22m 01:20:11
+[2m   Duration [22m 1.08s[2m (transform 89ms, setup 0ms, collect 114ms, tests 397ms, environment 0ms, prepare 117ms)[22m
+

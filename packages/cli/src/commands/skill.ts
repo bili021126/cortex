@@ -9,6 +9,7 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import { isHelpRequest } from "../utils.js";
 import { SkillRegistry } from "@cortex/engine";
 import type { SkillTemplate } from "@cortex/shared";
 
@@ -27,7 +28,7 @@ function getRegistry(): SkillRegistry {
 
 export function createSkillHandler(): CommandHandler {
   return async (args, options, context): Promise<CommandResult> => {
-    if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
+    if (isHelpRequest(args)) {
       return { success: true, output: HELP_TEXT, exitCode: 0 };
     }
 
@@ -35,21 +36,21 @@ export function createSkillHandler(): CommandHandler {
     const subArgs = args.slice(1);
 
     try {
-      const registry = await getRegistry();
+      const registry = getRegistry();
 
       switch (subcommand) {
         case "list":
-          return await handleList(registry, options, context);
+          return handleList(registry, options, context);
         case "search":
-          return await handleSearch(registry, subArgs, options, context);
+          return handleSearch(registry, subArgs, options);
         case "info":
-          return await handleInfo(registry, subArgs, context);
+          return handleInfo(registry, subArgs, context);
         case "register":
-          return await handleRegister(registry, subArgs, options, context);
+          return handleRegister(registry, subArgs, options);
         case "unregister":
-          return await handleUnregister(registry, subArgs, options, context);
+          return handleUnregister(registry, subArgs, options);
         case "stats":
-          return await handleStats(registry, options, context);
+          return handleStats(registry, options, context);
         default:
           return {
             success: false,
@@ -100,11 +101,11 @@ const HELP_TEXT = [
 
 // ─── list ────────────────────────────────────────────
 
-async function handleList(
+function handleList(
   registry: SkillRegistry,
   options: Record<string, unknown>,
   _context: CommandContext,
-): Promise<CommandResult> {
+): CommandResult {
   let skills = registry.getAll();
   const category = options["category"] as string | undefined;
   const tagsStr = options["tags"] as string | undefined;
@@ -136,12 +137,11 @@ async function handleList(
 
 // ─── search ──────────────────────────────────────────
 
-async function handleSearch(
+function handleSearch(
   registry: SkillRegistry,
   args: string[],
   options: Record<string, unknown>,
-  _context: CommandContext,
-): Promise<CommandResult> {
+): CommandResult {
   const query = args.join(" ");
   if (!query) {
     return { success: false, error: "请指定搜索关键词。用法: cortex skill search <query>", exitCode: 1 };
@@ -150,17 +150,7 @@ async function handleSearch(
   const categoryFilter = options["category"] as string | undefined;
   const tagsFilter = options["tags"] ? (options["tags"] as string).split(",").map((t) => t.trim()) : undefined;
 
-  let skills = registry.getAll();
-
-  // 关键词搜索：匹配 id、name、trigger 字段
-  const lowerQ = query.toLowerCase();
-  skills = skills.filter(
-    (s) =>
-      s.id.toLowerCase().includes(lowerQ) ||
-      s.name.toLowerCase().includes(lowerQ) ||
-      s.trigger.toLowerCase().includes(lowerQ),
-  );
-
+  let skills = _filterSkillsBySearch(registry.getAll(), query);
   if (categoryFilter) {
     skills = skills.filter((s) => s.triggerTags.some((t) => t.toLowerCase() === categoryFilter.toLowerCase()));
   }
@@ -171,22 +161,16 @@ async function handleSearch(
   if (skills.length === 0) {
     return { success: true, output: `未找到匹配 "${query}" 的技能`, exitCode: 0 };
   }
-
-  const lines = [`搜索 "${query}" (共 ${skills.length} 个):`, ""];
-  for (const s of skills) {
-    lines.push(`  ${s.id}  ${s.name}  [${s.kind}]`);
-    lines.push(`    ${s.trigger.slice(0, 80)}${s.trigger.length > 80 ? "…" : ""}`);
-  }
-  return { success: true, output: lines.join("\n"), exitCode: 0 };
+  return _formatSearchResults(query, skills);
 }
 
 // ─── info ────────────────────────────────────────────
 
-async function handleInfo(
+function handleInfo(
   registry: SkillRegistry,
   args: string[],
   _context: CommandContext,
-): Promise<CommandResult> {
+): CommandResult {
   const skillId = args[0];
   if (!skillId) {
     return { success: false, error: "请指定技能 ID。用法: cortex skill info <id>", exitCode: 1 };
@@ -197,6 +181,118 @@ async function handleInfo(
     return { success: false, error: `技能「${skillId}」未在注册表中找到`, exitCode: 1 };
   }
 
+  return { success: true, output: _formatSkillDetail(tmpl), exitCode: 0 };
+}
+
+// ─── register ────────────────────────────────────────
+
+function handleRegister(
+  registry: SkillRegistry,
+  _args: string[],
+  options: Record<string, unknown>,
+): CommandResult {
+  const id = options["id"] as string;
+  const name = options["name"] as string;
+  const trigger = options["trigger"] as string;
+  const kind = (options["kind"] as string) ?? "action";
+
+  if (!id || !name || !trigger) {
+    return { success: false, error: "缺少必要参数。用法: cortex skill register --id <id> --name <name> --trigger <触发条件> [--kind action|thought|workflow] [--tags t1,t2]", exitCode: 1 };
+  }
+
+  const validationError = _validateRegisterInput(id, kind);
+  if (validationError) return validationError;
+
+  if (!options["overwrite"] && registry.get(id)) {
+    return { success: false, error: `技能「${id}」已存在。使用 --overwrite 覆盖`, exitCode: 1 };
+  }
+
+  const template = _buildSkillTemplate({ id, name, kind, trigger, tagsStr: (options["tags"] as string) ?? "", options });
+  registry.register(template);
+  return { success: true, output: `✓ 技能「${id}」注册成功`, exitCode: 0 };
+}
+
+// ─── unregister ──────────────────────────────────────
+
+function handleUnregister(
+  registry: SkillRegistry,
+  args: string[],
+  options: Record<string, unknown>,
+): CommandResult {
+  const skillId = args[0];
+  if (!skillId) {
+    return { success: false, error: "请指定技能 ID。用法: cortex skill unregister <id>", exitCode: 1 };
+  }
+
+  const exists = registry.get(skillId);
+  if (!exists) {
+    return { success: false, error: `技能「${skillId}」未在注册表中找到`, exitCode: 1 };
+  }
+
+  if (!options["force"]) {
+    const dependents = registry.getAll().filter((s) => s.trigger.includes(skillId));
+    if (dependents.length > 0) {
+      return {
+        success: false,
+        error: `技能「${skillId}」可能被引用: ${dependents.map((d) => d.id).join(", ")}。使用 --force 强制注销`,
+        exitCode: 1,
+      };
+    }
+  }
+
+  const ok = registry.unregister(skillId);
+  return ok
+    ? { success: true, output: `✓ 技能「${skillId}」已注销`, exitCode: 0 }
+    : { success: false, error: `注销失败: 技能「${skillId}」不存在`, exitCode: 1 };
+}
+
+// ─── execute ─────────────────────────────────────────
+// 注：v2.6 重构后，技能不再是可执行函数，而是结构化认知（被参照而非被执行）。
+// execute 子命令已移除。如需执行 Agent，请使用 cortex run。
+
+// ─── stats ───────────────────────────────────────────
+
+function handleStats(
+  registry: SkillRegistry,
+  options: Record<string, unknown>,
+  _context: CommandContext,
+): CommandResult {
+  const allSkills = registry.getAll();
+  const stats = _groupSkillStats(allSkills);
+  const format = (options["format"] as string) ?? "text";
+  if (format === "json") {
+    return {
+      success: true,
+      data: stats,
+      output: JSON.stringify(stats, null, 2),
+      exitCode: 0,
+    };
+  }
+  return { success: true, output: _formatSkillStatsText(stats), exitCode: 0 };
+}
+
+// ─── helpers ────────────────────────────────────────
+
+function _filterSkillsBySearch(skills: SkillTemplate[], query: string): SkillTemplate[] {
+  const lowerQ = query.toLowerCase();
+  return skills.filter(
+    (s) =>
+      s.id.toLowerCase().includes(lowerQ) ||
+      s.name.toLowerCase().includes(lowerQ) ||
+      s.trigger.toLowerCase().includes(lowerQ),
+  );
+}
+
+function _formatSearchResults(query: string, skills: SkillTemplate[]): CommandResult {
+  const lines = [`搜索 "${query}" (共 ${skills.length} 个):`, ""];
+  for (const s of skills) {
+    lines.push(`  ${s.id}  ${s.name}  [${s.kind}]`);
+    lines.push(`    ${s.trigger.slice(0, 80)}${s.trigger.length > 80 ? "…" : ""}`);
+  }
+  return { success: true, output: lines.join("\n"), exitCode: 0 };
+}
+
+function _formatSkillDetail(tmpl: SkillTemplate): string {
   const status = tmpl.status ?? "trial";
   const lines = [
     `技能详情: ${tmpl.id}`,
@@ -213,122 +309,25 @@ async function handleInfo(
   ];
   if (tmpl.expectedOutput) lines.push(`  预期产出: ${tmpl.expectedOutput}`);
   if (tmpl.outputFile) lines.push(`  输出文件: ${tmpl.outputFile}`);
-
-  return { success: true, output: lines.join("\n"), exitCode: 0 };
+  return lines.join("\n");
 }
 
-// ─── register ────────────────────────────────────────
-
-async function handleRegister(
-  registry: SkillRegistry,
-  _args: string[],
-  options: Record<string, unknown>,
-  _context: CommandContext,
-): Promise<CommandResult> {
-  const id = options["id"] as string;
-  const name = options["name"] as string;
-  const trigger = options["trigger"] as string;
-  const kind = (options["kind"] as string) ?? "action";
-  const tagsStr = (options["tags"] as string) ?? "";
-
-  if (!id || !name || !trigger) {
-    return {
-      success: false,
-      error: "缺少必要参数。用法: cortex skill register --id <id> --name <name> --trigger <触发条件> [--kind action|thought|workflow] [--tags t1,t2]",
-      exitCode: 1,
-    };
-  }
-
-  // 简单 ID 校验
+function _validateRegisterInput(id: string, kind: string): CommandResult | null {
   if (!/^[a-z][a-z0-9_-]{1,63}$/.test(id)) {
     return { success: false, error: `无效技能 ID「${id}」。需小写字母开头，2-64 字符，字母/数字/连字符/下划线`, exitCode: 1 };
   }
-
   if (!["action", "thought", "workflow"].includes(kind)) {
     return { success: false, error: `无效技能种类「${kind}」。可用: action, thought, workflow`, exitCode: 1 };
   }
-
-  const tags = tagsStr ? tagsStr.split(",").map((t) => t.trim()).filter(Boolean) : [];
-
-  const overwrite = !!options["overwrite"];
-  if (!overwrite && registry.get(id)) {
-    return { success: false, error: `技能「${id}」已存在。使用 --overwrite 覆盖`, exitCode: 1 };
-  }
-
-  const template: SkillTemplate = {
-    id,
-    kind: kind as SkillTemplate["kind"],
-    name,
-    triggerTags: tags as SkillTemplate["triggerTags"],
-    trigger,
-    steps: (options["steps"] as string[] | undefined) ?? [],
-    expectedOutput: (options["expected-output"] as string) ?? "",
-    status: "trial",
-    weight: 0,
-    feedbackHistory: [],
-    discoveredBy: (options["author"] as string) ?? "cli",
-    createdAt: Date.now(),
-  };
-
-  registry.register(template);
-  return { success: true, output: `✓ 技能「${id}」注册成功`, exitCode: 0 };
+  return null;
 }
 
-// ─── unregister ──────────────────────────────────────
+interface SkillStats { total: number; byKind: Record<string, number>; byTag: Record<string, number>; byStatus: Record<string, number>; }
 
-async function handleUnregister(
-  registry: SkillRegistry,
-  args: string[],
-  options: Record<string, unknown>,
-  _context: CommandContext,
-): Promise<CommandResult> {
-  const skillId = args[0];
-  if (!skillId) {
-    return { success: false, error: "请指定技能 ID。用法: cortex skill unregister <id>", exitCode: 1 };
-  }
-
-  const force = !!options["force"];
-  const exists = registry.get(skillId);
-  if (!exists) {
-    return { success: false, error: `技能「${skillId}」未在注册表中找到`, exitCode: 1 };
-  }
-
-  if (!force) {
-    // 检查是否有其他技能依赖此技能（通过 trigger 文本引用）
-    const allSkills = registry.getAll();
-    const dependents = allSkills.filter((s) => s.trigger.includes(skillId));
-    if (dependents.length > 0) {
-      return {
-        success: false,
-        error: `技能「${skillId}」可能被引用: ${dependents.map((d) => d.id).join(", ")}。使用 --force 强制注销`,
-        exitCode: 1,
-      };
-    }
-  }
-
-  const ok = registry.unregister(skillId);
-  if (ok) {
-    return { success: true, output: `✓ 技能「${skillId}」已注销`, exitCode: 0 };
-  }
-  return { success: false, error: `注销失败: 技能「${skillId}」不存在`, exitCode: 1 };
-}
-
-// ─── execute ─────────────────────────────────────────
-// 注：v2.6 重构后，技能不再是可执行函数，而是结构化认知（被参照而非被执行）。
-// execute 子命令已移除。如需执行 Agent，请使用 cortex run。
-
-// ─── stats ───────────────────────────────────────────
-
-async function handleStats(
-  registry: SkillRegistry,
-  options: Record<string, unknown>,
-  _context: CommandContext,
-): Promise<CommandResult> {
-  const allSkills = registry.getAll();
+function _groupSkillStats(allSkills: SkillTemplate[]): SkillStats {
   const byKind: Record<string, number> = {};
   const byTag: Record<string, number> = {};
   const byStatus: Record<string, number> = {};
-
   for (const s of allSkills) {
     byKind[s.kind] = (byKind[s.kind] ?? 0) + 1;
     byStatus[s.status] = (byStatus[s.status] ?? 0) + 1;
@@ -336,20 +335,41 @@ async function handleStats(
       byTag[t] = (byTag[t] ?? 0) + 1;
     }
   }
+  return { byKind, byTag, byStatus, total: allSkills.length };
+}
 
-  const format = (options["format"] as string) ?? "text";
-  if (format === "json") {
-    return {
-      success: true,
-      data: { total: allSkills.length, byKind, byStatus, byTag },
-      output: JSON.stringify({ total: allSkills.length, byKind, byStatus, byTag }, null, 2),
-      exitCode: 0,
-    };
-  }
+/** 从选项构建 SkillTemplate */
+function _buildSkillTemplate(opts: {
+  id: string;
+  name: string;
+  kind: string;
+  trigger: string;
+  tagsStr: string;
+  options: Record<string, unknown>;
+}): SkillTemplate {
+  const tags = opts.tagsStr ? opts.tagsStr.split(",").map((t) => t.trim()).filter(Boolean) : [];
+  return {
+    id: opts.id,
+    kind: opts.kind as SkillTemplate["kind"],
+    name: opts.name,
+    triggerTags: tags as SkillTemplate["triggerTags"],
+    trigger: opts.trigger,
+    steps: (opts.options["steps"] as string[] | undefined) ?? [],
+    expectedOutput: (opts.options["expected-output"] as string) ?? "",
+    status: "trial",
+    weight: 0,
+    feedbackHistory: [],
+    discoveredBy: (opts.options["author"] as string) ?? "cli",
+    createdAt: Date.now(),
+  };
+}
 
+/** 格式化统计文本 */
+function _formatSkillStatsText(stats: SkillStats): string {
+  const { total, byKind, byTag, byStatus } = stats;
   const lines = [
     `技能注册表统计:`,
-    `  总数: ${allSkills.length}`,
+    `  总数: ${total}`,
     `  活跃: ${byStatus["active"] ?? 0}`,
     `  试用: ${byStatus["trial"] ?? 0}`,
     `  弃用: ${byStatus["deprecated"] ?? 0}`,
@@ -364,6 +384,5 @@ async function handleStats(
   for (const [tag, count] of topTags) {
     lines.push(`    ${tag.padEnd(14)} ${count}`);
   }
-
-  return { success: true, output: lines.join("\n"), exitCode: 0 };
+  return lines.join("\n");
 }

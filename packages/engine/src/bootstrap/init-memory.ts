@@ -3,10 +3,10 @@
 // ============================================================
 /* eslint-disable no-console */
 
-import { MemoryStore } from "../memory/memory-store.js";
-import { defaultEmbeddingService } from "../memory/embedding.js";
-import { ConsistencyLayer } from "../consistency/consistency-layer.js";
-import type { PipelineObserver } from "../core/pipeline-observer.js";
+import { MemoryStore, defaultEmbeddingService } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
+import { ConsistencyLayer } from "@cortex/consistency";
+import type { PipelineObserver } from "@cortex/scheduler";
 import type { IFileSystemAdapter, IMemoryStore, MemoryEntry, MemoryWriteInput, ReadMode } from "@cortex/shared";
 
 /** ConsistencyLayer 初始化结果——含 filterRead 回传 */
@@ -25,7 +25,8 @@ export async function initMemoryStore(
 ): Promise<IMemoryStore | undefined> {
   let store = memory;
   if (!store && dbPath) {
-    store = new MemoryStore(observer, defaultEmbeddingService);
+    const backend = new InMemoryMemoryStore();
+    store = new MemoryStore(backend, observer, defaultEmbeddingService);
     await store.init(dbPath);
   }
   return store;

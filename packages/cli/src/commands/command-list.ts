@@ -113,17 +113,20 @@ export const COMMAND_DEFS: readonly CommandDef[] = [
   },
 ];
 
+/** registerCommands 的聚合服务对象 */
+interface RegisterCtx {
+  engineBridge: EngineBridge;
+  configManager: ConfigManager;
+  docRegistry: DocRegistry;
+}
+
 /**
  * 注册所有命令到 CommandRegistry。
  *
  * 命令描述来自 COMMAND_DEFS，handler 通过工厂延迟创建。
  */
-export function registerCommands(
-  registry: CommandRegistry,
-  engineBridge: EngineBridge,
-  configManager: ConfigManager,
-  docRegistry: DocRegistry,
-): void {
+export function registerCommands(registry: CommandRegistry, ctx: RegisterCtx): void {
+  const { engineBridge, configManager, docRegistry } = ctx;
   const handlers = {
     run: createRunHandler(engineBridge),
     agent: createAgentHandler(engineBridge),
@@ -131,7 +134,7 @@ export function registerCommands(
     memory: createMemoryHandler(engineBridge),
     config: createConfigHandler(configManager),
     schedule: createScheduleHandler(engineBridge),
-    roundtable: createRoundtableHandler(engineBridge, docRegistry),
+    roundtable: createRoundtableHandler({ bridge: engineBridge, docRegistry }),
     confirm: createConfirmHandler(engineBridge),
     skill: createSkillHandler(),
     inspect: createInspectHandler(),

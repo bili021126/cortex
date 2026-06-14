@@ -8,8 +8,8 @@
 // ============================================================
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
-import { MemoryStore } from "../memory/memory-store.js";
-import { defaultEmbeddingService } from "../memory/embedding.js";
+import { MemoryStore, defaultEmbeddingService } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
 
 export class MemoryStorePlugin implements EnginePlugin {
   readonly name = "memoryStore";
@@ -18,8 +18,14 @@ export class MemoryStorePlugin implements EnginePlugin {
   private instance!: MemoryStore;
 
   async init(ctx: PluginContext): Promise<void> {
+    // 外部注入的 MemoryStore 优先使用（测试注入 mock embedder）
+    if (ctx.externals.memory) {
+      this.instance = ctx.externals.memory as unknown as MemoryStore;
+      return;
+    }
     const observer = ctx.get<PipelineObserverPlugin>("pipelineObserver").getInstance();
-    this.instance = new MemoryStore(observer, defaultEmbeddingService);
+    const backend = new InMemoryMemoryStore();
+    this.instance = new MemoryStore(backend, observer, defaultEmbeddingService);
 
     // 初始化持久化层（SQLite 建表 + 加载数据）
     if (ctx.externals.dbPath) {

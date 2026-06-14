@@ -15,6 +15,7 @@ export default defineConfig({
       "!tests/skill-bootstrap*",
       "!tests/skill-system-integration*",
       "!tests/system-stress*",
+      "!tests/task-board-stress*",
       "!tests/e2e/**",
     ],
     env: {

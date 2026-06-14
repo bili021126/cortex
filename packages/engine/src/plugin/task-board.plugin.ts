@@ -8,7 +8,7 @@
 // ============================================================
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
-import { TaskBoard } from "../core/task-board.js";
+import { TaskBoard } from "@cortex/scheduler";
 
 export class TaskBoardPlugin implements EnginePlugin {
   readonly name = "taskBoard";

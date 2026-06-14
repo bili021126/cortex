@@ -2,13 +2,21 @@
 // P3: MemoryStore 并发写入压力测试——验证 CAS 状态机在并发写入下不丢数据、不错状态。
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentType } from "@cortex/shared";
-import { MemoryStore } from "@cortex/engine";
+import { MemoryStore } from "@cortex/memory-store";
+import type { IEmbeddingService } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
+
+const mockEmbedder: IEmbeddingService = {
+  embedText: async () => { throw new Error("mock embedding unavailable"); },
+  embedBatch: async () => { throw new Error("mock embedding unavailable"); },
+};
 
 describe("MemoryStore 并发写入压力", () => {
   let store: MemoryStore;
 
-  beforeEach(() => {
-    store = new MemoryStore();
+  beforeEach(async () => {
+    store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder);
+    await store.init(":memory:");
   });
 
   it("10 Agent 并发写 100 条记忆——无崩溃、ID 格式合法", async () => {
@@ -36,7 +44,7 @@ describe("MemoryStore 并发写入压力", () => {
     expect(fulfilled.length).toBeGreaterThan(0);
     // 所有成功写入返回合法 ID
     expect(fulfilled.every((r) => typeof (r as PromiseFulfilledResult<string>).value === "string"
-      && (r as PromiseFulfilledResult<string>).value.startsWith("mem-"))).toBe(true);
+      && /^[0-9a-f]{8}-/.test((r as PromiseFulfilledResult<string>).value))).toBe(true);
     // 允许部分去重导致 ID 重复（MemoryStore 内置 SHA256+向量去重）
   });
 

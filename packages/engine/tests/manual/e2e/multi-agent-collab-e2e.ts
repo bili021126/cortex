@@ -26,16 +26,15 @@ import { AgentType, type Tag, type TaskNode, type SkillTemplate, setAgentRegistr
 import { LlmAdapter } from "@cortex/llm";
 import {
   SkillRegistry,
-  SkillExecutor,
   TaskBoard,
   AgentPool,
   Scheduler,
   PipelineObserver,
   ConfirmGate,
-  Toolkit,
-  MemoryStore,
   MetaAgent,
   createAgent} from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
 import type { AgentFactoryConfig } from "@cortex/engine";
 import { resolveLlmConfig } from "../config/llm-defaults";
 

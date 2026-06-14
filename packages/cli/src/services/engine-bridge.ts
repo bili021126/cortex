@@ -16,22 +16,16 @@ import * as path from "node:path";
 import {
   type MetaAgent,
   type StrategistAgent,
-  type Toolkit,
   Scheduler,
-  TaskBoard,
-  PipelineObserver,
-  ConfirmGate,
-  CLIAdapter,
-  MemoryStore,
   bootstrapEngine,
-  type IScheduler,
-  type IAgentPool,
-  type ITaskBoard,
-  type IMemoryStore,
-  type EngineConfig,
   type BootstrapEngineResult,
 } from "@cortex/engine";
-import { AgentStatus, AgentType, type AgentConfig, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
+import type { IScheduler, ITaskBoard, IAgentPool } from "@cortex/scheduler";
+import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
+import { CLIAdapter, type Toolkit } from "@cortex/platform";
+import type { EngineConfig } from "@cortex/config";
+import { MemoryStore } from "@cortex/memory-store";
+import { AgentStatus, AgentType, type AgentConfig, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
@@ -279,7 +273,7 @@ export class EngineBridge implements ICortexApi {
     board.setObserver(observer);
 
     // 5. MemoryStore
-    const memory = new MemoryStore(observer);
+    const memory = new MemoryStore(undefined, observer);
     if (this.dbPath) {
       await memory.init(this.dbPath);
     }
@@ -338,6 +332,20 @@ export class EngineBridge implements ICortexApi {
   }
 
   /**
+   * 获取 Agent 可用的工具定义——供 TUI queryLoop 注入 LLM function calling。
+   * 若 Toolkit 未初始化（轻量模式），返回空数组。
+   */
+  getToolDefs(agent: AgentType): { name: string; description: string; parameters?: Record<string, unknown> }[] {
+    const toolkit = this._bootstrapConfig?.toolkit;
+    if (!toolkit) return [];
+    return toolkit.listDefinitions(agent).map((d) => ({
+      name: d.name,
+      description: d.description,
+      parameters: d.parameters,
+    }));
+  }
+
+  /**
    * 执行工具调用——TUI 层通过此方法将 LLM 产出的 tool_call 转发到引擎 Toolkit。
    *
    * 默认以 "code" Agent 身份调用（TUI chat 模式的工具调用权限与 CodeAgent 一致）。
@@ -370,7 +378,7 @@ export class EngineBridge implements ICortexApi {
     tools: { name: string; description: string; parameters?: Record<string, unknown> }[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
     opts?: { reasoningEffort?: "high" | "max" },
-  ): Promise<{ content: string | null; tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[]; usage?: { prompt_tokens: number; completion_tokens: number } }> {
+  ): Promise<{ content: string | null; tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[]; usage?: { prompt_tokens: number; completion_tokens: number }; reasoning_content?: string }> {
     const l = this.llm;
     if (!l) throw new Error("LLM 未配置——请设置 DEEPSEEK_API_KEY 环境变量");
 
@@ -608,17 +616,18 @@ export class EngineBridge implements ICortexApi {
   async shutdown(): Promise<void> {
     if (!this.ctx.initialized) return;
     if (this.ctx.memoryStore) {
-      await this.ctx.memoryStore.flush();
-      await this.ctx.memoryStore.close();
+      try { await this.ctx.memoryStore.flush(); } catch { /* store may not be initialized */ }
+      try { await this.ctx.memoryStore.close(); } catch { /* store may not be initialized */ }
     }
     if (this.ctx.talkMemoryStore) {
-      await this.ctx.talkMemoryStore.flush();
-      await this.ctx.talkMemoryStore.close();
+      try { await this.ctx.talkMemoryStore.flush(); } catch { /* store may not be initialized */ }
+      try { await this.ctx.talkMemoryStore.close(); } catch { /* store may not be initialized */ }
     }
     if (this.ctx.cliAdapter) {
       this.ctx.cliAdapter.close();
     }
     this.ctx.initialized = false;
+    this.ctx.bootstrapped = false;
   }
 
   get isInitialized(): boolean {

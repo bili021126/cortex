@@ -31,7 +31,18 @@
         "run_shell",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "code",
       "display": {
@@ -69,7 +80,18 @@
         "run_shell",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "review",
       "display": {
@@ -106,7 +128,18 @@
         "web_search",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "analysis",
       "display": {
@@ -146,7 +179,18 @@
         "run_shell",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "ops",
       "display": {
@@ -184,7 +228,18 @@
         "web_search",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "loop",
       "display": {
@@ -227,7 +282,18 @@
         "web_search",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "doc-govern",
       "display": {
@@ -268,7 +334,18 @@
         "run_shell",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "fix",
       "display": {
@@ -306,7 +383,18 @@
         "web_search",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "api",
       "display": {
@@ -349,7 +437,18 @@
         "web_search",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "memoryQueryStrategy": "data",
       "display": {
@@ -386,7 +485,18 @@
         "web_search",
         "list_files",
         "delete_file",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "display": {
         "emoji": "🐰",
@@ -422,7 +532,18 @@
         "list_files",
         "delete_file",
         "parse_ast",
-        "browser_do"
+        "browser_do",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "display": {
         "emoji": "🎆",
@@ -450,7 +571,18 @@
       "toolPermissions": [
         "read_file",
         "search_code",
-        "list_files"
+        "list_files",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "display": {
         "emoji": "🍀",
@@ -482,7 +614,18 @@
         "search_code",
         "web_search",
         "list_files",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "display": {
         "emoji": "📋",
@@ -518,7 +661,18 @@
         "search_code",
         "web_search",
         "list_files",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "display": {
         "emoji": "☄️",
@@ -552,7 +706,18 @@
         "search_code",
         "web_search",
         "list_files",
-        "parse_ast"
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
       ],
       "display": {
         "emoji": "❄️",

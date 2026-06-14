@@ -14,7 +14,7 @@ import {
   applyApproved,
   checkTimeouts,
   summarizeGovernance,
-} from "../governance/governance-loop.js";
+} from "@cortex/governance";
 
 export class GovernancePlugin implements EnginePlugin {
   readonly name = "governance";

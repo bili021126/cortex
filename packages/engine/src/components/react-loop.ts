@@ -1,8 +1,8 @@
 /* eslint-disable no-console */
 import type { TaskNode, NodeResult, AgentType, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../platform/toolkit.js";
-import type { MemoryStore } from "../memory/memory-store.js";
+import type { Toolkit } from "@cortex/platform";
+import type { MemoryStore } from "@cortex/memory-store";
 
 /**
  * ReAct 循环上下文——解耦 BaseAgent 继承链。

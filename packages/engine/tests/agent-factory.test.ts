@@ -2,7 +2,8 @@
 import { describe, it, expect } from "vitest";
 import { AgentType, AgentStatus as AS } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit, createAgent, type AgentFactoryConfig, PoolAwareState, AgentPool } from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { createAgent, type AgentFactoryConfig, PoolAwareState, AgentPool } from "@cortex/engine";
 
 function mockLlm() {
   const adapter = new LlmAdapter({

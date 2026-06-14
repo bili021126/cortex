@@ -23,8 +23,15 @@
   },
   "dependencies": {
     "@cortex/config": "workspace:*",
+    "@cortex/consistency": "workspace:*",
     "@cortex/factory": "workspace:*",
+    "@cortex/governance": "workspace:*",
     "@cortex/llm": "workspace:*",
+    "@cortex/memory": "workspace:*",
+    "@cortex/memory-store": "workspace:*",
+    "@cortex/pattern-extractor": "workspace:^",
+    "@cortex/platform": "workspace:*",
+    "@cortex/scheduler": "workspace:*",
     "@cortex/shared": "workspace:*",
     "@cortex/telemetry": "workspace:*",
     "@xenova/transformers": "^2.17.2",
@@ -32,14 +39,14 @@
   },
   "devDependencies": {
     "@cortex/testing": "workspace:*",
-    "@types/node": "^22.0.0",
     "@types/better-sqlite3": "^7.6.0",
-    "eslint": "^10.3.0",
+    "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "eslint": "^10.4.1",
     "playwright": "^1.59.1",
     "tree-sitter": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0",
-    "@vitest/coverage-v8": "^2.1.9"
+    "vitest": "^2.1.0"
   }
 }

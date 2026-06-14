@@ -26,6 +26,9 @@ export default tseslint.config(
       "packages/engine/scripts/**",
       "packages/skill-validator/eslint.config.mjs",
       "packages/src/**",
+      "packages/scheduler/src/**/*.d.ts",
+      "packages/scheduler/src/**/*.js",
+      "packages/memory/examples/**",
     ],
   },
   {
@@ -62,12 +65,14 @@ export default tseslint.config(
       "require-await": "off",
       "@typescript-eslint/require-await": "warn",
 
-      // ── 控制台（禁止裸 console——统一走 PipelineObserver 管道；仅 warn/error 例外用于运行时日志） ──
+      // ── 控制台（禁止裸 console——统一走 PipelineObserver 管道；仅 warn/error 例外用于运行时日志）
+      //   豁免需标注 // @justification 注释说明原因（例如："@cortex/llm 包无 observer 可用"）
       "no-console": ["error", { allow: ["warn", "error"] }],
 
       // ── 代码质量 ──
       "no-debugger": "error",
-      "no-duplicate-imports": "error",
+      // no-duplicate-imports 与 consistent-type-imports (prefer:type-imports) 冲突——
+      // 拆分混合导入时 inevitable 产生同源 import type + import value，由 TS 编译器去重
       "@typescript-eslint/no-non-null-assertion": "error",
 
       // ── 类型导入规范 ──

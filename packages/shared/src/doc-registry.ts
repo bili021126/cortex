@@ -1,6 +1,10 @@
 // ============================================================
 // @cortex/shared — DocRegistry 类型定义
 //
+// @constitutional §9.3 no-interface-leak — shared 包仅含纯接口约定，
+//   运行时类（含 DocRegistry 实例化逻辑）必须在 engine 层实现。
+//   本文件只导出类型和接口，禁止导入任何运行时依赖。
+//
 // @file-overview
 // DocRegistry 是文档治理层的核心基础设施——与 MemoryStore 同构，
 // 管理治理文档的生命周期（draft → active → archived → deprecated）。

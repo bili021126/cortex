@@ -7,7 +7,7 @@
  * @see CLI 设计文档 §8.2（对接点矩阵）
  */
 
-import { CLIAdapter } from "@cortex/engine";
+import { CLIAdapter } from "@cortex/platform";
 import type { PlatformBridge } from "@cortex/shared";
 
 let _bridge: PlatformBridge | null = null;

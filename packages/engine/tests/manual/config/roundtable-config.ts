@@ -11,7 +11,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { AgentType, LinkType, type MemoryKind } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import { MemoryStore } from "@cortex/engine";
+import { MemoryStore } from "@cortex/memory-store";
 import cortexConfig from "../../../../../cortex-agents.json" assert { type: "json" };
 
 // ═══════════════════════════════════════════════

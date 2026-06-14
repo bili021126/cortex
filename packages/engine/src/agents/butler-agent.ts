@@ -1,6 +1,6 @@
 /* eslint-disable no-console */
 import { AgentType as AT, AgentStatus as AS, PipelinePriority, type AgentStatus, type ObservableEvent, type SafeErrorReporter, type IPipelineObserver, type PlatformBridge } from "@cortex/shared";
-import type { AgentPool } from "../core/agent-pool.js";
+import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "../components/pool-aware.js";
 
 /**

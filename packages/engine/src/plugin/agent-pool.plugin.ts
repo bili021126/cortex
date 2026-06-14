@@ -9,7 +9,7 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import type { Disposable } from "@cortex/shared";
-import { AgentPool } from "../core/agent-pool.js";
+import { AgentPool } from "@cortex/scheduler";
 
 export class AgentPoolPlugin implements EnginePlugin {
   readonly name = "agentPool";

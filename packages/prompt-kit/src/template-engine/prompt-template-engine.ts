@@ -141,7 +141,7 @@ export class PromptTemplateEngine {
     this.directives.set("block", (params, _body, context, _engine, _depth) => {
       const blockMap = context.variables?.__blocks as Record<string, string> | undefined;
       const blockId = params.trim();
-      if (blockMap && blockMap[blockId]) {
+      if (blockMap?.[blockId]) {
         return blockMap[blockId];
       }
       return `[块 "${blockId}" 未找到]`;
@@ -347,15 +347,22 @@ export class PromptTemplateEngine {
       ? this.options.undefinedPlaceholder
       : String(value);
 
+    // 防御性转义模板分隔符，防止变量值破坏模板结构
+    const openTag = this.options.delimiters[0];
+    const closeTag = this.options.delimiters[1];
+    let safe = str
+      .replace(new RegExp(openTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "&#123;&#123;")
+      .replace(new RegExp(closeTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"), "&#125;&#125;");
+
     if (this.options.escapeHtml) {
-      return str
+      safe = safe
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
     }
-    return str;
+    return safe;
   }
 
   private resolvePath(obj: Record<string, unknown>, path: string): unknown {
@@ -366,7 +373,11 @@ export class PromptTemplateEngine {
       if (current === null || current === undefined) {
         return undefined;
       }
-      if (typeof current === "object" && part in (current as Record<string, unknown>)) {
+      // 防御 __proto__ / constructor / prototype 等原型链属性
+      if (part === "__proto__" || part === "constructor" || part === "prototype") {
+        return undefined;
+      }
+      if (typeof current === "object" && Object.prototype.hasOwnProperty.call(current as object, part)) {
         current = (current as Record<string, unknown>)[part];
       } else {
         return undefined;

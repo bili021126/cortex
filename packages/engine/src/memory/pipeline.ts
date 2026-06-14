@@ -1,8 +1,9 @@
 import { LinkType, PRESET_CONTEXT_POLICIES, type AgentType, type MemoryEntry, type MemoryKind, type MemoryQuery, type NodeResult, type ReadMode, type SafeErrorReporter, type TaskNode } from "@cortex/shared";
-import type { MemoryStore } from "./memory-store.js";
+import type { LlmAdapter } from "@cortex/llm";
+import { ContextBuilder, type MemoryStore } from "@cortex/memory-store";
+import type { Toolkit } from "@cortex/platform";
 import { runReActLoop, type ReActContext } from "../components/react-loop.js";
-import { PipelineRunner, type PipelineCtx, type IStep } from "../core/pipeline-runner.js";
-import { ContextBuilder } from "./context-builder.js";
+import { PipelineRunner, type PipelineCtx, type IStep } from "@cortex/scheduler";
 import { recordTelemetry } from "../telemetry/engine-telemetry.js";
 
 /**
@@ -82,7 +83,7 @@ export class MemoryRetrievalStep implements IStep {
       const contextPolicyId = node.contextPolicyId;
       if (contextPolicyId && PRESET_CONTEXT_POLICIES[contextPolicyId]) {
         const policy = PRESET_CONTEXT_POLICIES[contextPolicyId];
-        const builder = new ContextBuilder(memory);
+        const builder = new ContextBuilder(memory as MemoryStore);
         const result = await builder.build(policy, node);
 
         // ── 遥测：记录上下文构建统计 ──
@@ -109,7 +110,7 @@ export class MemoryRetrievalStep implements IStep {
 
       // ── 回退：关键词检索（无 ContextPolicy） ──
       const query = memoryQuery ? memoryQuery(node) : defaultMemoryQuery(node);
-      const ctxRecords = await memory.read(query);
+      const ctxRecords = await (memory as MemoryStore).read(query);
       const filtered = filterRead ? filterRead(ctxRecords, "CSA") : ctxRecords;
       if (filtered.length > 0) {
         const ctxSummary = filtered.map((m) => `[记忆] ${m.summary}`).join("\n");
@@ -149,12 +150,12 @@ export class ReActLoopStep implements IStep {
 
     const reactCtx: ReActContext = {
       agentType: ctx.agentType,
-      llm: ctx.llm,
-      toolkit: ctx.toolkit,
+      llm: ctx.llm as LlmAdapter,
+      toolkit: ctx.toolkit as Toolkit,
       systemPrompt: ctx.systemPrompt,
       maxLoops: ctx.maxLoops,
       reactLoopTimeoutMs: ctx.reactLoopTimeoutMs,
-      memory: ctx.memory,
+      memory: ctx.memory as MemoryStore | undefined,
       safeReporter: ctx.safeReporter,
     };
 
@@ -173,7 +174,7 @@ export class MemoryWriteStep implements IStep {
   async run(ctx: PipelineCtx): Promise<PipelineCtx> {
     const { memory, agentType, node, result, safeReporter } = ctx;
     if (memory && result) {
-      await _rememberResult(memory, agentType, node, result, safeReporter);
+      await _rememberResult(memory as MemoryStore, agentType, node, result, safeReporter);
     }
     return ctx;
   }
@@ -196,7 +197,7 @@ export class DirectStep implements IStep {
     ];
 
     try {
-      const res = await ctx.llm.chat(ctx.model, messages, [], node.reasoningEffort);
+      const res = await (ctx.llm as LlmAdapter).chat(ctx.model, messages, [], node.reasoningEffort);
       ctx.result = {
         nodeId: node.id,
         agentType: ctx.agentType,

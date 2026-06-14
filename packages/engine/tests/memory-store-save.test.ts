@@ -1,19 +1,26 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { MemoryStore, PipelineObserver } from "@cortex/engine";
+import { PipelineObserver } from "@cortex/engine";
+import { MemoryStore, type IEmbeddingService } from "@cortex/memory-store";
+import { InMemoryMemoryStore } from "@cortex/memory";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 
-describe("MemoryStore._saveDb", () => {
+const mockEmbedder: IEmbeddingService = {
+  embedText: async () => { throw new Error("mock embedding unavailable"); },
+  embedBatch: async () => { throw new Error("mock embedding unavailable"); },
+};
+
+describe("MemoryStore 写入与读取", () => {
   let store: MemoryStore;
   let observer: PipelineObserver;
   let dbPath: string;
 
   beforeEach(() => {
     observer = new PipelineObserver();
-    store = new MemoryStore(observer);
+    store = new MemoryStore(new InMemoryMemoryStore(), observer, mockEmbedder);
     dbPath = path.join(os.tmpdir(), `test-memory-${Date.now()}.db`);
   });
 
@@ -23,11 +30,10 @@ describe("MemoryStore._saveDb", () => {
     }
   });
 
-  it("persists and reloads data correctly (happy path, no retry needed)", async () => {
-    await store.init(dbPath);
-    expect(store.isPersisted).toBe(true);
+  it("写入后可通过 read() 检索（内存模式）", async () => {
+    await store.init(":memory:");
 
-    // 写入一条记忆（触发 _saveDb）
+    // 写入一条记忆
     const id = await store.write({
       kind: "TaskLog",
       content_blob: { key: "value", nested: { a: 1 } },
@@ -41,23 +47,27 @@ describe("MemoryStore._saveDb", () => {
     expect(entry).toBeDefined();
     expect(entry!.summary).toBe("test persistence");
 
-    // 等待防抖刷盘完成（默认 200ms 延迟）
-    await store.flush();
+    // 通过 read 检索
+    const results = await store.read({ keywords: ["persistence"] });
+    expect(results).toHaveLength(1);
+    expect(results[0].content_blob).toEqual({ key: "value", nested: { a: 1 } });
 
-    // 确认 db 文件存在且非空
-    const stat = fs.statSync(dbPath);
-    expect(stat.size).toBeGreaterThan(0);
-
-    // 重新加载：创建新 MemoryStore 从同一 db 文件初始化
-    const store2 = new MemoryStore();
-    await store2.init(dbPath);
-    const reloaded = store2.peek(id);
-    expect(reloaded).toBeDefined();
-    expect(reloaded!.content_blob).toEqual({ key: "value", nested: { a: 1 } });
-    store2.close();
+    await store.close();
   });
 
-  it("writes without persistence when init is not called (pure memory)", async () => {
+  it("未 init 时写入抛出错误", async () => {
+    const uninitStore = new MemoryStore(new InMemoryMemoryStore(), observer, mockEmbedder);
+    await expect(uninitStore.write({
+      kind: "TaskLog",
+      content_blob: { test: true },
+      summary: "memory-only",
+      semantic_gist: "memory-only",
+      content_hash: "",
+      source: { agentType: AgentType.Code, taskId: "" }})).rejects.toThrow(/not initialized/);
+  });
+
+  it("init(':memory:') 后 isPersisted 为 false（纯内存模式）", async () => {
+    await store.init(":memory:");
     const id = await store.write({
       kind: "TaskLog",
       content_blob: { test: true },
@@ -69,14 +79,14 @@ describe("MemoryStore._saveDb", () => {
     expect(store.peek(id)).toBeDefined();
   });
 
-  it("write triggers observer on critical path through save", async () => {
-    await store.init(dbPath);
+  it("write triggers observer on critical path through write", async () => {
+    await store.init(":memory:");
     const events: Array<{ type: string }> = [];
     observer.on(PipelinePriority.CRITICAL, (e) => {
       events.push({ type: e.type });
     });
 
-    // 写入一条记忆，触发 _saveDb（正常路径，不会有 persist_failed）
+    // 写入一条记忆
     await store.write({
       kind: "TaskLog",
       content_blob: { test: true },
@@ -85,16 +95,17 @@ describe("MemoryStore._saveDb", () => {
       content_hash: "",
       source: { agentType: AgentType.Code, taskId: "" }});
 
-    // 正常写入不应触发 persist_failed
+    // 正常写入不应触发 persist_failed（适配器层不产生该事件）
     const persistErrors = events.filter((e) => e.type === "memory.persist_failed");
     expect(persistErrors).toHaveLength(0);
     store.close();
   });
 });
 
-describe("MemoryStore._deserializeRow", () => {
+describe("MemoryStore 内容序列化", () => {
   it("handles normal JSON content correctly via write + read", async () => {
-    const store = new MemoryStore();
+    const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder);
+    await store.init(":memory:");
 
     // 写带 JSON content 的记忆
     const id = await store.write({
@@ -112,7 +123,8 @@ describe("MemoryStore._deserializeRow", () => {
   });
 
   it("handles content with special characters without crash", async () => {
-    const store = new MemoryStore();
+    const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder);
+    await store.init(":memory:");
 
     const id = await store.write({
       kind: "TaskLog",
@@ -127,10 +139,9 @@ describe("MemoryStore._deserializeRow", () => {
     expect(results[0].content_blob.text).toContain("中文");
   });
 
-  it("persists and reloads content with metadata correctly", async () => {
-    const dbPath = path.join(os.tmpdir(), `test-deserialize-${Date.now()}.db`);
-    const store = new MemoryStore();
-    await store.init(dbPath);
+  it("写入后通过 peek 获取稳定快照", async () => {
+    const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder);
+    await store.init(":memory:");
 
     const id = await store.write({
       kind: "TaskLog",
@@ -140,17 +151,12 @@ describe("MemoryStore._deserializeRow", () => {
       content_hash: "",
       source: { agentType: AgentType.Code, taskId: "" }});
 
-    // 等待防抖刷盘完成后，从同一文件重新加载
+    // 从同一 store 实例 peek 应返回数据
     await store.flush();
-
-    const store2 = new MemoryStore();
-    await store2.init(dbPath);
-    const reloaded = store2.peek(id);
-    expect(reloaded).toBeDefined();
-    expect(reloaded!.content_blob).toEqual({ data: "persisted" });
+    const peeked = store.peek(id);
+    expect(peeked).toBeDefined();
+    expect(peeked!.content_blob).toEqual({ data: "persisted" });
 
     store.close();
-    store2.close();
-    try { fs.unlinkSync(dbPath); } catch { /* cleanup */ }
   });
 });

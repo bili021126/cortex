@@ -7,9 +7,11 @@
  * @see CLI 设计文档 §4.1
  */
 
-import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import type { CommandHandler, CommandResult } from "../types.js";
+import { isHelpRequest } from "../utils.js";
 import { AGENT_CHINESE_ROLE, AgentStatus, AgentType, CHINESE_NAME_TO_TYPE, getAgentTags, getAgentToolPermissions, type AgentConfig, type ICortexApi } from "@cortex/shared";
-import type { IAgentPool, StrategistAgent } from "@cortex/engine";
+import type { StrategistAgent } from "@cortex/engine";
+import type { IAgentPool } from "@cortex/scheduler";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -52,69 +54,62 @@ function getChineseRole(type: AgentType): string {
   return AGENT_CHINESE_ROLE[type] ?? type;
 }
 
+const HELP_TEXT = [
+  "用法: cortex agent <子命令> [选项]",
+  "",
+  "子命令:",
+  "  list                 列出所有已注册 Agent 类型",
+  "  inspect <type>       查看 Agent 详情",
+  "  spawn <type>         手动启动 Agent 实例",
+  "  destroy <type>       回收 Agent 实例",
+  "",
+  "选项:",
+  "  --status <s>         按状态过滤 (awake/active/draining/destroyed)",
+  "  --format <fmt>       输出格式 (text/json/color)",
+  "  --count <n>          启动实例数（默认 1）",
+  "  --force, -f          强制销毁",
+  "  --verbose, -v        显示详细信息",
+].join("\n");
+
 export function createAgentHandler(bridge: ICortexApi): CommandHandler {
-  return async (args, options, context): Promise<CommandResult> => {
-    if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
-      return {
-        success: true,
-        output: [
-          "用法: cortex agent <子命令> [选项]",
-          "",
-          "子命令:",
-          "  list                 列出所有已注册 Agent 类型",
-          "  inspect <type>       查看 Agent 详情",
-          "  spawn <type>         手动启动 Agent 实例",
-          "  destroy <type>       回收 Agent 实例",
-          "",
-          "选项:",
-          "  --status <s>         按状态过滤 (awake/active/draining/destroyed)",
-          "  --format <fmt>       输出格式 (text/json/color)",
-          "  --count <n>          启动实例数（默认 1）",
-          "  --force, -f          强制销毁",
-          "  --verbose, -v        显示详细信息",
-        ].join("\n"),
-        exitCode: 0,
-      };
+  return async (args, options, _context): Promise<CommandResult> => {
+    if (isHelpRequest(args)) {
+      return { success: true, output: HELP_TEXT, exitCode: 0 };
     }
-
-    const subcommand = args[0];
-
-    try {
-      // list/inspect 走轻量模式；spawn/destroy 需要 bootstrap（注册 Agent config）
-      const needsBootstrap = subcommand === "spawn" || subcommand === "destroy";
-      if (needsBootstrap && bridge.bootstrapped === false) {
-        try {
-          await bridge.ensureBootstrapped();
-        } catch {
-          // 如果 bootstrap 不可用（无 API Key），回退轻量模式
-          await bridge.ensureReady();
-        }
-      } else {
-        await bridge.ensureReady();
-      }
-      const pool = bridge.getAgentPool() as IAgentPool;
-
-      switch (subcommand) {
-        case "list":
-          return await handleAgentList(pool, options, context, bridge);
-        case "inspect":
-          return await handleAgentInspect(pool, args[1], options, context, bridge);
-        case "spawn":
-          return await handleAgentSpawn(pool, args[1], options, context);
-        case "destroy":
-          return await handleAgentDestroy(pool, args[1], options, context);
-        default:
-          return {
-            success: false,
-            error: `未知子命令: "${subcommand}"。可用子命令: list, inspect, spawn, destroy`,
-            exitCode: 1,
-          };
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { success: false, error: `Agent 操作失败: ${msg}`, exitCode: 2 };
-    }
+    return await dispatchAgent(bridge, args, options);
   };
+}
+
+async function dispatchAgent(
+  bridge: ICortexApi,
+  args: string[],
+  options: Record<string, unknown>,
+): Promise<CommandResult> {
+  const subcommand = args[0];
+  try {
+    const needsBootstrap = subcommand === "spawn" || subcommand === "destroy";
+    if (needsBootstrap && bridge.bootstrapped === false) {
+      try { await bridge.ensureBootstrapped(); } catch { /* fall through */ }
+    }
+    await bridge.ensureReady();
+    const pool = bridge.getAgentPool() as IAgentPool;
+
+    switch (subcommand) {
+      case "list": return handleAgentList(pool, options, bridge);
+      case "inspect": return handleAgentInspect(pool, args[1], bridge);
+      case "spawn": return handleAgentSpawn(pool, args[1], options);
+      case "destroy": return handleAgentDestroy(pool, args[1], options);
+      default:
+        return {
+          success: false,
+          error: `未知子命令: "${subcommand}"。可用子命令: list, inspect, spawn, destroy`,
+          exitCode: 1,
+        };
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: `Agent 操作失败: ${msg}`, exitCode: 2 };
+  }
 }
 
 /**
@@ -142,39 +137,53 @@ function safePool(pool: IAgentPool | null | undefined): PoolLike {
   };
 }
 
-async function handleAgentList(
-  pool: IAgentPool,
-  options: Record<string, unknown>,
-  context: CommandContext,
-  bridge: ICortexApi,
-): Promise<CommandResult> {
-  const p = safePool(pool);
-  const statusFilter = options["status"] as string | undefined;
-  const verbose = options["verbose"] || options["v"];
+/** _buildAgentRows 的聚合参数对象 */
+interface AgentRowsCtx {
+  agentTypes: readonly AgentType[];
+  p: PoolLike;
+  persisted: PersistedInstances;
+  statusFilter: string | undefined;
+  verbose: unknown;
+  bridge: ICortexApi;
+  tally: (instances: number, awake: boolean) => void;
+  rows: string[][];
+}
 
-  // 读取跨进程持久化的实例计数（spawn 写入，list 读取）
-  const persisted = readPersistedInstances();
+/** 将单个 Strategist 实例追加为行 */
+function _appendStrategistRow(ctx: AgentRowsCtx, id: string, agent: StrategistAgent): void {
+  const statusStr = agent.status === AgentStatus.Awake ? "awake" : String(agent.status);
+  const tags = getAgentTags()[AgentType.Strategist] ?? [];
 
-  const agentTypes = Object.values(AgentType);
-  const rows: string[][] = [];
-  let totalInstances = 0;
-  let totalAwake = 0;
+  if (ctx.statusFilter && statusStr !== ctx.statusFilter) return;
 
-  // ── 常规 Agent（从 AgentPool + 持久化合并查询）──
+  if (ctx.verbose) {
+    const permissions = (getAgentToolPermissions()[AgentType.Strategist] ?? []).join(", ");
+    const role = id === "zhongli" ? "契约守护者" : id === "shuangning" ? "方向监理" : id;
+    const idTags = id === "zhongli" ? "strategy, contract" : id === "shuangning" ? "strategy, direction" : tags.join(", ");
+    ctx.rows.push([`strategist:${id}`, role, statusStr, "1", idTags, permissions || "(无)"]);
+  } else {
+    const displayType = id === "zhongli" ? "钟离" : id === "shuangning" ? "霜凝" : id;
+    const role = id === "zhongli" ? "契约守护者" : "方向监理";
+    const idTags = id === "zhongli" ? "strategy, contract" : "strategy, direction";
+    ctx.rows.push([displayType, role, statusStr, "1", idTags]);
+  }
+
+  ctx.tally(1, statusStr === "awake");
+}
+
+function _buildAgentRows(ctx: AgentRowsCtx): string[][] {
+  const { agentTypes, p, persisted, statusFilter, verbose } = ctx;
+
   for (const type of agentTypes) {
-    // strategist 不走 AgentPool，单独查询（见下方）
     if (type === AgentType.Strategist) continue;
     const memCount = p.count(type);
     const persistedCount = persisted[type] ?? 0;
-    // 合并：内存计数 + 持久化计数取最大值（持久化统计的是累计 spawn，内存统计当前进程）
     const count = Math.max(memCount, persistedCount);
     const statuses = p.getStatuses(type);
     const hasAwake = p.hasAwake(type) || persistedCount > 0;
     const tags = getAgentTags()[type as AgentType] ?? [];
-
     const displayStatus = statuses.length > 0 ? statuses[0] : (count > 0 ? "awake" : "-");
 
-    // 过滤
     if (statusFilter && displayStatus !== statusFilter) continue;
 
     const statusStr = count > 0 ? String(displayStatus) : "-";
@@ -183,69 +192,99 @@ async function handleAgentList(
 
     if (verbose) {
       const permissions = (getAgentToolPermissions()[type as AgentType] ?? []).join(", ");
-      rows.push([type, role, statusStr, instanceStr, tags.join(", "), permissions || "(无)"]);
+      ctx.rows.push([type, role, statusStr, instanceStr, tags.join(", "), permissions || "(无)"]);
     } else {
-      rows.push([type, role, statusStr, instanceStr, tags.join(", ")]);
+      ctx.rows.push([type, role, statusStr, instanceStr, tags.join(", ")]);
     }
 
-    totalInstances += count;
-    if (hasAwake) totalAwake++;
+    ctx.tally(count, hasAwake);
   }
 
-  // ── Strategist Agent（从 bootstrapResult 查询，不注册 AgentPool）──
-  const strategists = bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
+  const strategists = ctx.bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
   if (strategists && strategists.size > 0) {
-    for (const [id, agent] of strategists) {
-      const type = "strategist";
-      const statusStr = agent.status === AgentStatus.Awake ? "awake" : String(agent.status);
-      const tags = getAgentTags()[AgentType.Strategist] ?? [];
-
-      if (statusFilter && statusStr !== statusFilter) continue;
-
-      if (verbose) {
-        const permissions = (getAgentToolPermissions()[AgentType.Strategist] ?? []).join(", ");
-        const role = id === "zhongli" ? "契约守护者" : id === "shuangning" ? "方向监理" : id;
-        const idTags = id === "zhongli" ? "strategy, contract" : id === "shuangning" ? "strategy, direction" : tags.join(", ");
-        rows.push([`${type}:${id}`, role, statusStr, "1", idTags, permissions || "(无)"]);
-      } else {
-        const displayType = id === "zhongli" ? "钟离" : id === "shuangning" ? "霜凝" : id;
-        const role = id === "zhongli" ? "契约守护者" : "方向监理";
-        const idTags = id === "zhongli" ? "strategy, contract" : "strategy, direction";
-        rows.push([displayType, role, statusStr, "1", idTags]);
-      }
-
-      totalInstances += 1;
-      if (statusStr === "awake") totalAwake++;
-    }
+    for (const [id, agent] of strategists) 
+      _appendStrategistRow(ctx, id, agent);
   }
+
+  return ctx.rows;
+}
+
+function handleAgentList(
+  pool: IAgentPool,
+  options: Record<string, unknown>,
+  bridge: ICortexApi,
+): CommandResult {
+  const p = safePool(pool);
+  const statusFilter = options["status"] as string | undefined;
+  const verbose = options["verbose"] || options["v"];
+  const persisted = readPersistedInstances();
+  const agentTypes = Object.values(AgentType);
+
+  let totalInstances = 0;
+  let totalAwake = 0;
+  const rows = _buildAgentRows({
+    agentTypes, p, persisted, statusFilter, verbose, bridge, rows: [],
+    tally: (inc: number, awake: boolean) => { totalInstances += inc; if (awake) totalAwake++; },
+  });
 
   return {
     success: true,
     data: {
       agents: rows.map((r) => ({
-        type: r[0],
-        role: r[1],
-        status: r[2],
-        instances: parseInt(r[3], 10),
-        tags: r[4],
+        type: r[0], role: r[1], status: r[2], instances: parseInt(r[3], 10), tags: r[4],
         ...(verbose ? { permissions: r[5] } : {}),
       })),
-      total: rows.length,
-      awake: totalAwake,
-      instances: totalInstances,
+      total: rows.length, awake: totalAwake, instances: totalInstances,
     },
     output: `Agent 列表: ${totalInstances} 实例, ${totalAwake} awake`,
     exitCode: 0,
   };
 }
 
-async function handleAgentInspect(
+/** handleAgentInspect 返回值 */
+interface AgentInspectInfo {
+  agentType: AgentType;
+  role: string;
+  count: number;
+  statuses: readonly string[];
+  tags: readonly string[];
+  permissions: readonly string[];
+}
+
+/** 解析 Strategist 的 inspect 信息 */
+function _resolveStrategistInspect(bridge: ICortexApi, typeName: string): AgentInspectInfo {
+  const strategists = bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
+  const id = typeName === "钟离" || typeName === "zhongli" ? "zhongli" : "shuangning";
+  const strategist = strategists?.get(id);
+
+  return {
+    agentType: AgentType.Strategist,
+    role: id === "zhongli" ? "契约守护者" : "方向监理",
+    count: strategist ? 1 : 0,
+    statuses: strategist ? [strategist.status === AgentStatus.Awake ? "awake" : String(strategist.status)] : [],
+    tags: id === "zhongli" ? ["strategy", "contract"] : ["strategy", "direction"],
+    permissions: getAgentToolPermissions()[AgentType.Strategist] ?? [],
+  };
+}
+
+/** 构建常规 Agent 的 inspect 信息——非 Strategist 分支 */
+function _inspectRegularAgent(pool: IAgentPool, agentType: AgentType): AgentInspectInfo {
+  const p = safePool(pool);
+  return {
+    agentType,
+    role: getChineseRole(agentType),
+    count: p.count(agentType),
+    statuses: p.getStatuses(agentType),
+    tags: getAgentTags()[agentType as AgentType] ?? [],
+    permissions: getAgentToolPermissions()[agentType as AgentType] ?? [],
+  };
+}
+
+function handleAgentInspect(
   pool: IAgentPool,
   typeName: string | undefined,
-  options: Record<string, unknown>,
-  context: CommandContext,
   bridge: ICortexApi,
-): Promise<CommandResult> {
+): CommandResult {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent inspect <type>", exitCode: 1 };
   }
@@ -255,65 +294,46 @@ async function handleAgentInspect(
     return { success: false, error: `未知 Agent 类型或名称: "${typeName}"。可用英文字类型名或中文名（如 甘雨/阿贝多/刻晴...）`, exitCode: 1 };
   }
 
-  // Strategist 特殊处理：按 ID 区分 钟离/霜凝
-  let role: string;
-  let tags: readonly string[];
-  let count: number;
-  let statuses: readonly string[];
-  let permissions: readonly string[];
-
-  if (agentType === AgentType.Strategist) {
-    const strategists = bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
-    const id = typeName === "钟离" || typeName === "zhongli" ? "zhongli" : "shuangning";
-    const strategist = strategists?.get(id);
-
-    if (strategist) {
-      count = 1;
-      statuses = [strategist.status === AgentStatus.Awake ? "awake" : String(strategist.status)];
-    } else {
-      count = 0;
-      statuses = [];
-    }
-
-    role = id === "zhongli" ? "契约守护者" : "方向监理";
-    tags = id === "zhongli" ? ["strategy", "contract"] : ["strategy", "direction"];
-    permissions = getAgentToolPermissions()[AgentType.Strategist] ?? [];
-  } else {
-    const p = safePool(pool);
-    count = p.count(agentType);
-    statuses = p.getStatuses(agentType);
-    tags = getAgentTags()[agentType as AgentType] ?? [];
-    permissions = getAgentToolPermissions()[agentType as AgentType] ?? [];
-    role = getChineseRole(agentType);
-  }
+  const info = agentType === AgentType.Strategist
+    ? _resolveStrategistInspect(bridge, typeName)
+    : _inspectRegularAgent(pool, agentType);
 
   return {
     success: true,
-    data: {
-      type: agentType,
-      role,
-      instances: count,
-      statuses,
-      tags,
-      permissions,
-    },
+    data: { type: info.agentType, role: info.role, instances: info.count, statuses: info.statuses, tags: info.tags, permissions: info.permissions },
     output: [
-      `Agent: ${agentType}（${role}）`,
-      `实例数: ${count}`,
-      `状态: ${statuses.join(", ") || "未注册"}`,
-      `标签: ${tags.join(", ")}`,
-      `工具权限: ${permissions.join(", ")}`,
+      `Agent: ${info.agentType}（${info.role}）`,
+      `实例数: ${info.count}`,
+      `状态: ${info.statuses.join(", ") || "未注册"}`,
+      `标签: ${info.tags.join(", ")}`,
+      `工具权限: ${info.permissions.join(", ")}`,
     ].join("\n"),
     exitCode: 0,
   };
 }
 
-async function handleAgentSpawn(
+/** Agent 生成配置 */
+interface SpawnConfig {
+  typeName: string;
+  count: number;
+}
+
+/** 批量生成 Agent 实例，返回成功生成数 */
+function _spawnInstances(p: PoolLike, agentType: AgentType, config: SpawnConfig): number {
+  const { typeName, count } = config;
+  let spawned = 0;
+  for (let i = 0; i < count; i++) {
+    const instanceId = `${typeName}-${Date.now()}-${i}`;
+    if (p.spawn(agentType, instanceId)) spawned++;
+  }
+  return spawned;
+}
+
+function handleAgentSpawn(
   pool: IAgentPool,
   typeName: string | undefined,
   options: Record<string, unknown>,
-  _context: CommandContext,
-): Promise<CommandResult> {
+): CommandResult {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent spawn <type>", exitCode: 1 };
   }
@@ -324,24 +344,12 @@ async function handleAgentSpawn(
   if (!agentType) {
     return { success: false, error: `未知 Agent 类型或名称: "${typeName}"`, exitCode: 1 };
   }
-  let spawned = 0;
 
-  for (let i = 0; i < count; i++) {
-    const instanceId = `${typeName}-${Date.now()}-${i}`;
-    const ok = p.spawn(agentType, instanceId);
-    if (ok) spawned++;
-  }
-
-  // @fix H-03 — 检查 spawn 结果，全部失败时返回错误
+  const spawned = _spawnInstances(p, agentType, { typeName, count });
   if (spawned === 0) {
-    return {
-      success: false,
-      error: `所有 ${count} 个 spawn 请求均失败：Agent 类型未注册或已达实例上限`,
-      exitCode: 1,
-    };
+    return { success: false, error: `所有 ${count} 个 spawn 请求均失败：Agent 类型未注册或已达实例上限`, exitCode: 1 };
   }
 
-  // 持久化：写入跨进程共享的实例计数文件
   const persisted = readPersistedInstances();
   persisted[agentType] = (persisted[agentType] ?? 0) + spawned;
   writePersistedInstances(persisted);
@@ -354,12 +362,11 @@ async function handleAgentSpawn(
   };
 }
 
-async function handleAgentDestroy(
+function handleAgentDestroy(
   pool: IAgentPool,
   typeName: string | undefined,
   options: Record<string, unknown>,
-  _context: CommandContext,
-): Promise<CommandResult> {
+): CommandResult {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent destroy <type>", exitCode: 1 };
   }
@@ -373,21 +380,15 @@ async function handleAgentDestroy(
 
   if (instanceId) {
     p.destroy(agentType, instanceId);
-    // 持久化：递减计数
     const persisted = readPersistedInstances();
     if (persisted[agentType] && persisted[agentType] > 0) {
       persisted[agentType]--;
       if (persisted[agentType] === 0) delete persisted[agentType];
       writePersistedInstances(persisted);
     }
-    return {
-      success: true,
-      output: `✓ 已回收实例 ${instanceId}`,
-      exitCode: 0,
-    };
+    return { success: true, output: `✓ 已回收实例 ${instanceId}`, exitCode: 0 };
   }
 
-  // @fix H-03 — 没有指定实例 ID 时返回错误而非静默成功
   return {
     success: false,
     error: `请使用 --id <instanceId> 指定要回收的实例 ID`,

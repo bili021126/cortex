@@ -32,11 +32,10 @@ import {
   createInspectorAgent,
   createBrowserAgent,
   ButlerAgent,
-  Toolkit,
-  MemoryStore,
   PipelineObserver,
-  ConfirmGate,
-  CLIAdapter} from "@cortex/engine";
+  ConfirmGate} from "@cortex/engine";
+import { Toolkit, CLIAdapter } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
 import { resolveLlmConfig } from "../config/llm-defaults";
 
 // ══════════════════════════════════════════════

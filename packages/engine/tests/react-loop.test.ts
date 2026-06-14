@@ -2,7 +2,8 @@
 import { describe, it, expect } from "vitest";
 import { AgentType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
-import { Toolkit, runReActLoop, type ReActContext } from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { runReActLoop, type ReActContext } from "@cortex/engine";
 
 function mockLlm() {
   const adapter = new LlmAdapter({
@@ -15,6 +16,7 @@ function mockLlm() {
 
 describe("runReActLoop", () => {
   const baseCtx: Omit<ReActContext, "systemPrompt" | "maxLoops"> = {
+    agentType: AgentType.Code,
     llm: mockLlm(),
     toolkit: new Toolkit(),
     reactLoopTimeoutMs: 10000};
@@ -102,7 +104,7 @@ describe("runReActLoop", () => {
     let lastUserContent = "";
     adapter.injectMock(async (messages) => {
       const last = messages[messages.length - 1];
-      if (last && last.role === "user") lastUserContent = last.content_blob ?? "";
+      if (last && last.role === "user") lastUserContent = last.content;
       return { content: "ok", toolCalls: [] };
     });
 

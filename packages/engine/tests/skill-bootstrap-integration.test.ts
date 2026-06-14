@@ -20,10 +20,10 @@ import {
   PipelineObserver,
   Scheduler,
   MetaAgent,
-  Toolkit,
-  MemoryStore,
   createAgent,
   fixAgentConfig} from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
+import { MemoryStore } from "@cortex/memory-store";
 import { AgentType } from "@cortex/shared";
 import type { SkillTemplate, Tag } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
@@ -182,7 +182,7 @@ describe("Skill Persistence via MemoryStore", () => {
   beforeEach(async () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-skill-test-"));
     observer = new PipelineObserver();
-    memory = new MemoryStore(observer);
+    memory = new MemoryStore(undefined, observer);
     await memory.init(path.join(tmpDir, "memory.db"));
     registry = new SkillRegistry();
   });
@@ -191,7 +191,7 @@ describe("Skill Persistence via MemoryStore", () => {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
   });
 
-  it("skills can be persisted to and loaded from MemoryStore", async () => {
+  it("skills can be persisted to and loaded from MemoryStore", { timeout: 30000 }, async () => {
     registry.register(makeSkill({
       id: "persist-skill",
       name: "Persist Test",

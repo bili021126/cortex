@@ -105,9 +105,9 @@ export interface AgentDefinition {
 
 // ─── 工具权限预设 ──────────────────────────────
 
-const FULL_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "web_search", "run_shell", "list_files", "delete_file", "parse_ast"];
-const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "web_search", "list_files", "delete_file", "parse_ast"];
-const READONLY_TOOLSET: readonly string[] = ["read_file", "search_code", "web_search", "list_files", "parse_ast"];
+const FULL_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "web_search", "run_shell", "list_files", "delete_file", "parse_ast", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files", "edit_file", "format_code", "run_test"];
+const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "web_search", "list_files", "delete_file", "parse_ast", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files", "edit_file", "format_code"];
+const READONLY_TOOLSET: readonly string[] = ["read_file", "search_code", "web_search", "list_files", "parse_ast", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files"];
 
 // ─── AGENT_DEFS — 单一起源 ─────────────────────
 
@@ -159,7 +159,7 @@ const AGENT_DEFS: Record<AgentType, AgentDefinition> = {
     tags: [],
     chineseRole: "昔涟",
     display: { emoji: "🍀", name: "昔涟", signature: "三千世轮回。这辈子归你了。" },
-    toolPermissions: ["read_file", "search_code", "list_files"],
+    toolPermissions: ["read_file", "search_code", "list_files", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files"],
   },
   [AgentType.Inspector]: {
     tags: ["inspector", "inspect"],

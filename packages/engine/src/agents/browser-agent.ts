@@ -1,11 +1,13 @@
-import { AgentType as AT, AgentStatus as AS, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode } from "@cortex/shared";
+import { AgentType as AT, AgentStatus as AS, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode, ToolCategory, ReversibilityLevel } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { Toolkit } from "../platform/toolkit.js";
-import type { MemoryStore } from "../memory/memory-store.js";
-import type { AgentPool } from "../core/agent-pool.js";
+import type { Toolkit } from "@cortex/platform";
+import type { MemoryStore } from "@cortex/memory-store";
+import type { AgentPool } from "@cortex/scheduler";
 import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
 import { BROWSER_DEFAULT_VIEWPORT } from "@cortex/config";
 import { chromium, type Browser, type Page } from "playwright";
+import { BUILTIN_BROWSER_ACTIONS, buildBrowserDoHandler, type BrowserActionDef } from "./browser-actions.js";
+import { LocalTool } from "@cortex/platform";
 
 /**
  * 创建 BrowserAgent——Playwright UI 验证专家。
@@ -17,6 +19,7 @@ export function createBrowserAgent(
   memory?: MemoryStore,
   systemPrompt?: string,
   filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[],
+  actions?: BrowserActionDef[],
 ): Agent & {
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
@@ -29,59 +32,41 @@ export function createBrowserAgent(
   let workspaceRoot: string | null = null;
   let safeReporterRef: SafeErrorReporter | null = null;
 
-  // 注册 browser_do 工具
-  toolkit.register("browser_do", async (params) => {
-    const action = params.action as string;
-    const timeout = (params.timeout as number) ?? 10_000;
+  const pageRef: { current: Page | null } = { current: page };
+  const actionDefs = actions ?? BUILTIN_BROWSER_ACTIONS;
 
-    if (!page) {
-      return { success: false, error: "浏览器未初始化" };
-    }
-
-    try {
-      switch (action) {
-        case "navigate": {
-          const url = params.url as string;
-          if (!url) return { success: false, error: "navigate 缺少 url 参数" };
-          await page.goto(url, { timeout, waitUntil: "domcontentloaded" });
-          const title = await page.title();
-          return { success: true, output: `已打开页面: ${title} (${url})` };
-        }
-        case "type": {
-          const selector = params.selector as string;
-          const text = params.text as string;
-          if (!selector) return { success: false, error: "type 缺少 selector 参数" };
-          if (text === undefined) return { success: false, error: "type 缺少 text 参数" };
-          await page.waitForSelector(selector, { timeout });
-          await page.fill(selector, text);
-          return { success: true, output: `已在 "${selector}" 中输入: "${text}"` };
-        }
-        case "click": {
-          const selector = params.selector as string;
-          if (!selector) return { success: false, error: "click 缺少 selector 参数" };
-          await page.waitForSelector(selector, { timeout });
-          await page.click(selector);
-          return { success: true, output: `已点击 "${selector}"` };
-        }
-        case "read": {
-          const selector = params.selector as string;
-          if (!selector) return { success: false, error: "read 缺少 selector 参数" };
-          await page.waitForSelector(selector, { timeout, state: "visible" });
-          const text = await page.textContent(selector);
-          return { success: true, output: text ?? "(元素存在但无文本内容)" };
-        }
-        case "screenshot": {
-          const buf = await page.screenshot({ type: "png", fullPage: false });
-          const b64 = buf.toString("base64");
-          return { success: true, output: `[截图已生成，${buf.length} bytes，base64 前 200 字符] ${b64.slice(0, 200)}...` };
-        }
-        default:
-          return { success: false, error: `未知 browser_do 操作: "${action}"` };
-      }
-    } catch (e) {
-      return { success: false, error: `browser_do.${action} 失败: ${e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300)}` };
-    }
-  });
+  // 注册 browser_do 工具——由声明式 action 注册表驱动，含完整子操作描述
+  toolkit.registerTool(new LocalTool(
+    "browser_do",
+    ToolCategory.Search,
+    `浏览器自动化操作。通过 action 参数指定子操作：
+- navigate: 打开 URL（url）
+- type: 在元素中输入文本（selector, text）
+- click: 点击元素（selector）
+- read: 读取元素文本内容（selector）
+- screenshot: 截图——可选 fullPage（全页面）/ selector（指定元素）
+- evaluate: 在页面执行 JS 并返回结果（expression）。$"selector" 可获取元素的 computed styles + rect
+- measure: 测量元素布局属性——位置/尺寸/margin/padding/flex/grid（selector）
+- wait: 等待条件——selector/ms/network（waitFor）
+- scroll: 滚动页面——top/bottom/selector（to, scrollToSelector）
+`,
+    {
+      action: { type: "string", description: "子操作名", enum: ["navigate", "type", "click", "read", "screenshot", "evaluate", "measure", "wait", "scroll"] },
+      url: { type: "string", description: "目标 URL（navigate 时必需）" },
+      selector: { type: "string", description: "CSS 选择器" },
+      text: { type: "string", description: "输入文本（type 时必需）" },
+      expression: { type: "string", description: "JS 表达式或 $selector（evaluate 时必需）" },
+      textOnly: { type: "boolean", description: "evaluate 时仅返回文本（默认 false）" },
+      fullPage: { type: "boolean", description: "screenshot 时截取全页面（默认 false）" },
+      waitFor: { type: "string", description: "等待条件（wait 时必需）：selector/ms/network" },
+      ms: { type: "number", description: "等待毫秒数（waitFor='ms' 时使用，默认 1000）" },
+      to: { type: "string", description: "滚动目标（scroll 时必需）：top/bottom/selector" },
+      scrollToSelector: { type: "string", description: "滚动目标选择器（to='selector' 时使用）" },
+      timeout: { type: "number", description: "超时（ms），默认 10000" },
+    },
+    ReversibilityLevel.L1,
+    buildBrowserDoHandler(actionDefs, pageRef),
+  ));
 
   const config: AgentFactoryConfig = {
     type: AT.Browser,
@@ -103,6 +88,7 @@ export function createBrowserAgent(
     if (browser?.isConnected()) return;
     browser = await chromium.launch({ headless: true });
     page = await browser.newPage();
+    pageRef.current = page;
     await page.setViewportSize(BROWSER_DEFAULT_VIEWPORT);
   }
 

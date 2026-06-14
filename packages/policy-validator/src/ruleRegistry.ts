@@ -211,8 +211,7 @@ export class RuleRegistry implements IRuleRegistry {
 
     // 按 AgentType 筛选
     if (filter.agentTypes && filter.agentTypes.length > 0) {
-      if (!rule.targetAgentTypes ||
-          !rule.targetAgentTypes.some(t => (filter.agentTypes ?? []).includes(t))) {
+      if (!rule.targetAgentTypes?.some(t => (filter.agentTypes ?? []).includes(t))) {
         return false;
       }
     }

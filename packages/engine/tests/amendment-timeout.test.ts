@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { checkTimeout, updateStaleCount } from "@cortex/engine";
+import { checkTimeout, updateStaleCount } from "@cortex/governance";
 import type { AmendmentProposal } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";

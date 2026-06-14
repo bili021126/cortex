@@ -1,6 +1,6 @@
 import { AgentType as AT, AgentStatus as AS, type AgentType, type AgentStatus, type TaskNode, type NodeResult, type SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
-import type { AgentPool } from "../core/agent-pool.js";
+import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "../components/pool-aware.js";
 
 /**

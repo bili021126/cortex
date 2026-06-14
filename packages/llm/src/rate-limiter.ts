@@ -139,17 +139,47 @@ export class RateLimiter {
     return { allowed: true };
   }
 
-  /** 记录实际消耗的 token */
-  recordTokens(keyFingerprint: string, tokens: number): void {
+  /** 记录实际消耗的 token（并发安全：与 check 共享同一锁串行化） */
+  async recordTokens(keyFingerprint: string, tokens: number): Promise<void> {
     if (tokens <= 0) return;
-    const today = new Date().toISOString().slice(0, 10);
-    let quota = this._dayQuotas.get(keyFingerprint);
-    if (!quota || quota.date !== today) {
-      quota = { date: today, tokens: 0 };
+    // 复用 check 的串行化锁，防止 read-modify-write 竞态
+    const prev = this._locks.get(keyFingerprint) ?? Promise.resolve();
+    let resolve!: () => void;
+    const next = new Promise<void>((r) => { resolve = r; });
+    this._locks.set(keyFingerprint, next);
+    try {
+      await prev;
+      const today = new Date().toISOString().slice(0, 10);
+      let quota = this._dayQuotas.get(keyFingerprint);
+      if (quota?.date !== today) {
+        quota = { date: today, tokens: 0 };
+      }
+      quota.tokens += tokens;
+      this._dayQuotas.set(keyFingerprint, quota);
+      this._scheduleSaveQuotas();
+    } finally {
+      resolve();
+      if (this._locks.get(keyFingerprint) === next) {
+        this._locks.delete(keyFingerprint);
+      }
     }
-    quota.tokens += tokens;
-    this._dayQuotas.set(keyFingerprint, quota);
-    this._saveQuotas();
+  }
+
+  /** 标记需要持久化，防抖批量写入（异步，不阻塞事件循环） */
+  private _savePending = false;
+  private _scheduleSaveQuotas(): void {
+    if (this._savePending) return;
+    this._savePending = true;
+    setImmediate(async () => {
+      this._savePending = false;
+      try {
+        const obj: QuotaStore = {};
+        for (const [k, v] of this._dayQuotas) { obj[k] = v; }
+        await fs.promises.writeFile(this._quotaPath, JSON.stringify(obj, null, 2), "utf-8");
+      } catch {
+        // 写入失败不阻塞主流程
+      }
+    });
   }
 
   /** 获取今日用量 */
@@ -170,18 +200,6 @@ export class RateLimiter {
       }
     } catch {
       // 文件损坏，忽略
-    }
-  }
-
-  private _saveQuotas(): void {
-    try {
-      const obj: QuotaStore = {};
-      for (const [k, v] of this._dayQuotas) {
-        obj[k] = v;
-      }
-      fs.writeFileSync(this._quotaPath, JSON.stringify(obj, null, 2), "utf-8");
-    } catch {
-      // 写入失败不阻塞主流程
     }
   }
 }

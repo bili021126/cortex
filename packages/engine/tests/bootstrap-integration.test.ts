@@ -16,8 +16,11 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mockLlmAdapter } from "./fixtures/mock-adapter.js";
-import { bootstrapEngine } from "../src/bootstrap/bootstrap-engine.js";
-import { Toolkit } from "../src/platform/toolkit.js";
+import { bootstrapEngine } from "@cortex/engine";
+import { MemoryStore } from "@cortex/memory-store";
+import type { IEmbeddingService } from "@cortex/memory-store";
+import { Toolkit } from "@cortex/platform";
+import { InMemoryMemoryStore } from "@cortex/memory";
 import { syntheticTaskNode } from "@cortex/testing";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -52,6 +55,46 @@ function cleanup(): void {
   }
 }
 
+/** mock embedder: 生成伪向量，避免 real ONNX 下载和超时 */
+function makeMockEmbedder(): IEmbeddingService {
+  const dim = 384;
+  function hashText(text: string): number {
+    let h = 0;
+    for (let i = 0; i < text.length; i++) {
+      h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+    }
+    return h;
+  }
+  function makeVec(seed: number): number[] {
+    let s = seed;
+    const vec = new Array(dim);
+    for (let i = 0; i < dim; i++) {
+      s = (1664525 * s + 1013904223) | 0;
+      vec[i] = (s / 2147483647);
+    }
+    let norm = 0;
+    for (let i = 0; i < dim; i++) norm += vec[i] * vec[i];
+    norm = Math.sqrt(norm);
+    for (let i = 0; i < dim; i++) vec[i] /= norm;
+    return vec;
+  }
+  return {
+    async embedText(text: string): Promise<number[]> {
+      return makeVec(hashText(text));
+    },
+    async embedBatch(texts: string[]): Promise<number[][]> {
+      return texts.map((t) => makeVec(hashText(t)));
+    }};
+}
+
+/** 创建带 mock embedder 的 MemoryStore */
+async function makeMockMemory(): Promise<MemoryStore> {
+  const backend = new InMemoryMemoryStore();
+  const store = new MemoryStore(backend, undefined, makeMockEmbedder());
+  await store.init(":memory:");
+  return store;
+}
+
 // ── 设置/清理 ───────────────────────────────────
 
 beforeAll(() => {
@@ -75,7 +118,8 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB});
+      dbPath: TEMP_DB,
+      memory: await makeMockMemory()});
 
     // 核心组件
     expect(result.scheduler).toBeDefined();
@@ -112,7 +156,8 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB});
+      dbPath: TEMP_DB,
+      memory: await makeMockMemory()});
 
     const memory = result.memory!;
 
@@ -143,7 +188,8 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB});
+      dbPath: TEMP_DB,
+      memory: await makeMockMemory()});
 
     // 构造合成任务节点
     const node = syntheticTaskNode({
@@ -181,7 +227,8 @@ describe("T2: MetaAgent.plan() 意图拆解", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB});
+      dbPath: TEMP_DB,
+      memory: await makeMockMemory()});
 
     const plan = await result.metaAgent.plan("实现用户登录功能");
 
@@ -202,7 +249,8 @@ describe("T2: MetaAgent.plan() 意图拆解", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB});
+      dbPath: TEMP_DB,
+      memory: await makeMockMemory()});
 
     const plan = await result.metaAgent.plan("某个无法拆解的简单意图");
 
@@ -229,7 +277,8 @@ describe("T3: Plan → Execute 闭环", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB});
+      dbPath: TEMP_DB,
+      memory: await makeMockMemory()});
 
     // Step 1: 规划
     const plan = await result.metaAgent.plan("写一个 Hello World 程序");
@@ -266,7 +315,8 @@ describe("T4: MemoryStore 读写闭环", () => {
     const result = await bootstrapEngine(WORKSPACE_ROOT, {
       llms,
       toolkit,
-      dbPath: TEMP_DB});
+      dbPath: TEMP_DB,
+      memory: await makeMockMemory()});
 
     const memory = result.memory!;
 
@@ -301,5 +351,5 @@ describe("T4: MemoryStore 读写闭环", () => {
     }
 
     await memory.close();
-  });
+  }, 10000);
 });

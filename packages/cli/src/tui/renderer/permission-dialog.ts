@@ -8,7 +8,8 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import { writeln, style, StyleCode, ColorCode } from "./ansi.js";
+import { write, style, StyleCode, ColorCode, eraseLine } from "./ansi.js";
+import * as readline from "node:readline";
 
 // ═══════════════════════════════════════════════════════════
 // §1 可逆性评估
@@ -56,50 +57,84 @@ export function reversibilityLevel(tool: string): 1 | 2 | 3 {
 // §2 权限对话框渲染
 // ═══════════════════════════════════════════════════════════
 
-let dialogActive = false;
-
 /**
- * 渲染权限确认对话框。
+ * 渲染 inline 权限确认提示。
+ * 在工具调用行后追加 [y/n/a/s]? 单行提示——不打断输出流。
  */
-export function renderPermissionDialog(tool: string, input: string, level: 1 | 2 | 3): void {
-  dialogActive = true;
+export function renderInlinePermission(tool: string, input: string, level: 1 | 2 | 3): void {
 
   const levelLabel = level === 3
-    ? style("⚠ L3 不可逆", ColorCode.red + StyleCode.bold)
+    ? style("L3不可逆", ColorCode.red)
     : level === 2
-      ? style("⚡ L2 需确认", ColorCode.yellow)
-      : style("✓ L1 可逆", ColorCode.green);
+      ? style("L2需确认", ColorCode.yellow)
+      : style("L1", ColorCode.green);
 
-  writeln("");
-  writeln(style("┌─ 权限确认 ─────────────────────────────", StyleCode.dim));
-  writeln(`│ ${levelLabel}`);
-  writeln(`│ 工具: ${style(tool, StyleCode.bold)}`);
-  writeln(`│ 输入: ${style(input.length > 60 ? input.slice(0, 60) + "..." : input, StyleCode.dim)}`);
-  writeln(style("├──────────────────────────────────────────", StyleCode.dim));
-  writeln(`│ [y] 允许  [n] 拒绝  [a] 全部允许  [s] 跳过`);
-  writeln(style("└──────────────────────────────────────────", StyleCode.dim));
+  const truncatedInput = input.length > 40 ? input.slice(0, 40) + "..." : input;
+  write(` ${style("⚡", ColorCode.yellow)} ${style(tool, StyleCode.bold)}(${levelLabel}): ${style(truncatedInput, StyleCode.dim)} [y/n/a/s]? `);
 }
 
 /**
- * 清除权限对话框。
+ * 清除 inline 权限提示。
  */
-export function clearPermissionDialog(): void {
-  dialogActive = false;
+export function clearInlinePermission(): void {
+  // 上移一行并清除
+  process.stdout.write("\r" + eraseLine);
 }
 
 /**
- * 监听用户确认输入。
+ * 在 raw mode 下等待单键确认输入。
+ * 处理单个按键后立即返回，无需回车。
+ *
+ * @param timeoutMs 超时毫秒数，默认 30000（30s 超时自动 deny）
  */
-export function listenForConfirm(key: string): "approve_once" | "approve_all" | "deny" | "skip" | null {
-  if (!dialogActive) return null;
+export async function waitForSingleKey(timeoutMs: number = 30000): Promise<"approve_once" | "approve_all" | "deny" | "skip"> {
+  const prevRaw = process.stdin.isRaw;
+  process.stdin.setRawMode?.(true);
 
-  switch (key.toLowerCase()) {
-    case "y": return "approve_once";
-    case "n": return "deny";
-    case "a": return "approve_all";
-    case "s": return "skip";
-    default: return null;
-  }
+  return await new Promise<"approve_once" | "approve_all" | "deny" | "skip">((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, escapeCodeTimeout: 50 });
+    readline.emitKeypressEvents(process.stdin, rl);
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve("deny"); // 超时自动 deny
+    }, timeoutMs);
+
+    const onKeypress = (_str: string, key: readline.Key) => {
+      clearTimeout(timeout);
+      let result: "approve_once" | "approve_all" | "deny" | "skip" | null = null;
+
+      if (key.name) {
+        switch (key.name) {
+          case "y": result = "approve_once"; break;
+          case "n": result = "deny"; break;
+          case "a": result = "approve_all"; break;
+          case "s": result = "skip"; break;
+        }
+      }
+      // 字符 fallback
+      if (!result) {
+        const seq = key.sequence?.toLowerCase();
+        if (seq === "y") result = "approve_once";
+        else if (seq === "n") result = "deny";
+        else if (seq === "a") result = "approve_all";
+        else if (seq === "s") result = "skip";
+      }
+
+      if (result) {
+        cleanup();
+        resolve(result);
+      }
+    };
+
+    const cleanup = () => {
+      process.stdin.removeListener("keypress", onKeypress);
+      if (prevRaw !== undefined) process.stdin.setRawMode?.(prevRaw as boolean);
+      rl.close();
+    };
+
+    process.stdin.on("keypress", onKeypress);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════

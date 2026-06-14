@@ -21,6 +21,38 @@ const MODE_LABELS: Record<ReplMode, string> = {
   party: "👥 群聊",
 };
 
+/** 多人头部标签映射 */
+const MULTI_MODE_LABELS: Record<string, string> = {
+  "talk-trio": "👥 三人",
+  "party": "👥 群聊",
+};
+
+/**
+ * 渲染多人角色头——群聊 / 三人 talk 模式。
+ *
+ * 格式：
+ * ```
+ * ═══════════════════════════════════════════════
+ * 🌸 昔涟 + 🌿 纳西妲              👥 三人
+ * ═══════════════════════════════════════════════
+ * ```
+ */
+export function renderMultiPersonaHeader(agents: AgentType[], modeLabel: string): void {
+  const w = Math.min(terminalWidth(), 80);
+  const parts = agents.map(a => {
+    const d = AGENT_DISPLAY_BY_TYPE[a] ?? AGENT_DISPLAY_FALLBACK;
+    return `${d.emoji} ${style(d.name, StyleCode.bold)}`;
+  });
+  const leftPart = parts.join(` ${style("+", StyleCode.dim)} `);
+  const rightPart = MULTI_MODE_LABELS[modeLabel] ?? modeLabel;
+  const spacer = " ".repeat(Math.max(1, w - leftPart.length - rightPart.length));
+
+  const sep = style("═".repeat(w), StyleCode.dim);
+  writeln(sep);
+  writeln(leftPart + spacer + rightPart);
+  writeln(sep);
+}
+
 /**
  * 渲染角色头。
  *

@@ -121,6 +121,12 @@ export interface TaskNode {
    * @since mHC 流约束 per-node override
    */
   acquireTimeoutMs?: number;
+  /**
+   * 推荐模型能力等级——MetaAgent 规划时根据任务语义设定。
+   * 模型路由器优先使用此字段（零成本语义路由），未设时回退到 LLM 分类或启发式。
+   * @since v2.6.6 模型路由语义重建
+   */
+  recommendedTier?: 'fast' | 'standard' | 'thinking';
 }
 
 /**

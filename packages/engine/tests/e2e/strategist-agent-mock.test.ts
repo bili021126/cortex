@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { Scheduler, TaskBoard, AgentPool, PipelineObserver, createAgent, Toolkit } from "@cortex/engine";
+import { Scheduler, TaskBoard, AgentPool, PipelineObserver, createAgent } from "@cortex/engine";
+import { Toolkit } from "@cortex/platform";
 import type { AgentFactoryConfig } from "@cortex/engine";
 import { AgentType } from "@cortex/shared";
 import { createE2eMockFactory } from "../fixtures/mock-llm-factory.js";

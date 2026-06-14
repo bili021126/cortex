@@ -12,7 +12,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "code",
         "implementation",
@@ -56,7 +56,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "review",
         "audit"
@@ -94,7 +94,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "analysis",
         "research"
@@ -132,7 +132,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "ops",
         "deploy",
@@ -171,7 +171,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "loop",
         "pattern_scan",
@@ -210,7 +210,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "doc-govern",
         "doc_govern",
@@ -252,7 +252,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "fix",
         "bugfix",
@@ -289,7 +289,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "api",
         "api_design",
@@ -331,7 +331,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "data",
         "data_model",
@@ -374,7 +374,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "inspector",
         "inspect"
@@ -409,7 +409,7 @@
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
-      "maxInstances": 10,
+      "maxInstances": 20,
       "tags": [
         "browser",
         "ui_verify"
@@ -466,7 +466,7 @@
       ],
       "model": "deepseek-v4-pro",
       "key": "DEEPSEEK_REASONER",
-      "maxInstances": 1,
+      "maxInstances": 5,
       "tags": [
         "plan_review",
         "meta"
@@ -502,7 +502,7 @@
       ],
       "model": "deepseek-v4-pro",
       "key": "DEEPSEEK_REASONER",
-      "maxInstances": 1,
+      "maxInstances": 5,
       "tags": [
         "strategy",
         "contract"
@@ -536,7 +536,7 @@
       ],
       "model": "deepseek-v4-pro",
       "key": "DEEPSEEK_REASONER",
-      "maxInstances": 1,
+      "maxInstances": 5,
       "tags": [
         "strategy",
         "direction"
@@ -716,8 +716,8 @@
   "engine": {
     "defaultMaxLoops": 64,
     "inspectorMaxLoops": 48,
-    "maxReplanPerNode": 3,
-    "maxTotalReplans": 3,
+    "maxReplanPerNode": 10,
+    "maxTotalReplans": 50,
     "executeAllTimeoutMs": 600000,
     "reactLoopTimeoutMs": 300000,
     "toolTimeouts": {

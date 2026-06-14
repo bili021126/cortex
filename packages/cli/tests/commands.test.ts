@@ -734,7 +734,8 @@ describe("cortex roundtable", () => {
   let docReg: any;
 
   beforeAll(async () => {
-    const { DocRegistry, NodeFileSystemAdapter } = await import("@cortex/engine");
+    const { DocRegistry } = await import("@cortex/engine");
+    const { NodeFileSystemAdapter } = await import("@cortex/platform");
     const tmpDir = createTmpDir();
     docReg = new DocRegistry(new NodeFileSystemAdapter(), tmpDir);
   });

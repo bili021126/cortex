@@ -23,6 +23,9 @@ export const ENV_DEEPSEEK_BASE_URL = "DEEPSEEK_BASE_URL";
 /** DeepSeek Chat 模型环境变量名 */
 export const ENV_DEEPSEEK_CHAT_MODEL = "DEEPSEEK_CHAT_MODEL";
 
+/** DeepSeek 昔涟专用 Chat 模型环境变量名（独立于通用 Chat 模型，允许昔涟使用更高规格模型） */
+export const ENV_DEEPSEEK_CYRENE_CHAT_MODEL = "DEEPSEEK_CYRENE_CHAT_MODEL";
+
 /** DeepSeek Reasoner 模型环境变量名 */
 export const ENV_DEEPSEEK_REASONER_MODEL = "DEEPSEEK_REASONER_MODEL";
 
