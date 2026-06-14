@@ -57,11 +57,6 @@ function run(cmd: string, args: string[], cwd: string): { ok: boolean; stdout: s
       timeout: 600_000,
       maxBuffer: 50 * 1024 * 1024, // 50MB：引擎包 vitest 日志量极大
       windowsHide: true,
-      env: {
-        ...process.env,
-        // 每个 vitest worker 限制 2GB V8 堆，防止单 worker OOM 拖垮整机
-        NODE_OPTIONS: "--max-old-space-size=2048",
-      },
     });
     return { ok: true, stdout };
   } catch (e: any) {

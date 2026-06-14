@@ -15,6 +15,9 @@ cortex-cli.mjs
 coverage/
 # 测试构建产物混入（dist/ 已覆盖，显式标注防回归）
 packages/shared/dist/__tests__/
+# scheduler: tsc 输出误入 src 树防回归
+packages/scheduler/src/**/*.js
+packages/scheduler/src/**/*.d.ts
 
 # IDE
 .vscode/
