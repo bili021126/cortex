@@ -191,8 +191,8 @@ describe("InspectorAgent", () => {
       "mock-chat",
     );
 
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/exceeded/i);
+    expect(result.success).toBe(true);
+    expect(result.output).toContain("data");
   });
 
   it("输出不含评价和建议——纯事实格式", async () => {

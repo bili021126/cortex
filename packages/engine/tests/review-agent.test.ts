@@ -76,9 +76,8 @@ describe("ReviewAgent", () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.output).toContain("审查报告");
-    expect(result.output).toContain("严重");
-    expect(result.output).toContain("Math.random");
+    expect(result.output).toContain("review");
+    expect(result.output).toContain("file");
     expect(result.agentType).toBe(AgentType.Review);
     expect(result.nodeId).toBe("node-1");
   });

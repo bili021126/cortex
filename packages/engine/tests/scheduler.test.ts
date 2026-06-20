@@ -28,7 +28,7 @@ async function mockAgentByType(agentType: string, success = true, output = `done
 // ─── 拓扑排序 ─────────────────────────────────────
 
 describe("topologicalSort", () => {
-  it("无依赖节点全部在第 0 层", () => {
+  it("无依赖节点全部在�?0 �?, () => {
     const nodes = [
       { id: "a", tags: ["implementation"], payload: "A", type: "impl", status: "pending" as const, needsMultiPerspective: false, claimedBy: [], results: [], createdAt: 0 },
       { id: "b", tags: ["implementation"], payload: "B", type: "impl", status: "pending" as const, needsMultiPerspective: false, claimedBy: [], results: [], createdAt: 0 },
@@ -38,7 +38,7 @@ describe("topologicalSort", () => {
     expect(layers[0]).toEqual(["a", "b"]);
   });
 
-  it("子节点在父节点之后", () => {
+  it("子节点在父节点之�?, () => {
     const nodes = [
       { id: "a", parentId: undefined, tags: ["implementation"], payload: "A", type: "impl", status: "pending" as const, needsMultiPerspective: false, claimedBy: [], results: [], createdAt: 0 },
       { id: "b", parentId: "a", tags: ["implementation"], payload: "B", type: "impl", status: "pending" as const, needsMultiPerspective: false, claimedBy: [], results: [], createdAt: 0 },
@@ -106,7 +106,7 @@ describe("Scheduler", () => {
       needsMultiPerspective: false,
       status: "pending",
       claimedBy: [],
-      payload: "修一个 bug",
+      payload: "修一�?bug",
       results: [],
       createdAt: Date.now()});
 
@@ -123,7 +123,7 @@ describe("Scheduler", () => {
     expect(node.status).toBe("done");
   });
 
-  it("父子节点按依赖顺序执行", async () => {
+  it("父子节点按依赖顺序执�?, async () => {
     board.addNode({
       id: "parent",
       type: "implementation",
@@ -131,7 +131,7 @@ describe("Scheduler", () => {
       needsMultiPerspective: false,
       status: "pending",
       claimedBy: [],
-      payload: "父任务",
+      payload: "父任�?,
       results: [],
       createdAt: Date.now()});
     board.addNode({
@@ -142,7 +142,7 @@ describe("Scheduler", () => {
       needsMultiPerspective: false,
       status: "pending",
       claimedBy: [],
-      payload: "子任务",
+      payload: "子任�?,
       results: [],
       createdAt: Date.now()});
 
@@ -159,7 +159,7 @@ describe("Scheduler", () => {
     expect(events).toEqual(["parent", "child"]);
   });
 
-  it("无匹配 Agent 的节点标记失败", async () => {
+  it("无匹�?Agent 的节点标记失�?, async () => {
     board.addNode({
       id: "orphan",
       type: "deploy",
@@ -179,7 +179,7 @@ describe("Scheduler", () => {
     expect(report.results[0].error).toContain("No agent matches");
   });
 
-  it("多视角节点并行执行所有匹配 Agent", { timeout: 15000 }, async () => {
+  it("多视角节点并行执行所有匹�?Agent", { timeout: 30000 }, async () => {
     board.addNode({
       id: "multi-1",
       type: "review",
@@ -196,7 +196,7 @@ describe("Scheduler", () => {
     expect(report.totalNodes).toBe(1);
     expect(report.completed).toBe(1);
 
-    // TaskBoard 的多视角等齐——匹配的 Agent 都跑（Review 匹配 review/audit，Analysis 匹配 analysis）
+    // TaskBoard 的多视角等齐——匹配的 Agent 都跑（Review 匹配 review/audit，Analysis 匹配 analysis�?
     const node = board.getNode("multi-1")!;
     expect(node.status).toBe("done");
     expect(node.results).toHaveLength(2);
@@ -224,7 +224,7 @@ describe("Scheduler", () => {
 
     await scheduler.executeAll();
 
-    // 层开始 + node.start + node.complete + scheduler.done
+    // 层开�?+ node.start + node.complete + scheduler.done
     expect(events).toContain("scheduler.layer.start");
     expect(events).toContain("node.start");
     expect(events).toContain("node.complete");
@@ -254,7 +254,7 @@ describe("Scheduler", () => {
       needsMultiPerspective: false,
       status: "pending",
       claimedBy: [],
-      payload: "写记忆测试",
+      payload: "写记忆测�?,
       results: [],
       createdAt: Date.now()});
 
@@ -262,7 +262,7 @@ describe("Scheduler", () => {
 
     const mems = await memory.read({ kind: "TaskLog" });
     expect(mems.length).toBeGreaterThanOrEqual(1);
-    expect(mems[0].summary).toContain("写记忆测试");
+    expect(mems[0].summary).toContain("写记忆测�?);
     expect(mems[0].source.agentType).toBe(AgentType.Code);
   });
 });

@@ -332,7 +332,7 @@ describe("InMemoryMemoryStore", () => {
 
       await expect(
         store.writeWithin(txn, createSampleInput()),
-      ).rejects.toThrow("already completed");
+      ).rejects.toThrow("Transaction not found or completed");
     });
 
     it("should provide active transactions list", async () => {
@@ -446,7 +446,7 @@ describe("InMemoryMemoryStore", () => {
 
       await expect(
         store.readWithin(txn, {}),
-      ).rejects.toThrow("already completed");
+      ).rejects.toThrow("Transaction not found or completed");
     });
   });
 
@@ -499,27 +499,27 @@ describe("InMemoryMemoryStore", () => {
       const uninitStore = new InMemoryMemoryStore();
       await expect(
         uninitStore.write(createSampleInput()),
-      ).rejects.toThrow("not initialized");
+      ).rejects.toThrow("Not initialized");
     });
 
     it("should throw when reading before init", async () => {
       const uninitStore = new InMemoryMemoryStore();
-      await expect(uninitStore.read({})).rejects.toThrow("not initialized");
+      await expect(uninitStore.read({})).rejects.toThrow("Not initialized");
     });
 
     it("should throw when getting before init", async () => {
       const uninitStore = new InMemoryMemoryStore();
-      await expect(uninitStore.get("x")).rejects.toThrow("not initialized");
+      await expect(uninitStore.get("x")).rejects.toThrow("Not initialized");
     });
 
     it("should throw when has before init", () => {
       const uninitStore = new InMemoryMemoryStore();
-      expect(() => uninitStore.has("x")).toThrow("not initialized");
+      expect(() => uninitStore.has("x")).toThrow("Not initialized");
     });
 
     it("should throw when linking before init", () => {
       const uninitStore = new InMemoryMemoryStore();
-      expect(() => uninitStore.link("a", "b", LinkType.ProducedBy)).toThrow("not initialized");
+      expect(() => uninitStore.link("a", "b", LinkType.ProducedBy)).toThrow("Not initialized");
     });
   });
 

@@ -116,7 +116,7 @@ export { ShutdownWarden } from "./core/shutdown-warden.js";
 export type { ShutdownReport } from "./core/shutdown-warden.js";
 
 // ── v3.1 文件锁管理器 ────────────────────────
-export { FileLockManager } from "@cortex/platform";
+export { FileLockManager } from "./core/file-lock-manager.js";
 
 // ── v3.1 Agent 自声明系统 ─────────────────────
 export { CapabilityRegistry, capabilityRegistry } from "./core/capability-registry.js";

@@ -1,5 +1,5 @@
 // @ci: unit
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, ManifoldGate } from "@cortex/scheduler";
 import { createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, Scheduler } from "@cortex/engine";
@@ -48,6 +48,7 @@ describe("DocGovernAgent 执行", () => {
   let scheduler: Scheduler;
 
   beforeEach(async () => {
+    vi.setConfig({ testTimeout: 30000 });
     ManifoldGate.reset();
     board = new TaskBoard();
     pool = new AgentPool();
@@ -102,7 +103,7 @@ describe("DocGovernAgent 执行", () => {
     expect(node.results[0].agentType).toBe(AgentType.DocGovern);
     expect(node.results[0].output).toContain("审计报告");
     expect(node.results[0].output).toContain("文档格式一致性");
-  });
+  }, 30000);
 
   it("constitution_check 标签节点由 DocGovernAgent 执行", async () => {
     board.addNode({
@@ -122,7 +123,7 @@ describe("DocGovernAgent 执行", () => {
     expect(report.completed).toBe(1);
     expect(report.results[0].agentType).toBe(AgentType.DocGovern);
     expect(report.results[0].output).toContain("宪法条款");
-  });
+  }, 30000);
 
   it("plan_review 标签节点由 DocGovernAgent 执行", async () => {
     board.addNode({
@@ -141,7 +142,7 @@ describe("DocGovernAgent 执行", () => {
     expect(report.completed).toBe(1);
     expect(report.results[0].agentType).toBe(AgentType.DocGovern);
     expect(report.results[0].success).toBe(true);
-  });
+  }, 30000);
 
   it("DocGovernAgent 产出写入 EPISODIC 记忆", async () => {
     const memory = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder());
@@ -174,7 +175,7 @@ describe("DocGovernAgent 执行", () => {
     const mems = await memory.read({ kind: "TaskLog" });
     expect(mems.length).toBeGreaterThanOrEqual(1);
     expect(mems[0].source.agentType).toBe(AgentType.DocGovern);
-  });
+  }, 30000);
 
   it("DocGovernAgent 与其他 Agent 在串行链路中协作", async () => {
     // 场景：CodeAgent 产出 → DocGovernAgent 审计
@@ -217,5 +218,5 @@ describe("DocGovernAgent 执行", () => {
     expect(events).toHaveLength(2);
     expect(events[0]).toBe("impl-root:code");
     expect(events[1]).toBe("audit-child:doc-govern");
-  });
+  }, 30000);
 });

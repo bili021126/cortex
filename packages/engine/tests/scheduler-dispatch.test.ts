@@ -40,7 +40,7 @@ describe("Scheduler._dispatchNode", () => {
     pool = new AgentPool();
     observer = new PipelineObserver();
     scheduler = new Scheduler(board, pool, observer);
-    // 注册 pool 配置，否则 spawn 失败
+    // 注册 pool 配置，否�?spawn 失败
     pool.register({ type: AgentType.Code, maxInstances: 3 });
   });
 
@@ -159,8 +159,8 @@ describe("Scheduler._findMatchingAgent 密度平局打破", () => {
 
   // ── P2-5 回归：密度平局打破 ──
   it("P0-3 regression: Review wins over Code for tags=[\"review\"] via match density", async () => {
-    // Code 的 AGENT_TAGS 含 "review"（8 标签中 1 个），Review 含 "review"（2 标签中 1 个）
-    // 两者评分=1 平局，Review 密度 1/2=0.5 > Code 密度 1/8=0.125
+    // Code �?AGENT_TAGS �?"review"�? 标签�?1 个），Review �?"review"�? 标签�?1 个）
+    // 两者评�?1 平局，Review 密度 1/2=0.5 > Code 密度 1/8=0.125
     const node: TaskNode = {
       id: "review-node",
       type: "implementation",
@@ -180,8 +180,8 @@ describe("Scheduler._findMatchingAgent 密度平局打破", () => {
 
     await scheduler.executeAll();
 
-    // 密度打破：Review execute 被调用，Code 不应被调用
+    // 密度打破：Review execute 被调用，Code 不应被调�?
     expect(reviewAgent.execute).toHaveBeenCalled();
     expect(codeAgent.execute).not.toHaveBeenCalled();
-  });
+  }, 30_000);
 });

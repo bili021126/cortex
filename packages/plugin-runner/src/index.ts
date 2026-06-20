@@ -18,3 +18,9 @@ export type {
 
 export { PluginLoader } from "./plugin-loader.js";
 export type { EnginePluginLoadConfig } from "./plugin-loader.js";
+
+export { PluginRegistry } from "./registry.js";
+export { PluginRunner } from "./runner.js";
+export { PluginValidator } from "./validator.js";
+export { AbstractPlugin, isPlugin } from "./plugin.js";
+export { PluginRunnerPlugin } from "./plugin-runner.plugin.js";

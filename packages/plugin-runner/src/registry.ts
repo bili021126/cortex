@@ -411,6 +411,11 @@ export class PluginRegistry {
       return [];
     }
 
+    // 拒绝包含非法路径字符的模式（\0 在所有文件系统上均无效）
+    if (globPattern.includes("\0")) {
+      return [];
+    }
+
     const { basePath, pattern } = parseGlobPattern(globPattern.trim());
     const regex = globToRegex(pattern);
 

@@ -195,7 +195,9 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
       return result;
     } catch (err) {
       this.recordFailure();
-      // 仅将原始错误透传；fallback 只在电路 OPEN 时触发
+      if (fallback !== undefined) {
+        return await fallback();
+      }
       throw err;
     }
   }

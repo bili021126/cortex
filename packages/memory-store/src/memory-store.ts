@@ -53,14 +53,13 @@ const MEMORY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const VALID_TRANSITIONS: Record<SemanticState, Set<SemanticState>> = (() => {
   const t: Record<string, Set<string>> = {};
 
-  // 从 FSM 定义中按 allTransitions 提取所有 from→to 对
+  // 从 FSM 定义中按 allTransitions 提取所有 from→to 对（PascalCase 对齐 SemanticState）
   const allTransitions = [
-    { from: "pending", to: "active" },
-    { from: "pending", to: "obliterated" },
-    { from: "active", to: "archived" },
-    { from: "active", to: "obliterated" },
-    { from: "archived", to: "active" },
-    { from: "archived", to: "obliterated" },
+    { from: "Pending", to: "Active" },
+    { from: "Pending", to: "Obliterated" },
+    { from: "Active", to: "Archived" },
+    { from: "Active", to: "Obliterated" },
+    { from: "Archived", to: "Obliterated" },
   ] as const;
 
   for (const tr of allTransitions) {
@@ -71,7 +70,7 @@ const VALID_TRANSITIONS: Record<SemanticState, Set<SemanticState>> = (() => {
     t[tr.to].add(tr.to);
   }
   // Obliterated 终态无出边
-  t["obliterated"] = new Set();
+  t["Obliterated"] = new Set();
 
   return t as Record<SemanticState, Set<SemanticState>>;
 })();
@@ -421,25 +420,16 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
    * 后端为纯内存操作（单线程 JS EventLoop 保证原子性），无 persistFn 回滚风险。
    * @see FIND-002 — 已核实为误报（不存在 persistFn 异常回滚路径）
    */
-  cas(memoryId: string, expected: string, newState: string): boolean {
-    const from = expected as SemanticState;
-    const to = newState as SemanticState;
-
-    const fromKey = expected.toLowerCase();
-    const toKey = newState.toLowerCase();
-    const validTargets = (VALID_TRANSITIONS as Record<string, Set<string>>)[fromKey];
-    if (!validTargets?.has(toKey)) {
-      this._emitDegraded("cas", `CAS拒绝: ${memoryId} ${from}→${to}（非法转换）`);
+  cas(memoryId: string, expected: SemanticState, newState: SemanticState): boolean {
+    const validTargets = VALID_TRANSITIONS[expected];
+    if (!validTargets?.has(newState)) {
+      this._emitDegraded("cas", `CAS拒绝: ${memoryId} ${expected}→${newState}（非法转换）`);
       return false;
     }
 
-    const result = this._backend.cas(
-      memoryId,
-      from,
-      to,
-    );
+    const result = this._backend.cas(memoryId, expected, newState);
     if (!result) {
-      this._emitDegraded("cas", `CAS失败: ${memoryId} ${from}→${to}`);
+      this._emitDegraded("cas", `CAS失败: ${memoryId} ${expected}→${newState}`);
     }
     return result;
   }

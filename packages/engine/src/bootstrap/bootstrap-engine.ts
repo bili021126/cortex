@@ -32,6 +32,7 @@ import "../plugin/register-all.js";
 import { PluginLoader, type EnginePluginLoadConfig } from "@cortex/plugin-runner";
 import type { Toolkit } from "@cortex/platform";
 import { preloadModel } from "@cortex/memory-store";
+import { LoggingPipelineBridge, createLogger, addTransport } from "@cortex/logging";
 import type { LlmAdapter } from "@cortex/llm";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ReadMode, type TaskNode } from "@cortex/shared";
 import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
@@ -39,7 +40,6 @@ import { readFileSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import { installConsoleBridge, uninstallConsoleBridge } from "@cortex/telemetry";
-import { LoggingPipelineBridge, ConsoleTransport, type Transport } from "@cortex/logging";
 
 // 插件类型引用
 import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.js";
@@ -168,9 +168,9 @@ export async function bootstrapEngine(
   // §6.0 ConsoleBridge —— PipelineObserver 就绪后安装，拦截裸 console
   installConsoleBridge(observer);
 
-  // §6.0.2 LoggingPipelineBridge —— Logger → PipelineObserver 桥接
+  // §6.0b Logging → PipelineObserver 桥接
   //     宪法 §8.1 三档映射：Warn→degraded, Error→degraded, Fatal→fatal
-  const loggingBridge = new LoggingPipelineBridge({
+  const _loggingBridge = new LoggingPipelineBridge({
     emit: (event: string) => observer.emit({
       type: PipelineEventType.ErrorReported,
       priority: PipelinePriority.NORMAL,
@@ -179,6 +179,8 @@ export async function bootstrapEngine(
       notificationType: "FYI",
     }),
   });
+  addTransport(_loggingBridge.createTransport());
+  const _bootstrapLogger = createLogger("bootstrap");
 
   // §6.0.1 LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期
   const lifecycleManager = new LifecycleManager();
@@ -283,6 +285,11 @@ export async function bootstrapEngine(
     );
     await agent.wakeup();
     strategists.set(def.id, agent);
+  }
+
+  // §7.1 StrategistAgent 订阅治理事件
+  for (const agent of strategists.values()) {
+    observer.on(PipelinePriority.HIGH, (event) => agent.onGovernanceEvent(event));
   }
 
   // §8 确认门接线——Toolkit 需要 ConfirmGate

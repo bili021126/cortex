@@ -1,4 +1,4 @@
-import { AgentType as AT, AgentStatus as AS, type AgentType, type AgentStatus, type TaskNode, type NodeResult, type SafeErrorReporter } from "@cortex/shared";
+import { AgentType as AT, AgentStatus as AS, PipelineEventType, type AgentType, type AgentStatus, type TaskNode, type NodeResult, type SafeErrorReporter, type ObservableEvent } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "../components/pool-aware.js";
@@ -64,6 +64,16 @@ export class StrategistAgent {
 
   async wakeup(): Promise<void> {
     this._setStatus(AS.Awake);
+  }
+
+  /**
+   * 治理事件处理——仅 ConstitutionViolation 级别事件。
+   * 不阻塞执行，纯分析产出。
+   */
+  onGovernanceEvent(event: ObservableEvent): void {
+    if (event.type !== PipelineEventType.ConstitutionViolation) return;
+    const ts = new Date(event.timestamp ?? Date.now()).toISOString();
+    process.stderr.write(`[Strategist] ${ts} 宪法违规: ${JSON.stringify(event.payload).slice(0, 500)}\n`);
   }
 
   /**

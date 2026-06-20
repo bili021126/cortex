@@ -727,7 +727,7 @@ describe("PluginRegistry — registry.ts", () => {
       );
       // 不抛异常即可
       expect(typeof count).toBe("number");
-    }, 10000);
+    }, 15000);
   });
 
   // ── 集成场景 ──

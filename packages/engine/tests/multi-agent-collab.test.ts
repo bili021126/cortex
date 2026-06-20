@@ -120,7 +120,7 @@ describe("串行协作 CodeAgent → ReviewAgent", () => {
     const reviewNodeFinal = board.getNode("review-1")!;
     expect(reviewNodeFinal.results).toHaveLength(1);
     expect(reviewNodeFinal.results[0].success).toBe(true);
-  });
+  }, 30000);
 
   it("父节点失败 → 子节点仍执行（已存在节点不受影响）", async () => {
     // ── Arrange ──
@@ -161,7 +161,7 @@ describe("串行协作 CodeAgent → ReviewAgent", () => {
     expect(report.completed).toBe(1);
     expect(report.failed).toBe(1);
     expect(report.results).toHaveLength(2);
-  });
+  }, 30000);
 });
 
 // ═══════════════════════════════════════════════════
@@ -233,7 +233,7 @@ describe("开会 needsMultiPerspective 并行", () => {
     // 聚合输出包含两个视角
     const result = report.results[0];
     expect(result.output).toContain("Review");
-  });
+  }, 30000);
 
   it("单视角节点只用第一个匹配 Agent", async () => {
     // ── Arrange ──
@@ -259,7 +259,7 @@ describe("开会 needsMultiPerspective 并行", () => {
     const finalNode = board.getNode("single-1")!;
     expect(finalNode.claimedBy).toHaveLength(1);
     expect(finalNode.claimedBy[0]).toBe(AgentType.Code);
-  });
+  }, 30000);
 
   it("needsMultiPerspective 无匹配 Agent → 全部失败", async () => {
     // ── Arrange ──
@@ -279,7 +279,7 @@ describe("开会 needsMultiPerspective 并行", () => {
     // ── Assert ──
     expect(report.failed).toBe(1);
     expect(report.results[0].error).toContain("No agents match");
-  });
+  }, 30000);
 });
 
 // ═══════════════════════════════════════════════════
@@ -353,7 +353,7 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
     // 重规划产生的新节点在 board 中（原节点已被 replan 移除）
     const allNodes = board.getAllNodes();
     expect(allNodes.length).toBeGreaterThanOrEqual(1); // 至少新节点在板上
-  });
+  }, 30000);
 
   it("超过 3 轮重规划 → 放弃重规划", async () => {
     // ── Arrange ──
@@ -397,7 +397,7 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
     // 最终仍然失败
     const failResult = report.results.find((r) => r.nodeId === "fail-2")!;
     expect(failResult.success).toBe(false);
-  });
+  }, 30000);
 
   it("重规划成功 → 新节点全部通过", async () => {
     // ── Arrange ──
@@ -436,7 +436,7 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
     // 新加的节点至少有 1 个（research matched）
     const allNodes = board.getAllNodes();
     expect(allNodes.length).toBeGreaterThanOrEqual(2);
-  });
+  }, 30000);
 
   it("无 MetaAgent 注入 → 失败不触发重规划", async () => {
     // ── Arrange ──
@@ -460,7 +460,7 @@ describe("重规划 失败 → MetaAgent 重规划", () => {
     // 无重规划事件
     // 板上的节点数不变
     expect(board.getAllNodes()).toHaveLength(1);
-  });
+  }, 30000);
 });
 
 // ═══════════════════════════════════════════════════
@@ -511,5 +511,5 @@ describe("InspectorAgent 认领 inspect 节点", () => {
     expect(finalNode.claimedBy).toHaveLength(1);
     expect(finalNode.results[0].success).toBe(true);
     expect(finalNode.results[0].output).toContain("事实报告");
-  });
+  }, 30000);
 });

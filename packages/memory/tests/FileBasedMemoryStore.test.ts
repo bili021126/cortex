@@ -403,12 +403,12 @@ describe("FileBasedMemoryStore", () => {
   describe("error handling - before init", () => {
     it("should throw when writing before init", async () => {
       const uninitStore = new FileBasedMemoryStore();
-      await expect(uninitStore.write(createSampleInput())).rejects.toThrow("not initialized");
+      await expect(uninitStore.write(createSampleInput())).rejects.toThrow("Not initialized");
     });
 
     it("should throw when has before init", () => {
       const uninitStore = new FileBasedMemoryStore();
-      expect(() => uninitStore.has("x")).toThrow("not initialized");
+      expect(() => uninitStore.has("x")).toThrow("Not initialized");
     });
   });
 

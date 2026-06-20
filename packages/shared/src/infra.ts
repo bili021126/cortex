@@ -66,6 +66,10 @@ export enum PipelineEventType {
   SkillReferenced = "skill.referenced",
   // ── Boundary Guard ──
   AgentBoundaryViolation = "agent.boundary_violation",
+  // ── Governance ──
+  ConstitutionViolation = "constitution.violation",
+  ConstitutionSessionConvened = "constitution.session_convened",
+  ConstitutionSessionResolved = "constitution.session_resolved",
   // ── RLM 递归分层执行 ──
   RlmDecompose = "rlm.decompose",
   RlmContextCompress = "context.compress",

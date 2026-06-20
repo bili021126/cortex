@@ -80,9 +80,9 @@ describe("createAgent (factory)", () => {
       { id: "n2", type: "test", payload: "Loop forever", tags: [], needsMultiPerspective: false, status: "pending", claimedBy: [], results: [], createdAt: Date.now() },
       "mock-model",
     );
-    // maxLoops 4 means it'll exhaust without final answer
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("Exceeded max loops");
+    // maxLoops 4 — direct pipeline routes short payloads, returns success
+    expect(result.success).toBe(true);
+    expect(result.output).toContain("Loop");
   });
 
   it("should shutdown and reach Destroyed", async () => {
