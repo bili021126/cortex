@@ -60,6 +60,30 @@ export interface ValidationResult {
 // ────────────────────────────────────────────────────────────
 
 export class FsmValidator {
+
+  /**
+   * 检查 FSM 状态图连通性：从 initialState 出发 BFS，标记不可达状态为 warning。
+   */
+  checkConnectivity(states: string[], transitions: Array<{from:string;to:string}>, initialState: string): string[] {
+    const reachable = new Set<string>();
+    const queue = [initialState];
+    while (queue.length > 0) {
+      const s = queue.shift()!;
+      if (reachable.has(s)) continue;
+      reachable.add(s);
+      for (const t of transitions) {
+        if (t.from === s && !reachable.has(t.to)) queue.push(t.to);
+      }
+    }
+    const unreachable = states.filter(s => !reachable.has(s));
+    if (unreachable.length > 0) {
+      console.warn('[FsmValidator] 不可达状态:', unreachable.join(', '));
+    }
+    return unreachable;
+  }
+
+  /**
+   * 原始 FsmValidator {
   /**
    * Validate a parsed FSM AST.
    */

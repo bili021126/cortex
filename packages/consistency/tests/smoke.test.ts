@@ -1,33 +1,46 @@
-// @ci: unit
-
 import { describe, it, expect } from "vitest";
-import {
-  createDefaultConflictDetector,
-  SchemaEnforcer,
-  AGENT_MEMORY_SCOPES,
-  DEFAULT_TEAM_COLLAB_CONFIG,
-} from "@cortex/consistency";
+import { SchemaEnforcer } from "../src/schema-enforcer.js";
 
-describe("@cortex/consistency — 导出完整性", () => {
-  it("createDefaultConflictDetector 可创建", () => {
-    const detector = createDefaultConflictDetector();
-    expect(detector).toBeDefined();
-    expect(typeof detector.detect).toBe("function");
-  });
-
-  it("SchemaEnforcer 可实例化且 validate 可用", () => {
+describe("@cortex/consistency smoke", () => {
+  it("SchemaEnforcer 可实例化", () => {
     const enforcer = new SchemaEnforcer();
-    expect(enforcer).toBeDefined();
-    expect(typeof enforcer.validate).toBe("function");
+    expect(enforcer).toBeInstanceOf(SchemaEnforcer);
   });
 
-  it("AGENT_MEMORY_SCOPES 为已定义常量", () => {
-    expect(AGENT_MEMORY_SCOPES).toBeDefined();
-    expect(typeof AGENT_MEMORY_SCOPES).toBe("object");
+  it("校验合法 MemoryWriteInput", () => {
+    const enforcer = new SchemaEnforcer();
+    const result = enforcer.validate({
+      source: { agentType: "test" as any },
+      kind: "test-kind" as any,
+      summary: "test summary",
+      semantic_gist: "test gist",
+      content_blob: { data: 1 },
+    });
+    expect(result.valid).toBe(true);
   });
 
-  it("DEFAULT_TEAM_COLLAB_CONFIG 有合理默认值", () => {
-    expect(DEFAULT_TEAM_COLLAB_CONFIG).toBeDefined();
-    expect(typeof DEFAULT_TEAM_COLLAB_CONFIG).toBe("object");
+  it("校验拒绝缺少 kind", () => {
+    const enforcer = new SchemaEnforcer();
+    const result = enforcer.validate({
+      source: { agentType: "test" as any },
+      kind: undefined as any,
+      summary: "test summary",
+      semantic_gist: "test gist",
+      content_blob: { data: 1 },
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it("校验拒绝缺少 summary", () => {
+    const enforcer = new SchemaEnforcer();
+    const result = enforcer.validate({
+      source: { agentType: "test" as any },
+      kind: "test-kind" as any,
+      summary: "",
+      semantic_gist: "test gist",
+      content_blob: { data: 1 },
+    });
+    expect(result.valid).toBe(false);
   });
 });

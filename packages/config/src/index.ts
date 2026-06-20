@@ -159,6 +159,8 @@ export {
   // 错误类型
   ConfigLoadError,
   ConfigValidationError,
+validateAllConfigs,
+  validateConfigDomain,
 } from "./loader.js";
 
 export type {

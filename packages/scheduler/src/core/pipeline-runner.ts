@@ -62,9 +62,18 @@ export interface IStep {
 export class PipelineRunner {
   static async run(steps: IStep[], ctx: PipelineCtx): Promise<PipelineCtx> {
     let current = ctx;
-    for (const step of steps) {
-      current = await step.run(current);
+    const completed: IStep[] = [];
+    try {
+      for (const step of steps) {
+        current = await step.run(current);
+        completed.push(step);
+      }
+      return current;
+    } finally {
+      // 兜底清理：倒序释放已完成 step 的资源，防止异常跳过 CleanupStep
+      for (let i = completed.length - 1; i >= 0; i--) {
+        try { await completed[i].cleanup?.(current); } catch { /* 静默 */ }
+      }
     }
-    return current;
   }
 }

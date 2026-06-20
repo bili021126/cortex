@@ -9,8 +9,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AgentType } from "@cortex/shared";
 import type { LlmMessage } from "@cortex/shared";
-import { saveSession, loadSession, clearSession } from "../src/tui/session-store";
-import type { SessionSnapshot } from "../src/tui/session-store";
+import { saveSession, loadSession, clearSession } from "@cortex/tui";
+import type { SessionSnapshot } from "@cortex/tui";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";

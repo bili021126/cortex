@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   reversibilityLevel,
   ConfirmGateState,
-} from "../src/tui/renderer/permission-dialog.js";
+} from "@cortex/tui";
 
 // ═══════════════════════════════════════════════════════════
 // reversibilityLevel

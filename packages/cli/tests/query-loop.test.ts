@@ -17,8 +17,8 @@ import {
   queryLoop,
   extractHistory,
   agentTalkPersona,
-} from "../src/tui/query-loop.js";
-import type { TuiEvent, TuiHooks, ReplMode, LlmStreamBridge } from "../src/tui/types.js";
+} from "@cortex/tui";
+import type { TuiEvent, TuiHooks, ReplMode, LlmStreamBridge } from "@cortex/tui";
 import type { AgentType, LlmMessage, ICortexApi } from "@cortex/shared";
 
 // ── 类型辅助 ──────────────────────────────────────────────

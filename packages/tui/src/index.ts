@@ -36,7 +36,7 @@ export type {
 } from "./types.js";
 
 // ─── 查询循环 ──────────────────────────────────────
-export { queryLoop, extractHistory } from "./query-loop.js";
+export { queryLoop, extractHistory, agentTalkPersona } from "./query-loop.js";
 
 // ─── 模式 ──────────────────────────────────────────
 export { chatMode } from "./modes/chat-mode.js";

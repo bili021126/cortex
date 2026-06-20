@@ -321,6 +321,61 @@ export function loadAllConfig(
   return config;
 }
 
+// ─── 校验器 ──────────────────────────────────────────
+
+/**
+ * 为每个 ConfigDomain 定义字段级校验规则。
+ * 在严格模式（strictConfigMode = true）下，加载后对每个域执行此校验。
+ * 校验失败抛 ConfigValidationError，阻断 bootstrap。
+ */
+export const DOMAIN_VALIDATORS: Record<string, (data: unknown, domain: string) => string[]> = {
+  agents: (data: unknown) => {
+    const errs: string[] = [];
+    if (!Array.isArray(data)) errs.push("agents 必须是数组");
+    return errs;
+  },
+  engine: (_data: unknown) => [] as string[], // 所有字段可选
+  mcpServers: (data: unknown) => {
+    const errs: string[] = [];
+    if (typeof data !== "object" || data === null) errs.push("mcpServers 必须是对象");
+    return errs;
+  },
+};
+
+/**
+ * 对指定域的数据执行字段级校验。
+ * 仅在 strictConfigMode 为 true 时调用。
+ * 校验不通过抛 ConfigValidationError。
+ */
+export function validateConfigDomain(
+  domainName: string,
+  data: unknown,
+): void {
+  const validator = DOMAIN_VALIDATORS[domainName];
+  if (!validator) return; // 没有校验规则的域跳过
+  const errors = validator(data, domainName);
+  if (errors.length > 0) {
+    throw new ConfigValidationError(
+      `配置域 "${domainName}" 校验失败:\n  - ${errors.join("\n  - ")}`,
+      domainName,
+    );
+  }
+}
+
+// ─── 全量校验 ──────────────────────────────────────────
+
+/**
+ * 对所有已加载的配置域执行字段级校验。
+ * 调用时机：loadAllConfig 之后，bootstrap 使用之前。
+ */
+export function validateAllConfigs(config: CortexConfig): void {
+  for (const domainName of Object.keys(DOMAIN_VALIDATORS)) {
+    const data = config[domainName];
+    if (data === undefined) continue; // 可选域未加载不校验
+    validateConfigDomain(domainName, data);
+  }
+}
+
 // ─── 全量配置类型 ──────────────────────────────────────
 
 /** 全量 Cortex 配置——按域索引 */

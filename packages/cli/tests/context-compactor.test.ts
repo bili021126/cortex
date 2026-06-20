@@ -17,7 +17,7 @@ import {
   estimateTokens,
   compactMessages,
   type CompactionOptions,
-} from "../src/tui/context-compactor.js";
+} from "@cortex/tui";
 import type { LlmMessage } from "@cortex/shared";
 
 // ── 工厂函数 ──────────────────────────────────────────────

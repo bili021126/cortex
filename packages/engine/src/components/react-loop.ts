@@ -3,7 +3,7 @@
 
 /* eslint-disable no-console */
 import type { TaskNode, NodeResult, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
-import { AgentType } from "@cortex/shared";
+import { AgentType, ReversibilityLevel as RL } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
@@ -158,7 +158,41 @@ export async function runReActLoop(
         reasoning_content: res.reasoning_content,
       });
 
-      for (const tc of (res.tool_calls ?? [])) {
+      // 分类：L0（只读）并行，L2/L3（写入）串行
+      const toolCalls = res.tool_calls ?? [];
+      const l0Calls = toolCalls.filter(tc => toolkit.reversibilityOf(tc.name) === RL.L0);
+      const writeCalls = toolCalls.filter(tc => toolkit.reversibilityOf(tc.name) !== RL.L0);
+
+      // L0 并行执行
+      if (l0Calls.length > 0) {
+        diagnostic(`🚀 L0 工具并行执行 ${l0Calls.length} 个`);
+        const l0Results = await Promise.allSettled(
+          l0Calls.map(async (tc) => {
+            const toolStart = Date.now();
+            const result = await toolkit.execute(
+              { toolName: tc.name, params: tc.arguments },
+              agentType,
+            );
+            const toolElapsed = Date.now() - toolStart;
+            const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
+            diagnostic(`🔧 ${tc.name} → ${outcome}`);
+            return { tc, result, toolElapsed };
+          })
+        );
+        for (const settled of l0Results) {
+          if (settled.status === "fulfilled") {
+            const { tc, result } = settled.value;
+            messages.push({
+              role: "tool",
+              content: result.success ? (result.output ?? "success") : `ERROR: ${result.error}`,
+              tool_call_id: tc.id,
+            });
+          }
+        }
+      }
+
+      // L2/L3 串行执行
+      for (const tc of writeCalls) {
         diagnostic(`🔧 执行工具 ${tc.name}`);
         const toolStart = Date.now();
         const result = await toolkit.execute(
