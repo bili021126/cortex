@@ -9,6 +9,8 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import type { Disposable } from "@cortex/shared";
+import type { LlmAdapter } from "@cortex/llm";
+import type { BootstrapResult } from "../bootstrap/factory/index.js";
 import { MetaAgent } from "../core/meta-agent.js";
 import { resolveLlm } from "../bootstrap/load-config.js";
 
@@ -20,10 +22,11 @@ export class MetaAgentPlugin implements EnginePlugin {
 
   async init(ctx: PluginContext): Promise<void> {
     const observer = ctx.get<PipelineObserverPlugin>("pipelineObserver").getInstance();
-    const { llms, factoryConfig } = ctx.externals;
+    const llmMap = ctx.externals.llms as Map<string, LlmAdapter>;
+    const fConfig = ctx.externals.factoryConfig as BootstrapResult;
 
-    const metaDef = factoryConfig.agentDefinitions.find((d) => d.type === "meta");
-    const llm = resolveLlm(llms, metaDef?.key);
+    const metaDef = fConfig.agentDefinitions.find((d) => d.type === "meta");
+    const llm = resolveLlm(llmMap, metaDef?.key);
 
     this.instance = new MetaAgent(
       llm,
@@ -51,8 +54,3 @@ export class MetaAgentPlugin implements EnginePlugin {
 }
 
 import type { PipelineObserverPlugin } from "./pipeline-observer.plugin.js";
-
-// 自注册
-import { PluginLoader } from "./plugin-loader.js";
-PluginLoader.register("metaAgent", MetaAgentPlugin);
-PluginLoader.register("metaAgent", MetaAgentPlugin);

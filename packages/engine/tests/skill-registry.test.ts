@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { SkillRegistry } from "@cortex/engine";
+import { SkillRegistry } from "@cortex/skill-kit";
 import type { SkillKind, Tag, FeedbackEntry } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";

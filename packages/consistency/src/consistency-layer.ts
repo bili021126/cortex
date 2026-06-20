@@ -3,6 +3,7 @@ import type { IFileSystemAdapter, MemoryEntry, MemoryWriteInput, ReadMode } from
 import type { MemoryStore } from "@cortex/memory-store";
 import { InitVerifier } from "./init-verifier.js";
 import type { ConsistencyReport } from "./init-verifier.js";
+import type { FileCoverageReport } from "./init-verifier.js";
 import { SchemaEnforcer } from "./schema-enforcer.js";
 import type { ValidationResult } from "./schema-enforcer.js";
 import { IntentFactWall } from "./intent-fact-wall.js";
@@ -94,6 +95,15 @@ export class ConsistencyLayer {
   async verify(): Promise<ConsistencyReport | null> {
     if (!this._initVerifier) return null;
     return await this._initVerifier.run();
+  }
+
+  /**
+   * 反向文件覆盖度校验（文件→记忆方向）。
+   * 检查给定文件列表是否都有对应的 Active 记忆覆盖。
+   */
+  async checkCoverage(filePaths: string[]): Promise<FileCoverageReport | null> {
+    if (!this._initVerifier) return null;
+    return await this._initVerifier.checkCoverage(filePaths);
   }
 
   // ── 写前校验 ────────────────────────────────

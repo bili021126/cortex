@@ -307,6 +307,8 @@ export interface LlmAdapterConfig {
   reasoningEffort?: "high" | "max";
   /** 权限控制标识（用于限流/配额匹配，如 "cyrene" / "chat" / "reasoner"） */
   label?: string;
+  /** 供应商扩展参数（如 DeepSeek 的 thinking 模式等）。调用方显式设置，无默认值。 */
+  extraBody?: Record<string, unknown>;
 }
 
 // ─── 运行时类型约束 ──────────────────────────────────────────
@@ -351,9 +353,9 @@ export interface ICortexApi {
   readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
   writeTalkMemory(entry: MemoryWriteInput): Promise<void>;
 
-  // ── Agent 查询（返回引擎类型，CLI 知道具体类型可转型）──
-  getMetaAgent(): unknown;
-  getStrategists(): unknown;
+  // ── Agent 查询（WebUI/CLI 需具体类型展示状态）──
+  getMetaAgent(): Promise<{ plan(intent: string, context?: Record<string, unknown>): Promise<unknown> } | undefined>;
+  getStrategists(): Map<string, unknown> | undefined;
 
   // ── 确认门（已有 IConfirmGate 契约）──
   getConfirmGate(): Promise<IConfirmGate>;
@@ -365,11 +367,11 @@ export interface ICortexApi {
   /** 获取记忆库（管理命令：memory write/read/search/link/archive/freeze/obliterate） */
   getMemoryStore(): Promise<IMemoryStore>;
 
-  /** 获取任务板（管理命令：task submit/list/status/cancel/redo） */
-  getTaskBoard(): Promise<unknown>;
+  /** 获取任务板（返回具体类型，WebUI 需展示任务状态） */
+  getTaskBoard(): Promise<{ getNode(id: string): unknown; getAllNodes(): unknown[]; addNode(node: unknown): void }>;
 
-  /** 获取调度器（管理命令：task redo / run / schedule） */
-  getScheduler(): Promise<unknown>;
+  /** 获取调度器（返回具体类型，WebUI 需触发执行） */
+  getScheduler(): Promise<{ executeAll(): Promise<unknown>; register(type: string, agent: unknown, model: string): void }>;
 
   /** 获取 AgentPool（管理命令：agent list/inspect/spawn/destroy） */
   getAgentPool(): unknown;

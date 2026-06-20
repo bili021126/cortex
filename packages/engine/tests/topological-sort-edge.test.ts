@@ -9,7 +9,7 @@
  *   全链路: 边语义分层 → 同层并行 → 循环检测
  */
 import { describe, it, expect } from "vitest";
-import { topologicalSort } from "@cortex/engine";
+import { topologicalSort } from "@cortex/scheduler";
 import type { TaskNode } from "@cortex/shared";
 
 /** 创建 TaskNode 辅助（仅填充拓扑排序所需字段） */

@@ -2,6 +2,8 @@
 // @cortex/engine/plugin/consistency-layer.plugin
 //
 // ConsistencyLayer 插件——依赖 MemoryStore。
+// @layer 治理层
+// @role 观察者——记忆-现实一致性校验，校验→阻断，不修复
 // 记忆-现实一致性校验：InitVerifier + SchemaEnforcer + IntentFactWall。
 //
 // @since v3.0 — 引擎插件化解耦
@@ -78,6 +80,4 @@ export class ConsistencyLayerPlugin implements EnginePlugin {
 
 import type { MemoryStorePlugin } from "./memory-store.plugin.js";
 
-// 自注册
-import { PluginLoader } from "./plugin-loader.js";
-PluginLoader.register("consistencyLayer", ConsistencyLayerPlugin);
+

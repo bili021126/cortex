@@ -1,3 +1,6 @@
+// @layer 规划-执行层
+// @role Agent 基类——执行单元的基础抽象
+
 import { AgentStatus as AS, type TaskNode, type NodeResult, type AgentType, type MemoryQuery, type SafeErrorReporter, type MemoryEntry, type ReadMode, type Agent } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
@@ -9,6 +12,10 @@ import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 
 /**
  * BaseAgent —— 所有 Agent 的抽象基类。
+ *
+ * @deprecated 自 v3 起已迁移至 createAgent() 工厂模式（components/agent-factory.ts）。
+ *             新代码请使用组合式 Agent 创建，本类保留为向后兼容占位，将在下一大版本移除。
+ *
  * 封装生命周期、记忆检索与写入、ReAct 调度。
  * 子类只需定义 type 和 systemPrompt。
  */

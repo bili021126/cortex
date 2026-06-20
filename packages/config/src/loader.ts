@@ -341,5 +341,6 @@ export interface CortexConfig {
   governancePipeline?: GovernancePipelineConfig;
   cognition?: CognitionConfig;
   docs?: DocsConfig;
+  /** 动态域索引——由 loadConfigDomain 按 CONFIG_DOMAINS 动态填入。外部消费者不应使用此签名。 */
   [key: string]: unknown;
 }

@@ -73,6 +73,9 @@ docs/core/翁法罗斯游记.md
 .tmp-*/
 .tmp-*.txt
 .tmp-*.zip
+.tmp-*.mjs
+.tmp-*.json
+.eslintcache
 
 # Cortex runtime artifacts
 .cortex/
@@ -85,3 +88,31 @@ packages/engine/test-tmp.txt
 
 # 治理会话数据以顶层 doc-govern/ 为权威源
 packages/engine/doc-govern/
+
+# 临时调试产物（防回归）
+*.tmp*
+.tmp-*
+lint-audit*.txt
+lint-group*.txt
+lint-remaining.txt
+tsc_check.txt
+tsc_engine.txt
+tsc_log.txt
+vitest_output.txt
+test-output.txt
+tmp_lint.json
+tmp_lint_*.txt
+calc.json
+data.json
+plan.json
+task.json
+out.html
+dashboard.html
+# 空壳包残留
+packages/skill-validator/
+packages/src/
+packages/test-output/
+packages/tests/.test-data/
+# 非项目内容
+3.*剧情.txt
+nahida-persona.txt

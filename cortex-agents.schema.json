@@ -55,7 +55,7 @@
             },
             "model": { "type": "string", "description": "使用的 LLM 模型名" },
             "key": { "type": "string", "description": "API 密钥标识符。对应 env var {key}_API_KEY。同一厂商不同模型独立 Key 实现资源隔离。如 DEEPSEEK_CYRENE / DEEPSEEK_CHAT / DEEPSEEK_REASONER 各自独立计费。" },
-            "maxInstances": { "type": "integer", "minimum": 1, "maximum": 10, "default": 1, "description": "最大实例数" },
+            "maxInstances": { "type": "integer", "minimum": 1, "maximum": 30, "default": 1, "description": "最大实例数" },
             "tags": {
               "type": "array",
               "items": { "type": "string" },

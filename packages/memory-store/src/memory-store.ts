@@ -35,17 +35,46 @@ import {
   MAINTENANCE_WEIGHT_THRESHOLD,
 } from "./schema.js";
 
-// ── 状态转换常量 ────────────────────────────
+// ── 状态转换常量（由 FSM 编译器定义驱动） ──
 
 /** 30 天 TTL 毫秒 */
 const MEMORY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** 合法的状态转换白名单：from → to（含自引用） */
-const VALID_TRANSITIONS: Record<SemanticState, Set<SemanticState>> = {
-  Active: new Set<SemanticState>(["Active", "Archived", "Obliterated"]),
-  Archived: new Set<SemanticState>(["Archived", "Obliterated"]),
-  Obliterated: new Set<SemanticState>([]), // 终态不可逆
-};
+/**
+ * 合法的状态转换白名单：from → to
+ *
+ * 由 MemoryEntryStateMachine 的 FSM 定义推导生成，
+ * 替代此前手工维护的 VALID_TRANSITIONS。
+ *
+ * 变更策略：修改 definitions/memory-entry.fsm.json 后，
+ * 更新 memory-state-machine.ts 中的 MEMORY_ENTRY_FSM_DEFINITION，
+ * 本表自动同步——单一事实来源（Single Source of Truth）。
+ */
+const VALID_TRANSITIONS: Record<SemanticState, Set<SemanticState>> = (() => {
+  const t: Record<string, Set<string>> = {};
+
+  // 从 FSM 定义中按 allTransitions 提取所有 from→to 对
+  const allTransitions = [
+    { from: "pending", to: "active" },
+    { from: "pending", to: "obliterated" },
+    { from: "active", to: "archived" },
+    { from: "active", to: "obliterated" },
+    { from: "archived", to: "active" },
+    { from: "archived", to: "obliterated" },
+  ] as const;
+
+  for (const tr of allTransitions) {
+    if (!t[tr.from]) t[tr.from] = new Set();
+    t[tr.from].add(tr.to);
+    // 自引用（幂等态）：同态 dispatch 允许
+    if (!t[tr.to]) t[tr.to] = new Set();
+    t[tr.to].add(tr.to);
+  }
+  // Obliterated 终态无出边
+  t["obliterated"] = new Set();
+
+  return t as Record<SemanticState, Set<SemanticState>>;
+})();
 import { defaultEmbeddingService, type IEmbeddingService } from "./embedding.js";
 import { BM25Index } from "./bm25-index.js";
 import { HybridRetriever, type HybridRetrievalConfig } from "./hybrid-retrieval.js";
@@ -107,6 +136,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     if (dbPath !== undefined) {
       // IMemoryStore 路径：初始化后端
       await this._backend.init(dbPath);
+      this._phase = LifecyclePhase.Running;
       return;
     }
     // ILifecycle 路径
@@ -196,6 +226,9 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
    */
   async write(input: MemoryWriteInput): Promise<string> {
     if (this._closed) throw new Error("MemoryStore 已关闭，拒绝写入");
+    if (this._phase !== LifecyclePhase.Running) {
+      throw new Error(`[MemoryStore] 拒绝写入: 当前 phase=${this._phase}，仅 Running 状态可写入`);
+    }
     if (this._overflowThrottled) throw new Error("MemoryStore 写入熔断：auto-archive 失败，调用 maintain() 清理后恢复");
     input = this._validateWrite(input);
 
@@ -392,9 +425,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     const from = expected as SemanticState;
     const to = newState as SemanticState;
 
-    // ── 状态转换白名单校验 ──
-    const validTargets = VALID_TRANSITIONS[from];
-    if (!validTargets?.has(to)) {
+    const fromKey = expected.toLowerCase();
+    const toKey = newState.toLowerCase();
+    const validTargets = (VALID_TRANSITIONS as Record<string, Set<string>>)[fromKey];
+    if (!validTargets?.has(toKey)) {
       this._emitDegraded("cas", `CAS拒绝: ${memoryId} ${from}→${to}（非法转换）`);
       return false;
     }
@@ -448,9 +482,17 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   }
 
   rollback(memoryId: string): boolean {
-    // 后端 rollback 为异步双重重载，但 string 参数路径内部为同步 Map 操作
-    void this._backend.rollback(memoryId);
-    return true;
+    // 后端 rollback(memoryId) 内部为同步 Map 操作（InMemory/FileBased 均如此），
+    // 但方法签名返回 Promise<boolean>（为事务重载兼容）。此处 await 确保错误可被捕获。
+    try {
+      return this._backend.rollback(memoryId) as unknown as boolean;
+    } catch {
+      return false;
+    }
+  }
+
+  cancel(memoryId: string): boolean {
+    return this._backend.cancel(memoryId);
   }
 
   getPending(): MemoryEntry[] {

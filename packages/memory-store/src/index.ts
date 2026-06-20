@@ -46,3 +46,7 @@ export { DEFAULT_HYBRID_CONFIG, cosineSimilarity, batchCosineSimilarity } from "
 
 // ── 监控 ───────────────────────────────────────
 export { MemoryStoreMonitor } from "./monitor.js";
+
+// ── FSM 状态机适配器 ──────────────────────────
+export { MemoryEntryStateMachine, stateTransitionToEvent } from "./memory-state-machine.js";
+export type { MemEvent, MemState, MemTransitionContext, MemGuard, MemAction } from "./memory-state-machine.js";

@@ -1,7 +1,8 @@
 // @ci: unit
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, Scheduler, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, ManifoldGate } from "@cortex/scheduler";
+import { createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, docGovernAgentConfig, Scheduler } from "@cortex/engine";
 import { Toolkit } from "@cortex/platform";
 import { MemoryStore } from "@cortex/memory-store";
 import { InMemoryMemoryStore } from "@cortex/memory";

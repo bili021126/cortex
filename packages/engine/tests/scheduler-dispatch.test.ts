@@ -2,7 +2,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { AgentType, AgentStatus, type TaskNode, type NodeResult, PipelinePriority, PipelineEventType } from "@cortex/shared";
 import type { Agent } from "@cortex/shared";
-import { Scheduler, TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/scheduler";
+import { Scheduler } from "@cortex/engine";
 
 function makeNode(overrides: Partial<TaskNode> = {}): TaskNode {
   return {

@@ -251,8 +251,9 @@ export class MemoryStoreRegistry {
     if (registration.initialized) {
       try {
         await registration.store.close();
-      } catch {
-        // 关闭失败不阻止注销
+      } catch (err) {
+        // 关闭失败不阻止注销，但必须记录
+        console.warn(`[MemoryStoreRegistry] unregister close failed for "${name}":`, err);
       }
     }
 
@@ -327,7 +328,9 @@ export class MemoryStoreRegistry {
 
     for (const registration of this._registrations.values()) {
       if (registration.initialized) {
-        promises.push(registration.store.close().catch(() => {}));
+        promises.push(registration.store.close().catch((err) => {
+          console.warn(`[MemoryStoreRegistry] shutdownAll close failed for "${registration.name}":`, err);
+        }));
       }
     }
 

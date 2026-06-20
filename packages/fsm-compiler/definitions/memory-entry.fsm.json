@@ -1,19 +1,22 @@
 {
   "id": "memory_entry",
   "displayName": "Memory Entry Lifecycle",
-  "version": "1.0.0",
-  "description": "Lifecycle of a memory entry from active to archived to obliterated",
+  "version": "2.0.0",
+  "description": "Four-state lifecycle of a memory entry: Pending → Active → Archived → Obliterated, per Cortex Constitution §10",
   "states": [
-    { "id": "active",     "displayName": "Active",     "style": "initial", "description": "Memory entry is active and searchable" },
-    { "id": "archived",   "displayName": "Archived",   "description": "Memory entry archived (kept but not primary)" },
-    { "id": "obliterated","displayName": "Obliterated","style": "final",   "description": "Memory entry permanently deleted" }
+    { "id": "pending",     "displayName": "Pending",     "style": "normal",  "description": "Two-phase commit: written but not yet committed. Not visible in CSA reads" },
+    { "id": "active",      "displayName": "Active",      "style": "initial", "description": "Committed and searchable. Participates in HCA/CSA reads" },
+    { "id": "archived",    "displayName": "Archived",    "style": "normal",  "description": "Moved out of hot path. Kept for audit but not primary" },
+    { "id": "obliterated", "displayName": "Obliterated", "style": "final",   "description": "Terminal state. Permanently removed from all indexes. Irreversible" }
   ],
   "transitions": [
-    { "id": "active_to_archived",    "from": "active",     "to": "archived",    "event": "archive",    "guard": "canArchive",  "action": "onArchive" },
-    { "id": "archived_to_active",    "from": "archived",   "to": "active",      "event": "restore",    "action": "onRestore" },
-    { "id": "active_to_obliterated", "from": "active",     "to": "obliterated", "event": "obliterate", "action": "onObliterate" },
-    { "id": "archived_to_obliterated","from": "archived",  "to": "obliterated", "event": "obliterate", "action": "onObliterate" }
+    { "id": "pending_to_active",      "from": "pending",     "to": "active",      "event": "commit",     "guard": "canCommit",    "action": "onCommit",    "description": "Two-phase commit: finalize pending memory to active" },
+    { "id": "pending_to_obliterated", "from": "pending",     "to": "obliterated", "event": "rollback",   "action": "onRollback",  "description": "Two-phase rollback: discard pending memory" },
+    { "id": "active_to_archived",     "from": "active",      "to": "archived",    "event": "archive",    "guard": "canArchive",   "action": "onArchive",   "description": "Archive active memory (weight below threshold or manually triggered)" },
+    { "id": "active_to_obliterated",  "from": "active",      "to": "obliterated", "event": "obliterate", "guard": "canObliterate","action": "onObliterate","description": "Force-obliterate active memory (irreversible)" },
+    { "id": "archived_to_active",     "from": "archived",    "to": "active",      "event": "restore",    "guard": "canRestore",   "action": "onRestore",   "description": "Restore archived memory back to active (manual override)" },
+    { "id": "archived_to_obliterated","from": "archived",    "to": "obliterated", "event": "obliterate", "guard": "canObliterate","action": "onObliterate","description": "Obliterate archived memory (permanent removal)" }
   ],
-  "initialState": "active",
+  "initialState": "pending",
   "finalStates": ["obliterated"]
 }

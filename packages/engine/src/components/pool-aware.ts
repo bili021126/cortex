@@ -1,6 +1,6 @@
 import { AgentStatus as AS, type AgentStatus, type SafeErrorReporter } from "@cortex/shared";
 import { AgentPool as AgentPoolClass, type AgentPool } from "@cortex/scheduler";
-import { isTestEnv } from "../test-env.js";
+import { isTestEnv } from "@cortex/config";
 
 /**
  * PoolAwareState —— 方案B 状态管理共享组件。

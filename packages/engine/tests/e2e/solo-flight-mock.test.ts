@@ -1,4 +1,5 @@
-// @ci
+// @ci: integration
+// @ci: skip — v3.0: 手动构造模式不兼容 bootstrapEngine 内化。已由 cortex-e2e-full.ts 替代。
 /**
  * Solo Flight Mock E2E —— 单 Agent 全类型全链路的完整路径模拟
  *
@@ -19,9 +20,11 @@ import { AgentType } from "@cortex/shared";
 import {
   TaskBoard,
   AgentPool,
-  Scheduler,
   PipelineObserver,
   ConfirmGate,
+} from "@cortex/scheduler";
+import {
+  Scheduler,
   createAgent,
   codeAgentConfig,
   fixAgentConfig,

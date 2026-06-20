@@ -1,0 +1,27 @@
+{
+  "id": "skill-p39-package-gap-scan",
+  "agentType": "analysis",
+  "name": "P39: monorepo 包接入缺口扫描——依赖声明与实际引用的交叉审计",
+  "triggerTags": ["package", "audit", "integration", "gap", "dependency", "monorepo"],
+  "trigger": "需要审计 monorepo 中所有包的接入状态：哪些包声明了依赖但未实际引用，哪些包已就绪但完全未接入 engine runtime。典型场景：阶段跃迁后排查未接线模块，或新包加入后验证是否被正确集成。",
+  "steps": [
+    "1. 列出所有包：grep '\"name\": \"@cortex/' --glob 'package.json' 在 packages/ 下收集全部 25 个包名",
+    "2. 列出 engine 声明的依赖：读 packages/engine/package.json 的 dependencies 字段，提取所有 @cortex/* 条目",
+    "3. 列出 engine 实际 import：grep 'from \"@cortex/' --glob '*.ts' 在 packages/engine/src/ 下统计每个包的引用次数",
+    "4. 交叉对照：生成三分类表——",
+    "   A. 已接入（声明+引用）：正常",
+    "   B. 声明但弱引用（声明了但只引类型、零运行时调用）：标为 '类型壳'——通知这类",
+    "   C. 完全未接入（有包但无声明无引用）：标为 '孤儿包'——prompt-kit/resilience 这类",
+    "5. 估算未接入包的行数：统计每个未接入包的 .ts 文件总行数，按行数降序排列",
+    "6. 区分独立工具 vs 应接入的基础设施：tui/cli/doctor/tools/testing/pm 为独立工具，不标红；prompt-kit/resilience/cache 为基础设施，标红建议接入",
+    "7. 输出缺口报告表：包名 | 行数 | 状态(A/B/C) | 类型(工具/基础设施) | 建议",
+    "8. 同步更新 docs/core/概念设计全面整合-项目实际阶段与路线图.md §三 设计锚点表"
+  ],
+  "expectedOutput": "三分类缺口表 + 未接入包行数统计 + 建议接入优先级排序。报告格式与 Core-2-过渡阶段-全面接入改造计划.md §设计锚点 一致。",
+  "outputFile": "docs/core/概念设计全面整合-项目实际阶段与路线图.md（§三 设计锚点表更新）",
+  "status": "trial",
+  "adoptionCount": 1,
+  "rejectionCount": 0,
+  "discoveredBy": "Cyrene (package gap audit during Core-2 transition planning)",
+  "createdAt": 1781616953861
+}

@@ -3,7 +3,7 @@
 > 此文件由 bootstrapEngine 自动注入到每个 Agent 的 system prompt 头部。
 > 违者将在 CI lint 环节被拦截。你不是在"建议"，你是在"执行法律"。
 > 
-> 版本：v4.0（§九~§十禁止层 + §十一~§十四指导层——代码法典双翼闭合）
+> 版本：v4.1（§九·九 包边界职责划分——横向解耦制度化）
 
 ---
 
@@ -489,6 +489,64 @@ interface KvStore<T> {
 ```
 
 > 薄壳包不是"过渡"——是技术债务。每多一个薄壳包，就多一个编译路径、一个歧义来源。
+
+### 9.9 包模块功能边界与职责划分
+
+```
+✅ 每个包必须有唯一、明确的功能职责——package.json description 字段为强制契约
+✅ 包的职责必须在 barrel（src/index.ts）顶部用 @responsibility JSDoc 标注
+✅ 一个包最多承担 3 个内聚的职责域——超出必须拆分
+✅ 包间依赖必须单向、无环——禁止 A→B 且 B→A（静态/运行时都不行）
+✅ 新建包必须先审计：现有包是否已覆盖该职责？是否可合并而非新增？
+
+❌ 禁止："什么都放的公共抽屉"——包因"不知道放哪"而积累无关符号
+❌ 禁止：空壳重导出包——仅重导出另一个包的内容而不增加任何价值
+❌ 禁止：运行时类实现在 shared/config 层——实现必须下放到域包
+❌ 禁止：跨域直接导入实现文件——必须通过 barrel 或包名导入
+```
+
+**审计标准**：
+
+| 指标 | 阈值 | 动作 |
+|------|------|------|
+| 职责域数 | > 3 | 拆分 |
+| 扇入（被依赖数） | > 10 | 审查是否承担了过多基础职责 |
+| 扇出（依赖数） | > 8 | 审查是否可合并消费方 |
+| 文件数 | > 30 | 审查是否可分子域 |
+
+**判例**：@cortex/engine 横向解耦
+
+```
+解耦前（垂直堆叠）：              解耦后（横向解耦）：
+                                  
+@cortex/engine (58文件, 9职责域)   @cortex/engine (纯引擎)
+  ├── skill-*.ts                    ├── agents/    — Agent 生命周期
+  ├── doc-registry.ts               ├── bootstrap/ — 组装管线
+  ├── engine-defaults.ts            ├── components/— ReAct/factory/pool
+  ├── engine-telemetry.ts           ├── core/      — scheduler/meta
+  ├── console-bridge.ts             ├── lifecycle/ — 生命周期管理
+  ├── test-env.ts                   ├── memory/    — 记忆管线
+  └── ...                           └── plugin/    — 内部插件接线
+                                  
+skill-kit/validator 是薄壳重导出    @cortex/skill-kit
+→ 核心逻辑全在 engine               ├── skill-registry.ts (253L)
+                                    ├── skill-persister.ts (379L)
+                                    ├── skill-extractor.ts (232L)
+                                    └── skill-template-engine.ts (281L)
+                                  
+                                  @cortex/governance
+                                    └── doc-registry.ts (300L)
+                                  
+                                  @cortex/telemetry
+                                    ├── engine-telemetry.ts (52L)
+                                    └── console-bridge.ts (128L)
+                                  
+                                  @cortex/config
+                                    ├── engine-defaults.ts (173L)
+                                    └── isTestEnv/ifNotTest (合并自 engine+ scheduler)
+```
+
+> 包不是文件夹——是契约边界。每个包的存在理由是"我提供 X 能力，且只有我能提供"。
 
 ---
 

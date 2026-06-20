@@ -65,7 +65,8 @@ export interface McpServerConfig {
   /** 子进程工作目录 */
   cwd?: string;
 
-  // ── HTTP 传输字段 ──
+  /** 可选——MCP 服务器的 trust 配置（未设时默认 L2 + 所有 Agent 可用） */
+  trust?: McpTrustConfig;
   /** HTTP 端点 URL */
   url?: string;
   /** HTTP 请求头 */
@@ -75,6 +76,20 @@ export interface McpServerConfig {
   enabled?: boolean;
   /** 单次 tool call 超时 (ms), 默认 15000 */
   timeout?: number;
+}
+
+/**
+ * MCP 服务器信任配置——声明式鉴权，不依赖 TrustModel 的历史行为计算。
+ *
+ * 与 ConfirmGate 的 reversibility 不同：trust 控制"谁能调"，reversibility 控制"调了要不要确认"。
+ */
+export interface McpTrustConfig {
+  /** 可逆性等级——该服务器所有工具的默认等级（覆盖工具自身声明）。默认 L2 */
+  level?: "L0" | "L1" | "L2" | "L3";
+  /** 允许调用此 MCP 服务器的 Agent 类型列表。不设 = 全部允许 */
+  allowedAgents?: string[];
+  /** 是否需要 ConfirmGate 确认。默认 true */
+  requireConfirmation?: boolean;
 }
 
 /** MCP Tool 定义 (来自 tools/list 响应) */

@@ -11,6 +11,7 @@
  * 正常路径通过验证，确保不会误杀合法操作。
  */
 
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { validatePath, resolveSafePath } from "@cortex/platform";
 import * as path from "node:path";

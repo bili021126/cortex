@@ -8,5 +8,9 @@
 // ── 记忆增强执行管道（胶水层，仍在 engine） ──
 export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE } from "./pipeline.js";
 
-// ── 技能闭环订阅者（胶水层，仍在 engine） ──
-export { registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "./skill-pipeline.js";
+// ── 技能闭环订阅者（迁入 @cortex/skill-kit） ──
+export { registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "@cortex/skill-kit";
+
+// ── Context Sharding（Kimi Agent Swarm 对齐） ──
+export { compactToSubAgentSummary } from "./pipeline.js";
+export type { SubAgentSummary } from "./pipeline.js";

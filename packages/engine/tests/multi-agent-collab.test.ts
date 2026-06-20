@@ -2,7 +2,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import { TaskBoard, AgentPool, PipelineObserver, createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MetaAgent, createInspectorAgent, Scheduler, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/scheduler";
+import { createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MetaAgent, createInspectorAgent, Scheduler } from "@cortex/engine";
 import { Toolkit } from "@cortex/platform";
 import { MemoryStore } from "@cortex/memory-store";
 import { InMemoryMemoryStore } from "@cortex/memory";

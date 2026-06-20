@@ -1,6 +1,6 @@
 // @ci: integration
 import { describe, it, expect, beforeEach } from "vitest";
-import { SkillRegistry, extractSkillsFromOutput } from "@cortex/engine";
+import { SkillRegistry, extractSkillsFromOutput } from "@cortex/skill-kit";
 import type { SkillTemplate, Tag } from "@cortex/shared";
 
 /** 模拟 LoopAgent 输出：模式提炼 + SkillTemplate JSON */

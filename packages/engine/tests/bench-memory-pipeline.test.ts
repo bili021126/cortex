@@ -758,6 +758,7 @@ describe("Bench ⑤: MemoryStore 端到端混合管线", () => {
       fineTopN: 10,
       enableBoundaryRegression: true,
     });
+    await store.init(":memory:");
 
     // 写入 5 条记忆
     const ids: string[] = [];
@@ -804,6 +805,7 @@ describe("Bench ⑤: MemoryStore 端到端混合管线", () => {
       beta: 0.5,
       fineTopN: 10,
     });
+    await store.init(":memory:");
 
     // 写入 2 条关联记忆
     const input1: MemoryWriteInput = {
@@ -848,6 +850,7 @@ describe("Bench ⑤: MemoryStore 端到端混合管线", () => {
     const backend = new InMemoryMemoryStore();
     await backend.init(":memory:");
     const store = new MemoryStore(backend, undefined, mockEmbedder);
+    await store.init(":memory:");
 
     const input: MemoryWriteInput = {
       source: { agentType: "Code" as import("@cortex/shared").AgentType, taskId: "bench" },
@@ -878,6 +881,7 @@ describe("Bench ⑤: MemoryStore 端到端混合管线", () => {
     const backend = new InMemoryMemoryStore();
     await backend.init(":memory:");
     const store = new MemoryStore(backend, undefined, mockEmbedder);
+    await store.init(":memory:");
 
     // 写入几条, 查询时不提供 keywords (不会生成 embedding)
     for (const t of SYNTHETIC_POOL.slice(0, 3)) {

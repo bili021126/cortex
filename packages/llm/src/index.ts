@@ -17,3 +17,6 @@
 // ============================================================
 
 export { LlmAdapter } from "./llm-adapter.js";
+export { RateLimiter } from "./rate-limiter.js";
+export { accumulateToolCalls, finalizeToolCalls } from "./tool-call-stream.js";
+export type { StreamToolCallAccumulator, StreamToolCallDelta } from "./tool-call-stream.js";

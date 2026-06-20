@@ -226,7 +226,7 @@ export class Toolkit {
     // ── FileLockManager 加锁（依赖 Tool.needsLock 标志，而非硬编码工具名） ──
     if (tool.needsLock && this.lockManager) {
       const filePath = inv.params.file_path as string;
-      if (filePath && !this.lockManager.acquire(filePath, LockType.Write, "toolkit")) {
+      if (filePath && !this.lockManager.acquire(filePath, "toolkit", LockType.Write)) {
         return { success: false, error: `File locked: ${filePath}` };
       }
       try {

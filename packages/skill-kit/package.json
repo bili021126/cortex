@@ -18,7 +18,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cortex/engine": "workspace:*"
+    "@cortex/memory-store": "workspace:*",
+    "@cortex/pattern-extractor": "workspace:*",
+    "@cortex/platform": "workspace:*",
+    "@cortex/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

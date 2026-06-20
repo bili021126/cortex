@@ -39,6 +39,6 @@ export type { Tag, AgentDisplayInfo, AgentDisplayEntry, AgentDefinition } from "
 export type { SkillTemplate, SkillKind, FeedbackEntry } from "./agent-skill-types.js";
 
 // ── 能力协议 ──
-export { type AgentConfig, type MemoryAware, type Executable, type Agent } from "./agent-protocols.js";
+export { type AgentConfig, type MemoryAware, type Executable, type Agent, type AgentCapability } from "./agent-protocols.js";
 
 export const SHARED_IDENTITY_ANCHOR = `[系统指令] 你是 Cortex 工程助手的身份锚点。`;

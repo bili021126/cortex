@@ -1,10 +1,14 @@
+// @cortex/engine/memory/pipeline —— 记忆增强执行管道
+// @layer 记忆层
+// @role 记忆管道——检索→增强→执行→写入→校验
+
 import { LinkType, PRESET_CONTEXT_POLICIES, type AgentType, type MemoryEntry, type MemoryKind, type MemoryQuery, type NodeResult, type ReadMode, type SafeErrorReporter, type TaskNode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import { ContextBuilder, type MemoryStore } from "@cortex/memory-store";
 import type { Toolkit } from "@cortex/platform";
 import { runReActLoop, type ReActContext } from "../components/react-loop.js";
 import { PipelineRunner, type PipelineCtx, type IStep } from "@cortex/scheduler";
-import { recordTelemetry } from "../telemetry/engine-telemetry.js";
+import { recordTelemetry } from "@cortex/telemetry";
 
 /**
  * 默认记忆检索策略——调用统一入口 makeMemoryQuery。
@@ -123,6 +127,7 @@ export class MemoryRetrievalStep implements IStep {
       }
     } catch (e) {
       ctx.enrichedNode = node;
+      console.warn(`[MemoryRetrievalStep] 节点 ${node.id} 记忆检索失败，降级为无记忆执行: ${String(e).slice(0, 200)}`);
       if (safeReporter) {
         safeReporter({
           source: `${agentType}.MemoryRetrievalStep`,
@@ -398,8 +403,9 @@ async function _rememberResult(
       });
     }
   } catch (memErr) {
-    try { if (memId !== undefined) memory.cas(memId, "Active", "Archived"); } catch { /* 静默 */ }
-    try { if (ctxMemId !== undefined) memory.cas(ctxMemId, "Active", "Archived"); } catch { /* 静默 */ }
+    // 统一取消——自动判断 Pending→rollback / Active→archive
+    try { if (memId !== undefined) memory.cancel(memId); } catch { /* 静默 */ }
+    try { if (ctxMemId !== undefined) memory.cancel(ctxMemId); } catch { /* 静默 */ }
 
     const hint = `任务 ${node.id} 已${isSuccess ? "成功" : "失败"}完成，但记忆写入失败，半成品 Pending 条目已清理`;
     if (safeReporter) {
@@ -411,4 +417,69 @@ async function _rememberResult(
       });
     }
   }
+}
+
+// ═══════════════════════════════════════════
+// Context Sharding — 子 Agent 上下文隔离（Kimi Agent Swarm 对齐）
+// ═══════════════════════════════════════════
+
+/**
+ * 子 Agent 执行后的上下文摘要。
+ *
+ * Context Sharding 的核心：子 Agent 执行完成后，不把完整上下文传给协调者。
+ * 而是压缩为结构化摘要，协调者只读摘要做决策——这突破了单上下文窗口限制。
+ */
+export interface SubAgentSummary {
+  /** 执行节点 ID */
+  nodeId: string;
+  /** 执行 Agent 类型 */
+  agentType: string;
+  /** 是否成功 */
+  success: boolean;
+  /** 关键发现（≤200 字） */
+  keyFindings: string;
+  /** 执行步骤数 */
+  stepsExecuted: number;
+  /** 使用的工具 */
+  toolsUsed: string[];
+  /** 引用的文件 */
+  filesTouched: string[];
+  /** 下一步建议 */
+  nextSuggestion?: string;
+}
+
+/**
+ * 将子 Agent 的完整输出压缩为 Context Sharding 摘要。
+ *
+ * 模仿 Kimi Agent Swarm 的"子 Agent 只汇报关键结论"模式：
+ * - 提取前 200 字作为关键发现
+ * - 提取文件路径和工具调用
+ * - 丢弃完整推理中间过程
+ *
+ * @param nodeResult 子 Agent 的完整执行结果
+ * @returns 压缩后的摘要，可写入 MemoryStore 供协调者读取
+ */
+export function compactToSubAgentSummary(
+  nodeResult: { nodeId: string; agentType: string; success: boolean; output?: string; error?: string },
+): SubAgentSummary {
+  const output = nodeResult.output ?? "";
+  const keyFindings = output.slice(0, 200).replace(/\n/g, " ");
+
+  // 提取文件路径
+  const fileMatches = output.match(/[\w./-]+\.(ts|tsx|js|json|md|yaml|yml)/g) ?? [];
+  const filesTouched = [...new Set(fileMatches)].slice(0, 10);
+
+  // 提取工具调用
+  const toolMatches = output.match(/\[(工具|tool):\s*(\w+)\]/g) ?? [];
+  const toolsUsed = [...new Set(toolMatches.map((m) => m.replace(/\[(工具|tool):\s*(\w+)\].*/, "$2")))].slice(0, 10);
+
+  return {
+    nodeId: nodeResult.nodeId,
+    agentType: nodeResult.agentType,
+    success: nodeResult.success,
+    keyFindings: keyFindings || (nodeResult.success ? "执行成功" : `失败: ${(nodeResult.error ?? "unknown").slice(0, 100)}`),
+    stepsExecuted: (output.match(/step[\s:]*\d+/gi) ?? []).length || 1,
+    toolsUsed,
+    filesTouched,
+  };
 }

@@ -1,7 +1,7 @@
 // @ci: unit
 // P3: Scheduler 循环依赖恢复 e2e——验证拓扑排序检测循环后节点被标记为 failed。
 import { describe, it, expect } from "vitest";
-import { topologicalSort } from "@cortex/engine";
+import { topologicalSort } from "@cortex/scheduler";
 
 describe("Scheduler 循环依赖恢复", () => {
   it("简单循环: A→B→A——返回空 layers", () => {

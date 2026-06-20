@@ -49,6 +49,23 @@ export interface ConsistencyReport {
   fatal: boolean;
 }
 
+/**
+ * 文件→记忆覆盖度报告。
+ *
+ * 反向校验：给定文件列表，检查每个文件是否有至少一条 Active 记忆引用它。
+ * 用于 CI 流水线中检测"修改了文件但忘记写 TaskLog"的情况。
+ */
+export interface FileCoverageReport {
+  timestamp: number;
+  totalFiles: number;
+  covered: number;
+  uncovered: number;
+  /** 无记忆覆盖的文件路径列表 */
+  uncoveredFiles: string[];
+  /** 有覆盖的文件及其关联的记忆 ID */
+  coveredFiles: Array<{ filePath: string; memoryIds: string[] }>;
+}
+
 // ─── 文件路径提取 ────────────────────────────────
 
 /**
@@ -247,6 +264,70 @@ export class InitVerifier {
         changed: changedCount,
       },
       fatal,
+    };
+  }
+
+  /**
+   * 反向文件覆盖度校验（文件→记忆方向）。
+   *
+   * 给定一组文件路径，检查每条路径是否至少被一条 Active 记忆引用。
+   * 用于 CI 流水线中检测"修改了文件但忘记写 TaskLog"的情况。
+   *
+   * @param filePaths 待检查的文件路径列表（相对于 projectRoot 或绝对路径）
+   * @returns FileCoverageReport —— 哪些文件有记忆覆盖、哪些没有
+   */
+  async checkCoverage(filePaths: string[]): Promise<FileCoverageReport> {
+    const timestamp = Date.now();
+
+    // 获取全部 Active 记忆
+    const activeMemories = await this._memory.read({
+      limit: 0,
+    } as unknown as MemoryQuery);
+
+    // 构建 文件路径 → 记忆 ID 集合 的索引
+    const fileToMemories = new Map<string, Set<string>>();
+    for (const entry of activeMemories) {
+      const refs = extractFileReferences(entry);
+      for (const ref of refs) {
+        // 规范化路径：相对路径转为绝对路径
+        const normalized = path.isAbsolute(ref)
+          ? ref
+          : path.resolve(this._projectRoot, ref);
+        let ids = fileToMemories.get(normalized);
+        if (!ids) {
+          ids = new Set();
+          fileToMemories.set(normalized, ids);
+        }
+        ids.add(entry.id);
+      }
+    }
+
+    const coveredFiles: FileCoverageReport["coveredFiles"] = [];
+    const uncoveredFiles: string[] = [];
+
+    for (const fp of filePaths) {
+      const normalized = path.isAbsolute(fp)
+        ? fp
+        : path.resolve(this._projectRoot, fp);
+
+      const memoryIds = fileToMemories.get(normalized);
+      if (memoryIds && memoryIds.size > 0) {
+        coveredFiles.push({
+          filePath: fp,
+          memoryIds: Array.from(memoryIds),
+        });
+      } else {
+        uncoveredFiles.push(fp);
+      }
+    }
+
+    return {
+      timestamp,
+      totalFiles: filePaths.length,
+      covered: coveredFiles.length,
+      uncovered: uncoveredFiles.length,
+      uncoveredFiles,
+      coveredFiles,
     };
   }
 

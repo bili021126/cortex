@@ -12,7 +12,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { AgentType, AgentStatus, PipelinePriority, type TaskNode, type NodeResult } from "@cortex/shared";
 import type { Agent } from "@cortex/shared";
-import { Scheduler, TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/scheduler";
+import { Scheduler } from "@cortex/engine";
 
 // ════════════════════════════════════════════════════════
 // Helpers

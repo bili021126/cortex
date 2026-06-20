@@ -17,8 +17,8 @@ import {
   parseDecomposeResponse,
   buildDecomposePrompt,
   MAX_RLM_DEPTH,
-} from "@cortex/engine";
-import type { LlmCallable } from "@cortex/engine";
+} from "@cortex/scheduler";
+import type { LlmCallable } from "@cortex/scheduler";
 
 // ── 辅助 ──────────────────────────────────────────────
 

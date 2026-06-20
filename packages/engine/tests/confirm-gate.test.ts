@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { ConfirmGate } from "@cortex/engine";
+import { ConfirmGate } from "@cortex/scheduler";
 import { ReversibilityLevel } from "@cortex/shared";
 
 describe("ConfirmGate", () => {

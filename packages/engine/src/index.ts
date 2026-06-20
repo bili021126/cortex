@@ -32,6 +32,55 @@ export { createInspectorAgent, createBrowserAgent, ButlerAgent } from "./agents/
 // 特殊 Agent & Core-2 实验性
 export { MetaAgent, StrategistAgent, type IntentClarification } from "./agents/index.js";
 
+// ── Core-2: Prompt 管理 ────────────────────────
+// @experimental prompt-kit 引擎集成层
+export { PromptManager } from "./core/prompt-manager.js";
+export type { PlanningPromptBlocks } from "./core/prompt-manager.js";
+
+// ── Core-2: 循环策略注册表 ─────────────────────
+// @experimental 可插拔循环策略（react/direct/decompose/jury）
+export { LoopStrategyRegistry, loopStrategyRegistry } from "./core/loop-strategy-registry.js";
+export type { LoopStrategy } from "./core/loop-strategy-registry.js";
+
+// ── Core-2: 任务路由器 ─────────────────────────
+// @experimental 统一策略+模型路由决策
+export { TaskRouter } from "./core/task-router.js";
+export type { RouteDecision } from "./core/task-router.js";
+
+// ── Core-2: 环境感知路由器 ─────────────────────
+// @experimental 运行时环境约束（模型可用性/配额/延迟）
+export { EnvironmentAwareRouter } from "./core/environment-aware-router.js";
+export type { ModelHealth, EnvironmentRouterOptions } from "./core/environment-aware-router.js";
+
+// ── Core-2: 哨兵信号分层过滤器 ─────────────────
+// @experimental L1/L2/L3 信号分层 + 去噪 + 采样
+export { SentinelSignalFilter } from "./core/sentinel-signal-filter.js";
+export type { SignalLevel, FilteredSignal, SignalFilterOptions } from "./core/sentinel-signal-filter.js";
+
+// ── Core-2: 治理事件发射器 ─────────────────────
+// @experimental DocGovernAgent 治理事件（修宪/审计/合规/圆桌）
+export { GovernanceEventEmitter } from "./core/governance-events.js";
+export type { GovernanceEventType, GovernanceEventPayload } from "./core/governance-events.js";
+
+// ── Core-2: 决策门桥接器 ───────────────────────
+// @experimental DECISION_REQUIRED → ConfirmGate 桥接
+export { DecisionGateBridge } from "./core/decision-gate-bridge.js";
+export type { DecisionRequest, DecisionResult } from "./core/decision-gate-bridge.js";
+
+// ── Core-2: 韧性策略集成 ───────────────────────
+// @experimental retry/circuit-breaker/timeout 引擎集成
+export { ResiliencePolicyFactory, resilienceFactory } from "./core/resilience-integration.js";
+export type { ResilienceOptions } from "./core/resilience-integration.js";
+
+// ── Core-2: 通知运行时接入 ─────────────────────
+// @experimental PipelineObserver → NotificationPipe 桥接
+export { NotificationRuntime } from "./core/notification-runtime.js";
+export type { NotificationRuntimeOptions } from "./core/notification-runtime.js";
+
+// ── Core-2: 技能作用域 ─────────────────────────
+// @experimental 四级作用域技能解析（跨域/项目/包级/Agent）
+export { resolveByScope, tagSkillScope, type SkillScope } from "./core/skill-scope.js";
+
 // ── 记忆子系统（仅引擎胶水层） ──────────────────
 export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE, registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "./memory/index.js";
 
@@ -50,16 +99,16 @@ export { MetaAgentReplanAdapter } from "./core/meta-agent-adapter.js";
 
 // ── 引擎组件 ────────────────────────────────────
 export { PoolAwareState } from "./components/pool-aware.js";
-export { DocRegistry } from "./registry/doc-registry.js";
+export { DocRegistry } from "@cortex/governance";
 
 // ── 搜索后端 ───────────────────────────────────
 // @note v2.6.7 兼容层已砍，直接导入 @cortex/platform
 
 // ── 技能系统 ────────────────────────────────────
-export { SkillRegistry, deriveStatus } from "./registry/skill-registry.js";
+export { SkillRegistry, deriveStatus } from "@cortex/skill-kit";
 
 // ── Core-2: 引擎遥测 ───────────────────────────
-export { getTelemetry, setTelemetry, recordTelemetry, shutdownTelemetry } from "./telemetry/engine-telemetry.js";
+export { getTelemetry, setTelemetry, recordTelemetry, shutdownTelemetry } from "@cortex/telemetry";
 
 // ── v3.1 生命周期 & 优雅关闭 ─────────────────
 export { LifecycleManager } from "./lifecycle/lifecycle-manager.js";
@@ -67,10 +116,13 @@ export { ShutdownWarden } from "./core/shutdown-warden.js";
 export type { ShutdownReport } from "./core/shutdown-warden.js";
 
 // ── v3.1 文件锁管理器 ────────────────────────
-export { FileLockManager } from "./core/file-lock-manager.js";
+export { FileLockManager } from "@cortex/platform";
+
+// ── v3.1 Agent 自声明系统 ─────────────────────
+export { CapabilityRegistry, capabilityRegistry } from "./core/capability-registry.js";
 
 // ── v3.1 Console → Observer 桥接 ─────────────
-export { installConsoleBridge, uninstallConsoleBridge } from "./observer/console-bridge.js";
+export { installConsoleBridge, uninstallConsoleBridge } from "@cortex/telemetry";
 
 // ── 引擎配置 ───────────────────────────────────
 // @note 配置类型、常量、默认值统一由 @cortex/config 提供
@@ -97,8 +149,8 @@ export {
   MONITOR_THRESHOLD,
   ENGINE_DEFAULTS,
   loadEngineDefaults,
-} from "./config/engine-defaults.js";
-export type { EngineDefaults } from "./config/engine-defaults.js";
+} from "@cortex/config";
+export type { EngineDefaults } from "@cortex/config";
 
 // ── 修宪管线 ───────────────────────────────────
 // @note v2.6.7 兼容层已砍，直接导入 @cortex/governance
@@ -107,50 +159,18 @@ export type { EngineDefaults } from "./config/engine-defaults.js";
 // @note LlmAdapter 由 @cortex/llm 提供，engine barrel 不再重导出
 // CLI/外部消费者请直接从 @cortex/llm 导入
 
-// ── v3.1 调度层兼容重导出（引擎测试需要） ──────
+// ── v3.1 调度层接口类型（仅供测试兼容） ──────
 // @note 调度核心类请从 @cortex/scheduler 导入；
-// engine barrel 保留重导出以兼容现有测试。
-export { TaskBoard } from "@cortex/scheduler";
-export { AgentPool } from "@cortex/scheduler";
-export { PipelineObserver } from "@cortex/scheduler";
-export { PipelineRunner } from "@cortex/scheduler";
-export { topologicalSort } from "@cortex/scheduler";
-export { TrustModel } from "@cortex/scheduler";
-export { ConfirmGate } from "@cortex/scheduler";
-export { ManifoldGate } from "@cortex/scheduler";
-export {
-  decompose,
-  shouldDecompose,
-  shouldExecuteDecomposition,
-  MAX_RLM_DEPTH,
-  parseDecomposeResponse,
-  buildDecomposePrompt,
-} from "@cortex/scheduler";
+// 仅保留 IStep/PipelineCtx 类型重导出以兼容现有测试。
 export type { PipelineCtx, IStep } from "@cortex/scheduler";
 
-// ── v3.1 密度压缩兼容重导出（引擎测试需要） ──
-export {
-  parseDensityTag,
-  stripDensityTag,
-  compressByDensity,
-  annotateAndCompress,
-  mergeContext,
-  densityToStrategy,
-} from "@cortex/scheduler";
-
-// ── 插件体系（v3.1 配置驱动）────────────────────
-export { PluginLoader, type EnginePluginLoadConfig } from "./plugin/plugin-loader.js";
+// ── 插件体系（v3.2 迁入 @cortex/plugin-runner）────
+export { PluginLoader, type EnginePluginLoadConfig } from "@cortex/plugin-runner";
+export type { EnginePlugin, PluginContext, PluginContainer, PluginExternals, PluginHealth } from "@cortex/plugin-runner";
 export { registerAgentFactory, getAgentFactory, hasAgentFactory, getRegisteredAgentTypes } from "./plugin/register-all.js";
-export type { EnginePlugin, PluginContext, PluginContainer, PluginExternals, PluginHealth } from "./plugin/types.js";
 export type { AgentFactory } from "./plugin/agent-factory-registry.js";
 
-// ── 插件实例（供测试/扩展直接引用）───────────────
-export { PipelineObserverPlugin } from "./plugin/pipeline-observer.plugin.js";
-export { TaskBoardPlugin } from "./plugin/task-board.plugin.js";
-export { AgentPoolPlugin } from "./plugin/agent-pool.plugin.js";
-export { ConfirmGatePlugin } from "./plugin/confirm-gate.plugin.js";
-export { MemoryStorePlugin } from "./plugin/memory-store.plugin.js";
-export { ConsistencyLayerPlugin } from "./plugin/consistency-layer.plugin.js";
-export { MetaAgentPlugin } from "./plugin/meta-agent.plugin.js";
-export { GovernancePlugin } from "./plugin/governance.plugin.js";
-export { SchedulerPlugin } from "./plugin/scheduler.plugin.js";
+// ── 插件实例（v3.2 engine 内部使用，不再对外暴露类名）──
+// 外部消费者应通过 PluginContainer.get("pipelineObserver") 等字符串名获取实例，
+// 而非直接 import 插件类。插件类保留在 engine/src/plugin/ 内部文件中，
+// bootstrap-engine.ts 通过 type-only import 引用。

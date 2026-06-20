@@ -39,8 +39,3 @@ export class AgentPoolPlugin implements EnginePlugin {
 }
 
 import type { PipelineObserverPlugin } from "./pipeline-observer.plugin.js";
-
-// 自注册
-import { PluginLoader } from "./plugin-loader.js";
-PluginLoader.register("agentPool", AgentPoolPlugin);
-PluginLoader.register("agentPool", AgentPoolPlugin);

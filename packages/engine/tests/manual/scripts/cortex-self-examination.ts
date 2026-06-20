@@ -620,7 +620,7 @@ async function main() {
   // ═══════════════════════════════════════════════
 
   let phase0Baseline = "";
-  const fixListPath = path.join(ROOT, "test-output", "self-examination", "consensus-fix-list.md");
+  const fixListPath = path.join(ROOT, "test-output", "self-examination-soft", "consensus-fix-list.md");
   
   if (!SOFT_MODE && fs.existsSync(fixListPath)) {
     console.log("🟡 [第零阶段] HCA 预读上轮共识基线...");
@@ -751,7 +751,7 @@ async function main() {
           // 回退：JSON 未加载时，使用硬约束通用指引
           "请根据共识修复清单中的 P0-P3 条目，为七位专家各分配与其 type 匹配的验证任务。",
           "每位专家核查其对应优先级的条目是否已在代码层落地——不是改标记、不是加注释，是真改。",
-          "各节点输出到 test-output/self-examination/{agent-key}-verification.md。",
+          "各节点输出到 test-output/self-examination-soft/{agent-key}-verification.md。",
         ];
 
   // ── 意图组装 ──
@@ -991,7 +991,7 @@ async function main() {
   //     1. 读取 7 份审视报告 → 提取摘要
   //     2. 注入为 MemoryStore 种子记忆（Agent 发言时可回溯）
   //     3. 三轮硬约束圆桌 → 凝光收束签署
-  //     4. 覆写 test-output/self-examination/consensus-fix-list.md
+  //     4. 覆写 test-output/self-examination-soft/consensus-fix-list.md
   //   产出：标准 P0-P3 共识修复清单，可供下一轮硬约束验证直接使用
   // ═══════════════════════════════════════════════
 

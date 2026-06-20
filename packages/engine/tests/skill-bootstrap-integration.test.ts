@@ -15,9 +15,13 @@ import * as os from "node:os";
 import {
   SkillRegistry,
   SkillTemplateEngine,
+} from "@cortex/skill-kit";
+import {
   TaskBoard,
   AgentPool,
   PipelineObserver,
+} from "@cortex/scheduler";
+import {
   Scheduler,
   MetaAgent,
   createAgent,

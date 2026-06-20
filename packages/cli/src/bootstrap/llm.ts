@@ -89,6 +89,8 @@ export async function bootstrapLlm(): Promise<LlmBootstrapResult> {
       reasonerModel: llmReasonerModel,
       reasoningEffort: extra?.reasoningEffort,
       label,
+      // DeepSeek 专有参数：由 URL 驱动注入，非 DeepSeek 供应商自动跳过
+      extraBody: llmBaseUrl.includes("deepseek") ? { thinking: { type: "enabled" } } : undefined,
     });
 
   // 昔涟独立 Key + 独立 Chat 模型（不谈 reasoning，不注入 reasoning_effort）

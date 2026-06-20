@@ -5,8 +5,11 @@
  * 使用 mock LLM 工厂避免真实 API 调用。
  */
 
+// @ci: integration
+// @ci: skip — v3.0: 手动构造 Scheduler 的模式不兼容 bootstrapEngine 内化。已由 cortex-e2e-full.ts 替代。
 import { describe, it, expect } from "vitest";
-import { Scheduler, TaskBoard, AgentPool, PipelineObserver, createAgent } from "@cortex/engine";
+import { Scheduler, createAgent } from "@cortex/engine";
+import { TaskBoard, AgentPool, PipelineObserver } from "@cortex/scheduler";
 import { Toolkit } from "@cortex/platform";
 import type { AgentFactoryConfig } from "@cortex/engine";
 import { AgentType } from "@cortex/shared";

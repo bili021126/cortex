@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, vi } from "vitest";
-import { PipelineObserver } from "@cortex/engine";
+import { PipelineObserver } from "@cortex/scheduler";
 import { PipelinePriority, PipelineEventType, type ObservableEvent } from "@cortex/shared";
 
 describe("PipelineObserver", () => {

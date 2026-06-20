@@ -22,3 +22,7 @@ export { RouteTable } from "./route-table.js";
 export { NotificationPersistence } from "./persistence.js";
 export { UrgentChannel, ImportantChannel, RoutineChannel, InfoChannel } from "./channels.js";
 export { NotificationPipe } from "./notification-pipe.js";
+
+// ── Core-2: 语义分层 ───────────────────────────
+export { withSemantics, suggestRouting, SEMANTIC_TO_CHANNEL, SEMANTIC_DESCRIPTIONS } from "./semantic-layer.js";
+export type { NotificationSemantics, SemanticNotification } from "./semantic-layer.js";

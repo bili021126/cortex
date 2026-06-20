@@ -1,3 +1,7 @@
+// @cortex/engine/core/meta-agent —— MetaAgent 战术中枢（甘雨）
+// @layer 规划-执行层
+// @role 事轴起点——意图拆解为粗粒度 TaskNode 树
+
 import { extractJsonBlock, PRESET_CONTEXT_POLICIES, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import {
@@ -9,7 +13,10 @@ import {
   PIPELINE_CTX_RECENT_LIMIT,
   PIPELINE_CTX_HARD_CAP,
 } from "@cortex/config";
-import type { SkillRegistry } from "../registry/skill-registry.js";
+import type { SkillRegistry } from "@cortex/skill-kit";
+import type { PromptManager, PlanningPromptBlocks } from "./prompt-manager.js";
+import { resolveByScope, type SkillScope } from "./skill-scope.js";
+import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
 
 /**
  * MetaAgent —— 战术引擎。
@@ -53,6 +60,8 @@ export class MetaAgent {
   private readonly _planningSystem: string;
   private readonly _replanSystem: string;
   private _workspaceRoot?: string;
+  private _promptManager?: PromptManager;
+  private _loopStrategyRegistry?: LoopStrategyRegistry;
 
   constructor(
     private readonly llm: LlmAdapter,
@@ -82,6 +91,23 @@ export class MetaAgent {
   /** 注入技能注册表（可后置绑定） */
   setSkillRegistry(registry: SkillRegistry): void {
     this._skillRegistry = registry;
+  }
+
+  /** Core-2: 注入技能作用域上下文（包名 + agentType） */
+  private _skillScope?: SkillScope;
+
+  setSkillScope(scope: SkillScope): void {
+    this._skillScope = scope;
+  }
+
+  /** 注入 PromptManager（prompt-kit 编排器，可后置绑定） */
+  setPromptManager(manager: PromptManager): void {
+    this._promptManager = manager;
+  }
+
+  /** 注入循环策略注册表（策略顾问上下文注入，可后置绑定） */
+  setLoopStrategyRegistry(registry: LoopStrategyRegistry): void {
+    this._loopStrategyRegistry = registry;
   }
 
   /** 注入管线——MetaAgent 订阅节点事件以获取执行层信息 */
@@ -317,7 +343,7 @@ export class MetaAgent {
     intent: string,
     context?: PlanContext,
   ): Promise<TaskNode[]> {
-    const prompt = this._planningPrompt(intent, context);
+    const prompt = await this._planningPrompt(intent, context);
     // 有工作区时注入到系统提示词，确保边界校验规则生效
     const systemPrompt = this._workspaceRoot
       ? buildPlanningSystem(this._workspaceRoot)
@@ -334,8 +360,61 @@ export class MetaAgent {
     }
   }
 
-  /** 生成规划 prompt */
-  private _planningPrompt(intent: string, context?: PlanContext): string {
+  /**
+   * 生成规划 prompt。
+   *
+   * 当 PromptManager 已注入时，走声明式块组装（assembler）；
+   * 否则回退到手拼 parts.join("\n") 以保持向后兼容。
+   */
+  private async _planningPrompt(intent: string, context?: PlanContext): Promise<string> {
+    // ── PromptManager 路径：声明式块组装 ──
+    if (this._promptManager) {
+      const blocks: PlanningPromptBlocks = {};
+
+      if (context?.parentId) {
+        blocks.parentContext = `Parent node: ${context.parentId}`;
+      }
+      if (context?.existingTags && context.existingTags.length > 0) {
+        blocks.existingTags = `Existing context tags: ${context.existingTags.join(", ")}`;
+      }
+
+      const pipeCtx = this._getPipelineContext();
+      if (pipeCtx) {
+        blocks.pipelineContext = pipeCtx;
+      }
+
+      // 技能增强
+      if (this._skillRegistry && context?.existingTags) {
+        const scope = this._skillScope ?? {};
+        const skills = resolveByScope(this._skillRegistry.getAll(), scope);
+        const matched = skills.filter((s) =>
+          context.existingTags!.some((t) => (s.triggerTags as readonly string[]).includes(t)),
+        );
+        if (matched.length > 0) {
+          const skillLines = matched.map((s) =>
+            `  · ${s.name} (id:${s.id}) [${s.kind}] tags:[${s.triggerTags.join(",")}] — ${s.trigger}`,
+          );
+          blocks.skillContext =
+            `Available skill templates (pre-existing patterns):\n${skillLines.join("\n")}\n\n` +
+            "You MAY reference these skills in your plan by mentioning their id in the payload. " +
+            "These are vetted, repeatable workflows — prefer them over inventing new task sequences.";
+        }
+      }
+
+      // 策略顾问上下文
+      if (this._loopStrategyRegistry) {
+        blocks.advisorContext =
+          "Available loop strategies (set preferredStrategy on task nodes):\n" +
+          this._loopStrategyRegistry.getAdvisorContext() +
+          "\n\nChoose the most appropriate strategy for each task based on its nature.";
+      }
+
+      blocks.intent = `User intent: ${intent}`;
+
+      return this._promptManager.assemblePlanningPrompt(blocks);
+    }
+
+    // ── 回退路径：原始手拼方式（向后兼容） ──
     const parts: string[] = [];
 
     if (context?.parentId) {
@@ -351,9 +430,13 @@ export class MetaAgent {
       parts.push(pipeCtx);
     }
 
-    // ── 技能增强：查询 SkillRegistry 匹配的技能模板 ──
-    if (this._skillRegistry && context?.existingTags) {
-      const matched = this._skillRegistry.queryByTags(context.existingTags as Tag[]);
+      // 技能增强
+      if (this._skillRegistry && context?.existingTags) {
+        const scope = this._skillScope ?? {};
+        const skills = resolveByScope(this._skillRegistry.getAll(), scope);
+        const matched = skills.filter((s) =>
+          context.existingTags!.some((t) => (s.triggerTags as readonly string[]).includes(t)),
+        );
       if (matched.length > 0) {
         const skillLines = matched.map((s) =>
           `  · ${s.name} (id:${s.id}) [${s.kind}] tags:[${s.triggerTags.join(",")}] — ${s.trigger}`,
@@ -364,6 +447,15 @@ export class MetaAgent {
           "These are vetted, repeatable workflows — prefer them over inventing new task sequences.",
         );
       }
+    }
+
+    // ── 策略顾问上下文 ──
+    if (this._loopStrategyRegistry) {
+      parts.push(
+        "Available loop strategies (set preferredStrategy on task nodes):\n" +
+        this._loopStrategyRegistry.getAdvisorContext() +
+        "\n\nChoose the most appropriate strategy for each task based on its nature.",
+      );
     }
 
     parts.push(`User intent: ${intent}`);

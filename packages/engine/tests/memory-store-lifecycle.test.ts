@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { PipelineObserver } from "@cortex/engine";
+import { PipelineObserver } from "@cortex/scheduler";
 import { MemoryStore, type IEmbeddingService } from "@cortex/memory-store";
 import { InMemoryMemoryStore } from "@cortex/memory";
 

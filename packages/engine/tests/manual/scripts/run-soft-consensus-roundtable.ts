@@ -72,7 +72,7 @@ async function main() {
   const ROOT = path.resolve(ENGINE_DIR, "..", "..");
 
   const REPORT_DIR = path.join(ROOT, "test-output", "self-examination-soft");
-  const CONSENSUS_OUTPUT = path.join(ROOT, "test-output", "self-examination", "consensus-fix-list.md");
+  const CONSENSUS_OUTPUT = path.join(ROOT, "test-output", "self-examination-soft", "consensus-fix-list.md");
   const DB_DIR = path.join(ROOT, ".cortex");
 
   // 确保输出目录存在

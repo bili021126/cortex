@@ -19,6 +19,7 @@ import type { MemoryStore } from "@cortex/memory-store";
 import type { Toolkit } from "@cortex/platform";
 import type { PipelineObserver } from "@cortex/scheduler";
 import type { LlmAdapter } from "@cortex/llm";
+import type { BootstrapResult } from "../bootstrap/factory/index.js";
 import { resolveLlm, injectStandards, MEMORY_QUERY_REGISTRY } from "../bootstrap/load-config.js";
 import {
   registerAgentFactory,
@@ -89,7 +90,10 @@ export class SchedulerPlugin implements EnginePlugin {
    * 等同于原 bootstrap 中的 registerAgents() 逻辑。
    */
   async registerAllAgents(ctx: PluginContext): Promise<Map<string, Agent>> {
-    const { llms, toolkit, codingStandards, factoryConfig } = ctx.externals;
+    const llmMap = ctx.externals.llms as Map<string, LlmAdapter>;
+    const tk = ctx.externals.toolkit as Toolkit;
+    const { codingStandards } = ctx.externals;
+    const fConfig = ctx.externals.factoryConfig as BootstrapResult;
     const observer = ctx.get<PipelineObserverPlugin>("pipelineObserver").getInstance();
     const memory = ctx.get<MemoryStorePlugin>("memoryStore").getInstance();
     const filterRead = ctx.get<ConsistencyLayerPlugin>("consistencyLayer").getFilterRead();
@@ -98,9 +102,9 @@ export class SchedulerPlugin implements EnginePlugin {
     // 注册表注入已在 bootstrap 阶段完成（bootstrap-engine.ts §2），此处不再重复调用
 
     // ── 注册特殊 Agent 工厂（配置驱动：新增 Agent 类型在别处 registerAgentFactory 即可）──
-    _registerBuiltinAgentFactories(ctx, observer, toolkit, memory as MemoryStore, codingStandards, filterRead, llms);
+    _registerBuiltinAgentFactories(ctx, observer, tk, memory as MemoryStore, codingStandards, filterRead, llmMap);
 
-    for (const def of factoryConfig.agentDefinitions) {
+    for (const def of fConfig.agentDefinitions) {
       const agentType = def.type;
 
       // 跳过不参与调度的特殊 Agent
@@ -121,7 +125,7 @@ export class SchedulerPlugin implements EnginePlugin {
         }
       } else {
         // 默认工厂：通用 createAgent 逻辑
-        const llmAdapter = resolveLlm(llms, def.key);
+        const llmAdapter = resolveLlm(llmMap, def.key);
         const memoryQuery = MEMORY_QUERY_REGISTRY.get(agentType);
         const factoryConf: AgentFactoryConfig = {
           type: agentType as AgentType,
@@ -130,7 +134,7 @@ export class SchedulerPlugin implements EnginePlugin {
           memoryEnabled: true,
           getMemoryQuery: memoryQuery ?? undefined,
         };
-        agent = createAgent(factoryConf, llmAdapter as LlmAdapter, toolkit, memory as MemoryStore);
+        agent = createAgent(factoryConf, llmAdapter as LlmAdapter, tk, memory as MemoryStore);
       }
 
       if (agent) {
@@ -215,7 +219,3 @@ import type { PipelineObserverPlugin } from "./pipeline-observer.plugin.js";
 import type { MetaAgentPlugin } from "./meta-agent.plugin.js";
 import type { MemoryStorePlugin } from "./memory-store.plugin.js";
 import type { ConsistencyLayerPlugin } from "./consistency-layer.plugin.js";
-
-// 自注册
-import { PluginLoader } from "./plugin-loader.js";
-PluginLoader.register("scheduler", SchedulerPlugin);

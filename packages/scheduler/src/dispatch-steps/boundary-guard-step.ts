@@ -234,6 +234,15 @@ export class BoundaryGuardStep implements IDispatchStep {
       files: violatingFiles.map((v) => v.file),
     };
 
+    // 标记节点失败——boundary_violation 不应被标记为"成功"
+    // Scheduler 的 boundaryHandler 会通过 replanManager.enqueue(node, reason, "boundary_violation") 触发重规划
+    ctx.result = {
+      ...ctx.result,
+      success: false,
+      nodeId: ctx.node.id,
+      error: `boundary_violation: ${reason}`,
+    };
+
     return ctx;
   }
 

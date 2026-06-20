@@ -7,7 +7,7 @@
 // @since v3.1 — 配置驱动装配
 // ============================================================
 
-import type { AgentDefinition } from "@cortex/factory";
+import type { AgentDefinition } from "../bootstrap/factory/index.js";
 import type { Agent } from "@cortex/shared";
 import type { PluginContext } from "./types.js";
 

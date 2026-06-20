@@ -14,7 +14,7 @@
  * @since v2.6 — SkillExecutor 移除，SkillRegistry 统一技能池
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { SkillRegistry, deriveStatus } from "@cortex/engine";
+import { SkillRegistry, deriveStatus } from "@cortex/skill-kit";
 import type { SkillTemplate, Tag, SkillKind, FeedbackEntry } from "@cortex/shared";
 
 // ─── Helpers ──────────────────────────────────────────────

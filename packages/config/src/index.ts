@@ -137,6 +137,8 @@ export {
   CLI_EXIT_SUCCESS,
   WINDOWS_CHCP_UTF8,
   CLI_REPL_PLAN_OUTPUT_MAX_LEN,
+  isTestEnv,
+  ifNotTest,
 } from "./constants/index.js";
 
 // ── 默认值 + 解析 ─────────────────────────────────
@@ -164,4 +166,30 @@ export type {
   ConfigFileReader,
   CortexConfig,
 } from "./loader.js";
+
+// ── Engine 层默认常量 ──────────────────────────────
+export {
+  DEFAULT_LOCK_TIMEOUT_MS,
+  CLEANUP_INTERVAL_MS,
+  SHUTDOWN_TIMEOUT_MS,
+  SHUTDOWN_FORCE_EXIT_DELAY_MS,
+  SCHEDULER_MAX_ROUNDS,
+  SCHEDULER_ROUND_TIMEOUT_MS,
+  REACT_MAX_LOOPS,
+  EMBEDDING_DIM,
+  EMBEDDING_CACHE_SIZE,
+  CONTENT_HASH_ALGO,
+  VECTOR_DEDUP_THRESHOLD,
+  WEIGHT_AGING_FACTOR,
+  STALE_FREEZE_DAYS,
+  FROZEN_OBLITERATE_DAYS,
+  MAINTENANCE_WEIGHT_THRESHOLD,
+  MAX_TOTAL_MEMORIES,
+  SCHEMA_VERSION,
+  MONITOR_WINDOW_MS,
+  MONITOR_THRESHOLD,
+  ENGINE_DEFAULTS,
+  loadEngineDefaults,
+} from "./engine-defaults.js";
+export type { EngineDefaults } from "./engine-defaults.js";
 

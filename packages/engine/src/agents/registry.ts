@@ -7,9 +7,10 @@
 // @version 3.0.0 — 声明式重构：消灭 9 个独立 agent 文件
 // ============================================================
 
-import { AgentType, type TaskNode, type MemoryQuery, type MemoryKind, type LinkType, type ReadMode } from "@cortex/shared";
+import { AgentType, type TaskNode, type MemoryQuery, type MemoryKind, type LinkType, type ReadMode, type AgentCapability } from "@cortex/shared";
 import type { AgentFactoryConfig } from "../components/agent-factory.js";
 import { makeMemoryQuery } from "../memory/pipeline.js";
+import { capabilityRegistry } from "../core/capability-registry.js";
 
 // ─── Memory Query 参数（每个 Agent 的唯一差异点） ──────────
 
@@ -35,6 +36,8 @@ export interface AgentRegistration {
   description: string;
   /** 可选的 Agent 类（ApiAgent/DataAgent 等有自定义子类的） */
   AgentClass?: new (...args: unknown[]) => unknown;
+  /** Agent 自声明——能力画像 */
+  capability: AgentCapability;
 }
 
 // ─── 通用工厂函数 ──────────────────────────────────
@@ -49,105 +52,130 @@ export function createMemoryQuery(params: MemoryQueryParams): (node: TaskNode) =
 export const AGENT_REGISTRY: AgentRegistration[] = [
   {
     type: AgentType.Code,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType],
-      bfsDepth: 2,
-      limit: 3,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType], bfsDepth: 2, limit: 3 },
     autoRegister: true,
     description: "代码实现——阿尔贝多",
+    capability: {
+      type: AgentType.Code, role: "阿尔贝多 — 首席工匠", emoji: "🎨",
+      tags: ["implementation", "code", "refactor", "bugfix"], produces: ["implementation"],
+      toolPermissions: ["write_file", "search_replace", "read_file", "run_shell"],
+      memoryQueryStrategy: "code", maxInstances: 3, modelKey: "code",
+      applicableScenarios: ["代码实现", "重构", "Bug 修复"], outputFormat: "code", collaborationMode: "solo",
+    },
   },
   {
     type: AgentType.Review,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["DerivedFrom" as LinkType, "DerivedFrom" as LinkType],
-      bfsDepth: 2,
-      limit: 5,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["DerivedFrom" as LinkType, "DerivedFrom" as LinkType], bfsDepth: 2, limit: 5 },
     autoRegister: true,
     description: "代码审查——刻晴",
+    capability: {
+      type: AgentType.Review, role: "刻晴 — 玉衡星", emoji: "⚡",
+      tags: ["review", "audit"], produces: ["review"],
+      toolPermissions: ["read_file", "run_shell"],
+      memoryQueryStrategy: "review", maxInstances: 2, modelKey: "review",
+      applicableScenarios: ["代码审查", "质量审计"], outputFormat: "report", collaborationMode: "reviewer",
+    },
   },
   {
     type: AgentType.Analysis,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["ProducedBy" as LinkType, "ConfirmedUseful" as LinkType],
-      bfsDepth: 2,
-      limit: 3,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["ProducedBy" as LinkType, "ConfirmedUseful" as LinkType], bfsDepth: 2, limit: 3 },
     autoRegister: true,
     description: "深度分析——莫娜",
+    capability: {
+      type: AgentType.Analysis, role: "莫娜 — 占星术士", emoji: "🔮",
+      tags: ["analysis", "research"], produces: ["analysis"],
+      toolPermissions: ["read_file", "search_code", "web_search"],
+      memoryQueryStrategy: "analysis", maxInstances: 2, modelKey: "analysis",
+      applicableScenarios: ["深度分析", "架构审查", "根因分析"], outputFormat: "report", collaborationMode: "solo",
+    },
   },
   {
     type: AgentType.Ops,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["ProducedBy" as LinkType, "ConfirmedUseful" as LinkType],
-      bfsDepth: 3,
-      limit: 10,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["ProducedBy" as LinkType, "ConfirmedUseful" as LinkType], bfsDepth: 3, limit: 10 },
     autoRegister: true,
     description: "运维操作——北斗",
+    capability: {
+      type: AgentType.Ops, role: "北斗 — 南十字船长", emoji: "⚓",
+      tags: ["ops", "deploy", "config"], produces: ["ops"],
+      toolPermissions: ["run_shell", "write_file", "search_replace"],
+      memoryQueryStrategy: "ops", maxInstances: 2, modelKey: "ops",
+      applicableScenarios: ["部署操作", "配置变更", "环境管理"], outputFormat: "structured", collaborationMode: "solo",
+    },
   },
   {
     type: AgentType.Loop,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType],
-      bfsDepth: 2,
-      limit: 5,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType], bfsDepth: 2, limit: 5 },
     autoRegister: true,
-    description: "模式发现——宵宫",
+    description: "模式发现——莫娜",
+    capability: {
+      type: AgentType.Loop, role: "莫娜 — 占星术士", emoji: "🔮",
+      tags: ["loop", "pattern_scan"], produces: ["pattern"],
+      toolPermissions: ["read_file", "search_code"],
+      memoryQueryStrategy: "loop", maxInstances: 1, modelKey: "loop",
+      applicableScenarios: ["模式发现", "重复检测", "跨模块分析"], outputFormat: "report", collaborationMode: "solo",
+    },
   },
   {
     type: AgentType.DocGovern,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["DerivedFrom" as LinkType, "DerivedFrom" as LinkType],
-      bfsDepth: 2,
-      limit: 3,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["DerivedFrom" as LinkType, "DerivedFrom" as LinkType], bfsDepth: 2, limit: 3 },
     autoRegister: true,
     description: "治理审计——凝光",
+    capability: {
+      type: AgentType.DocGovern, role: "凝光 — 天权星", emoji: "💎",
+      tags: ["doc-govern", "audit"], produces: ["governance"],
+      toolPermissions: ["read_file", "write_file", "search_replace"],
+      memoryQueryStrategy: "doc-govern", maxInstances: 1, modelKey: "govern",
+      applicableScenarios: ["治理审计", "合规审查", "修宪提案"], outputFormat: "decision", collaborationMode: "reviewer",
+    },
   },
   {
     type: AgentType.Api,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["DerivedFrom" as LinkType, "ProducedBy" as LinkType],
-      bfsDepth: 2,
-      limit: 5,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["DerivedFrom" as LinkType, "ProducedBy" as LinkType], bfsDepth: 2, limit: 5 },
     autoRegister: true,
-    description: "API 设计——久岐忍（Core-2 预埋）",
+    description: "API 设计——久岐忍",
+    capability: {
+      type: AgentType.Api, role: "久岐忍 — 律法咨询", emoji: "📋",
+      tags: ["api", "design"], produces: ["api"],
+      toolPermissions: ["write_file", "read_file", "search_code"],
+      memoryQueryStrategy: "api", maxInstances: 1, modelKey: "api",
+      applicableScenarios: ["API 设计", "接口契约", "协议定义"], outputFormat: "structured", collaborationMode: "solo",
+    },
   },
   {
     type: AgentType.Data,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType],
-      bfsDepth: 2,
-      limit: 5,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType], bfsDepth: 2, limit: 5 },
     autoRegister: true,
-    description: "数据建模——艾尔海森（Core-2 预埋）",
+    description: "数据建模——艾尔海森",
+    capability: {
+      type: AgentType.Data, role: "艾尔海森 — 知论派", emoji: "📚",
+      tags: ["data", "modeling"], produces: ["data"],
+      toolPermissions: ["write_file", "read_file", "search_code"],
+      memoryQueryStrategy: "data", maxInstances: 1, modelKey: "data",
+      applicableScenarios: ["数据建模", "Schema 设计", "存储优化"], outputFormat: "structured", collaborationMode: "solo",
+    },
   },
   {
     type: AgentType.Fix,
-    memoryParams: {
-      kind: "TaskLog",
-      linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType, "ConfirmedUseful" as LinkType],
-      readMode: "CSA",
-      bfsDepth: 2,
-      limit: 3,
-    },
+    memoryParams: { kind: "TaskLog", linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType, "ConfirmedUseful" as LinkType], readMode: "CSA", bfsDepth: 2, limit: 3 },
     autoRegister: true,
     description: "缺陷修复——希格雯",
+    capability: {
+      type: AgentType.Fix, role: "希格雯 — 医护长", emoji: "💉",
+      tags: ["fix", "bugfix", "urgent"], produces: ["fix"],
+      toolPermissions: ["write_file", "search_replace", "read_file", "run_shell"],
+      memoryQueryStrategy: "fix", maxInstances: 2, modelKey: "fix",
+      applicableScenarios: ["紧急修复", "缺陷定位", "回滚操作"], outputFormat: "code", collaborationMode: "solo",
+    },
   },
 ];
+
+// ─── 自声明自动注册 ────────────────────────────────
+
+/** 将 AGENT_REGISTRY 中的全部能力声明注册到 CapabilityRegistry */
+export function registerAllCapabilities(): void {
+  const caps = AGENT_REGISTRY.map((r) => r.capability);
+  capabilityRegistry.registerAll(caps);
+}
 
 // ─── 按类型查找 ────────────────────────────────────
 
@@ -161,7 +189,8 @@ export function getAutoRegisterable(): AgentRegistration[] {
 
 // ─── OpsAgent 特殊逻辑（额外需要节点标签作为关键词） ──
 
-const opsReg = AGENT_REGISTRY.find((r) => r.type === AgentType.Ops) ?? (() => { throw new Error("Ops agent not found in registry"); })();
+const opsReg = AGENT_REGISTRY.find((r) => r.type === AgentType.Ops);
+if (!opsReg) throw new Error("Ops agent not found in registry");
 
 // ─── 向后兼容：具名导出 ──
 
@@ -193,10 +222,10 @@ export const analysisAgentConfig = analysis.config;
 
 export function opsMemoryQuery(node: TaskNode): MemoryQuery {
   const base = makeMemoryQuery(node, {
-    kind: opsReg.memoryParams.kind,
-    linkTypes: opsReg.memoryParams.linkTypes,
-    bfsDepth: opsReg.memoryParams.bfsDepth,
-    limit: opsReg.memoryParams.limit,
+    kind: opsReg!.memoryParams.kind,
+    linkTypes: opsReg!.memoryParams.linkTypes,
+    bfsDepth: opsReg!.memoryParams.bfsDepth,
+    limit: opsReg!.memoryParams.limit,
   });
   return {
     ...base,

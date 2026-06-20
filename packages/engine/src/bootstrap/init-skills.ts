@@ -6,10 +6,10 @@
 // ============================================================
 /* eslint-disable no-console */
 
-import { SkillRegistry, deriveStatus } from "../registry/skill-registry.js";
-import { registerSkillPipeline } from "../memory/skill-pipeline.js";
-import { crystallizeSkillToKnowledge, loadSkillsFromMemory, persistSkillsToMemory, verifySkillKnowledge } from "../components/skill-persister.js";
-import type { ExternalSearcher } from "../components/skill-persister.js";
+import { SkillRegistry, deriveStatus } from "@cortex/skill-kit";
+import { registerSkillPipeline } from "@cortex/skill-kit";
+import { crystallizeSkillToKnowledge, loadSkillsFromMemory, persistSkillsToMemory, verifySkillKnowledge } from "@cortex/skill-kit";
+import type { ExternalSearcher } from "@cortex/skill-kit";
 import type { MemoryStore } from "@cortex/memory-store";
 import type { IMemoryStore, IPipelineObserver, SkillTemplate } from "@cortex/shared";
 import type { MetaAgent } from "../core/meta-agent.js";

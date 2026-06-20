@@ -115,3 +115,20 @@ export {
   WINDOWS_CHCP_UTF8,
   CLI_REPL_PLAN_OUTPUT_MAX_LEN,
 } from "./pipeline.js";
+
+// ── 测试环境检测 ──────────────────────────────────
+import { ENV_VITEST as _ENV_VITEST, ENV_NODE_ENV as _ENV_NODE_ENV } from "./env.js";
+/**
+ * 测试环境检测 —— 替代散落在各处的 `process.env.ENV_VITEST` 硬编码。
+ * engine 和 scheduler 共用这一份实现。
+ */
+export function isTestEnv(): boolean {
+  return !!process.env[_ENV_VITEST] || !!process.env[_ENV_NODE_ENV]?.startsWith("test");
+}
+
+/** 仅在非测试环境下执行回调 */
+export function ifNotTest(fn: () => void): void {
+  if (!isTestEnv()) {
+    fn();
+  }
+}

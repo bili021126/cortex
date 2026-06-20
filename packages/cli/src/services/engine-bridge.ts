@@ -20,6 +20,7 @@ import {
   bootstrapEngine,
   type BootstrapEngineResult,
 } from "@cortex/engine";
+import { SlashCommandParser, type SlashCommandResult } from "./slash-command.js";
 import type { IScheduler, ITaskBoard, IAgentPool } from "@cortex/scheduler";
 import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { CLIAdapter, type Toolkit } from "@cortex/platform";
@@ -30,7 +31,7 @@ import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
 import { LLM_KEY_NAMES } from "@cortex/config";
-import type { TuiEvent } from "../tui/types.js";
+import type { TuiEvent } from "@cortex/tui";
 
 export interface BridgeContext {
   scheduler?: IScheduler;
@@ -46,99 +47,11 @@ export interface BridgeContext {
   bootstrapResult?: BootstrapEngineResult;
   /** 昔涟独立记忆数据库——仅 talk 模式使用，与主 MemoryStore 物理隔离 */
   talkMemoryStore?: MemoryStore;
+  /** 斜杠命令解析器（Core-2） */
+  slashCommandParser?: SlashCommandParser;
 }
 
-/**
- * 最小 AgentPool 兼容包装。
- * 轻量模式下使用简单的内存存储，满足 IAgentPool 接口。
- */
-export class MiniAgentPool implements IAgentPool {
-  private configs = new Map<string, AgentConfig>();
-  private instances = new Map<string, Set<string>>();
-  private statuses = new Map<string, AgentStatus>();
-
-  register(config: AgentConfig): void {
-    this.configs.set(config.type, config);
-    if (!this.instances.has(config.type)) {
-      this.instances.set(config.type, new Set());
-    }
-  }
-
-  setMaxInstances(agentType: AgentType, newMax: number): void {
-    const config = this.configs.get(agentType);
-    if (config) {
-      config.maxInstances = newMax;
-    }
-  }
-
-  /** MiniAgentPool 无 observer 管道 */
-  setObserver(_observer: unknown): void {
-    // no-op: MiniAgentPool 不参与事件总线
-  }
-
-  spawn(agentType: AgentType, instanceId: string): boolean {
-    const config = this.configs.get(agentType);
-    if (!config) return false;
-    const instances = this.instances.get(agentType);
-    if (!instances) return false;
-    if (instances.size >= (config.maxInstances ?? 1)) return false;
-    instances.add(instanceId);
-    this.statuses.set(instanceId, AgentStatus.Created);
-    return true;
-  }
-
-  /** RLM 子任务——不占主配额 */
-  spawnSubtask(agentType: AgentType, instanceId: string): boolean {
-    const config = this.configs.get(agentType);
-    if (!config) return false;
-    const instances = this.instances.get(agentType);
-    if (!instances) return false;
-    instances.add(instanceId);
-    this.statuses.set(instanceId, AgentStatus.Created);
-    return true;
-  }
-
-
-  setStatus(instanceId: string, status: AgentStatus): boolean {
-    if (!this.statuses.has(instanceId)) return false;
-    this.statuses.set(instanceId, status);
-    return true;
-  }
-
-  getStatuses(agentType: AgentType): AgentStatus[] {
-    const instances = this.instances.get(agentType);
-    if (!instances) return [];
-    return [...instances].map((id) => this.statuses.get(id) ?? AgentStatus.Created);
-  }
-
-  getStatus(instanceId: string): AgentStatus | undefined {
-    return this.statuses.get(instanceId);
-  }
-
-  hasAwake(agentType: string): boolean {
-    const instances = this.instances.get(agentType);
-    if (!instances) return false;
-    return [...instances].some((id) => this.statuses.get(id) === AgentStatus.Awake);
-  }
-
-  canSpawn(agentType: string): boolean {
-    const config = this.configs.get(agentType as AgentType);
-    if (!config) return false;
-    const instances = this.instances.get(agentType);
-    if (!instances) return true;
-    return instances.size < (config.maxInstances ?? 1);
-  }
-
-  destroy(agentType: AgentType, instanceId: string): void {
-    const instances = this.instances.get(agentType);
-    instances?.delete(instanceId);
-    this.statuses.delete(instanceId);
-  }
-
-  count(agentType: string): number {
-    return this.instances.get(agentType)?.size ?? 0;
-  }
-}
+import { MiniAgentPool } from "./mini-agent-pool.js";
 
 /** Bootstrap 配置——使用 bootstrapEngine 的必需参数 */
 export interface BootstrapConfig {
@@ -240,6 +153,8 @@ export class EngineBridge implements ICortexApi {
       initialized: true,
       bootstrapped: true,
       bootstrapResult: result,
+      // Core-2: 斜杠命令解析器——从 SkillRegistry 加载
+      slashCommandParser: new SlashCommandParser(result.skillRegistry),
     };
 
     return this.ctx;

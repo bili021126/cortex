@@ -55,6 +55,14 @@ export interface SkillTemplate {
   createdAt: number;
   /** 标签命中计数（运行时动态追踪） */
   tagHits?: Record<string, number>;
+  /** Core-2: 目标 Agent 类型——仅该类型 Agent 可见（L3 作用域过滤） */
+  agentType?: string;
+  /** Core-2: 是否可通过 / 命令被用户调用。默认 true（历史技能兼容） */
+  userInvocable?: boolean;
+  /** Core-2: 作用域层级——cross-domain | project | package（运行时标注，不持久化到 JSON） */
+  _scope?: string;
+  /** Core-2: 包级技能的所属包名（运行时标注） */
+  _packageName?: string;
 }
 
 /** 评价回流条目——Agent 使用技能后带回的评价 */

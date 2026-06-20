@@ -2,9 +2,8 @@
 import { describe, it, expect } from "vitest";
 import { AgentType } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
+import { PipelineObserver, PipelineRunner } from "@cortex/scheduler";
 import {
-  PipelineObserver,
-  PipelineRunner,
   executeWithMemoryPipeline,
   resolvePipeline,
   DirectStep,

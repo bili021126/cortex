@@ -62,7 +62,10 @@ export type { Formatter } from "./formatters/index.js";
 export { parseGlobalFormat, createDefaultContext, outputResult, stripGlobalOptions, isDirectRun } from "./utils.js";
 
 // ── Plan 工具函数 ────────────────────────────────
-export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "./tui/modes/plan-utils.js";
+export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "@cortex/tui";
 
 // ── Platform ───────────────────────────────────────
 export { getPlatformBridge, closePlatformBridge } from "./platform.js";
+
+// ── Core-2: 斜杠命令 ────────────────────────────
+export { SlashCommandParser, type SlashCommandResult } from "./services/slash-command.js";

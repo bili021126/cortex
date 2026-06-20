@@ -1,3 +1,6 @@
+// @layer 规划-执行层
+// @role Agent 工厂——替代 BaseAgent 继承模式
+
 import {
   AgentStatus as AS,
 } from "@cortex/shared";
@@ -19,6 +22,7 @@ import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "./pool-aware.js";
 import type { ReActContext } from "./react-loop.js";
 import { executeWithMemoryPipeline, resolvePipeline } from "../memory/pipeline.js";
+import { loopStrategyRegistry } from "../core/loop-strategy-registry.js";
 import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 
 /**
@@ -121,7 +125,10 @@ export function createAgent(
           : node;
 
         const ctx = buildCtx();
-        const steps = resolvePipeline(enrichedNode.preferredStrategy);
+        // 如果 MetaAgent 已设定策略 → 直接用；否则 → 规则路由自动选择
+        const strategyName = enrichedNode.preferredStrategy
+          ?? loopStrategyRegistry.selectByRule(enrichedNode)?.name;
+        const steps = resolvePipeline(strategyName);
         const result = config.memoryEnabled && memory
           ? await executeWithMemoryPipeline(
               ctx, enrichedNode, model,

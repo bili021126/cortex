@@ -6,6 +6,6 @@
   },
   "include": [
     "src",
-    "../**/__tests__/**/*.test.ts"
+    "tests"
   ]
 }

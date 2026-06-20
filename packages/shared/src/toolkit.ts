@@ -182,4 +182,20 @@ export interface ITrustModel {
 
   /** 获取信任快照（诊断用） */
   snapshot(): ReadonlyMap<string, TrustEntry>;
+
+  /**
+   * 计算 (agentType, domain) 的 0..1 置信度评分。
+   * 综合 trustLevel、时间衰减、历史确认数。
+   */
+  computeConfidence(agentType: AgentType, domain: RiskDomain): TrustScore;
+
+  /**
+   * 按工具名计算置信度（便捷方法）。
+   */
+  computeConfidenceForTool(agentType: AgentType, toolName: string): TrustScore;
+
+  /**
+   * 获取所有 (agentType, domain) 的置信度评分列表（按 score 降序）。
+   */
+  allConfidences(): TrustScore[];
 }

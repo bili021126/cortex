@@ -7,12 +7,13 @@ import type { Scheduler } from "../core/scheduler.js";
 import type { AgentPool } from "@cortex/scheduler";
 import type { MemoryStore } from "@cortex/memory-store";
 import type { Toolkit } from "@cortex/platform";
-import type { BootstrapResult } from "@cortex/factory";
+import type { BootstrapResult } from "./factory/index.js";
 import type { LlmAdapter } from "@cortex/llm";
 import type { EngineConfig } from "@cortex/config";
 import { createAgent } from "../components/agent-factory.js";
 import type { AgentFactoryConfig } from "../components/agent-factory.js";
 import { ButlerAgent } from "../agents/butler-agent.js";
+import { registerAllCapabilities } from "../agents/registry.js";
 import { resolveLlm, injectStandards, MEMORY_QUERY_REGISTRY } from "./load-config.js";
 
 export async function registerAgents(
@@ -31,6 +32,9 @@ export async function registerAgents(
     observer?: IPipelineObserver;
   },
 ): Promise<Map<string, Agent>> {
+  // ── 自声明自动注册 ──
+  registerAllCapabilities();
+
   const agents = new Map<string, Agent>();
 
   for (const def of config.agentDefinitions) {

@@ -44,7 +44,7 @@ export class MemoryStoreMonitor {
     } = {},
   ) {
     this._windowMs = options.windowMs ?? 60_000;
-    this._threshold = options.threshold ?? 10;
+    this._threshold = Math.max(1, Math.min(options.threshold ?? 10, 500));
     this._logToStdout = options.logToStdout ?? false;
   }
 

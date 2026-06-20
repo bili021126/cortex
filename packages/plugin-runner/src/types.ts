@@ -1,241 +1,121 @@
-/**
- * @cortex/plugin-runner — 类型定义模块
- *
- * 定义所有公开接口和类型，零业务逻辑。
- * 被所有其他模块依赖。
- */
+// ============================================================
+// @cortex/plugin-runner/types —— 插件基础契约
+//
+// @module-convention
+// 所有 Engine 子系统插件必须实现 EnginePlugin 接口。
+// 插件间通信通过 PluginContext.get() 获取已初始化的依赖实例，
+// 跨插件事件通知走 PipelineObserver（observer 字段）。
+//
+// @since v3.0 — 引擎插件化解耦
+// @since v3.2 — 迁入独立包 @cortex/plugin-runner（横向解耦 Phase 3）
+// ============================================================
 
-// ── 核心生命周期接口 ──
+import type { IPipelineObserver, IFileSystemAdapter, IMemoryStore } from "@cortex/shared";
+import type { EngineConfig } from "@cortex/config";
+
+// ─── 插件健康状态 ─────────────────────────────────
+
+/** 插件健康状态 */
+export type PluginHealth = "healthy" | "degraded" | "dead";
+
+// ─── 外部依赖 ─────────────────────────────────────
 
 /**
- * Plugin —— 二级插件的生命周期接口。
+ * PluginExternals —— 由外部（BootstrapEngineOptions）注入的非插件依赖。
+ * 这些依赖不是插件体系的成员，但插件初始化时可能需要。
  *
- * 生命周期顺序：constructor → init() → [execute()*] → destroy()
- *
- * - init(config):   注入配置、初始化内部状态（数据库连接、文件句柄等）
- * - execute(ctx):   执行插件核心逻辑，结果通过 ExecuteContext.output 传递
- * - destroy():      优雅清理资源（关闭连接、释放锁、清除临时文件）
- *
- * 所有生命周期方法均返回 Promise<void>，保证异步执行的统一契约。
- *
- * @template TConfig  — 插件配置类型（执行 init 前由 PluginValidator 校验）
+ * @note llms / toolkit / factoryConfig 使用 loose type——具体类型由消费方（engine）定义，
+ *       plugin-runner 只负责传递，不耦合 engine 内部类型。
  */
-export interface Plugin<TConfig = PluginConfig> {
-  /** 插件唯一名称（用于 Registry 查找和依赖声明） */
+export interface PluginExternals {
+  /** LLM 适配器映射（key → LlmAdapter） */
+  llms: Map<string, unknown>;
+  /** 工具包（Toolkit） */
+  toolkit: unknown;
+  /** 编码规范文本 */
+  codingStandards: string;
+  /** 工厂配置（Agent 定义等）——具体类型由引擎 bootstrap 定义 */
+  factoryConfig: unknown;
+  /** 可选：SQLite 数据库路径 */
+  dbPath?: string;
+  /** 可选：文件系统适配器 */
+  fs?: IFileSystemAdapter;
+  /** 可选：外部预构建的 MemoryStore（测试注入 mock embedder） */
+  memory?: IMemoryStore;
+}
+
+// ─── 插件基础契约 ─────────────────────────────────
+
+/**
+ * EnginePlugin —— 引擎插件统一生命周期接口。
+ *
+ * 生命周期顺序：
+ *   init() → start() → [运行时] → stop()
+ *
+ * - init()：组装内部状态，通过 ctx.get() 获取依赖实例
+ * - start()：激活运行时（注册 PipelineObserver handler / 启动循环）
+ * - stop()：优雅关闭（注销 handler / 释放资源）
+ * - health()：运行时健康检查
+ */
+export interface EnginePlugin {
+  /** 插件唯一名称——对应 engine-plugins.json 中的 key */
   readonly name: string;
 
-  /** 插件语义版本号（遵循 semver） */
-  readonly version: string;
-
-  /** 短描述（≤ 80 字符，用于 registry list 展示） */
-  readonly description: string;
-
-  /** 依赖的二级插件名称列表（registry 按此解析执行顺序） */
+  /** 依赖插件名列表——PluginLoader 按拓扑排序确保依赖项先初始化 */
   readonly dependencies: string[];
 
-  /** 插件标签（用于 findByTag 分类检索） */
-  readonly tags: string[];
+  /** 初始化——组装内部状态，通过 ctx 获取依赖 */
+  init(ctx: PluginContext): Promise<void>;
 
-  /** 支持的钩子声明（PluginRunner 据此决定是否调用对应钩子） */
-  readonly hooks: PluginHooks;
+  /** 激活运行时 */
+  start(): Promise<void>;
 
-  /** 初始化——注入配置，准备运行时状态 */
-  init(config: TConfig): Promise<void>;
+  /** 优雅关闭 */
+  stop(): Promise<void>;
 
-  /** 执行核心逻辑 */
-  execute(context: ExecuteContext): Promise<void>;
-
-  /** 清理——释放资源 */
-  destroy(): Promise<void>;
+  /** 运行时健康检查 */
+  health(): PluginHealth;
 }
 
-// ── 元数据与钩子 ──
+// ─── 插件上下文 ───────────────────────────────────
 
 /**
- * PluginMeta —— 插件注册时的元信息。
- * 用于 registry list / discover 返回，无需加载完整插件实例。
- */
-export interface PluginMeta {
-  /** 插件名称 */
-  name: string;
-  /** 版本 */
-  version: string;
-  /** 描述 */
-  description: string;
-  /** 标签 */
-  tags: string[];
-  /** 依赖列表 */
-  dependencies: string[];
-  /** 钩子声明 */
-  hooks: PluginHooks;
-  /** 插件文件路径（从文件发现时有值） */
-  filePath?: string;
-}
-
-/**
- * PluginHooks —— 插件支持的生命周期钩子。
- * PluginRunner 根据此声明选择性地调用对应生命周期方法。
+ * PluginContext —— init() 阶段注入的运行时环境。
  *
- * 所有字段可选——插件只实现自己需要的钩子。
+ * get<T>(name) 按插件名获取已初始化的依赖实例。
+ * observer / config / workspaceRoot 是所有插件的公共上下文。
+ * externals 携带由 BootstrapEngineOptions 注入的外部依赖。
  */
-export interface PluginHooks {
-  /** 执行前钩子 */
-  beforeExecute?: boolean;
-  /** 执行后钩子 */
-  afterExecute?: boolean;
-  /** 错误处理钩子 */
-  onError?: boolean;
-  /** 资源清理钩子 */
-  onCleanup?: boolean;
+export interface PluginContext {
+  /** 按名称获取已初始化的插件实例（泛型返回，调用方断言类型） */
+  get<T>(name: string): T;
+
+  /** 事件总线——插件间异步通信的唯一通道 */
+  observer: IPipelineObserver;
+
+  /** 合并后的全局引擎配置 */
+  config: Required<EngineConfig>;
+
+  /** 工作区根目录绝对路径 */
+  workspaceRoot: string;
+
+  /** 外部依赖——由 BootstrapEngineOptions 注入 */
+  externals: PluginExternals;
 }
 
-// ── 执行上下文与结果 ──
+// ─── 插件容器 ─────────────────────────────────────
 
 /**
- * ExecuteContext —— execute() 时注入的运行时上下文。
- *
- * 插件的 execute() 返回 Promise<void>，执行结果通过 output
- * 字段传递，由 PluginRunner 在 execute 完成后读取并构造成 PluginResult。
+ * PluginContainer —— PluginLoader.load() 的返回结果。
+ * 封装了全部已加载插件的生命周期管理。
  */
-export interface ExecuteContext {
-  /** 任务载荷（由调用方传入） */
-  payload: unknown;
+export interface PluginContainer {
+  /** 按名称获取插件实例 */
+  get<T>(name: string): T;
 
-  /** 已初始化的依赖插件映射（按 name → Plugin） */
-  deps: Map<string, Plugin>;
+  /** 检查插件是否已加载 */
+  has(name: string): boolean;
 
-  /** 运行时的临时工作目录（PluginRunner 分配，destroy 时清理） */
-  workDir: string;
-
-  /** 超时时间 ms（覆盖默认值） */
-  timeoutMs?: number;
-
-  /** 中止信号（外部可触发） */
-  signal?: AbortSignal;
-
-  /** 执行产出 —— 插件通过此字段传递执行结果，PluginRunner 读取后构造成 PluginResult.output */
-  output?: unknown;
-}
-
-/**
- * PluginResult —— 执行结果（由 PluginRunner 构造）。
- *
- * Plugin 接口的 execute() 返回 Promise<void>，不直接返回结果。
- * PluginRunner 在 execute 执行完毕后，通过 ExecuteContext.output
- * 和其他运行时信息自行构造 PluginResult。
- */
-export interface PluginResult<T = unknown> {
-  /** 执行是否成功 */
-  success: boolean;
-
-  /** 成功时的产出 */
-  output?: T;
-
-  /** 失败时的错误信息 */
-  error?: string;
-
-  /** 执行耗时 ms */
-  durationMs: number;
-
-  /** 插件内发出的事件列表（桥接到 PipelineObserver） */
-  events?: PluginEvent[];
-}
-
-/**
- * PluginEvent —— 二级插件的内部事件。
- * PluginRunner 将这些事件桥接到引擎的 PipelineObserver 事件总线。
- */
-export interface PluginEvent {
-  /** 事件类型 */
-  type: string;
-  /** 事件载荷 */
-  payload: unknown;
-  /** 事件时间戳 */
-  timestamp: number;
-}
-
-// ── 配置与 Schema ──
-
-/**
- * PluginConfig —— 插件的通用配置接口。
- * 具体插件可继承此接口扩展自定义配置字段。
- */
-export interface PluginConfig {
-  /** 是否启用 */
-  enabled: boolean;
-  /** 执行超时 ms（默认 30000） */
-  timeout?: number;
-  /** 插件级环境变量覆盖 */
-  env?: Record<string, string>;
-  /** 自定义配置（按插件类型解构） */
-  [key: string]: unknown;
-}
-
-/**
- * PluginSchema —— 插件校验 schema 定义。
- * 每个插件类型在注册时关联一个 schema，用于校验配置和输入参数。
- *
- * @template _T — schema 对应的配置类型
- */
-export interface PluginSchema<_T = Record<string, unknown>> {
-  /** schema 名称（对应插件类型） */
-  name: string;
-  /** 配置校验函数（返回错误列表，空数组=通过） */
-  validateConfig(config: unknown): string[];
-  /** 输入参数校验函数（可选） */
-  validateInput?(input: unknown): string[];
-  /** 输出结果校验函数（可选） */
-  validateOutput?(output: unknown): string[];
-}
-
-// ── 运行时状态 ──
-
-/**
- * PluginStatus —— 插件的运行时健康状态。
- */
-export interface PluginStatus {
-  /** 插件名称 */
-  name: string;
-  /** 生命周期阶段 */
-  phase: "created" | "initialized" | "running" | "destroyed" | "error";
-  /** 最后执行时间戳 */
-  lastExecutedAt?: number;
-  /** 累计执行次数 */
-  executionCount: number;
-  /** 累计失败次数 */
-  failureCount: number;
-  /** 最后错误信息 */
-  lastError?: string;
-  /** 是否健康 */
-  healthy: boolean;
-}
-
-// ── 批量执行报告 ──
-
-/**
- * ExecutionReport —— executeAll() 的批量执行报告。
- */
-export interface ExecutionReport {
-  /** 总执行数 */
-  total: number;
-  /** 成功数 */
-  succeeded: number;
-  /** 失败数 */
-  failed: number;
-  /** 单个插件结果 */
-  results: Map<string, PluginResult>;
-  /** 总耗时 ms */
-  totalDurationMs: number;
-}
-
-// ── 校验结果 ──
-
-/**
- * ValidationResult —— Schema 校验结果。
- */
-export interface ValidationResult {
-  /** 校验是否通过 */
-  valid: boolean;
-  /** 错误信息列表 */
-  errors: string[];
+  /** 逆序停止全部插件 */
+  shutdown(): Promise<void>;
 }

@@ -1,5 +1,5 @@
 import { AgentStatus, PipelineEventType, PipelinePriority, type AgentConfig, type AgentType, type IPipelineObserver, type InvariantReporter } from "@cortex/shared";
-import { isTestEnv } from "../utils/internal.js";
+import { isTestEnv } from "@cortex/config";
 import { ManifoldGate } from "../dispatch-steps/manifold-gate.js";
 
 /**

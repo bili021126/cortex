@@ -41,6 +41,8 @@ export { InMemoryMemoryStore } from "./implementations/InMemoryMemoryStore.js";
 
 export { FileBasedMemoryStore } from "./implementations/FileBasedMemoryStore.js";
 export type { FileBasedMemoryStoreOptions } from "./implementations/FileBasedMemoryStore.js";
+export { AbstractMemoryStore } from "./implementations/AbstractMemoryStore.js";
+export type { MemoryStoreBackend } from "./implementations/AbstractMemoryStore.js";
 
 // ─── 注册表 ────────────────────────────────────────
 export { MemoryStoreRegistry } from "./registry/MemoryStoreRegistry.js";

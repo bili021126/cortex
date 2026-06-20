@@ -17,17 +17,17 @@ export { runReActLoop } from "./react-loop.js";
 export type { ReActContext } from "./react-loop.js";
 
 // ── 技能提取 ─────────────────────────────────────
-export { extractSkillsFromOutput, resolveOutputFile } from "./skill-extractor.js";
-export type { SkillExtractResult } from "./skill-extractor.js";
+export { extractSkillsFromOutput, resolveOutputFile } from "@cortex/skill-kit";
+export type { SkillExtractResult } from "@cortex/skill-kit";
 
 // ── 技能持久化 ──────────────────────────────────
-export { persistSkillsToMemory, loadSkillsFromMemory, scanOutputFilesForSkills, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence } from "./skill-persister.js";
-export type { CrystallizeOptions, CrystallizeResult, KnowledgeMetadata, ExternalSearcher, VerifyOptions, VerifyResult } from "./skill-persister.js";
+export { persistSkillsToMemory, loadSkillsFromMemory, scanOutputFilesForSkills, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence } from "@cortex/skill-kit";
+export type { CrystallizeOptions, CrystallizeResult, KnowledgeMetadata, ExternalSearcher, VerifyOptions, VerifyResult } from "@cortex/skill-kit";
 
 // ── 外源技能 JSON 校验与转化 ────────────────────
-export { validateExternalSkillJson, externalJsonToSkillTemplate, importExternalSkill } from "./skill-json-validator.js";
-export type { SkillJsonValidationResult, SkillJsonValidationError, SkillJsonValidationWarning, SkillJsonValidationInfo, SkillJsonValidator, SkillStatus } from "./skill-json-validator.js";
+export { validateExternalSkillJson, externalJsonToSkillTemplate, importExternalSkill } from "@cortex/skill-kit";
+export type { SkillJsonValidationResult, SkillJsonValidationError, SkillJsonValidationWarning, SkillJsonValidationInfo, SkillJsonValidator, SkillStatus } from "@cortex/skill-kit";
 
 // ── 技能步骤模板渲染引擎 ──────────────────────────
-export { SkillTemplateEngine } from "./skill-template-engine.js";
-export type { TemplateEngineOptions, TemplateContext } from "./skill-template-engine.js";
+export { SkillTemplateEngine } from "@cortex/skill-kit";
+export type { TemplateEngineOptions, TemplateContext } from "@cortex/skill-kit";

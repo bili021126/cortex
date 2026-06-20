@@ -186,7 +186,7 @@ export const MATERIAL_CHECKLIST: MaterialChecklist = {
       name: "共识修复清单（上一轮）",
       description: "上一轮圆桌产出的 P0-P3 修复清单——如为首次圆桌则此项为空，视为无历史基准",
       source: "上一轮圆桌凝光收束签署",
-      filePath: "test-output/self-examination/consensus-fix-list.md",
+      filePath: "test-output/self-examination-soft/consensus-fix-list.md",
       phase: "第一轮",
       required: false},
     {
@@ -736,7 +736,7 @@ export async function runMeeting(
     console.log(`${"=".repeat(60)}\n`);
 
     // 会议背景写入 Knowledge 记忆
-    memory.write({
+    await memory.write({
       kind: "Insight",
       content_blob: { background: config.background },
       summary: `[会议背景] ${config.name}: ${config.background.slice(0, 80)}`,
@@ -749,7 +749,7 @@ export async function runMeeting(
     if (seedMemories && seedMemories.length > 0) {
       console.log(`  🌱 注入 ${seedMemories.length} 条种子记忆...`);
       for (const seed of seedMemories) {
-        memory.write({
+        await memory.write({
           kind: seed.kind as MemoryKind,
           content_blob: seed.content_blob,
           summary: seed.summary,
@@ -886,7 +886,7 @@ export async function runMeeting(
               console.log(`  ${"\u2502"} ${line}`);
             }
             console.log(`  ${"\u2502".repeat(3)}`);
-            memory.write({
+            void memory.write({
               kind: "TaskLog",
               content_blob: { speech, round: ri + 1, turn, meeting: config.name },
               summary: `[发言:${config.name}] ${persona.name}: ${speech.slice(0, 100)}`,
@@ -923,7 +923,7 @@ export async function runMeeting(
         const roundDigest = saidSpeeches
           .map((s) => `[${s.speaker} R${ri + 1}T${s.turn}] ${s.preview.slice(0, 150)}`)
           .join("\n");
-        memory.write({
+        void memory.write({
           kind: "Insight",
           content_blob: {
             round: ri + 1,
@@ -1046,6 +1046,6 @@ export async function runMeeting(
       }
     }
   } finally {
-    memory.close();
+    await memory.close();
   }
 }

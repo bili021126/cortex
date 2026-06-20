@@ -11,22 +11,35 @@
 // @refactor v3.0 — 引擎插件化解耦
 // ============================================================
 
-import type { AgentDefinition } from "@cortex/factory";
+import type { AgentDefinition } from "./factory/index.js";
 import { loadConfig, resolveCodingStandards, resolveLlm, injectRegistryFromConfig } from "./load-config.js";
+import { enhancePrompts } from "./factory/loaders/agents.loader.js";
+import { PromptManager } from "../core/prompt-manager.js";
 import { StrategistAgent } from "../agents/strategist-agent.js";
 import { ButlerAgent } from "../agents/butler-agent.js";
-// 副作用导入：触发全部插件自注册至 PluginLoader（无需调用任何函数）
+// ── Core-2: 新模块 ─────────────────────────────
+import { TaskRouter } from "../core/task-router.js";
+import { EnvironmentAwareRouter } from "../core/environment-aware-router.js";
+import { SentinelSignalFilter } from "../core/sentinel-signal-filter.js";
+import { GovernanceEventEmitter } from "../core/governance-events.js";
+import { DecisionGateBridge } from "../core/decision-gate-bridge.js";
+import { resilienceFactory } from "../core/resilience-integration.js";
+import { NotificationRuntime } from "../core/notification-runtime.js";
+import { NotificationPipe } from "@cortex/notification";
+import type { IModelRouter } from "@cortex/scheduler";
+// 集中注册：触发全部插件注册至 PluginLoader
 import "../plugin/register-all.js";
-import { PluginLoader, type EnginePluginLoadConfig } from "../plugin/plugin-loader.js";
+import { PluginLoader, type EnginePluginLoadConfig } from "@cortex/plugin-runner";
 import type { Toolkit } from "@cortex/platform";
 import { preloadModel } from "@cortex/memory-store";
 import type { LlmAdapter } from "@cortex/llm";
-import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ReadMode } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ReadMode, type TaskNode } from "@cortex/shared";
 import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
-import { installConsoleBridge, uninstallConsoleBridge } from "../observer/console-bridge.js";
+import { installConsoleBridge, uninstallConsoleBridge } from "@cortex/telemetry";
+import { LoggingPipelineBridge, ConsoleTransport, type Transport } from "@cortex/logging";
 
 // 插件类型引用
 import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.js";
@@ -73,6 +86,17 @@ export async function bootstrapEngine(
   // §1 加载配置
   const config = loadConfig(projectRoot);
 
+  // §1.1 PromptManager —— prompt-kit 编排器接入
+  //     同步加载完成后，异步增强 Agent prompt（校验 + 缓存 + 模板渲染）
+  //     失败时优雅降级：保留同步加载的原始文本
+  const promptManager = new PromptManager(projectRoot);
+  try {
+    await enhancePrompts(config.agentDefinitions, promptManager);
+  } catch (e) {
+    // prompt-kit 增强失败不阻断启动——使用同步加载的原始 prompt
+    console.warn(`[bootstrapEngine] prompt-kit 增强失败，回退到原始 prompt: ${String(e)}`);
+  }
+
   // §1.5 设置 Toolkit 的 workspaceRoot（路径沙箱）
   const wsRoot = options.workspaceRoot ?? projectRoot;
   options.toolkit.setWorkspaceRoot(wsRoot);
@@ -81,7 +105,7 @@ export async function bootstrapEngine(
   injectRegistryFromConfig(config.agentDefinitions);
   const codingStandards = resolveCodingStandards(projectRoot);
 
-  // §3 已由 plugin/register-all.js 副作用导入完成全部插件注册
+  // §3 已由 plugin/register-all.js 集中注册完成全部插件注册
 
   // §4 从 engine-plugins.json 读取插件清单（配置驱动，不再硬编码）
   const pluginsDataDir = resolveConfigDataDir();
@@ -108,6 +132,13 @@ export async function bootstrapEngine(
       fs: options.fs,
       memory: options.memory,
     },
+    // postInit 钩子：全部插件 init 完成后，执行跨插件织入（Scheduler 注册 Agent）
+    onPostInit: async (ctx, plugins) => {
+      const schedulerPlugin = plugins.get("scheduler") as SchedulerPlugin | undefined;
+      if (schedulerPlugin) {
+        await schedulerPlugin.registerAllAgents(ctx);
+      }
+    },
   };
 
   // §5 加载并启动全部插件
@@ -128,6 +159,8 @@ export async function bootstrapEngine(
   const memory = container.get<MemoryStorePlugin>("memoryStore").getInstance();
   const consistencyLayer = container.get<ConsistencyLayerPlugin>("consistencyLayer").getInstance();
   const metaAgent = container.get<MetaAgentPlugin>("metaAgent").getInstance();
+  // §6.0a 注入 PromptManager —— MetaAgent 的 planning prompt 走声明式块组装
+  metaAgent.setPromptManager(promptManager);
   const scheduler = container.get<SchedulerPlugin>("scheduler").getInstance();
   const agents = container.get<SchedulerPlugin>("scheduler").getAgents();
   const butler = container.get<SchedulerPlugin>("scheduler").getButler();
@@ -135,8 +168,102 @@ export async function bootstrapEngine(
   // §6.0 ConsoleBridge —— PipelineObserver 就绪后安装，拦截裸 console
   installConsoleBridge(observer);
 
+  // §6.0.2 LoggingPipelineBridge —— Logger → PipelineObserver 桥接
+  //     宪法 §8.1 三档映射：Warn→degraded, Error→degraded, Fatal→fatal
+  const loggingBridge = new LoggingPipelineBridge({
+    emit: (event: string) => observer.emit({
+      type: PipelineEventType.ErrorReported,
+      priority: PipelinePriority.NORMAL,
+      payload: { message: event },
+      timestamp: Date.now(),
+      notificationType: "FYI",
+    }),
+  });
+
   // §6.0.1 LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期
   const lifecycleManager = new LifecycleManager();
+
+  // ────────────────────────────────────────────────
+  // §6.2 Core-2 模块接线——将独立创建的模块接入运行时
+  // ────────────────────────────────────────────────
+
+  // §6.2.1 TaskRouter —— 统一策略+模型路由
+  // @layer 规划-执行层→规划-执行层：事轴路由组合
+  const modelRouter = scheduler.modelRouter;
+  const defaultModel = process.env["DEEPSEEK_CHAT_MODEL"] ?? "";
+  const taskRouter = modelRouter
+    ? new TaskRouter(modelRouter, defaultModel)
+    : undefined;
+
+  // §6.2.2 EnvironmentAwareRouter —— 环境感知模型降级
+  const envRouter = new EnvironmentAwareRouter({
+    modelPriority: [
+      process.env["DEEPSEEK_REASONER_MODEL"] ?? "",
+      process.env["DEEPSEEK_CHAT_MODEL"] ?? "",
+    ].filter(Boolean),
+    fallbackStrategy: "next-in-priority",
+  });
+
+  // §6.2.2a 将 TaskRouter + EnvironmentAwareRouter 组合为调度器模型路由
+  //     ExecuteStep/RlmExecuteStep 执行前自动走路由 → 环境感知降级
+  // @layer 规划-执行层→规划-执行层：模型路由注入
+  if (taskRouter) {
+    const compositeRouter: IModelRouter = {
+      name: "core-2-composite",
+      route: async (node, agentType, _defaultModel) => {
+        const decision = await taskRouter.route(node as TaskNode, agentType as string);
+        return envRouter.resolve(decision.model, node as TaskNode);
+      },
+    };
+    scheduler.setModelRouter(compositeRouter);
+  }
+
+  // §6.2.3 SentinelSignalFilter —— 哨兵信号分层
+  const sentinelFilter = new SentinelSignalFilter({
+    deduplicationWindowMs: 5000,
+    l3SampleRate: 0.1,
+    alertStormThreshold: 10,
+  });
+  // 订阅 CRITICAL 事件到哨兵，过滤后仅 alert 级别记录遥测
+  // @layer 治理层（观察者）→ 治理层：哨兵订阅 CRITICAL 事件
+  observer.on(PipelinePriority.CRITICAL, (event) => {
+    const signal = sentinelFilter.filter(event);
+    if (signal && signal.suggestedAction === "alert") {
+      void import("@cortex/telemetry").then(({ recordTelemetry }) =>
+        recordTelemetry("sentinel.alert", 1, [
+          { key: "level", value: signal.level },
+          { key: "aggregationKey", value: signal.aggregationKey },
+        ]),
+      );
+    }
+  });
+
+  // §6.2.4 NotificationRuntime —— PipelineObserver → NotificationPipe 桥接
+  // @layer 治理层→治理层：PipelineObserver → NotificationPipe 桥接
+  const notificationPipe = new NotificationPipe();
+  const notificationRuntime = new NotificationRuntime(observer, notificationPipe, {
+    enableTelemetry: true,
+  });
+  notificationRuntime.start();
+
+  // §6.2.5 ResiliencePolicyFactory —— 注册 LLM + 工具韧性策略
+  // @role 恢复者——仅执行层调用，注册 llm-call + tool-exec 韧性策略
+  resilienceFactory.registerPolicies("llm-call", {
+    retry: { maxAttempts: 3, baseDelayMs: 1000, maxDelayMs: 10000 },
+    circuitBreaker: { threshold: 5, halfOpenAfterMs: 60000 },
+    timeout: { timeoutMs: 120000 },
+  });
+  resilienceFactory.registerPolicies("tool-exec", {
+    retry: { maxAttempts: 2, baseDelayMs: 500, maxDelayMs: 5000 },
+    circuitBreaker: { threshold: 3, halfOpenAfterMs: 30000 },
+    timeout: { timeoutMs: 30000 },
+  });
+
+  // §6.2.6 GovernanceEventEmitter + DecisionGateBridge
+  const governanceEmitter = new GovernanceEventEmitter(observer);
+  // @layer 治理层→交互层：权轴桥接
+  const decisionBridge = new DecisionGateBridge(observer, gate);
+  decisionBridge.start();
 
   // §6.1 技能系统初始化——不再通过插件，直接在 bootstrap 中装配
   const skillRegistry = await initSkillSystem(
@@ -189,6 +316,13 @@ export async function bootstrapEngine(
     agents,
     consistencyLayer,
     lifecycleManager,
+    // Core-2 模块
+    taskRouter,
+    envRouter,
+    sentinelFilter,
+    governanceEmitter,
+    decisionBridge,
+    notificationRuntime,
     shutdown: async () => {
       // 先优雅关闭 ILifecycle 组件
       await lifecycleManager.shutdown();

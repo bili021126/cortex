@@ -31,3 +31,9 @@ export type {
 // ── 超时处置 ───────────────────────────────────
 export { checkTimeout, updateStaleCount } from "./amendment-timeout.js";
 export type { TimeoutAction, TimeoutConfig } from "./amendment-timeout.js";
+
+// ── 文档注册中心 ───────────────────────────────
+export { DocRegistry } from "./doc-registry.js";
+
+// ── 治理→记忆适配器 ─────────────────────────────
+export { syncGovernanceToMemory } from "./governance-memory.js";

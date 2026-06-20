@@ -1,3 +1,6 @@
+// @layer 规划-执行层
+// @role ReAct 循环——共享执行引擎
+
 /* eslint-disable no-console */
 import type { TaskNode, NodeResult, AgentType, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
@@ -48,6 +51,10 @@ export async function runReActLoop(
   const TOOL_DISCIPLINE = [
     "──── ⚠️ 工具使用硬约束（违反将导致任务失败）────",
     "",
+    "· ⛔ 最高优先级：如果任务要求产出代码文件/配置文件/文档文件——",
+    "  你的第一次工具调用必须是 write_file。禁止只在回复中输出代码文本——",
+    "  输出代码文本不算完成任务。Agent 的输出必须是工具调用结果。",
+    "",
     "· 文件搜索 → 优先用 search_code。若 search_code 返回错误，立即改用 list_files + read_file。禁止用 run_shell 执行 grep/findstr/rg/dir",
     "· 目录浏览 → 必须用 list_files，禁止用 run_shell 执行 ls/dir/Get-ChildItem",
     "· 文件读取 → 必须用 read_file，禁止用 run_shell 执行 cat/type/Get-Content",
@@ -63,6 +70,7 @@ export async function runReActLoop(
   ].join("\n");
 
   const messages: LlmMessage[] = [
+    { role: "system", content: "你是一个代码执行引擎。你不是游戏角色，不要扮演任何人。你的唯一职责是调用工具完成任务。" },
     { role: "system", content: systemPrompt },
     { role: "system", content: TOOL_DISCIPLINE },
     { role: "user", content: `Task: ${node.payload}` },
@@ -73,8 +81,9 @@ export async function runReActLoop(
   const startTime = Date.now();
   const deadline = startTime + ctx.reactLoopTimeoutMs;
 
+  const REACT_DEBUG = process.env["CORTEX_DEBUG"] === "1" || process.env["REACT_DEBUG"] === "1";
   const diagnostic = (msg: string): void => {
-    console.log(`  🔁 [ReAct-${agentType}#${loops}] ${msg}`);
+    if (REACT_DEBUG) process.stderr.write(`  🔁 [ReAct-${agentType}#${loops}] ${msg}\n`);
   };
 
   diagnostic(`启动——maxLoops=${maxLoops}, timeout=${ctx.reactLoopTimeoutMs}ms, tools=${toolDefs.length}个`);
@@ -104,22 +113,36 @@ export async function runReActLoop(
 
       const msgCount = messages.length;
       diagnostic(`🛰️  调用 LLM (${model})——上下文 ${msgCount} 条消息，工具 ${toolDefs.length} 个...`);
+      if (REACT_DEBUG) {
+        process.stderr.write(`  📋 [ReAct-${agentType}#${loops}] 系统消息: ${(messages[0]?.content ?? "(空)").slice(0, 100)}\n`);
+        process.stderr.write(`  📋 [ReAct-${agentType}#${loops}] 工具列表: ${toolDefs.map(t=>t.name).join(", ")}\n`);
+      }
       const callStart = Date.now();
-      const res = await llm.chat(model, messages, toolDefs, node.reasoningEffort);
+      // 🎯 硬核：code/fix/test/ops 类 Agent 首次 LLM 调用必须选 write_file
+      const forceWrite = (loops === 0 && ["code","fix","ops"].includes(agentType) && toolDefs.some(t => t.name === "write_file"))
+        ? "write_file" : undefined;
+      const res = await llm.chat(model, messages, toolDefs, node.reasoningEffort, forceWrite);
       const callElapsed = Date.now() - callStart;
 
       // ── 思维链诊断：打印推理内容 ──
       if (res.reasoning_content) {
-        const preview = res.reasoning_content.slice(0, 300);
-        console.log(`  💭 [ReAct-${agentType}#${loops}] 思维链预览: ${preview}${res.reasoning_content.length > 300 ? "...(截断)" : ""}`);
+        if (REACT_DEBUG) {
+          const preview = res.reasoning_content.slice(0, 300);
+          process.stderr.write(`  💭 [ReAct-${agentType}#${loops}] 思维链预览: ${preview}${res.reasoning_content.length > 300 ? "...(截断)" : ""}\n`);
+        }
       }
       if (res.content) {
-        const preview = res.content.slice(0, 200);
-        console.log(`  📝 [ReAct-${agentType}#${loops}] 文本响应: ${preview}${res.content.length > 200 ? "...(截断)" : ""}`);
+        if (REACT_DEBUG) {
+          const preview = res.content.slice(0, 200);
+          process.stderr.write(`  📝 [ReAct-${agentType}#${loops}] 文本响应: ${preview}${res.content.length > 200 ? "...(截断)" : ""}\n`);
+        }
       }
 
       const toolCallCount = (res.tool_calls ?? []).length;
       diagnostic(`✅ LLM 响应耗时 ${callElapsed}ms——工具调用 ${toolCallCount} 个`);
+      if (REACT_DEBUG) {
+        process.stderr.write(`  🔍 [ReAct-${agentType}#${loops}] tool_calls=${JSON.stringify(res.tool_calls)?.slice(0,200)}\n`);
+      }
 
       if (toolCallCount === 0) {
         finalOutput = res.content ?? undefined;

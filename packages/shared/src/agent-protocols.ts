@@ -54,3 +54,46 @@ export interface Agent extends MemoryAware, Executable {
   /** 注入 AgentPool 引用 */
   setPool?(pool: unknown, instanceId: string): void;
 }
+
+// ═══════════════════════════════════════════
+// Agent 自声明系统（v2.7 — Kimi Agent Swarm 对齐）
+// ═══════════════════════════════════════════
+
+/**
+ * Agent 自声明——描述一个 Agent 的完整能力画像。
+ *
+ * 每个 Agent 通过导出静态 capability 实现"自声明"：
+ * 不需手动注册，系统启动时自动收集所有声明，MetaAgent 据此自组装。
+ *
+ * @since v2.7 — Agent 自声明与自组装
+ */
+export interface AgentCapability {
+  /** Agent 类型标识 */
+  type: AgentType;
+  /** 人类可读角色名（格式："短名 — 头衔"） */
+  role: string;
+  /** emoji 图标 */
+  emoji: string;
+
+  /** 认领标签——MetaAgent 按标签匹配任务 */
+  tags: string[];
+  /** 产出的事件类型 */
+  produces: string[];
+
+  /** 需要的工具权限列表 */
+  toolPermissions: string[];
+  /** 记忆检索策略标识 */
+  memoryQueryStrategy: string;
+
+  /** 最大实例数 */
+  maxInstances: number;
+  /** 使用的模型 key */
+  modelKey: string;
+
+  /** 适用场景——自然语言描述（供 MetaAgent 决策） */
+  applicableScenarios: string[];
+  /** 输出格式——"code" | "report" | "decision" | "structured" */
+  outputFormat: string;
+  /** 协作模式——"solo" | "reviewer" | "subordinate" */
+  collaborationMode: "solo" | "reviewer" | "subordinate";
+}

@@ -17,7 +17,7 @@ import {
   annotateAndCompress,
   mergeContext,
   densityToStrategy,
-} from "@cortex/engine";
+} from "@cortex/scheduler";
 import type { DensityAnnotated } from "@cortex/shared";
 
 // ════════════════════════════════════════════════════════

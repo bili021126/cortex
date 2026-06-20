@@ -1,9 +1,13 @@
+// @cortex/engine/core/scheduler —— 调度中枢
+// @layer 规划-执行层
+// @role 事轴中枢——executeAll() 拓扑排序 + 逐层并行 dispatch
+
 import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { Agent, AgentType, ExecutionReport, IMemoryStore, IPipelineObserver, NodeResult, TaskNode } from "@cortex/shared";
 import type { MetaAgent } from "./meta-agent.js";
 import { MetaAgentReplanAdapter } from "./meta-agent-adapter.js";
 import { ReplanManager, findAllMatchingAgents, ClaimStep, SpawnStep, RlmExecuteStep, BoundaryGuardStep, CleanupStep, TagMatchingStrategy, TopologicalLayeredDriver, PipelineModel, FixedModelRouter, type ITaskBoard, type ISchedulerAgentPool, type DispatchCtx, type IDispatchStep, type LlmCallable, type IScheduler, type IScheduleStrategy, type ILoopDriver, type IExecutionModel, type IModelRouter, type CompositeSchedulerConfig, type LoopContext } from "@cortex/scheduler";
-import { isTestEnv } from "../test-env.js";
+import { isTestEnv } from "@cortex/config";
 import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
 
@@ -64,12 +68,13 @@ export class Scheduler implements IScheduler {
   private agents = new Map<string, Agent>();
   private models = new Map<string, string>();
   private readonly replanManager: ReplanManager;
+  // @role 恢复者——ReplanManager 仅通过 Scheduler 被 MetaAgent 间接触发
   private readonly config: Required<EngineConfig>;
   // 四抽象组件（默认行为与原 Scheduler 完全一致）
   readonly strategy: IScheduleStrategy;
   readonly loopDriver: ILoopDriver;
   readonly executionModel: IExecutionModel;
-  readonly modelRouter: IModelRouter;
+  modelRouter: IModelRouter;
   /** 当前运行会话标识——executeAll() 启动时生成 */
   private _sessionId?: string;
   /** MemoryStore 引用——用于 beginSession/endSession 生命周期管理 */
@@ -89,6 +94,11 @@ export class Scheduler implements IScheduler {
     this.loopDriver = schedulerConfig?.loopDriver ?? new TopologicalLayeredDriver();
     this.executionModel = schedulerConfig?.executionModel ?? new PipelineModel();
     this.modelRouter = schedulerConfig?.modelRouter ?? new FixedModelRouter();
+  }
+
+  /** Core-2: 替换模型路由器（供 bootstrap 注入 TaskRouter + EnvironmentAwareRouter 组合） */
+  setModelRouter(router: IModelRouter): void {
+    this.modelRouter = router;
   }
 
   /** 注册一个 AgentRunner 及其所用模型 */

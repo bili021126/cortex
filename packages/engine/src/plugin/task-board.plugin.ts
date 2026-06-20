@@ -38,6 +38,4 @@ export class TaskBoardPlugin implements EnginePlugin {
 // 前向声明依赖类型
 import type { PipelineObserverPlugin } from "./pipeline-observer.plugin.js";
 
-// 自注册
-import { PluginLoader } from "./plugin-loader.js";
-PluginLoader.register("taskBoard", TaskBoardPlugin);
+

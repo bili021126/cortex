@@ -13,8 +13,25 @@ import type { AgentType } from "./agent.js";
 
 // ─── v3 核心类型 ──────────────────────────────────────────
 
-/** 记忆认知类别 */
-export type MemoryKind = "TaskLog" | "Insight" | "Skill";
+/** 记忆认知类别
+ *
+ * | 类别       | 语义                     | isFact 默认 |
+ * |-----------|--------------------------|-------------|
+ * | TaskLog   | 任务执行记录（事实）       | true        |
+ * | Insight   | 洞察/分析结论（事实）      | true        |
+ * | Skill     | 技能提取/结晶（事实）      | true        |
+ * | Governance| 治理决策/审议记录（事实）  | true        |
+ * | Intent    | 意图/计划/待办（非事实）   | false       |
+ *
+ * Intent 与其余四类的核心区别：
+ * - Fact 类记忆描述"已经发生的事"——可验证、可对账、不可回滚
+ * - Intent 类记忆描述"想做的事"——尚未发生、可能变更、可取消
+ *
+ * @remarks
+ * CSA 执行检索时自动过滤 Intent，防止"想做的事"污染 Agent 决策。
+ * HCA 规划扫描不过滤——MetaAgent 需要全局视图（含半成品意图）。
+ */
+export type MemoryKind = "TaskLog" | "Insight" | "Skill" | "Governance" | "Intent";
 
 /** 语义生命周期 */
 export type SemanticState = "Active" | "Archived" | "Obliterated";
@@ -39,6 +56,9 @@ export interface MemoryEntry {
 
   // §2 认知层（自迭代策略操作的对象）
   kind: MemoryKind;
+  /** 是否为事实记忆。Intent 类记忆默认 false，其余默认 true。
+   *  CSA 检索时 isFact===false 的条目被自动排除。 */
+  isFact?: boolean;
   summary: string;
   /** LLM 萃取的语义精华，专供 embedding 生成。<=200 字 */
   semantic_gist: string;
@@ -71,6 +91,8 @@ export interface MemoryWriteInput {
 
   // §2 认知
   kind: MemoryKind;
+  /** 是否事实记忆。未显式指定时由 IntentFactWall 按 kind 自动推断 */
+  isFact?: boolean;
   summary: string;
   semantic_gist: string;
   content_blob: Record<string, unknown>;
@@ -169,6 +191,8 @@ export interface IMemoryStore {
   commitMemory(memoryId: string): boolean;
   /** 显式回滚——将指定 Pending 记忆湮灭（不经过 Active 态）。两阶段提交的终止路径 */
   rollback(memoryId: string): boolean;
+  /** 统一取消——自动判断状态：Pending→rollback，Active→archive。幂等 */
+  cancel(memoryId: string): boolean;
   getPending(): MemoryEntry[];
   hasPending(): boolean;
   /** 按 sessionId 查询指定会话的所有记忆 */

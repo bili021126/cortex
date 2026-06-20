@@ -3,6 +3,7 @@
 //
 // @since v3.1.0
 // @layer 引擎层 — 编排 shutdown 顺序，管理资源泄漏报告
+// @role 恢复者——资源清理，仅生命周期调用
 //
 // 职责：
 //   1. 管理引擎组件（FileLockManager / Scheduler / MemoryStore）的 shutdown 顺序
@@ -17,7 +18,7 @@ import type { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import {
   SHUTDOWN_TIMEOUT_MS,
   SHUTDOWN_FORCE_EXIT_DELAY_MS,
-} from "../config/engine-defaults.js";
+} from "@cortex/config";
 
 /** Shutdown 阶段报告 */
 export interface ShutdownReport {

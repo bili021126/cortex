@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, beforeEach } from "vitest";
-import { TrustModel } from "@cortex/engine";
+import { TrustModel } from "@cortex/scheduler";
 import { TrustLevel, type AgentType } from "@cortex/shared";
 
 describe("TrustModel", () => {

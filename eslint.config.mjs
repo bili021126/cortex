@@ -24,8 +24,6 @@ export default tseslint.config(
       "**/*.cjs",
       "**/*.mjs",
       "packages/engine/scripts/**",
-      "packages/skill-validator/eslint.config.mjs",
-      "packages/src/**",
       "packages/scheduler/src/**/*.d.ts",
       "packages/scheduler/src/**/*.js",
       "packages/memory/examples/**",

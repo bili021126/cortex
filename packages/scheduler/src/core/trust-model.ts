@@ -18,7 +18,7 @@
 //   resetAll() → 全部回到 L1
 // ============================================================
 
-import { TrustLevel, type AgentType, type ITrustModel, type RiskDomain, type TrustEntry, toolNameToRiskDomain } from "@cortex/shared";
+import { TrustLevel, type AgentType, type ITrustModel, type RiskDomain, type TrustEntry, type TrustScore, toolNameToRiskDomain } from "@cortex/shared";
 
 // ─── 内部常量 ──────────────────────────────────────────
 
@@ -107,6 +107,79 @@ export class TrustModel implements ITrustModel {
 
   snapshot(): ReadonlyMap<string, TrustEntry> {
     return new Map(this._entries);
+  }
+
+  // ── 置信度评分 ──────────────────────────────────
+
+  /**
+   * 计算 (agentType, domain) 的置信度评分 (0..1)。
+   *
+   * 评分公式：
+   *   baseScore = level / 3  （L0=0, L1≈0.33, L2≈0.67, L3=1.0）
+   *   decayFactor = 1 - min(1, elapsedDays / 7) * 0.3  （7天无活动扣30%）
+   *   historyBonus = min(0.2, totalConfirmations * 0.01)  （最多加0.2）
+   *   score = clamp(baseScore * decayFactor + historyBonus, 0, 1)
+   *
+   * 设计意图：
+   * - 信任不是二值的——即使 L3 也可能因长期无活动而衰减
+   * - 历史确认数提供平滑的置信度基底，避免少量样本过度拟合
+   * - score 可用于排序、仪表盘展示、自动决策阈值判断
+   */
+  computeConfidence(agentType: AgentType, domain: RiskDomain): TrustScore {
+    const key = this._key(agentType, domain);
+    let entry = this._entries.get(key);
+
+    if (!entry) {
+      return { agentType, domain, score: 0.1, historyCount: 0 };
+    }
+
+    // 先应用衰减（同步状态）
+    this._applyDecay(entry);
+
+    const baseScore = entry.level / 3; // L0=0, L1=0.333, L2=0.667, L3=1.0
+
+    // 时间衰减：距上次接受的天数
+    const elapsedDays = entry.lastAcceptedAt > 0
+      ? (Date.now() - entry.lastAcceptedAt) / (24 * 60 * 60 * 1000)
+      : 0;
+    const decayFactor = 1 - Math.min(1, elapsedDays / 7) * 0.3;
+
+    // 历史确认奖励
+    const historyBonus = Math.min(0.2, entry.totalConfirmations * 0.01);
+
+    const score = Math.max(0, Math.min(1, baseScore * decayFactor + historyBonus));
+
+    return {
+      agentType,
+      domain,
+      score,
+      historyCount: entry.totalConfirmations,
+    };
+  }
+
+  /**
+   * 按工具名计算置信度（便捷方法）。
+   */
+  computeConfidenceForTool(agentType: AgentType, toolName: string): TrustScore {
+    const domain = toolNameToRiskDomain(toolName);
+    if (!domain) {
+      return { agentType, domain: "file_write", score: 0.1, historyCount: 0 };
+    }
+    return this.computeConfidence(agentType, domain);
+  }
+
+  /**
+   * 获取所有 (agentType, domain) 的置信度评分列表。
+   * 用于仪表盘展示和自动决策审计。
+   */
+  allConfidences(): TrustScore[] {
+    const results: TrustScore[] = [];
+    for (const [, entry] of this._entries) {
+      results.push(
+        this.computeConfidence(entry.agentType, entry.domain)
+      );
+    }
+    return results.sort((a, b) => b.score - a.score);
   }
 
   // ── 内部 ──────────────────────────────────────────

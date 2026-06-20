@@ -276,4 +276,27 @@ export const PRESET_CONTEXT_POLICIES: Record<string, ContextPolicy> = {
       tokenBudget: { bfs: 0.4, vector: 0.3, keywords: 0.2, conversation: 0.1, total: 48000 },
     },
   },
+
+  /**
+   * planning: MetaAgent 规划——HCA 全局扫描 + 含 Intent 类记忆。
+   *
+   * 与 code-refactor/architecture-review 的关键区别：
+   * - HCA 模式不过滤 Intent（MetaAgent 需要看到"想做什么"来规划）
+   * - BFS 深度大（4），token 预算高（96K），确保全局视野
+   * - 排序为 cognitive 模式：贝叶斯相关性 + 傅里叶时间衰减 + 联想激活
+   */
+  planning: {
+    id: "planning",
+    description: "MetaAgent 规划：HCA 全局扫描含 Intent 类记忆",
+    conversation: { mode: "full" },
+    retrieval: { readMode: "HCA", bfsDepth: 4, bfsMaxNodes: 300 },
+    pipeline: {
+      sort: { mode: "cognitive" },
+      deduplicate: true,
+      assemble: { tierBudget: { critical: 0.3, support: 0.4, reference: 0.3 } },
+      tokenBudget: { bfs: 0.5, vector: 0.25, keywords: 0.15, conversation: 0.1, total: 96000 },
+      bayesianPrior: 0.25,
+      linkActivationDepth: 4,
+    },
+  },
 };

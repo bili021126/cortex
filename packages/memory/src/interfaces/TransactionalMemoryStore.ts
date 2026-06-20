@@ -261,6 +261,16 @@ export interface TransactionalMemoryStore extends IMemoryStore {
   rollback(memoryId: string): Promise<boolean>;
 
   /**
+   * 统一取消一条记忆——自动判断状态。
+   * 若条目处于 Pending 态（两阶段提交中）→ 从 pendingEntries 移除。
+   * 若条目处于 Active 态 → 归档为 Archived。
+   * 幂等——条目不存在或已取消时返回 false。
+   *
+   * @since v2.7 — 语义统一
+   */
+  cancel(memoryId: string): boolean;
+
+  /**
    * 创建一条关联。
    *
    * @param sourceId - 源记忆 ID

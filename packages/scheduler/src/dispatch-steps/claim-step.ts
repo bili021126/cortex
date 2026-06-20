@@ -1,7 +1,7 @@
 import { AgentType as AT, AGENT_TAGS, PipelinePriority, PipelineEventType, type AgentType } from "@cortex/shared";
 import type { DispatchCtx, IDispatchStep } from "./types.js";
 import { findMatchingAgent } from "../core/agent-matcher.js";
-import { isTestEnv as checkTestEnv } from "../utils/internal.js";
+import { isTestEnv as checkTestEnv } from "@cortex/config";
 
 /**
  * ClaimStep —— 认领节点。

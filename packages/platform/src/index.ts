@@ -25,7 +25,7 @@ export type { CompressionLevel, CompressedReport, ReportStats, RoundtableCompres
 
 // ── MCP 客户端 ─────────────────────────────────
 export { McpClient, McpToolAdapter, MCP_PREFIX } from "./mcp-client.js";
-export type { McpServerConfig, McpToolDef } from "./mcp-client.js";
+export type { McpServerConfig, McpToolDef, McpTrustConfig } from "./mcp-client.js";
 
 // ── 本地工具适配 ──────────────────────────────
 export { LocalTool } from "./local-tool.js";

@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { AgentPool, PipelineObserver } from "@cortex/engine";
+import { AgentPool, PipelineObserver } from "@cortex/scheduler";
 import { AgentType } from "@cortex/shared";
 import { AgentStatus, PipelinePriority } from "@cortex/shared";
 

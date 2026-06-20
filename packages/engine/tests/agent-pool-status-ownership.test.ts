@@ -22,7 +22,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { AgentPool, PipelineObserver, BaseAgent, ButlerAgent, ManifoldGate } from "@cortex/engine";
+import { AgentPool, PipelineObserver, ManifoldGate } from "@cortex/scheduler";
+import { BaseAgent, ButlerAgent } from "@cortex/engine";
 import { Toolkit } from "@cortex/platform";
 import type { TaskNode, NodeResult, AgentType as AT } from "@cortex/shared";
 import { AgentType, AgentStatus as AS } from "@cortex/shared";

@@ -16,7 +16,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { execSync } from "node:child_process";
-import { Toolkit } from "@cortex/platform";
+import { LocalTool, Toolkit } from "@cortex/platform";
+import { ReversibilityLevel as RL, ToolCategory } from "@cortex/shared";
 
 const MAX_OUTPUT_CHARS = 4000; // 单次工具调用的最大输出字符数
 
@@ -117,27 +118,41 @@ export function registerExaminationTools(
 
   // ── 受限 write_file：仅允许写入输出目录 ──
 
-  toolkit.register("write_file", async (params) => {
-    const fp = resolve(params.file_path as string);
-    const content = (params.content_blob ?? "") as string;
-    const normalizedFp = path.normalize(fp);
-    const normalizedOut = path.normalize(outputDir);
-    if (!normalizedFp.startsWith(normalizedOut + path.sep) && normalizedFp !== normalizedOut) {
-      return {
-        success: false,
-        error:
-          `写入被拒绝：审视实验中，所有写入操作仅限于 ${outputDir}/ 目录。\n` +
-          `你不能修改 packages/ 或 docs/ 下的任何文件。请将发现写入 ${outputDir}/ 目录下。`};
-    }
-    try {
-      const dir = path.dirname(fp);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(fp, content, "utf-8");
-      return { success: true, output: `Wrote ${Buffer.byteLength(content)} bytes to ${fp}` };
-    } catch (e) {
-      return { success: false, error: String(e) };
-    }
-  });
+  toolkit.registerTool(new LocalTool(
+    "write_file",
+    ToolCategory.Write,
+    "Write content to a file. Only paths under the examination output directory are permitted.",
+    {
+      type: "object",
+      properties: {
+        file_path: { type: "string", description: "Absolute path to the output file" },
+        content: { type: "string", description: "Content to write into the file" },
+      },
+      required: ["file_path", "content"],
+    },
+    RL.L2,
+    async (params: Record<string, unknown>) => {
+      const fp = resolve(params.file_path as string);
+      const content = (params.content ?? "") as string;
+      const normalizedFp = path.normalize(fp);
+      const normalizedOut = path.normalize(outputDir);
+      if (!normalizedFp.startsWith(normalizedOut + path.sep) && normalizedFp !== normalizedOut) {
+        return {
+          success: false,
+          error:
+            `写入被拒绝：审视实验中，所有写入操作仅限于 ${outputDir}/ 目录。\n` +
+            `你不能修改 packages/ 或 docs/ 下的任何文件。请将发现写入 ${outputDir}/ 目录下。`};
+      }
+      try {
+        const dir = path.dirname(fp);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(fp, content, "utf-8");
+        return { success: true, output: `Wrote ${Buffer.byteLength(content)} bytes to ${fp}` };
+      } catch (e) {
+        return { success: false, error: String(e) };
+      }
+    },
+  ));
 
   // ── 软约束模式：移除 FORBIDDEN 占位，不向 LLM 暴露无法使用的工具定义 ──
   // FORBIDDEN 工具仍占据 listDefinitions() 输出的 toolDefs，导致 LLM 可能尝试调用并浪费 token。
@@ -145,7 +160,7 @@ export function registerExaminationTools(
   if (!softMode) {
     const FORBIDDEN = async () => ({
       success: false,
-      error: "操作被禁止：审视实验中仅允许读取文件和将报告写入 test-output/self-examination/ 目录。"});
+      error: "操作被禁止：审视实验中仅允许读取文件和将报告写入 test-output/self-examination-soft/ 目录。"});
     toolkit.register("run_shell", FORBIDDEN);
     toolkit.register("delete_file", FORBIDDEN);
   } else {

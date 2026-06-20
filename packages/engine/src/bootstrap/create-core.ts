@@ -8,7 +8,7 @@ import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate } from "@cortex/sch
 import { MetaAgent } from "../core/meta-agent.js";
 import { StrategistAgent } from "../agents/strategist-agent.js";
 import type { LlmAdapter } from "@cortex/llm";
-import type { BootstrapResult } from "@cortex/factory";
+import type { BootstrapResult } from "./factory/index.js";
 import type { EngineConfig } from "@cortex/config";
 import { resolveLlm, injectStandards, injectRegistryFromConfig } from "./load-config.js";
 

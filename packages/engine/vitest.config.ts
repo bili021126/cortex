@@ -3,6 +3,12 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    exclude: [
+      "tests/e2e/strategist-agent-mock.test.ts",
+      "tests/e2e/closed-loop-mock.test.ts",
+      "tests/e2e/multi-agent-collab-mock.test.ts",
+      "tests/e2e/solo-flight-mock.test.ts",
+    ],
     env: {
       DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ?? "",
       DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",

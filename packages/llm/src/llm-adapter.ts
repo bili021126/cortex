@@ -184,6 +184,7 @@ export class LlmAdapter {
     messages: LlmMessage[],
     tools?: ToolDef[],
     reasoningEffort?: "high" | "max",
+    toolChoice?: "auto" | "required" | "none" | string,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       return await this._mockRespond(messages, tools);
@@ -227,6 +228,16 @@ export class LlmAdapter {
           parameters: t.parameters,
         },
       }));
+      if (toolChoice) {
+        body.tool_choice = (typeof toolChoice === "string" && toolChoice !== "auto" && toolChoice !== "required" && toolChoice !== "none")
+          ? { type: "function", function: { name: toolChoice } }
+          : toolChoice;
+      }
+    }
+
+    // 供应商扩展参数——由调用方通过 LlmAdapterConfig.extraBody 显式注入，无默认值
+    if (this.config.extraBody) {
+      body.extra_body = this.config.extraBody;
     }
 
     const t0 = Date.now();
@@ -376,6 +387,7 @@ export class LlmAdapter {
     tools: ToolDef[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
     reasoningEffort?: "high" | "max",
+    _toolChoice?: string,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       const resp = await this._mockRespond(messages, tools);
@@ -405,6 +417,7 @@ export class LlmAdapter {
           parameters: t.parameters,
         },
       }));
+      if (_toolChoice) body.tool_choice = _toolChoice;
     }
 
     const t0 = Date.now();

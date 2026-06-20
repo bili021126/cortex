@@ -1,4 +1,5 @@
-// @ci
+// @ci: integration
+// @ci: skip — v3.0: 手动构造模式不兼容 bootstrapEngine 内化。已由 cortex-e2e-full.ts 替代。
 /**
  * 闭环协作 Mock E2E —— 模拟 MetaAgent 规划 → CodeAgent 实现 → ReviewAgent 审查
  *
@@ -13,9 +14,11 @@ import { AgentType, type TaskNode } from "@cortex/shared";
 import {
   TaskBoard,
   AgentPool,
-  Scheduler,
   PipelineObserver,
   ConfirmGate,
+} from "@cortex/scheduler";
+import {
+  Scheduler,
   createAgent,
   codeAgentConfig,
   reviewAgentConfig} from "@cortex/engine";

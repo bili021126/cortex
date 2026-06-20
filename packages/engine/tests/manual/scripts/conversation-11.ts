@@ -59,7 +59,7 @@ async function main() {
   const ROOT = path.resolve(SCRIPTS_DIR, "..", "..", "..", "..", ".."); // d:\cortex
 
   const DB_DIR = path.join(ROOT, ".cortex");
-  const CONSENSUS_OUTPUT = path.join(ROOT, "test-output", "self-examination", "consensus-fix-list.md");
+  const CONSENSUS_OUTPUT = path.join(ROOT, "test-output", "self-examination-soft", "consensus-fix-list.md");
 
   if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 

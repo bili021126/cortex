@@ -17,7 +17,7 @@ export type { ValidationResult } from "./schema-enforcer.js";
 
 // ── 启动校验器 ────────────────────────────────
 export { InitVerifier, extractFileReferences } from "./init-verifier.js";
-export type { ConsistencyReport, VerificationEntry } from "./init-verifier.js";
+export type { ConsistencyReport, VerificationEntry, FileCoverageReport } from "./init-verifier.js";
 
 // ── 一致性层 Facade ────────────────────────────
 export { ConsistencyLayer } from "./consistency-layer.js";

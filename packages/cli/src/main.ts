@@ -40,7 +40,7 @@ import { bootstrapMcp } from "./bootstrap/mcp.js";
 // ── 命令 ─────────────────────────────────────────
 import { CommandRegistry } from "./commands/index.js";
 import { registerCommands } from "./commands/command-list.js";
-import { tuiReplHandler } from "./tui/tui-repl.js";
+import { tuiReplHandler } from "@cortex/tui";
 import { createVersionHandler } from "./commands/version.js";
 import { createHelpHandler } from "./commands/help.js";
 

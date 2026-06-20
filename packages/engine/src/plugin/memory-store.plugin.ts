@@ -50,6 +50,4 @@ export class MemoryStorePlugin implements EnginePlugin {
 
 import type { PipelineObserverPlugin } from "./pipeline-observer.plugin.js";
 
-// 自注册
-import { PluginLoader } from "./plugin-loader.js";
-PluginLoader.register("memoryStore", MemoryStorePlugin);
+

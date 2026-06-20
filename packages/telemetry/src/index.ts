@@ -52,3 +52,9 @@ export { ThresholdSampler } from "./sampler.js";
 // ─── 批处理策略 ────────────────────────────────────
 export { SizeBatcher } from "./batcher.js";
 export { TimeBatcher } from "./batcher.js";
+
+// ─── 引擎遥测封装 ──────────────────────────────────
+export { getTelemetry, setTelemetry, recordTelemetry, shutdownTelemetry } from "./engine-telemetry.js";
+
+// ─── Console → Observer 桥接 ────────────────────────
+export { installConsoleBridge, uninstallConsoleBridge } from "./console-bridge.js";

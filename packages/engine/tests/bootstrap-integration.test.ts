@@ -146,6 +146,20 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     expect(result.config).toBeDefined();
     expect(result.config.agentDefinitions.length).toBeGreaterThan(0);
 
+    // ── Core-2 模块集成验证 ──
+    // 哨兵信号过滤器
+    expect(result.sentinelFilter).toBeDefined();
+    // 通知运行时
+    expect(result.notificationRuntime).toBeDefined();
+    // 治理事件发射器
+    expect(result.governanceEmitter).toBeDefined();
+    // 决策门桥接
+    expect(result.decisionBridge).toBeDefined();
+    // 环境感知路由器
+    expect(result.envRouter).toBeDefined();
+    // TaskRouter（需要 scheduler.modelRouter，可能为 undefined）
+    // 韧性策略工厂（全局单例，已注册 llm-call 和 tool-exec）
+
     // MemoryStore 可关闭
     await result.memory!.close();
   });

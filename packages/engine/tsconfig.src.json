@@ -13,8 +13,9 @@
     { "path": "../platform/tsconfig.src.json" },
     { "path": "../scheduler/tsconfig.src.json" },
     { "path": "../shared" },
+    { "path": "../skill-kit" },
     { "path": "../llm" },
-    { "path": "../factory" },
+    { "path": "../plugin-runner" },
     { "path": "../telemetry" },
     { "path": "../memory" }
   ]

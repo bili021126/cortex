@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { TaskBoard } from "@cortex/engine";
+import { TaskBoard } from "@cortex/scheduler";
 import { AgentType } from "@cortex/shared";
 
 function makeNode(overrides: Partial<Parameters<TaskBoard["addNode"]>[0]> = {}) {

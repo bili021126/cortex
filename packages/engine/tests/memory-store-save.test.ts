@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { AgentType, PipelinePriority } from "@cortex/shared";
-import { PipelineObserver } from "@cortex/engine";
+import { PipelineObserver } from "@cortex/scheduler";
 import { MemoryStore, type IEmbeddingService } from "@cortex/memory-store";
 import { InMemoryMemoryStore } from "@cortex/memory";
 import * as fs from "node:fs";
@@ -63,7 +63,7 @@ describe("MemoryStore 写入与读取", () => {
       summary: "memory-only",
       semantic_gist: "memory-only",
       content_hash: "",
-      source: { agentType: AgentType.Code, taskId: "" }})).rejects.toThrow(/not initialized/);
+      source: { agentType: AgentType.Code, taskId: "" }})).rejects.toThrow(/[Mm]emory[Ss]tore.*(拒绝写入|init)/);
   });
 
   it("init(':memory:') 后 isPersisted 为 false（纯内存模式）", async () => {

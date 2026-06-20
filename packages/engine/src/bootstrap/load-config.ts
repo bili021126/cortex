@@ -2,7 +2,7 @@
 // @cortex/engine/bootstrap/load-config —— 配置加载 & 工具函数
 // ============================================================
 
-import { bootstrap, type AgentDefinition, type BootstrapResult } from "@cortex/factory";
+import { bootstrap, type AgentDefinition, type BootstrapResult } from "./factory/index.js";
 import { setAgentRegistry, type MemoryQuery, type TaskNode } from "@cortex/shared";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
