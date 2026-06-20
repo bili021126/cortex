@@ -138,8 +138,11 @@ function parseInline(text: string): string {
       }
     }
 
-    // 普通字符
-    result += text[i];
+    // 普通字符 — HTML 实体转义防止 XSS
+    if (text[i] === '<') result += '&lt;';
+    else if (text[i] === '>') result += '&gt;';
+    else if (text[i] === '&') result += '&amp;';
+    else result += text[i];
     i++;
   }
 

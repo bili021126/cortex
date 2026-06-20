@@ -163,7 +163,7 @@ export class DecisionGateBridge {
       { key: "timedOut", value: String(result.timedOut ?? false) },
     ]);
 
-    console.log(
+    process.stderr.write(
       `[DecisionGateBridge] 决策结果: ${result.requestId} → ${result.approved ? "批准" : "拒绝"}` +
       (result.timedOut ? " (超时)" : ""),
     );

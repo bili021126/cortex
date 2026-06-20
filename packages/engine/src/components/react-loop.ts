@@ -2,7 +2,8 @@
 // @role ReAct 循环——共享执行引擎
 
 /* eslint-disable no-console */
-import type { TaskNode, NodeResult, AgentType, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
+import type { TaskNode, NodeResult, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
+import { AgentType } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
@@ -119,7 +120,7 @@ export async function runReActLoop(
       }
       const callStart = Date.now();
       // 🎯 硬核：code/fix/test/ops 类 Agent 首次 LLM 调用必须选 write_file
-      const forceWrite = (loops === 0 && ["code","fix","ops"].includes(agentType) && toolDefs.some(t => t.name === "write_file"))
+      const forceWrite = (loops === 0 && [AgentType.Code, AgentType.Fix, AgentType.Ops].includes(agentType as AgentType) && toolDefs.some(t => t.name === "write_file"))
         ? "write_file" : undefined;
       const res = await llm.chat(model, messages, toolDefs, node.reasoningEffort, forceWrite);
       const callElapsed = Date.now() - callStart;

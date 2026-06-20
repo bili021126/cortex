@@ -40,9 +40,9 @@ export async function initSkillSystem(
           const vr = externalSearch
             ? await verifySkillKnowledge(skill, memory as MemoryStore, "analysis-agent", { externalSearch })
             : await verifySkillKnowledge(skill, memory as MemoryStore, "analysis-agent");
-          console.log(`[bootstrapEngine] 知识验证: ${skill.name} verified=${vr.verified}`);
+          process.stderr.write(`[bootstrapEngine] 知识验证: ${skill.name} verified=${vr.verified}`);
           if (vr.externalResults && vr.externalResults.length > 0) {
-            console.log(`[bootstrapEngine] 外部佐证: ${vr.externalResults.length} 条 web_search 结果`);
+            process.stderr.write(`[bootstrapEngine] 外部佐证: ${vr.externalResults.length} 条 web_search 结果`);
           }
 
           const result = await crystallizeSkillToKnowledge(skill, memory as MemoryStore, {
@@ -51,7 +51,7 @@ export async function initSkillSystem(
           });
           if (result) {
             const tag = result.isUpdate ? "更新(v" + result.version + ")" : "新建";
-            console.log(`[bootstrapEngine] 技能结晶为知识: ${skill.name} ${tag} verified=${result.verified}`);
+            process.stderr.write(`[bootstrapEngine] 技能结晶为知识: ${skill.name} ${tag} verified=${result.verified}`);
           }
         } catch (e) {
           console.warn(
@@ -61,7 +61,7 @@ export async function initSkillSystem(
         }
       }
     }
-    console.log(`[bootstrapEngine] 技能状态变更: ${skill.name}(${skill.id}) ${oldStatus} → ${deriveStatus(skill.weight, skill.feedbackHistory)}`);
+    process.stderr.write(`[bootstrapEngine] 技能状态变更: ${skill.name}(${skill.id}) ${oldStatus} → ${deriveStatus(skill.weight, skill.feedbackHistory)}`);
   };
 
   // 将 onSkillStatusChange 挂到 registry 上（供 recordFeedback 等调用）
@@ -76,7 +76,7 @@ export async function initSkillSystem(
       const loadedSkills = await loadSkillsFromMemory(memory as MemoryStore);
       if (loadedSkills.length > 0) {
         skillRegistry.registerAll(loadedSkills);
-        console.log(
+        process.stderr.write(
           `[bootstrapEngine] 从记忆库恢复 ${loadedSkills.length} 个技能模板: ` +
           loadedSkills.map((s) => `${s.name}(${s.id})`).join(", "),
         );

@@ -11,7 +11,8 @@
  * 6. 非法流转不抛出（被 safeReporter 捕获）
  */
 import { describe, it, expect, vi } from "vitest";
-import { AgentStatus as AS } from "@cortex/shared";
+import { AgentStatus as AS, PipelineEventType } from "@cortex/shared";
+import type { ObservableEvent } from "@cortex/shared";
 import { StrategistAgent } from "@cortex/engine";
 
 /** Mock LlmAdapter */
@@ -73,5 +74,50 @@ describe("StrategistAgent（D1: PoolAwareState 复用）", () => {
     // 通过 shutdown 两次触发第二次到 Destroyed 的非法流转
     await agent.shutdown();
     expect(agent.status).toBe(AS.Destroyed);
+  });
+
+  it("onGovernanceEvent — ConstitutionViolation 输出到 stderr", async () => {
+    const agent = new StrategistAgent(createMockLlm());
+    await agent.wakeup();
+
+    let stderr = "";
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: any) => { stderr += chunk.toString(); return true; };
+
+    try {
+      const event: ObservableEvent = {
+        type: PipelineEventType.ConstitutionViolation,
+        priority: 2 as any,
+        payload: { rule: "§12", detail: "放下身段" },
+        timestamp: Date.now(),
+      };
+      agent.onGovernanceEvent(event);
+      expect(stderr).toContain("[Strategist]");
+      expect(stderr).toContain("宪法违规");
+    } finally {
+      process.stderr.write = origWrite;
+    }
+  });
+
+  it("onGovernanceEvent — 非 ConstitutionViolation 不输出", async () => {
+    const agent = new StrategistAgent(createMockLlm());
+    await agent.wakeup();
+
+    let stderr = "";
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk: any) => { stderr += chunk.toString(); return true; };
+
+    try {
+      const event: ObservableEvent = {
+        type: PipelineEventType.NodeFailed,
+        priority: 2 as any,
+        payload: { nodeId: "n1" },
+        timestamp: Date.now(),
+      };
+      agent.onGovernanceEvent(event);
+      expect(stderr).toBe("");
+    } finally {
+      process.stderr.write = origWrite;
+    }
   });
 });

@@ -307,6 +307,10 @@ export class PromptTemplateEngine {
       "g",
     );
 
+    // 模板变量长度保护：超过 5000 字符视为异常输入
+    if (template.length > 50000) {
+      return template.slice(0, 50000);
+    }
     return template.replace(variableRegex, (_match, expression: string) => {
       const trimmed = expression.trim();
 

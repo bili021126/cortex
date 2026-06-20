@@ -79,6 +79,7 @@ export class RoundRobinStrategy implements IScheduleStrategy {
     // 回退：轮转
     const available = this._availableAgents(agents);
     if (available.length === 0) return null;
+    if (available.length === 0) return null;
     const chosen = available[this._rrIndex % available.length];
     this._rrIndex++;
     return chosen;

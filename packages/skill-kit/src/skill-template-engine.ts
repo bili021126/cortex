@@ -275,6 +275,11 @@ export class SkillTemplateEngine {
         return undefined;
       }
 
+      // 原型链防护：禁止访问 __proto__ / constructor / prototype
+      if (part === "__proto__" || part === "constructor" || part === "prototype") {
+        return undefined;
+      }
+
       if (typeof current === "object" && part in (current as Record<string, unknown>)) {
         current = (current as Record<string, unknown>)[part];
       } else {

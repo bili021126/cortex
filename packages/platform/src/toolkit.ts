@@ -299,10 +299,18 @@ export class Toolkit {
     const ctx: ToolContext = {
       resolvePath: (filePath: string) => this._resolvePath(filePath),
       fs: this.fs,
-      workspaceRoot: this.workspaceRoot,
+      workspaceRoot: null as string | null,
       toolTimeouts: { ...this.config.toolTimeouts },
       searchWeb: (query, maxResults) => this._aggregator.search(query, maxResults),
     };
+
+    // 动态 getter：每次读取时实时获取 Toolkit 的 workspaceRoot
+    const self = this;
+    Object.defineProperty(ctx, 'workspaceRoot', {
+      get: function() { return self.workspaceRoot; },
+      enumerable: true,
+      configurable: false,
+    });
 
     this.tools.set("read_file", createReadFile(ctx));
     this.tools.set("write_file", createWriteFile(ctx));

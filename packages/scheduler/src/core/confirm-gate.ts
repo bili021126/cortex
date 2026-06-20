@@ -29,6 +29,8 @@ export class ConfirmGate {
   private rejecters = new Map<string, (reason: Error) => void>();
   private bridge?: PlatformBridge;
   private _bypass = false;
+  private _bypassExpiresAt = 0;
+  private static readonly BYPASS_TTL_MS = 300_000; // 5 分钟
   private trustModel?: ITrustModel;
   private defaultTimeoutMs: number;
 
@@ -47,12 +49,13 @@ export class ConfirmGate {
     }
   }
 
-  /** 测试模式：跳过所有确认，直接放行。生产过程调用将抛错。 */
+  /** 测试模式：跳过所有确认，5 分钟后自动过期。生产过程调用将抛错。 */
   bypassAll(): void {
     if (process.env[ENV_NODE_ENV] === "production") {
       throw new Error("ConfirmGate.bypassAll() called in production — forbidden. Use setBridge() for real user interaction.");
     }
     this._bypass = true;
+    this._bypassExpiresAt = Date.now() + ConfirmGate.BYPASS_TTL_MS;
   }
 
   /**
@@ -69,7 +72,8 @@ export class ConfirmGate {
     level: ReversibilityLevel,
     trustContext?: { agentType: AgentType; toolName: string },
   ): boolean {
-    if (this._bypass) return false;
+    if (this._bypass && Date.now() < this._bypassExpiresAt) return false;
+    if (this._bypass) this._bypass = false; // 过期后自动关闭
 
     // L0 永不确认
     if (level === RL.L0) return false;

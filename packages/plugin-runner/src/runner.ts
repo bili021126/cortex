@@ -135,9 +135,9 @@ export class PluginRunner {
       };
     }
 
-    // 1-b. Schema 配置校验（无 schema 时静默通过）
-    const defaultConfig: PluginConfig = { enabled: true };
-    const configResult = this._validator.validateConfig(name, defaultConfig);
+    // 1-b. Schema 配置校验（使用插件配置，无配置时回退默认值）
+    const config = (plugin as any).config ?? { enabled: true };
+    const configResult = this._validator.validateConfig(name, config);
     if (!configResult.valid) {
       return {
         success: false,
@@ -164,7 +164,7 @@ export class PluginRunner {
 
     try {
       // 2-a. 初始化插件
-      await plugin.init(defaultConfig);
+      await plugin.init(config);
       this._updateStatus(name, "initialized");
 
       // 2-b. 超时执行
@@ -175,7 +175,10 @@ export class PluginRunner {
       const output = ctx.output as T | undefined;
 
       // 2-d. 销毁插件（清理内部资源）
-      await plugin.destroy();
+      await Promise.race([
+        plugin.destroy(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("destroy timeout")), 5000)),
+      ]);
 
       // ──── 阶段③: 收尾 ────
       this._updateStatus(name, "destroyed");

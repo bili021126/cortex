@@ -1,7 +1,7 @@
 import type { IFileSystemAdapter, DirectoryEntry } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { execSync, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 /**
  * NodeFileSystemAdapter —— IFileSystemAdapter 的 Node.js 实现。
@@ -53,11 +53,16 @@ export class NodeFileSystemAdapter implements IFileSystemAdapter {
   }
 
   async execCommand(command: string, options?: { cwd?: string; timeout?: number }): Promise<string> {
-    return execSync(command, {
+    // 明确指定 shell 防止隐式 shell 选择带来的注入风险
+    const isWin = process.platform === "win32";
+    const shell = isWin ? "cmd.exe" : "/bin/sh";
+    const shellArgs = isWin ? ["/c", command] : ["-c", command];
+    const timeout = options?.timeout ?? 60_000;
+    return execFileSync(shell, shellArgs, {
       cwd: options?.cwd,
       encoding: "utf-8",
-      timeout: options?.timeout ?? 60_000,
-      maxBuffer: 5 * 1024 * 1024, // 5MB
+      timeout,
+      maxBuffer: 5 * 1024 * 1024,
     });
   }
 

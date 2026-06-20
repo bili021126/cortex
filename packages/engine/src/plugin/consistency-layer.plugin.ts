@@ -51,7 +51,7 @@ export class ConsistencyLayerPlugin implements EnginePlugin {
             report.checkedMemories > 0
               ? report.summary.missing / report.checkedMemories
               : 0;
-          console.log(
+          process.stderr.write(
             `[ConsistencyLayer] 启动校验完成——总数 ${report.totalMemories}，` +
               `缺失 ${report.summary.missing}（${(missingRatio * 100).toFixed(1)}%），` +
               `致命: ${report.fatal ? "是" : "否"}`,

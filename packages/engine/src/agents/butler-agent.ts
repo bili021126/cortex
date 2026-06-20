@@ -167,7 +167,7 @@ export class ButlerAgent {
     if (this.bridge) {
       this.bridge.notify(msg);
     } else {
-      console.log(`[${tag}] ${msg}`);
+      process.stderr.write(`[${tag}] ${msg}`);
     }
   }
 
