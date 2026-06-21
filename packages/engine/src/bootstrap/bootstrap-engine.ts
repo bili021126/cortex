@@ -25,6 +25,7 @@ import { GovernanceEventEmitter } from "../core/governance-events.js";
 import { DecisionGateBridge } from "../core/decision-gate-bridge.js";
 import { resilienceFactory } from "../core/resilience-integration.js";
 import { NotificationRuntime } from "../core/notification-runtime.js";
+import { ZeroTokenValidator } from "../core/zero-token-validator.js";
 import { NotificationPipe } from "@cortex/notification";
 import type { IModelRouter } from "@cortex/scheduler";
 // 集中注册：触发全部插件注册至 PluginLoader
@@ -244,8 +245,10 @@ export async function bootstrapEngine(
   // §6.2.4 NotificationRuntime —— PipelineObserver → NotificationPipe 桥接
   // @layer 治理层→治理层：PipelineObserver → NotificationPipe 桥接
   const notificationPipe = new NotificationPipe();
+  const govValidator = new ZeroTokenValidator();
   const notificationRuntime = new NotificationRuntime(observer, notificationPipe, {
     enableTelemetry: true,
+    governanceValidator: govValidator,
   });
   notificationRuntime.start();
 

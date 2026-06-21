@@ -24,6 +24,7 @@ import {
   type NotificationSemantics,
 } from "@cortex/notification";
 import { recordTelemetry } from "@cortex/telemetry";
+import type { ZeroTokenValidator } from "./zero-token-validator.js";
 
 /**
  * 通知运行时配置。
@@ -33,6 +34,8 @@ export interface NotificationRuntimeOptions {
   eventSemantics?: Partial<Record<PipelineEventType | string, NotificationSemantics>>;
   /** 是否启用遥测，默认 true */
   enableTelemetry?: boolean;
+  /** 零 token 校验器——用于对治理事件标记来源并降级 llm-inference 通知 */
+  governanceValidator?: ZeroTokenValidator;
 }
 
 /**
@@ -100,11 +103,39 @@ export class NotificationRuntime {
     this.observer.off(PipelinePriority.NORMAL, this._handler);
   }
 
+  /** 治理事件类型列表 */
+  private static readonly GOVERNANCE_EVENT_TYPES = [
+    PipelineEventType.ConstitutionViolation,
+    PipelineEventType.GovernanceAmendmentProposed,
+    PipelineEventType.GovernanceAuditReport,
+    PipelineEventType.GovernanceComplianceViolation,
+    PipelineEventType.GovernanceRoundtableConsensus,
+  ];
+
   /**
    * 处理事件——转换为通知并发送到 NotificationPipe。
+   *
+   * llm-inference 来源的治理事件自动降级语义：
+   *   DECISION_REQUIRED → WARNING
+   *   WARNING → FYI
    */
+  /** 治理事件走零 token 规则验证——llm-inference 来源降级语义 */
+  private _downgradeIfLlmInference(event: ObservableEvent, semantics: NotificationSemantics): NotificationSemantics {
+    if (!this.options.governanceValidator) return semantics;
+    if (!NotificationRuntime.GOVERNANCE_EVENT_TYPES.includes(event.type)) return semantics;
+
+    const result = this.options.governanceValidator.validate(event, { workspaceRoot: process.cwd() });
+    if (result.source === "llm-inference") {
+      // 降级：DECISION_REQUIRED → WARNING, WARNING → FYI
+      if (semantics === "DECISION_REQUIRED") return "WARNING";
+      if (semantics === "WARNING") return "FYI";
+    }
+    return semantics;
+  }
+
   private _handleEvent(event: ObservableEvent): void {
-    const semantics = this._resolveSemantics(event.type as string);
+    const rawSemantics = this._resolveSemantics(event.type as string);
+    const semantics = this._downgradeIfLlmInference(event, rawSemantics);
     const notification = this._eventToNotification(event, semantics);
 
     if (!notification) return;
