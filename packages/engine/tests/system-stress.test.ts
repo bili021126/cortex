@@ -17,7 +17,7 @@ import { Toolkit } from "@cortex/platform";
 import { MemoryStore, type IEmbeddingService } from "@cortex/memory-store";
 import { InMemoryMemoryStore } from "@cortex/memory";
 import { LlmAdapter } from "@cortex/llm";
-import type { EngineConfig } from "@cortex/engine";
+import type { EngineConfig } from "@cortex/config";
 ;
 
 /** 短超时配置，防止死循环耗尽 CI 时间 */

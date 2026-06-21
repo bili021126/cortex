@@ -5,6 +5,7 @@
     "rootDir": "./src"
   },
   "include": ["src"],
+  "exclude": ["dist"],
   "references": [
     { "path": "../engine/tsconfig.src.json" }
   ]

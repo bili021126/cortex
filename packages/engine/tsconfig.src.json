@@ -16,7 +16,7 @@
     { "path": "../shared" },
     { "path": "../skill-kit" },
     { "path": "../llm" },
-    { "path": "../plugin-runner" },
+    { "path": "../plugin-runner/tsconfig.src.json" },
     { "path": "../telemetry" },
     { "path": "../memory" }
   ]
