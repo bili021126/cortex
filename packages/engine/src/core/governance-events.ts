@@ -18,6 +18,7 @@
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 import { GOVERNANCE_EVENT_ROUTING } from "@cortex/config";
 import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
+import { HardVerificationGate, emitGateRejection } from "./hard-verification-gate.js";
 
 /**
  * 治理事件类型——映射到 PipelineEventType 枚举值。
@@ -55,9 +56,10 @@ export interface GovernanceEventPayload {
  *   ```
  */
 export class GovernanceEventEmitter {
+  private readonly _gate = new HardVerificationGate();
+
   constructor(
     private readonly observer: IPipelineObserver,
-    /** 策略上下文注入——emit 时自动附加当前可用策略信息 */
     private readonly _strategyRegistry?: LoopStrategyRegistry,
   ) {}
 
@@ -106,6 +108,14 @@ export class GovernanceEventEmitter {
    */
   private _emit(type: GovernanceEventType, payload: GovernanceEventPayload): void {
     const routing = GOVERNANCE_EVENT_ROUTING[type];
+
+    // 硬验证门预检
+    const gateResult = this._gate.check(payload);
+    if (!gateResult.passed) {
+      emitGateRejection(this.observer, payload, gateResult);
+      return;
+    }
+
     const enrichedPayload = this._strategyRegistry
       ? { ...payload, strategyContext: this._strategyRegistry.getAdvisorContext() }
       : payload;
