@@ -30,6 +30,9 @@ import { LlmAdapter } from "@cortex/llm";
 import {
   TaskBoard,
   AgentPool,
+  PipelineObserver,
+  ConfirmGate} from "@cortex/scheduler";
+import {
   createAgent,
   codeAgentConfig,
   reviewAgentConfig,
@@ -42,8 +45,6 @@ import {
   apiAgentConfig,
   dataAgentConfig,
   Scheduler,
-  PipelineObserver,
-  ConfirmGate,
   ButlerAgent,
   MetaAgent,
   StrategistAgent} from "@cortex/engine";

@@ -23,9 +23,30 @@ export function createTool(ctx: ToolContext): Tool {
     },
     RL.L0,
     async (params) => {
-      const dirPath = params.dir_path
-        ? ctx.resolvePath(params.dir_path as string)
-        : (ctx.workspaceRoot ?? ctx.fs.cwd());
+      let dirPath: string;
+      if (params.dir_path) {
+        const given = params.dir_path as string;
+        // 先尝试沙箱解析
+        try {
+          dirPath = ctx.resolvePath(given);
+        } catch {
+          // 沙箱拦截——回退到 workspaceRoot 相对路径
+          if (ctx.workspaceRoot) {
+            const relative = given.replace(/^[\/]+/, "").replace(/^[A-Z]:[\/\\]/, "");
+            dirPath = ctx.resolvePath(relative);
+          } else {
+            dirPath = given;
+          }
+        }
+        // 如果路径不存在但 workspaceRoot 已知，尝试相对解析
+        if (!(await ctx.fs.exists(dirPath)) && ctx.workspaceRoot) {
+          const relative = given.replace(/^[\/]+/, "").replace(/^[A-Z]:[\/\\]/, "");
+          const altPath = await ctx.fs.resolve(relative);
+          if (await ctx.fs.exists(altPath)) dirPath = altPath;
+        }
+      } else {
+        dirPath = ctx.workspaceRoot ?? ctx.fs.cwd();
+      }
       try {
         const exists = await ctx.fs.exists(dirPath);
         if (!exists) {

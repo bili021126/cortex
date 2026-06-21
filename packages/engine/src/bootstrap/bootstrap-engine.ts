@@ -35,6 +35,9 @@ import type { Toolkit } from "@cortex/platform";
 import { preloadModel } from "@cortex/memory-store";
 import { LoggingPipelineBridge, createLogger, addTransport } from "@cortex/logging";
 import type { LlmAdapter } from "@cortex/llm";
+import { LlmAdapter as LlmAdapterValue } from "@cortex/llm";
+import { WorkerPool } from "../core/worker-pool.js";
+import * as os from "node:os";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type ReadMode, type TaskNode } from "@cortex/shared";
 import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync } from "node:fs";
@@ -313,6 +316,11 @@ export async function bootstrapEngine(
     });
   });
 
+  // §9.5 WorkerPool —— CPU 密集型操作（JSON 解析）走独立线程
+  //        解除对主事件循环的阻塞，防止 Agent 排队超时永不触发
+  const workerPool = new WorkerPool({ maxWorkers: Math.max(1, os.cpus().length - 1) });
+  LlmAdapterValue.setWorkerPool(workerPool);
+
   // §10 组装返回
   return {
     scheduler,
@@ -340,6 +348,8 @@ export async function bootstrapEngine(
     shutdown: async () => {
       // 先优雅关闭 ILifecycle 组件
       await lifecycleManager.shutdown();
+      // WorkerPool —— 终止所有 worker 线程
+      workerPool.shutdown();
       // 再关闭插件容器（反向顺序 stop 各插件）
       await container.shutdown();
       // 最后卸载 ConsoleBridge，恢复原始 console

@@ -45,6 +45,14 @@ export class LlmAdapter {
   private static _auditQueue: string[] = [];
   private static _auditDraining = false;
 
+  /** WorkerPool —— CPU 密集型 JSON 解析走独立线程，不阻塞主事件循环 */
+  private static _workerPool: { parseJson<T = unknown>(text: string, timeout?: number): Promise<T> } | null = null;
+
+  /** 注入 WorkerPool（由 bootstrap 调用） */
+  static setWorkerPool(pool: { parseJson<T = unknown>(text: string, timeout?: number): Promise<T> }): void {
+    LlmAdapter._workerPool = pool;
+  }
+
   /** 启用 API 调用审计日志。日志写入 .cortex/logs/api-calls.jsonl */
   static enableAudit(logDir?: string): void {
     LlmAdapter._auditEnabled = true;
@@ -279,7 +287,9 @@ export class LlmAdapter {
             throw new Error(`LLM API error ${res.status}: ${errText}`);
           }
 
-          const json = (await res.json()) as {
+          // WorkerPool 模式：对大响应体（>10KB）走独立线程解析 JSON，
+          // 避免 V8 JSON.parse 阻塞主事件循环导致其他 Agent 的超时无法触发
+          let json: {
             choices: Array<{
               message: {
                 content: string | null;
@@ -296,6 +306,14 @@ export class LlmAdapter {
               total_tokens: number;
             };
           };
+          const pool = LlmAdapter._workerPool;
+          const cl = Number(res.headers.get("content-length") ?? "0");
+          if (pool && cl > 10_000) {
+            const rawText = await res.text();
+            json = await pool.parseJson<typeof json>(rawText, 30_000);
+          } else {
+            json = (await res.json()) as typeof json;
+          }
 
           const msg = json.choices[0]?.message;
           if (!msg) throw new Error("LLM returned no choices");

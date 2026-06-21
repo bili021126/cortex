@@ -12,6 +12,7 @@ import { PipelinePriority } from "@cortex/shared";
 import { bootstrapEngine, type BootstrapEngineResult } from "@cortex/engine";
 import { e2eBootstrap, log } from "./e2e-utils.js";
 import { setAgentToolPermissions } from "@cortex/shared";
+import { PanoramaTracker } from "./panorama-tracker.js";
 
 // ── 全工具开放 ──────────────────────────────
 const TOOLS = ["read_file","write_file","search_code","list_files","run_shell","web_search","delete_file","parse_ast"];
@@ -46,7 +47,7 @@ function verify(pkgDir: string) {
 }
 
 // ── 已知包名（排除）─────────────────────────
-const KNOWN = new Set("cache|cli|config|consistency|data|doctor|engine|factory|fsm-compiler|governance|llm|memory|memory-store|notification|parser|pattern-extractor|platform|plugin-runner|pm|policy-validator|prompt-kit|resilience|scheduler|shared|skill-kit|skill-validator|src|telemetry|test-output|testing|tests|tools|tui".split("|"));
+const KNOWN = new Set("cache|cli|config|consistency|context|data|doctor|engine|factory|fsm-compiler|governance|llm|logging|memory|memory-store|notification|parser|pattern-extractor|platform|plugin-runner|pm|policy-validator|prompt-kit|resilience|scheduler|self-examination|shared|skill-kit|skill-validator|src|telemetry|test-output|testing|tests|tools|tui".split("|"));
 
 // ── 主流程 ──────────────────────────────────
 async function main() {
@@ -56,6 +57,10 @@ async function main() {
   log("╔══════════════════════════════════╗");
   log("║  🕊️  Solo Flight  全系统闭环    ║");
   log("╚══════════════════════════════════╝\n");
+
+  // ── 全景追踪器 ──
+  const tracker = new PanoramaTracker({ logToStderr: true });
+  tracker.phase("S0", "启动");
 
   // ── S1 Bootstrap ──────────────────────────
   log("S1 Bootstrap");
@@ -68,6 +73,7 @@ async function main() {
   ));
   try { (toolkit as any).gate?.bypassAll?.(); log("  ✅ ConfirmGate 已绕过"); } catch { log("  ⚠️ ConfirmGate bypass 失败"); }
   log(`  ${10} 组件就绪 | ${fs.readdirSync(P).filter(d => !d.startsWith(".") && fs.statSync(path.join(P,d)).isDirectory()).length} 个已有包\n`);
+  tracker.phaseEnd("S0");
 
   // ── S2 组件健康 ──────────────────────────
   const diag = { MetaAgent: !!engine.metaAgent, Scheduler: !!engine.scheduler, Observer: !!engine.observer, TaskRouter: !!engine.taskRouter, Sentinel: !!engine.sentinelFilter, NotifyRuntime: !!engine.notificationRuntime, DecisionBridge: !!engine.decisionBridge, GovEmitter: !!engine.governanceEmitter, EnvRouter: !!engine.envRouter, MemoryStore: !!engine.memory, SkillRegistry: !!engine.skillRegistry };
@@ -86,15 +92,128 @@ async function main() {
     const skills = (engine.skillRegistry as any).getAll?.() ?? [];
     log(`  技能: ${(engine.skillRegistry as any).activeCount ?? skills.length} 活跃 | ${skills.length} 总数`);
   }
+
+  // Agent 注册清单
+  log("  ── Agent 注册 ──");
+  if (engine.agents) {
+    for (const [type, agent] of engine.agents) {
+      const max = (engine as any).pool?.configs?.get?.(type)?.maxInstances ?? "?";
+      log(`    ${type.padEnd(14)} max=${max}`);
+    }
+  }
+
+  // 并发上限设为 6——防止节流阻塞但限制实例爆炸
+  for (const augType of ["code","review","analysis","ops","inspector","doc-govern","loop","api","data"]) {
+    try { (engine as any).pool?.setMaxInstances?.(augType, 6); } catch {}
+  }
+  log("  ✅ Agent 并发上限 → 6");
+
+  // 工具注册清单
+  log("  ── 工具注册 ──");
+  try {
+    const defs = (toolkit as any).listDefinitions?.("code") ?? [];
+    const names = defs.map((d: any) => d.name ?? d);
+    log(`    ${names.length} 工具: ${names.slice(0, 15).join(", ")}${names.length > 15 ? " ..." : ""}`);
+  } catch { log("    工具清单不可用"); }
   log("");
 
-  // ── S3 事件收集 ──────────────────────────
+  // ── S3 事件收集 + 实时日志 + ReactLoop 追踪 ──
   const events: string[] = [];
+  let apiCallCount = 0;
+  let toolCallCount = 0;
+  let replanCount = 0;
+  let reactLoopCount = 0;
   engine.observer.on(PipelinePriority.HIGH, (e: any) => {
     const t = e.type ?? "";
     events.push(t);
-    log(`  📡 ${t}`);
+    const payload = e.payload as any;
+    const nodeId = payload?.nodeId ?? "";
+    const agentType = payload?.agentType ?? "";
+    const ts = new Date().toISOString().slice(11, 23);
+
+    // 全景追踪
+    tracker.onEvent(e);
+    if (t.includes("node.")) {
+      if (t.includes("claimed")) {
+        tracker.nodeClaimed(nodeId, agentType, payload?.type ?? "");
+      } else if (t.includes("started")) {
+        tracker.nodeStarted(nodeId);
+      } else if (t.includes("completed")) {
+        tracker.nodeCompleted(nodeId, true, payload?.output, "");
+      } else if (t.includes("failed")) {
+        tracker.nodeCompleted(nodeId, false, "", payload?.error);
+      } else if (t.includes("replan")) {
+        tracker.nodeReplanned(nodeId);
+      }
+    } else if (t.includes("tool.")) {
+      if (t.includes("started")) {
+        tracker.toolStarted(agentType, nodeId, payload?.toolName ?? "", payload?.params ?? {});
+      } else if (t.includes("completed") || t.includes("failed")) {
+        tracker.toolEnded(t.includes("completed"));
+      }
+    }
+      if (t.includes("completed") || t.includes("failed")) {
+        log(`[${ts}] ${t.includes("completed") ? "✅" : "❌"} [${agentType}] ${nodeId}`);
+      } else if (t.includes("started")) {
+        log(`[${ts}] ▶ [${agentType}] ${nodeId}`);
+      } else if (t.includes("claimed")) {
+        log(`[${ts}] 👤 [${agentType}] ${nodeId}`);
+      } else if (t.includes("replan")) {
+        replanCount++;
+        log(`[${ts}] 🔄 重规划 ${nodeId}`);
+      }
+    } else if (t.includes("governance") || t.includes("constitution")) {
+      log(`[${ts}] 🏛 ${t}`);
+    } else if (t.includes("llm") || t.includes("api")) {
+      apiCallCount++;
+    } else if (t.includes("tool.")) {
+      toolCallCount++;
+      if (t.includes("completed")) {
+        log(`[${ts}] 🔧 [${agentType}] ${payload?.toolName ?? ""} 完成`);
+      }
+    } else if (t.includes("rlm.") || t.includes("react")) {
+      reactLoopCount++;
+      log(`[${ts}] 🔁 ReactLoop ${t}  node:${nodeId}`);
+    } else if (t.includes("memory.write") || t.includes("memory.link")) {
+      log(`[${ts}] 💾 ${t} [${nodeId}]`);
+    } else if (t.includes("scheduler") || t.includes("agent_pool")) {
+      log(`[${ts}] ⚙ ${t}`);
+    } else if (t.includes("context.compress") || t.includes("context.")) {
+      log(`[${ts}] 📐 ${t}  node:${nodeId}`);
+    }
   });
+
+  // 15s 心跳 + claimed 超时兜底
+  let totalReactLoop = 0;
+  let totalReplans = 0;
+  const claimedAt = new Map<string, number>();
+  const heartbeat = setInterval(() => {
+    const allNodes = engine.board.getAllNodes() ?? [];
+    const nc = allNodes.length;
+    const pending = allNodes.filter((n: any) => n.status === "pending").length;
+    const claimed = allNodes.filter((n: any) => n.status === "claimed").length;
+    const running = allNodes.filter((n: any) => n.status === "running" || n.status === "in_progress").length;
+    const done = allNodes.filter((n: any) => n.status === "done").length;
+    const failed = allNodes.filter((n: any) => n.status === "failed").length;
+    // 兜底：认领超 90s 强制释放
+    const now = Date.now();
+    for (const n of allNodes) {
+      if (n.status === "claimed") {
+        if (!claimedAt.has(n.id)) claimedAt.set(n.id, now);
+        if (now - (claimedAt.get(n.id) ?? now) > 90_000) {
+          log(`[${new Date().toISOString().slice(11, 19)}] ⛔ ${n.id} 认领超时 强制释放`);
+          try { engine.board.release(n.id, (Array.isArray(n.claimedBy) ? n.claimedBy[0] : n.claimedBy) ?? ""); } catch {}
+          try { engine.board.failNode(n.id); } catch {}
+          claimedAt.delete(n.id);
+        }
+      } else { claimedAt.delete(n.id); }
+    }
+    const ts = new Date().toISOString().slice(11, 19);
+    totalReactLoop += reactLoopCount;
+    totalReplans += replanCount;
+    log(`[${ts}] ⏳ 节点:${nc} (待:${pending} 认领:${claimed} 运行:${running} 完成:${done} 失败:${failed}) | API:${apiCallCount} 工具:${toolCallCount} ReAct:${reactLoopCount}(累计${totalReactLoop}) 重规划:${replanCount}(累计${totalReplans})`);
+    apiCallCount = 0; toolCallCount = 0; reactLoopCount = 0; replanCount = 0;
+  }, 15_000);
 
   // ── S4 自主决策 + 规划 ──────────────────
   if (!engine.metaAgent) { log("❌ no MetaAgent"); await engine.shutdown(); return; }
@@ -124,22 +243,57 @@ async function main() {
   } catch { /* 搜索不可用 */ }
   
   const ctx = [
-    `母项目 Cortex——TypeScript monorepo, ${pkgDirs.length} 个包:`,
+    "=== 关于母项目（Cortex）===",
+    "",
+    `Cortex —— TypeScript monorepo, ${pkgDirs.length} 个包:`,
     pkgInfo,
     scan.length > 0 ? `\n非标准包: ${scan.join(", ")}` : "",
     "",
     webCtx,
     "",
+    "=== 你的任务 ===",
+    "",
     intent
       ? `指定意图: ${intent}`
-      : "自主分析 gaps，决定建造哪个包。",
+      : [
+          "在母项目 monorepo 中建造一个**有价值的、可独立编译测试的 TypeScript 包**。",
+          "",
+          "自主决策造什么——基于上述已有包结构和母项目定位：",
+          "  1. 哪些包已经存在？它们各自做什么？",
+          "  2. 还缺什么？有什么明显需要但还没做的？",
+        ].join("\n"),
     "",
-    "自由分配 Agent 类型和节点数量——根据任务复杂度和已有包结构自行决定。",
-    "编码铁律: 禁止 any/非空断言/空catch/var/魔法数字。JSDoc 全覆盖。",
+    "=== 强制要求 ===",
+    "",
+    "1. 【核心交付】包必须包含：",
+    "   - src/index.ts（公开 API，barrel 导出）",
+    "   - src/ 下至少一个功能模块",
+    "   - tests/ 下至少一个单元测试文件",
+    "2. 【CI 标注】每个测试文件首行 `// @ci: unit`",
+    "3. 【编译通过】`npx tsc --noEmit` 零错误",
+    "4. 【测试通过】`npx vitest run` 全部通过",
+    "5. 【编码规范】禁止 any/非空断言/空catch/var/魔法数字。JSDoc 全覆盖。",
+    "6. 【补足声明】创建 PACKAGE_POSITIONING.md，回答三个问题：",
+    "   - 这个包补足了什么？",
+    "   - 它的定位是什么？",
+    "   - 为什么值得合入？",
+    "7. 【模块化注册】包名 @cortex/<name>，依赖声明用 workspace:*",
+    "",
+    "=== 路径规则 ===",
+    "所有文件写在本目录内——不要嵌套多层：",
+    "- ✅ src/index.ts（正确——扁平结构）",
+    "- ❌ packages/xxx/src/index.ts（错误——不要嵌套）",
+    "- ❌ src/cortex/xxx/（错误——不要复制母目录树）",
+    "",
+    "=== 团队 ===",
+    "CodeAgent(阿贝多) ReviewAgent(刻晴) AnalysisAgent(纳西妲) OpsAgent(北斗)",
+    "LoopAgent(莫娜) DocGovernAgent(凝光) ApiAgent(久岐忍) DataAgent(艾尔海森)",
+    "",
     "必须 write_file——输出文本不算完成。tsc 零错, vitest 全过。",
   ].join("\n");
   
   log("S4 甘雨规划" + (webCtx ? " (含联网搜索)" : ""));
+  tracker.phase("S4", "甘雨规划");
   const planT0 = Date.now();
   const nodes = await engine.metaAgent.plan(ctx);
   const planMs = Date.now() - planT0;
@@ -152,7 +306,18 @@ async function main() {
   log(`  规划耗时: ${(planMs/1000).toFixed(1)}s`);
   const types = [...new Set(nodes.map(n => String(n.type)))];
   log(`  ${nodes.length} 节点 | ${types.length} 种 Agent | ${types.join(",")}`);
-  for (const n of nodes) log(`    [${n.type}] ${(n as any).payload?.slice(0, 80)}`);
+
+  // 拓扑结构可视化
+  const roots = nodes.filter(n => !n.parentId);
+  const nonRoots = nodes.filter(n => n.parentId);
+  log(`  🌳 拓扑: ${roots.length} 根节点, ${nonRoots.length} 子节点`);
+  for (const n of nodes) {
+    const parent = n.parentId ? ` ← parent:${n.parentId.slice(-20)}` : " ← root";
+    const deps = (n as any).dependsOn;
+    const depStr = deps?.length ? `  依赖:[${deps.map((d:any)=>d.slice(-12)).join(",")}]` : "";
+    log(`    [${n.type.padEnd(14)}] ${n.id.slice(-24)}${parent}${depStr}`);
+    log(`       ${(n as any).payload?.slice(0, 100)}`);
+  }
   if (!nodes.length) { log("⚠️ 空计划"); await engine.shutdown(); return; }
   log("");
 
@@ -161,12 +326,15 @@ async function main() {
   const t0 = Date.now();
   for (const n of nodes) engine.board.addNode(n);
   const report = await engine.scheduler.executeAll();
+  clearInterval(heartbeat);
   const elapsed = Date.now() - t0;
 
   let pass = 0, fail = 0;
   for (const r of report.results) {
     if (r.success) pass++; else fail++;
-    log(`  ${r.success ? "✅" : "❌"} [${r.agentType}] ${(r.output ?? r.error ?? "").slice(0, 100)}`);
+    const summary = (r.output ?? r.error ?? "").slice(0, 100);
+    const ms = (r as any).durationMs;
+    log(`  ${r.success ? "✅" : "❌"} [${r.agentType}] ${r.nodeId?.slice(-16)} ${ms ? (ms/1000).toFixed(1)+"s" : ""} ${summary}`);
   }
   log(`  ${(elapsed / 1000).toFixed(1)}s | ${pass}/${nodes.length} pass\n`);
 
@@ -219,6 +387,7 @@ async function main() {
   log(`  记忆: PersistFail:${memPersist} WriteBlock:${memBlocked} DbFail:${memDbFailed} FlushSkip:${memFlushSkip}`);
   log(`  技能: Referenced:${skillRef}`);
   log(`  扩展: Manifold:${mfgEvents} RLM:${rlmDecompose} Compress:${contextCompress} Replan:${replanEvents}`);
+  log(`  循环: ReAct累计${totalReactLoop}  重规划累计${totalReplans}  Claimed超时释放${claimedAt.size}`);
   log(`  新包: ${newPkg ?? "(无)"}`);
   if (vrfy) log(`  结构: ${vrfy.barrel&&vrfy.pkgJson&&vrfy.tests>0&&vrfy.ciTags>0&&vrfy.positioning?"✅":"❌"}`);
   if (vrfy) log(`  编译: ${vrfy.compile?"✅":"❌"}  测试: ${vrfy.test?"✅":"❌"}`);

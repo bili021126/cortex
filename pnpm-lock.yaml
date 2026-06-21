@@ -157,6 +157,21 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
+  packages/context-window:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      eslint:
+        specifier: ^10.4.1
+        version: 10.4.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
   packages/doctor:
     dependencies:
       '@cortex/shared':
@@ -266,6 +281,25 @@ importers:
       tree-sitter-typescript:
         specifier: ^0.23.2
         version: 0.23.2(tree-sitter@0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau))
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/event-bus:
+    dependencies:
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      eslint:
+        specifier: ^10.4.1
+        version: 10.4.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -563,6 +597,30 @@ importers:
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
+
+  packages/self-examination:
+    dependencies:
+      '@cortex/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@cortex/governance':
+        specifier: workspace:*
+        version: link:../governance
+      '@cortex/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@cortex/memory-store':
+        specifier: workspace:*
+        version: link:../memory-store
+      '@cortex/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@cortex/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
 
   packages/shared:
     devDependencies:
