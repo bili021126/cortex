@@ -221,7 +221,7 @@ describe("ExponentialBackoff", () => {
       const retry = new ExponentialBackoff({
         maxAttempts: 3,
         baseDelayMs: 1000,
-        retryableErrors: [NetworkError],
+        retryableErrors: [NetworkError as unknown as new (...args: unknown[]) => Error],
       });
       expect(retry.shouldRetry(1, new NetworkError("timeout"))).toBe(true);
       expect(retry.shouldRetry(1, new DatabaseError("down"))).toBe(false);
@@ -232,7 +232,7 @@ describe("ExponentialBackoff", () => {
       const retry = new ExponentialBackoff({
         maxAttempts: 3,
         baseDelayMs: 1000,
-        retryableErrors: [Error],
+        retryableErrors: [Error as unknown as new (...args: unknown[]) => Error],
       });
       expect(retry.shouldRetry(1, undefined)).toBe(false);
       expect(retry.shouldRetry(1, null)).toBe(false);
@@ -244,7 +244,7 @@ describe("ExponentialBackoff", () => {
       const retry = new ExponentialBackoff({
         maxAttempts: 3,
         baseDelayMs: 1000,
-        retryableErrors: [TimeoutError, RateLimitError],
+        retryableErrors: [TimeoutError as unknown as new (...args: unknown[]) => Error, RateLimitError as unknown as new (...args: unknown[]) => Error],
       });
       expect(retry.shouldRetry(1, new TimeoutError())).toBe(true);
       expect(retry.shouldRetry(1, new RateLimitError())).toBe(true);
@@ -466,7 +466,7 @@ describe("FixedRetry", () => {
       const retry = new FixedRetry({
         maxAttempts: 5,
         delayMs: 1000,
-        retryableErrors: [RateLimitError],
+        retryableErrors: [RateLimitError as unknown as new (...args: unknown[]) => Error],
       });
       expect(retry.shouldRetry(1, new RateLimitError("too fast"))).toBe(true);
       expect(retry.shouldRetry(1, new OtherError("other"))).toBe(false);
@@ -478,7 +478,7 @@ describe("FixedRetry", () => {
       const retry = new FixedRetry({
         maxAttempts: 5,
         delayMs: 1000,
-        retryableErrors: [TimeoutError, NetworkError],
+        retryableErrors: [TimeoutError as unknown as new (...args: unknown[]) => Error, NetworkError as unknown as new (...args: unknown[]) => Error],
       });
       expect(retry.shouldRetry(1, new TimeoutError())).toBe(true);
       expect(retry.shouldRetry(1, new NetworkError())).toBe(true);
@@ -489,7 +489,7 @@ describe("FixedRetry", () => {
       const retry = new FixedRetry({
         maxAttempts: 5,
         delayMs: 1000,
-        retryableErrors: [Error],
+        retryableErrors: [Error as unknown as new (...args: unknown[]) => Error],
       });
       expect(retry.shouldRetry(1, null)).toBe(false);
       expect(retry.shouldRetry(2, undefined)).toBe(false);
@@ -535,7 +535,7 @@ describe("FixedRetry", () => {
       const retry = new FixedRetry({
         maxAttempts: 3,
         delayMs: 1000,
-        retryableErrors: [MyError],
+        retryableErrors: [MyError as unknown as new (...args: unknown[]) => Error],
       });
       expect(retry.toString()).toContain("MyError");
     });
@@ -546,7 +546,7 @@ describe("FixedRetry", () => {
       const retry = new FixedRetry({
         maxAttempts: 3,
         delayMs: 1000,
-        retryableErrors: [ErrA, ErrB],
+        retryableErrors: [ErrA as unknown as new (...args: unknown[]) => Error, ErrB as unknown as new (...args: unknown[]) => Error],
       });
       const str = retry.toString();
       expect(str).toContain("ErrA");
@@ -576,7 +576,7 @@ describe("FixedRetry", () => {
         maxAttempts: 5,
         delayMs: 2000,
         maxDelayMs: 10000,
-        retryableErrors: [CustomError],
+        retryableErrors: [CustomError as unknown as new (...args: unknown[]) => Error],
         shouldRetry: () => true,
       });
       const cloned = retry.clone();
@@ -590,7 +590,7 @@ describe("FixedRetry", () => {
       const retry = new FixedRetry({ maxAttempts: 3, delayMs: 1000 });
       const cloned = retry.clone();
       // 修改 clone 不影响原实例
-      (cloned as Record<string, unknown>).maxAttempts = 999; // 类型体操用于测试
+      (cloned as unknown as Record<string, unknown>).maxAttempts = 999; // 类型体操用于测试
       expect(retry.maxAttempts).toBe(3);
     });
   });

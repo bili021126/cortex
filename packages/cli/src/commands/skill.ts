@@ -111,11 +111,11 @@ function handleList(
   const tagsStr = options["tags"] as string | undefined;
 
   if (category) {
-    skills = skills.filter((s) => s.triggerTags.some((t) => t.toLowerCase() === category.toLowerCase()));
+    skills = skills.filter((s: SkillTemplate) => s.triggerTags.some((t: string) => t.toLowerCase() === category.toLowerCase()));
   }
   if (tagsStr) {
     const filterTags = tagsStr.split(",").map((t) => t.trim());
-    skills = skills.filter((s) => filterTags.some((t) => (s.triggerTags as readonly string[]).includes(t)));
+    skills = skills.filter((s: SkillTemplate) => filterTags.some((t: string) => (s.triggerTags as readonly string[]).includes(t)));
   }
 
   if (skills.length === 0) {
@@ -230,11 +230,11 @@ function handleUnregister(
   }
 
   if (!options["force"]) {
-    const dependents = registry.getAll().filter((s) => s.trigger.includes(skillId));
+    const dependents = registry.getAll().filter((s: SkillTemplate) => s.trigger.includes(skillId));
     if (dependents.length > 0) {
       return {
         success: false,
-        error: `技能「${skillId}」可能被引用: ${dependents.map((d) => d.id).join(", ")}。使用 --force 强制注销`,
+        error: `技能「${skillId}」可能被引用: ${dependents.map((d: SkillTemplate) => d.id).join(", ")}。使用 --force 强制注销`,
         exitCode: 1,
       };
     }

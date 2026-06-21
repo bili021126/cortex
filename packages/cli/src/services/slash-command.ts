@@ -13,7 +13,7 @@
 // @since Core-2
 // ============================================================
 
-import type { SkillRegistry } from "@cortex/engine";
+import type { SkillRegistry } from "@cortex/skill-kit";
 import type { SkillTemplate } from "@cortex/shared";
 
 /** 斜杠命令解析结果 */
@@ -104,6 +104,6 @@ export class SlashCommandParser {
    */
   listInvocable(): SkillTemplate[] {
     const all = this.skillRegistry.getAll();
-    return all.filter((s) => s.userInvocable !== false);
+    return all.filter((s: SkillTemplate) => s.userInvocable !== false);
   }
 }
