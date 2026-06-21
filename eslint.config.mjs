@@ -10,6 +10,7 @@ export default tseslint.config(
       "**/node_modules/",
       "**/tmp/",
       "**/test-output/",
+      "**/dist-test/",
       ".cortex/",
       "projects/",
       "**/coverage/",

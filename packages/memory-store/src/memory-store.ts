@@ -1,4 +1,3 @@
-import { MEMORY_VALID_TRANSITIONS } from "@cortex/shared";
 // ============================================================
 // @cortex/engine/memory/memory-store —— MemoryStore 适配器
 //
@@ -516,7 +515,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     const ok = this._backend.commitMemory(memoryId);
     if (ok) {
       // 异步 enrichment：embedding 生成 + dedup 缓存 + BM25 索引更新
-      this._enrichPendingEntry(memoryId);
+      void this._enrichPendingEntry(memoryId);
     }
     return ok;
   }

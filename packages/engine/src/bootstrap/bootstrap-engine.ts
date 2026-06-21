@@ -289,9 +289,9 @@ export async function bootstrapEngine(
   }
 
   // §7.1 StrategistAgent 订阅治理事件
-  const strategistHandlers: Array<(event:any)=>void> = [];
+  const strategistHandlers: Array<(event: ObservableEvent) => void> = [];
   for (const agent of strategists.values()) {
-    const handler = (event:any) => agent.onGovernanceEvent(event);
+    const handler = (event: ObservableEvent) => agent.onGovernanceEvent(event);
     observer.on(PipelinePriority.HIGH, handler);
     strategistHandlers.push(handler);
   }
