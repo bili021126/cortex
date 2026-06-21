@@ -109,6 +109,25 @@ export interface PluginContext {
  * PluginContainer —— PluginLoader.load() 的返回结果。
  * 封装了全部已加载插件的生命周期管理。
  */
+export interface PluginMeta {
+  name: string;
+  version?: string;
+  description?: string;
+  dependencies: string[];
+}
+
+export interface PluginConfig {
+  name: string;
+  enabled: boolean;
+  settings?: Record<string, unknown>;
+}
+
+export interface PluginHooks {
+  beforeInit?: () => Promise<void>;
+  afterInit?: () => Promise<void>;
+  beforeDestroy?: () => Promise<void>;
+}
+
 export interface PluginContainer {
   /** 按名称获取插件实例 */
   get<T>(name: string): T;
@@ -118,4 +137,41 @@ export interface PluginContainer {
 
   /** 逆序停止全部插件 */
   shutdown(): Promise<void>;
+}
+
+
+// ─── 执行上下文与结果类型（由 runner.ts 使用） ─────
+
+export interface ExecuteContext {
+  payload: unknown;
+  deps: Map<string, unknown>;
+  workDir: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+  output?: unknown;
+}
+
+export interface PluginResult<T = unknown> {
+  success: boolean;
+  output?: T;
+  error?: string;
+  durationMs: number;
+}
+
+export interface PluginStatus {
+  name: string;
+  phase: "idle" | "created" | "running" | "initialized" | "destroyed" | "error";
+  lastExecutedAt?: number;
+  executionCount: number;
+  failureCount: number;
+  lastError?: string;
+  healthy: boolean;
+}
+
+export interface ExecutionReport {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: Map<string, PluginResult>;
+  totalDurationMs: number;
 }
