@@ -274,16 +274,22 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       );
     }
 
-    if (q.timeRange)
-      r = r.filter(e => e.createdAt >= q.timeRange.start && e.createdAt <= q.timeRange.end);
+    if (q.timeRange) {
+      const tr = q.timeRange;
+      r = r.filter(e => e.createdAt >= tr.start && e.createdAt <= tr.end);
+    }
 
-    if (q.agentTypes?.length)
-      r = r.filter(e => q.agentTypes.includes(e.source.agentType));
+    if (q.agentTypes?.length) {
+      const agentTypes = q.agentTypes;
+      r = r.filter(e => agentTypes.includes(e.source.agentType));
+    }
 
-    if (q.metadataFilter)
+    if (q.metadataFilter) {
+      const mf = q.metadataFilter;
       r = r.filter(e =>
-        Object.entries(q.metadataFilter).every(([k, v]) => (e.content_blob as Record<string, unknown>)[k] === v),
+        Object.entries(mf).every(([k, v]) => (e.content_blob as Record<string, unknown>)[k] === v),
       );
+    }
 
     if (q.bfsDepth && q.bfsDepth > 0)
       r = this._bfs(r, q.bfsDepth, q.bfsMaxNodes);
@@ -918,9 +924,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     if (x.status !== "active")
       throw new TransactionError("Transaction is " + x.status, t.id);
 
+    const committedIds: string[] = [];
+
     try {
       const ids: string[] = [];
-      const committedIds: string[] = [];
 
       for (const w of x.pendingWrites) {
         const id = await this.write(w);

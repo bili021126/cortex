@@ -10,6 +10,7 @@ export class LoggingPipelineBridge {
   }
   createTransport() {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const self = this;
     return {
       name: "pipeline-bridge",
       async write(entry: LogEntry): Promise<void> {
