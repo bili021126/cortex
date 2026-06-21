@@ -67,6 +67,7 @@ export { SentinelSignalFilter } from "./core/sentinel-signal-filter.js";
 export { ZeroTokenValidator } from "./core/zero-token-validator.js";
 export type { ZeroTokenRule, RuleResult, RuleContext } from "./core/zero-token-validator.js";
 export type { SignalLevel, FilteredSignal, SignalFilterOptions } from "./core/sentinel-signal-filter.js";
+export { getRejections } from "./core/hard-verification-gate.js";
 
 // ── Core-2: 治理事件发射器 ─────────────────────
 // @experimental DocGovernAgent 治理事件（修宪/审计/合规/圆桌）

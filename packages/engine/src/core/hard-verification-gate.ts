@@ -204,10 +204,14 @@ export class HardVerificationGate {
   }
 }
 
+/** 拒绝信号全局注册表——供 DocGovernAgent 在下一轮审计时查询 */
+const rejectionRegistry: Array<{ timestamp: number; summary: string; details: string }> = [];
+const MAX_REJECTIONS = 50;
+
 /**
  * 拒绝事件发射器——将硬验证门拒绝信号回写给 DocGovernAgent。
  * 拒绝事件以 FYI 优先级、source="rule-denied" 发射，
- * 模型收到后可在下一轮审计中自我修正。
+ * 同时写入拒绝注册表供 DocGovernAgent 下一轮查询。
  */
 export function emitGateRejection(
   observer: IPipelineObserver,
@@ -231,4 +235,17 @@ export function emitGateRejection(
     notificationType: "FYI",
   };
   observer.emit(rejectionEvent);
+
+  // 写入拒绝注册表——DocGovernAgent 下一轮审计时通过 getRejections() 查询
+  rejectionRegistry.push({
+    timestamp: Date.now(),
+    summary: denialReasons,
+    details: JSON.stringify(result.verdicts),
+  });
+  if (rejectionRegistry.length > MAX_REJECTIONS) rejectionRegistry.shift();
+}
+
+/** 获取近期拒绝记录——供 DocGovernAgent 审计上下文注入 */
+export function getRejections(): ReadonlyArray<{ timestamp: number; summary: string; details: string }> {
+  return rejectionRegistry;
 }

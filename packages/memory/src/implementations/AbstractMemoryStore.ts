@@ -913,6 +913,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       throw new TransactionError("Transaction is " + x.status, t.id);
 
     const committedIds: string[] = [];
+    const committedLinks: Array<{ sourceId: string; targetId: string; linkType: LinkType }> = [];
 
     try {
       const ids: string[] = [];
@@ -924,8 +925,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       }
 
       for (const l of x.pendingLinks)
-        if (l.action === "link")
+        if (l.action === "link") {
           this.link(l.sourceId, l.targetId, l.linkType, l.weight);
+          committedLinks.push({ sourceId: l.sourceId, targetId: l.targetId, linkType: l.linkType });
+        }
 
       if (x.pendingLinks.length > 0)
         await this._be.flushLinks(this._links);
@@ -939,9 +942,16 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
         affectedCount: ids.length + x.pendingLinks.length,
       };
     } catch (err) {
-      // 补偿回滚：撤销已写入的条目，防止部分提交
+      // 补偿回滚：撤销已写入的条目和关联链路，防止部分提交
       for (const cid of committedIds) {
         try { await this._be.remove(cid); this._entries.delete(cid); } catch { /* ignore */ }
+      }
+      for (const cl of committedLinks) {
+        const ls = this._links.get(cl.sourceId);
+        if (ls) {
+          const idx = ls.findIndex(l => l.targetId === cl.targetId && l.linkType === cl.linkType);
+          if (idx >= 0) ls.splice(idx, 1);
+        }
       }
       x.status = "error";
       return {

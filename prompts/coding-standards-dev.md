@@ -316,3 +316,45 @@ void somePromise();
 ### §10.5 验收标准
 
 `pnpm exec eslint --quiet packages/` 必须返回 0 行输出。CI 门禁拦截含 lint error 的 PR。
+
+
+## §十一 错误处理契约
+
+### §11.1 三路径原则
+
+每个操作必须明确三路径行为：
+
+| 路径 | 行为 | 示例 |
+|------|------|------|
+| **正常** | 返回结果 | 文件写入成功 → 返回 void |
+| **预期异常** | 抛特定 Error | 校验失败 → 抛 ValidationError |
+| **非预期异常** | catch + 降级标记 | IO 错误 → emitDegraded + 返回 fallback |
+
+### §11.2 禁止裸 catch {}
+
+```typescript
+// ✖ 禁止
+catch {}
+
+// ✔ 允许场景（文件不存在的删除）
+try { await fs.unlink(path); } catch { /* 文件不存在，忽略 */ }
+
+// ✔ 允许场景（降级标记）
+try {
+  input.embedding = await this._embedder.embedText(text);
+} catch {
+  this._emitDegraded("embedding", "embedding 生成失败，已降级跳过");
+}
+```
+
+### §11.3 降级必须显式标记
+
+任何 catch 后的降级路径必须调用 `_emitDegraded()` 或等效的日志/遥测方法。
+静默降级等同于吞异常。
+
+### §11.4 异常类型
+
+- 校验失败 → `ValidationError`（调用方需处理）
+- 契约违反 → `MemoryStoreError` 或等效（需传播到上层）
+- IO 异常 → catch 后降级或重试
+- 第三方超时 → catch 后降级并标记超时
