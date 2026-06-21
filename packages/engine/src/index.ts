@@ -64,6 +64,8 @@ export type { ModelHealth, EnvironmentRouterOptions } from "./core/environment-a
 // ── Core-2: 哨兵信号分层过滤器 ─────────────────
 // @experimental L1/L2/L3 信号分层 + 去噪 + 采样
 export { SentinelSignalFilter } from "./core/sentinel-signal-filter.js";
+export { ZeroTokenValidator } from "./core/zero-token-validator.js";
+export type { ZeroTokenRule, RuleResult, RuleContext } from "./core/zero-token-validator.js";
 export type { SignalLevel, FilteredSignal, SignalFilterOptions } from "./core/sentinel-signal-filter.js";
 
 // ── Core-2: 治理事件发射器 ─────────────────────

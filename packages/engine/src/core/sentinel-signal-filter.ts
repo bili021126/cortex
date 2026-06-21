@@ -20,6 +20,7 @@
 // ============================================================
 
 import { PipelineEventType, type ObservableEvent, type PipelineHandler } from "@cortex/shared";
+import { ZeroTokenValidator } from "./zero-token-validator.js";
 
 /**
  * 信号层级——事件的严重程度分类。
@@ -40,6 +41,8 @@ export interface FilteredSignal {
   aggregationKey: string;
   /** 建议的处理动作 */
   suggestedAction: "alert" | "log" | "sample" | "ignore";
+  /** 信号来源——规则验证通过后为 "rule"，否则为 "llm-inference" */
+  source: "rule" | "llm-inference";
 }
 
 /**
@@ -78,11 +81,13 @@ export interface SignalFilterOptions {
  */
 export class SentinelSignalFilter {
   private readonly config: Required<SignalFilterOptions>;
+  private readonly validator: ZeroTokenValidator;
 
   /** 去噪缓存：aggregationKey → { count, firstSeenAt, lastSeenAt } */
   private readonly dedupCache = new Map<string, { count: number; firstSeenAt: number; lastSeenAt: number }>();
 
   constructor(options: SignalFilterOptions = {}) {
+    this.validator = new ZeroTokenValidator();
     this.config = {
       l1EventTypes: options.l1EventTypes ?? [
         PipelineEventType.SchedulerLoopCrashed,
@@ -142,6 +147,7 @@ export class SentinelSignalFilter {
           requiresImmediateAction: true,
           aggregationKey,
           suggestedAction: "alert",
+          source: this._resolveSource(event),
         };
       }
 
@@ -166,6 +172,7 @@ export class SentinelSignalFilter {
       requiresImmediateAction: level === "L1",
       aggregationKey,
       suggestedAction: level === "L1" ? "alert" : (level === "L2" ? "log" : "sample"),
+      source: this._resolveSource(event),
     };
   }
 
@@ -215,5 +222,21 @@ export class SentinelSignalFilter {
     const source = payload?.source ?? "unknown";
     const errorType = payload?.error ?? "";
     return `${event.type}:${source}:${String(errorType).slice(0, 50)}`;
+  }
+
+  /** 治理事件走零 token 规则验证，其余事件默认 rule */
+  private _resolveSource(event: ObservableEvent): "rule" | "llm-inference" {
+    const govTypes = [
+      PipelineEventType.ConstitutionViolation,
+      PipelineEventType.GovernanceAmendmentProposed,
+      PipelineEventType.GovernanceAuditReport,
+      PipelineEventType.GovernanceComplianceViolation,
+      PipelineEventType.GovernanceRoundtableConsensus,
+    ];
+    if (govTypes.includes(event.type)) {
+      const result = this.validator.validate(event, { workspaceRoot: process.cwd() });
+      return result.source;
+    }
+    return "rule";
   }
 }
