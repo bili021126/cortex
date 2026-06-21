@@ -11,7 +11,8 @@
       "@cortex/engine": ["../packages/engine/src/index.ts"],
       "@cortex/shared": ["../packages/shared/src/index.ts"],
       "@cortex/platform": ["../packages/platform/src/index.ts"],
-      "@cortex/governance": ["../packages/governance/src/index.ts"]
+      "@cortex/governance": ["../packages/governance/src/index.ts"],
+      "@cortex/scheduler": ["../packages/scheduler/src/index.ts"]
     }
   },
   "include": ["*.ts"],

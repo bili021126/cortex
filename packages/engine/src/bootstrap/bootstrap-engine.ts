@@ -34,7 +34,7 @@ import type { Toolkit } from "@cortex/platform";
 import { preloadModel } from "@cortex/memory-store";
 import { LoggingPipelineBridge, createLogger, addTransport } from "@cortex/logging";
 import type { LlmAdapter } from "@cortex/llm";
-import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ReadMode, type TaskNode } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type ReadMode, type TaskNode } from "@cortex/shared";
 import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
