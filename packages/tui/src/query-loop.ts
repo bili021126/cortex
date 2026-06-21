@@ -30,6 +30,7 @@ import type { TuiEvent, TuiHooks, ReplMode, LlmStreamBridge } from "./types.js";
 import { compactMessages } from "./context-compactor.js";
 import { streamExecuteTools } from "./streaming-tool-executor.js";
 import { DEFAULT_MAX_TOOL_ROUNDS } from "@cortex/config";
+import { PLANNING_SYSTEM } from "@cortex/config";
 import fs from "fs";
 import path from "path";
 
@@ -142,7 +143,8 @@ function modeSystemPrompt(mode: ReplMode, agent: AgentType): string {
     case "chat":
       return "这是对话模式。你是 Cortex 工程助手，直接回答用户的问题。如果用户有编程任务，可以调用工具完成。";
     case "plan":
-      return "这是规划模式。你需要将用户意图拆解为详细的任务计划，列出每个步骤和对应的 Agent 类型。";
+      // 加载甘雨完整战术中枢 prompt（含时序依赖、标签匹配规则、输出格式等）
+      return PLANNING_SYSTEM;
     case "talk":
       return agentTalkPersona(agent);
     case "party":

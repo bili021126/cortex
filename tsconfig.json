@@ -20,7 +20,6 @@
     { "path": "packages/cache" },
     { "path": "packages/tui" },
     { "path": "packages/governance/tsconfig.src.json" },
-    { "path": "packages/json-fixer" },
     { "path": "packages/result" },
     { "path": "packages/scheduler" },
     { "path": "packages/platform" },

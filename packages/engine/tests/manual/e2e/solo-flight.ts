@@ -54,7 +54,7 @@ function verify(pkgDir: string) {
 }
 
 // ── 已知包名（排除）─────────────────────────
-const KNOWN = new Set("cache|cli|config|consistency|context|data|doctor|engine|factory|fsm-compiler|governance|llm|logging|memory|memory-store|notification|parser|pattern-extractor|platform|plugin-runner|pm|policy-validator|prompt-kit|resilience|scheduler|self-examination|shared|skill-kit|skill-validator|src|telemetry|test-output|testing|tests|tools|tui".split("|"));
+const KNOWN = new Set("cache|cli|config|consistency|context|data|doctor|engine|factory|fsm-compiler|governance|llm|logging|memory|memory-store|notification|option|parser|pattern-extractor|platform|plugin-runner|pm|policy-validator|prompt-kit|resilience|result|scheduler|self-examination|shared|skill-kit|skill-validator|src|telemetry|test-output|testing|tests|tools|tui".split("|"));
 
 // ── 主流程 ──────────────────────────────────
 async function main() {
@@ -347,13 +347,18 @@ async function main() {
   const elapsed = Date.now() - t0;
 
   let pass = 0, fail = 0;
+  let wroteFiles = false;
   for (const r of report.results) {
-    if (r.success) pass++; else fail++;
+    // 必须有 write_file 才算真正成功
+    const hasWrite = tracker.toolCalls.some(t => t.nodeId === r.nodeId && t.toolName === "write_file" && t.success);
+    const realSuccess = r.success && hasWrite;
+    if (realSuccess) { pass++; } else { fail++; }
+    if (hasWrite) wroteFiles = true;
     const summary = (r.output ?? r.error ?? "").slice(0, 100);
     const ms = (r as any).durationMs;
-    log(`  ${r.success ? "✅" : "❌"} [${r.agentType}] ${r.nodeId?.slice(-16)} ${ms ? (ms/1000).toFixed(1)+"s" : ""} ${summary}`);
+    log(`  ${realSuccess ? "✅" : "❌"} [${r.agentType}] ${r.nodeId?.slice(-16)} ${ms ? (ms/1000).toFixed(1)+"s" : ""} ${summary}`);
   }
-  log(`  ${(elapsed / 1000).toFixed(1)}s | ${pass}/${nodes.length} pass\n`);
+  log(`  ${(elapsed / 1000).toFixed(1)}s | ${pass}/${nodes.length} pass (write_file✍️=${wroteFiles ? "有" : "无"})\n`);
 
   // ── S6 发现新包 ──────────────────────────
   const newPkg = fs.readdirSync(P).filter(d => !KNOWN.has(d) && !d.startsWith(".") && fs.statSync(path.join(P,d)).isDirectory())

@@ -1,0 +1,206 @@
+// @ci: unit
+/**
+ * ManifoldGate 流约束门�?—�?全场景单元测�?
+ *
+ * 验证 mHC 流形约束的核心行为：
+ * - 同类�?Agent 并发�?�?maxInstances
+ * - FIFO 公平唤醒
+ * - 超时优雅失败
+ * - RLM 子任务不参与流约�?
+ * - SpawnStep/CleanupStep 集成
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { AgentType, AgentStatus, PipelinePriority } from "@cortex/shared";
+import { TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/scheduler";
+import { Scheduler } from "@cortex/engine";
+// ════════════════════════════════════════════════════════
+// Helpers
+// ════════════════════════════════════════════════════════
+function makeNode(id, type, tags = ["implementation"]) {
+    return {
+        id,
+        type,
+        tags: tags,
+        needsMultiPerspective: false,
+        status: "pending",
+        claimedBy: [],
+        payload: `Task ${id}`,
+        results: [],
+        createdAt: Date.now(),
+    };
+}
+function makeSlowAgent(agentType, delayMs = 500) {
+    return {
+        type: agentType,
+        status: AgentStatus.Awake,
+        wakeup: vi.fn().mockResolvedValue(undefined),
+        execute: vi.fn().mockImplementation(async () => {
+            await new Promise((r) => setTimeout(r, delayMs));
+            return { nodeId: "", success: true, output: `done by ${agentType}` };
+        }),
+        shutdown: vi.fn().mockResolvedValue(undefined),
+    };
+}
+// ════════════════════════════════════════════════════════
+// ManifoldGate 核心行为
+// ════════════════════════════════════════════════════════
+describe("ManifoldGate 流约束核心行为", () => {
+    beforeEach(() => {
+        ManifoldGate.reset();
+    });
+    afterEach(() => {
+        ManifoldGate.reset();
+    });
+    it("未注册类型默认 maxInstances=1", () => {
+        expect(ManifoldGate.max("unknown")).toBe(1);
+    });
+    it("注册后 acquire 在配额内立即通过", async () => {
+        ManifoldGate.register("test-type", 3);
+        const ok1 = await ManifoldGate.acquire("test-type", 1000);
+        const ok2 = await ManifoldGate.acquire("test-type", 1000);
+        const ok3 = await ManifoldGate.acquire("test-type", 1000);
+        expect(ok1).toBe(true);
+        expect(ok2).toBe(true);
+        expect(ok3).toBe(true);
+        expect(ManifoldGate.active("test-type")).toBe(3);
+    });
+    it("超配额时等待 FIFO 唤醒", async () => {
+        ManifoldGate.register("test-type", 1);
+        const ok1 = await ManifoldGate.acquire("test-type", 5000);
+        expect(ok1).toBe(true);
+        expect(ManifoldGate.active("test-type")).toBe(1);
+        expect(ManifoldGate.waiting("test-type")).toBe(0);
+        // 第二�?acquire 应排�?
+        const p2 = ManifoldGate.acquire("test-type", 5000);
+        // 给微任务队列时间
+        await new Promise((r) => setTimeout(r, 50));
+        expect(ManifoldGate.waiting("test-type")).toBe(1);
+        // 释放 �?唤醒 p2
+        ManifoldGate.release("test-type");
+        const ok2 = await p2;
+        expect(ok2).toBe(true);
+        expect(ManifoldGate.active("test-type")).toBe(1);
+        expect(ManifoldGate.waiting("test-type")).toBe(0);
+    });
+    it("超时后返回 false 且不从队列唤醒下一任务", async () => {
+        ManifoldGate.register("test-type", 1);
+        await ManifoldGate.acquire("test-type", 5000); // 占满
+        const timedOut = await ManifoldGate.acquire("test-type", 100); // 100ms 超时
+        expect(timedOut).toBe(false);
+        // 超时后不应影响活跃计�?
+        expect(ManifoldGate.active("test-type")).toBe(1);
+        expect(ManifoldGate.waiting("test-type")).toBe(0);
+    });
+    it("FIFO 顺序：先等待的先被唤醒", async () => {
+        ManifoldGate.register("test-type", 1);
+        await ManifoldGate.acquire("test-type", 5000); // 占满
+        const order = [];
+        const p1 = ManifoldGate.acquire("test-type", 5000).then((ok) => { order.push(1); return ok; });
+        const p2 = ManifoldGate.acquire("test-type", 5000).then((ok) => { order.push(2); return ok; });
+        const p3 = ManifoldGate.acquire("test-type", 5000).then((ok) => { order.push(3); return ok; });
+        await new Promise((r) => setTimeout(r, 50));
+        expect(ManifoldGate.waiting("test-type")).toBe(3);
+        // 逐次释放
+        ManifoldGate.release("test-type"); // 唤醒 p1
+        await p1;
+        expect(ManifoldGate.active("test-type")).toBe(1);
+        ManifoldGate.release("test-type"); // 唤醒 p2
+        await p2;
+        expect(ManifoldGate.active("test-type")).toBe(1);
+        ManifoldGate.release("test-type"); // 唤醒 p3
+        await p3;
+        expect(order).toEqual([1, 2, 3]);
+    });
+    it("release 当 active=0 时不做负操作", () => {
+        ManifoldGate.register("test-type", 3);
+        ManifoldGate.release("test-type"); // 应安�?no-op
+        expect(ManifoldGate.active("test-type")).toBe(0);
+    });
+    it("reset 清空所有状态", async () => {
+        ManifoldGate.register("test-type", 3);
+        await ManifoldGate.acquire("test-type", 100);
+        expect(ManifoldGate.active("test-type")).toBe(1);
+        ManifoldGate.reset();
+        expect(ManifoldGate.active("test-type")).toBe(0);
+        expect(ManifoldGate.max("test-type")).toBe(1); // 重置后退回默�?
+    });
+});
+// ════════════════════════════════════════════════════════
+// Scheduler 集成：流约束下的并发调度
+// ════════════════════════════════════════════════════════
+describe("Scheduler + ManifoldGate 集成", () => {
+    let board;
+    let pool;
+    let observer;
+    let scheduler;
+    beforeEach(() => {
+        ManifoldGate.reset();
+        board = new TaskBoard();
+        pool = new AgentPool();
+        observer = new PipelineObserver();
+        scheduler = new Scheduler(board, pool, observer);
+    });
+    afterEach(() => {
+        ManifoldGate.reset();
+    });
+    it("同类型超池节点被流控等待后全部成功（mHC 约束不丢节点）", async () => {
+        // 注册 code agent，maxInstances=2（模拟紧缺）
+        pool.register({ type: AgentType.Code, maxInstances: 2 });
+        const agent = makeSlowAgent(AgentType.Code, 300);
+        scheduler.register(AgentType.Code, agent, "test");
+        // 同一�?5 �?code 节点——旧行为�? 成功 + 3 池耗尽失败
+        // 新行为（mHC）：2 立即执行 + 3 排队等待 �?全部成功
+        const ids = ["c1", "c2", "c3", "c4", "c5"];
+        for (const id of ids) {
+            board.addNode(makeNode(id, "code", ["implementation"]));
+        }
+        const report = await scheduler.executeAll();
+        expect(report.completed).toBe(5);
+        expect(report.failed).toBe(0);
+        expect(agent.execute).toHaveBeenCalledTimes(5);
+    }, 30_000);
+    it("混合类型节点不受彼此流控影响", async () => {
+        // code max=2, analysis max=5
+        pool.register({ type: AgentType.Code, maxInstances: 2 });
+        pool.register({ type: AgentType.Analysis, maxInstances: 5 });
+        const codeAgent = makeSlowAgent(AgentType.Code, 200);
+        const analysisAgent = makeSlowAgent(AgentType.Analysis, 100);
+        scheduler.register(AgentType.Code, codeAgent, "test");
+        scheduler.register(AgentType.Analysis, analysisAgent, "test");
+        // 同一�?3 code + 3 analysis
+        for (let i = 1; i <= 3; i++) {
+            board.addNode(makeNode(`code-${i}`, "code", ["implementation"]));
+            board.addNode(makeNode(`analysis-${i}`, "analysis", ["analysis"]));
+        }
+        const report = await scheduler.executeAll();
+        expect(report.completed).toBe(6);
+        expect(report.failed).toBe(0);
+        // code 只有 2 个并发，�?3 个应排队
+        expect(codeAgent.execute).toHaveBeenCalledTimes(3);
+        expect(analysisAgent.execute).toHaveBeenCalledTimes(3);
+    }, 30_000);
+    it("父子节点按依赖顺序——子节点不排队在父节点完成前", async () => {
+        pool.register({ type: AgentType.Code, maxInstances: 1 }); // 极紧
+        const agent = makeSlowAgent(AgentType.Code, 100);
+        scheduler.register(AgentType.Code, agent, "test");
+        board.addNode({
+            ...makeNode("parent", "code", ["implementation"]),
+            parentId: undefined,
+        });
+        board.addNode({
+            ...makeNode("child", "code", ["implementation"]),
+            parentId: "parent",
+        });
+        const events = [];
+        observer.on(PipelinePriority.HIGH, (e) => {
+            if (e.type === "node.complete")
+                events.push(e.payload.nodeId);
+        });
+        const report = await scheduler.executeAll();
+        expect(report.completed).toBe(2);
+        expect(report.failed).toBe(0);
+        // 父先完成（拓扑排序保�?+ 流控只在同层生效�?
+        expect(events).toEqual(["parent", "child"]);
+    }, 10_000);
+});
+//# sourceMappingURL=manifold-gate.test.js.map

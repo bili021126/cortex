@@ -260,7 +260,23 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               ? executionModel.dispatchMulti(execCtx)
               : executionModel.dispatchSingle(execCtx);
 
-            return dispatchPromise.then((result) => {
+            // 单个节点超时兜底——防止 dispatch hang 住拖死 Promise.allSettled
+            const NODE_DISPATCH_TIMEOUT_MS = Math.min(config.reactLoopTimeoutMs, 120_000);
+            const timeoutPromise = new Promise<NodeResult>((resolve) => {
+              setTimeout(() => {
+                try { board.failNode(nodeId); } catch { /* best-effort */ }
+                observer.emit({
+                  type: PipelineEventType.NodeFailed,
+                  priority: PipelinePriority.CRITICAL,
+                  payload: { nodeId, error: `Node dispatch timeout after ${NODE_DISPATCH_TIMEOUT_MS}ms` },
+                  timestamp: Date.now(),
+                  notificationType: "WARNING",
+                });
+                resolve({ nodeId, success: false, error: `Node dispatch timeout` });
+              }, NODE_DISPATCH_TIMEOUT_MS);
+            });
+
+            return Promise.race([dispatchPromise, timeoutPromise]).then((result) => {
               if (!result.success) {
                 const reason = result.output ?? result.error ?? "unknown";
                 replanManager.enqueue(node, reason);

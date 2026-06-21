@@ -15,6 +15,7 @@
     "sourceMap": true,
     "composite": true,
     "incremental": true,
+    "noUncheckedIndexedAccess": true,
     "outDir": "${configDir}/dist",
     "rootDir": "${configDir}/src"
   },

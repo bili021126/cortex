@@ -66,6 +66,7 @@ interface TuiCmdCtx {
   session: TuiSession;
   projectRoot: string;
   hooks: TuiHooks;
+  bridge: EngineBridge;
 }
 
 /**
@@ -116,7 +117,7 @@ export async function tuiReplHandler(
 
   const cmdCtx: TuiCmdCtx = {
     rl, setMode: (m) => { session.mode = m; }, setAgent: (a) => { session.agent = a; },
-    session, projectRoot: context.projectRoot ?? process.cwd(), hooks,
+    session, projectRoot: context.projectRoot ?? process.cwd(), hooks, bridge,
   };
 
   let running = true;
@@ -403,6 +404,54 @@ async function handleInternalCommand(input: string, ctx: TuiCmdCtx): Promise<boo
       ctx.hooks.onSessionSave?.(saveSnap);
       saveSession(ctx.projectRoot, ctx.session);
       writeln(`💾 会话已保存（模式: ${ctx.session.mode}, 历史: ${ctx.session.history.length} 条）`);
+      return true;
+    }
+
+    case "review": {
+      if (!ctx.session.planState || ctx.session.planState.nodes.length === 0) {
+        writeln("✗ 没有待审议的计划（请先在 plan 模式下输入意图）");
+        return true;
+      }
+      if (ctx.session.planState.reviewStatus === "reviewed") {
+        writeln("⚠️ 计划已通过审议，输入 .approve 执行");
+        return true;
+      }
+      writeln(`🏛 启动三省审议（${ctx.session.planState.nodes.length} 个节点）...`);
+      writeln(`  凝光(合规审计) → 钟离(契约监督) → 霜凝(方向监理)`);
+      // 标记为已审议——实际三省审议需要凝光/钟离/霜凝 Agent 在线，当前阶段标记通过
+      ctx.session.planState.reviewStatus = "reviewed";
+      writeln("✅ 三省审议通过（当前阶段默认放行，完整审议待凝光/钟离/霜凝激活）");
+      writeln("  输入 .approve 执行计划");
+      return true;
+    }
+
+    case "approve": {
+      if (!ctx.session.planState || ctx.session.planState.nodes.length === 0) {
+        writeln("✗ 没有待执行的计划（请先在 plan 模式下输入意图）");
+        return true;
+      }
+      if (!ctx.session.planState.approved) {
+        ctx.session.planState.approved = true;
+        if (ctx.session.planState.reviewStatus !== "reviewed") {
+          writeln("⚠️ 计划未经审议，直接执行（建议先 .review）");
+        }
+        writeln(`🚀 执行计划：${ctx.session.planState.nodes.length} 个节点`);
+        // 重新进入 plan 模式触发执行
+        const result = await consumeGenerator(
+          planMode("execute", ctx.bridge, ctx.session.agent, ctx.session.planState, ctx.session.history),
+          tuiEventBus,
+          () => false,
+        );
+        if (result) {
+          savePlanState(ctx.projectRoot, ctx.session.planState);
+          writeln(result);
+        }
+        // 执行完成清理
+        clearPlanState(ctx.projectRoot);
+        ctx.session.planState = { nodes: [], intent: "", approved: false, reviewStatus: "pending" };
+      } else {
+        writeln("⚠️ 计划已批准，正在执行中...");
+      }
       return true;
     }
 

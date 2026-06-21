@@ -1,0 +1,37 @@
+/**
+ * @cortex/config — 环境变量名常量
+ *
+ * @module constants/env
+ * @layer root
+ */
+/** DeepSeek 昔涟（独立人格）API 密钥环境变量名 */
+export declare const ENV_DEEPSEEK_CYRENE_API_KEY = "DEEPSEEK_CYRENE_API_KEY";
+/** DeepSeek Chat 模型 API 密钥环境变量名 */
+export declare const ENV_DEEPSEEK_CHAT_API_KEY = "DEEPSEEK_CHAT_API_KEY";
+/** DeepSeek Reasoner 模型 API 密钥环境变量名 */
+export declare const ENV_DEEPSEEK_REASONER_API_KEY = "DEEPSEEK_REASONER_API_KEY";
+/** DeepSeek API 密钥环境变量名（回退 Key） */
+export declare const ENV_DEEPSEEK_API_KEY = "DEEPSEEK_API_KEY";
+/** DeepSeek Base URL 环境变量名 */
+export declare const ENV_DEEPSEEK_BASE_URL = "DEEPSEEK_BASE_URL";
+/** DeepSeek Chat 模型环境变量名 */
+export declare const ENV_DEEPSEEK_CHAT_MODEL = "DEEPSEEK_CHAT_MODEL";
+/** DeepSeek 昔涟专用 Chat 模型环境变量名（独立于通用 Chat 模型，允许昔涟使用更高规格模型） */
+export declare const ENV_DEEPSEEK_CYRENE_CHAT_MODEL = "DEEPSEEK_CYRENE_CHAT_MODEL";
+/** DeepSeek Reasoner 模型环境变量名 */
+export declare const ENV_DEEPSEEK_REASONER_MODEL = "DEEPSEEK_REASONER_MODEL";
+/** DeepSeek Reasoning Effort 环境变量名 */
+export declare const ENV_DEEPSEEK_REASONING_EFFORT = "DEEPSEEK_REASONING_EFFORT";
+/** Cortex 功能开关环境变量 */
+export declare const ENV_CORTEX_API_AUDIT = "CORTEX_API_AUDIT";
+/** 禁用搜索后端的 flag */
+export declare const ENV_CORTEX_NO_SEARCH = "CORTEX_NO_SEARCH";
+/** PM 主密钥环境变量名 */
+export declare const ENV_PM_MASTER_KEY = "PM_MASTER_KEY";
+/** ConfirmGate 超时环境变量名 */
+export declare const ENV_CONFIRM_GATE_TIMEOUT_MS = "CONFIRM_GATE_TIMEOUT_MS";
+/** VITEST 环境变量名（测试模式检测） */
+export declare const ENV_VITEST = "VITEST";
+/** NODE_ENV 环境变量名 */
+export declare const ENV_NODE_ENV = "NODE_ENV";
+//# sourceMappingURL=env.d.ts.map
