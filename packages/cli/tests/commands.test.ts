@@ -734,7 +734,7 @@ describe("cortex roundtable", () => {
   let docReg: any;
 
   beforeAll(async () => {
-    const { DocRegistry } = await import("@cortex/engine");
+    const { DocRegistry } = await import("@cortex/governance");
     const { NodeFileSystemAdapter } = await import("@cortex/platform");
     const tmpDir = createTmpDir();
     docReg = new DocRegistry(new NodeFileSystemAdapter(), tmpDir);
@@ -744,7 +744,7 @@ describe("cortex roundtable", () => {
     // bridge 未 bootstrap——_getTemplates() 会 catch 返回 []
     const bridge = new EngineBridge(new ConfigManager());
     try {
-      const handler = createRoundtableHandler(bridge, docReg);
+      const handler = createRoundtableHandler({bridge: bridge, docRegistry: docReg});
       const result = await handler([], {}, ctx);
       expect(result.success).toBe(true);
       expect(result.output).toContain("start");
@@ -759,7 +759,7 @@ describe("cortex roundtable", () => {
   it("start 缺少模板名返回错误", async () => {
     const bridge = new EngineBridge(new ConfigManager());
     try {
-      const handler = createRoundtableHandler(bridge, docReg);
+      const handler = createRoundtableHandler({bridge: bridge, docRegistry: docReg});
       const result = await handler(["start"], {}, ctx);
       expect(result.success).toBe(false);
       expect(result.error).toContain("模板");
@@ -771,7 +771,7 @@ describe("cortex roundtable", () => {
   it("未知子命令返回错误", async () => {
     const bridge = new EngineBridge(new ConfigManager());
     try {
-      const handler = createRoundtableHandler(bridge, docReg);
+      const handler = createRoundtableHandler({bridge: bridge, docRegistry: docReg});
       const result = await handler(["unknown-sub"], {}, ctx);
       expect(result.success).toBe(false);
       expect(result.error).toContain("未知子命令");
@@ -783,7 +783,7 @@ describe("cortex roundtable", () => {
   it("join 缺少会话 ID 返回错误", async () => {
     const bridge = new EngineBridge(new ConfigManager());
     try {
-      const handler = createRoundtableHandler(bridge, docReg);
+      const handler = createRoundtableHandler({bridge: bridge, docRegistry: docReg});
       const result = await handler(["join"], {}, ctx);
       expect(result.success).toBe(false);
       expect(result.error).toContain("会话 ID");

@@ -27,10 +27,10 @@ export function createTool(ctx: ToolContext): Tool {
         return { success: false, error: "run_shell 缺少 command 参数" };
       }
       try {
-        // 命令安全检查：禁止注入元字符（; && || 等多语句连接符）
-        const injectionPattern = /[;&|`]/;
+        // 命令安全检查：禁止注入元字符（多语句连接符 + 子shell + 重定向）
+        const injectionPattern = /[;&|`$(){}<>]/;
         if (injectionPattern.test(command)) {
-          return { success: false, error: "run_shell 拒绝危险字符: 命令包含 shell 注入元字符（; & | `）。如需执行多条命令，请分步调用。" };
+          return { success: false, error: "run_shell 拒绝危险字符: 命令包含 shell 注入元字符（; & | ` $ ( ) { } < >）。如需执行多条命令或有特殊需求，请分步调用。" };
         }
         const cwd = ctx.workspaceRoot ?? ctx.fs.cwd();
         const output = await ctx.fs.execCommand(command, {

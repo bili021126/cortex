@@ -228,7 +228,7 @@ export async function bootstrapEngine(
   });
   // 订阅 CRITICAL 事件到哨兵，过滤后仅 alert 级别记录遥测
   // @layer 治理层（观察者）→ 治理层：哨兵订阅 CRITICAL 事件
-  observer.on(PipelinePriority.CRITICAL, (event) => {
+  const sentinelHandler = (event: ObservableEvent): void => {
     const signal = sentinelFilter.filter(event);
     if (signal?.suggestedAction === "alert") {
       void import("@cortex/telemetry").then(({ recordTelemetry }) =>
@@ -238,7 +238,8 @@ export async function bootstrapEngine(
         ]),
       );
     }
-  });
+  };
+  observer.on(PipelinePriority.CRITICAL, sentinelHandler);
 
   // §6.2.4 NotificationRuntime —— PipelineObserver → NotificationPipe 桥接
   // @layer 治理层→治理层：PipelineObserver → NotificationPipe 桥接
@@ -288,8 +289,11 @@ export async function bootstrapEngine(
   }
 
   // §7.1 StrategistAgent 订阅治理事件
+  const strategistHandlers: Array<(event:any)=>void> = [];
   for (const agent of strategists.values()) {
-    observer.on(PipelinePriority.HIGH, (event) => agent.onGovernanceEvent(event));
+    const handler = (event:any) => agent.onGovernanceEvent(event);
+    observer.on(PipelinePriority.HIGH, handler);
+    strategistHandlers.push(handler);
   }
 
   // §8 确认门接线——Toolkit 需要 ConfirmGate

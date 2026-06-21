@@ -25,6 +25,8 @@
     { "path": "packages/memory-store" },
     { "path": "packages/consistency/tsconfig.src.json" },
     { "path": "packages/resilience" },
-    { "path": "packages/skill-kit" }
+    { "path": "packages/skill-kit" },
+    { "path": "packages/logging" },
+    { "path": "packages/plugin-runner/tsconfig.src.json" }
   ]
 }

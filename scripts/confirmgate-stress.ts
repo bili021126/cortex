@@ -13,7 +13,8 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
-import { bootstrapEngine, ConfirmGate } from "@cortex/engine";
+import { bootstrapEngine } from "@cortex/engine";
+import { ConfirmGate } from "@cortex/scheduler";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "@cortex/platform";
 import { ReversibilityLevel as RL, AgentType } from "@cortex/shared";
@@ -74,7 +75,7 @@ $("T1.9", "超时后 hasPending=false (防泄漏)", !g2.hasPending());
 const g3 = new ConfirmGate(5000);
 const rid3 = g3.request({ id: "t3", level: RL.L2, toolName: "write_file", summary: "dispose 测试", detail: "" });
 let dErr: any = null;
-const wp = g3.waitFor(rid3, 30000).catch(e => { dErr = e; return false; });
+const wp = g3.waitFor(rid3, 30000).catch((e: unknown) => { dErr = e; return false; });
 await new Promise(r => setTimeout(r, 50));
 g3.dispose();
 await wp;
