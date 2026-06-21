@@ -1,12 +1,19 @@
 // ============================================================
 // @cortex/scheduler —— 桶导出（Public API Surface）
 //
-// @module-convention
-// 1. 凡 src/ 下新增公开符号，必须在本文件追加对应的 export 语句。
-// 2. 测试文件禁止 ../ 相对导入——只用 @cortex/scheduler 包名导入。
+// 【Public API】
+//   本文件导出的四抽象接口/实现为调度层的公开契约：
+//   · TaskBoard / AgentPool — 任务板与 Agent 池
+//   · PipelineObserver — 事件总线
+//   · IScheduleStrategy / ILoopDriver / IExecutionModel / IModelRouter — 四抽象
+//   · CompositeScheduler — 组合调度入口
+//   其余为 Internal 实现——外部消费者不应直接依赖。
 //
-// @since v0.1.0 —— 从 @cortex/engine 独立拆出
-// ============================================================
+// 【Internal — 不从 scheduler 导入】
+//   dispatch-steps/ — 每个 step 的具体实现
+//   task-router.ts — 内部任务路由
+//   scheduling-types.ts — 内部调度类型
+//   以上由 CompositeScheduler 内部组合，外部不直接使用。
 
 // ── 任务板 ──────────────────────────────────────────────────────
 export { TaskBoard } from "./core/task-board.js";

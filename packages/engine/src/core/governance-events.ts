@@ -16,32 +16,28 @@
 // ============================================================
 
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+import { GOVERNANCE_EVENT_ROUTING } from "@cortex/config";
+import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
 
 /**
- * 治理事件类型——DocGovernAgent 专属事件。
+ * 治理事件类型——映射到 PipelineEventType 枚举值。
  */
 export type GovernanceEventType =
-  | "governance.amendment_proposed"
-  | "governance.audit_report"
-  | "governance.compliance_violation"
-  | "governance.roundtable_consensus";
+  | PipelineEventType.GovernanceAmendmentProposed
+  | PipelineEventType.GovernanceAuditReport
+  | PipelineEventType.GovernanceComplianceViolation
+  | PipelineEventType.GovernanceRoundtableConsensus;
 
-/**
- * 治理事件 Payload。
- */
+/** 治理事件 Payload（对齐 shared 中的 GovernanceEventPayload） */
 export interface GovernanceEventPayload {
-  /** 事件类型 */
   type: GovernanceEventType;
-  /** 提案/报告 ID */
   id: string;
-  /** 摘要 */
   summary: string;
-  /** 详情（可选） */
   detail?: string;
-  /** 相关节点 ID（可选） */
   nodeId?: string;
-  /** 是否需要用户确认 */
-  requiresDecision?: boolean;
+  severity: "FYI" | "WARNING" | "DECISION_REQUIRED";
+  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop";
+  suggestedAction?: "fix" | "ignore" | "escalate";
 }
 
 /**
@@ -59,58 +55,68 @@ export interface GovernanceEventPayload {
  *   ```
  */
 export class GovernanceEventEmitter {
-  constructor(private readonly observer: IPipelineObserver) {}
+  constructor(
+    private readonly observer: IPipelineObserver,
+    /** 策略上下文注入——emit 时自动附加当前可用策略信息 */
+    private readonly _strategyRegistry?: LoopStrategyRegistry,
+  ) {}
 
   /**
    * 发射修宪提案事件。
    */
   emitAmendmentProposed(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit("governance.amendment_proposed", {
+    this._emit(PipelineEventType.GovernanceAmendmentProposed, {
       ...payload,
-      type: "governance.amendment_proposed",
-    }, payload.requiresDecision ? PipelinePriority.HIGH : PipelinePriority.NORMAL);
+      type: PipelineEventType.GovernanceAmendmentProposed,
+    });
   }
 
   /**
    * 发射审计报告事件。
    */
   emitAuditReport(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit("governance.audit_report", {
+    this._emit(PipelineEventType.GovernanceAuditReport, {
       ...payload,
-      type: "governance.audit_report",
-    }, PipelinePriority.NORMAL);
+      type: PipelineEventType.GovernanceAuditReport,
+    });
   }
 
   /**
    * 发射合规违规事件。
    */
   emitComplianceViolation(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit("governance.compliance_violation", {
+    this._emit(PipelineEventType.GovernanceComplianceViolation, {
       ...payload,
-      type: "governance.compliance_violation",
-    }, PipelinePriority.HIGH);
+      type: PipelineEventType.GovernanceComplianceViolation,
+    });
   }
 
   /**
    * 发射圆桌共识事件。
    */
   emitRoundtableConsensus(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit("governance.roundtable_consensus", {
+    this._emit(PipelineEventType.GovernanceRoundtableConsensus, {
       ...payload,
-      type: "governance.roundtable_consensus",
-    }, PipelinePriority.NORMAL);
+      type: PipelineEventType.GovernanceRoundtableConsensus,
+    });
   }
 
   /**
    * 通用发射——直接发射原始事件。
    */
-  private _emit(type: GovernanceEventType, payload: GovernanceEventPayload, priority: PipelinePriority): void {
+  private _emit(type: GovernanceEventType, payload: GovernanceEventPayload): void {
+    const routing = GOVERNANCE_EVENT_ROUTING[type];
+    const enrichedPayload = this._strategyRegistry
+      ? { ...payload, strategyContext: this._strategyRegistry.getAdvisorContext() }
+      : payload;
     const event: ObservableEvent = {
-      type: type as unknown as PipelineEventType,
-      priority,
-      payload,
+      type,
+      priority: routing?.notificationType === "DECISION_REQUIRED"
+        ? PipelinePriority.HIGH
+        : PipelinePriority.NORMAL,
+      payload: enrichedPayload,
       timestamp: Date.now(),
-      notificationType: payload.requiresDecision ? "DECISION_REQUIRED" : "FYI",
+      notificationType: routing?.notificationType ?? "FYI",
     };
     this.observer.emit(event);
   }

@@ -442,7 +442,7 @@ async function editAgent(rl: readline.Interface, agent: AgentDef): Promise<Agent
 
 async function screenAgentsConfig(rl: readline.Interface): Promise<void> {
   if (!gAgents) return;
-  let agents = { ...gAgents.agents };
+  const agents = { ...gAgents.agents };
   const ids = Object.keys(agents);
 
   while (true) {
@@ -533,8 +533,8 @@ async function screenAgentsConfig(rl: readline.Interface): Promise<void> {
 
 async function screenCognitionConfig(rl: readline.Interface): Promise<void> {
   if (!gCognition) return;
-  let matrix = [...gCognition.activationMatrix];
-  let attention = { ...gCognition.attention };
+  const matrix = [...gCognition.activationMatrix];
+  const attention = { ...gCognition.attention };
 
   while (true) {
     clear();
@@ -580,7 +580,7 @@ async function screenCognitionConfig(rl: readline.Interface): Promise<void> {
 async function screenDocsConfig(rl: readline.Interface): Promise<void> {
   if (!gDocs) return;
   let conPath = gDocs.constitutionPath;
-  let registry = [...gDocs.docRegistry];
+  const registry = [...gDocs.docRegistry];
 
   while (true) {
     clear();

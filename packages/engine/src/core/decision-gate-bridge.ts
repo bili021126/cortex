@@ -15,7 +15,7 @@
 //   3. 可观测性——每次桥接都有日志和遥测
 // ============================================================
 
-import type { IPipelineObserver, ObservableEvent, PlatformBridge } from "@cortex/shared";
+import type { IPipelineObserver, ObservableEvent } from "@cortex/shared";
 import { PipelinePriority } from "@cortex/shared";
 import type { ConfirmGate } from "@cortex/scheduler";
 import { recordTelemetry } from "@cortex/telemetry";
@@ -64,6 +64,7 @@ export interface DecisionResult {
  */
 export class DecisionGateBridge {
   private _started = false;
+  private _handler: ((event: ObservableEvent) => void) | undefined;
 
   /** 确认超时 (ms) */
   private readonly timeoutMs: number;
@@ -83,10 +84,11 @@ export class DecisionGateBridge {
     if (this._started) return;
     this._started = true;
 
-    // 订阅 HIGH 优先级事件（治理事件通常是 HIGH）
-    this.observer.on(PipelinePriority.HIGH, (event: ObservableEvent) => {
+    this._handler = (event: ObservableEvent) => {
       this._handleEvent(event);
-    });
+    };
+    // 订阅 HIGH 优先级事件（治理事件通常是 HIGH）
+    this.observer.on(PipelinePriority.HIGH, this._handler);
   }
 
   /**
@@ -94,6 +96,7 @@ export class DecisionGateBridge {
    */
   stop(): void {
     this._started = false;
+    if (this._handler) this.observer.off(PipelinePriority.HIGH, this._handler);
   }
 
   /**
@@ -121,7 +124,7 @@ export class DecisionGateBridge {
     };
 
     // 异步请求确认
-    this._requestDecision(request).then((result) => {
+    void this._requestDecision(request).then((result) => {
       this._emitDecisionResult(result);
     });
   }
@@ -142,7 +145,7 @@ export class DecisionGateBridge {
         approved,
         durationMs: Date.now() - start,
       };
-    } catch (e) {
+    } catch (_e) {
       // 超时或错误——自动拒绝
       return {
         requestId: request.requestId,

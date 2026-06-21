@@ -127,7 +127,7 @@ export class TrustModel implements ITrustModel {
    */
   computeConfidence(agentType: AgentType, domain: RiskDomain): TrustScore {
     const key = this._key(agentType, domain);
-    let entry = this._entries.get(key);
+    const entry = this._entries.get(key);
 
     if (!entry) {
       return { agentType, domain, score: 0.1, historyCount: 0 };

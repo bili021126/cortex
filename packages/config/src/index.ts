@@ -195,3 +195,6 @@ export {
 } from "./engine-defaults.js";
 export type { EngineDefaults } from "./engine-defaults.js";
 
+// ── 治理事件路由表 ──
+export { GOVERNANCE_EVENT_ROUTING } from "./governance-event-routing.js";
+

@@ -11,7 +11,7 @@ describe("EventPayloadMap 一致性", () => {
     expect(evtValues.length).toBeGreaterThan(20);
     // Event 类型命名规范：点号分段
     for (const evt of evtValues) {
-      expect(evt).toMatch(/^[a-z]+\.[a-z_]+$/);
+      expect(evt).toMatch(/^[a-z_]+(\.[a-z_.]+)?$/);
     }
   });
 

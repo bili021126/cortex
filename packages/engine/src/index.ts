@@ -1,14 +1,23 @@
 // ============================================================
 // @cortex/engine —— 桶导出（Public API Surface）
 //
+// 【Public API】
+//   本文件导出的所有符号均为 @cortex/engine 的公开 API。
+//   @experimental 标记的导出可能调整，其余为稳定 API。
+//
+// 【Internal — 不从 engine 导入】
+//   @cortex/config         → 所有配置常量/类型
+//   @cortex/scheduler      → 所有调度类/类型
+//   @cortex/telemetry      → 所有遥测函数/类型
+//   @cortex/governance     → 所有治理类/类型
+//   @cortex/skill-kit      → 所有技能类/类型
+//   @cortex/plugin-runner  → 所有插件类/类型
+//   @cortex/llm            → LlmAdapter
+//   以上符号已从 engine barrel 移除——请从源包直接导入
+//
 // @module-convention 模块化铁律（昔涟 v2.6 入宪）
 // 1. 凡 src/ 下新增公开符号，必须在本文件追加对应的 export 语句。
 // 2. 测试文件禁止 ../src/ 相对导入——只用 @cortex/<package> 包名导入。
-// 3. 新增子模块同步更新。
-//
-// @contract 公共 API 稳定性承诺
-// - 标记 @experimental 的导出（Core-2 预留）语义可能调整
-// - 未标记的导出为稳定 API
 //
 // @refactor v2.2 — Agent 导出改由 registry.ts 统一管理，按 domain 聚类标注。
 // @version 2.2.0
@@ -99,16 +108,16 @@ export { MetaAgentReplanAdapter } from "./core/meta-agent-adapter.js";
 
 // ── 引擎组件 ────────────────────────────────────
 export { PoolAwareState } from "./components/pool-aware.js";
-export { DocRegistry } from "@cortex/governance";
+// DocRegistry → 从 @cortex/governance 直接导入
 
 // ── 搜索后端 ───────────────────────────────────
 // @note v2.6.7 兼容层已砍，直接导入 @cortex/platform
 
 // ── 技能系统 ────────────────────────────────────
-export { SkillRegistry, deriveStatus } from "@cortex/skill-kit";
+// SkillRegistry → 从 @cortex/skill-kit 直接导入
 
 // ── Core-2: 引擎遥测 ───────────────────────────
-export { getTelemetry, setTelemetry, recordTelemetry, shutdownTelemetry } from "@cortex/telemetry";
+// getTelemetry/setTelemetry/recordTelemetry → 从 @cortex/telemetry 直接导入
 
 // ── v3.1 生命周期 & 优雅关闭 ─────────────────
 export { LifecycleManager } from "./lifecycle/lifecycle-manager.js";
@@ -122,35 +131,11 @@ export { FileLockManager } from "./core/file-lock-manager.js";
 export { CapabilityRegistry, capabilityRegistry } from "./core/capability-registry.js";
 
 // ── v3.1 Console → Observer 桥接 ─────────────
-export { installConsoleBridge, uninstallConsoleBridge } from "@cortex/telemetry";
+// installConsoleBridge/uninstallConsoleBridge → 从 @cortex/telemetry 直接导入
 
 // ── 引擎配置 ───────────────────────────────────
 // @note 配置类型、常量、默认值统一由 @cortex/config 提供
 // engine barrel 不再重导出——调用方请直接从 @cortex/config 导入
-export {
-  DEFAULT_LOCK_TIMEOUT_MS,
-  CLEANUP_INTERVAL_MS,
-  SHUTDOWN_TIMEOUT_MS,
-  SHUTDOWN_FORCE_EXIT_DELAY_MS,
-  SCHEDULER_MAX_ROUNDS,
-  SCHEDULER_ROUND_TIMEOUT_MS,
-  REACT_MAX_LOOPS,
-  EMBEDDING_DIM,
-  EMBEDDING_CACHE_SIZE,
-  CONTENT_HASH_ALGO,
-  VECTOR_DEDUP_THRESHOLD,
-  WEIGHT_AGING_FACTOR,
-  STALE_FREEZE_DAYS,
-  FROZEN_OBLITERATE_DAYS,
-  MAINTENANCE_WEIGHT_THRESHOLD,
-  MAX_TOTAL_MEMORIES,
-  SCHEMA_VERSION,
-  MONITOR_WINDOW_MS,
-  MONITOR_THRESHOLD,
-  ENGINE_DEFAULTS,
-  loadEngineDefaults,
-} from "@cortex/config";
-export type { EngineDefaults } from "@cortex/config";
 
 // ── 修宪管线 ───────────────────────────────────
 // @note v2.6.7 兼容层已砍，直接导入 @cortex/governance
@@ -160,13 +145,10 @@ export type { EngineDefaults } from "@cortex/config";
 // CLI/外部消费者请直接从 @cortex/llm 导入
 
 // ── v3.1 调度层接口类型（仅供测试兼容） ──────
-// @note 调度核心类请从 @cortex/scheduler 导入；
-// 仅保留 IStep/PipelineCtx 类型重导出以兼容现有测试。
-export type { PipelineCtx, IStep } from "@cortex/scheduler";
+// PipelineCtx/IStep → 从 @cortex/scheduler 直接导入
 
 // ── 插件体系（v3.2 迁入 @cortex/plugin-runner）────
-export { PluginLoader, type EnginePluginLoadConfig } from "@cortex/plugin-runner";
-export type { EnginePlugin, PluginContext, PluginContainer, PluginExternals, PluginHealth } from "@cortex/plugin-runner";
+// PluginLoader → 从 @cortex/plugin-runner 直接导入
 export { registerAgentFactory, getAgentFactory, hasAgentFactory, getRegisteredAgentTypes } from "./plugin/register-all.js";
 export type { AgentFactory } from "./plugin/agent-factory-registry.js";
 

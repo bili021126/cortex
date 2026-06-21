@@ -99,6 +99,8 @@ export interface EngineDefaults {
   schemaVersion: number;
   monitorWindowMs: number;
   monitorThreshold: number;
+  retrievalAlpha: number;
+  retrievalBeta: number;
 }
 
 /** Engine 默认配置单例 */
@@ -122,6 +124,8 @@ export const ENGINE_DEFAULTS: EngineDefaults = {
   schemaVersion: SCHEMA_VERSION,
   monitorWindowMs: MONITOR_WINDOW_MS,
   monitorThreshold: MONITOR_THRESHOLD,
+  retrievalAlpha: 0.45,
+  retrievalBeta: 0.55,
 };
 
 // ─── loadEngineDefaults ───────────────────────────

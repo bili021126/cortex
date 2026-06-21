@@ -90,7 +90,7 @@ export class FileLockManager extends BaseLifecycle {
     // 读锁
     if (lockType === LockType.Read) {
       // 如果有写锁在文件上，读锁被排斥
-      if (current && current.holders.some((h) => h.lockType === LockType.Write)) {
+      if (current?.holders.some((h) => h.lockType === LockType.Write)) {
         return false;
       }
       // 可以获取

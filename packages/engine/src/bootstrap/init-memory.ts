@@ -1,7 +1,7 @@
 // ============================================================
 // @cortex/engine/bootstrap/init-memory —— 记忆存储与一致性层初始化
 // ============================================================
-/* eslint-disable no-console */
+ 
 
 import { MemoryStore, defaultEmbeddingService } from "@cortex/memory-store";
 import { InMemoryMemoryStore } from "@cortex/memory";

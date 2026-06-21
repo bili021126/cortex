@@ -58,6 +58,11 @@ export interface InspectorConfig {
   tscTimeout?: number;
   testTimeout?: number;
   vitestTimeout?: number;
+
+  /** 混合检索 BM25 权重 (0..1)。默认 0.45。对应 HybridRetrievalConfig.alpha */
+  retrievalAlpha?: number;
+  /** 混合检索向量相似度权重 (0..1)。默认 0.55。对应 HybridRetrievalConfig.beta */
+  retrievalBeta?: number;
 }
 
 /** LLM 配置 */

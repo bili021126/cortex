@@ -411,7 +411,7 @@ export class MetaAgent {
 
       blocks.intent = `User intent: ${intent}`;
 
-      return this._promptManager.assemblePlanningPrompt(blocks);
+      return await this._promptManager.assemblePlanningPrompt(blocks);
     }
 
     // ── 回退路径：原始手拼方式（向后兼容） ──

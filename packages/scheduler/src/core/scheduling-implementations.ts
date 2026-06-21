@@ -136,6 +136,10 @@ export class PriorityFirstStrategy implements IScheduleStrategy {
 export class TopologicalLayeredDriver implements ILoopDriver {
   readonly name = "topological-layered";
 
+  /** 增量拓扑缓存——pending 节点 ID 集合不变时复用上次排序结果 */
+  private _lastPendingIds: string | null = null;
+  private _lastLayers: string[][] | null = null;
+
   async run(ctx: LoopContext): Promise<LoopResult> {
     const {
       board, pool, observer, agents, models,
@@ -191,7 +195,15 @@ export class TopologicalLayeredDriver implements ILoopDriver {
           break;
         }
 
-        const layers = topologicalSort(pendingNodes, observer);
+        let layers: string[][];
+        const pendingIds = pendingNodes.map(n => n.id).sort().join(",");
+        if (pendingIds === this._lastPendingIds && this._lastLayers !== null) {
+          layers = this._lastLayers;
+        } else {
+          layers = topologicalSort(pendingNodes, observer);
+          this._lastPendingIds = pendingIds;
+          this._lastLayers = layers;
+        }
 
         if (layers.length === 0 && pendingNodes.length > 0) {
           observer.emit({
@@ -365,9 +377,20 @@ export class SequentialDriver implements ILoopDriver {
     let failed = 0;
 
     const startTime = Date.now();
+    const MAX_DURATION = ctx.config?.executeAllTimeoutMs ?? 300_000; // 默认 5 分钟全局超时
     let replanFlight: Promise<void> | null = null;
 
     while (true) {
+      if (Date.now() - startTime > MAX_DURATION) {
+        observer.emit({
+          type: PipelineEventType.SchedulerReplanLimit,
+          priority: PipelinePriority.CRITICAL,
+          payload: { totalReplans: 0, maxReplans: 0, hint: "SequentialDriver 全局超时" },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+        break;
+      }
       const pendingNodes = board.getPendingNodes();
       if (pendingNodes.length === 0) {
         if (replanFlight) { await replanFlight; replanFlight = null; }

@@ -79,15 +79,21 @@ export function topologicalSort(nodes: TaskNode[], observer?: IPipelineObserver)
   while (current.length > 0) {
     layers.push(current);
     const next: string[] = [];
-    for (const id of current) {
+    const injected = new Set<string>(); // 防止 soft-edge 循环注入
+    // 快照迭代——防止遍历时 current 被 push 修改导致无限增长
+    for (const id of [...current]) {
       // 硬边子节点 → 下一层
       const kids = children.get(id);
       if (kids) next.push(...kids);
-      // 软边/触发边子节点 → 同层（注入当前层，本轮并行执行）
+      // 软边/触发边子节点 → 同层（注入当前层，保证与父节点同轮并行）
       const softKids = softChildren.get(id);
       if (softKids) {
-        // 注入当前层数组，保证与父节点同轮并行
-        current.push(...softKids);
+        for (const sk of softKids) {
+          if (!injected.has(sk)) {
+            injected.add(sk);
+            current.push(sk);
+          }
+        }
       }
     }
     current = next;

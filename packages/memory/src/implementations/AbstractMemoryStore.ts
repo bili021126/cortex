@@ -565,6 +565,14 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     const x = this._entries.get(id);
     if (!x || x.semantic_state === "Obliterated" || x.semantic_state !== e)
       return false;
+    // 状态转换白名单校验（与 memory-store 的 VALID_TRANSITIONS 保持一致）
+    const valid: Record<string, Set<string>> = {
+      Pending: new Set(["Active", "Obliterated"]),
+      Active: new Set(["Archived", "Obliterated", "Active"]),
+      Archived: new Set(["Obliterated", "Archived"]),
+      Obliterated: new Set(),
+    };
+    if (!valid[e]?.has(n)) return false;
     x.semantic_state = n;
     return true;
   }
@@ -578,7 +586,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   archive(id: string) {
     this._ei();
     const e = this._entries.get(id);
-    if (!e || e.semantic_state !== "Active")
+    if (e?.semantic_state !== "Active")
       return false;
     e.semantic_state = "Archived";
     return true;
@@ -665,7 +673,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   async rollback(mt: string | TransactionContext): Promise<boolean | TransactionResult<void>> {
     if (typeof mt === "string")
       return this._rp(mt);
-    return this._rt(mt);
+    return await this._rt(mt);
   }
 
   /**
@@ -884,7 +892,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   async readWithin(t: TransactionContext, q: MemoryQuery, m?: ReadMode) {
     this._ei();
     this._va(t);
-    return this.read(q, m);
+    return await this.read(q, m);
   }
 
   /**
@@ -912,9 +920,13 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
     try {
       const ids: string[] = [];
+      const committedIds: string[] = [];
 
-      for (const w of x.pendingWrites)
-        ids.push(await this.write(w));
+      for (const w of x.pendingWrites) {
+        const id = await this.write(w);
+        ids.push(id);
+        committedIds.push(id);
+      }
 
       for (const l of x.pendingLinks)
         if (l.action === "link")
@@ -932,6 +944,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
         affectedCount: ids.length + x.pendingLinks.length,
       };
     } catch (err) {
+      // 补偿回滚：撤销已写入的条目，防止部分提交
+      for (const cid of committedIds) {
+        try { await this._be.remove(cid); this._entries.delete(cid); } catch {}
+      }
       x.status = "error";
       return {
         success: false,

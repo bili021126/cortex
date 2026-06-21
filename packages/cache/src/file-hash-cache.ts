@@ -101,7 +101,7 @@ export class FileHashCache {
       try {
         const stat = fs.statSync(filePath);
         // mtime 未变 → 复用旧哈希
-        if (existing && existing.mtimeMs === stat.mtimeMs && existing.size === stat.size) {
+        if (existing?.mtimeMs === stat.mtimeMs && existing.size === stat.size) {
           existing.checkedAt = Date.now();
           result.set(filePath, existing.hash);
           continue;

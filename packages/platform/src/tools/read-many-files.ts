@@ -38,7 +38,8 @@ export function createTool(ctx: ToolContext): Tool {
       }
 
       const resolvedPaths = paths.map((p) => {
-        try { return ctx.resolvePath(p); } catch { return p; }
+        // strict: resolvePath 失败说明路径越界或无效，不降级回退
+        return ctx.resolvePath(p);
       });
 
       const reads = resolvedPaths.map(async (filePath, i) => {

@@ -70,6 +70,10 @@ export enum PipelineEventType {
   ConstitutionViolation = "constitution.violation",
   ConstitutionSessionConvened = "constitution.session_convened",
   ConstitutionSessionResolved = "constitution.session_resolved",
+  GovernanceAmendmentProposed = "governance.amendment_proposed",
+  GovernanceAuditReport = "governance.audit_report",
+  GovernanceComplianceViolation = "governance.compliance_violation",
+  GovernanceRoundtableConsensus = "governance.roundtable_consensus",
   // ── RLM 递归分层执行 ──
   RlmDecompose = "rlm.decompose",
   RlmContextCompress = "context.compress",
@@ -168,6 +172,15 @@ export type EventPayloadMap = {
   // ── Infrastructure ──
   [PipelineEventType.InfraFileLockExpiredReclaimed]: { count: number; path?: string; holders?: string; detail: string };
   [PipelineEventType.InfraComponentDegraded]: { component: string; operation: string; detail: string };
+
+  // ── Governance ──
+  [PipelineEventType.ConstitutionViolation]: GovernanceEventPayload & { rule: string; detail: string };
+  [PipelineEventType.ConstitutionSessionConvened]: GovernanceEventPayload & { sessionId: string };
+  [PipelineEventType.ConstitutionSessionResolved]: GovernanceEventPayload & { sessionId: string; resolution: string };
+  [PipelineEventType.GovernanceAmendmentProposed]: GovernanceEventPayload & { amendmentId: string };
+  [PipelineEventType.GovernanceAuditReport]: GovernanceEventPayload & { auditType: "plan_review" | "doc_audit" | "constitution_check" };
+  [PipelineEventType.GovernanceComplianceViolation]: GovernanceEventPayload & { violationLevel: "P0" | "P1" | "P2" | "P3" };
+  [PipelineEventType.GovernanceRoundtableConsensus]: GovernanceEventPayload & { participants: string[] };
 };
 
 /** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定
@@ -194,6 +207,25 @@ export interface ObservableEvent<T extends PipelineEventType = PipelineEventType
    * undefined 为向后兼容，行为不变。
    */
   notificationType?: "FYI" | "WARNING" | "DECISION_REQUIRED";
+}
+
+/**
+ * 治理事件统一上下文。
+ * 所有治理组件 emit 的 ObservableEvent 中，payload 应符合此结构。
+ */
+export interface GovernanceEventPayload {
+  /** 事件严重性 */
+  severity: "FYI" | "WARNING" | "DECISION_REQUIRED";
+  /** 发射源 */
+  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop";
+  /** 摘要 */
+  summary: string;
+  /** 详情（可选） */
+  detail?: string;
+  /** 建议动作（可选） */
+  suggestedAction?: "fix" | "ignore" | "escalate";
+  /** 三轴归属（可选） */
+  axis?: "事轴" | "权轴" | "横切";
 }
 
 export type PipelineHandler = (event: ObservableEvent) => void;

@@ -15,8 +15,9 @@
 // ============================================================
 
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent, type PipelineHandler } from "@cortex/shared";
+import type {
+  NotificationPipe} from "@cortex/notification";
 import {
-  NotificationPipe,
   RouteTable,
   type NotificationEvent,
   type NotificationHandler,

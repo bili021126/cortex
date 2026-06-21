@@ -160,7 +160,8 @@ export class SkillTemplateEngine {
       }
 
       if (typeof value === "function") {
-        return this.safeRender(value.call(context));
+        // 安全修复：不将 context 作为 this 传入——防止函数通过 this.__proto__ 遍历原型链
+        return this.safeRender(value());
       }
 
       return this.safeRender(value);

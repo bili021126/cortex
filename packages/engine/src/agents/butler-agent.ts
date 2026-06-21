@@ -2,7 +2,7 @@
 // @layer 交互层
 // @role 交互边界——管道通知路由 + 用户交互面
 
-/* eslint-disable no-console */
+ 
 import { AgentType as AT, AgentStatus as AS, PipelinePriority, type AgentStatus, type ObservableEvent, type SafeErrorReporter, type IPipelineObserver, type PlatformBridge } from "@cortex/shared";
 import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "../components/pool-aware.js";

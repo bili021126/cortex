@@ -1,21 +1,13 @@
 // ============================================================
-// @cortex/shared —— Cortex v2.0 共享类型定义
+// @cortex/shared —— Cortex 类型中枢（Public API Surface）
 //
-// @file-overview
-// 本文档是 @cortex/shared 的桶导出，定义跨包的类型契约。所有 export *
-// 将对应域的完整类型/枚举/常量暴露给 @cortex/engine 和 @cortex/llm。
+// 【Public API】
+//   本文件导出的所有类型/枚举/常量为跨包公开契约。
+//   所有外部消费者应从 @cortex/shared 导入，非子路径。
 //
-// @module-convention 模块化铁律（昔涟 v2.6 入宪）
-// 1. 凡 src/ 下新增公开类型/枚举/常量，必须在本文件追加 export * 行。
-// 2. 测试文件禁止 ../src/ 相对导入——只用 @cortex/shared 包名导入。
-// 3. 收益：文件合并/拆分/重命名——只要 barrel 出口不变，所有引用方无感。
-// 违反者：导入路径越写越长，终至不可维护。
-//
-// @contract 类型中枢契约
-// - agent.ts: AgentType 枚举、统一注册表（标签/展示/权限/运行时覆写）、
-//   技能模板接口、能力协议——是整个 Agent 体系的类型脊梁
-// - task.ts: TaskNode、PipelineEventType、PipelinePriority 等任务管线类型
-// - memory.ts: MemoryEntry、SemanticState、MemoryQuery 等记忆域类型
+// 【领域分桶】
+//   按包依赖方向分组：agent / task / memory / infra / fs-adapter / toolkit
+//   消费者按需只导入需要的桶。
 // - toolkit.ts/infra.ts/cli-adapter.ts/file-lock-manager.ts/skill-registry.ts:
 //   工具/基础设施/CLI/文件锁/技能注册的辅助类型
 // - fs-adapter.ts: 文件系统适配器接口（纳西妲增强建议：解耦 Toolkit 与 Node.js API）

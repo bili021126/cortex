@@ -10,6 +10,9 @@ import { execSync } from "node:child_process";
 import { resolveConfig, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
 
+/** 所有 execSync 统一超时上限（ms） */
+const SAFE_EXEC_TIMEOUT = 60_000;
+
 /**
  * M9 — 提取为独立模块函数，工厂版本和类版本共同调用，消除 80 行重复代码。
  *
@@ -25,7 +28,7 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, t
     try {
       const tscOut = execSync("npx tsc --noEmit --pretty false", {
         cwd: root,
-        timeout: T.tscTimeout,
+        timeout: Math.min(T.tscTimeout ?? SAFE_EXEC_TIMEOUT, SAFE_EXEC_TIMEOUT),
         encoding: "utf-8",
         maxBuffer: 256 * 1024,
         stdio: ["ignore", "pipe", "pipe"],
@@ -48,7 +51,7 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, t
     try {
       const tsxOut = execSync("npx tsx test/calculator.test.ts", {
         cwd: root,
-        timeout: T.testTimeout,
+        timeout: Math.min(T.testTimeout ?? SAFE_EXEC_TIMEOUT, SAFE_EXEC_TIMEOUT),
         encoding: "utf-8",
         maxBuffer: 256 * 1024,
         stdio: ["ignore", "pipe", "pipe"],
@@ -69,9 +72,10 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, t
 
   try {
     try {
+      // execSync 同步阻塞事件循环，多 Agent 并发场景下其他任务等待。未来优化方向：异步 Promise.allSettled + AbortSignal。
       const testOut = execSync("npx vitest run --reporter verbose 2>&1 || npx jest --verbose 2>&1 || echo NO_TEST_RUNNER", {
         cwd: root,
-        timeout: T.vitestTimeout,
+        timeout: Math.min(T.vitestTimeout ?? SAFE_EXEC_TIMEOUT, SAFE_EXEC_TIMEOUT),
         encoding: "utf-8",
         maxBuffer: 512 * 1024,
         stdio: ["ignore", "pipe", "pipe"],

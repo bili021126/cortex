@@ -85,7 +85,8 @@ export function createTool(ctx: ToolContext): Tool {
         }
 
         try {
-          const output = await ctx.fs.execCommand(`npx ${args.join(" ")}`, {
+          const quotedArgs = args.map(a => a.includes(" ") ? `"${a}"` : a).join(" ");
+          const output = await ctx.fs.execCommand(`npx ${quotedArgs}`, {
             cwd,
             timeout: ctx.toolTimeouts.runShell ?? 60_000,
           });

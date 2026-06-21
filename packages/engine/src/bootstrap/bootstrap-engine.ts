@@ -214,7 +214,7 @@ export async function bootstrapEngine(
       name: "core-2-composite",
       route: async (node, agentType, _defaultModel) => {
         const decision = await taskRouter.route(node as TaskNode, agentType as string);
-        return envRouter.resolve(decision.model, node as TaskNode);
+        return await envRouter.resolve(decision.model, node as TaskNode);
       },
     };
     scheduler.setModelRouter(compositeRouter);
@@ -230,7 +230,7 @@ export async function bootstrapEngine(
   // @layer 治理层（观察者）→ 治理层：哨兵订阅 CRITICAL 事件
   observer.on(PipelinePriority.CRITICAL, (event) => {
     const signal = sentinelFilter.filter(event);
-    if (signal && signal.suggestedAction === "alert") {
+    if (signal?.suggestedAction === "alert") {
       void import("@cortex/telemetry").then(({ recordTelemetry }) =>
         recordTelemetry("sentinel.alert", 1, [
           { key: "level", value: signal.level },

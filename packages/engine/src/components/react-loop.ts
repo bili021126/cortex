@@ -1,7 +1,7 @@
 // @layer 规划-执行层
 // @role ReAct 循环——共享执行引擎
 
-/* eslint-disable no-console */
+ 
 import type { TaskNode, NodeResult, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import { AgentType, ReversibilityLevel as RL } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
@@ -186,6 +186,15 @@ export async function runReActLoop(
               role: "tool",
               content: result.success ? (result.output ?? "success") : `ERROR: ${result.error}`,
               tool_call_id: tc.id,
+            });
+          } else {
+            // rejected Promise——仍然推入 tool role 消息，防止 LLM 对话状态缺失
+            diagnostic(`⚠️ L0 工具被拒绝: ${(settled.reason as {tc?:{name?:string}})?.tc?.name ?? "unknown"}`);
+            const tc = (settled.reason as {tc?:{id?:string}})?.tc;
+            messages.push({
+              role: "tool",
+              content: `ERROR: ${String(settled.reason)}`,
+              tool_call_id: tc?.id ?? "unknown",
             });
           }
         }

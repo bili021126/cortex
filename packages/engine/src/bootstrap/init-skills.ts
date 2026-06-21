@@ -4,7 +4,7 @@
 // @since v2.6 — 重构：技能即记忆，SkillExecutor 已移除。
 //   Agent 自主拉取技能参照，不通过强制注入。
 // ============================================================
-/* eslint-disable no-console */
+ 
 
 import { SkillRegistry, deriveStatus } from "@cortex/skill-kit";
 import { registerSkillPipeline } from "@cortex/skill-kit";

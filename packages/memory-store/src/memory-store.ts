@@ -604,28 +604,46 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     });
   }
 
-  /** SHA256 去重——扫描后端已有条目 */
+  /** SHA256 去重缓存：content_hash → id */
+  private readonly _dedupCache = new Map<string, string>();
+  /** 向量索引缓存：id → embedding，用于快速向量去重 */
+  private readonly _vectorCache = new Map<string, number[]>();
+
+  /** SHA256 去重——优先查缓存，miss 时全表扫描 */
   private async _tryDedup(contentHash: string): Promise<string | null> {
+    // 缓存命中
+    const cached = this._dedupCache.get(contentHash);
+    if (cached) return cached;
+
     try {
       const all = await this._backend.read({}, "HCA");
       const dup = all.find((e: MemoryEntry) => e.content_hash === contentHash);
-      return dup?.id ?? null;
+      if (dup) {
+        this._dedupCache.set(contentHash, dup.id);
+        return dup.id;
+      }
+      // 缓存未命中：预热缓存（O(n) 一次，后续 O(1)）
+      for (const e of all) {
+        if (e.content_hash) this._dedupCache.set(e.content_hash, e.id);
+        if (e.embedding) this._vectorCache.set(e.id, e.embedding);
+      }
+      return null;
     } catch {
       this._emitDegraded("dedup-content-hash", "SHA256去重扫描失败");
       return null;
     }
   }
 
-  /** 向量相似去重——后验检查 */
+  /** 向量相似去重——优先查缓存，miss 时全表扫描 */
   private async _tryVectorDedup(newId: string, embedding: number[]): Promise<void> {
     try {
-      const all = await this._backend.read({}, "HCA");
-      for (const e of all) {
-        if (e.id === newId || e.embedding?.length !== embedding.length) continue;
-        const emb = e.embedding;
+      const all = this._vectorCache.size > 0 ? [] as MemoryEntry[] : await this._backend.read({}, "HCA");
+      const candidates = this._vectorCache.size > 0 ? Array.from(this._vectorCache.entries()) : all.map(e => [e.id, e.embedding] as [string, number[] | undefined]).filter(([,e]) => e);
+      for (const [id, emb] of candidates) {
+        if (id === newId || emb?.length !== embedding.length) continue;
         const dot = embedding.reduce((sum: number, v: number, i: number) => sum + v * (emb[i] ?? 0), 0);
         const magA = Math.sqrt(embedding.reduce((s: number, v: number) => s + v * v, 0));
-        const magB = Math.sqrt(e.embedding.reduce((s: number, v: number) => s + v * v, 0));
+        const magB = Math.sqrt(emb.reduce((s: number, v: number) => s + v * v, 0));
         const cos = magA > 0 && magB > 0 ? dot / (magA * magB) : 0;
         if (cos >= VECTOR_DEDUP_THRESHOLD) {
           await this._backend.delete(newId);
