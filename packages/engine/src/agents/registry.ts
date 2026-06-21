@@ -221,11 +221,13 @@ export const analysisMemoryQuery = analysis.query;
 export const analysisAgentConfig = analysis.config;
 
 export function opsMemoryQuery(node: TaskNode): MemoryQuery {
+  const reg = opsReg;
+  if (!reg) return { kind: undefined, linkTypes: [], bfsDepth: 2, limit: 20 };
   const base = makeMemoryQuery(node, {
-    kind: opsReg!.memoryParams.kind,
-    linkTypes: opsReg!.memoryParams.linkTypes,
-    bfsDepth: opsReg!.memoryParams.bfsDepth,
-    limit: opsReg!.memoryParams.limit,
+    kind: reg.memoryParams.kind,
+    linkTypes: reg.memoryParams.linkTypes,
+    bfsDepth: reg.memoryParams.bfsDepth,
+    limit: reg.memoryParams.limit,
   });
   return {
     ...base,

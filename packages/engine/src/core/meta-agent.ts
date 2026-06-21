@@ -388,7 +388,7 @@ export class MetaAgent {
         const scope = this._skillScope ?? {};
         const skills = resolveByScope(this._skillRegistry.getAll(), scope);
         const matched = skills.filter((s) =>
-          context.existingTags!.some((t) => (s.triggerTags as readonly string[]).includes(t)),
+          context.existingTags.some((t) => (s.triggerTags as readonly string[]).includes(t)),
         );
         if (matched.length > 0) {
           const skillLines = matched.map((s) =>
@@ -435,7 +435,7 @@ export class MetaAgent {
         const scope = this._skillScope ?? {};
         const skills = resolveByScope(this._skillRegistry.getAll(), scope);
         const matched = skills.filter((s) =>
-          context.existingTags!.some((t) => (s.triggerTags as readonly string[]).includes(t)),
+          context.existingTags.some((t) => (s.triggerTags as readonly string[]).includes(t)),
         );
       if (matched.length > 0) {
         const skillLines = matched.map((s) =>

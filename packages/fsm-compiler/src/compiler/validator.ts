@@ -68,7 +68,7 @@ export class FsmValidator {
     const reachable = new Set<string>();
     const queue = [initialState];
     while (queue.length > 0) {
-      const s = queue.shift()!;
+      const s = queue.shift() as string;
       if (reachable.has(s)) continue;
       reachable.add(s);
       for (const t of transitions) {

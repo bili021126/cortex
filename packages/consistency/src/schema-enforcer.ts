@@ -24,15 +24,6 @@ export interface ValidationResult {
 
 // ─── 校验器 ──────────────────────────────────────
 
-const REGEX_TIMEOUT_MS = 1000;
-
-function safeRegexTest(re: RegExp, input: string): boolean {
-  return new Promise<boolean>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("regex timeout")), REGEX_TIMEOUT_MS);
-    try { resolve(re.test(input)); } catch(e) { reject(e); } finally { clearTimeout(timer); }
-  }) as any;
-}
-
 export class SchemaEnforcer {
   /**
    * 校验 MemoryWriteInput 结构完整性（v3 字段）。

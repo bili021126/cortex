@@ -20,12 +20,10 @@ import {
   PromptOrchestrator,
   PromptBlockType,
   type PromptAssembly,
-  type PromptContext,
-  type PromptResult,
   type PromptTemplate,
   type ValidationResult,
 } from "@cortex/prompt-kit";
-import type { AgentDefinition } from "../bootstrap/factory/types.js";
+
 
 /**
  * PromptManager —— 引擎的 prompt 编排管理器。

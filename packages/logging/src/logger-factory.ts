@@ -1,4 +1,4 @@
-import { LogLevel } from "./log-level.js";
+
 import type { LoggerConfig } from "./types.js";
 import type { Transport } from "./transport.js";
 import { Logger } from "./logger.js";

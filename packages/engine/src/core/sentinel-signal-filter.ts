@@ -19,7 +19,7 @@
 //   3. 可配置——层级阈值、去噪窗口、采样率均可调
 // ============================================================
 
-import { PipelineEventType, PipelinePriority, type ObservableEvent, type PipelineHandler } from "@cortex/shared";
+import { PipelineEventType, type ObservableEvent, type PipelineHandler } from "@cortex/shared";
 
 /**
  * 信号层级——事件的严重程度分类。

@@ -10,6 +10,7 @@ export class ConsoleTransport implements Transport {
     this._formatter = _options?.formatter ?? new DefaultFormatter({ color: _options?.color, showTimestamp: _options?.showTimestamp });
   }
   async write(entry: LogEntry): Promise<void> {
+    /* eslint-disable no-console */
     const msg = this._formatter.format(entry);
     if (entry.level <= LogLevel.Info) console.log(msg);
     else if (entry.level === LogLevel.Warn) console.warn(msg);

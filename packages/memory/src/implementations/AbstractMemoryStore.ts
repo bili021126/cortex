@@ -275,14 +275,14 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     }
 
     if (q.timeRange)
-      r = r.filter(e => e.createdAt >= q.timeRange!.start && e.createdAt <= q.timeRange!.end);
+      r = r.filter(e => e.createdAt >= q.timeRange.start && e.createdAt <= q.timeRange.end);
 
     if (q.agentTypes?.length)
-      r = r.filter(e => q.agentTypes!.includes(e.source.agentType));
+      r = r.filter(e => q.agentTypes.includes(e.source.agentType));
 
     if (q.metadataFilter)
       r = r.filter(e =>
-        Object.entries(q.metadataFilter!).every(([k, v]) => (e.content_blob as any)[k] === v),
+        Object.entries(q.metadataFilter).every(([k, v]) => (e.content_blob as Record<string, unknown>)[k] === v),
       );
 
     if (q.bfsDepth && q.bfsDepth > 0)
@@ -468,7 +468,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       kind: f.kind,
       summary: f.summary,
       semantic_gist: f.semantic_gist,
-      content_blob: f.content_blob as any,
+      content_blob: f.content_blob as Record<string,unknown>,
       semantic_state: "Active",
       weight: f.weight ?? 1,
       accessCount: 0,
@@ -647,7 +647,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       kind: p.input.kind,
       summary: p.input.summary,
       semantic_gist: p.input.semantic_gist,
-      content_blob: p.input.content_blob as any,
+      content_blob: p.input.content_blob as Record<string, unknown>,
       semantic_state: "Active",
       weight: p.input.weight ?? 1,
       accessCount: 0,
@@ -946,7 +946,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     } catch (err) {
       // 补偿回滚：撤销已写入的条目，防止部分提交
       for (const cid of committedIds) {
-        try { await this._be.remove(cid); this._entries.delete(cid); } catch {}
+        try { await this._be.remove(cid); this._entries.delete(cid); } catch { /* ignore */ }
       }
       x.status = "error";
       return {
@@ -1098,7 +1098,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       kind: p.input.kind,
       summary: p.input.summary,
       semantic_gist: p.input.semantic_gist,
-      content_blob: p.input.content_blob as any,
+      content_blob: p.input.content_blob as Record<string, unknown>,
       semantic_state: "Active",
       weight: p.input.weight ?? 1,
       accessCount: 0,

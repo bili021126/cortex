@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * tui/modes/plan-utils.ts — Plan 模式工具函数
  *
@@ -40,14 +41,14 @@ export function displayClarification(cl: IntentClarification): void {
     analysis: "分析", modification: "修改", audit: "审计",
     refactor: "重构", generation: "生成", inquiry: "询问",
   };
-  console.log(`\n┌─ 意图确认 ─────────────────────────────`);
-  console.log(`│ 🎯 目标: ${cl.goal}`);
-  console.log(`│ ${actionIcon[cl.actionType] ?? "❓"} 类型: ${actionLabel[cl.actionType] ?? cl.actionType}`);
-  console.log(`│ 📂 范围: ${cl.scope}`);
+  console.log(`\n┌─ 意图确认 ─────────────────────────────`);/* eslint-disable-next-line no-console */
+  console.log(`│ 🎯 目标: ${cl.goal}`);/* eslint-disable-next-line no-console */
+  console.log(`│ ${actionIcon[cl.actionType] ?? "❓"} 类型: ${actionLabel[cl.actionType] ?? cl.actionType}`);/* eslint-disable-next-line no-console */
+  console.log(`│ 📂 范围: ${cl.scope}`);/* eslint-disable-next-line no-console */
   console.log(`│ ⚠️ 约束: ${cl.constraints}`);
   if (cl.unclear) {
     console.log(`│ ❓ 不明确: ${cl.unclear}`);
-  }
+  }/* eslint-disable-next-line no-console */
   console.log(`└─────────────────────────────────────────`);
 }
 
@@ -102,7 +103,7 @@ export async function clarifyAndConfirm(
     console.log(`📝 已修正意图，重新确认…`);
   }
 
-  // 三次确认仍未通过，最后一次机会
+  // 三次确认仍未通过，最后一次机会/* eslint-disable-next-line no-console */
   console.log("⚠️ 多次修正未确认，直接使用最后意图进入规划。");
   return currentIntent;
 }
@@ -196,3 +197,5 @@ export function formatPlanTree(nodes: TaskNode[]): string {
 
   return lines.join("\n");
 }
+
+/* eslint-enable no-console */

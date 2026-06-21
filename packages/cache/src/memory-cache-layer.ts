@@ -98,7 +98,8 @@ export class MemoryCacheLayer {
       return null;
     }
 
-    const entry = this._entries.get(key)!;
+    const entry = this._entries.get(key);
+    if (!entry) return null;
     const now = Date.now();
     const isExpired = now - entry.createdAt > this._config.ttlMs;
     const needsVerification =

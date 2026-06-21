@@ -18,9 +18,7 @@ import { PipelineEventType, PipelinePriority, type IPipelineObserver, type Obser
 import type {
   NotificationPipe} from "@cortex/notification";
 import {
-  RouteTable,
   type NotificationEvent,
-  type NotificationHandler,
   NotificationChannel,
   withSemantics,
   type NotificationSemantics,
@@ -134,7 +132,7 @@ export class NotificationRuntime {
   private _resolveSemantics(eventType: string): NotificationSemantics {
     // 优先使用用户配置
     if (this.options.eventSemantics?.[eventType as PipelineEventType]) {
-      return this.options.eventSemantics[eventType as PipelineEventType]!;
+      return this.options.eventSemantics[eventType as PipelineEventType] ?? "FYI";
     }
     // 回退到默认映射
     return this.defaultSemantics[eventType] ?? "FYI";

@@ -20,13 +20,13 @@ import {
   bootstrapEngine,
   type BootstrapEngineResult,
 } from "@cortex/engine";
-import { SlashCommandParser, type SlashCommandResult } from "./slash-command.js";
+import { SlashCommandParser } from "./slash-command.js";
 import type { IScheduler, ITaskBoard, IAgentPool } from "@cortex/scheduler";
 import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { CLIAdapter, type Toolkit } from "@cortex/platform";
 import type { EngineConfig } from "@cortex/config";
 import { MemoryStore } from "@cortex/memory-store";
-import { AgentStatus, AgentType, type AgentConfig, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
+import { AgentType, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";

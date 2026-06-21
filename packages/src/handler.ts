@@ -1,1 +1,0 @@
-export function handler(input: string | null): string { if (input === null) return ''; return input.trim(); }

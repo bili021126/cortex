@@ -63,7 +63,6 @@ export async function syncGovernanceToMemory(
   }
 
   // ── 2. 治理摘要 ──
-  let summaryWritten = false;
   const summary = summarizeGovernance(rootDir);
   const timeoutActions = checkTimeouts(rootDir);
 
@@ -84,7 +83,7 @@ export async function syncGovernanceToMemory(
     },
   };
   await store.write(summaryInput);
-  summaryWritten = true;
+  const summaryWrittenFinal = true;
 
-  return { proposalsWritten, summaryWritten };
+  return { proposalsWritten, summaryWritten: summaryWrittenFinal };
 }

@@ -211,7 +211,7 @@ export class MemoryEntryStateMachine {
   }
 
   /** 重置状态机 */
-  reset(state: MemState = "active", clearHistory = true): void {
+  reset(_state: MemState = "active", clearHistory = true): void {
     // NOTE: StateMachine.reset() 只支持回到 initialState，所以我们需要重建
     this._machine.reset(clearHistory);
     // 如果目标状态不是 initialState，通过连续 dispatch 到达

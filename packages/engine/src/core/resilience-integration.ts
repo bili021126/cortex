@@ -96,12 +96,12 @@ export class ResiliencePolicyFactory {
     const start = Date.now();
     try {
       const result = await this.registry.execute(componentName, fn);
-      recordTelemetry(`${componentName}.resilience.success`, Date.now() - start, [
+void recordTelemetry(`${componentName}.resilience.success`, Date.now() - start, [
         { key: "component", value: componentName },
       ]);
       return result;
     } catch (e) {
-      recordTelemetry(`${componentName}.resilience.failure`, Date.now() - start, [
+void recordTelemetry(`${componentName}.resilience.failure`, Date.now() - start, [
         { key: "component", value: componentName },
         { key: "error", value: String(e).slice(0, 200) },
       ]);

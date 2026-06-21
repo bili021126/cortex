@@ -305,6 +305,7 @@ export class Toolkit {
     };
 
     // 动态 getter：每次读取时实时获取 Toolkit 的 workspaceRoot
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     Object.defineProperty(ctx, 'workspaceRoot', {
       get: function() { return self.workspaceRoot; },

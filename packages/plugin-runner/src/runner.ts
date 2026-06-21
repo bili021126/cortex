@@ -15,7 +15,6 @@
 import { rm } from "node:fs/promises";
 
 import type {
-  PluginConfig,
   ExecuteContext,
   PluginResult,
   PluginStatus,
@@ -136,7 +135,7 @@ export class PluginRunner {
     }
 
     // 1-b. Schema 配置校验（使用插件配置，无配置时回退默认值）
-    const config = (plugin as any).config ?? { enabled: true };
+    const config = (plugin as unknown as Record<string, unknown>).config ?? { enabled: true };
     const configResult = this._validator.validateConfig(name, config);
     if (!configResult.valid) {
       return {

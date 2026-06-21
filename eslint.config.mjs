@@ -13,6 +13,7 @@ export default tseslint.config(
       ".cortex/",
       "projects/",
       "**/coverage/",
+      "packages/vitest.ci.base.ts",
       "**/vitest.config.ts",
       "**/vitest.ci.config.ts",
       "**/vitest.ci-slow.config.ts",

@@ -267,3 +267,52 @@ Agent.produces → routeTable → channels
 >
 > 宪法依据：Cortex 概念顶层设计——八条不可变原则
 > 代码依据：`prompts/coding-standards.md`（Agent 端）、`prompts/coding-standards-governance.md`（治理端）
+
+
+## §十 类型安全与 lint 纪律
+
+### §10.1 禁止 `!` 非空断言
+
+`!` 非空断言绕过 TypeScript 的 null 检查，是运行时崩溃的第一来源。
+
+```typescript
+// ❌ 禁止
+const x = obj!.value;
+
+// ✅ 改用可选链 + 类型守卫
+const x = obj?.value;
+if (!x) return;
+```
+
+### §10.2 禁止 `as any`
+
+`as any` 关闭整个类型检查系统。优先使用显式类型守卫。
+
+```typescript
+// ❌ 禁止
+const x = result as any;
+
+// ✅ 改用显式类型
+const x = result as MyType;
+```
+
+### §10.3 无 floating Promise
+
+所有 Promise 必须 await、catch 或 void 标记。
+
+```typescript
+// ❌ 禁止
+somePromise();
+
+// ✅
+await somePromise();
+void somePromise();
+```
+
+### §10.4 no-unused-vars
+
+未使用的变量和导入必须移除或以 `_` 前缀标记。
+
+### §10.5 验收标准
+
+`pnpm exec eslint --quiet packages/` 必须返回 0 行输出。CI 门禁拦截含 lint error 的 PR。
