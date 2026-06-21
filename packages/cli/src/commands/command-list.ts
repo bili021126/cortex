@@ -10,7 +10,7 @@
 import type { CommandRegistry } from "./index.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
 import type { ConfigManager } from "../services/config-manager.js";
-import type { DocRegistry } from "@cortex/engine";
+import type { DocRegistry } from "@cortex/governance";
 import { createRunHandler } from "./run.js";
 import { createAgentHandler } from "./agent.js";
 import { createTaskHandler } from "./task.js";

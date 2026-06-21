@@ -22,7 +22,7 @@ import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 
 // ── Workspace packages ───────────────────────────
-import { DocRegistry } from "@cortex/engine";
+import { DocRegistry } from "@cortex/governance";
 import { NodeFileSystemAdapter, Toolkit } from "@cortex/platform";
 
 // ── Config 常量 ──────────────────────────────────

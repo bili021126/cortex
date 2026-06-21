@@ -43,6 +43,9 @@ export interface IStep {
 
   /** 执行此步骤，返回更新后的上下文 */
   run(ctx: PipelineCtx): Promise<PipelineCtx>;
+
+  /** 可选：步骤执行后的清理钩子 */
+  cleanup?(ctx: PipelineCtx): Promise<void>;
 }
 
 /**

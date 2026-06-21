@@ -1,12 +1,12 @@
 // @ci: unit
 /**
- * ManifoldGate 流约束门�?—�?全场景单元测�?
+ * ManifoldGate 流约束门�?—�?全场景单元测�?
  *
  * 验证 mHC 流形约束的核心行为：
- * - 同类�?Agent 并发�?�?maxInstances
+ * - 同类�?Agent 并发�?�?maxInstances
  * - FIFO 公平唤醒
  * - 超时优雅失败
- * - RLM 子任务不参与流约�?
+ * - RLM 子任务不参与流约�?
  * - SpawnStep/CleanupStep 集成
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -50,7 +50,7 @@ function makeSlowAgent(agentType: AgentType, delayMs: number = 500): Agent {
 // ManifoldGate 核心行为
 // ════════════════════════════════════════════════════════
 
-describe("ManifoldGate �?流约束核�?, () => {
+describe("ManifoldGate 流约束核心行为", () => {
   beforeEach(() => {
     ManifoldGate.reset();
   });
@@ -59,11 +59,11 @@ describe("ManifoldGate �?流约束核�?, () => {
     ManifoldGate.reset();
   });
 
-  it("未注册类型默�?maxInstances=1", () => {
+  it("未注册类型默认 maxInstances=1", () => {
     expect(ManifoldGate.max("unknown")).toBe(1);
   });
 
-  it("注册�?acquire 在配额内立即通过", async () => {
+  it("注册后 acquire 在配额内立即通过", async () => {
     ManifoldGate.register("test-type", 3);
     const ok1 = await ManifoldGate.acquire("test-type", 1000);
     const ok2 = await ManifoldGate.acquire("test-type", 1000);
@@ -81,13 +81,13 @@ describe("ManifoldGate �?流约束核�?, () => {
     expect(ManifoldGate.active("test-type")).toBe(1);
     expect(ManifoldGate.waiting("test-type")).toBe(0);
 
-    // 第二�?acquire 应排�?
+    // 第二�?acquire 应排�?
     const p2 = ManifoldGate.acquire("test-type", 5000);
     // 给微任务队列时间
     await new Promise((r) => setTimeout(r, 50));
     expect(ManifoldGate.waiting("test-type")).toBe(1);
 
-    // 释放 �?唤醒 p2
+    // 释放 �?唤醒 p2
     ManifoldGate.release("test-type");
     const ok2 = await p2;
     expect(ok2).toBe(true);
@@ -95,18 +95,18 @@ describe("ManifoldGate �?流约束核�?, () => {
     expect(ManifoldGate.waiting("test-type")).toBe(0);
   });
 
-  it("超时后返�?false 且不从队列唤醒下一�?, async () => {
+  it("超时后返回 false 且不从队列唤醒下一任务", async () => {
     ManifoldGate.register("test-type", 1);
     await ManifoldGate.acquire("test-type", 5000); // 占满
 
     const timedOut = await ManifoldGate.acquire("test-type", 100); // 100ms 超时
     expect(timedOut).toBe(false);
-    // 超时后不应影响活跃计�?
+    // 超时后不应影响活跃计�?
     expect(ManifoldGate.active("test-type")).toBe(1);
     expect(ManifoldGate.waiting("test-type")).toBe(0);
   });
 
-  it("FIFO 顺序：先等待的先被唤�?, async () => {
+  it("FIFO 顺序：先等待的先被唤醒", async () => {
     ManifoldGate.register("test-type", 1);
     await ManifoldGate.acquire("test-type", 5000); // 占满
 
@@ -133,20 +133,20 @@ describe("ManifoldGate �?流约束核�?, () => {
     expect(order).toEqual([1, 2, 3]);
   });
 
-  it("release �?active=0 时不做负�?, () => {
+  it("release 当 active=0 时不做负操作", () => {
     ManifoldGate.register("test-type", 3);
-    ManifoldGate.release("test-type"); // 应安�?no-op
+    ManifoldGate.release("test-type"); // 应安�?no-op
     expect(ManifoldGate.active("test-type")).toBe(0);
   });
 
-  it("reset 清空所有状�?, async () => {
+  it("reset 清空所有状态", async () => {
     ManifoldGate.register("test-type", 3);
     await ManifoldGate.acquire("test-type", 100);
     expect(ManifoldGate.active("test-type")).toBe(1);
 
     ManifoldGate.reset();
     expect(ManifoldGate.active("test-type")).toBe(0);
-    expect(ManifoldGate.max("test-type")).toBe(1); // 重置后退回默�?
+    expect(ManifoldGate.max("test-type")).toBe(1); // 重置后退回默�?
   });
 });
 
@@ -172,14 +172,14 @@ describe("Scheduler + ManifoldGate 集成", () => {
     ManifoldGate.reset();
   });
 
-  it("同类型超池节点被流控等待后全部成功（mHC 约束不丢节点�?, async () => {
+  it("同类型超池节点被流控等待后全部成功（mHC 约束不丢节点）", async () => {
     // 注册 code agent，maxInstances=2（模拟紧缺）
     pool.register({ type: AgentType.Code, maxInstances: 2 });
     const agent = makeSlowAgent(AgentType.Code, 300);
     scheduler.register(AgentType.Code, agent, "test");
 
-    // 同一�?5 �?code 节点——旧行为�? 成功 + 3 池耗尽失败
-    // 新行为（mHC）：2 立即执行 + 3 排队等待 �?全部成功
+    // 同一�?5 �?code 节点——旧行为�? 成功 + 3 池耗尽失败
+    // 新行为（mHC）：2 立即执行 + 3 排队等待 �?全部成功
     const ids = ["c1", "c2", "c3", "c4", "c5"];
     for (const id of ids) {
       board.addNode(makeNode(id, "code", ["implementation"]));
@@ -201,7 +201,7 @@ describe("Scheduler + ManifoldGate 集成", () => {
     scheduler.register(AgentType.Code, codeAgent, "test");
     scheduler.register(AgentType.Analysis, analysisAgent, "test");
 
-    // 同一�?3 code + 3 analysis
+    // 同一�?3 code + 3 analysis
     for (let i = 1; i <= 3; i++) {
       board.addNode(makeNode(`code-${i}`, "code", ["implementation"]));
       board.addNode(makeNode(`analysis-${i}`, "analysis", ["analysis"]));
@@ -210,7 +210,7 @@ describe("Scheduler + ManifoldGate 集成", () => {
     const report = await scheduler.executeAll();
     expect(report.completed).toBe(6);
     expect(report.failed).toBe(0);
-    // code 只有 2 个并发，�?3 个应排队
+    // code 只有 2 个并发，�?3 个应排队
     expect(codeAgent.execute).toHaveBeenCalledTimes(3);
     expect(analysisAgent.execute).toHaveBeenCalledTimes(3);
   }, 30_000);
@@ -237,7 +237,7 @@ describe("Scheduler + ManifoldGate 集成", () => {
     const report = await scheduler.executeAll();
     expect(report.completed).toBe(2);
     expect(report.failed).toBe(0);
-    // 父先完成（拓扑排序保�?+ 流控只在同层生效�?
+    // 父先完成（拓扑排序保�?+ 流控只在同层生效�?
     expect(events).toEqual(["parent", "child"]);
   }, 10_000);
 });

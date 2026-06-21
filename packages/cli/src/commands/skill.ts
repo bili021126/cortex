@@ -10,7 +10,7 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import { isHelpRequest } from "../utils.js";
-import { SkillRegistry } from "@cortex/engine";
+import { SkillRegistry } from "@cortex/skill-kit";
 import type { SkillTemplate } from "@cortex/shared";
 
 // ─── 懒加载单例 ──────────────────────────────────────
