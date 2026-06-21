@@ -109,10 +109,8 @@ export function createTool(ctx: ToolContext): Tool {
         args.push(...extraArgs.split(/\s+/).filter(Boolean));
       }
 
-      const command = `npx ${args.join(" ")}`;
-
       try {
-        const output = await ctx.fs.execCommand(command, {
+        const output = await ctx.fs.execFile("npx", args, {
           cwd,
           timeout: ctx.toolTimeouts.runShell ?? 120_000,
         });

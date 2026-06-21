@@ -337,7 +337,8 @@ export class PromptTemplateEngine {
       }
 
       if (typeof value === "function") {
-        return this.safeRender(value.call(context));
+        // 安全修复：不将 context 作为 this 传入——防止函数通过 this 访问原型链
+        return this.safeRender(value());
       }
 
       return this.safeRender(value);

@@ -29,7 +29,7 @@
 //     - Private Helpers
 // ============================================================
 
-import type { MemoryEntry, MemoryWriteInput, MemoryQuery, MemoryLink, SemanticState, LinkType, ReadMode } from "@cortex/shared";
+import { MEMORY_VALID_TRANSITIONS, type MemoryEntry, MemoryWriteInput, type MemoryQuery, type MemoryLink, type SemanticState, type LinkType, type ReadMode } from "@cortex/shared";
 import type { IMemoryStore } from "../interfaces/MemoryStore.js";
 import type { TransactionalMemoryStore, TransactionContext, TransactionIsolation, TransactionResult, TransactionLinkOp } from "../interfaces/TransactionalMemoryStore.js";
 import { MemoryStoreError, MemoryStoreErrorCode, MemoryValidationError, TransactionError } from "../errors/MemoryStoreError.js";
@@ -403,9 +403,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     let c = 0;
 
     for (const e of this._entries.values()) {
-      if (e.sessionId === this._sid && e.semantic_state === "Active") {
-        e.semantic_state = "Archived";
-        c++;
+      if (e && e.sessionId === this._sid && e.semantic_state === "Active") {
+        if (this.cas(e.id, "Active", "Archived")) c++;
       }
     }
 
@@ -571,14 +570,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     const x = this._entries.get(id);
     if (!x || x.semantic_state === "Obliterated" || x.semantic_state !== e)
       return false;
-    // 状态转换白名单校验（与 memory-store 的 VALID_TRANSITIONS 保持一致）
-    const valid: Record<string, Set<string>> = {
-      Pending: new Set(["Active", "Obliterated"]),
-      Active: new Set(["Archived", "Obliterated", "Active"]),
-      Archived: new Set(["Obliterated", "Archived"]),
-      Obliterated: new Set(),
-    };
-    if (!valid[e]?.has(n)) return false;
+    // 状态转换白名单校验（引用 shared 中的单一事实来源）
+    if (!MEMORY_VALID_TRANSITIONS[e]?.has(n)) return false;
     x.semantic_state = n;
     return true;
   }
@@ -591,11 +584,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   archive(id: string) {
     this._ei();
-    const e = this._entries.get(id);
-    if (e?.semantic_state !== "Active")
-      return false;
-    e.semantic_state = "Archived";
-    return true;
+    return this.cas(id, "Active", "Archived");
   }
 
   /**
@@ -608,8 +597,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     this._ei();
     const e = this._entries.get(id);
     if (!e) return false;
-    e.semantic_state = "Obliterated";
-    return true;
+    // 允许任意状态 → Obliterated（FSM 白名单校验由 cas 内部执行）
+    return this.cas(id, e.semantic_state as SemanticState, "Obliterated");
   }
 
   // ══════════════════════════════════════════════
@@ -715,8 +704,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
     const e = this._entries.get(mid);
     if (e?.semantic_state === "Active") {
-      e.semantic_state = "Archived";
-      return true;
+      return this.cas(mid, "Active", "Archived");
     }
 
     return false;

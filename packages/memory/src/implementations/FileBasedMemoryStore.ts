@@ -107,8 +107,10 @@ class FileBackend implements MemoryStoreBackend {
 
   async persist(entry: MemoryEntry): Promise<void> {
     const filePath = path.join(this._entriesDir, `${entry.id}.json`);
+    const tmpPath = filePath + ".tmp";
     const json = JSON.stringify(entry, null, this._prettyPrint ? 2 : undefined);
-    await fs.writeFile(filePath, json, "utf-8");
+    await fs.writeFile(tmpPath, json, "utf-8");
+    await fs.rename(tmpPath, filePath);
   }
 
   async remove(id: string): Promise<void> {
@@ -128,7 +130,9 @@ class FileBackend implements MemoryStoreBackend {
     for (const [id, entry] of entries) {
       index.entries[id] = { id, kind: entry.kind, summary: entry.summary, semantic_state: entry.semantic_state, createdAt: entry.createdAt, weight: entry.weight };
     }
-    await fs.writeFile(this._indexPath, JSON.stringify(index, null, this._prettyPrint ? 2 : undefined), "utf-8");
+    const tmpPath = this._indexPath + ".tmp";
+    await fs.writeFile(tmpPath, JSON.stringify(index, null, this._prettyPrint ? 2 : undefined), "utf-8");
+    await fs.rename(tmpPath, this._indexPath);
   }
 
   async flushLinks(links: Map<string, MemoryLink[]>): Promise<void> {
@@ -136,7 +140,9 @@ class FileBackend implements MemoryStoreBackend {
     for (const [sourceId, linkList] of links) {
       linksFile.links[sourceId] = linkList.map(l => ({ ...l, linkType: l.linkType }));
     }
-    await fs.writeFile(this._linksPath, JSON.stringify(linksFile, null, this._prettyPrint ? 2 : undefined), "utf-8");
+    const tmpPath = this._linksPath + ".tmp";
+    await fs.writeFile(tmpPath, JSON.stringify(linksFile, null, this._prettyPrint ? 2 : undefined), "utf-8");
+    await fs.rename(tmpPath, this._linksPath);
   }
 
   async flushAll(entries: Map<string, MemoryEntry>, links: Map<string, MemoryLink[]>): Promise<void> {

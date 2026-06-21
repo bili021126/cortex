@@ -118,3 +118,5 @@ packages/tests/.test-data/
 nahida-persona.txt
 
 packages/resilience/tests/
+# TS test builds
+dist-test/

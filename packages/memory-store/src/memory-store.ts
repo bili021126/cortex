@@ -1,3 +1,4 @@
+import { MEMORY_VALID_TRANSITIONS } from "@cortex/shared";
 // ============================================================
 // @cortex/engine/memory/memory-store —— MemoryStore 适配器
 //
@@ -458,6 +459,50 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     return this._backend.obliterate(memoryId);
   }
 
+  /** 异步 enrichment：两阶段提交的记忆补全 embedding + dedup + BM25 */
+  private async _enrichPendingEntry(memoryId: string): Promise<void> {
+    try {
+      const entry = await this._backend.peek(memoryId);
+      if (!entry) return;
+
+      // embedding 生成（不修改只读 entry——仅缓存）
+      if (!entry.embedding) {
+        const text = entry.semantic_gist || JSON.stringify(entry.content_blob).slice(0, 2000);
+        try {
+          const emb = await this._embedder.embedText(text);
+          if (emb && emb.length === EMBEDDING_DIM) {
+            this._vectorCache.set(entry.id, emb);
+          }
+        } catch {
+          this._emitDegraded("embedding", "commitMemory embedding 失败");
+        }
+      } else {
+        this._vectorCache.set(entry.id, entry.embedding);
+      }
+
+      // content_hash 去重缓存
+      if (entry.content_hash) {
+        this._dedupCache.set(entry.content_hash, entry.id);
+      }
+
+      // 向量索引缓存
+      if (entry.embedding) {
+        this._vectorCache.set(entry.id, entry.embedding);
+      }
+
+      // BM25 索引更新
+      if (this._hybridEnabled) {
+        this._bm25Index.addDocument(entry.id, {
+          summary: entry.summary ?? "",
+          semantic_gist: entry.semantic_gist ?? "",
+          payload: typeof entry.content_blob === "string" ? entry.content_blob : JSON.stringify(entry.content_blob),
+        });
+      }
+    } catch {
+      // enrichment 失败不阻塞主流程
+    }
+  }
+
   // ══════════════════════════════════════════════
   // 两阶段提交（直通后端）
   // ══════════════════════════════════════════════
@@ -468,7 +513,12 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   }
 
   commitMemory(memoryId: string): boolean {
-    return this._backend.commitMemory(memoryId);
+    const ok = this._backend.commitMemory(memoryId);
+    if (ok) {
+      // 异步 enrichment：embedding 生成 + dedup 缓存 + BM25 索引更新
+      this._enrichPendingEntry(memoryId);
+    }
+    return ok;
   }
 
   rollback(memoryId: string): boolean {

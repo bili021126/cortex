@@ -36,6 +36,17 @@ export type MemoryKind = "TaskLog" | "Insight" | "Skill" | "Governance" | "Inten
 /** 语义生命周期 */
 export type SemanticState = "Active" | "Archived" | "Obliterated";
 
+/**
+ * 合法状态转换表——单一事实来源（Single Source of Truth）。
+ * memory-store 和 memory 两包的 cas() 统一引用此表。
+ */
+export const MEMORY_VALID_TRANSITIONS: Record<string, ReadonlySet<string>> = {
+  Pending: new Set(["Active", "Obliterated"]),
+  Active: new Set(["Archived", "Obliterated", "Active"]),
+  Archived: new Set(["Obliterated", "Archived"]),
+  Obliterated: new Set(),
+};
+
 /** 检索模式：HCA=广度浅读（MetaAgent 规划），CSA=深度窄读（Agent 执行） */
 export type ReadMode = "HCA" | "CSA";
 
