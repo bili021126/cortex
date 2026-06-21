@@ -116,3 +116,5 @@ packages/tests/.test-data/
 # 非项目内容
 3.*剧情.txt
 nahida-persona.txt
+
+packages/resilience/tests/
