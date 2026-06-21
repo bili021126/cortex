@@ -56,6 +56,7 @@ export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
     skillRegistry: "skill-registry.json",
     codingStandards: "prompts/coding-standards.md",
     hashCache: "file-hashes.json",
+    soloFlightOutput: "solo-flight-output",
   },
 
   skillSystem: {
@@ -119,6 +120,7 @@ function mergeFilePaths(
     skillRegistry: partial?.skillRegistry ?? DEFAULT_ENGINE_CONFIG.filePaths.skillRegistry,
     codingStandards: partial?.codingStandards ?? DEFAULT_ENGINE_CONFIG.filePaths.codingStandards,
     hashCache: partial?.hashCache ?? DEFAULT_ENGINE_CONFIG.filePaths.hashCache,
+    soloFlightOutput: partial?.soloFlightOutput ?? DEFAULT_ENGINE_CONFIG.filePaths.soloFlightOutput,
   };
 }
 

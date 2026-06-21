@@ -11,6 +11,7 @@
 
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "@cortex/platform";
 
@@ -33,12 +34,29 @@ export function loadEnv(dir: string): void {
 }
 
 // ── 项目根 ────────────────────────────────────
-/** 向上搜索 cortex-agents.json 定位项目根 */
+/** 向上搜索项目根（sentinel: cortex-cognition.json——沙箱屏蔽 cortex-agents.json） */
 export function findProjectRoot(startDir?: string): string {
+  const SENTINEL = "cortex-cognition.json";
+  // 优先取 CORTEX_ROOT 环境变量（沙箱场景）
+  if (process.env["CORTEX_ROOT"] && fs.existsSync(path.join(process.env["CORTEX_ROOT"], SENTINEL))) {
+    return process.env["CORTEX_ROOT"];
+  }
+  // 从当前模块路径向上推导（独立于 process.cwd）
+  try {
+    const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+    let dir = moduleDir;
+    while (!fs.existsSync(path.join(dir, SENTINEL))) {
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    if (fs.existsSync(path.join(dir, SENTINEL))) return dir;
+  } catch { /* import.meta.url 不可用 */ }
+  // 最后回退到 process.cwd
   let dir = startDir ?? process.cwd();
-  while (!fs.existsSync(path.join(dir, "cortex-agents.json"))) {
+  while (!fs.existsSync(path.join(dir, SENTINEL))) {
     const parent = path.dirname(dir);
-    if (parent === dir) throw new Error("找不到 cortex-agents.json——请在项目根目录下运行");
+    if (parent === dir) throw new Error(`找不到 ${SENTINEL}——请在项目根目录下运行`);
     dir = parent;
   }
   return dir;

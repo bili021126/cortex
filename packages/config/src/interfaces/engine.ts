@@ -77,6 +77,7 @@ export interface FilePathsConfig {
   skillRegistry?: string;
   codingStandards?: string;
   hashCache?: string;
+  soloFlightOutput?: string;
 }
 
 /** 可执行技能系统配置 */

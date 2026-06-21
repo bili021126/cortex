@@ -41,8 +41,8 @@ export function createTool(ctx: ToolContext): Tool {
         // 如果路径不存在但 workspaceRoot 已知，尝试相对解析
         if (!(await ctx.fs.exists(dirPath)) && ctx.workspaceRoot) {
           const relative = given.replace(/^[\/]+/, "").replace(/^[A-Z]:[\/\\]/, "");
-          const altPath = await ctx.fs.resolve(relative);
-          if (await ctx.fs.exists(altPath)) dirPath = altPath;
+          const altPath = ctx.fs.resolve(relative);
+          if (altPath !== dirPath && await ctx.fs.exists(altPath)) dirPath = altPath;
         }
       } else {
         dirPath = ctx.workspaceRoot ?? ctx.fs.cwd();

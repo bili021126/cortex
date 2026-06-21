@@ -11,6 +11,7 @@
 import type { AgentType, LlmMessage, ICortexApi, TaskNode, ExecutionReport } from "@cortex/shared";
 import type { TuiEvent, TuiHooks, LlmStreamBridge } from "../types.js";
 import { queryLoop } from "../query-loop.js";
+import { formatPlanTree } from "./plan-utils.js";
 import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 
@@ -135,5 +136,68 @@ export async function* planMode(
   }
 
   // 否则：生成计划
-  return yield* queryLoop({ input, bridge, mode: "plan", agent, hooks, history });
+  const planText = yield* queryLoop({ input, bridge, mode: "plan", agent, hooks, history });
+
+  // —— 后处理：解析甘雨输出的 JSON → TaskNode[] ——
+  const parsed = _extractPlanNodes(planText);
+  if (parsed && parsed.length > 0) {
+    planState.nodes = parsed;
+    planState.intent = input;
+    planState.reviewStatus = "reviewing";
+    return "\n" + formatPlanTree(parsed) + "\n\n📋 请输入 .review 启动三省审议，或 .approve 直接执行";
+  }
+
+  // 解析失败——返回原始文本
+  return planText;
+}
+
+/**
+ * 从甘雨的规划文本中提取 TaskNode 数组。
+ * 支持三种格式：
+ *   1. 纯 JSON 数组：甘雨输出格式 `[{...}, {...}]`
+ *   2. Markdown 代码块包裹的 JSON
+ *   3. 文本中嵌入的 JSON 数组片段
+ */
+function _extractPlanNodes(text: string): TaskNode[] | null {
+  // 尝试 1：整个文本就是 JSON 数组
+  try {
+    const direct = JSON.parse(text);
+    if (Array.isArray(direct)) return _normalizeNodes(direct);
+  } catch { /* 继续 */ }
+
+  // 尝试 2：Markdown 代码块中的 JSON
+  const codeBlock = text.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (codeBlock?.[1]) {
+    try {
+      const parsed = JSON.parse(codeBlock[1].trim());
+      if (Array.isArray(parsed)) return _normalizeNodes(parsed);
+    } catch { /* 继续 */ }
+  }
+
+  // 尝试 3：文本中嵌入的 JSON 数组
+  const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (arrayMatch) {
+    try {
+      const parsed = JSON.parse(arrayMatch[0]);
+      if (Array.isArray(parsed)) return _normalizeNodes(parsed);
+    } catch { /* 继续 */ }
+  }
+
+  return null;
+}
+
+/** 规范化原始 JSON 对象为 TaskNode（补全缺失字段） */
+function _normalizeNodes(raw: unknown[]): TaskNode[] {
+  return raw.map((item: any, i: number): TaskNode => ({
+    id: item.id ?? `plan-node-${i}-${Date.now()}`,
+    type: item.type ?? "implementation",
+    tags: item.tags ?? [],
+    needsMultiPerspective: item.needsMultiPerspective ?? false,
+    status: "pending" as const,
+    claimedBy: [],
+    payload: item.task ?? item.payload ?? item.description ?? "",
+    results: [],
+    createdAt: Date.now(),
+    parentId: item.parentId ?? undefined,
+  }));
 }

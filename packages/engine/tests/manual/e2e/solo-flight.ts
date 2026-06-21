@@ -13,16 +13,23 @@ import { bootstrapEngine, type BootstrapEngineResult } from "@cortex/engine";
 import { e2eBootstrap, log } from "./e2e-utils.js";
 import { setAgentToolPermissions } from "@cortex/shared";
 import { PanoramaTracker } from "./panorama-tracker.js";
+import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 
 // ── 全工具开放 ──────────────────────────────
 const TOOLS = ["read_file","write_file","search_code","list_files","run_shell","web_search","delete_file","parse_ast"];
 
 // ── 验收函数（纯函数，不依赖测试上下文）─────
 function verify(pkgDir: string) {
-  const r = { barrel: false, pkgJson: false, tests: 0, ciTags: 0, positioning: false, compile: false as boolean|null, test: false as boolean|null };
+  const r = { barrel: false, pkgJson: false, tests: 0, ciTags: 0, positioning: false, srcFiles: 0, compile: false as boolean|null, test: false as boolean|null };
   if (fs.existsSync(path.join(pkgDir, "src/index.ts"))) r.barrel = true;
   if (fs.existsSync(path.join(pkgDir, "package.json"))) r.pkgJson = true;
   if (fs.existsSync(path.join(pkgDir, "PACKAGE_POSITIONING.md"))) r.positioning = true;
+
+  // 统计实际 TypeScript 源文件
+  const srcDir = path.join(pkgDir, "src");
+  if (fs.existsSync(srcDir)) {
+    try { r.srcFiles = fs.readdirSync(srcDir).filter((f: string) => f.endsWith(".ts") && f !== "index.ts").length; } catch {}
+  }
 
   const td = path.join(pkgDir, "tests");
   if (fs.existsSync(td)) {
@@ -51,6 +58,14 @@ const KNOWN = new Set("cache|cli|config|consistency|context|data|doctor|engine|f
 
 // ── 主流程 ──────────────────────────────────
 async function main() {
+  // 沙箱兼容：从脚本路径推导项目根
+  try {
+    const url = import.meta.url.replace("file:///", "");
+    if (fs.existsSync(path.join(path.dirname(url), "../../../../../../cortex-cognition.json"))) {
+      const rootDir = path.resolve(path.dirname(url), "../../../../../..");
+      process.env["CORTEX_ROOT"] = rootDir;
+    }
+  } catch {}
   const { root, llm, toolkit } = e2eBootstrap();
   const P = path.join(root, "packages");
 
@@ -133,44 +148,46 @@ async function main() {
 
     // 全景追踪
     tracker.onEvent(e);
+
+    // 节点事件
     if (t.includes("node.")) {
       if (t.includes("claimed")) {
         tracker.nodeClaimed(nodeId, agentType, payload?.type ?? "");
+        log(`[${ts}] 👤 [${agentType}] ${nodeId}`);
       } else if (t.includes("started")) {
         tracker.nodeStarted(nodeId);
+        log(`[${ts}] ▶ [${agentType}] ${nodeId}`);
       } else if (t.includes("completed")) {
         tracker.nodeCompleted(nodeId, true, payload?.output, "");
+        log(`[${ts}] ✅ [${agentType}] ${nodeId}`);
       } else if (t.includes("failed")) {
         tracker.nodeCompleted(nodeId, false, "", payload?.error);
+        log(`[${ts}] ❌ [${agentType}] ${nodeId}`);
       } else if (t.includes("replan")) {
         tracker.nodeReplanned(nodeId);
+        replanCount++;
+        log(`[${ts}] 🔄 重规划 ${nodeId}`);
       }
-    } else if (t.includes("tool.")) {
+      return; // 避免命中后续域匹配
+    }
+
+    // 工具事件
+    if (t.includes("tool.")) {
       if (t.includes("started")) {
         tracker.toolStarted(agentType, nodeId, payload?.toolName ?? "", payload?.params ?? {});
       } else if (t.includes("completed") || t.includes("failed")) {
         tracker.toolEnded(t.includes("completed"));
+        toolCallCount++;
+        log(`[${ts}] 🔧 [${agentType}] ${payload?.toolName ?? ""} 完成`);
       }
+      return;
     }
-      if (t.includes("completed") || t.includes("failed")) {
-        log(`[${ts}] ${t.includes("completed") ? "✅" : "❌"} [${agentType}] ${nodeId}`);
-      } else if (t.includes("started")) {
-        log(`[${ts}] ▶ [${agentType}] ${nodeId}`);
-      } else if (t.includes("claimed")) {
-        log(`[${ts}] 👤 [${agentType}] ${nodeId}`);
-      } else if (t.includes("replan")) {
-        replanCount++;
-        log(`[${ts}] 🔄 重规划 ${nodeId}`);
-      }
-    } else if (t.includes("governance") || t.includes("constitution")) {
+
+    // 其他域事件
+    if (t.includes("governance") || t.includes("constitution")) {
       log(`[${ts}] 🏛 ${t}`);
     } else if (t.includes("llm") || t.includes("api")) {
       apiCallCount++;
-    } else if (t.includes("tool.")) {
-      toolCallCount++;
-      if (t.includes("completed")) {
-        log(`[${ts}] 🔧 [${agentType}] ${payload?.toolName ?? ""} 完成`);
-      }
     } else if (t.includes("rlm.") || t.includes("react")) {
       reactLoopCount++;
       log(`[${ts}] 🔁 ReactLoop ${t}  node:${nodeId}`);
@@ -394,6 +411,14 @@ async function main() {
   log(`  综合: ${newPkg&&vrfy&&vrfy.compile&&vrfy.test&&pass===nodes.length?"✅ ALL PASS":"❌ GAPS"}`);
 
   await engine.shutdown();
+
+  // ── S9 全景报告 ──
+  try {
+    const outputDir = path.join(root, DEFAULT_ENGINE_CONFIG.filePaths.soloFlightOutput ?? "solo-flight-output");
+    const report = tracker.generateReport(outputDir, intent ?? "default");
+    tracker.printSummary(report);
+  } catch (e) { log(`⚠️ 全景报告生成失败: ${e}`); }
+
   log("\n✨ 闭环完成");
 }
 

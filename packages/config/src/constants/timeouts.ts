@@ -5,6 +5,9 @@
  * @layer root
  */
 
+/** 工具调用最大轮次（TUI 对话模式） */
+export const DEFAULT_MAX_TOOL_ROUNDS = 20;
+
 /** 任务执行默认超时（秒） */
 export const DEFAULT_TASK_TIMEOUT_SEC = 300;
 
