@@ -1,0 +1,37 @@
+{
+  "description": "种子记忆——在 MemoryStore 初始化时写入，帮 Agent 快速了解项目结构。",
+  "entries": [
+    {
+      "taskId": "self-exam-constitution-index",
+      "memoryType": "Conceptual",
+      "agentType": "Analysis",
+      "content": {
+        "taskType": "examination",
+        "entities": [
+          "cortex",
+          "architecture",
+          "constitution"
+        ],
+        "decision": "Cortex 项目结构：packages/shared/ 是类型协议层，packages/engine/ 是核心引擎（含 9 类 Agent + Scheduler + MemoryStore + Toolkit）， packages/testing/ 是测试工具包。docs/constitution/ 存放宪法级架构约束，docs/issues/ 存放议题追踪。",
+        "outcome": "guide"
+      },
+      "summary": "审视入口指引：shared（协议层）→ engine（核心引擎，含全部 Agent 与调度器）→ testing（测试层）。宪法在 docs/constitution/，议题在 docs/issues/。"
+    },
+    {
+      "taskId": "self-exam-design-philosophy",
+      "memoryType": "Conceptual",
+      "agentType": "Analysis",
+      "content": {
+        "taskType": "examination",
+        "entities": [
+          "constitution",
+          "design-philosophy"
+        ],
+        "decision": "Cortex 宪法从 v1.1 的「大脑隐喻」演进到 v2.3 的「工具链隐喻」。六条不可变原则约束架构演化方向： 每个组件可替换、可验证、职责清晰。Agent 体系并非静态集合，而是可演化生态。",
+        "outcome": "context"
+      },
+      "summary": "设计哲学：Cortex 宪法经历了从大脑隐喻到工具链隐喻的演进。六条不可变原则是所有架构决策的锚点。",
+      "linkTo": "self-exam-constitution-index"
+    }
+  ]
+}

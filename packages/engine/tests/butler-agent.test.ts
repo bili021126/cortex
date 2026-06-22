@@ -12,12 +12,12 @@ function makeEvent(type: string, priority: PipelinePriority, payload: Record<str
 describe("ButlerAgent", () => {
   let observer: PipelineObserver;
   let agent: ButlerAgent;
-  let consoleSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     observer = new PipelineObserver();
     agent = new ButlerAgent(observer);
-    consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
 
   // ── 状态机 ──────────────────────────────────
@@ -53,13 +53,13 @@ describe("ButlerAgent", () => {
       nodeId: "n1",
       error: "LLM timeout"}));
 
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("[昔涟-CRITICAL]"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("n1"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("LLM timeout"),
     );
   });
@@ -71,13 +71,13 @@ describe("ButlerAgent", () => {
       reason: "CodeAgent failed",
       attempt: 2}));
 
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("[昔涟-CRITICAL]"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("n2"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("2"),
     );
   });
@@ -90,13 +90,13 @@ describe("ButlerAgent", () => {
       failed: 1,
       durationMs: 1234}));
 
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("[昔涟-CRITICAL]"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("4"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("5"),
     );
   });
@@ -109,10 +109,10 @@ describe("ButlerAgent", () => {
       nodeId: "n3",
       type: "implementation"}));
 
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("[昔涟]"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("n3"),
     );
   });
@@ -123,10 +123,10 @@ describe("ButlerAgent", () => {
       nodeId: "n4",
       success: true}));
 
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("[昔涟]"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("n4"),
     );
   });
@@ -137,10 +137,10 @@ describe("ButlerAgent", () => {
       layer: 2,
       nodes: 3}));
 
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("[昔涟]"),
     );
-    expect(consoleSpy).toHaveBeenCalledWith(
+    expect(stderrSpy).toHaveBeenCalledWith(
       expect.stringContaining("2"),
     );
   });
@@ -151,13 +151,13 @@ describe("ButlerAgent", () => {
     await agent.wakeup();
     await agent.shutdown();
 
-    consoleSpy.mockClear();
+    stderrSpy.mockClear();
     observer.emit(makeEvent("node.failed", PipelinePriority.CRITICAL, {
       nodeId: "silent",
       error: "should not be logged"}));
 
     // 退订后不应有任何输出
-    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(stderrSpy).not.toHaveBeenCalled();
   });
 
   // ── 未知事件类型不应抛异常 ────────────────────

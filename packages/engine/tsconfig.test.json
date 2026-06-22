@@ -11,6 +11,11 @@
     "noEmit": true
   },
   "include": ["src", "tests"],
+  "exclude": [
+    "tests/e2e/solo-flight-mock.test.ts",
+    "tests/e2e/multi-agent-collab-mock.test.ts",
+    "tests/e2e/strategist-agent-mock.test.ts"
+  ],
   "references": [
     { "path": "../shared" },
     { "path": "../llm" }

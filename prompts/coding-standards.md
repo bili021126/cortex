@@ -1216,3 +1216,52 @@ class Scheduler {
 
 > **§十一至§十四构成 Cortex 工程规范层——代码怎么写、模块怎么组、接口怎么定、模式怎么用。**
 > 至此，代码法典从"不能做什么"（§一~§十 禁止层）闭合到"应该怎么做"（§十一~§十四 指导层）。
+
+---
+
+## 十五、跨包整合铁律——系统级防御（v4.2 新增）
+
+> **地位：与 §一~§十并列的编译期铁律。五轮深度审查（260+ 缺陷）的根因收敛于此。**
+> 违者将在 CI gate 被拦截。
+
+### 15.1 接口契约——编译期强制验证
+
+```
+❌ error：禁止 `as unknown as` 绕过跨包接口类型检查
+✅ 要求：@cortex/shared 中的每个 interface 变更时，必须 `tsc -b --force` 全量重编
+✅ 要求：实现方不得使用 `as unknown as` 将 Promise 强转为同步值
+✅ 要求：同名的 interface 不得在多个包中独立定义——必须有单一真相源
+```
+
+**判例**：`memory-store.ts:527` 的 `rollback()` 返回 `Promise<boolean>` 但通过 `as unknown as boolean` 强转为同步 boolean——两阶段提交回滚形同虚设。
+
+### 15.2 事件注册表——每个事件必须有消费方
+
+```
+❌ error：PipelineEventType 枚举新增的值必须在 EventPayloadMap 中有对应条目
+❌ error：emit 事件类型不得通过 `as unknown as PipelineEventType` 绕过编译期检查
+✅ 要求：每个治理事件在发射前必须有至少一个订阅方
+```
+
+### 15.3 TUI/CLI 桥接——禁止 any 类型擦除
+
+```
+❌ error：禁止 `type EngineBridge = any` 或 `type CommandContext = any`
+✅ 要求：TUI/CLI 对引擎的依赖必须通过 `ICortexApi` 或 `ITuiEngineBridge` 正式接口声明
+✅ 要求：引擎组件（AgentPool/Scheduler/MemoryStore）不得通过 `unknown` 暴露给 CLI
+```
+
+### 15.4 上下文压缩——必须使用累积 token 值
+
+```
+❌ error：上下文压缩触发阈值不得使用单次请求的 `prompt_tokens`
+✅ 要求：压缩触发必须使用累积会话 token（sessionTokens），确保随对话增长正确触发
+```
+
+### 15.5 跨包变更 CI 门禁
+
+```
+✅ 要求：@cortex/shared 中的 interface 变更 → CI 触发全量 tsc -b --force
+✅ 要求：PipelineEventType 枚举变更 → CI 验证 EventPayloadMap 完整性
+✅ 要求：ICortexApi 方法签名变更 → CI 验证 CLI/TUI 所有调用方
+```

@@ -18,6 +18,8 @@
     { "path": "../llm" },
     { "path": "../plugin-runner" },
     { "path": "../telemetry" },
-    { "path": "../memory" }
+    { "path": "../memory" },
+    { "path": "../notification" },
+    { "path": "../logging" }
   ]
 }

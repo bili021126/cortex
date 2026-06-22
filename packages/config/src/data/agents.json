@@ -1,0 +1,730 @@
+{
+  "description": "Agent 定义集合。每个 Agent 的完整声明——类型、模型、权限、标签、提示词等。",
+  "agents": {
+    "albedo": {
+      "id": "albedo",
+      "type": "code",
+      "role": "阿贝多 — 西风骑士团首席炼金术士",
+      "produces": [
+        "code_changed",
+        "implementation_complete",
+        "code_committed"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 2,
+      "tags": [
+        "code",
+        "implementation",
+        "refactor",
+        "test",
+        "config",
+        "review",
+        "research",
+        "analysis"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "run_shell",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "code",
+      "display": {
+        "emoji": "⚗️",
+        "shortName": "阿贝多",
+        "title": "西风骑士团首席炼金术士"
+      },
+      "roundtable": {
+        "roundtableTitle": "核心层深度审查",
+        "personaPromptFile": "prompts/albedo/roundtable.md"
+      },
+      "systemPromptFile": "prompts/albedo/system.md"
+    },
+    "keqing": {
+      "id": "keqing",
+      "type": "review",
+      "role": "刻晴 — 璃月七星之玉衡",
+      "produces": [
+        "review_completed",
+        "code_reviewed",
+        "defect_found"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 2,
+      "tags": [
+        "review",
+        "audit"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "run_shell",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "review",
+      "display": {
+        "emoji": "⚡",
+        "shortName": "刻晴",
+        "title": "璃月七星之玉衡"
+      },
+      "roundtable": {
+        "roundtableTitle": "代码质量侦察",
+        "personaPromptFile": "prompts/keqing/roundtable.md"
+      },
+      "systemPromptFile": "prompts/keqing/system.md"
+    },
+    "nahida": {
+      "id": "nahida",
+      "type": "analysis",
+      "role": "纳西妲 — 须弥草神，智慧化身",
+      "produces": [
+        "analysis_completed",
+        "pattern_discovered",
+        "architecture_finding"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "analysis",
+        "research"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "analysis",
+      "display": {
+        "emoji": "🌿",
+        "shortName": "纳西妲",
+        "title": "须弥草神，智慧化身"
+      },
+      "roundtable": {
+        "roundtableTitle": "架构全景分析",
+        "personaPromptFile": "prompts/nahida/roundtable.md"
+      },
+      "systemPromptFile": "prompts/nahida/system.md"
+    },
+    "beidou": {
+      "id": "beidou",
+      "type": "ops",
+      "role": "北斗 — 南十字船队大姊",
+      "produces": [
+        "ops_executed",
+        "build_complete",
+        "ci_result",
+        "test_complete"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "ops",
+        "deploy",
+        "test"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "run_shell",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "ops",
+      "display": {
+        "emoji": "⚓",
+        "shortName": "北斗",
+        "title": "南十字船队大姊"
+      },
+      "roundtable": {
+        "roundtableTitle": "工程就绪诊断",
+        "personaPromptFile": "prompts/beidou/roundtable.md"
+      },
+      "systemPromptFile": "prompts/beidou/system.md"
+    },
+    "mona": {
+      "id": "mona",
+      "type": "loop",
+      "role": "莫娜·梅姬斯图斯 — 星天水占术士",
+      "produces": [
+        "skill_extracted",
+        "pattern_identified",
+        "loop_training_complete"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "loop",
+        "pattern_scan",
+        "skill_precipitate"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "loop",
+      "display": {
+        "emoji": "🔮",
+        "shortName": "莫娜",
+        "title": "星天水占术士"
+      },
+      "roundtable": {
+        "roundtableTitle": "模式发现与趋势预言",
+        "personaPromptFile": "prompts/mona/roundtable.md"
+      },
+      "systemPromptFile": "prompts/mona/system.md"
+    },
+    "ningguang": {
+      "id": "ningguang",
+      "type": "doc-govern",
+      "role": "凝光 — 璃月七星之天权",
+      "produces": [
+        "doc_audited",
+        "amendment_proposed",
+        "constitution_reviewed",
+        "compliance_check_complete"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "doc-govern",
+        "doc_govern",
+        "audit",
+        "plan_review",
+        "doc_audit",
+        "constitution_check",
+        "constitution_propose"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "doc-govern",
+      "display": {
+        "emoji": "💎",
+        "shortName": "凝光",
+        "title": "璃月七星之天权"
+      },
+      "roundtable": {
+        "roundtableTitle": "治理收束与清单签署",
+        "personaPromptFile": "prompts/ningguang/roundtable.md"
+      },
+      "systemPromptFile": "prompts/ningguang/system.md"
+    },
+    "sigewinne": {
+      "id": "sigewinne",
+      "type": "fix",
+      "role": "希格雯 — 梅洛彼得堡护士长",
+      "produces": [
+        "bug_fixed",
+        "issue_diagnosed",
+        "repair_complete"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "fix",
+        "bugfix",
+        "repair",
+        "diagnose",
+        "heal"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "run_shell",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "fix",
+      "display": {
+        "emoji": "💉",
+        "shortName": "希格雯",
+        "title": "梅洛彼得堡护士长"
+      },
+      "systemPromptFile": "prompts/sigewinne/system.md"
+    },
+    "kuki": {
+      "id": "kuki",
+      "type": "api",
+      "role": "久岐忍 — 荒泷派外务奉行",
+      "produces": [
+        "api_implemented",
+        "api_verified",
+        "contract_validated"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "api",
+        "api_design",
+        "api_integration",
+        "endpoint",
+        "review",
+        "research",
+        "analysis"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "api",
+      "display": {
+        "emoji": "😈",
+        "shortName": "久岐忍",
+        "title": "荒泷派外务奉行"
+      },
+      "roundtable": {
+        "roundtableTitle": "API 契约设计",
+        "personaPromptFile": "prompts/kuki/roundtable.md"
+      },
+      "systemPromptFile": "prompts/kuki/system.md"
+    },
+    "alhaitham": {
+      "id": "alhaitham",
+      "type": "data",
+      "role": "艾尔海森 — 教令院大书记官",
+      "produces": [
+        "schema_migrated",
+        "data_integrity_checked",
+        "migration_applied"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "data",
+        "data_model",
+        "migration",
+        "storage",
+        "schema",
+        "review",
+        "research",
+        "analysis"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "memoryQueryStrategy": "data",
+      "display": {
+        "emoji": "📚",
+        "shortName": "艾尔海森",
+        "title": "教令院大书记官"
+      },
+      "roundtable": {
+        "roundtableTitle": "数据层设计审计",
+        "personaPromptFile": "prompts/alhaitham/roundtable.md"
+      },
+      "systemPromptFile": "prompts/alhaitham/system.md"
+    },
+    "amber": {
+      "id": "amber",
+      "type": "inspector",
+      "role": "安柏 — 西风骑士团侦察骑士",
+      "produces": [
+        "fact_collected",
+        "inspection_complete",
+        "factsheet_generated"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 2,
+      "tags": [
+        "inspector",
+        "inspect"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "display": {
+        "emoji": "🐰",
+        "shortName": "安柏",
+        "title": "西风骑士团侦察骑士"
+      },
+      "roundtable": {
+        "roundtableTitle": "全项目侦察",
+        "personaPromptFile": "prompts/amber/roundtable.md"
+      },
+      "systemPromptFile": "prompts/amber/system.md"
+    },
+    "yoimiya": {
+      "id": "yoimiya",
+      "type": "browser",
+      "role": "宵宫 — 长野原烟花店老板",
+      "produces": [
+        "browser_verified",
+        "ui_checked"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "browser",
+        "ui_verify"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "write_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "delete_file",
+        "parse_ast",
+        "browser_do",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "display": {
+        "emoji": "🎆",
+        "shortName": "宵宫",
+        "title": "长野原烟花店老板"
+      },
+      "roundtable": {
+        "roundtableTitle": "观察者视角",
+        "personaPromptFile": "prompts/yoimiya/roundtable.md"
+      },
+      "systemPromptFile": "prompts/yoimiya/system.md"
+    },
+    "cyrene": {
+      "id": "cyrene",
+      "type": "butler",
+      "role": "昔涟 — 记忆命途守望者，开拓者代言人，兼管CLI交互",
+      "produces": [],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CYRENE",
+      "maxInstances": 1,
+      "tags": [
+        "cli",
+        "talk"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "search_code",
+        "list_files",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "display": {
+        "emoji": "🍀",
+        "shortName": "昔涟",
+        "title": "记忆守望者——仅对开拓者负责"
+      },
+      "roundtable": {
+        "roundtableTitle": "记忆守望者",
+        "personaPromptFile": "prompts/cyrene/roundtable.md"
+      },
+      "systemPromptFile": "prompts/cyrene/system.md"
+    },
+    "ganyu": {
+      "id": "ganyu",
+      "type": "meta",
+      "role": "甘雨 — 璃月七星秘书，战术调度中枢",
+      "produces": [
+        "plan_generated",
+        "replan_executed"
+      ],
+      "model": "deepseek-v4-pro",
+      "key": "DEEPSEEK_REASONER",
+      "maxInstances": 1,
+      "tags": [
+        "plan_review"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "display": {
+        "emoji": "📋",
+        "shortName": "甘雨",
+        "title": "璃月七星秘书，战术调度中枢"
+      },
+      "roundtable": {
+        "roundtableTitle": "全局上下文提供者",
+        "personaPromptFile": "prompts/ganyu/roundtable.md"
+      },
+      "systemPromptFile": "prompts/ganyu/system.md",
+      "planningPromptFile": "prompts/ganyu/planning.md",
+      "replanPromptFile": "prompts/ganyu/replan.md"
+    },
+    "zhongli": {
+      "id": "zhongli",
+      "type": "strategist",
+      "role": "钟离 — 往生堂客卿，契约守护者",
+      "produces": [
+        "strategy_assessed",
+        "contract_reviewed",
+        "phase_gate_decided"
+      ],
+      "model": "deepseek-v4-pro",
+      "key": "DEEPSEEK_REASONER",
+      "maxInstances": 1,
+      "tags": [
+        "strategy",
+        "contract"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "display": {
+        "emoji": "☄️",
+        "shortName": "钟离",
+        "title": "往生堂客卿，契约守护者"
+      },
+      "roundtable": {
+        "roundtableTitle": "战略判断者 / 契约守护者",
+        "personaPromptFile": "prompts/zhongli/roundtable.md"
+      },
+      "systemPromptFile": "prompts/zhongli/system.md"
+    },
+    "shuangning": {
+      "id": "shuangning",
+      "type": "strategist",
+      "role": "霜凝 — 超越者，方向监理",
+      "produces": [
+        "direction_supervised",
+        "contradiction_exposed",
+        "coherence_validated"
+      ],
+      "model": "deepseek-v4-pro",
+      "key": "DEEPSEEK_REASONER",
+      "maxInstances": 1,
+      "tags": [
+        "strategy",
+        "direction"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files",
+        "edit_file",
+        "format_code",
+        "run_test"
+      ],
+      "display": {
+        "emoji": "❄️",
+        "shortName": "霜凝",
+        "title": "超越者，方向监理"
+      },
+      "systemPromptFile": "prompts/shuangning/system.md"
+    }
+  }
+}

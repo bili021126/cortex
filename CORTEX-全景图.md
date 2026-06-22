@@ -2,8 +2,8 @@
 
 **定位**：供外部 Agent 进行全量架构审查的完整上下文。涵盖项目身份、架构、运行时、治理、记忆、Agent 体系、工具链、文件索引、当前状态。
 
-**生成日期**：2026-06-21
-**版本**：v1.0
+**生成日期**：2026-06-21（v1.0）→ 2026-06-22（v1.1 数据修正）
+**版本**：v1.1
 
 ---
 
@@ -15,7 +15,8 @@ Cortex 是一个**个人 AI 工程助手系统**——不是 SaaS，不是框架
 - **堆栈**：TypeScript + Node.js，pnpm workspace monorepo
 - **模型层**：DeepSeek（主）/ OpenAI（备），通过 `@cortex/llm` 统一适配
 - **宪法系统**：昔涟宪法（Cyrene Constitution），12 章，治理整个项目的开发行为
-- **代码规模**：~22 包，~48K 行 TypeScript，~3130 测试
+- **代码规模**：~31 包，~48K 行 TypeScript，~3172 测试（通过率 ~98%）
+- **已知缺陷**：五轮深度审查发现 ~260 项缺陷（~30 Critical / ~60 High），核心根因为系统级整合缺位
 
 ## 一、架构总览——四层 monorepo
 
@@ -284,15 +285,15 @@ interface Tool {
 
 ```
 测试文件：173 个
-测试用例：3130 passed / 0 failed / 1 flaky
-已知：3 个测试文件 UTF-8 编码损坏（esbuild 解析失败，非逻辑错误）
+测试用例：3172 total | 3122 passed | 50 failed | 通过率 ~98%
+已知：3 个测试文件 UTF-8 编码损坏（esbuild 解析失败）+ 47 个测试漂移/预存失败
 ```
 
 ### 8.2 Lint 基线
 
 ```
-ESLint errors：0（已清零）
-ESLint warnings：~500（主要为 require-await / prefer-optional-chain，不强制）
+ESLint errors：550（预存，核心 31 包外）
+ESLint warnings：511
 ```
 
 ### 8.3 TypeScript 编译

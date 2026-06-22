@@ -1,0 +1,23 @@
+{
+  "description": "搜索后端与聚合配置——可插拔的 MCP 搜索提供商注册。每个后端独立启用/禁用，聚合去重。",
+  "providers": {
+    "backends": [
+      {
+        "id": "bing",
+        "command": "cmd",
+        "args": [
+          "/c",
+          "npx",
+          "-y",
+          "bing-cn-mcp"
+        ],
+        "enabled": true
+      }
+    ],
+    "aggregation": {
+      "deduplicateBy": "url",
+      "resultTimeout": 10000,
+      "minBackends": 1
+    }
+  }
+}

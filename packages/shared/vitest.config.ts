@@ -1,10 +1,16 @@
 import { defineConfig } from "vitest/config";
+import { resolveAlias } from "../vitest.ci.base.js";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /**
- * 本地开发 vitest 配置。
- * 测试文件统一放在 tests/ 目录下，不再从 src/ 下扫描。
+ * 本地开�?vitest 配置�?
+ * 测试文件统一放在 tests/ 目录下，不再�?src/ 下扫描�?
  */
 export default defineConfig({
+  resolve: { alias: resolveAlias(__dirname) },
   test: {
     include: ["tests/**/*.test.ts"],
     env: {

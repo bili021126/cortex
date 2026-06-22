@@ -317,6 +317,39 @@ void somePromise();
 
 `pnpm exec eslint --quiet packages/` 必须返回 0 行输出。CI 门禁拦截含 lint error 的 PR。
 
+---
+
+## §11 跨包集成测试与契约验证（v1.1 新增——五轮审查根因收敛）
+
+> **地位**：五轮深度审查（260+ 缺陷）的核心根因是"系统级整合未到位"——单包测试全绿，跨包集成零验证。以下为防御性补全。
+
+### §11.1 接口契约测试
+
+`@cortex/shared` 中定义的每个核心 interface 必须有至少一个契约验证测试：
+- `IMemoryStore` → 验证所有实现方（FileBasedMemoryStore / InMemoryMemoryStore）的返回类型一致
+- `IPipelineObserver` → 验证事件发射→消费链路完整
+- `ICortexApi` → 验证 CLI/TUI 桥接方法签名对齐
+
+### §11.2 编译门禁
+
+跨包接口变更时 CI 必须执行：
+```bash
+tsc -b --force  # 全量重编，不允许增量跳过
+```
+禁止使用 composite build 缓存绕过编译——接口变更必须触发所有消费方重新编译。
+
+### §11.3 事件契约验证
+
+PipelineEventType 新增枚举值必须同步更新 EventPayloadMap。CI 通过编译期类型检查拦截遗漏。
+
+### §11.4 上下文压缩集成测试
+
+"填满 95% 上下文 → 断言压缩触发" 作为 solo-flight 的验收步骤之一。
+
+### §11.5 服务初始化失败恢复测试
+
+Embedding 管线、MemoryStore、WorkerPool 等核心服务的初始化失败后恢复路径必须有测试覆盖。
+
 
 ## §十一 错误处理契约
 
