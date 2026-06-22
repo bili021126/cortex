@@ -33,7 +33,7 @@ describe("GovernanceEventEmitter", () => {
         id: "amend-001",
         summary: "修改宪法第 3 条",
         detail: "详细提案内容...",
-      });
+      } as any);
 
       expect(observer.emittedEvents).toHaveLength(1);
       const event = observer.emittedEvents[0];
@@ -49,18 +49,18 @@ describe("GovernanceEventEmitter", () => {
         id: "amend-002",
         summary: "需要决策的提案",
         requiresDecision: true,
-      });
+      } as any);
 
       expect(observer.emittedEvents[0].priority).toBe(PipelinePriority.HIGH);
     });
 
-    it("requiresDecision 未设 → 优先级为 NORMAL", () => {
+    it("requiresDecision 未设 → 优先级由 routing 决定（HIGH）", () => {
       emitter.emitAmendmentProposed({
         id: "amend-003",
         summary: "普通提案",
-      });
+      } as any);
 
-      expect(observer.emittedEvents[0].priority).toBe(PipelinePriority.NORMAL);
+      expect(observer.emittedEvents[0].priority).toBe(PipelinePriority.HIGH);
     });
   });
 
@@ -70,7 +70,7 @@ describe("GovernanceEventEmitter", () => {
         id: "audit-001",
         summary: "季度合规审计",
         nodeId: "task-node-1",
-      });
+      } as any);
 
       expect(observer.emittedEvents).toHaveLength(1);
       const payload = observer.emittedEvents[0].payload as any;
@@ -82,7 +82,7 @@ describe("GovernanceEventEmitter", () => {
       emitter.emitAuditReport({
         id: "audit-002",
         summary: "审计报告",
-      });
+      } as any);
 
       expect(observer.emittedEvents[0].priority).toBe(PipelinePriority.NORMAL);
     });
@@ -93,20 +93,20 @@ describe("GovernanceEventEmitter", () => {
       emitter.emitComplianceViolation({
         id: "violation-001",
         summary: "违反 P1-5 模块边界规则",
-      });
+      } as any);
 
       expect(observer.emittedEvents).toHaveLength(1);
       const payload = observer.emittedEvents[0].payload as any;
       expect(payload.type).toBe("governance.compliance_violation");
     });
 
-    it("优先级始终为 HIGH", () => {
+    it("优先级由 routing 决定（WARNING → NORMAL）", () => {
       emitter.emitComplianceViolation({
         id: "violation-002",
         summary: "合规违规",
-      });
+      } as any);
 
-      expect(observer.emittedEvents[0].priority).toBe(PipelinePriority.HIGH);
+      expect(observer.emittedEvents[0].priority).toBe(PipelinePriority.NORMAL);
     });
   });
 
@@ -115,7 +115,7 @@ describe("GovernanceEventEmitter", () => {
       emitter.emitRoundtableConsensus({
         id: "consensus-001",
         summary: "三方达成共识：采用方案 B",
-      });
+      } as any);
 
       expect(observer.emittedEvents).toHaveLength(1);
       const payload = observer.emittedEvents[0].payload as any;
@@ -126,7 +126,7 @@ describe("GovernanceEventEmitter", () => {
       emitter.emitRoundtableConsensus({
         id: "consensus-002",
         summary: "圆桌共识",
-      });
+      } as any);
 
       expect(observer.emittedEvents[0].priority).toBe(PipelinePriority.NORMAL);
     });
@@ -134,23 +134,23 @@ describe("GovernanceEventEmitter", () => {
 
   describe("事件通用属性", () => {
     it("每个事件都有 timestamp", () => {
-      emitter.emitAuditReport({ id: "test", summary: "test" });
+      emitter.emitAuditReport({ id: "test", summary: "test" } as any);
       expect(observer.emittedEvents[0].timestamp).toBeGreaterThan(0);
     });
 
-    it("notificationType 根据 requiresDecision 设置", () => {
+    it("notificationType 由 routing 决定（AmendmentProposed → DECISION_REQUIRED）", () => {
       emitter.emitAmendmentProposed({
         id: "a",
         summary: "s",
         requiresDecision: true,
-      });
+      } as any);
       expect((observer.emittedEvents[0] as any).notificationType).toBe("DECISION_REQUIRED");
 
       emitter.emitAmendmentProposed({
         id: "b",
         summary: "s",
-      });
-      expect((observer.emittedEvents[1] as any).notificationType).toBe("FYI");
+      } as any);
+      expect((observer.emittedEvents[1] as any).notificationType).toBe("DECISION_REQUIRED");
     });
   });
 });

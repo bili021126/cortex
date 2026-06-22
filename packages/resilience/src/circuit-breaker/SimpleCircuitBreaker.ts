@@ -195,7 +195,9 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
       return result;
     } catch (err) {
       this.recordFailure();
-      if (fallback !== undefined) {
+      // fallback 仅在 OPEN 状态下生效（阻止 fn 穿透）
+      // CLOSED/HALF_OPEN 状态下，原始错误直接传播给 retry 循环
+      if (fallback !== undefined && this._state === 'OPEN') {
         return await fallback();
       }
       throw err;

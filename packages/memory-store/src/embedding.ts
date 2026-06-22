@@ -76,9 +76,14 @@ async function _ensurePipeline(): Promise<EmbeddingPipeline> {
     return _pipeline;
   })();
 
-  const pipe = await _loading;
-  _loading = null;
-  return pipe;
+  try {
+    const pipe = await _loading;
+    return pipe;
+  } finally {
+    // 修正 C-03：首次加载失败后 _loading 永不重置→所有后续 embedding 永久卡死
+    // try/finally 确保无论成功失败都清空 _loading，允许下次重试
+    _loading = null;
+  }
 }
 
 // ── 公开 API ──────────────────────────────────

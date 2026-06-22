@@ -23,7 +23,7 @@ import {
   ENGINE_DEFAULTS,
   loadEngineDefaults,
   type EngineDefaults,
-} from "@cortex/engine";
+} from "../../engine/src/config/engine-defaults.js";
 
 // ── 常量值校验 ──────────────────────────────
 

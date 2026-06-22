@@ -29,7 +29,7 @@
 //     - Private Helpers
 // ============================================================
 
-import { MEMORY_VALID_TRANSITIONS, type MemoryEntry, type MemoryWriteInput, type MemoryQuery, type MemoryLink, type SemanticState, type LinkType, type ReadMode } from "@cortex/shared";
+import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type MemoryEntry, type MemoryWriteInput, type MemoryQuery, type MemoryLink, type SemanticState, type LinkType, type ReadMode, type IPipelineObserver, type MaintainReport } from "@cortex/shared";
 import type { IMemoryStore } from "../interfaces/MemoryStore.js";
 import type { TransactionalMemoryStore, TransactionContext, TransactionIsolation, TransactionResult, TransactionLinkOp } from "../interfaces/TransactionalMemoryStore.js";
 import { MemoryStoreError, MemoryStoreErrorCode, MemoryValidationError, TransactionError } from "../errors/MemoryStoreError.js";
@@ -146,7 +146,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   // Constructor
   // ══════════════════════════════════════════════
 
-  constructor(private readonly _be: MemoryStoreBackend) {}
+  constructor(
+      private readonly _be: MemoryStoreBackend,
+      private readonly _observer?: IPipelineObserver,
+    ) {}
 
   // ══════════════════════════════════════════════
   // Internal Loading Methods
@@ -427,7 +430,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   async flush() {
     this._ei();
-    await this._be.flushAll(this._entries, this._links);
+    try {
+      await this._be.flushAll(this._entries, this._links);
+    } catch (err) {
+      this._observer?.emit({ type: PipelineEventType.MemoryFlushSkipped, priority: PipelinePriority.HIGH, payload: { error: String(err).slice(0, 200) }, timestamp: Date.now() });
+      throw err;
+    }
   }
 
   /**
@@ -485,7 +493,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     };
 
     this._entries.set(id, e);
-    await this._be.persist(e);
+    try {
+      await this._be.persist(e);
+    } catch (err) {
+      this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { error: String(err).slice(0, 200), entryId: id }, timestamp: Date.now() });
+      throw err;
+    }
     return id;
   }
 
@@ -498,7 +511,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   async set(id: string, e: MemoryEntry) {
     this._ei();
     this._entries.set(id, { ...e });
-    await this._be.persist(e);
+    try {
+      await this._be.persist(e);
+    } catch (err) {
+      this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { error: String(err).slice(0, 200), entryId: id }, timestamp: Date.now() });
+      throw err;
+    }
   }
 
   /**
@@ -597,8 +615,20 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     this._ei();
     const e = this._entries.get(id);
     if (!e) return false;
-    // 允许任意状态 → Obliterated（FSM 白名单校验由 cas 内部执行）
+    // 幂等：已是 Obliterated 直接返回 true
+    if (e.semantic_state === "Obliterated") return true;
+    // 允许其他状态 → Obliterated（FSM 白名单校验由 cas 内部执行）
     return this.cas(id, e.semantic_state as SemanticState, "Obliterated");
+  }
+
+  /** freeze —— 冻结记忆，语义等同于 archive（映射到 Archived 状态），幂等 */
+  freeze(id: string): boolean {
+    return this.archive(id);
+  }
+
+  /** maintain —— 维护扫描（当前为空实现，子类可重写） */
+  maintain(): MaintainReport {
+    return { archived: 0, obliterated: 0, orphanedLinks: 0 };
   }
 
   // ══════════════════════════════════════════════

@@ -7,7 +7,7 @@
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { installConsoleBridge, uninstallConsoleBridge } from "@cortex/engine";
+import { installConsoleBridge, uninstallConsoleBridge } from "@cortex/telemetry";
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 
 // ── Mock observer ──────────────────────────────

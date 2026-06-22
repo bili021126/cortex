@@ -63,11 +63,11 @@ const VALID_TRANSITIONS: Record<SemanticState, Set<SemanticState>> = (() => {
   ] as const;
 
   for (const tr of allTransitions) {
-    if (!t[tr.from]) t[tr.from] = new Set();
-    t[tr.from].add(tr.to);
+    let fs = t[tr.from]; if (!fs) { fs = new Set(); t[tr.from] = fs; }
+    fs.add(tr.to);
     // 自引用（幂等态）：同态 dispatch 允许
-    if (!t[tr.to]) t[tr.to] = new Set();
-    t[tr.to].add(tr.to);
+    let ts = t[tr.to]; if (!ts) { ts = new Set(); t[tr.to] = ts; }
+    ts.add(tr.to);
   }
   // Obliterated 终态无出边
   t["Obliterated"] = new Set();
@@ -520,11 +520,9 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     return ok;
   }
 
-  rollback(memoryId: string): boolean {
-    // 后端 rollback(memoryId) 内部为同步 Map 操作（InMemory/FileBased 均如此），
-    // 但方法签名返回 Promise<boolean>（为事务重载兼容）。此处 await 确保错误可被捕获。
+  async rollback(memoryId: string): Promise<boolean> {
     try {
-      return this._backend.rollback(memoryId) as unknown as boolean;
+      return await this._backend.rollback(memoryId);
     } catch {
       return false;
     }
@@ -579,7 +577,9 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       // Phase 2: 湮灭长期 Archived 记忆
       for (const m of all) {
         if (m.semantic_state !== "Archived") continue;
-        if (m.lastAccessedAt > obliterateThreshold && (m.expires_at ?? 0) === 0) continue;
+        // 修正 C-07：此前条件为 recent && no_expiry → continue，导致 Archived 堆积无限增长
+        // 正确逻辑：近期被访问过的不湮灭，其余全部湮灭
+        if (m.lastAccessedAt > obliterateThreshold) continue;
         const ok = this._backend.obliterate(m.id);
         if (ok) obliterated++;
       }

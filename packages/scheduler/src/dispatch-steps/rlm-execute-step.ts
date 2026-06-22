@@ -146,6 +146,7 @@ export class RlmExecuteStep implements IDispatchStep {
 
     for (let li = 0; li < layers.length && li < MAX_RLM_DEPTH; li++) {
       const layer = layers[li];
+      if (!layer) continue;
       const layerContext = mergeContext(allAnnotations);
 
       for (let si = 0; si < layer.length; si += MAX_PARALLEL_SUBTASKS) {
@@ -169,7 +170,10 @@ export class RlmExecuteStep implements IDispatchStep {
       result: {
         nodeId: ctx.node.id,
         agentType: agentType as AgentType,
-        success: allAnnotations.length > 0,
+        // 修正 C-06：1/10 子任务产出即标记成功 → 成功率 ≥ 50% 才算成功
+        success: allAnnotations.length > 0 && subTasks.length > 0
+          ? (allAnnotations.length / subTasks.length) >= 0.5
+          : allAnnotations.length > 0,
         output: merged || "(RLM 子任务执行完成，无产出)",
       },
     };

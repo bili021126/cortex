@@ -1,1 +1,0 @@
-{"version":3,"file":"agent-quota.js","sourceRoot":"","sources":["agent-quota.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,oBAAoB;AACpB,MAAM,CAAC,MAAM,mBAAmB,GAA2B;IACzD,OAAO,EAAE,CAAC;IACV,IAAI,EAAE,CAAC;IACP,MAAM,EAAE,CAAC;IACT,QAAQ,EAAE,CAAC;IACX,SAAS,EAAE,CAAC;CACb,CAAC"}

@@ -201,7 +201,7 @@ export interface IMemoryStore {
   writePending(input: MemoryWriteInput): string;
   commitMemory(memoryId: string): boolean;
   /** 显式回滚——将指定 Pending 记忆湮灭（不经过 Active 态）。两阶段提交的终止路径 */
-  rollback(memoryId: string): boolean;
+  rollback(memoryId: string): Promise<boolean>;
   /** 统一取消——自动判断状态：Pending→rollback，Active→archive。幂等 */
   cancel(memoryId: string): boolean;
   getPending(): MemoryEntry[];

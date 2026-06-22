@@ -15,10 +15,12 @@
  *
  * @ci 标签规范（写在测试文件第一行注释中）:
  *   // @ci: unit         CI 必跑（默认值）
+ *   // @ci: verify       关键修复验证，CI 必跑（与 unit 同级）
  *   // @ci: llm          需要 LLM API，CI 跳过
  *   // @ci: integration  需要外部服务，CI 跳过
  *   // @ci: e2e          端到端测试，CI 跳过
  *   // @ci: manual       人工触发，永远不自动跑
+ *   // @ci: contract     跨包接口契约验证，CI 必跑（与 unit 同级）
  */
 
 import { execSync } from "node:child_process";
@@ -27,7 +29,7 @@ import { join, relative, resolve, dirname } from "node:path";
 
 // ─── 类型 ────────────────────────────────────────────────
 
-type CiTag = "unit" | "llm" | "integration" | "e2e" | "manual";
+type CiTag = "unit" | "verify" | "contract" | "llm" | "integration" | "e2e" | "manual";
 
 interface TestFile {
   path: string;
@@ -37,7 +39,7 @@ interface TestFile {
 // ─── 常量 ────────────────────────────────────────────────
 
 const ROOT = resolve(import.meta.dirname, "..");
-const CI_TAG_RE = /@ci\s*:\s*(unit|llm|integration|e2e|manual)/;
+const CI_TAG_RE = /@ci\s*:\s*(unit|verify|contract|llm|integration|e2e|manual)/;
 const TEST_FILE_RE = /\.test\.ts$/;
 
 // ─── 工具 ────────────────────────────────────────────────
@@ -110,7 +112,7 @@ function extractPackageRoot(filePath: string): string {
   const rel = relative(join(ROOT, "packages"), filePath);
   const seg = rel.replace(/\\/g, "/").split("/");
   if (seg.length > 0) {
-    return join(ROOT, "packages", seg[0]);
+    return join(ROOT, "packages", seg[0]!);
   }
   return dirname(filePath);
 }
@@ -124,7 +126,7 @@ function parseVitestLine(output: string): { passed: number; total: number } {
   let last: { passed: number; total: number } = { passed: 0, total: 0 };
   let m: RegExpExecArray | null;
   while ((m = re.exec(output)) !== null) {
-    last = { passed: parseInt(m[1], 10), total: parseInt(m[2], 10) };
+    last = { passed: parseInt(m[1]!, 10), total: parseInt(m[2]!, 10) };
   }
   return last;
 }
@@ -150,10 +152,27 @@ async function main() {
   const dryRun = args.includes("--dry-run");
   const jsonMode = args.includes("--json");
 
-  // 扫描
+  // ── 门禁栈：类型检查 → 修复验证 → 契约验证 → 单元测试 ──
+  if (!dryRun) {
+    console.log("\n🔒 [门禁 1/4] tsc --noEmit 全量类型检查...");
+    try {
+      const tscResult = run("npx", ["tsc", "--noEmit", "-p", "tsconfig.json"], ROOT);
+      if (!tscResult.ok) {
+        console.error("❌ tsc --noEmit 失败，阻断");
+        process.exit(1);
+      }
+      console.log("   ✅ 类型检查通过\n");
+    } catch (e) {
+      console.error(`❌ tsc 执行异常: ${e}`);
+      process.exit(1);
+    }
+  }
+
+  // ── 扫描测试文件 ──
   const all = scanAllTests();
-  const unit = all.filter((t) => t.ciTag === "unit");
-  const skipped = all.filter((t) => t.ciTag !== "unit");
+  // 默认运行：unit + verify + contract（verify 和 contract 是新门禁层）
+  const targetFiles = all.filter((t) => t.ciTag === "unit" || t.ciTag === "verify" || t.ciTag === "contract");
+  const skipped = all.filter((t) => t.ciTag !== "unit" && t.ciTag !== "verify" && t.ciTag !== "contract");
 
   // @ci 标签审计
   const untagged = all.filter((t) => !hasCiTag(t.path));
@@ -191,7 +210,7 @@ async function main() {
     return;
   }
 
-  console.log(`\n🧪 vitest 按包串行 — ${runAll ? "全量模式" : `仅 @ci: unit (${unit.length} 个文件)`}`);
+  console.log(`\n🧪 vitest 按包串行 — ${runAll ? "全量模式" : `unit + verify + contract (${targetFiles.length} 个文件)`}`);
   console.log(`   @ci: llm/integration/e2e/manual → ${skipped.length} 个文件跳过\n`);
 
   // 按包分组
@@ -208,13 +227,13 @@ async function main() {
   let allOk = true;
 
   for (const [pkgDir, files] of pkgMap) {
-    const pkgUnit = files.filter((f) => f.ciTag === "unit");
-    const pkgSkipped = files.filter((f) => f.ciTag !== "unit");
+    const pkgTarget = files.filter((f) => f.ciTag === "unit" || f.ciTag === "verify" || f.ciTag === "contract");
+    const pkgSkipped = files.filter((f) => f.ciTag !== "unit" && f.ciTag !== "verify" && f.ciTag !== "contract");
 
-    // 非全量模式下，如果此包没有 unit 测试，跳过
-    if (!runAll && pkgUnit.length === 0) {
+    // 非全量模式下，如果此包没有 target 测试，跳过
+    if (!runAll && pkgTarget.length === 0) {
       if (files.length > 0) {
-        console.log(`   ⏭ ${relative(ROOT, pkgDir)} — 无 @ci: unit 测试 (${files.length} 个文件跳过)`);
+        console.log(`   ⏭ ${relative(ROOT, pkgDir)} — 无 @ci: unit/verify/contract 测试 (${files.length} 个文件跳过)`);
       }
       continue;
     }

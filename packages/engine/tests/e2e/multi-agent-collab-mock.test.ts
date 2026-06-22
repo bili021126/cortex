@@ -39,6 +39,8 @@ describe("多 Agent 协作 Mock E2E", () => {
     pool = new AgentPool();
     observer = new PipelineObserver();
     scheduler = new Scheduler(board, pool, observer);
+    // mock MetaAgent——多视角路由需要
+    (scheduler as any).metaAgent = { plan: async () => [] };
   });
 
   it("Code + Review + Analysis 三路并行 → 全部完成", async () => {

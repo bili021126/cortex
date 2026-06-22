@@ -62,18 +62,28 @@ export class LifecycleManager {
     }
 
     const sorted = this._topoSort();
+    const initialized: string[] = [];
 
-    for (const entry of sorted) {
-      try {
+    try {
+      for (const entry of sorted) {
         await entry.component.init();
-      } catch (err) {
-        this._emit("component_error", { component: entry.name, phase: "init", error: err });
-        throw err;
+        initialized.push(entry.name);
       }
-    }
 
-    for (const entry of sorted) {
-      await entry.component.start();
+      for (const entry of sorted) {
+        await entry.component.start();
+      }
+    } catch (err) {
+      // 回滚：逆序 stop + dispose 已初始化的组件
+      for (let i = initialized.length - 1; i >= 0; i--) {
+        const name = initialized[i];
+        const entry = sorted.find(e => e.name === name);
+        if (!entry) continue;
+        try { await entry.component.stop(); } catch {}
+        try { await entry.component.dispose(); } catch {}
+      }
+      this._emit("component_error", { component: "bootstrap", phase: "init", error: err });
+      throw err;
     }
 
     this._phase = "running";

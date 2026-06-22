@@ -1,1 +1,0 @@
-{"version":3,"file":"spawn-step.d.ts","sourceRoot":"","sources":["spawn-step.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,WAAW,EAAE,aAAa,EAAE,MAAM,YAAY,CAAC;AAG7D;;;;;;;;;;;;;;;;;GAiBG;AACH,qBAAa,SAAU,YAAW,aAAa;IAC7C,QAAQ,CAAC,IAAI,WAAW;IAExB,qBAAqB;IACrB,OAAO,CAAC,QAAQ,CAAC,iBAAiB,CAAS;gBAE/B,gBAAgB,GAAE,MAAe;IAIvC,GAAG,CAAC,GAAG,EAAE,WAAW,GAAG,OAAO,CAAC,WAAW,CAAC;CAmGlD"}

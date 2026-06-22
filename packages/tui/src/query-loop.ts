@@ -232,17 +232,16 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
   // 对话模型选择
   const chatModel = bridge.getChatModelName() || "deepseek-v4-flash";
 
-  // 获取工具定义——plan 模式仅 L0 只读工具（读代码 + 列目录 + 搜索），talk/party 无工具
+  // 获取工具定义——plan/talk/party 模式零工具
   const rawTools = bridge.getToolDefs(agent);
-  const planReadTools = ["read_file", "list_files", "glob_find", "search_symbol"];
-  const tools = mode === "plan"
-    ? rawTools.filter(t => planReadTools.includes(t.name))
-    : (mode === "talk" || mode === "party" ? [] : rawTools);
+  const tools = mode === "plan" || mode === "talk" || mode === "party"
+    ? []
+    : rawTools;
 
   // 最大工具调用轮次（从 config 读取，支持环境变量 CORTEX_MAX_TOOL_ROUNDS 覆盖）
   const envLimit = process.env.CORTEX_MAX_TOOL_ROUNDS;
   const configMax = envLimit ? Number(envLimit) : DEFAULT_MAX_TOOL_ROUNDS;
-  // plan 模式：只读工具 + 5 轮上限——读完上下文即产出规划，不做深度探索
+  // plan/talk/party 模式：零工具 + 极低轮次上限——纯文本对话，不调用工具
   const MAX_TOOL_ROUNDS = mode === "plan" ? Math.min(configMax, 5) : configMax;
   const CONTEXT_LIMIT = 128000;
   let toolRound = 0;
@@ -337,13 +336,13 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
 
     // ── 上下文压缩（95% 阈值自动触发）──
     if (resp.usage) {
-      const promptPercent = Math.round((resp.usage.prompt_tokens / CONTEXT_LIMIT) * 100);
+      const promptPercent = Math.round((sessionTokens / CONTEXT_LIMIT) * 100);
       if (promptPercent >= 95) {
         // Hook: onPreCompact
         await hooks.onPreCompact?.(messages);
         const compactResult = await compactMessages(messages, {
           contextLimit: CONTEXT_LIMIT,
-          currentTokens: resp.usage.prompt_tokens,
+          currentTokens: sessionTokens,
           triggerThreshold: 0.95,
           keepRecentTurns: 3,
           summarize: bridge.chat

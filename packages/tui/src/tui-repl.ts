@@ -251,9 +251,8 @@ async function _dispatchTuiMode(
       break;
     }
     case "plan": {
-      session.planState = { nodes: [], intent: input, approved: false, reviewStatus: "pending" };
       const result = await consumeGenerator(planMode(input, bridge, a, ps, h), tuiEventBus, abort);
-      if (result) { savePlanState(projectRoot, ps); writeln(result); }
+      if (result) { session.planState = ps; savePlanState(projectRoot, ps); writeln(result); }
       break;
     }
     case "party": {

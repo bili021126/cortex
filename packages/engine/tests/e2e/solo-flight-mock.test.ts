@@ -45,6 +45,7 @@ describe("Solo Flight Mock E2E", () => {
     pool = new AgentPool();
     observer = new PipelineObserver();
     scheduler = new Scheduler(board, pool, observer);
+    (scheduler as any).metaAgent = { plan: async () => [] };
   });
 
   it("CodeAgent 读取代码 → 修改 → 写入 → 验证", async () => {

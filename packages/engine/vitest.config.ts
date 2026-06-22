@@ -1,13 +1,18 @@
 import { defineConfig } from "vitest/config";
+import { resolveAlias } from "../vitest.ci.base.js";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  resolve: { alias: resolveAlias(__dirname) },
   test: {
     include: ["tests/**/*.test.ts"],
     exclude: [
-      "tests/e2e/strategist-agent-mock.test.ts",
-      "tests/e2e/closed-loop-mock.test.ts",
-      "tests/e2e/multi-agent-collab-mock.test.ts",
       "tests/e2e/solo-flight-mock.test.ts",
+      "tests/e2e/multi-agent-collab-mock.test.ts",
+      "tests/e2e/strategist-agent-mock.test.ts",
     ],
     env: {
       DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ?? "",

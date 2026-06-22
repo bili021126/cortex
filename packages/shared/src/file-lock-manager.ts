@@ -164,7 +164,7 @@ export class InMemoryFileLockManager implements IFileLockManager {
       if (filtered.length === 0) {
         this._locks.delete(filePath);
       } else if (filtered.length === 1) {
-        this._locks.set(filePath, filtered[0]);
+        this._locks.set(filePath, filtered[0]!);
       } else {
         this._locks.set(filePath, filtered);
       }
@@ -231,7 +231,7 @@ export class InMemoryFileLockManager implements IFileLockManager {
       if (alive.length === 0) {
         this._locks.delete(filePath);
       } else if (alive.length === 1) {
-        this._locks.set(filePath, alive[0]);
+        this._locks.set(filePath, alive[0]!);
       } else {
         this._locks.set(filePath, alive);
       }

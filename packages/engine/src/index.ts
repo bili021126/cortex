@@ -135,10 +135,10 @@ export { CapabilityRegistry, capabilityRegistry } from "./core/capability-regist
 
 // ── v3.1 Console → Observer 桥接 ─────────────
 // installConsoleBridge/uninstallConsoleBridge → 从 @cortex/telemetry 直接导入
+// vitest 下跨包 re-export 在 alias 中不解析，由引用方直接 import
 
 // ── 引擎配置 ───────────────────────────────────
-// @note 配置类型、常量、默认值统一由 @cortex/config 提供
-// engine barrel 不再重导出——调用方请直接从 @cortex/config 导入
+// 配置常量、默认值改用相对路径直接导入：
 
 // ── 修宪管线 ───────────────────────────────────
 // @note v2.6.7 兼容层已砍，直接导入 @cortex/governance

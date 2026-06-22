@@ -286,8 +286,12 @@ export class Toolkit {
       return this.fs.resolve(filePath);
     }
     const resolved = this.fs.resolve(filePath);
+    // 解析符号链接的真实路径（防符号链接沙箱绕过）
+    let realResolved: string;
+    try { realResolved = require("fs").realpathSync.native(resolved); } catch { realResolved = resolved; }
     const root = this.workspaceRoot;
-    if (resolved === root || resolved.startsWith(root + this.fs.sep)) {
+    if ((realResolved === root || realResolved.startsWith(root + this.fs.sep)) &&
+        (resolved === root || resolved.startsWith(root + this.fs.sep))) {
       return resolved;
     }
     throw new Error(`路径越界: "${filePath}" 不在工作区 "${root}" 内`);

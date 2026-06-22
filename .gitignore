@@ -120,3 +120,17 @@ nahida-persona.txt
 packages/resilience/tests/
 # TS test builds
 dist-test/
+
+# 全仓编译产物防回归——src/ 和 tests/ 下的 .js/.d.ts/.map 不应被追踪
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts.map
+packages/*/tests/**/*.d.ts
+packages/*/tests/**/*.js
+packages/*/tests/**/*.js.map
+packages/*/tests/**/*.d.ts.map
+scripts/**/*.js
+scripts/**/*.d.ts
+scripts/**/*.js.map
+scripts/**/*.d.ts.map

@@ -169,6 +169,7 @@ export type EventPayloadMap = {
   [PipelineEventType.ManifoldGateReleased]: { agentType: string; active: number; waiting: number; requestId: string };
   [PipelineEventType.ManifoldGateInvariantViolation]: { agentType: string; message: string };
   [PipelineEventType.ManifoldGateReleaseOrphan]: { agentType: string; message: string };
+  [PipelineEventType.ManifoldGateMaxUpdated]: { agentType: string; newMax: number; oldMax: number };
   // ── Infrastructure ──
   [PipelineEventType.InfraFileLockExpiredReclaimed]: { count: number; path?: string; holders?: string; detail: string };
   [PipelineEventType.InfraComponentDegraded]: { component: string; operation: string; detail: string };
@@ -226,6 +227,8 @@ export interface GovernanceEventPayload {
   suggestedAction?: "fix" | "ignore" | "escalate";
   /** 三轴归属（可选） */
   axis?: "事轴" | "权轴" | "横切";
+  /** 是否需要决策（可选——权轴拦截信号） */
+  requiresDecision?: boolean;
 }
 
 export type PipelineHandler = (event: ObservableEvent) => void;

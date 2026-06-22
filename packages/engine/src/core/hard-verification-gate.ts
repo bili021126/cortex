@@ -139,8 +139,8 @@ export class HardVerificationGate {
         passed: exported,
         reason: exported ? undefined : `${exportName} 未在 barrel 中导出`,
       };
-    } catch {
-      return { ruleName: "barrel-export", passed: true };
+    } catch (e) {
+      return { ruleName: "barrel-export", passed: false, reason: `I/O 故障: ${String(e).slice(0, 100)}` };
     }
   }
 
@@ -151,6 +151,11 @@ export class HardVerificationGate {
     const tgtPkg = p.targetPkg as string | undefined;
     const iface = p.interfaceName as string | undefined;
     if (!srcPkg || !tgtPkg || !iface) return { ruleName: "cross-package", passed: true };
+
+    // 防注入：校验接口名仅含合法标识符字符
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(iface) || !/^[a-z][a-z0-9-]*$/.test(srcPkg) || !/^[a-z][a-z0-9-]*$/.test(tgtPkg)) {
+      return { ruleName: "cross-package", passed: false, reason: `非法接口名或包名: iface=${iface} src=${srcPkg} tgt=${tgtPkg}` };
+    }
 
     try {
       const srcDir = `packages/${srcPkg}/src`;
@@ -167,8 +172,8 @@ export class HardVerificationGate {
         passed: defined && consumed,
         reason: defined && consumed ? undefined : `接口 ${iface} 在包间不一致`,
       };
-    } catch {
-      return { ruleName: "cross-package", passed: true };
+    } catch (e) {
+      return { ruleName: "cross-package", passed: false, reason: `I/O 故障: ${String(e).slice(0, 100)}` };
     }
   }
 

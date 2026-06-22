@@ -596,15 +596,9 @@ export class Registry implements IResilienceRegistry {
             }
             return timeoutResult.value;
           },
-          // 熔断降级：尝试执行超时保护下的调用
+          // 熔断降级：断路器已 OPEN → 不调 fn()，阻止穿透
           async () => {
-            const timeoutResult = await timeout.execute(
-              async (_signal?: AbortSignal) => await fn(),
-            );
-            if (!timeoutResult.success) {
-              throw timeoutResult.error;
-            }
-            return timeoutResult.value;
+            throw new CircuitBreakerOpenError(cb.name);
           },
         );
       } catch (err) {
