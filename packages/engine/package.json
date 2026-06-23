@@ -22,7 +22,6 @@
     "e2e:skill": "tsc --outDir dist/e2e --rootDir . --module nodenext --moduleResolution nodenext --target ES2022 --esModuleInterop --skipLibCheck tests/manual/e2e/skill-fix-e2e.ts ; node dist/e2e/tests/manual/e2e/skill-fix-e2e.js"
   },
   "dependencies": {
-    "@cortex/cache": "workspace:*",
     "@cortex/config": "workspace:*",
     "@cortex/consistency": "workspace:*",
     "@cortex/governance": "workspace:*",

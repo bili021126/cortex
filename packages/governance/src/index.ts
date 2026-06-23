@@ -35,5 +35,14 @@ export type { TimeoutAction, TimeoutConfig } from "./amendment-timeout.js";
 // ── 文档注册中心 ───────────────────────────────
 export { DocRegistry } from "./doc-registry.js";
 
+// ── 原则七：宪法修宪验证 ──
+export {
+  validateConstitutionAmendment,
+} from "./constitution-validator.js";
+export type {
+  SubConstraintVerdict,
+  ConstitutionValidationResult,
+} from "./constitution-validator.js";
+
 // ── 治理→记忆适配器 ─────────────────────────────
 export { syncGovernanceToMemory } from "./governance-memory.js";
