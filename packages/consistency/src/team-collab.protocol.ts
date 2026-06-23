@@ -270,7 +270,9 @@ export class TeamCollabManager {
     };
 
     // 异步写入——不阻塞主流程
-    void this._memory.write(writeInput);
+    this._memory.write(writeInput).catch((err) => {
+      process.stderr.write(`[TeamCollab] recordReflection 写入失败: ${String(err)}\n`);
+    });
   }
 
   /**
@@ -297,8 +299,8 @@ export class TeamCollabManager {
     if (report) {
       // 标记需要解决
       for (const entryId of report.conflictingIds) {
-        this._memory.cas(entryId, "Active", "Active"); // persist as Active but flagged
-        // 通过 link 标记冲突关系
+        // M-04 修复：跳过 Active→Active 的 no-op CAS
+        // 当前 entries 为 Active，无需 CAS；直接通过 link 标记冲突关系
         if (report.conflictingIds[0] !== entryId) {
           this._memory.link(report.conflictingIds[0], entryId, LinkType.DerivedFrom);
         }

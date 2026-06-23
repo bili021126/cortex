@@ -203,7 +203,7 @@ export const PRESET_CONTEXT_POLICIES: Record<string, ContextPolicy> = {
   "single-step": {
     id: "single-step",
     description: "单步任务：零历史，只看 payload",
-    conversation: { mode: "full", maxTurns: 0 },
+    conversation: { mode: "sliding-window", maxTurns: 0 },
     retrieval: { readMode: "CSA", bfsDepth: 0 },
     pipeline: {
       sort: { mode: "relevance" },

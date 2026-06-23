@@ -175,7 +175,10 @@ export class RateLimiter {
       try {
         const obj: QuotaStore = {};
         for (const [k, v] of this._dayQuotas) { obj[k] = v; }
-        await fs.promises.writeFile(this._quotaPath, JSON.stringify(obj, null, 2), "utf-8");
+        // M-02 修复：tmp→rename 原子模式，崩溃后不丢失原数据
+        const tmpPath = this._quotaPath + ".tmp";
+        await fs.promises.writeFile(tmpPath, JSON.stringify(obj, null, 2), "utf-8");
+        await fs.promises.rename(tmpPath, this._quotaPath);
       } catch {
         // 写入失败不阻塞主流程
       }

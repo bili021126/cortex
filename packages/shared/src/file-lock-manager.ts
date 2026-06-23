@@ -1,5 +1,8 @@
 // ============================================================
 // @cortex/shared — 文件锁域
+//
+// FIXME: InMemoryFileLockManager 是运行时类，应迁移到 @cortex/tools 或 @cortex/engine。
+//        shared 包应只保留接口（IFileLockManager, LockEntry, FileLockManagerConfig）。
 // ============================================================
 
 export enum LockType {

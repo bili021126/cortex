@@ -484,7 +484,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     const ok = this._backend.commitMemory(memoryId);
     if (ok) {
       // 异步 enrichment：embedding 生成 + dedup 缓存 + BM25 索引更新
-      void this._enrichPendingEntry(memoryId);
+      // M-05 修复：加 .catch() 取代 fire-and-forget，失败时输出错误
+      this._enrichPendingEntry(memoryId).catch((err) => {
+        process.stderr.write(`[MemoryStore] commitMemory enrichment 失败: ${String(err)}\n`);
+      });
     }
     return ok;
   }
@@ -652,11 +655,15 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     }
   }
 
-  /** 向量相似去重——优先查缓存，miss 时全表扫描 */
+  /** 向量相似去重——每次查询前刷新缓存，避免过期数据 */
   private async _tryVectorDedup(newId: string, embedding: number[]): Promise<void> {
     try {
-      const all = this._vectorCache.size > 0 ? [] as MemoryEntry[] : await this._backend.read({}, "HCA");
-      const candidates = this._vectorCache.size > 0 ? Array.from(this._vectorCache.entries()) : all.map(e => [e.id, e.embedding] as [string, number[] | undefined]).filter(([,e]) => e);
+      // M-06 修复：每次查询前从后端刷新 _vectorCache，避免过期缓存漏去重
+      const all = await this._backend.read({}, "HCA");
+      for (const e of all) {
+        if (e.embedding) this._vectorCache.set(e.id, e.embedding);
+      }
+      const candidates = Array.from(this._vectorCache.entries());
       for (const [id, emb] of candidates) {
         if (id === newId || emb?.length !== embedding.length) continue;
         const dot = embedding.reduce((sum: number, v: number, i: number) => sum + v * (emb[i] ?? 0), 0);

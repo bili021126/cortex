@@ -42,6 +42,19 @@ export interface Executable {
 }
 
 /**
+ * AgentPoolLike —— AgentPool 的最小接口约束。
+ * setPool() 入参的预期形状，包含 Agent 状态管理所需的最小方法集。
+ * 具体实现见 @cortex/scheduler 的 IAgentPool。
+ */
+export interface AgentPoolLike {
+  spawn(agentType: AgentType, instanceId: string): boolean;
+  spawnSubtask(agentType: AgentType, instanceId: string): boolean;
+  getStatus(instanceId: string): AgentStatus | undefined;
+  setStatus(instanceId: string, status: AgentStatus): boolean;
+  destroy(agentType: AgentType, instanceId: string): void;
+}
+
+/**
  * Agent —— Agent 的统一接口。
  * 所有 Agent 必须实现此接口。
  */
@@ -51,8 +64,12 @@ export interface Agent extends MemoryAware, Executable {
   readonly status: AgentStatus;
   wakeup(): Promise<void>;
   shutdown(): Promise<void>;
-  /** 注入 AgentPool 引用 */
-  setPool?(pool: unknown, instanceId: string): void;
+  /**
+   * 注入 AgentPool 引用（方案B：状态所有权归一）。
+   * @param pool AgentPool 实例——必须实现 {@link AgentPoolLike} 最小契约
+   * @param instanceId 当前 Agent 在 Pool 中的实例 ID
+   */
+  setPool?(pool: AgentPoolLike, instanceId: string): void;
 }
 
 // ═══════════════════════════════════════════

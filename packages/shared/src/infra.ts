@@ -434,6 +434,6 @@ export interface Disposable {
 }
 
 /** 返回类型声明——插件式注入类型 */
-export type SafeAny = unknown;
+export type Unknown = unknown;
 
 export type StrictNonEmptyArray<T> = T extends readonly [infer F, ...infer R] ? (F extends undefined ? never : readonly [F, ...R]) : never;
