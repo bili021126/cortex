@@ -102,11 +102,8 @@ export class DocRegistry {
 
   /** 确保已加载索引 */
   private _ensureLoaded(): void {
-    if (!this._loaded) {
-      // 同步加载（适用于只用内存的场景）
-      this.index = { formatVersion: 1, entries: {} };
-      this._loaded = true;
-    }
+    if (!this._loaded)
+      throw new Error("DocRegistry.init() must be called before use");
   }
 
   // ── ID 与路径计算 ───────────────────────────

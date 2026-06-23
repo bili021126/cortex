@@ -35,6 +35,8 @@ export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
     tscTimeout: 30_000,
     testTimeout: 30_000,
     vitestTimeout: 60_000,
+    retrievalAlpha: 0.45,
+    retrievalBeta: 0.55,
   },
 
   search: {

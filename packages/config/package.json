@@ -16,7 +16,9 @@
     "typecheck": "tsc",
     "lint": "eslint src/"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@cortex/shared": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.7.0"
   }

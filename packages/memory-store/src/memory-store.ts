@@ -20,6 +20,7 @@ import {
   type ReadMode,
   type LinkType,
   type SemanticState,
+  MEMORY_VALID_TRANSITIONS,
 } from "@cortex/shared";
 import * as crypto from "node:crypto";
 import { InMemoryMemoryStore, type TransactionalMemoryStore } from "@cortex/memory";
@@ -40,40 +41,8 @@ import {
 /** 30 天 TTL 毫秒 */
 const MEMORY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-/**
- * 合法的状态转换白名单：from → to
- *
- * 由 MemoryEntryStateMachine 的 FSM 定义推导生成，
- * 替代此前手工维护的 VALID_TRANSITIONS。
- *
- * 变更策略：修改 definitions/memory-entry.fsm.json 后，
- * 更新 memory-state-machine.ts 中的 MEMORY_ENTRY_FSM_DEFINITION，
- * 本表自动同步——单一事实来源（Single Source of Truth）。
- */
-const VALID_TRANSITIONS: Record<SemanticState, Set<SemanticState>> = (() => {
-  const t: Record<string, Set<string>> = {};
-
-  // 从 FSM 定义中按 allTransitions 提取所有 from→to 对（PascalCase 对齐 SemanticState）
-  const allTransitions = [
-    { from: "Pending", to: "Active" },
-    { from: "Pending", to: "Obliterated" },
-    { from: "Active", to: "Archived" },
-    { from: "Active", to: "Obliterated" },
-    { from: "Archived", to: "Obliterated" },
-  ] as const;
-
-  for (const tr of allTransitions) {
-    let fs = t[tr.from]; if (!fs) { fs = new Set(); t[tr.from] = fs; }
-    fs.add(tr.to);
-    // 自引用（幂等态）：同态 dispatch 允许
-    let ts = t[tr.to]; if (!ts) { ts = new Set(); t[tr.to] = ts; }
-    ts.add(tr.to);
-  }
-  // Obliterated 终态无出边
-  t["Obliterated"] = new Set();
-
-  return t as Record<SemanticState, Set<SemanticState>>;
-})();
+/** MEMORY_VALID_TRANSITIONS 来自 @cortex/shared —— 单一事实来源 */
+const VALID_TRANSITIONS = MEMORY_VALID_TRANSITIONS;
 import { defaultEmbeddingService, type IEmbeddingService } from "./embedding.js";
 import { BM25Index } from "./bm25-index.js";
 import { HybridRetriever, type HybridRetrievalConfig } from "./hybrid-retrieval.js";

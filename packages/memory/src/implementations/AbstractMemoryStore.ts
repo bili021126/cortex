@@ -960,8 +960,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
           committedLinks.push({ sourceId: l.sourceId, targetId: l.targetId, linkType: l.linkType });
         }
 
-      if (x.pendingLinks.length > 0)
+      if (x.pendingLinks.length > 0) {
         await this._be.flushLinks(this._links);
+        await this._be.flushIndex(this._entries);
+      }
 
       x.status = "committed";
       this._transactions.delete(x.id);
