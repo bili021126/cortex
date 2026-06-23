@@ -178,7 +178,7 @@ export async function bootstrapEngine(
     emit: (event: string) => observer.emit({
       type: PipelineEventType.ErrorReported,
       priority: PipelinePriority.NORMAL,
-      payload: { source: "LoggingPipelineBridge", severity: "error", error: String(event), hint: "log-bridge-failure" },
+      payload: { message: event },
       timestamp: Date.now(),
       notificationType: "FYI",
     }),
@@ -240,7 +240,7 @@ export async function bootstrapEngine(
           { key: "level", value: signal.level },
           { key: "aggregationKey", value: signal.aggregationKey },
         ]),
-      ).catch(err => console.error("[telemetry] dynamic import failed:", err));
+      );
     }
   };
   observer.on(PipelinePriority.CRITICAL, sentinelHandler);
