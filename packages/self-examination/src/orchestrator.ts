@@ -40,7 +40,9 @@ export async function orchestrate(config: ExamConfig, platform: Platform): Promi
           content_hash: `seed-${seedPath}`,
           summary: `种子记忆: ${seedPath}`,
         });
-      } catch {}
+      } catch (err) {
+        process.stderr.write(`[orchestrator] 种子记忆注入失败: ${err}\n`);
+      }
     }
   }
 

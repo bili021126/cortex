@@ -8,7 +8,7 @@
 /** 种子记忆条目 */
 export interface SeedMemoryEntry {
   taskId: string;
-  memoryType: string;
+  kind: string;
   agentType: string;
   content: unknown;
   summary: string;

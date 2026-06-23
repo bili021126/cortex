@@ -97,8 +97,9 @@ export function installConsoleBridge(observer: IPipelineObserver): void {
   _origError = console.error;
 
   console.log = (...args: unknown[]) => {
-    if (_isWhitelisted(args)) { _origLog?.(...args); }
-    // else: 静默——不 emit 事件（常规日志量太大）
+    if (_isWhitelisted(args)) { _origLog?.(...args); } else {
+      process.stderr.write(`[console-bridge] ${_flattenArgs(args)}\n`);
+    }
   };
 
   console.warn = (...args: unknown[]) => {

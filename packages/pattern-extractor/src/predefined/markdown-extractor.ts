@@ -261,8 +261,10 @@ export class MarkdownPatternExtractor
   // ── 正则常量 ──
 
   /** 匹配 ```json ... ``` 代码块 */
-  private static readonly JSON_BLOCK_RE =
-    /```json\s*\n([\s\S]*?)```/g;
+  private static get JSON_BLOCK_RE(): RegExp {
+    // 每次调用创建新实例，避免 g-flag 跨调用共享 lastIndex
+    return /```json\s*\n([\s\S]*?)```/g;
+  }
 
   /** 匹配 P0-P99 编号前缀 */
   private static readonly P_NUMBER_RE =
@@ -485,7 +487,7 @@ export class MarkdownPatternExtractor
   ): SkillTemplateCandidate[] {
     const candidates: SkillTemplateCandidate[] = [];
 
-    // 重置 lastIndex
+    // 重置 lastIndex（getter 已创建新实例，此行保留防御性重置）
     MarkdownPatternExtractor.JSON_BLOCK_RE.lastIndex = 0;
 
     let match: RegExpExecArray | null;

@@ -22,8 +22,8 @@ export function getTelemetry(): ITelemetryCollector {
 }
 
 /** 替换遥测采集器（测试/生产环境注入 FileCollector 等） */
-export function setTelemetry(collector: ITelemetryCollector): void {
-  void _collector?.shutdown();
+export async function setTelemetry(collector: ITelemetryCollector): Promise<void> {
+  await _collector?.shutdown();
   _collector = collector;
 }
 
@@ -46,7 +46,7 @@ export async function recordTelemetry(
 }
 
 /** 关闭遥测（刷新缓冲区 + 释放资源） */
-export function shutdownTelemetry(): void {
-  void _collector?.shutdown();
+export async function shutdownTelemetry(): Promise<void> {
+  await _collector?.shutdown();
   _collector = null;
 }

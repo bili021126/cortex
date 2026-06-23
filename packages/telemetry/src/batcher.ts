@@ -7,7 +7,7 @@
 // ============================================================
 
 import type { Batcher, TelemetryData, TelemetryBatch } from "./types.js";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 
 // ─── SizeBatcher ───────────────────────────────────
 

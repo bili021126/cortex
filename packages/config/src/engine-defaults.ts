@@ -168,8 +168,10 @@ function _readEnvOverrides(): Partial<EngineDefaults> {
   for (const [envKey, configKey] of Object.entries(ENV_MAP)) {
     const val = process.env[envKey];
     if (val !== undefined) {
-      const num = Number(val);
-      (overrides as Record<string, unknown>)[configKey] = Number.isNaN(num) ? val : num;
+      const defaultValue = ENGINE_DEFAULTS[configKey];
+      // 按默认值类型处理: string 字段保留原值，number 字段做转换
+      (overrides as Record<string, unknown>)[configKey] =
+        typeof defaultValue === "string" ? val : Number(val);
     }
   }
   return overrides;

@@ -8,6 +8,8 @@
 import * as path from "node:path";
 import type { ExamConfig } from "./config.js";
 
+let _bypassInterval: ReturnType<typeof setInterval> | null = null;
+
 export interface Platform {
   observer: any;
   board: any;
@@ -21,6 +23,14 @@ export interface Platform {
   butlerAgent: any;
   gate: any;
   engine: any;
+}
+
+/** 清理定时器（供 shutdown 调用） */
+export function stopPlatform(): void {
+  if (_bypassInterval !== null) {
+    clearInterval(_bypassInterval);
+    _bypassInterval = null;
+  }
 }
 
 export async function initPlatform(config: ExamConfig): Promise<Platform> {
@@ -53,7 +63,8 @@ export async function initPlatform(config: ExamConfig): Promise<Platform> {
   });
 
   process.env["CONFIRM_GATE_TIMEOUT_MS"] = "100";
-  setInterval(() => {
+  if (_bypassInterval !== null) clearInterval(_bypassInterval);
+  _bypassInterval = setInterval(() => {
     try { engine.gate?.bypassAll?.(); } catch {}
   }, 240_000);
 

@@ -270,8 +270,8 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
     const resolvedLimit = query.limit ?? (mode === "HCA" ? 10 : 3);
 
-    // ── 适配器层剥离 keywords：后端只做文本搜索，适配器补充 content_blob 搜索 ──
-    const backendQuery = { ...query, keywords: undefined };
+    // ── 传递 keywords 到后端：后端在 summary/semantic_gist 层过滤，适配器补充 content_blob 搜索 ──
+    const backendQuery = { ...query };
     let results = await this._backend.read(backendQuery, mode);
 
     // ── 适配器层过滤：30 天 TTL ──

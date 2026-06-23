@@ -81,15 +81,18 @@ export function accumulateToolCalls(
       next[idx] = { ...item, id: tc.id };
     }
 
-    // function.name —— 通常只在首个 delta 出现，但也有可能后续补全（容错）
+    // function.name —— 只在首个 delta 出现时设置，后续 chunk 不追加（防止跨 chunk 拼接错误）
     if (tc.function?.name) {
-      next[idx] = {
-        ...(next[idx] || item),
-        function: {
-          ...(next[idx] || item).function,
-          name: (next[idx] || item).function.name + tc.function.name,
-        },
-      };
+      const current = next[idx] || item;
+      if (!current.function.name) {
+        next[idx] = {
+          ...current,
+          function: {
+            ...current.function,
+            name: tc.function.name,
+          },
+        };
+      }
     }
 
     // function.arguments —— 分片追加

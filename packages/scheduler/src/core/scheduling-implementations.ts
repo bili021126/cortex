@@ -399,9 +399,9 @@ export class SequentialDriver implements ILoopDriver {
     while (true) {
       if (Date.now() - startTime > MAX_DURATION) {
         observer.emit({
-          type: PipelineEventType.SchedulerReplanLimit,
+          type: PipelineEventType.SchedulerLoopCrashed,
           priority: PipelinePriority.CRITICAL,
-          payload: { totalReplans: 0, maxReplans: 0, deferred: 0 },
+          payload: { round: 0, error: "SequentialDriver global timeout", pendingAtCrash: board.getPendingNodes().length },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });

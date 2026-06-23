@@ -241,9 +241,10 @@ export class TypeScriptGenerator {
 
   private _toEnumKey(str: string): string {
     // Convert snake_case or kebab-case to PascalCase for enum keys
+    // 保留原大小写避免碰撞（如 myState vs mystate）
     return str
       .split(/[_-]/)
-      .map((s, i) => (i === 0 ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()))
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
       .join("");
   }
 }
