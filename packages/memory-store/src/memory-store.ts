@@ -161,12 +161,12 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     this._phase = LifecyclePhase.Stopped;
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
     if (this._phase === LifecyclePhase.Disposed) return;
     if (!this._closed) {
       this._closed = true;
       try {
-        void this._backend.close();
+        await this._backend.close();
       } catch (err) {
         this._emitDegraded("dispose-close", `后端关闭失败: ${String(err)}`);
       }
