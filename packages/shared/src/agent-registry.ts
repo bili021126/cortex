@@ -334,28 +334,16 @@ export function setAgentToolPermissions(permissions: Record<string, readonly str
 // ============================================================
 
 /**
- * 按 AgentType + AgentContext 解析实际权限集。
+ * 按 AgentType 解析实际权限集。
  *
- * ReviewAgent 权限动态规则：
- *   - production（默认）→ BASE_TOOLSET（无 run_shell）
- *   - self_examination  → FULL_TOOLSET（含 run_shell，用于测试验证）
- *
- * InspectorAgent 权限动态规则：
- *   - production（默认）→ BASE_TOOLSET（纯静态侦察）
- *   - post_verification → FULL_TOOLSET（含 run_shell，用于 tsc/vitest/madge）
- *
- * 其他 Agent 类型当前不受 context 影响，直接返回默认权限。
+ * 所有 Agent 类型统一走 AGENT_TOOL_PERMISSIONS（含运行时覆写），
+ * Review/Inspector 不再特殊 bypass。
+ * context 参数保留为向后兼容占位，不影响权限结果。
  */
 export function resolveAgentPermissions(
   agentType: AgentType,
-  context: AgentContext = AgentContext.Production,
+  _context?: AgentContext,
 ): readonly string[] {
-  if (agentType === AgentType.Review) {
-    return context === AgentContext.SelfExamination ? FULL_TOOLSET : BASE_TOOLSET;
-  }
-  if (agentType === AgentType.Inspector) {
-    return context === AgentContext.PostVerification ? FULL_TOOLSET : BASE_TOOLSET;
-  }
   return AGENT_TOOL_PERMISSIONS[agentType] ?? [];
 }
 

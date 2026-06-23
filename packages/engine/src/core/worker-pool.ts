@@ -37,6 +37,9 @@ export class WorkerPool {
   private queue: QueuedTask[] = [];
   private busy = new Set<Worker>();
 
+  /** 队列最大长度上限——超出时新任务被立即拒绝，提供背压。 */
+  private static readonly MAX_QUEUE_LENGTH = 100;
+
   constructor(private options: { maxWorkers?: number } = {}) {
     const count = options.maxWorkers ?? Math.max(1, cpus().length - 1);
     for (let i = 0; i < count; i++) {
@@ -55,6 +58,8 @@ export class WorkerPool {
       const wrappedReject = (err: Error) => reject(err);
       if (worker) {
         this._dispatch(worker, task, wrappedResolve, wrappedReject);
+      } else if (this.queue.length >= WorkerPool.MAX_QUEUE_LENGTH) {
+        reject(new Error("WorkerPool queue full (max " + WorkerPool.MAX_QUEUE_LENGTH + "), task rejected"));
       } else {
         this.queue.push({ task, resolve: wrappedResolve, reject: wrappedReject });
       }
@@ -62,6 +67,10 @@ export class WorkerPool {
   }
 
   shutdown(): void {
+    // 拒绝所有排队任务，防止 promise 悬空
+    for (const q of this.queue) {
+      q.reject(new Error("WorkerPool shutdown: queued task discarded"));
+    }
     for (const w of this.workers) w.terminate();
     this.workers = [];
     this.queue = [];

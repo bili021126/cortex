@@ -83,7 +83,7 @@ export class ConfirmGate {
 
     // L1：信任模型判定
     if (!this.trustModel || !trustContext) {
-      // 无信任模型时保守放行（保持旧行为）
+      // 原则四 fail-open: TrustModel 离线时不阻断 L1 操作
       return false;
     }
     const trustLevel = this.trustModel.getTrustLevelForTool(

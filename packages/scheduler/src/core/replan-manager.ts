@@ -238,7 +238,7 @@ export class ReplanManager {
         // 标记为 RLM 子任务——走 pool.spawnSubtask() 独立配额
         n.isRlmSubtask = true;
         this.board.addNode(n);
-        this.replanCount.set(n.id, count);
+        this.replanCount.set(n.id, 0);
         newIds.push(n.id);
       }
       this.replanMap.set(item.node.id, newIds);

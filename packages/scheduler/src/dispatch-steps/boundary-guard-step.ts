@@ -128,26 +128,6 @@ async function walkDir(dirPath: string): Promise<Array<[string, number]>> {
   return results;
 }
 
-/** walkDir 结果缓存 TTL（ms）——同一波节点共享扫描结果 */
-const WALK_CACHE_TTL = 5000;
-let _walkCache: { files: Array<[string, number]>; timestamp: number } | null = null;
-
-/** 带 TTL 缓存的 walkDir——避免高频扫描同一工作区 */
-async function walkDirCached(dirPath: string): Promise<Array<[string, number]>> {
-  const now = Date.now();
-  if (_walkCache && (now - _walkCache.timestamp) < WALK_CACHE_TTL) {
-    return _walkCache.files;
-  }
-  const files = await walkDir(dirPath);
-  _walkCache = { files, timestamp: now };
-  return files;
-}
-
-/** 清除 walkDir 缓存（测试用） */
-export function clearWalkCache(): void {
-  _walkCache = null;
-}
-
 /** glob 匹配：将简单 glob 转为正则 */
 function globToRegex(pattern: string): RegExp {
   let regexStr = "^";
@@ -189,14 +169,32 @@ function matchesAny(filePath: string, patterns: string[]): boolean {
  *
  * 在 Execute/RlmExecute 成功后、Cleanup 之前运行。
  * 检测 Agent 是否在其许可域之外创建/修改了文件。
+ *
+ * 缓存（_walkCache）为实例属性，每个实例独立缓存自己的工作区根目录，
+ * 避免模块级缓存混淆不同 workspace root 的扫描结果。
  */
 export class BoundaryGuardStep implements IDispatchStep {
   readonly name = "BoundaryGuard";
 
   private readonly _workspaceRoot: string;
 
+  /** walkDir 结果缓存 TTL（ms）——同一波节点共享扫描结果 */
+  private static readonly WALK_CACHE_TTL = 5000;
+  private _walkCache: { files: Array<[string, number]>; timestamp: number } | null = null;
+
   constructor(workspaceRoot: string = process.cwd()) {
     this._workspaceRoot = workspaceRoot;
+  }
+
+  /** 带 TTL 缓存的 walkDir——避免高频扫描同一工作区 */
+  private async _walkDirCached(dirPath: string): Promise<Array<[string, number]>> {
+    const now = Date.now();
+    if (this._walkCache && (now - this._walkCache.timestamp) < BoundaryGuardStep.WALK_CACHE_TTL) {
+      return this._walkCache.files;
+    }
+    const files = await walkDir(dirPath);
+    this._walkCache = { files, timestamp: now };
+    return files;
   }
 
   async run(ctx: DispatchCtx): Promise<DispatchCtx> {
@@ -254,7 +252,7 @@ export class BoundaryGuardStep implements IDispatchStep {
     const violations: Array<{ file: string; matchedRule: string }> = [];
 
     try {
-      const allFiles = await walkDirCached(this._workspaceRoot);
+      const allFiles = await this._walkDirCached(this._workspaceRoot);
 
       for (const [absPath, mtime] of allFiles) {
         if (mtime < threshold - CLOCK_SKEW_TOLERANCE) continue;
