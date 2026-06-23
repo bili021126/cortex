@@ -40,8 +40,9 @@ abstract class BaseChannel {
     for (const handler of this.handlers) {
       try {
         void handler(event);
-      } catch {
-        // 单 handler 异常不阻断其他 handler
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        process.stderr.write(`[notification] handler error: ${msg}\n`);
       }
     }
   }

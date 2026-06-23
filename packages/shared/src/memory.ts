@@ -34,7 +34,7 @@ import type { AgentType } from "./agent.js";
 export type MemoryKind = "TaskLog" | "Insight" | "Skill" | "Governance" | "Intent";
 
 /** 语义生命周期 */
-export type SemanticState = "Active" | "Archived" | "Obliterated";
+export type SemanticState = "Pending" | "Active" | "Archived" | "Obliterated";
 
 /**
  * 合法状态转换表——单一事实来源（Single Source of Truth）。

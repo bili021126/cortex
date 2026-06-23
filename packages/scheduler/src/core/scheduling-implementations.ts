@@ -430,10 +430,28 @@ export class SequentialDriver implements ILoopDriver {
           strategy, isTestEnv: isTestEnv(),
         };
 
+        // 逐节点超时兜底——防止 dispatch hang 住拖死顺序执行
+        const NODE_DISPATCH_TIMEOUT_MS = Math.min(ctx.config.reactLoopTimeoutMs, 120_000);
+        const dispatchPromise = node.needsMultiPerspective
+          ? executionModel.dispatchMulti(execCtx)
+          : executionModel.dispatchSingle(execCtx);
+
+        const timeoutPromise = new Promise<NodeResult>((resolve) => {
+          setTimeout(() => {
+            try { board.failNode(node.id); } catch { /* best-effort */ }
+            observer.emit({
+              type: PipelineEventType.NodeFailed,
+              priority: PipelinePriority.CRITICAL,
+              payload: { nodeId: node.id, error: `Node dispatch timeout after ${NODE_DISPATCH_TIMEOUT_MS}ms` },
+              timestamp: Date.now(),
+              notificationType: "WARNING",
+            });
+            resolve({ nodeId: node.id, success: false, error: "Node dispatch timeout" });
+          }, NODE_DISPATCH_TIMEOUT_MS);
+        });
+
         try {
-          const result = node.needsMultiPerspective
-            ? await executionModel.dispatchMulti(execCtx)
-            : await executionModel.dispatchSingle(execCtx);
+          const result = await Promise.race([dispatchPromise, timeoutPromise]);
 
           allResults.push(result);
           if (result.success) completed++;

@@ -529,7 +529,10 @@ export class LlmAdapter {
       const parts = messages.map((m) => {
         const role = m.role ?? "unknown";
         const contentPreview = typeof m.content === "string" ? m.content.slice(0, 100) : "";
-        return `${role}:${contentPreview.length}`;
+        const previewHash = contentPreview
+          ? crypto.createHash("sha256").update(contentPreview).digest("hex").slice(0, 12)
+          : "empty";
+        return `${role}:${contentPreview.length}-${previewHash}`;
       });
       return crypto
         .createHash("sha256")

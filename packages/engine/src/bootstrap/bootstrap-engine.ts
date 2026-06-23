@@ -38,7 +38,7 @@ import type { LlmAdapter } from "@cortex/llm";
 import { LlmAdapter as LlmAdapterValue } from "@cortex/llm";
 import { WorkerPool } from "../core/worker-pool.js";
 import * as os from "node:os";
-import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type ReadMode, type TaskNode } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type PipelineHandler, type ReadMode, type TaskNode } from "@cortex/shared";
 import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
@@ -243,6 +243,9 @@ export async function bootstrapEngine(
       );
     }
   };
+  const _registeredHandlers: Array<{ priority: PipelinePriority; handler: PipelineHandler }> = [
+    { priority: PipelinePriority.CRITICAL, handler: sentinelHandler },
+  ];
   observer.on(PipelinePriority.CRITICAL, sentinelHandler);
 
   // §6.2.4 NotificationRuntime —— PipelineObserver → NotificationPipe 桥接
@@ -300,6 +303,7 @@ export async function bootstrapEngine(
     const handler = (event: ObservableEvent) => agent.onGovernanceEvent(event);
     observer.on(PipelinePriority.HIGH, handler);
     strategistHandlers.push(handler);
+    _registeredHandlers.push({ priority: PipelinePriority.HIGH, handler });
   }
 
   // §8 确认门接线——Toolkit 需要 ConfirmGate
@@ -346,6 +350,10 @@ export async function bootstrapEngine(
     decisionBridge,
     notificationRuntime,
     shutdown: async () => {
+      // 先取消注册的所有 handler，防止长期运行中 handler 累积泄漏
+      for (const reg of _registeredHandlers) {
+        observer.off(reg.priority, reg.handler);
+      }
       // 先优雅关闭 ILifecycle 组件
       await lifecycleManager.shutdown();
       // WorkerPool —— 终止所有 worker 线程

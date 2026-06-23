@@ -280,7 +280,7 @@ describe("InMemoryMemoryStore", () => {
       expect(obliterated).toBe(true);
 
       const entry = await store.get(id);
-      expect(entry!.semantic_state).toBe("Obliterated");
+      expect(entry).toBeUndefined();
     });
 
     it("should cas an entry", async () => {

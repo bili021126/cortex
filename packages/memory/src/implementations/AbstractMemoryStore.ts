@@ -553,10 +553,30 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   async writeMany(is: MemoryWriteInput[]) {
     this._ei();
-    const ids: string[] = [];
-    for (const i of is)
-      ids.push(await this.write(i));
-    return ids;
+    const succeeded: string[] = [];
+    const failed: { index: number; error: string }[] = [];
+    for (let idx = 0; idx < is.length; idx++) {
+      try {
+        const id = await this.write(is[idx]);
+        succeeded.push(id);
+      } catch (err) {
+        failed.push({ index: idx, error: String(err).slice(0, 200) });
+      }
+    }
+    if (failed.length > 0) {
+      this._observer?.emit({
+        type: PipelineEventType.ErrorReported,
+        priority: PipelinePriority.HIGH,
+        payload: {
+          source: "MemoryStore.writeMany",
+          severity: "degraded",
+          error: `${failed.length}/${inputs.length} items failed`,
+          hint: JSON.stringify({ succeeded, failed }),
+        },
+        timestamp: Date.now(),
+      });
+    }
+    return succeeded;
   }
 
   /**
@@ -618,7 +638,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     // 幂等：已是 Obliterated 直接返回 true
     if (e.semantic_state === "Obliterated") return true;
     // 允许其他状态 → Obliterated（FSM 白名单校验由 cas 内部执行）
-    return this.cas(id, e.semantic_state as SemanticState, "Obliterated");
+    const ok = this.cas(id, e.semantic_state as SemanticState, "Obliterated");
+    if (ok) {
+      this._entries.delete(id);
+      this._links.delete(id);
+    }
+    return ok;
   }
 
   /** freeze —— 冻结记忆，语义等同于 archive（映射到 Archived 状态），幂等 */
@@ -1136,7 +1161,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       summary: p.input.summary,
       semantic_gist: p.input.semantic_gist,
       content_blob: p.input.content_blob as Record<string, unknown>,
-      semantic_state: "Active",
+      semantic_state: "Pending",
       weight: p.input.weight ?? 1,
       accessCount: 0,
       lastAccessedAt: p.createdAt,
