@@ -58,6 +58,19 @@ model: "[DeepSeek-V4-Flash](custom:model_1780322226482_zim08d6)"
 - 不修改 docs/ 目录
 - 不修改 .cortex/nights/ 目录
 - 不修改 constitution 相关文件（那是主Agent的事）
+- 不修改 Qoder 系统文件（C:\Users\origin\.qoder\ 下的任何文件）
+
+## 预算感知
+
+- 每轮修复预估 token 消耗，完成后汇报实际消耗
+- Flash 模型成本低——单次修复通常 0.02-0.10 元
+- 不浪费 token 在冗长解释上——汇报用最少字数
+
+## Config 优先
+
+- 新功能先看能不能放 config，不建新组件
+- 硬编码判断优先迁移到 config 表（governance-routing, supervision-activation 等）
+- config 表改动后验证：读 json→改代码引用→tsc→vitest
 
 ## 输出格式
 

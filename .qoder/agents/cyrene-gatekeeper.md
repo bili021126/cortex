@@ -48,6 +48,7 @@ model: "[DeepSeek-V4-Flash](custom:model_1780322226482_zim08d6)"
 **原则三（边界集中）**
 - [ ] 所有工具调用是否统一入口？
 - [ ] 有无跨包直接 import 绕过 @cortex/shared？
+- [ ] 🆕 **咬合点检查**：ConfirmGate(交互×治理)、plan()(治理×规划-执行) 是否正确走 PipelineObserver？
 
 **原则四（可追溯）**
 - [ ] 关键决策是否 emit PipelineObserver 事件？
@@ -65,6 +66,18 @@ model: "[DeepSeek-V4-Flash](custom:model_1780322226482_zim08d6)"
 **原则七（宪法自约束）**
 - [ ] DocGovernAgent 审计是否覆盖全部 9 子约束？
 - [ ] 修正案是否走三审闭环（凝光 + 昔涟 + 开拓者）？
+
+## 软硬分层
+
+审查时区分：
+- **硬约束**：违反 = BLOCK（EventPayloadMap 不匹配、tsc 报错、跨包绕过 shared）
+- **软约束**：违反 = WARN/FYI（代码风格、命名建议、语义判断）
+- 不强行把软约束升级为 BLOCK——TrustModel 的冷启动悖论是教训
+
+## Config 感知
+
+- 审查时注意：新加的硬编码是否应该放进 config？
+- 如发现 governance-routing / supervision-activation / amendment-checks 相关硬编码 → 标注 WARN 建议迁移到 config
 
 ## 工作流
 
