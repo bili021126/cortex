@@ -704,10 +704,11 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     }
   }
 
-  /** 总量超限时自动归档最久未访问的记忆 */
+  /** 总量超限时自动归档最久未访问的 Active 记忆 */
   private async _autoArchiveIfOverflow(): Promise<void> {
-    if (this._overflowThrottled) return; // 熔断中，拒绝操作
-    if (this._backend.size <= MAX_TOTAL_MEMORIES) return;
+    if (this._overflowThrottled) return;
+    const totalSize = this._backend.size;
+    if (totalSize <= MAX_TOTAL_MEMORIES) return;
 
     try {
       const all = await this._backend.read({}, "HCA");
@@ -715,10 +716,11 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         .filter((e: MemoryEntry) => e.semantic_state === "Active")
         .sort((a: MemoryEntry, b: MemoryEntry) => a.lastAccessedAt - b.lastAccessedAt);
 
-      const excess = activeEntries.length - MAX_TOTAL_MEMORIES;
+      // H-03 修复：用总量计 excess，非 Active 数
+      const excess = totalSize - MAX_TOTAL_MEMORIES;
       if (excess <= 0) return;
 
-      const toArchive = activeEntries.slice(0, excess);
+      const toArchive = activeEntries.slice(0, Math.min(excess, activeEntries.length));
       for (const e of toArchive) {
         this._backend.archive(e.id);
       }
