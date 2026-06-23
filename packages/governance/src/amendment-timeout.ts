@@ -159,5 +159,6 @@ export function updateStaleCount(
     // 文件不存在，从头开始
   }
   counters[proposalId] = (counters[proposalId] ?? 0) + 1;
-  fs.writeFileSync(counterPath, JSON.stringify(counters, null, 2), "utf-8");
+  fs.writeFileSync(counterPath + ".tmp", JSON.stringify(counters, null, 2), "utf-8");
+  fs.renameSync(counterPath + ".tmp", counterPath);
 }

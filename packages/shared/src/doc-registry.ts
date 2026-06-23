@@ -26,7 +26,10 @@ export type DocType =
   | "attribution"       // 归因分析报告（归因圆桌产出）
   | "review"            // 审查报告（刻晴/纳西妲审查产出）
   | "self-examination"  // 软审视报告（纳西妲/莫娜架构洞察）
-  | "architecture";     // 架构设计文档（纳西妲或人类维护）
+  | "architecture"      // 架构设计文档（纳西妲或人类维护）
+  | "constitution"     // 宪法文档
+  | "design"           // 设计文档
+  | "governance";       // 治理产出
 
 /** 文档状态——与记忆四态对齐 */
 export type DocStatus =

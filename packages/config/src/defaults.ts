@@ -89,6 +89,8 @@ function mergeInspector(
     tscTimeout: partial?.tscTimeout ?? DEFAULT_ENGINE_CONFIG.inspector.tscTimeout,
     testTimeout: partial?.testTimeout ?? DEFAULT_ENGINE_CONFIG.inspector.testTimeout,
     vitestTimeout: partial?.vitestTimeout ?? DEFAULT_ENGINE_CONFIG.inspector.vitestTimeout,
+    retrievalAlpha: partial?.retrievalAlpha ?? DEFAULT_ENGINE_CONFIG.inspector.retrievalAlpha,
+    retrievalBeta: partial?.retrievalBeta ?? DEFAULT_ENGINE_CONFIG.inspector.retrievalBeta,
   };
 }
 

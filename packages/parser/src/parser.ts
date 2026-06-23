@@ -122,7 +122,7 @@ function parseInline(text: string): string {
 
     // 斜体 *text* 或 _text_
     if (text[i] === '*' || text[i] === '_') {
-      const marker = text[i];
+      const marker = text[i]!;
       const end = text.indexOf(marker, i + 1);
       if (end !== -1) {
         // 避免误匹配加粗标记
@@ -183,7 +183,7 @@ function isThematicBreak(line: string): boolean {
 function isHeading(line: string): { level: number; content: string } | null {
   const match = line.match(/^(#{1,6})\s+(.+)$/);
   if (match) {
-    return { level: match[1].length, content: match[2].trim() };
+    return { level: match[1]!.length, content: match[2]!.trim() };
   }
   return null;
 }
@@ -191,20 +191,20 @@ function isHeading(line: string): { level: number; content: string } | null {
 /** 判断是否为引用行 */
 function isBlockquote(line: string): string | null {
   const match = line.match(/^>\s?(.*)$/);
-  return match ? match[1] : null;
+  return match ? match[1]! : null;
 }
 
 /** 判断是否为无序列表项 */
 function isUnorderedListItem(line: string): string | null {
   const match = line.match(/^[-*+]\s+(.+)$/);
-  return match ? match[1] : null;
+  return match ? match[1]! : null;
 }
 
 /** 判断是否为有序列表项 */
 function isOrderedListItem(line: string): { content: string; start: number } | null {
   const match = line.match(/^(\d+)\.\s+(.+)$/);
   if (match) {
-    return { content: match[2], start: parseInt(match[1], 10) };
+    return { content: match[2]!, start: parseInt(match[1]!, 10) };
   }
   return null;
 }
@@ -217,17 +217,17 @@ function isFenceStart(line: string): string | null {
 
 /** 解析代码块内容 */
 function parseCodeBlock(lines: string[], startIdx: number): { html: string; endIdx: number } {
-  const fenceLang = isFenceStart(lines[startIdx]);
+  const fenceLang = isFenceStart(lines[startIdx]!);
   const langClass = fenceLang ? ` class="language-${escapeAttr(fenceLang)}"` : '';
   const codeLines: string[] = [];
   let i = startIdx + 1;
 
   while (i < lines.length) {
-    if (lines[i].trim() === '```') {
+    if (lines[i]!.trim() === '```') {
       i++; // 跳过结束围栏
       break;
     }
-    codeLines.push(lines[i]);
+    codeLines.push(lines[i]!);
     i++;
   }
 
@@ -250,7 +250,7 @@ export function convert(markdown: string): string {
   let i = 0;
 
   while (i < lines.length) {
-    const line = lines[i];
+    const line = lines[i]!;
 
     // 空行 — 跳过
     if (line.trim() === '') {
@@ -287,7 +287,7 @@ export function convert(markdown: string): string {
     if (isBlockquote(line) !== null) {
       const quoteLines: string[] = [];
       while (i < lines.length) {
-        const q = isBlockquote(lines[i]);
+        const q = isBlockquote(lines[i]!);
         if (q === null) break;
         quoteLines.push(q);
         i++;
@@ -304,7 +304,7 @@ export function convert(markdown: string): string {
     if (ulItem !== null) {
       const items: string[] = [];
       while (i < lines.length) {
-        const item = isUnorderedListItem(lines[i]);
+        const item = isUnorderedListItem(lines[i]!);
         if (item === null) break;
         items.push(parseInline(item));
         i++;
@@ -321,7 +321,7 @@ export function convert(markdown: string): string {
       const items: string[] = [];
       const startNum = olItem.start;
       while (i < lines.length) {
-        const item = isOrderedListItem(lines[i]);
+        const item = isOrderedListItem(lines[i]!);
         if (item === null) break;
         items.push(parseInline(item.content));
         i++;
@@ -336,7 +336,7 @@ export function convert(markdown: string): string {
     // 段落
     const paragraphLines: string[] = [];
     while (i < lines.length) {
-      const l = lines[i];
+      const l = lines[i]!;
       if (l.trim() === '') break;
       if (isHeading(l)) break;
       if (isThematicBreak(l)) break;
