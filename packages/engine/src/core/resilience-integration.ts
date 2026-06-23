@@ -98,13 +98,13 @@ export class ResiliencePolicyFactory {
       const result = await this.registry.execute(componentName, fn);
 void recordTelemetry(`${componentName}.resilience.success`, Date.now() - start, [
         { key: "component", value: componentName },
-      ]);
+      ]).catch(err => process.stderr.write(`[resilience] success telemetry failed: ${err instanceof Error ? err.message : String(err)}\n`));
       return result;
     } catch (e) {
 void recordTelemetry(`${componentName}.resilience.failure`, Date.now() - start, [
         { key: "component", value: componentName },
         { key: "error", value: String(e).slice(0, 200) },
-      ]);
+      ]).catch(err => process.stderr.write(`[resilience] failure telemetry failed: ${err instanceof Error ? err.message : String(err)}\n`));
       throw e;
     }
   }
@@ -124,7 +124,7 @@ void recordTelemetry(`${componentName}.resilience.failure`, Date.now() - start, 
       void recordTelemetry(`resilience.event.${event.type.toLowerCase()}`, 0, [
         { key: "name", value: event.name },
         { key: "type", value: event.type },
-      ]);
+      ]).catch(err => process.stderr.write(`[resilience] event telemetry failed: ${err instanceof Error ? err.message : String(err)}\n`));
     });
   }
 }

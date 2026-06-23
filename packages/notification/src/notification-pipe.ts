@@ -133,7 +133,10 @@ export class NotificationPipe {
     // 通知 ack 回调
     for (const handler of this.ackHandlers) {
       try {
-        void handler(requestId, approved);
+        const result = handler(requestId, approved);
+        if (result instanceof Promise) {
+          result.catch(err => process.stderr.write(`[notification] ackHandler failed: ${err instanceof Error ? err.message : String(err)}\n`));
+        }
       } catch {
         // 单回调异常不阻断
       }

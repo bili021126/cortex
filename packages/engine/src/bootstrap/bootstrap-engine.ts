@@ -240,7 +240,7 @@ export async function bootstrapEngine(
           { key: "level", value: signal.level },
           { key: "aggregationKey", value: signal.aggregationKey },
         ]),
-      );
+      ).catch(err => process.stderr.write(`[bootstrap] sentinel telemetry failed: ${err instanceof Error ? err.message : String(err)}\n`));
     }
   };
   const _registeredHandlers: Array<{ priority: PipelinePriority; handler: PipelineHandler }> = [

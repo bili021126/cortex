@@ -15,7 +15,7 @@
 //   - 圆桌共识 (roundtable_consensus)
 // ============================================================
 
-import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type GovernanceEventPayload as SharedGovernanceEventPayload, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 import { GOVERNANCE_EVENT_ROUTING } from "@cortex/config";
 import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
 import { HardVerificationGate, emitGateRejection } from "./hard-verification-gate.js";
@@ -29,16 +29,11 @@ export type GovernanceEventType =
   | PipelineEventType.GovernanceComplianceViolation
   | PipelineEventType.GovernanceRoundtableConsensus;
 
-/** 治理事件 Payload（对齐 shared 中的 GovernanceEventPayload） */
-export interface GovernanceEventPayload {
+/** 治理事件 Payload（扩展 @cortex/shared 的基础类型） */
+export interface GovernanceEventPayload extends SharedGovernanceEventPayload {
   type: GovernanceEventType;
   id: string;
-  summary: string;
-  detail?: string;
   nodeId?: string;
-  severity: "FYI" | "WARNING" | "DECISION_REQUIRED";
-  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop";
-  suggestedAction?: "fix" | "ignore" | "escalate";
 }
 
 /**

@@ -153,7 +153,7 @@ export class NotificationRuntime {
         { key: "eventType", value: event.type as string },
         { key: "semantics", value: semantics },
         { key: "channel", value: notification.channel },
-      ]);
+      ]).catch(err => process.stderr.write(`[notification] runtime telemetry failed: ${err instanceof Error ? err.message : String(err)}\n`));
     }
   }
 

@@ -99,7 +99,7 @@ export class MemoryRetrievalStep implements IStep {
           injected: result.injected,
           charCount: result.charCount,
           tierCounts: result.tierCounts,
-        });
+        }).catch(err => process.stderr.write(`[memory] context builder telemetry failed: ${err instanceof Error ? err.message : String(err)}\n`));
 
         if (result.injected > 0) {
           ctx.enrichedNode = {

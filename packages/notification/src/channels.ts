@@ -39,7 +39,13 @@ abstract class BaseChannel {
   protected notify(event: NotificationEvent): void {
     for (const handler of this.handlers) {
       try {
-        void handler(event);
+        const result = handler(event);
+        if (result instanceof Promise) {
+          result.catch(err => {
+            const msg = err instanceof Error ? err.message : String(err);
+            process.stderr.write(`[notification] handler error: ${msg}\n`);
+          });
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         process.stderr.write(`[notification] handler error: ${msg}\n`);

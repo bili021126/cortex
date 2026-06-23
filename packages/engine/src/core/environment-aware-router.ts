@@ -249,6 +249,6 @@ export class EnvironmentAwareRouter {
       { key: "preferred", value: preferred },
       { key: "selected", value: selected },
       { key: "reason", value: reason },
-    ]);
+    ]).catch(err => process.stderr.write(`[router] environment telemetry failed: ${err instanceof Error ? err.message : String(err)}\n`));
   }
 }
