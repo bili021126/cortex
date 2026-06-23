@@ -13,6 +13,8 @@ import {
   FsmParseError,
   TransitionError,
   GuardError,
+} from "../src/index.js";
+import {
   type FsmDefinition,
   type FsmStateDefinition,
   type FsmTransitionDefinition,

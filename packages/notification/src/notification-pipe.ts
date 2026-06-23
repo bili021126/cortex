@@ -40,6 +40,10 @@ export class NotificationPipe {
 
   /** 归并缓冲区：mergeKey → 事件列表 */
   private mergeBuffer = new Map<string, NotificationEvent[]>();
+  /** 归并超时定时器：mergeKey → timer */
+  private mergeTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+  /** 归并超时阈值（毫秒） */
+  private static readonly MERGE_TIMEOUT_MS = 5_000;
   /** 归并规则 */
   private mergeRules: MergeRule[] = [];
 
@@ -231,6 +235,12 @@ export class NotificationPipe {
     if (!key) return;
     if (!this.mergeBuffer.has(key)) {
       this.mergeBuffer.set(key, []);
+
+      // H-13: 首次创建缓冲区时启动超时定时器，到期强制 flush
+      const timer = setTimeout(() => {
+        this._flushMergeKey(key);
+      }, NotificationPipe.MERGE_TIMEOUT_MS);
+      this.mergeTimeouts.set(key, timer);
     }
     const batch = this.mergeBuffer.get(key) ?? [];
     batch.push(event);
@@ -261,6 +271,13 @@ export class NotificationPipe {
 
   /** flush 单个归并键 */
   private _flushMergeKey(key: string): void {
+    // H-13: 清除关联超时定时器
+    const timer = this.mergeTimeouts.get(key);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      this.mergeTimeouts.delete(key);
+    }
+
     const events = this.mergeBuffer.get(key);
     if (!events || events.length === 0) return;
 

@@ -399,7 +399,6 @@ export function buildChineseRoleMap(
 export function setAgentRegistry(
   tags: Record<string, readonly string[]>,
   toolPermissions: Record<string, readonly string[]>,
-  _allTags: string[],
 ): void {
   setAgentTags(tags);
   setAgentToolPermissions(toolPermissions);

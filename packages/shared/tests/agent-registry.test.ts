@@ -243,7 +243,6 @@ describe("agent-registry — 运行时覆写", () => {
     setAgentRegistry(
       { code: ["registry_tag"] },
       { code: ["registry_perm"] },
-      ["registry_tag"],
     );
     const tags = getAgentTags();
     const perms = getAgentToolPermissions();

@@ -665,16 +665,17 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    * 条目不会立即对 read() 可见，需 commitMemory() 后激活。
    *
    * @param i - 记忆写入输入
-   * @returns Pending 条目 ID（格式：pending_<generatedId>）
+   * @returns Pending 条目 ID（commitMemory/rollback 时使用此 ID）
    * @throws {MemoryValidationError} 输入校验失败
+   * @fix H-06 — 返回的 ID 不含 pending_ 前缀，前缀仅用于内部 pending map
    */
   writePending(i: MemoryWriteInput) {
     this._ei();
     this._vw(i);
 
-    const id = "pending_" + generateId();
-    this._pendingEntries.set(id, { input: { ...i }, createdAt: Date.now() });
-    return id;
+    const cleanId = generateId();
+    this._pendingEntries.set("pending_" + cleanId, { input: { ...i }, createdAt: Date.now() });
+    return cleanId;
   }
 
   /**
@@ -686,7 +687,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   commitMemory(mid: string) {
     this._ei();
 
-    const p = this._pendingEntries.get(mid);
+    const p = this._pendingEntries.get("pending_" + mid);
     if (!p) return false;
 
     const n = Date.now();
@@ -709,7 +710,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     };
 
     this._entries.set(mid, e);
-    this._pendingEntries.delete(mid);
+    this._pendingEntries.delete("pending_" + mid);
     return true;
   }
 
@@ -729,14 +730,14 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   /**
    * 回滚一条 Pending 记忆（从 _pendingEntries 中移除）。
    *
-   * @param mid - Pending 记忆条目 ID
+   * @param mid - Pending 记忆条目 ID（writePending 返回的干净 ID）
    * @returns 是否成功回滚
    */
   private _rp(mid: string) {
     this._ei();
-    if (!this._pendingEntries.has(mid))
+    if (!this._pendingEntries.has("pending_" + mid))
       return false;
-    this._pendingEntries.delete(mid);
+    this._pendingEntries.delete("pending_" + mid);
     return true;
   }
 
@@ -752,8 +753,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   cancel(mid: string) {
     this._ei();
 
-    if (this._pendingEntries.has(mid)) {
-      this._pendingEntries.delete(mid);
+    if (this._pendingEntries.has("pending_" + mid)) {
+      this._pendingEntries.delete("pending_" + mid);
       return true;
     }
 

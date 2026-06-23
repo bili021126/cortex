@@ -74,7 +74,12 @@ function parseInline(text: string): string {
         if (closeParen !== -1) {
           const alt = text.slice(i + 2, closeBracket);
           const url = text.slice(closeBracket + 2, closeParen);
-          result += `<img src="${escapeAttr(url)}" alt="${escapeAttr(alt)}">`;
+          // H-19: 过滤危险协议 URL（图片 src 也可能执行 javascript:）
+          if (!isSafeUrl(url)) {
+            result += `<img src="#" alt="${escapeAttr(alt)}" class="unsafe-url">`;
+          } else {
+            result += `<img src="${escapeAttr(url)}" alt="${escapeAttr(alt)}">`;
+          }
           i = closeParen + 1;
           continue;
         }
@@ -89,7 +94,12 @@ function parseInline(text: string): string {
         if (closeParen !== -1) {
           const linkText = text.slice(i + 1, closeBracket);
           const url = text.slice(closeBracket + 2, closeParen);
-          result += `<a href="${escapeAttr(url)}">${parseInline(linkText)}</a>`;
+          // H-19: 过滤危险协议 URL
+          if (!isSafeUrl(url)) {
+            result += `<a href="#" class="unsafe-url">${parseInline(linkText)}</a>`;
+          } else {
+            result += `<a href="${escapeAttr(url)}">${parseInline(linkText)}</a>`;
+          }
           i = closeParen + 1;
           continue;
         }
@@ -165,6 +175,12 @@ function escapeAttr(str: string): string {
     .replace(/'/g, '&#39;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+/** H-19: 检查 URL 协议是否安全（拒绝 javascript: data: vbscript: 等危险协议） */
+function isSafeUrl(url: string): boolean {
+  const dangerousProtocols = /^(javascript|data|vbscript)\s*:/i;
+  return !dangerousProtocols.test(url.trim());
 }
 
 // ─── 块级解析 ───────────────────────────────────────────

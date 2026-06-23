@@ -78,18 +78,9 @@ export interface FsmAst {
   reverseAdjacency: Map<string, FsmTransitionDefinition[]>;
 }
 
-// ── Parse Errors ──
-
-export class FsmParseError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly nodeId?: string,
-  ) {
-    super(message);
-    this.name = "FsmParseError";
-  }
-}
+// ── Parse Errors (defined in compiler/parser.ts and runtime/state-machine.ts) ──
+// FsmParseError is defined in ./compiler/parser.ts
+// TransitionError and GuardError are defined in ./runtime/state-machine.ts
 
 // ── Validation ──
 
@@ -196,30 +187,7 @@ export interface TransitionTable<TState extends string, _TEvent extends string> 
   } | undefined;
 }
 
-// ── Runtime Errors ──
-
-export class TransitionError extends Error {
-  constructor(
-    message: string,
-    public readonly from: string,
-    public readonly event: string,
-    public readonly cause?: Error,
-  ) {
-    super(message);
-    this.name = "TransitionError";
-  }
-}
-
-export class GuardError extends Error {
-  constructor(
-    message: string,
-    public readonly guardName: string,
-    public readonly cause?: Error,
-  ) {
-    super(message);
-    this.name = "GuardError";
-  }
-}
+// ── Runtime Errors (defined in ./runtime/state-machine.ts) ──
 
 // ── Guard & Action Signatures ──
 

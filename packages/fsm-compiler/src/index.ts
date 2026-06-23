@@ -58,10 +58,9 @@ export type {
   ActionRegistryLike,
 } from "./types.js";
 
-// ── Error Classes (value + type exports) ──
-export { FsmParseError } from "./types.js";
-export { TransitionError } from "./types.js";
-export { GuardError } from "./types.js";
+// ── Error Classes (value exports from single source of truth) ──
+export { FsmParseError } from "./compiler/parser.js";
+export { TransitionError, GuardError } from "./runtime/state-machine.js";
 
 // ── Compiler Layer (Layer 2) ──
 export { FsmParser } from "./compiler.js";

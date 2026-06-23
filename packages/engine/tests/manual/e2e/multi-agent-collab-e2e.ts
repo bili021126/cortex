@@ -330,7 +330,6 @@ async function main() {
     {
       [AgentType.Fix]: ["read_file", "write_file", "replace_in_file", "search_code", "web_search", "run_shell", "list_files", "delete_file", "parse_ast", "check_e2e_compile"],
       [AgentType.Analysis]: ["read_file", "write_file", "replace_in_file", "search_code", "web_search", "list_files", "delete_file", "parse_ast", "check_e2e_compile"]},
-    [],
   );
   // 注入工具元数据，否则 LLM 看到的是空 description
   toolkit.setToolMeta({

@@ -82,7 +82,7 @@ export function injectRegistryFromConfig(definitions: AgentDefinition[]): void {
     if (def.tags) { tags[def.type] = [...def.tags]; for (const t of def.tags) { if (!allTags.includes(t)) allTags.push(t); } }
     if (def.toolPermissions) { toolPermissions[def.type] = [...def.toolPermissions]; }
   }
-  setAgentRegistry(tags, toolPermissions, allTags);
+  setAgentRegistry(tags, toolPermissions);
 }
 
 // ─── 主入口：加载配置 ────────────────────────────────
