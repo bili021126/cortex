@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "excalidraw": {
+      "source": "modelscope.cn",
+      "sourceType": "well-known",
+      "computedHash": "346216e395f0dcd5a5747c6f38f114df850dddc582de375a41c4cdff4da7bad8"
+    },
+    "github": {
+      "source": "modelscope.cn",
+      "sourceType": "well-known",
+      "computedHash": "433edef2c3cf0464294a54aebc793064a40e50dbe6f0fd2b3a0fbd5a7d27f92d"
+    },
+    "profiling": {
+      "source": "modelscope.cn",
+      "sourceType": "well-known",
+      "computedHash": "778d132da7fbcf7c207cb95a8182f34ae6ef9c134b3bef6541f2f94d614a441e"
+    },
+    "rspress-api-docs": {
+      "source": "modelscope.cn",
+      "sourceType": "well-known",
+      "computedHash": "9582374c4e99dac4ca14a9458d1179616c790303035d1ecf67b21ffa97f0bc12"
+    },
+    "typescript-refactoring-patterns": {
+      "source": "modelscope.cn",
+      "sourceType": "well-known",
+      "computedHash": "822b2d29a5bc4cb56d90b9887cd1c3097a9903b1625edf2ae12fa28d3eafad83"
+    },
+    "typescript-style-guide": {
+      "source": "modelscope.cn",
+      "sourceType": "well-known",
+      "computedHash": "a1af573cc86e3cca6545206295b50bfdd69af2b76d095788f8a34664e472579a"
+    }
+  }
+}
