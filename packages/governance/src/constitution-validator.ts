@@ -132,8 +132,10 @@ export function validateConstitutionAmendment(
     reason: hasHardcoded ? "提案可能引入了新的硬编码配置值" : undefined,
   });
 
-  // ⑨ 类型安全保障（由 CI 门禁 tsc --noEmit 覆盖，此处检查提案是否提及类型变更）
-  const hasTypeChange = proposal.impact?.toLowerCase().includes("type") || proposal.impact?.toLowerCase().includes("interface");
+  // ⑨ 类型安全保障（由 CI 门禁 tsc --noEmit 覆盖，检查 impact.principles）
+  const hasTypeChange = (proposal.impact?.principles ?? []).some(p =>
+    p.includes("type") || p.includes("interface")
+  );
   verdicts.push({
     id: 9,
     title: "类型安全保障",
