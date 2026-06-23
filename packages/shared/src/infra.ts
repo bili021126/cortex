@@ -99,7 +99,7 @@ export type EventPayloadMap = {
   [PipelineEventType.AgentPoolDestroyBypass]: { agentType: AgentType; instanceId: string };
   [PipelineEventType.SchedulerLayerStart]: { layer: number; nodes: number; round: number };
   [PipelineEventType.SchedulerLoopCrashed]: { round: number; error: string; pendingAtCrash?: number; hint?: string };
-  [PipelineEventType.SchedulerDone]: { total: number; completed: number; failed: number; durationMs: number; rounds: number };
+  [PipelineEventType.SchedulerDone]: { total: number; completed: number; failed: number; durationMs: number; rounds: number; orphanedNodes: number };
   [PipelineEventType.SchedulerReplanLimit]: { totalReplans: number; maxReplans: number; deferred?: number };
   [PipelineEventType.SchedulerReplanNoMetaAgent]: { orphanCount: number; hint: string };
   [PipelineEventType.SchedulerReplanFailed]: { nodeId: string; error: string };
