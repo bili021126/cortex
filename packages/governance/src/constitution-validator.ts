@@ -16,7 +16,7 @@
 //   9. 类型安全保障  — 提案涉及的接口变更是否通过类型校验
 // ============================================================
 
-import type { AmendmentProposal } from "./governance-loop.js";
+import type { AmendmentProposal } from "@cortex/shared";
 
 /** 单条子约束检查结果 */
 export interface SubConstraintVerdict {
@@ -77,17 +77,16 @@ export function validateConstitutionAmendment(
     reason: isMinimal ? undefined : `改动幅度过大: before=${beforeLen} → after=${afterLen}`,
   });
 
-  // ④ 架构保护（启发式：检查是否涉及 agents/core/memory/pipeline 等关键路径）
-  const hasArchImpact = proposal.impact?.toLowerCase().includes("agent")
-    || proposal.impact?.toLowerCase().includes("pipeline")
-    || proposal.impact?.toLowerCase().includes("core")
-    || proposal.impact?.toLowerCase().includes("memory");
+  // ④ 架构保护（检查 impact.agents 是否有核心 Agent 受影响）
+  const hasArchImpact = (proposal.impact?.agents ?? []).some(a =>
+    ["scheduler", "meta-agent", "agent-pool"].includes(a)
+  );
   verdicts.push({
     id: 4,
     title: "架构保护",
-    passed: !hasArchImpact || proposal.impact?.toLowerCase().includes("架构影响: 已验证") !== undefined,
-    reason: hasArchImpact && !proposal.impact?.includes("架构影响: 已验证")
-      ? "提案影响架构关键路径但未在 impact 中标注'架构影响: 已验证'"
+    passed: !hasArchImpact || proposal.impact?.principles?.includes("架构影响: 已验证") === true,
+    reason: hasArchImpact && !proposal.impact?.principles?.includes("架构影响: 已验证")
+      ? "提案影响架构关键 Agent 但未在 impact.principles 中标注'架构影响: 已验证'"
       : undefined,
   });
 
