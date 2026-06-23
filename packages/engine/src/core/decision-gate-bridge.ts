@@ -16,7 +16,7 @@
 // ============================================================
 
 import type { IPipelineObserver, ObservableEvent } from "@cortex/shared";
-import { PipelinePriority } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { ConfirmGate } from "@cortex/scheduler";
 import { recordTelemetry } from "@cortex/telemetry";
 
@@ -126,7 +126,7 @@ export class DecisionGateBridge {
     // 异步请求确认
     void this._requestDecision(request).then((result) => {
       this._emitDecisionResult(result);
-    });
+    }).catch(err => this._emitDecisionError(err));
   }
 
   /**
@@ -170,5 +170,23 @@ export class DecisionGateBridge {
       `[DecisionGateBridge] 决策结果: ${result.requestId} → ${result.approved ? "批准" : "拒绝"}` +
       (result.timedOut ? " (超时)" : ""),
     );
+  }
+
+  /**
+   * 发射决策错误事件——Promise rejection 不再被无声吞噬。
+   */
+  private _emitDecisionError(err: unknown): void {
+    this.observer.emit({
+      type: PipelineEventType.ErrorReported,
+      priority: PipelinePriority.NORMAL,
+      payload: {
+        source: "DecisionGateBridge",
+        severity: "error",
+        error: err instanceof Error ? err.message : String(err),
+        hint: "decision-request-failed",
+      },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
   }
 }

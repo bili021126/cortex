@@ -52,7 +52,7 @@ export async function registerAgents(
         if (!options.observer) break;
         const butler = new ButlerAgent(options.observer);
         await butler.wakeup();
-        agent = butler as unknown as Agent;
+        agent = butler;
         break;
       }
 

@@ -98,10 +98,7 @@ export class SpawnStep implements IDispatchStep {
     }
 
     // 2. 方案 B：Agent 状态所有权归一——spawn 后注入 Pool
-    const agentWithPool = agent as unknown as { setPool?: (pool: unknown, instanceId: string) => void };
-    if (typeof agentWithPool.setPool === 'function') {
-      agentWithPool.setPool(pool, instanceId);
-    }
+    agent.setPool?.(pool, instanceId);
 
     // 3. 唤醒 Agent：Created → Awake
     if (pool.getStatus(instanceId) === AgentStatus.Created) {

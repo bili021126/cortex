@@ -79,8 +79,8 @@ export class HardVerificationGate {
 
   // ── 规则 1: Git Diff ──
   private _ruleGitDiff(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
-    const filePath = (p.filePath ?? p.nodeId) as string | undefined;
+    const p = payload as GovernanceEventPayload;
+    const filePath = (p as any).filePath ?? (p as any).nodeId as string | undefined;
     if (!filePath) return { ruleName: "git-diff", passed: true };
 
     const changed = this._getChangedFiles();
@@ -94,8 +94,8 @@ export class HardVerificationGate {
 
   // ── 规则 2: ESLint 违禁确认 ──
   private _ruleEslint(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
-    const violation = p.violation as string | undefined;
+    const p = payload as GovernanceEventPayload;
+    const violation = (p as any).violation as string | undefined;
     if (!violation) return { ruleName: "eslint", passed: true };
 
     const errors = this._getEslintErrors();
@@ -109,9 +109,9 @@ export class HardVerificationGate {
 
   // ── 规则 3: FSM 状态转换 ──
   private _ruleFsmTransition(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
-    const from = p.fromState as string | undefined;
-    const to = p.toState as string | undefined;
+    const p = payload as GovernanceEventPayload;
+    const from = (p as any).fromState as string | undefined;
+    const to = (p as any).toState as string | undefined;
     if (!from || !to) return { ruleName: "fsm-transition", passed: true };
 
     const valid = MEMORY_VALID_TRANSITIONS[from]?.has(to);
@@ -124,8 +124,8 @@ export class HardVerificationGate {
 
   // ── 规则 4: Barrel 导出 ──
   private _ruleBarrelExport(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
-    const modulePath = p.modulePath as string | undefined;
+    const p = payload as GovernanceEventPayload;
+    const modulePath = (p as any).modulePath as string | undefined;
     if (!modulePath) return { ruleName: "barrel-export", passed: true };
 
     try {
@@ -146,10 +146,10 @@ export class HardVerificationGate {
 
   // ── 规则 5: 跨包接口契约 ──
   private _ruleCrossPackage(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
-    const srcPkg = p.sourcePkg as string | undefined;
-    const tgtPkg = p.targetPkg as string | undefined;
-    const iface = p.interfaceName as string | undefined;
+    const p = payload as GovernanceEventPayload;
+    const srcPkg = (p as any).sourcePkg as string | undefined;
+    const tgtPkg = (p as any).targetPkg as string | undefined;
+    const iface = (p as any).interfaceName as string | undefined;
     if (!srcPkg || !tgtPkg || !iface) return { ruleName: "cross-package", passed: true };
 
     // 防注入：校验接口名仅含合法标识符字符

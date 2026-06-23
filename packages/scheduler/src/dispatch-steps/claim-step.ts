@@ -63,18 +63,13 @@ export class ClaimStep implements IDispatchStep {
           payload: {
             nodeId: node.id,
             nodeType: node.type,
-            agentType,
+            assigned: agentType,
             matchedCount,
             totalAgents: agents.size,
           },
           timestamp: Date.now(),
         });
-        console.warn(
-          `[scheduler] 节点 ${node.id} type="${node.type}" 非标准 AgentType——` +
-          `仅 ${matchedCount} 个 Agent 可匹配 (已分配 ${agentType})，` +
-          `其余 ${agents.size - matchedCount} 个空闲。` +
-          `建议 MetaAgent 将大任务拆分为 type="review"+"ops"+"code"... 的独立节点以利用并行。`
-        );
+
       }
     }
 

@@ -47,7 +47,13 @@ export function topologicalSort(nodes: TaskNode[], observer?: IPipelineObserver)
       observer.emit({
         type: PipelineEventType.SchedulerNonstandardType,
         priority: PipelinePriority.NORMAL,
-        payload: { danglings: [...dangling].slice(0, 10), total: dangling.size },
+        payload: {
+          nodeId: [...dangling][0] ?? "unknown",
+          nodeType: "dangling",
+          matchedCount: 0,
+          assigned: "none",
+          totalAgents: dangling.size,
+        },
         timestamp: Date.now(),
         notificationType: "FYI",
       });

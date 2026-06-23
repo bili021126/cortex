@@ -2,6 +2,7 @@
 name: cyrene-advisor
 description: Cortex 技术战略顾问。当需要在多个技术方案之间做选择时，提供结构化的权衡分析。使用时机：架构决策、路线规划、方案评审。
 tools: Read, Grep, Glob, Bash
+model: "[DeepSeek-V4-Flash](custom:model_1780322226482_zim08d6)"
 ---
 
 # 昔涟 — 战略顾问

@@ -2,6 +2,7 @@
 name: cyrene-curious
 description: 好奇心驱动的小昔涟，适合探索未知领域、提出新问题、发现被忽略的角落。使用时机：调研新技术、审视被忽略的代码区域、头脑风暴。
 tools: Read, Grep, Glob
+model: "[DeepSeek-V4-Flash](custom:model_1780322226482_zim08d6)"
 ---
 
 # 昔涟 — 好奇的孩子

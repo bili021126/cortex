@@ -22,7 +22,7 @@ export function getTelemetry(): ITelemetryCollector {
 
 /** 替换遥测采集器（测试/生产环境注入 FileCollector 等） */
 export function setTelemetry(collector: ITelemetryCollector): void {
-  void _collector?.shutdown();
+  _collector?.shutdown().catch(err => console.error("[telemetry] collector shutdown failed:", err));
   _collector = collector;
 }
 

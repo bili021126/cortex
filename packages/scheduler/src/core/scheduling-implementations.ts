@@ -401,7 +401,7 @@ export class SequentialDriver implements ILoopDriver {
         observer.emit({
           type: PipelineEventType.SchedulerReplanLimit,
           priority: PipelinePriority.CRITICAL,
-          payload: { totalReplans: 0, maxReplans: 0, hint: "SequentialDriver 全局超时" },
+          payload: { totalReplans: 0, maxReplans: 0, deferred: 0 },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
@@ -604,9 +604,9 @@ export class WaveDriver implements ILoopDriver {
         const skipped = waveNodes.length - filtered.length;
         if (skipped > 0) {
           observer.emit({
-            type: PipelineEventType.SchedulerNonstandardType,
+            type: PipelineEventType.SchedulerReplanLimit,
             priority: PipelinePriority.NORMAL,
-            payload: { message: `WaveDriver wave ${waveIdx}: ${skipped} node(s) deferred (parent in different wave)` },
+            payload: { totalReplans: 0, maxReplans: 0, deferred: skipped },
             timestamp: Date.now(),
             notificationType: "FYI",
           });
@@ -617,7 +617,7 @@ export class WaveDriver implements ILoopDriver {
         observer.emit({
           type: PipelineEventType.SchedulerLayerStart,
           priority: PipelinePriority.HIGH,
-          payload: { layer: waveIdx, nodes: waveNodes.length, round, wave: waveIdx },
+          payload: { layer: waveIdx, nodes: waveNodes.length, round },
           timestamp: Date.now(),
           notificationType: "FYI",
         });
