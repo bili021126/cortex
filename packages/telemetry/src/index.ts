@@ -61,6 +61,8 @@ export { installConsoleBridge, uninstallConsoleBridge } from "./console-bridge.j
 
 // ─── Phase 0 遥测基础设施 ───────────────────────────
 export { AuditTrail } from "./audit-trail.js";
+export { HealthCollector } from "./health-collector.js";
+export type { HealthSnapshot } from "./health-collector.js";
 export type {
   AuditEntry,
   AuditEntryBase,

@@ -96,7 +96,7 @@ export class WorkerPool {
       clearTimeout(timeout);
       this.busy.delete(worker);
       this._drainQueue();
-      if (result.success) resolve(result.data);
+      if (result.success) resolve(result);
       else reject(new Error(result.error ?? "worker failed"));
     });
 

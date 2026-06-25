@@ -9,6 +9,8 @@
 // @see docs/core/telemetry-infrastructure-deepening.md §2.4
 // ============================================================
 
+import type { HealthCollector } from "@cortex/telemetry";
+
 /** 降级等级 */
 export type DegradationLevel = 'silent' | 'trace' | 'escalate';
 
@@ -17,6 +19,12 @@ export type DegradationLevel = 'silent' | 'trace' | 'escalate';
  * 统一处理非致命异常，为遥测留插桩点。
  */
 export class DegradationBoundary {
+  /**
+   * 健康聚合采集器引用——由 bootstrap 注入。
+   * 所有非 silent 路径的降级事件会自动记录至此。
+   */
+  static collector?: HealthCollector;
+
   /**
    * 处理降级事件。
    *
@@ -30,6 +38,9 @@ export class DegradationBoundary {
     level: DegradationLevel = 'trace'
   ): void {
     if (level === 'silent') return;
+
+    // 记录到健康聚合器
+    DegradationBoundary.collector?.record(source, level);
 
     const msg = `[DEGRADED:${source}] ${error instanceof Error ? error.message : String(error)}`;
 

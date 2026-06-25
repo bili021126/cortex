@@ -43,7 +43,8 @@ import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
-import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD } from "@cortex/telemetry";
+import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector } from "@cortex/telemetry";
+import { DegradationBoundary } from "../core/degradation-boundary.js";
 
 // 插件类型引用
 import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.js";
@@ -189,6 +190,10 @@ export async function bootstrapEngine(
   // §6.0.0a Phase 0 遥测基础设施初始化
   const auditTrail = new AuditTrail();
   const metricCounter = new MetricCounter();
+
+  // §6.0.0b HealthCollector —— 降级健康聚合
+  const healthCollector = new HealthCollector();
+  DegradationBoundary.collector = healthCollector;
   metricCounter.startPeriodicFlush(
     60_000, // 每分钟 flush 一次
     (snapshots) => {
