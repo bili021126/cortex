@@ -876,7 +876,17 @@ export class PipelineModel implements IExecutionModel {
       return { nodeId: node.id, success: false, error: "All agents failed to claim multi-perspective node" };
     }
 
-    const combined = results.map((r) => `[${r.agentType}] ${r.output ?? r.error}`).join("\n");
+    const combined = results.map((r) =>
+      `[${r.agentType ?? "unknown"}]:\n${r.output ?? "(无输出)"}`
+    ).join("\n\n---\n\n");
+
+    const successCount = results.filter((r) => r.success).length;
+    const failCount = results.length - successCount;
+    const summary = `[多视角结果: ${successCount}/${results.length} 成功`;
+    if (failCount > 0) summary += `, ${failCount} 失败`;
+    summary += `]`;
+
+    const finalOutput = combined + "\n\n" + summary;
     const finalNode = board.getNode(node.id);
     const isDone = finalNode?.status === "done";
 
@@ -884,7 +894,7 @@ export class PipelineModel implements IExecutionModel {
       nodeId: node.id,
       agentType: agentTypes[0] as AgentType,
       success: isDone || results.every((r) => r.success),
-      output: combined,
+      output: finalOutput,
     };
   }
 }

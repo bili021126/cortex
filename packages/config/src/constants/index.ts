@@ -118,6 +118,11 @@ export {
   CLI_REPL_PLAN_OUTPUT_MAX_LEN,
 } from "./pipeline.js";
 
+// ── 调度常量 ──
+export {
+  CLOCK_SKEW_TOLERANCE,
+} from "./scheduling.js";
+
 // ── 记忆常量（Phase 4 收敛）──
 export {
   EMBEDDING_DIM,

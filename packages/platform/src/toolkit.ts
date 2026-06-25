@@ -95,7 +95,13 @@ export class Toolkit {
     this._aggregator = aggregator;
   }
 
-  /** 直接搜索（不经工具系统，供知识验证等基础设施使用） */
+  /**
+   * 直接搜索（不经工具系统，供知识验证等基础设施使用）。
+   *
+   * @internal — 仅限基础设施内部使用，不暴露给 Agent。不走 execute() 管线的
+   *   权限校验 / ConfirmGate / FileLock，因此不被视为工具调用。如需从 Agent
+   *   侧搜索，应通过 "web_search" 工具走 execute() 完整管线。
+   */
   async search(query: string, maxResults: number = 5): Promise<SearchResult[]> {
     return await this._aggregator.search(query, maxResults);
   }

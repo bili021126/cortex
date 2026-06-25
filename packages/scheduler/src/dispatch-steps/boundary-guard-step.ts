@@ -14,9 +14,7 @@ import { PipelineEventType, PipelinePriority, type AgentType } from "@cortex/sha
 import type { DispatchCtx, IDispatchStep } from "./types.js";
 import { readdir, stat } from "node:fs/promises";
 import { resolve, relative, sep } from "node:path";
-
-/** 时钟偏差容忍窗口（ms）。节点创建时间与文件 mtime 之间允许的微小偏差。 */
-const CLOCK_SKEW_TOLERANCE = 1000;
+import { CLOCK_SKEW_TOLERANCE } from "@cortex/config";
 
 // ============================================================
 // Agent 边界规则注册表 —— 可插拔
