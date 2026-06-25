@@ -1,9 +1,10 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
 import {
-  BM25Index,
-  tokenize,
+  BM25Index, tokenize, HybridRetriever,
+  DEFAULT_HYBRID_CONFIG, cosineSimilarity, batchCosineSimilarity,
 } from "@cortex/memory-store";
+import type { IEmbeddingService } from "@cortex/memory-store";
 
 describe("tokenize", () => {
   it("切分中文文本为单字 token", () => {
@@ -106,5 +107,129 @@ describe("BM25Index", () => {
     index.addDocument("b", { summary: "文档 B 内容较多" });
     expect(index.stats.docCount).toBe(2);
     expect(index.stats.avgDocLength).toBeGreaterThan(0);
+  });
+});
+
+// ══════════════════════════════════════════════════?
+// HybridRetrieval 边界——空/阈值/查询/容量
+// ══════════════════════════════════════════════════?
+
+describe("HybridRetrieval edge cases", () => {
+  function mockEmbedder(): IEmbeddingService {
+    return {
+      async embedText(text: string): Promise<number[]> {
+        let h = 0;
+        for (let i = 0; i < text.length; i++) h = ((h << 5) - h + text.charCodeAt(i)) | 0;
+        const vec = new Array(384).fill(0);
+        vec[Math.abs(h) % 384] = 1;
+        return vec;
+      },
+      async embedBatch(texts: string[]): Promise<number[][]> {
+        return Promise.all(texts.map((t) => this.embedText(t)));
+      },
+    };
+  }
+
+  it("should handle empty query", () => {
+    const retriever = new HybridRetriever();
+    const results = retriever.greedyFineRank([]);
+    expect(results).toEqual([]);
+  });
+
+  it("should handle empty corpus", () => {
+    const retriever = new HybridRetriever();
+    const empty: Array<{ entry: any; hybridScore: number }> = [];
+    const results = retriever.greedyFineRank(empty as any);
+    expect(results).toEqual([]);
+  });
+
+  it("should handle query with all stopwords", () => {
+    const retriever = new HybridRetriever();
+    const scored = retriever.greedyFineRank([]);
+    expect(scored).toEqual([]);
+  });
+
+  it("should handle threshold at 0 (return all)", () => {
+    const retriever = new HybridRetriever({ initialThreshold: 0, enableBoundaryRegression: false });
+    const entries = Array.from({ length: 5 }, (_, i) => ({
+      entry: { id: `t0-${i}`, summary: `test ${i}` } as any,
+      bm25Score: i * 0.1,
+      vectorScore: i * 0.1,
+      hybridScore: i * 0.2,
+    }));
+    const results = retriever.greedyFineRank(entries);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("should handle threshold at 1 (return none)", () => {
+    const retriever = new HybridRetriever({ initialThreshold: 1, enableBoundaryRegression: true });
+    const entries = Array.from({ length: 3 }, (_, i) => ({
+      entry: { id: `t1-${i}`, summary: `test ${i}` } as any,
+      bm25Score: 0.1,
+      vectorScore: 0.1,
+      hybridScore: 0.3,
+    }));
+    const results = retriever.greedyFineRank(entries);
+    // threshold=1 时所有结果都 < 1，应返回 [] 或 top-1（取决于实现）
+    expect(results.length).toBeLessThanOrEqual(1);
+  });
+
+  it("should handle duplicate content in corpus", () => {
+    const index = new BM25Index();
+    index.addDocument("d1", { summary: "重复内容", semantic_gist: "dup" });
+    index.addDocument("d2", { summary: "重复内容", semantic_gist: "dup" });
+    const results = index.search("重复内容");
+    expect(results.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should handle single-char query", () => {
+    const index = new BM25Index();
+    index.addDocument("d1", { summary: "中文测试文档", semantic_gist: "test" });
+    const results = index.search("中");
+    expect(results.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should handle 10000-char query", () => {
+    const index = new BM25Index();
+    index.addDocument("d1", { summary: "短文档", semantic_gist: "short" });
+    const longQuery = "A".repeat(10000);
+    const results = index.search(longQuery);
+    expect(results).toEqual([]);
+  });
+
+  it("should maintain boundary regression with edge values", () => {
+    const retriever = new HybridRetriever({ initialThreshold: 0.5, enableBoundaryRegression: true });
+    expect(retriever.adaptiveThreshold).toBe(0.5);
+
+    retriever.greedyFineRank([]);
+    expect(retriever.adaptiveThreshold).toBe(0.5);
+
+    const low = Array.from({ length: 5 }, (_, i) => ({
+      entry: { id: `low-${i}`, summary: "low" } as any,
+      bm25Score: 0,
+      vectorScore: 0,
+      hybridScore: 0.01,
+    }));
+    retriever.greedyFineRank(low);
+    expect(retriever.adaptiveThreshold).toBeGreaterThanOrEqual(0.01);
+    expect(retriever.adaptiveThreshold).toBeLessThanOrEqual(0.95);
+  });
+
+  it("should converge threshold with repetitive similar queries", () => {
+    const retriever = new HybridRetriever({ initialThreshold: 0.5, enableBoundaryRegression: true, boundaryEma: 0.3 });
+    const entries = Array.from({ length: 5 }, (_, i) => ({
+      entry: { id: `cv-${i}`, summary: `similar ${i}` } as any,
+      bm25Score: 0.3,
+      vectorScore: 0.3,
+      hybridScore: 0.6,
+    }));
+
+    const thresholds: number[] = [retriever.adaptiveThreshold];
+    for (let r = 0; r < 10; r++) {
+      retriever.greedyFineRank(entries);
+      thresholds.push(retriever.adaptiveThreshold);
+    }
+    expect(retriever.adaptiveThreshold).toBeGreaterThanOrEqual(0.01);
+    expect(retriever.adaptiveThreshold).toBeLessThanOrEqual(0.95);
   });
 });

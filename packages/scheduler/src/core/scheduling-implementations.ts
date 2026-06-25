@@ -882,7 +882,7 @@ export class PipelineModel implements IExecutionModel {
 
     const successCount = results.filter((r) => r.success).length;
     const failCount = results.length - successCount;
-    const summary = `[多视角结果: ${successCount}/${results.length} 成功`;
+    let summary = `[多视角结果: ${successCount}/${results.length} 成功`;
     if (failCount > 0) summary += `, ${failCount} 失败`;
     summary += `]`;
 

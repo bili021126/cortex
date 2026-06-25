@@ -241,3 +241,91 @@ describe("Scheduler + ManifoldGate 集成", () => {
     expect(events).toEqual(["parent", "child"]);
   }, 10_000);
 });
+
+// ══════════════════════════════════════════════════?
+// ManifoldGate 边界——零槽位/负槽位/双重释放/队列溢出
+// ══════════════════════════════════════════════════?
+
+describe("ManifoldGate edge cases", () => {
+  beforeEach(() => {
+    ManifoldGate.reset();
+  });
+
+  afterEach(() => {
+    ManifoldGate.reset();
+  });
+
+  it("should handle zero slots", async () => {
+    ManifoldGate.register("zero-slot", 0);
+    // 0 槽位——acquire 应超时返回 false
+    const ok = await ManifoldGate.acquire("zero-slot", 100);
+    expect(ok).toBe(false);
+    expect(ManifoldGate.active("zero-slot")).toBe(0);
+  });
+
+  it("should handle negative slots (clamp to 0)", async () => {
+    ManifoldGate.register("neg-slot", -5);
+    // 负槽位应被夹到 0——acquire 总是超时
+    const ok = await ManifoldGate.acquire("neg-slot", 100);
+    expect(ok).toBe(false);
+    expect(ManifoldGate.active("neg-slot")).toBe(0);
+  });
+
+  it("should handle release of unacquired slot", () => {
+    ManifoldGate.register("unacquired", 3);
+    // 释放未获取的槽位——应安全 no-op
+    expect(() => ManifoldGate.release("unacquired")).not.toThrow();
+    expect(ManifoldGate.active("unacquired")).toBe(0);
+  });
+
+  it("should handle double release of same slot", async () => {
+    ManifoldGate.register("double-rel", 2);
+    const ok = await ManifoldGate.acquire("double-rel", 100);
+    expect(ok).toBe(true);
+    expect(ManifoldGate.active("double-rel")).toBe(1);
+
+    // 第一次释放
+    ManifoldGate.release("double-rel");
+    expect(ManifoldGate.active("double-rel")).toBe(0);
+
+    // 第二次释放——不应变为负值
+    ManifoldGate.release("double-rel");
+    expect(ManifoldGate.active("double-rel")).toBe(0);
+  });
+
+  it("should handle wait queue overflow", async () => {
+    ManifoldGate.register("overflow", 1);
+    // 占满 1 个槽位
+    await ManifoldGate.acquire("overflow", 5000);
+
+    // 大量排队——不应崩溃
+    const waiters = Array.from({ length: 100 }, (_, i) =>
+      ManifoldGate.acquire("overflow", 5000),
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(ManifoldGate.waiting("overflow")).toBeGreaterThanOrEqual(50);
+
+    // 释放所有槽位——等待者逐步唤醒
+    ManifoldGate.release("overflow");
+    await new Promise((r) => setTimeout(r, 100));
+    // 至少一个排队者被唤醒
+    expect(ManifoldGate.active("overflow")).toBe(1);
+  });
+
+  it("should timeout correctly under load", async () => {
+    ManifoldGate.register("load-timeout", 2);
+    // 占满 2 个槽位
+    await ManifoldGate.acquire("load-timeout", 5000);
+    await ManifoldGate.acquire("load-timeout", 5000);
+
+    // 第三个 acquire 应超时
+    const start = Date.now();
+    const ok = await ManifoldGate.acquire("load-timeout", 50);
+    const elapsed = Date.now() - start;
+
+    expect(ok).toBe(false);
+    // 超时应大致在 50ms 左右（允许小幅波动）
+    expect(elapsed).toBeLessThan(500);
+    expect(ManifoldGate.active("load-timeout")).toBe(2);
+  });
+});

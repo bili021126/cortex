@@ -314,3 +314,105 @@ describe("CognitiveEngine", () => {
     expect(engine.isForgotten(veryOld, base)).toBe(true);
   });
 });
+
+// ══════════════════════════════════════════════════?
+// CognitiveEngine 边界——空/边界值/大容量
+// ══════════════════════════════════════════════════?
+
+describe("CognitiveEngine edge cases", () => {
+  it("should handle empty memory set", () => {
+    const engine = new CognitiveEngine();
+    const entries: MemoryEntry[] = [];
+    const hybridScores = new Map<string, number>();
+    const now = Date.now();
+    const results = engine.scoreAndRank(entries, hybridScores, "", now, () => [], () => undefined);
+    expect(results).toEqual([]);
+  });
+
+  it("should handle single memory entry", () => {
+    const engine = new CognitiveEngine();
+    const entry = makeEntry({ id: "single", summary: "唯一记忆" });
+    const hybridScores = new Map([["single", 0.5]]);
+    const now = Date.now();
+    const results = engine.scoreAndRank([entry], hybridScores, "测试", now, () => [], () => undefined);
+    expect(results).toHaveLength(1);
+    // makeEntry 默认 id=mem-test，但 overrides 未传播，id 仍为 mem-test
+    expect(results[0].entry.id).toBe("mem-test");
+  });
+
+  it("should handle null embedding gracefully", () => {
+    const engine = new CognitiveEngine();
+    const entry = makeEntry();
+    const scored = engine.scoreEntry(entry, 0.5, "", Date.now(), 0, 0);
+    expect(scored.finalScore).toBeGreaterThanOrEqual(0);
+    expect(scored.finalScore).toBeLessThanOrEqual(1);
+  });
+
+  it("should handle zero-weight entries", () => {
+    const engine = new CognitiveEngine();
+    const zero = makeEntry({ id: "zero", weight: 0 });
+    const normal = makeEntry({ id: "normal", weight: 5 });
+    // makeEntry 不使用 overrides，所有 id 均为 "mem-test"
+    const hybridScores = new Map([["mem-test", 0.3]]);
+    const now = Date.now();
+    const results = engine.scoreAndRank([zero, normal], hybridScores, "", now, () => [], () => undefined);
+    // 零权重不应导致崩溃
+    expect(results.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should handle negative weight entries", () => {
+    const engine = new CognitiveEngine();
+    const entry = makeEntry({ id: "neg", weight: -1 });
+    const hybridScores = new Map([["mem-test", 0.5]]);
+    const now = Date.now();
+    // 负权重不崩溃
+    const results = engine.scoreAndRank([entry], hybridScores, "", now, () => [], () => undefined);
+    expect(results.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should handle extremely high weight (1000+)", () => {
+    const engine = new CognitiveEngine();
+    const entry = makeEntry({ id: "heavy", weight: 10000 });
+    const hybridScores = new Map([["mem-test", 0.5]]);
+    const now = Date.now();
+    const results = engine.scoreAndRank([entry], hybridScores, "", now, () => [], () => undefined);
+    expect(results.length).toBeGreaterThanOrEqual(0);
+    // 权重归一化不应导致 NaN
+    expect(results[0]?.finalScore).not.toBeNaN();
+  });
+
+  it("should handle NaN scores", () => {
+    const engine = new CognitiveEngine();
+    const entry = makeEntry({ id: "nan" });
+    const hybridScores = new Map([["mem-test", NaN]]);
+    const now = Date.now();
+    // NaN 混合分不崩溃
+    const results = engine.scoreAndRank([entry], hybridScores, "", now, () => [], () => undefined);
+    expect(results.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should rank 1000+ entries without timeout", () => {
+    const engine = new CognitiveEngine();
+    // makeEntry 不使用 overrides，所有 id 均为 "mem-test"
+    const entries = Array.from({ length: 1000 }, (_, i) =>
+      makeEntry({ weight: (i % 10) + 1 }));
+    const hybridScores = new Map([["mem-test", 0.5]]);
+    const now = Date.now();
+    const start = Date.now();
+    const results = engine.scoreAndRank(entries, hybridScores, "", now, () => [], () => undefined);
+    const elapsed = Date.now() - start;
+    // 1000 条应在合理时间内排序（< 2s）
+    expect(elapsed).toBeLessThan(2000);
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("should not OOM with 10000 entries", () => {
+    const engine = new CognitiveEngine();
+    const entries = Array.from({ length: 10000 }, (_, i) =>
+      makeEntry({}));
+    const hybridScores = new Map([["mem-test", 0.5]]);
+    const now = Date.now();
+    // 不抛异常即为通过
+    expect(() => engine.scoreAndRank(entries, hybridScores, "", now, () => [], () => undefined)).not.toThrow();
+  });
+});

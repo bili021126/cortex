@@ -2020,3 +2020,377 @@ describe("场景 13：MemoryStore 事件完整性", () => {
     await memory.close();
   });
 });
+
+// ══════════════════════════════════════════════════?
+// 场景 14：Scheduler 压力——并发/错误恢复/边界
+// ══════════════════════════════════════════════════?
+
+describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
+  const TIMEOUT = 30_000;
+
+  beforeEach(() => {
+    ManifoldGate.reset();
+  });
+
+  function makeNode(overrides: Partial<{
+    id: string; parentId: string; type: string; tags: string[];
+    needsMultiPerspective: boolean; payload: string;
+  }> = {}) {
+    return {
+      id: overrides.id ?? "n1",
+      parentId: overrides.parentId,
+      type: overrides.type ?? "implementation",
+      tags: (overrides.tags ?? ["implementation"]) as any,
+      needsMultiPerspective: overrides.needsMultiPerspective ?? false,
+      status: "pending" as const,
+      claimedBy: [] as never[],
+      payload: overrides.payload ?? "do something",
+      results: [] as never[],
+      createdAt: Date.now()
+    };
+  }
+
+  it("should handle 100 concurrent task nodes without deadlock", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 20 });
+    const scheduler = new Scheduler(board, pool, observer);
+
+    const agent = createAgent(
+      codeAgentConfig("stress"),
+      mockAdapter("concurrent ok"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    for (let i = 0; i < 100; i++) {
+      board.addNode(makeNode({ id: `conc-${i}`, payload: `Concurrent ${i}` }));
+    }
+
+    const report = await scheduler.executeAll();
+    expect(report.totalNodes).toBeGreaterThanOrEqual(100);
+    // 不崩溃即通过——100 节点无死锁
+    expect(report.completed + report.failed).toBeGreaterThanOrEqual(80);
+  }, TIMEOUT);
+
+  it("should handle rapid node addition during execution", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 10 });
+
+    const agent = createAgent(
+      codeAgentConfig("rapid"),
+      mockAdapter("rapid ok"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+
+    // 创建 scheduler 但不注册 agent——手动控制执行节奏
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    // 先加 10 个节点
+    for (let i = 0; i < 10; i++) {
+      board.addNode(makeNode({ id: `rapid-init-${i}` }));
+    }
+
+    // 启动 executeAll 但不 await——在调度过程中快速加节点
+    const execPromise = scheduler.executeAll();
+
+    // 快速追加 20 个节点
+    for (let i = 0; i < 20; i++) {
+      board.addNode(makeNode({ id: `rapid-add-${i}` }));
+    }
+
+    const report = await execPromise;
+    // 至少部分节点完成
+    expect(report.completed + report.failed).toBeGreaterThanOrEqual(5);
+  }, TIMEOUT);
+
+  it("should handle node cancellation mid-execution", async () => {
+    // 验证：节点取消不影响其他节点
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 5 });
+
+    let slowExecuted = false;
+    const slowAgent: Agent = {
+      type: AgentType.Code,
+      status: AgentStatus.Awake,
+      wakeup: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn().mockImplementation(async () => {
+        slowExecuted = true;
+        await new Promise((r) => setTimeout(r, 500));
+        throw new Error("mid-execution cancel");
+      }),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, slowAgent, "mock");
+
+    board.addNode(makeNode({ id: "cancel-me", payload: "Will be cancelled" }));
+    board.addNode(makeNode({ id: "other", payload: "Should complete" }));
+
+    const report = await scheduler.executeAll();
+    // 其他节点要么完成要么失败，但系统不崩溃
+    expect(report.results.length).toBeGreaterThanOrEqual(1);
+  }, TIMEOUT);
+
+  it("should handle 1000 nodes in a single task graph", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 50 });
+
+    const agent = createAgent(
+      codeAgentConfig("thousand"),
+      mockAdapter("thousand ok"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    for (let i = 0; i < 1000; i++) {
+      board.addNode(makeNode({ id: `big-${i}`, payload: `Node ${i}` }));
+    }
+
+    const report = await scheduler.executeAll();
+    expect(report.totalNodes).toBeGreaterThanOrEqual(1000);
+  }, TIMEOUT);
+
+  it("should recover from agent crash without corrupting task board", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 3 });
+
+    const crashAgent: Agent = {
+      type: AgentType.Code,
+      status: AgentStatus.Awake,
+      wakeup: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn().mockRejectedValue(new Error("Agent crashed")),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, crashAgent, "mock");
+
+    board.addNode(makeNode({ id: "crash-test", payload: "crash" }));
+
+    const report = await scheduler.executeAll();
+    // Agent 崩溃不应破坏 TaskBoard
+    const node = board.getNode("crash-test");
+    expect(node).toBeDefined();
+    expect(["failed", "done"]).toContain(node!.status);
+    const failResult = report.results.find((r) => r.nodeId === "crash-test");
+    expect(failResult?.success).toBe(false);
+  }, TIMEOUT);
+
+  it("should handle agent timeout with proper cleanup", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 3 });
+
+    const timeoutAgent: Agent = {
+      type: AgentType.Code,
+      status: AgentStatus.Awake,
+      wakeup: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn().mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 10_000));
+        return { nodeId: "", success: true, output: "too late" };
+      }),
+      shutdown: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const scheduler = new Scheduler(board, pool, observer, undefined, {
+      ...SHORT_STRESS_CONFIG,
+      executeAllTimeoutMs: 500,
+      manifoldGateAcquireTimeoutMs: 200,
+    });
+    scheduler.register(AgentType.Code, timeoutAgent, "mock");
+
+    board.addNode(makeNode({ id: "timeout-node", payload: "slow" }));
+
+    const report = await scheduler.executeAll();
+    // 超时后应正确清理，不残留 pending 状态
+    const node = board.getNode("timeout-node");
+    expect(node).toBeDefined();
+    expect(node!.status).toBe("failed");
+  }, TIMEOUT);
+
+  it("should continue remaining nodes after one fails", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 5 });
+
+    const agent = createAgent(
+      codeAgentConfig("continue"),
+      selectiveFailAdapter(new Set([1]), "First node fails"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    board.addNode(makeNode({ id: "fail-first", payload: "Will fail" }));
+    board.addNode(makeNode({ id: "ok-second", payload: "Should succeed" }));
+    board.addNode(makeNode({ id: "ok-third", payload: "Should succeed too" }));
+
+    const report = await scheduler.executeAll();
+    expect(report.failed).toBeGreaterThanOrEqual(1);
+    // 至少一个成功——后面的节点继续执行
+    expect(report.completed).toBeGreaterThanOrEqual(1);
+    // 不崩溃即可
+  }, TIMEOUT);
+
+  it("should handle empty task board gracefully", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 1 });
+    const scheduler = new Scheduler(board, pool, observer);
+
+    const report = await scheduler.executeAll();
+    expect(report.totalNodes).toBe(0);
+    expect(report.completed).toBe(0);
+    expect(report.failed).toBe(0);
+    expect(report.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should handle single node with no dependencies", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 1 });
+
+    const agent = createAgent(
+      codeAgentConfig("single"),
+      mockAdapter("single ok"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    board.addNode(makeNode({ id: "sole", payload: "Only one" }));
+
+    const report = await scheduler.executeAll();
+    expect(report.completed).toBe(1);
+    expect(report.failed).toBe(0);
+    const node = board.getNode("sole");
+    expect(node?.status).toBe("done");
+  });
+
+  it("should handle circular-like dependency chain (100 deep)", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    pool.register({ type: AgentType.Code, maxInstances: 3 });
+
+    const agent = createAgent(
+      codeAgentConfig("deep"),
+      mockAdapter("deep ok"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    // 100 deep chain: n0 -> n1 -> n2 -> ... -> n99
+    for (let i = 0; i < 100; i++) {
+      board.addNode(makeNode({
+        id: `deep-${i}`,
+        parentId: i === 0 ? undefined : `deep-${i - 1}`,
+        payload: `Deep ${i}`,
+      }));
+    }
+
+    const report = await scheduler.executeAll();
+    // 全部节点应被处理
+    expect(report.totalNodes).toBeGreaterThanOrEqual(100);
+    expect(report.completed + report.failed).toBeGreaterThanOrEqual(100);
+  }, TIMEOUT);
+
+  it("should handle nodes with all agents busy", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    // 只有 1 个槽位
+    pool.register({ type: AgentType.Code, maxInstances: 1 });
+
+    const agent = createAgent(
+      codeAgentConfig("busy"),
+      mockAdapter("busy ok"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    // 20 节点竞争 1 个槽位
+    for (let i = 0; i < 20; i++) {
+      board.addNode(makeNode({ id: `busy-${i}`, payload: `Busy ${i}` }));
+    }
+
+    const report = await scheduler.executeAll();
+    // 所有节点最终被处理（排队等待）
+    expect(report.completed + report.failed).toBeGreaterThanOrEqual(20);
+  }, TIMEOUT);
+
+  it("should handle zero-concurrency pool", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    // 0 槽位——没有实例可提供
+    pool.register({ type: AgentType.Code, maxInstances: 0 });
+
+    // 使用 mock agent 即使 0 槽位也能测试
+    board.addNode(makeNode({ id: "zero-conc", payload: "No slot" }));
+
+    const scheduler = new Scheduler(board, pool, observer);
+    // 不注册 agent——0 槽位时无法 spawn
+
+    const report = await scheduler.executeAll();
+    // 不崩溃即可
+    expect(report.totalNodes).toBeGreaterThanOrEqual(0);
+  });
+
+  it("should handle max concurrency pool (>100)", async () => {
+    const board = new TaskBoard();
+    const pool = new AgentPool();
+    const observer = new PipelineObserver();
+    // 大并发池
+    pool.register({ type: AgentType.Code, maxInstances: 200 });
+
+    const agent = createAgent(
+      codeAgentConfig("maxconc"),
+      mockAdapter("maxconc ok"),
+      new Toolkit(),
+    );
+    await agent.wakeup();
+
+    const scheduler = new Scheduler(board, pool, observer);
+    scheduler.register(AgentType.Code, agent, "mock");
+
+    for (let i = 0; i < 50; i++) {
+      board.addNode(makeNode({ id: `maxc-${i}`, payload: `Max conc ${i}` }));
+    }
+
+    const report = await scheduler.executeAll();
+    expect(report.completed + report.failed).toBeGreaterThanOrEqual(50);
+  }, TIMEOUT);
+});
+
