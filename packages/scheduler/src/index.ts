@@ -67,6 +67,10 @@ export {
 export { ReplanManager } from "./core/replan-manager.js";
 export type { IReplanProvider, ReplanItem } from "./core/replan-manager.js";
 
+// ── Agent Tracker ────────────────────────────────────────────────
+export { AgentTracker } from "./core/agent-tracker.js";
+export type { AgentStateEntry, TimeoutAction, AgentExecutionState } from "./core/agent-tracker.js";
+
 // ── RLM 递归拆解 ────────────────────────────────────────────────
 export {
   decompose,

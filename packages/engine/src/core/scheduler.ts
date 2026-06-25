@@ -6,7 +6,7 @@ import { AgentStatus, PipelineEventType, PipelinePriority } from "@cortex/shared
 import type { Agent, AgentType, ExecutionReport, IMemoryStore, IPipelineObserver, NodeResult, TaskNode } from "@cortex/shared";
 import type { MetaAgent } from "./meta-agent.js";
 import { MetaAgentReplanAdapter } from "./meta-agent-adapter.js";
-import { ReplanManager, findAllMatchingAgents, ClaimStep, SpawnStep, RlmExecuteStep, BoundaryGuardStep, CleanupStep, TagMatchingStrategy, TopologicalLayeredDriver, PipelineModel, FixedModelRouter, type ITaskBoard, type ISchedulerAgentPool, type DispatchCtx, type IDispatchStep, type LlmCallable, type IScheduler, type IScheduleStrategy, type ILoopDriver, type IExecutionModel, type IModelRouter, type CompositeSchedulerConfig, type LoopContext } from "@cortex/scheduler";
+import { ReplanManager, findAllMatchingAgents, ClaimStep, SpawnStep, RlmExecuteStep, BoundaryGuardStep, CleanupStep, TagMatchingStrategy, TopologicalLayeredDriver, PipelineModel, FixedModelRouter, AgentTracker, type ITaskBoard, type ISchedulerAgentPool, type DispatchCtx, type IDispatchStep, type LlmCallable, type IScheduler, type IScheduleStrategy, type ILoopDriver, type IExecutionModel, type IModelRouter, type CompositeSchedulerConfig, type LoopContext } from "@cortex/scheduler";
 import { isTestEnv } from "@cortex/config";
 import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
@@ -135,6 +135,22 @@ export class Scheduler implements IScheduler {
     // 激活 MemoryStore 会话——后续 write/writePending 自动注入此 sessionId
     this._memoryStore?.beginSession(this._sessionId);
 
+    // 创建 AgentTracker 实例——本次执行的心跳超时跟踪器
+    const agentTracker = new AgentTracker();
+
+    // 包装 dispatchNode：分发前 markDispatched，完成后 markCompleted/markFailed
+    const wrappedDispatchNode = async (node: TaskNode): Promise<NodeResult> => {
+      // 使用 node.id 作为跟踪 key——每个节点独立跟踪
+      agentTracker.markDispatched(node.id, node.id);
+      const result = await this._dispatchNode(node.id);
+      if (result.success) {
+        agentTracker.markCompleted(node.id);
+      } else {
+        agentTracker.markFailed(node.id);
+      }
+      return result;
+    };
+
     // 构建 LoopContext，注入 dispatchNode 保留完整 RLM 拆解管线
     const loopCtx: LoopContext = {
       board: this.board,
@@ -148,10 +164,14 @@ export class Scheduler implements IScheduler {
       strategy: this.strategy,
       executionModel: this.executionModel,
       modelRouter: this.modelRouter,
-      dispatchNode: (node) => this._dispatchNode(node.id),
+      dispatchNode: wrappedDispatchNode,
+      agentTracker,
     };
 
     const loopResult = await this.loopDriver.run(loopCtx);
+
+    // 执行结束——清零 AgentTracker
+    agentTracker.reset();
 
     // MemoryStore endSession 已迁移至 ShutdownWarden（统一管理 shutdown 生命周期）
 

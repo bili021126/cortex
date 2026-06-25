@@ -33,9 +33,14 @@ export class ExecuteStep implements IDispatchStep {
     // 模型解析：优先使用 ctx.model，回退到 models 按 agentType 查找，最后兜底
     const model = ctx.model ?? models.get(agentType) ?? DEFAULT_CLI_CHAT_MODEL;
 
+    // 发送心跳——agent 开始执行
+    ctx.pool.heartbeat(ctx.instanceId ?? agentType);
+
     let result;
     try {
       result = await agent.execute(node, model);
+      // 执行完成后发送心跳——仍在活跃
+      ctx.pool.heartbeat(ctx.instanceId ?? agentType);
     } catch (e) {
       result = {
         nodeId: node.id,

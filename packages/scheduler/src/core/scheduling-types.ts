@@ -19,6 +19,7 @@ import type { ITaskBoard } from "./task-board.js";
 import type { ISchedulerAgentPool } from "./agent-pool.js";
 import type { IReplanProvider, ReplanManager } from "./replan-manager.js";
 import type { EngineConfig } from "@cortex/config";
+import type { AgentTracker } from "./agent-tracker.js";
 
 // ══════════════════════════════════════════════
 // IScheduleStrategy —— 调度策略
@@ -76,6 +77,8 @@ export interface LoopContext {
   dispatchNode?: (node: TaskNode) => Promise<NodeResult>;
   /** 可选——模型路由器。提供时 dispatch 管线通过此路由动态选择 LLM 模型，否则使用 Agent 注册时的默认模型 */
   modelRouter?: IModelRouter;
+  /** 可选——Agent 执行跟踪器。提供时 driver 在每轮循环中调用 checkTimeouts() 做分层超时检测 */
+  agentTracker?: AgentTracker;
 }
 
 /** 循环驱动执行结果 */

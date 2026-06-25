@@ -14,6 +14,10 @@ export interface ISchedulerAgentPool {
   getStatus(instanceId: string): AgentStatus | undefined;
   setStatus(instanceId: string, status: AgentStatus): boolean;
   destroy(agentType: AgentType, instanceId: string): void;
+  /** 记录 agent 心跳——更新最后活跃时间戳 */
+  heartbeat(agentId: string): void;
+  /** 探测 agent 是否存活——仍在 pool 活跃列表中返回 true */
+  ping(agentId: string): Promise<boolean>;
 }
 
 /**
@@ -43,6 +47,7 @@ export class AgentPool implements IAgentPool {
   private configs = new Map<AgentType, AgentConfig>();
   private active = new Map<AgentType, Set<string>>();
   private statuses = new Map<string, AgentStatus>(); // instanceId → status
+  private heartbeats = new Map<string, number>(); // instanceId → lastHeartbeat
   private _observer?: IPipelineObserver;
 
   /**
@@ -208,5 +213,22 @@ export class AgentPool implements IAgentPool {
     } else if (!isTestEnv()) {
       console.error(`[invariant] ${source}: ${message}`);
     }
+  }
+
+  /** 记录 agent 心跳——更新最后活跃时间戳。 */
+  heartbeat(agentId: string): void {
+    this.heartbeats.set(agentId, Date.now());
+  }
+
+  /**
+   * 探测 agent 是否存活。
+   * 检查 agent 实例是否仍在 pool 的活跃列表中。
+   */
+  async ping(agentId: string): Promise<boolean> {
+    // 遍历所有活跃集合查找该 instanceId
+    for (const [, instances] of this.active) {
+      if (instances.has(agentId)) return true;
+    }
+    return false;
   }
 }

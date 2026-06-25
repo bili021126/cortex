@@ -187,6 +187,19 @@ export class ReplanManager {
     this.replanQueue.length = 0;
   }
 
+  /**
+   * 处理节点延迟事件。
+   * 'wait'  → 只记录，不触发重规划
+   * 'extend' → 给该 node 额外的时间（加时），不触发重规划
+   * 与 onNodeFailed 的区别：不触发 replan 入队。
+   */
+  onNodeDelayed(_nodeId: string, _elapsed: number, action: 'wait' | 'extend'): void {
+    // 'wait'：仅记录，无实际操作
+    if (action === 'wait') return;
+    // 'extend'：预留扩展点——未来可在此延长节点的超时阈值
+    if (action === 'extend') return;
+  }
+
   // ── 内部实现 ─────────────────────────────────
 
   private async _drain(): Promise<void> {

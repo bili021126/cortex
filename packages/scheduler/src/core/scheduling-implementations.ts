@@ -18,6 +18,7 @@ import type {
   LoopResult,
   ExecutionContext,
 } from "./scheduling-types.js";
+import type { TimeoutAction } from "./agent-tracker.js";
 import { topologicalSort } from "./topological-sort.js";
 import { findMatchingAgent, findAllMatchingAgents } from "./agent-matcher.js";
 import { ClaimStep } from "../dispatch-steps/claim-step.js";
@@ -32,6 +33,52 @@ import { isTestEnv } from "../utils/internal.js";
 // ══════════════════════════════════════════════
 // IScheduleStrategy 实现
 // ══════════════════════════════════════════════
+
+/**
+ * AgentTracker 超时动作分发——供各 driver 的循环中调用。
+ * 处理 checkTimeouts() 返回的 TimeoutAction[]：
+ *   warn  → emit Exec:NodeDelayed (wait)
+ *   ping  → pool.ping(agentId) + emit Exec:NodeDelayed (extend)
+ *   kill  → board.failNode + emit NodeFailed
+ */
+function _handleTimeoutActions(actions: TimeoutAction[], ctx: LoopContext): void {
+  for (const a of actions) {
+    switch (a.type) {
+      case 'warn':
+        ctx.observer.emit({
+          type: PipelineEventType.ExecNodeDelayed,
+          priority: PipelinePriority.NORMAL,
+          payload: { nodeId: a.nodeId, agentId: a.agentId, elapsed: a.elapsed, action: 'wait', level: 'warn' },
+          timestamp: Date.now(),
+          notificationType: "FYI",
+        });
+        break;
+
+      case 'ping':
+        // 异步探测——不 blocking
+        ctx.pool.ping(a.agentId).catch(() => {});
+        ctx.observer.emit({
+          type: PipelineEventType.ExecNodeDelayed,
+          priority: PipelinePriority.NORMAL,
+          payload: { nodeId: a.nodeId, agentId: a.agentId, elapsed: a.elapsed, action: 'extend', level: 'ping' },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+        break;
+
+      case 'kill':
+        try { ctx.board.failNode(a.nodeId); } catch { /* best-effort */ }
+        ctx.observer.emit({
+          type: PipelineEventType.NodeFailed,
+          priority: PipelinePriority.CRITICAL,
+          payload: { nodeId: a.nodeId, error: `Agent heartbeat timeout after ${a.elapsed}ms` },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+        break;
+    }
+  }
+}
 
 /**
  * TagMatchingStrategy —— 默认标签匹配策略。
@@ -307,6 +354,12 @@ export class TopologicalLayeredDriver implements ILoopDriver {
           }
         }
 
+        // 分层超时检测——每层 dispatch 后检查心跳超时
+        if (ctx.agentTracker) {
+          const actions = ctx.agentTracker.checkTimeouts(Date.now());
+          _handleTimeoutActions(actions, ctx);
+        }
+
         if (replanManager.hasPending && !replanFlight) {
           replanFlight = replanManager.tryFireReplan();
         }
@@ -473,6 +526,12 @@ export class SequentialDriver implements ILoopDriver {
           allResults.push({ nodeId: node.id, success: false, error: String(e).slice(0, 200) });
           failed++;
         }
+      }
+
+      // 分层超时检测——每轮节点执行后检查心跳超时
+      if (ctx.agentTracker) {
+        const actions = ctx.agentTracker.checkTimeouts(Date.now());
+        _handleTimeoutActions(actions, ctx);
       }
 
       if (replanManager.hasPending && !replanFlight) {
@@ -675,6 +734,12 @@ export class WaveDriver implements ILoopDriver {
               else failed++;
             }
           }
+        }
+
+        // 分层超时检测——每层 dispatch 后检查心跳超时
+        if (ctx.agentTracker) {
+          const actions = ctx.agentTracker.checkTimeouts(Date.now());
+          _handleTimeoutActions(actions, ctx);
         }
       }
 
