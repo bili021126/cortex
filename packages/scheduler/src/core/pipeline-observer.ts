@@ -80,15 +80,11 @@ export class PipelineObserver implements IPipelineObserver {
           meta.causalChain.upstreamEvents = [];
         }
         for (const entry of upstreamFromDeadLetter) {
-          if (!meta.causalChain.upstreamEvents.includes(entry.id)) {
-            meta.causalChain.upstreamEvents.push(entry.id);
+          const deadLetterId = `deadLetter:${entry.id}`;
+          if (!meta.causalChain.upstreamEvents.includes(deadLetterId)) {
+            meta.causalChain.upstreamEvents.push(deadLetterId);
           }
         }
-        // 标注 deadLetter:true 通过修改 upstreamEvents 来隐式传递
-        // 死信引用标记为 `deadLetter:${entry.id}`
-        meta.causalChain.upstreamEvents = meta.causalChain.upstreamEvents.map(
-          (id) => id.startsWith("deadLetter:") ? id : `deadLetter:${id}`
-        );
       }
     }
 
