@@ -25,9 +25,9 @@ export class PredictiveRetriever {
     }
   }
 
-  predictRelevant(scene: RetrievalScene): MemoryEntry[] {
+  predictRelevant(_scene: RetrievalScene): MemoryEntry[] {
     // Phase 6 基础版：按 scene 和当前激活域做简单过滤
-    const activeDomains = this.domainGate.getActiveDomains();
+    const _activeDomains = this.domainGate.getActiveDomains();
     return []; // 返回空——预热动作已由 read() 触发
                 // 完整实现需要 MemoryStore 支持 relevancePredict 查询
                 // Phase 6 留骨架，Phase 6+ 对接 CognitionEngine 的 relevance 字段

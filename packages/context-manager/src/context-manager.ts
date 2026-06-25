@@ -60,6 +60,13 @@ export class ContextManager {
       policies.find((p) => p.id === "single-step") ??
       policies[0];
 
+    return this._buildResolvedContext(match, input);
+  }
+
+  private _buildResolvedContext(
+    match: Record<string, unknown> | undefined,
+    input: ContextResolveInput,
+  ): ResolvedContext {
     if (!match) {
       return {
         policyId: "single-step",

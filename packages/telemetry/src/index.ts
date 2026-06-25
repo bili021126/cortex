@@ -69,5 +69,7 @@ export type {
   ConfigViolationEntry,
   DomainFilterEntry,
   DegradationEntry,
+  RecordConfigOverrideOptions,
+  RecordDomainFilterOptions,
 } from "./audit-trail.js";
 export { MetricCounter, SILENT_THRESHOLD } from "./metric-counter.js";

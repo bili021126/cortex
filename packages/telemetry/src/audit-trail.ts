@@ -55,6 +55,20 @@ export interface DegradationEntry extends AuditEntryBase {
   errorType: string;
 }
 
+export interface RecordConfigOverrideOptions {
+  key: string;
+  source: string;
+  oldValue: string;
+  newValue: string;
+}
+
+export interface RecordDomainFilterOptions {
+  query: string;
+  allowed: string[];
+  blocked: string[];
+  stats: { total: number; allowedCount: number; blockedCount: number };
+}
+
 export type AuditEntry =
   | ConfigOverrideEntry
   | ConfigReloadEntry
@@ -84,15 +98,15 @@ export class AuditTrail {
 
   // ── record* 方法 ──────────────────────────
 
-  recordConfigOverride(key: string, source: string, oldValue: string, newValue: string): void {
+  recordConfigOverride(options: RecordConfigOverrideOptions): void {
     const entry: ConfigOverrideEntry = {
       id: this._nextId(),
       timestamp: Date.now(),
       type: "config_override",
-      key,
-      source,
-      oldValue: String(oldValue),
-      newValue: String(newValue),
+      key: options.key,
+      source: options.source,
+      oldValue: String(options.oldValue),
+      newValue: String(options.newValue),
     };
     this._append(entry);
   }
@@ -119,15 +133,15 @@ export class AuditTrail {
     this._append(entry);
   }
 
-  recordDomainFilter(query: string, allowed: string[], blocked: string[], stats: { total: number; allowedCount: number; blockedCount: number }): void {
+  recordDomainFilter(options: RecordDomainFilterOptions): void {
     const entry: DomainFilterEntry = {
       id: this._nextId(),
       timestamp: Date.now(),
       type: "domain_filter",
-      query,
-      allowed,
-      blocked,
-      stats,
+      query: options.query,
+      allowed: options.allowed,
+      blocked: options.blocked,
+      stats: options.stats,
     };
     this._append(entry);
   }
@@ -177,7 +191,7 @@ export class AuditTrail {
   /**
    * 调用 fs.fsync 确保写入。
    */
-  async flush(): Promise<void> {
+  flush(): void {
     if (this._closed) return;
     try {
       fs.fsyncSync(this.fd);
