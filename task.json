@@ -1,7 +1,0 @@
-{
-  "id": "test-task-1",
-  "type": "code",
-  "payload": "读取 data.json 文件，提取 name 和 version 字段，用 JSON 格式输出。",
-  "tags": ["implementation"],
-  "needsMultiPerspective": false
-}
