@@ -1,5 +1,5 @@
-import { ToolCategory, ReversibilityLevel as RL, getAgentToolPermissions, resolveAgentPermissions, LockType } from "@cortex/shared";
-import type { ToolInvocation, ToolResult, ToolDefinition, Tool, ReversibilityLevel, AgentType, IFileSystemAdapter, AgentContext } from "@cortex/shared";
+import { ToolCategory, ReversibilityLevel as RL, getAgentToolPermissions, resolveAgentPermissions, LockType, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import type { ToolInvocation, ToolResult, ToolDefinition, Tool, ReversibilityLevel, AgentType, IFileSystemAdapter, AgentContext, IPipelineObserver } from "@cortex/shared";
 import type { ConfirmGate } from "@cortex/scheduler";
 import type { FileLockManager } from "./file-lock-manager.js";
 import { NodeFileSystemAdapter } from "./node-fs-adapter.js";
@@ -72,6 +72,8 @@ export class Toolkit {
   private _toolMeta: Record<string, ToolMeta> = {};
   /** 多源搜索聚合器 (默认仅 DDG) */
   private _aggregator: SearchAggregator;
+  /** 可观测事件管道 */
+  private _observer?: IPipelineObserver;
 
   constructor(gate?: ConfirmGate, lockManager?: FileLockManager, fsAdapter?: IFileSystemAdapter, engineConfig?: EngineConfig) {
     this.gate = gate;
@@ -133,6 +135,11 @@ export class Toolkit {
     this.gate = gate;
   }
 
+  /** 注入可观测事件管道（可选，无 observer 时跳过事件上报） */
+  setObserver(observer: IPipelineObserver): void {
+    this._observer = observer;
+  }
+
   /** 注入 FileLockManager（可选，无锁管理器时跳过文件锁） */
   setLockManager(lm: FileLockManager): void {
     this.lockManager = lm;
@@ -189,6 +196,20 @@ export class Toolkit {
       ? resolveAgentPermissions(callerType, context)
       : (getAgentToolPermissions()[callerType] ?? []);
     if (!allowed.includes(inv.toolName)) {
+      // 发射权限拒绝事件
+      if (this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.SkillToolPermissionDenied,
+          priority: PipelinePriority.NORMAL,
+          payload: {
+            agentType: callerType,
+            toolName: inv.toolName,
+            reason: `Tool not permitted for agent type "${callerType}"`,
+          },
+          timestamp: Date.now(),
+          notificationType: "FYI",
+        });
+      }
       return { success: false, error: `Tool "${inv.toolName}" not permitted for agent type "${callerType}"` };
     }
 

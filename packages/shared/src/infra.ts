@@ -64,6 +64,7 @@ export enum PipelineEventType {
   Analysis = "analysis",
   // ── Skill ──
   SkillReferenced = "skill.referenced",
+  SkillToolPermissionDenied = "skill.tool_permission_denied",
   // ── Boundary Guard ──
   AgentBoundaryViolation = "agent.boundary_violation",
   // ── Governance ──
@@ -98,6 +99,7 @@ export enum PipelineEventType {
   MemRetrievalStrategySelected = "mem.retrieval_strategy_selected",
   MemMemoryWarmupInitiated = "mem.memory_warmup_initiated",
   MemMemoryObliterationTriggered = "mem.memory_obliteration_triggered",
+  MemMemoryWritten = "mem.memory_written",
 
   // ── Exec（执行流——调度器心跳/超时/生命周期）──
   ExecNodeDelayed = "exec.node_delayed",
@@ -158,6 +160,11 @@ export type EventPayloadMap = {
     /** Agent 对步骤的临时调整说明 */
     adaptation?: string;
   };
+  [PipelineEventType.SkillToolPermissionDenied]: {
+    agentType: AgentType;
+    toolName: string;
+    reason: string;
+  };
   [PipelineEventType.AgentBoundaryViolation]: {
     nodeId: string;
     agentType: AgentType;
@@ -209,6 +216,14 @@ export type EventPayloadMap = {
   [PipelineEventType.MemRetrievalStrategySelected]: { timestamp: number; query: string; strategy: string; reason: string };
   [PipelineEventType.MemMemoryWarmupInitiated]: { timestamp: number; embeddingModel: string; dimension: number };
   [PipelineEventType.MemMemoryObliterationTriggered]: { timestamp: number; pattern: string; reason: string };
+  [PipelineEventType.MemMemoryWritten]: {
+    entryId: string;
+    domain?: string;
+    /** 记忆域场景 */
+    scene?: string;
+    /** 字节大小 */
+    byteSize: number;
+  };
 
   // ── Exec（执行流——调度器心跳/超时/生命周期）──
   [PipelineEventType.ExecNodeDelayed]: {

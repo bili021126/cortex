@@ -178,10 +178,19 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     // 2. CLIAdapter
     const cliAdapter = new CLIAdapter();
 
-    // 3. ConfirmGate（轻量模式：不连接交互桥，无 bridge 时自动放行 L2/L3 确认）
+    // 3. ConfirmGate（轻量模式：TTY 环境提供 stdout bridge，非 TTY 自动放行）
     const gate = new ConfirmGate();
-    // gate.setBridge(cliAdapter); — 轻量模式不连接 CLIAdapter，
-    // 避免在非 TTY/自动化场景下阻塞 stdin。交互确认仅在 bootstrap 模式有效。
+    if (process.stdout.isTTY) {
+      gate.setBridge({
+        confirm: async (msg: { id: string; level: string; toolName: string; summary: string; detail?: string }) => {
+          process.stdout.write(`\n⚠️  [ConfirmGate] ${msg.summary}\n`);
+          process.stdout.write('   非交互模式，自动放行...\n');
+          return { requestId: msg.id, approved: true };
+        },
+        notify: (message: string) => process.stdout.write(`[ConfirmGate] ${message}\n`),
+        getPlatformContext: () => ({ kind: 'cli' as const, foreground: true, idle: false }),
+      });
+    }
 
     // 4. TaskBoard
     const board = new TaskBoard();

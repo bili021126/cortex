@@ -230,6 +230,23 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     // ── 后端写入 ──
     const id = await this._backend.write(input);
 
+    // ── 发射写入成功事件
+    if (this._observer) {
+      const blobStr = typeof input.content_blob === "string" ? input.content_blob : JSON.stringify(input.content_blob);
+      this._observer.emit({
+        type: PipelineEventType.MemMemoryWritten,
+        priority: PipelinePriority.NORMAL,
+        payload: {
+          entryId: id,
+          domain: input.domain,
+          scene: input.kind,
+          byteSize: new TextEncoder().encode(blobStr).length,
+        },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
+    }
+
     // ── BM25 索引更新 ──
     if (this._hybridEnabled) {
       this._bm25Index.addDocument(id, {

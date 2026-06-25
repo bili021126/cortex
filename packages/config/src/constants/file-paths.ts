@@ -14,6 +14,9 @@ export const FILE_PERSONA_TALK_TXT = "persona-talk.txt";
 /** 宪法文件所在目录 */
 export const DIR_CONSTITUTION = "docs/constitution";
 
+/** 修宪提案归档目录（相对于项目根目录） */
+export const DIR_AMENDMENTS = "docs/amendments";
+
 /** REPL 历史文件（用户目录下的 .cortex 子目录） */
 export const FILE_REPL_HISTORY = "repl-history";
 

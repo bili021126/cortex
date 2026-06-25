@@ -73,6 +73,7 @@ export {
   DIR_PROMPTS,
   FILE_TIMEOUT_COUNTERS,
   FILE_HASH_CACHE,
+  DIR_AMENDMENTS,
 } from "./file-paths.js";
 
 // ── 技能 ──

@@ -20,14 +20,16 @@ import type {
   AmendmentApplyResult,
 } from "@cortex/shared";
 import { PipelineEventType, PipelinePriority, type IPipelineObserver } from "@cortex/shared";
+import { DIR_AMENDMENTS } from "@cortex/config";
 import { evaluateAmendment } from "./amendment-judge.js";
 import { applyAmendment, findConstitutionPath } from "./amendment-applier.js";
 import { checkTimeout, updateStaleCount, type TimeoutAction } from "./amendment-timeout.js";
 
 // ─── 常量 ───────────────────────────────────────
 
-/** 修宪提案归档目录（相对于项目根目录） */
-const AMENDMENTS_DIR = "docs/amendments";
+/** 修宪提案归档目录（相对于项目根目录）
+ * 来自 @cortex/config 常量 */
+const AMENDMENTS_DIR = DIR_AMENDMENTS;
 
 // ─── 提案管理 ──────────────────────────────────
 

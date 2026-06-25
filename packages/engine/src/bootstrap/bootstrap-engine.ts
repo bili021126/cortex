@@ -344,6 +344,7 @@ export async function bootstrapEngine(
 
   // §8 确认门接线——Toolkit 需要 ConfirmGate
   options.toolkit.setGate(gate);
+  options.toolkit.setObserver(observer);
 
   // §9 ONNX 模型预热（fire-and-forget）
   preloadModel().catch((err) => {
@@ -360,6 +361,19 @@ export async function bootstrapEngine(
   //        解除对主事件循环的阻塞，防止 Agent 排队超时永不触发
   const workerPool = new WorkerPool({ maxWorkers: Math.max(1, os.cpus().length - 1) });
   LlmAdapterValue.setWorkerPool(workerPool);
+
+  // §9.6 发射启动完成事件
+  observer.emit({
+    type: PipelineEventType.ExecLifecyclePhaseChanged,
+    priority: PipelinePriority.NORMAL,
+    payload: {
+      from: "uninitialized",
+      to: "running",
+      phase: "bootstrap_done",
+    },
+    timestamp: Date.now(),
+    notificationType: "FYI",
+  });
 
   // §10 组装返回
   return {
@@ -388,6 +402,18 @@ export async function bootstrapEngine(
     auditTrail,
     metricCounter,
     shutdown: async () => {
+      // 先发射关闭开始事件
+      observer.emit({
+        type: PipelineEventType.ExecLifecyclePhaseChanged,
+        priority: PipelinePriority.NORMAL,
+        payload: {
+          from: "running",
+          to: "shutdown",
+          phase: "shutdown_start",
+        },
+        timestamp: Date.now(),
+        notificationType: "FYI",
+      });
       // 先取消注册的所有 handler，防止长期运行中 handler 累积泄漏
       for (const reg of _registeredHandlers) {
         observer.off(reg.priority, reg.handler);
