@@ -99,8 +99,9 @@ export enum PipelineEventType {
   MemMemoryWarmupInitiated = "mem.memory_warmup_initiated",
   MemMemoryObliterationTriggered = "mem.memory_obliteration_triggered",
 
-  // ── Exec（执行流——调度器心跳/超时）──
+  // ── Exec（执行流——调度器心跳/超时/生命周期）──
   ExecNodeDelayed = "exec.node_delayed",
+  ExecLifecyclePhaseChanged = "exec.lifecycle_phase_changed",
 
   // ── Tele（遥测流）──
   TeleDegradationThresholdBreached = "tele.degradation_threshold_breached",
@@ -209,13 +210,20 @@ export type EventPayloadMap = {
   [PipelineEventType.MemMemoryWarmupInitiated]: { timestamp: number; embeddingModel: string; dimension: number };
   [PipelineEventType.MemMemoryObliterationTriggered]: { timestamp: number; pattern: string; reason: string };
 
-  // ── Exec（执行流——调度器心跳/超时）──
+  // ── Exec（执行流——调度器心跳/超时/生命周期）──
   [PipelineEventType.ExecNodeDelayed]: {
     nodeId: string;
     agentId: string;
     elapsed: number;
     action: 'wait' | 'extend';
     level: 'warn' | 'ping';
+  };
+  [PipelineEventType.ExecLifecyclePhaseChanged]: {
+    from: "uninitialized" | "running" | "shutdown";
+    to: "uninitialized" | "running" | "shutdown";
+    phase: "bootstrap_done" | "shutdown_start" | "shutdown_done" | "component_error";
+    component?: string;
+    error?: string;
   };
 
   // ── Tele（遥测流）──

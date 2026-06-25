@@ -223,7 +223,7 @@ export async function bootstrapEngine(
   );
 
   // §6.0.1 LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期
-  const lifecycleManager = new LifecycleManager();
+  const lifecycleManager = new LifecycleManager(observer);
 
   // ────────────────────────────────────────────────
   // §6.2 Core-2 模块接线——将独立创建的模块接入运行时

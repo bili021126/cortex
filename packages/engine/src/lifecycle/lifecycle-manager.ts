@@ -13,7 +13,17 @@
  */
 
 import type { ILifecycle } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
+
+/** 生命周期 phase 映射 */
+interface PhaseTransition {
+  from: "uninitialized" | "running" | "shutdown";
+  to: "uninitialized" | "running" | "shutdown";
+  phase: "bootstrap_done" | "shutdown_start" | "shutdown_done" | "component_error";
+  error?: string;
+  component?: string;
+}
 
 /** 注册项——组件 + 元数据 */
 interface LifecycleEntry {
@@ -26,6 +36,11 @@ export class LifecycleManager {
   private _entries: LifecycleEntry[] = [];
   private _phase: "uninitialized" | "running" | "shutdown" = "uninitialized";
   private _listeners: Array<(event: string, detail?: unknown) => void> = [];
+  private _observer?: IPipelineObserver;
+
+  constructor(observer?: IPipelineObserver) {
+    this._observer = observer;
+  }
 
   /** 注册事件监听器 */
   on(listener: (event: string, detail?: unknown) => void): void {
@@ -34,8 +49,51 @@ export class LifecycleManager {
 
   /** 触发事件 */
   private _emit(event: string, detail?: unknown): void {
+    // 通知旧式监听器（向后兼容）
     for (const l of this._listeners) {
-      try { l(event, detail); } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); /* 隔离监听器异常 */ }
+      try { l(event, detail); } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); }
+    }
+
+    // 通过 PipelineObserver 发射（L1 管道）
+    const transition = this._toTransition(event, detail);
+    if (transition) {
+      const obsEvent: ObservableEvent = {
+        type: PipelineEventType.ExecLifecyclePhaseChanged,
+        priority: transition.phase === "component_error"
+          ? PipelinePriority.HIGH
+          : PipelinePriority.NORMAL,
+        payload: transition,
+        timestamp: Date.now(),
+        notificationType: transition.phase === "component_error" ? "WARNING" : "FYI",
+      };
+      if (this._observer) {
+        this._observer.emit(obsEvent);
+      } else {
+        console.warn(`[LifecycleManager] 无 observer，降级打印 lifecycle 事件: ${event}${detail ? ' ' + JSON.stringify(detail).slice(0, 200) : ''}`);
+      }
+    }
+  }
+
+  /** 将旧式字符串事件映射为 PipelineObserver 的 PhaseTransition */
+  private _toTransition(event: string, detail?: unknown): PhaseTransition | null {
+    const d = (detail ?? {}) as Record<string, unknown>;
+    switch (event) {
+      case "bootstrap_done":
+        return { from: "uninitialized", to: "running", phase: "bootstrap_done" };
+      case "shutdown_start":
+        return { from: "running", to: "shutdown", phase: "shutdown_start" };
+      case "shutdown_done":
+        return { from: "shutdown", to: "shutdown", phase: "shutdown_done" };
+      case "component_error":
+        return {
+          from: this._phase,
+          to: this._phase,
+          phase: "component_error",
+          component: String(d.component ?? ""),
+          error: String(d.error ?? ""),
+        };
+      default:
+        return null;
     }
   }
 
