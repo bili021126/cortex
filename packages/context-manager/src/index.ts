@@ -6,3 +6,6 @@ export type {
   ContextResolveInput,
   ResolvedContext,
 } from "./context-manager.js";
+
+// ── Domain Gate（C 层域门控）──
+export { DomainGateController } from "./domain-gate.js";

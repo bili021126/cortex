@@ -62,6 +62,8 @@ export interface MemoryEntry {
   // §1 身份层（写入后永不变）
   id: string;
   source: MemorySource;
+  /** 记忆域——用于 DomainGate 门控过滤。默认 'general'。空串或 undefined 等效于 'general' */
+  domain?: string;
   /** 运行会话标识——每次 executeAll() 生成唯一 runId。正常完成时融入认知共享层，任务终结时按 sessionId 批量清理。undefined 为向后兼容（v2.5.41 前无此字段） */
   sessionId?: string;
 
@@ -173,6 +175,8 @@ export interface MemoryQuery {
   linkTypes?: LinkType[];
   /** 按 metadata（content_blob 内字段）精确过滤 */
   metadataFilter?: Record<string, unknown>;
+  /** DomainGate 门控参数——只返回 allow 内 / 排除 block 内的 domain 条目 */
+  domainGate?: { allow?: string[]; block?: string[] };
 }
 
 // ─── IMemoryStore ──────────────────────────────────────

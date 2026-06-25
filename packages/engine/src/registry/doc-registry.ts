@@ -13,6 +13,8 @@
 // - list()      ← read()/query()  : 按 status/type/committeeType 查询
 //
 // @contract 调用者说"是什么"，DocRegistry 决定"放哪"和"什么状态"
+
+import { DegradationBoundary } from "../core/degradation-boundary.js";
 //   调用者不指定路径——路径由 DocRegistry 根据 type + title 自动计算。
 //   调用者只负责 content 的正确性。
 //
@@ -101,8 +103,9 @@ export class DocRegistry {
         if (parsed.formatVersion === 1 && parsed.entries) {
           this.index = parsed;
         }
-      } catch {
+      } catch (err) {
         // 索引文件损坏 → 空索引，不阻塞启动
+        DegradationBoundary.handle(err, 'doc-registry-index-load', 'trace');
         this.index = { formatVersion: 1, entries: {} };
       }
     }

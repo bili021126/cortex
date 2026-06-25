@@ -106,6 +106,11 @@ export { BaseAgent } from "./base-agent.js";
 export { Scheduler } from "./core/scheduler.js";
 export { MetaAgentReplanAdapter } from "./core/meta-agent-adapter.js";
 
+// ── Core-2: 降级边界 ────────────────────────
+// @experimental 标准化空 catch 替代方案
+export { DegradationBoundary } from "./core/degradation-boundary.js";
+export type { DegradationLevel } from "./core/degradation-boundary.js";
+
 // ── 一致性层（六层防御） ─────────────────────────
 // @note v2.6.7 兼容层已砍，直接导入 @cortex/consistency
 

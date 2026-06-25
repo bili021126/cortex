@@ -52,8 +52,9 @@ export function saveSession(projectRoot: string, session: SessionSnapshot): void
 
     const filePath = path.join(projectRoot, SESSION_FILE);
     fs.writeFileSync(filePath, JSON.stringify(toSave, null, 2), "utf-8");
-  } catch {
+  } catch (err) {
     // 持久化失败不应阻塞用户操作
+    console.warn('[DEGRADED:tui-session-store-save]', err instanceof Error ? err.message : String(err));
   }
 }
 

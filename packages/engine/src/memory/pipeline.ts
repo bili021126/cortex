@@ -10,6 +10,7 @@ import type { Toolkit } from "@cortex/platform";
 import { runReActLoop, type ReActContext } from "../components/react-loop.js";
 import { PipelineRunner, type PipelineCtx, type IStep } from "@cortex/scheduler";
 import { recordTelemetry } from "@cortex/telemetry";
+import { DegradationBoundary } from "../core/degradation-boundary.js";
 
 /**
  * 默认记忆检索策略——调用统一入口 makeMemoryQuery。
@@ -405,8 +406,8 @@ async function _rememberResult(
     }
   } catch (memErr) {
     // 统一取消——自动判断 Pending→rollback / Active→archive
-    try { if (memId !== undefined) memory.cancel(memId); } catch { /* 静默 */ }
-    try { if (ctxMemId !== undefined) memory.cancel(ctxMemId); } catch { /* 静默 */ }
+    try { if (memId !== undefined) memory.cancel(memId); } catch (err) { DegradationBoundary.handle(err, 'memory-pipeline-cleanup', 'trace'); }
+    try { if (ctxMemId !== undefined) memory.cancel(ctxMemId); } catch (err) { DegradationBoundary.handle(err, 'memory-pipeline-cleanup', 'trace'); }
 
     const hint = `任务 ${node.id} 已${isSuccess ? "成功" : "失败"}完成，但记忆写入失败，半成品 Pending 条目已清理`;
     if (safeReporter) {
