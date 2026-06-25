@@ -140,6 +140,7 @@ export {
   CLI_REPL_PLAN_OUTPUT_MAX_LEN,
   isTestEnv,
   ifNotTest,
+  VALID_TIERS,
 } from "./constants/index.js";
 
 // ── 默认值 + 解析 ─────────────────────────────────
@@ -179,6 +180,9 @@ export {
   SCHEDULER_MAX_ROUNDS,
   SCHEDULER_ROUND_TIMEOUT_MS,
   REACT_MAX_LOOPS,
+  DEFAULT_ACQUIRE_TIMEOUT_MS,
+  RETRIEVAL_ALPHA,
+  RETRIEVAL_BETA,
   EMBEDDING_DIM,
   EMBEDDING_CACHE_SIZE,
   CONTENT_HASH_ALGO,

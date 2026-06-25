@@ -14,6 +14,7 @@ import {
   PIPELINE_CTX_MAX_ERROR_LEN,
   PIPELINE_CTX_RECENT_LIMIT,
   PIPELINE_CTX_HARD_CAP,
+  VALID_TIERS,
 } from "@cortex/config";
 import type { SkillRegistry } from "@cortex/skill-kit";
 import type { PromptManager, PlanningPromptBlocks } from "./prompt-manager.js";
@@ -692,7 +693,7 @@ function _resolveContextPolicyFallback(type?: string, tags?: string[]): string {
 }
 
 /** 校验并归一化 recommendedTier：非法值 → undefined，防止甘雨 prompt 漂移注入脏数据 */
-const _VALID_TIERS = new Set(["fast", "standard", "thinking"]);
+// VALID_TIERS 单源定义 @cortex/config/constants/tiers
 function _validTier(t?: string): "fast" | "standard" | "thinking" | undefined {
-  return t && _VALID_TIERS.has(t) ? t as "fast" | "standard" | "thinking" : undefined;
+  return t && VALID_TIERS.has(t) ? t as "fast" | "standard" | "thinking" : undefined;
 }

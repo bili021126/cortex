@@ -14,9 +14,10 @@
  */
 
 import { PipelineEventType, PipelinePriority, type AgentType, type IPipelineObserver } from "@cortex/shared";
+import { DEFAULT_ACQUIRE_TIMEOUT_MS } from "@cortex/config";
 
-/** 最大等待时间（ms），超时后节点标记失败而非无限等待 */
-const DEFAULT_ACQUIRE_TIMEOUT_MS = 60_000;
+/** 最大等待时间（ms），超时后节点标记失败而非无限等待
+ * 单源定义 @cortex/config (engine-defaults.ts) */
 
 /**
  * 将事件发射推迟到下一个微任务，消除 observer 回调重入 acquired/release 的风险窗口。

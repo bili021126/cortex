@@ -117,6 +117,20 @@ export {
   CLI_REPL_PLAN_OUTPUT_MAX_LEN,
 } from "./pipeline.js";
 
+// ── 记忆常量（Phase 4 收敛）──
+export {
+  EMBEDDING_DIM,
+  VECTOR_DEDUP_THRESHOLD,
+  WEIGHT_AGING_FACTOR,
+  STALE_FREEZE_DAYS,
+  FROZEN_OBLITERATE_DAYS,
+  MAINTENANCE_WEIGHT_THRESHOLD,
+  SCHEMA_VERSION,
+} from "./memory.js";
+
+// ── Tier 校验常量（Phase 4 收敛）──
+export { VALID_TIERS } from "./tiers.js";
+
 // ── 测试环境检测 ──────────────────────────────────
 import { ENV_VITEST as _ENV_VITEST, ENV_NODE_ENV as _ENV_NODE_ENV } from "./env.js";
 /**

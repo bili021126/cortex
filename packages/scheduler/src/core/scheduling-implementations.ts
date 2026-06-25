@@ -23,6 +23,7 @@ import { findMatchingAgent, findAllMatchingAgents } from "./agent-matcher.js";
 import { ClaimStep } from "../dispatch-steps/claim-step.js";
 import { SpawnStep } from "../dispatch-steps/spawn-step.js";
 import { ExecuteStep } from "../dispatch-steps/execute-step.js";
+import { VALID_TIERS } from "@cortex/config";
 import { CleanupStep } from "../dispatch-steps/cleanup-step.js";
 import { BoundaryGuardStep } from "../dispatch-steps/boundary-guard-step.js";
 import type { DispatchCtx, IDispatchStep } from "../dispatch-steps/types.js";
@@ -1075,8 +1076,8 @@ export class SemanticModelRouter implements IModelRouter {
   }
 }
 
-/** 合法 tier 值集合（用于校验甘雨标注和分类器输出） */
-const _VALID_TIERS: Set<string> = new Set(["fast", "standard", "thinking"]);
+/** 合法 tier 值集合（用于校验甘雨标注和分类器输出）
+ * 单源定义 @cortex/config/constants/tiers */
 
 /** Tier 排序：fast < standard < thinking */
 const TIER_ORDER: Record<ModelTier, number> = { fast: 0, standard: 1, thinking: 2 };

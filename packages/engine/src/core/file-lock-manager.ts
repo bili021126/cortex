@@ -14,6 +14,7 @@
 import { LockType, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import { BaseLifecycle } from "@cortex/shared";
 import type { IPipelineObserver } from "@cortex/shared";
+import { DEFAULT_LOCK_TIMEOUT_MS } from "@cortex/config";
 
 // ── 内部数据模型 ─────────────────────────────────────────
 
@@ -30,7 +31,7 @@ interface FileLocks {
 
 // ── 默认值 ───────────────────────────────────────────────
 
-const DEFAULT_LOCK_TIMEOUT_MS = 30_000; // 30s
+// DEFAULT_LOCK_TIMEOUT_MS 来自 @cortex/config (engine-defaults.ts)
 
 // ── FileLockManager ──────────────────────────────────────
 

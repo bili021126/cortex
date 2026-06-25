@@ -8,7 +8,16 @@
  * @since v2.7 — 横向解耦：从 @cortex/engine 迁入 @cortex/config
  */
 
-import { DEFAULT_MAX_TOTAL_MEMORIES } from "./constants/index.js";
+import {
+  DEFAULT_MAX_TOTAL_MEMORIES,
+  EMBEDDING_DIM,
+  VECTOR_DEDUP_THRESHOLD,
+  WEIGHT_AGING_FACTOR,
+  STALE_FREEZE_DAYS,
+  FROZEN_OBLITERATE_DAYS,
+  MAINTENANCE_WEIGHT_THRESHOLD,
+  SCHEMA_VERSION,
+} from "./constants/index.js";
 
 // ─── FileLock ──────────────────────────────────────
 
@@ -37,10 +46,21 @@ export const SCHEDULER_ROUND_TIMEOUT_MS = 120_000;
 /** ReAct 最大循环次数 */
 export const REACT_MAX_LOOPS = 20;
 
+/** ManifoldGate 获取锁超时（毫秒） */
+export const DEFAULT_ACQUIRE_TIMEOUT_MS = 60_000;
+
+// ─── Retrieval ─────────────────────────────────────
+
+/** BM25 权重（混合检索 alpha） */
+export const RETRIEVAL_ALPHA = 0.45;
+
+/** 向量相似度权重（混合检索 beta） */
+export const RETRIEVAL_BETA = 0.55;
+
 // ─── Embedding ─────────────────────────────────────
 
-/** 向量维度（384d ONNX） */
-export const EMBEDDING_DIM = 384;
+/** 向量维度（384d ONNX），单源定义 @cortex/config/constants/memory */
+export { EMBEDDING_DIM };
 
 /** 向量 LRU 缓存容量 */
 export const EMBEDDING_CACHE_SIZE = 10_000;
@@ -48,26 +68,26 @@ export const EMBEDDING_CACHE_SIZE = 10_000;
 /** 内容哈希算法 */
 export const CONTENT_HASH_ALGO = "sha256";
 
-/** 向量去重余弦相似度阈值 */
-export const VECTOR_DEDUP_THRESHOLD = 0.95;
+/** 向量去重余弦相似度阈值，单源定义 @cortex/config/constants/memory */
+export { VECTOR_DEDUP_THRESHOLD };
 
-/** 权重衰减因子 */
-export const WEIGHT_AGING_FACTOR = 0.95;
+/** 权重衰减因子，单源定义 @cortex/config/constants/memory */
+export { WEIGHT_AGING_FACTOR };
 
-/** 过期未访问天数阈值（可归档） */
-export const STALE_FREEZE_DAYS = 30;
+/** 过期未访问天数阈值（可归档），单源定义 @cortex/config/constants/memory */
+export { STALE_FREEZE_DAYS };
 
-/** 归档后湮灭天数 */
-export const FROZEN_OBLITERATE_DAYS = 7;
+/** 归档后湮灭天数，单源定义 @cortex/config/constants/memory */
+export { FROZEN_OBLITERATE_DAYS };
 
-/** maintenance 权重阈值 */
-export const MAINTENANCE_WEIGHT_THRESHOLD = 0.05;
+/** maintenance 权重阈值，单源定义 @cortex/config/constants/memory */
+export { MAINTENANCE_WEIGHT_THRESHOLD };
 
 /** 记忆总数上限（委托 @cortex/config） */
 export const MAX_TOTAL_MEMORIES = DEFAULT_MAX_TOTAL_MEMORIES;
 
-/** 记忆模式版本号 */
-export const SCHEMA_VERSION = 5;
+/** 记忆模式版本号，单源定义 @cortex/config/constants/memory */
+export { SCHEMA_VERSION };
 
 // ─── Monitor ───────────────────────────────────────
 
@@ -101,6 +121,7 @@ export interface EngineDefaults {
   monitorThreshold: number;
   retrievalAlpha: number;
   retrievalBeta: number;
+  manifoldGateAcquireTimeoutMs: number;
 }
 
 /** Engine 默认配置单例 */
@@ -124,8 +145,9 @@ export const ENGINE_DEFAULTS: EngineDefaults = {
   schemaVersion: SCHEMA_VERSION,
   monitorWindowMs: MONITOR_WINDOW_MS,
   monitorThreshold: MONITOR_THRESHOLD,
-  retrievalAlpha: 0.45,
-  retrievalBeta: 0.55,
+  retrievalAlpha: RETRIEVAL_ALPHA,
+  retrievalBeta: RETRIEVAL_BETA,
+  manifoldGateAcquireTimeoutMs: DEFAULT_ACQUIRE_TIMEOUT_MS,
 };
 
 // ─── loadEngineDefaults ───────────────────────────
