@@ -417,3 +417,61 @@ PipelineObserver（已有）
 | 无初始化前队列 | 启动前的 bootstrap 事件也要记录 | 需加待发队列 |
 | 无自观测 | emit 失败计数 + 健康检查文件 | 需加 MetricCounter 自计数 |
 | 无事件前缀规范 | Exec:/Skill:/Interact:/Gov:/Mem:/Tele: | 需约定 |
+
+---
+
+## 七、设计决策定稿
+
+> 原子事实链审查（`docs/audit/theory-coverage-review.md`）推导出两个 P0 阻塞问题。以下为终局裁决。
+
+### 决策 1：spanId 的生成权——甘雨分配
+
+**裁决**：spanId 是规划产物，由甘雨在 `plan()` 阶段分配，作为 `TaskNode.contextSpanId` 下发。Agent 不自行生成 spanId——从 TaskNode 读取。
+
+**理由**：
+- 事轴发起者分配追踪 ID，横切层只消费不生成——符合三轴模型。
+- 一个 TaskGraph 一个 span，跨节点因果链自然贯通。
+- 与原则二（非对称均衡）一致——甘雨决定"追踪什么"，Agent 不决定。
+
+**非 TaskGraph 操作**（配置热加载、手动场景切换、系统启动）：由操作发起方自行生成 spanId，前缀约定：
+
+```
+spanId 格式：{prefix}-{uuid}
+  task-   甘雨分配的 TaskGraph span
+  cfg-    配置操作 span
+  scene-  场景切换 span
+  boot-   启动阶段 span
+  sys-    系统自发操作 span（遗忘、维护）
+```
+
+### 决策 2：因果链断裂——死信队列
+
+**裁决**：Degradation Boundary 的 silent 级别不 emit 到订阅者，但写入 PipelineObserver 内部的死信环形缓冲区（`deadLetterRing`，固定 1000 条）。下游非 silent 事件 emit 时，PipelineObserver 自动从死信队列提取被吞事件 ID，补入 `causalChain.upstreamEvents`。
+
+**理由**：
+- 不违反子原则 3（观测不可阻断）——死信写入是遥测基础设施内部操作，不影响业务路径。
+- 不违反子原则 7（插桩解耦）——Degradation Boundary 不知道死信队列的存在，只照常调 `emit()`。
+- 缓冲区满时覆盖最老条目——不阻塞、不增长无限。
+- 权轴 Agent 沿链追溯时，被吞环节标注 `deadLetter: true`，表示该事件内容不可得但因果关系保留。
+
+**实现要点**：
+- 死信队列只存事件 ID + type + timestamp——不存 payload（减少内存）。
+- PipelineObserver 在每次 emit 前检查死信队列，如果存在当前 span 的上游事件，自动附加到 causalChain。
+- 死信不写 AuditTrail——它是纯内存结构，进程重启清空。
+
+### 决策 3：causalChain 作为 emit() 参数——非 payload 字段（NP-4 化解）
+
+**裁决**：`causalChain` 不作为 EventPayloadMap 中每个 payload 的字段。作为 `PipelineObserver.emit()` 的第三个可选参数：
+
+```typescript
+// packages/shared/src/infra.ts
+PipelineObserver.emit(
+  type: PipelineEventType,
+  payload: EventPayloadMap[T],      // payload 不改
+  meta?: {                           // 🆕 元数据参数
+    causalChain?: { spanId: string; directCause?: string; upstreamEvents?: string[] };
+  }
+): void;
+```
+
+**理由**：类型爆炸化解——不需要全局修改 50+ EventPayloadMap 条目。EventPayloadMap 保持纯业务语义。
