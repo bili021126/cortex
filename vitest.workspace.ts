@@ -21,7 +21,6 @@ export default defineWorkspace([
   "./packages/scheduler/vitest.config.ts",
 
   // ── 叶包（无内部依赖，全部并行） ─────────────────────
-  "./packages/cache/vitest.config.ts",
   "./packages/doctor/vitest.config.ts",
   "./packages/logging/vitest.config.ts",
   "./packages/fsm-compiler/vitest.config.ts",
