@@ -33,9 +33,7 @@ export function loadPlanState(projectRoot: string): PlanModeState | null {
       return null;
     }
     return state;
-  } catch {
-    return null;
-  }
+  } catch (err) { console.warn('[DEGRADED:tui-plan]', String(err)); return null; }
 }
 
 /**
@@ -49,9 +47,7 @@ export function savePlanState(projectRoot: string, state: PlanModeState): void {
     }
     const filePath = nodePath.join(projectRoot, PLAN_STATE_FILE);
     nodeFs.writeFileSync(filePath, JSON.stringify(state, null, 2), "utf-8");
-  } catch {
-    // 持久化失败不应阻塞用户操作
-  }
+  } catch (err) { console.warn('[DEGRADED:tui-plan]', String(err)) }
 }
 
 /**
@@ -63,9 +59,7 @@ export function clearPlanState(projectRoot: string): void {
     if (nodeFs.existsSync(filePath)) {
       nodeFs.unlinkSync(filePath);
     }
-  } catch {
-    // 静默失败
-  }
+  } catch (err) { console.warn('[DEGRADED:tui-plan]', String(err)) }
 }
 
 /** Plan 模式扩展桥接——增加 executeWithStream 用于计划执行 */
@@ -171,7 +165,7 @@ function _extractPlanNodes(text: string): TaskNode[] | null {
     try {
       const parsed = JSON.parse(codeBlock[1].trim());
       if (Array.isArray(parsed)) return _normalizeNodes(parsed);
-    } catch { /* 继续 */ }
+    } catch (err) { console.warn('[DEGRADED:tui-plan]', String(err)) }
   }
 
   // 尝试 3：文本中嵌入的 JSON 数组
@@ -180,7 +174,7 @@ function _extractPlanNodes(text: string): TaskNode[] | null {
     try {
       const parsed = JSON.parse(arrayMatch[0]);
       if (Array.isArray(parsed)) return _normalizeNodes(parsed);
-    } catch { /* 继续 */ }
+    } catch (err) { console.warn('[DEGRADED:tui-plan]', String(err)) }
   }
 
   return null;

@@ -85,7 +85,7 @@ function readImageToBase64(filePath: string): ImageAttachment | null {
     const base64 = buffer.toString("base64");
 
     return { path: absPath, base64, mimeType };
-  } catch {
+  } catch (err) { console.warn('[DEGRADED:tui-input]', String(err));
     return null;
   }
 }

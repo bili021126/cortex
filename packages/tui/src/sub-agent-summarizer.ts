@@ -62,7 +62,7 @@ async function llmSummarize(
     if (summary.length > 0 && summary.length <= maxChars * 2) {
       return summary.length > maxChars ? summary.slice(0, maxChars - 3) + "..." : summary;
     }
-  } catch {
+  } catch (err) { console.warn('[DEGRADED:tui-summarizer]', String(err));
     // LLM 摘要失败，回退截断
   }
   return truncateSummary(text, maxChars);

@@ -20,6 +20,8 @@ import {
   SHUTDOWN_FORCE_EXIT_DELAY_MS,
 } from "@cortex/config";
 
+import { DegradationBoundary } from "./degradation-boundary.js";
+
 /** Shutdown 阶段报告 */
 export interface ShutdownReport {
   /** stop 阶段耗时 (ms) */
@@ -91,14 +93,14 @@ export class ShutdownWarden {
       try {
         await this.memory.endSession();
         endSessionDone = true;
-      } catch {
+      } catch (err) { DegradationBoundary.handle(err, 'shutdown-warden', 'trace');
         failedComponents.push("memoryStore.endSession");
       }
 
       // Phase 3: MemoryStore close
       try {
         await this.memory.close();
-      } catch {
+      } catch (err) { DegradationBoundary.handle(err, 'shutdown-warden', 'trace');
         failedComponents.push("memoryStore.close");
       }
     }

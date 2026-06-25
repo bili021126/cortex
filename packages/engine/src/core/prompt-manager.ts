@@ -24,6 +24,7 @@ import {
   type ValidationResult,
 } from "@cortex/prompt-kit";
 
+import { DegradationBoundary } from "./degradation-boundary.js";
 
 /**
  * PromptManager —— 引擎的 prompt 编排管理器。
@@ -67,7 +68,7 @@ export class PromptManager {
         injectIdentityAnchor: false,
       });
       return result.text || null;
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'prompt-manager', 'trace');
       // orchestrator 加载失败（文件不存在/模板解析错误），静默回退
       return null;
     }

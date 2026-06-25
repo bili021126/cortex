@@ -68,7 +68,7 @@ function cyrenePersona(): string {
   try {
     const personaPath = path.join(process.cwd(), ".cortex", "persona-talk.txt");
     _cyrenePersona = fs.readFileSync(personaPath, "utf-8");
-  } catch {
+  } catch (err) { console.warn('[DEGRADED:tui-query-loop]', String(err));
     _cyrenePersona = "你是昔涟，用轻松自然的语气和用户聊天。";
   }
   return _cyrenePersona;
@@ -106,7 +106,7 @@ export function agentTalkPersona(agent: string): string {
     try {
       const testPath = path.join(process.cwd(), "prompts", agent, "system.md");
       if (fs.existsSync(testPath)) dir = agent;
-    } catch { /* ignore */ }
+    } catch (err) { console.warn('[DEGRADED:tui-query-loop]', String(err)) }
   }
 
   // 5. 加载文件——优先 agent persona 本体（nahida-persona.txt 同构惯例），
@@ -120,11 +120,11 @@ export function agentTalkPersona(agent: string): string {
       if (fs.existsSync(personaPath)) {
         return fs.readFileSync(personaPath, "utf-8");
       }
-    } catch { /* try system.md fallback */ }
+    } catch (err) { console.warn('[DEGRADED:tui-query-fallback]', String(err)) }
     try {
       const promptPath = path.join(process.cwd(), "prompts", dir, "system.md");
       return fs.readFileSync(promptPath, "utf-8");
-    } catch { /* fall through */ }
+    } catch (err) { console.warn('[DEGRADED:tui-query]', String(err)) }
   }
 
   return cyrenePersona();

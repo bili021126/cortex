@@ -11,6 +11,7 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import { ConfirmGate } from "@cortex/scheduler";
+import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { CLIAdapter } from "@cortex/platform";
 
 export class ConfirmGatePlugin implements EnginePlugin {
@@ -29,7 +30,7 @@ export class ConfirmGatePlugin implements EnginePlugin {
     try {
       const trustModel = ctx.get<TrustModelPlugin>("trustModel").getInstance();
       this.instance.setTrustModel(trustModel);
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'confirm-gate-plugin', 'trace');
       // trustModel 插件可选缺省——缺时回退到固定确认模式
     }
   }

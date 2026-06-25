@@ -18,6 +18,7 @@ import {
 } from "@cortex/config";
 import type { SkillRegistry } from "@cortex/skill-kit";
 import type { PromptManager, PlanningPromptBlocks } from "./prompt-manager.js";
+import { DegradationBoundary } from "./degradation-boundary.js";
 import { resolveByScope, type SkillScope } from "./skill-scope.js";
 import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
 
@@ -535,18 +536,18 @@ export class MetaAgent {
     if (!jsonStr || jsonStr.length < 2) return null;
 
     // 策略 1: 直接解析
-    try { return JSON.parse(jsonStr); } catch { /* continue */ }
+    try { return JSON.parse(jsonStr); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
 
     // 策略 2: 去除尾部多余逗号（LLM 经典错误）
-    try { return JSON.parse(jsonStr.replace(/,\s*([}\]])/g, "$1")); } catch { /* continue */ }
+    try { return JSON.parse(jsonStr.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
 
     // 策略 3: 截取首 [ 到末 ]，再做一次字符串感知提取（双保险）
     const firstBracket = jsonStr.indexOf("[");
     const lastBracket = jsonStr.lastIndexOf("]");
     if (firstBracket !== -1 && lastBracket > firstBracket) {
       const trimmed = jsonStr.slice(firstBracket, lastBracket + 1);
-      try { return JSON.parse(trimmed); } catch { /* continue */ }
-      try { return JSON.parse(trimmed.replace(/,\s*([}\]])/g, "$1")); } catch { /* continue */ }
+      try { return JSON.parse(trimmed); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
+      try { return JSON.parse(trimmed.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
     }
 
     return null;

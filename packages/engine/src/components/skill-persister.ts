@@ -15,6 +15,7 @@ import type { MemoryStore } from "@cortex/memory-store";
 import { AgentType, LinkType, type SkillKind, type SkillTemplate, type Tag } from "@cortex/shared";
 import type { SearchResult } from "@cortex/platform";
 import { MarkdownPatternExtractor, type PatternDefinition } from "@cortex/pattern-extractor";
+import { DegradationBoundary } from "../core/degradation-boundary.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -132,7 +133,7 @@ export async function crystallizeSkillToKnowledge(
     // 6. 链接证据链（DerivedFrom）
     if (opts?.evidenceIds) {
       for (const eid of opts.evidenceIds) {
-        try { memory.link(memId, eid, LinkType.DerivedFrom); } catch { /* link best-effort */ }
+        try { memory.link(memId, eid, LinkType.DerivedFrom); } catch (err) { DegradationBoundary.handle(err, 'skill-persister', 'trace'); /* link best-effort */ }
       }
     }
 
@@ -198,7 +199,7 @@ export async function searchExternalEvidence(
   if (!query) return [];
   try {
     return await searcher(query, 5);
-  } catch {
+  } catch (err) { DegradationBoundary.handle(err, 'skill-persister', 'trace');
     return [];
   }
 }
@@ -239,7 +240,7 @@ export async function verifySkillKnowledge(
   if (opts?.externalSearch) {
     try {
       externalResults = await searchExternalEvidence(skill, opts.externalSearch);
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'skill-persister', 'trace');
       // 外部搜索失败不影响内部验证
     }
   }

@@ -17,6 +17,7 @@
 
 import { execSync } from "node:child_process";
 import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type GovernanceEventPayload, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+import { DegradationBoundary } from "./degradation-boundary.js";
 
 // ─── 裁决类型 ─────────────────────────────────────
 
@@ -187,7 +188,7 @@ export class HardVerificationGate {
       this._gitDiffCache = out.split("\n").filter(Boolean);
       this._gitDiffTime = now;
       return this._gitDiffCache;
-    } catch { return []; }
+    } catch (err) { DegradationBoundary.handle(err, 'hard-verification-gate', 'trace'); return []; }
   }
 
   private _getEslintErrors(): Array<{ file: string; rule: string }> {
@@ -205,7 +206,7 @@ export class HardVerificationGate {
       this._eslintCache = errors;
       this._eslintTime = now;
       return errors;
-    } catch { return []; }
+    } catch (err) { DegradationBoundary.handle(err, 'hard-verification-gate', 'trace'); return []; }
   }
 }
 

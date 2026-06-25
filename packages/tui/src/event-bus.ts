@@ -69,9 +69,7 @@ export class TuiEventBus {
       for (const listener of wildcard) {
         try {
           listener(event);
-        } catch {
-          // 同上
-        }
+        } catch (err) { console.warn('[DEGRADED:tui-event-bus]', String(err)) }
       }
     }
   }

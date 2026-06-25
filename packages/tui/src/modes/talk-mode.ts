@@ -45,7 +45,7 @@ export async function* talkMode(
         memoryCtx = "\n[以下是昔涟记得的最近对话——自然融入回复，不要逐条复述]\n" +
           memories.map(m => `- ${m.summary}`).join("\n") + "\n";
       }
-    } catch { /* 记忆不可用时静默降级 */ }
+    } catch (err) { console.warn('[DEGRADED:tui-talk-memory]', String(err)) }
   }
 
   const effectiveInput = memoryCtx ? `${memoryCtx}\n[用户消息] ${input}` : input;
@@ -62,7 +62,7 @@ export async function* talkMode(
         content_blob: { user: input, assistant: result.slice(0, 500) },
         weight: 1,
       });
-    } catch { /* 静默失败 */ }
+    } catch (err) { console.warn('[DEGRADED:tui-talk]', String(err)) }
   }
 
   return result;
@@ -96,7 +96,7 @@ export async function* talkTrioMode(
       memoryCtx = "\n[昔涟记得的最近对话——自然融入]\n" +
         memories.map(m => `- ${m.summary}`).join("\n");
     }
-  } catch { /* 静默降级 */ }
+  } catch (err) { console.warn('[DEGRADED:tui-talk]', String(err)) }
 
   const effectiveInput = memoryCtx ? `${memoryCtx}\n[用户] ${input}` : input;
 
@@ -123,7 +123,7 @@ export async function* talkTrioMode(
         content_blob: { user: input, responses: resultText.slice(0, 500) },
         weight: 1,
       });
-    } catch { /* 静默失败 */ }
+    } catch (err) { console.warn('[DEGRADED:tui-talk]', String(err)) }
   }
 
   return resultText;

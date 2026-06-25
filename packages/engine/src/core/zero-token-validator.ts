@@ -16,6 +16,7 @@
 import { execSync } from "node:child_process";
 import { MEMORY_VALID_TRANSITIONS } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
+import { DegradationBoundary } from "./degradation-boundary.js";
 
 // ─── 规则结果 ─────────────────────────────────────
 
@@ -84,7 +85,7 @@ export class GitDiffRule implements ZeroTokenRule {
       this._cachedDiff = out.split("\n").filter(Boolean);
       this._cacheTime = now;
       return this._cachedDiff;
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'zero-token-validator', 'trace');
       return [];
     }
   }
@@ -137,7 +138,7 @@ export class EslintRule implements ZeroTokenRule {
       this._cachedErrors = errors;
       this._cacheTime = now;
       return errors;
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'zero-token-validator', 'trace');
       return [];
     }
   }
@@ -196,7 +197,7 @@ export class BarrelExportRule implements ZeroTokenRule {
           ? `${exportName} 已在 barrel 中导出`
           : `${exportName} 未在 ${barrelPath} 中导出`,
       };
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'zero-token-validator', 'trace');
       return { ruleName: this.name, passed: true, detail: "无法读取 barrel 文件，跳过" };
     }
   }
@@ -240,7 +241,7 @@ export class CrossPackageContractRule implements ZeroTokenRule {
             ? `${interfaceName} 未在 ${sourcePkg} 中找到定义`
             : `${interfaceName} 在 ${targetPkg} 中无引用`),
       };
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'zero-token-validator', 'trace');
       return { ruleName: this.name, passed: true, detail: "检查跳过（IO 错误）" };
     }
   }
@@ -252,7 +253,7 @@ export class CrossPackageContractRule implements ZeroTokenRule {
         encoding: "utf-8", timeout: 5000, cwd: process.cwd(),
       });
       return out.split("\n").filter(Boolean);
-    } catch {
+    } catch (err) { DegradationBoundary.handle(err, 'zero-token-validator', 'trace');
       return [];
     }
   }

@@ -13,6 +13,7 @@
  */
 
 import type { ILifecycle } from "@cortex/shared";
+import { DegradationBoundary } from "../core/degradation-boundary.js";
 
 /** 注册项——组件 + 元数据 */
 interface LifecycleEntry {
@@ -34,7 +35,7 @@ export class LifecycleManager {
   /** 触发事件 */
   private _emit(event: string, detail?: unknown): void {
     for (const l of this._listeners) {
-      try { l(event, detail); } catch { /* 隔离监听器异常 */ }
+      try { l(event, detail); } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); /* 隔离监听器异常 */ }
     }
   }
 
@@ -79,8 +80,8 @@ export class LifecycleManager {
         const name = initialized[i];
         const entry = sorted.find(e => e.name === name);
         if (!entry) continue;
-        try { await entry.component.stop(); } catch {}
-        try { await entry.component.dispose(); } catch {}
+        try { await entry.component.stop(); } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); }
+        try { await entry.component.dispose(); } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); }
       }
       this._emit("component_error", { component: "bootstrap", phase: "init", error: err });
       throw err;
@@ -119,7 +120,7 @@ export class LifecycleManager {
     }
 
     for (const entry of reversed) {
-      try { entry.component.dispose(); } catch { /* dispose 不抛错 */ }
+      try { entry.component.dispose(); } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); /* dispose 不抛错 */ }
     }
 
     this._phase = "shutdown";

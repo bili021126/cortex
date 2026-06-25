@@ -13,6 +13,7 @@ import type { ConsistencyLayer } from "@cortex/consistency";
 import type { BootstrapResult } from "./factory/index.js";
 import type { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import type { AuditTrail, MetricCounter } from "@cortex/telemetry";
+import { DegradationBoundary } from "../core/degradation-boundary.js";
 // ── Core-2 模块 ──
 import type { TaskRouter } from "../core/task-router.js";
 import type { EnvironmentAwareRouter } from "../core/environment-aware-router.js";
@@ -79,9 +80,9 @@ export function assemble(input: AssembleInput): BootstrapEngineResult {
 
   const shutdown = async (): Promise<void> => {
     // 逆序释放资源——各组件以 best-effort 关闭，未实现的方法静默跳过
-    try { (input.scheduler as unknown as { stop?(): void }).stop?.(); } catch { /* best-effort */ }
-    try { (input.pool as unknown as { destroyAll?(): void }).destroyAll?.(); } catch { /* best-effort */ }
-    try { (input.observer as unknown as { clear?(): void }).clear?.(); } catch { /* best-effort */ }
+    try { (input.scheduler as unknown as { stop?(): void }).stop?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    try { (input.pool as unknown as { destroyAll?(): void }).destroyAll?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    try { (input.observer as unknown as { clear?(): void }).clear?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
     try { await input.memory?.close(); } catch { /* best-effort */ }
     try { (input.gate as unknown as { dispose?(): void }).dispose?.(); } catch { /* best-effort */ }
     try { input.cliAdapter.close?.(); } catch { /* best-effort */ }

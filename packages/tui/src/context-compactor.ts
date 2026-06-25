@@ -258,7 +258,7 @@ async function compactL4(
       ],
       compressed,
     };
-  } catch {
+  } catch (err) { console.warn('[DEGRADED:tui-compactor]', String(err));
     return { messages, compressed: 0 };
   }
 }
