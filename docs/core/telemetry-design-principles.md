@@ -297,6 +297,58 @@ ConfigOverrideApplied {             ConfigOverrideApplied {
 
 ---
 
+### 遥测子原则 9：因果可溯——事件携带原子事实链（源自原则四 + 横切感知）
+
+> 原子事实链是遥测与记忆系统之间的共享契约。每个事件不孤立存在——它通过 `causalChain` 与上游事件形成可追踪的因果图。权轴 Agent 不需要猜测根因，沿链追溯即可。
+
+```
+不带因果链                         带因果链
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ConfigSchemaViolation {            ConfigSchemaViolation {
+  schemaName: "cognition",           schemaName: "cognition",
+  errors: [...]                      errors: [...],
+}                                     causalChain: {
+                                        directCause: "evt-0042",
+                                        upstreamEvents: [
+                                          "evt-0041 ConfigReloaded",
+                                          "evt-0040 ConfigOverrideApplied"
+                                        ],
+                                        spanId: "span-boot-03"
+                                      }
+                                    }
+// 凝光看到这个：                 // 凝光看到这个：
+// "什么出错了"                   // "什么出错了 + 为什么 + 追溯链"
+// 需要自己查原因                  // 直接沿链回溯，不需要额外查询
+```
+
+**规则**：
+- 每个 emit 的事件可选附带 `causalChain` 字段——如果事件有明确的因果前件，必须附带。
+- `spanId` 是本次操作追踪 ID，贯穿从触发到结果的所有事件。同一 span 内的事件共享 spanId。
+- `directCause` 是直接原因事件 ID。`upstreamEvents` 是完整的上游链（按时间倒序）。
+- 因果链是 best-effort——如果上游事件不可得（例如跨进程），`upstreamEvents` 可为空。但 `spanId` 必须存在。
+
+**与记忆系统的契约**：
+
+```
+遥测事件因果链                      记忆操作原子事实
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+所有 emit 事件                       Mem:* 事件
+  ├─ causalChain.spanId                ├─ 同 spanId 贯穿读/写/忘/切换
+  ├─ causalChain.directCause           ├─ 遗忘事件可追溯"谁写了它"
+  └─ causalChain.upstreamEvents        └─ 检索事件可追溯"谁触发了查询"
+```
+
+**关键约束**：
+- 因果链不是强制所有事件都要有——但权轴 Agent 依赖的事件必须有。
+- 如果 `Degradation Boundary` 的 silent 级别吞掉了某个事件，它的因果链不能断——下一个未吞的事件必须把被吞事件的上游链继承过来。
+- 因果链自身不可变——事件一旦 emit，causalChain 不可改。如果需要修正，emit 新事件并引用旧事件的 spanId。
+
+**检验标准**：凝光收到 `ConfigSchemaViolation` 后，能否仅凭 causalChain 回溯到最初触发配置覆盖的环境变量？如果不能——causalChain 不完整。
+
+---
+
 ## 三、三层（EventBus / AuditTrail / MetricCounter）的分工
 
 ```
@@ -352,6 +404,7 @@ PipelineObserver（已有）
 | 6 | 分级存储 | 原则五（性能） | 高频 → Counter，中频 → EventBus，低频 → AuditTrail |
 | 7 | 插桩解耦 | 裂+合 | 被观测方只调 emit()，不知 AuditTrail/MetricCounter 存在 |
 | 8 | 治理可消费 | 原则四 + 六 | event payload 携带 Agent 决策所需最小信息集；Agent 不绕过 PipelineObserver 查状态 |
+| 9 | 因果可溯 | 原则四 + 横切 | 事件附带 causalChain（spanId + directCause + upstreamEvents）；与记忆系统的共享契约 |
 
 ---
 

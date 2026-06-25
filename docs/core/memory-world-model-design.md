@@ -19,6 +19,7 @@
 | 无预测编码（V） | 写入时不标注"未来在什么场景有用"，导致检索盲查 |
 | 无预测检索（M） | 场景切换时不预判需要什么记忆，每次冷启动 |
 | 无域门控（C） | 工程记忆和亲密记忆混在一起打分，效率低且不安全 |
+| 无原子操作事件 | 记忆的读/写/遗忘/域切换不可追溯，权轴 Agent 无法审计 |
 
 ---
 
@@ -127,6 +128,52 @@ class DomainGateController {
   }
 }
 ```
+
+### 原子操作事件（横切——Mem:* 事件流入遥测因果链）
+
+MemoryWorldModel 的每个关键操作 emit 遥测事件，携带 `causalChain`：
+
+```typescript
+// packages/retrieval-scheduler/src/memory-events.ts
+
+// V 层——写入事件
+PipelineObserver.emit('Mem:Written', {
+  entryId: string,
+  domain: MemoryDomain,
+  scene: RetrievalScene,
+  causalChain: { spanId, directCause: prevEventId, upstreamEvents: [...] }
+});
+
+// M 层——策略选择事件
+PipelineObserver.emit('Mem:RetrievalStrategySelected', {
+  scene: RetrievalScene,
+  persona: PersonaId,
+  preset: string,
+  weighting: Record<string, number>,
+  causalChain: { spanId: querySpanId }
+});
+
+// C 层——域切换事件
+PipelineObserver.emit('Mem:DomainGateUpdated', {
+  from: string[],
+  to: string[],
+  triggeredBy: 'scene-change' | 'persona-change' | 'manual',
+  causalChain: { spanId, directCause: sceneChangeEventId }
+});
+
+// 遗忘事件
+PipelineObserver.emit('Mem:ObliterationTriggered', {
+  entryId: string,
+  reason: string,
+  causalChain: { spanId, directCause: maintenanceEventId }
+});
+```
+
+**关键约束**：
+- 记忆操作事件不是记忆内容本身——它们是记忆操作的审计记录。
+- `Mem:Written` 的 payload 不包含记忆内容，只包含 entryId + domain + scene。内容走 MemoryStore 存储。
+- 所有 Mem:* 事件共享同一个 spanId（如果它们属于同一个操作上下文）。
+- 权轴 Agent（凝光/钟离/Sentinel）订阅 Mem:* 事件进行审计和态势感知。
 
 ### 与 CognitionEngine 的关系
 
