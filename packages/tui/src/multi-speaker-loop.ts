@@ -8,8 +8,8 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import type { AgentType, LlmMessage, ICortexApi } from "@cortex/shared";
-import type { TuiEvent, LlmStreamBridge } from "./types.js";
+import type { AgentType, LlmMessage, ITuiEngineBridge } from "@cortex/shared";
+import type { TuiEvent } from "./types.js";
 import { agentTalkPersona } from "./query-loop.js";
 
 /** 单个发言者定义 */
@@ -23,7 +23,7 @@ export interface SpeakerDef {
 export interface MultiSpeakerParams {
   input: string;
   speakers: SpeakerDef[];
-  bridge: LlmStreamBridge & Pick<ICortexApi, "chat" | "submitTask" | "executeAll">;
+  bridge: ITuiEngineBridge;
   /** 共享对话历史——所有 Agent 共用同一份 */
   history?: LlmMessage[];
   /** 单次 loop 最大发言轮次 */

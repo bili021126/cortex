@@ -14,7 +14,7 @@
  * @since v3 — Claude Code 对标：子Agent摘要化
  */
 
-import type { AgentType, LlmMessage, ICortexApi } from "@cortex/shared";
+import type { AgentType, LlmMessage, ITuiEngineBridge } from "@cortex/shared";
 import { AGENT_CHINESE_ROLE } from "@cortex/shared";
 
 // ═══════════════════════════════════════════════════════════
@@ -47,7 +47,7 @@ function truncateSummary(text: string, maxChars: number = 100): string {
 async function llmSummarize(
   agentLabel: string,
   text: string,
-  bridge: Pick<ICortexApi, "chat"> | null,
+  bridge: Pick<ITuiEngineBridge, "chat"> | null,
   maxChars: number = 100,
 ): Promise<string> {
   if (!bridge?.chat) return truncateSummary(text, maxChars);
@@ -84,7 +84,7 @@ async function llmSummarize(
 export async function summarizeSubAgents(
   outputs: string[],
   roster: AgentType[],
-  bridge: Pick<ICortexApi, "chat"> | null,
+  bridge: Pick<ITuiEngineBridge, "chat"> | null,
   opts?: SummarizeOptions,
 ): Promise<string[]> {
   const maxChars = opts?.maxChars ?? 100;
@@ -127,7 +127,7 @@ export async function summarizeSubAgents(
 export async function summarizeOne(
   agent: AgentType,
   text: string,
-  bridge: Pick<ICortexApi, "chat"> | null,
+  bridge: Pick<ITuiEngineBridge, "chat"> | null,
   maxChars: number = 100,
 ): Promise<string> {
   const label = AGENT_CHINESE_ROLE[agent] ?? agent;

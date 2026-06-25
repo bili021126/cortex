@@ -8,8 +8,8 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import type { AgentType, LlmMessage, ICortexApi, TaskNode, ExecutionReport } from "@cortex/shared";
-import type { TuiEvent, TuiHooks, LlmStreamBridge } from "../types.js";
+import type { AgentType, LlmMessage, ITuiEngineBridge, TaskNode, ExecutionReport } from "@cortex/shared";
+import type { TuiEvent, TuiHooks } from "../types.js";
 import { queryLoop } from "../query-loop.js";
 import { formatPlanTree } from "./plan-utils.js";
 import * as nodeFs from "node:fs";
@@ -62,10 +62,7 @@ export function clearPlanState(projectRoot: string): void {
   } catch (err) { console.warn('[DEGRADED:tui-plan]', String(err)) }
 }
 
-/** Plan 模式扩展桥接——增加 executeWithStream 用于计划执行 */
-interface PlanModeBridge extends LlmStreamBridge, Pick<ICortexApi, "chat" | "submitTask" | "executeAll"> {
-  executeWithStream(nodes: TaskNode[], onEvent: (event: TuiEvent) => void): Promise<ExecutionReport>;
-}
+/** Plan 模式桥接——ITuiEngineBridge 包含 executeWithStream */
 
 /**
  * Plan 模式上下文——甘雨计划阶段的状态管理。
@@ -91,7 +88,7 @@ export interface PlanModeState {
  */
 export async function* planMode(
   input: string,
-  bridge: PlanModeBridge,
+  bridge: ITuiEngineBridge,
   agent: AgentType,
   planState: PlanModeState,
   history?: LlmMessage[],

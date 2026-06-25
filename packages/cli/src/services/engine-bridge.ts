@@ -26,7 +26,7 @@ import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { CLIAdapter, type Toolkit } from "@cortex/platform";
 import type { EngineConfig } from "@cortex/config";
 import { MemoryStore } from "@cortex/memory-store";
-import { AgentType, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
+import { AgentType, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type ITuiEngineBridge, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
@@ -72,7 +72,7 @@ export interface BootstrapConfig {
  * 2. 配置驱动模式（ensureBootstrapped）—— 使用 bootstrapEngine，
  *    从 cortex-agents.json 加载所有 Agent 定义并注册
  */
-export class EngineBridge implements ICortexApi {
+export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   private ctx: BridgeContext = { initialized: false };
   private _pool: MiniAgentPool = new MiniAgentPool();
   private config: ConfigManager;

@@ -8,8 +8,8 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import type { AgentType, LlmMessage, ICortexApi } from "@cortex/shared";
-import type { TuiEvent, TuiHooks, LlmStreamBridge } from "../types.js";
+import type { AgentType, LlmMessage, ITuiEngineBridge } from "@cortex/shared";
+import type { TuiEvent, TuiHooks } from "../types.js";
 import { queryLoop } from "../query-loop.js";
 
 /**
@@ -22,7 +22,7 @@ import { queryLoop } from "../query-loop.js";
  */
 export async function* chatMode(
   input: string,
-  bridge: LlmStreamBridge & Pick<ICortexApi, "chat" | "submitTask" | "executeAll">,
+  bridge: ITuiEngineBridge,
   agent: AgentType,
   history?: LlmMessage[],
 ): AsyncGenerator<TuiEvent, string, void> {

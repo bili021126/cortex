@@ -11,13 +11,10 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import { AgentType, type AgentType as AgentTypeEnum, type LlmMessage, type ICortexApi } from "@cortex/shared";
-import type { TuiEvent, TuiHooks, LlmStreamBridge } from "../types.js";
+import { AgentType, type AgentType as AgentTypeEnum, type LlmMessage, type ITuiEngineBridge } from "@cortex/shared";
+import type { TuiEvent, TuiHooks } from "../types.js";
 import { queryLoop } from "../query-loop.js";
 import { multiSpeakerLoop, type SpeakerDef } from "../multi-speaker-loop.js";
-
-/** Talk 桥接——扩展记忆读写能力 */
-type TalkBridge = LlmStreamBridge & Pick<ICortexApi, "chat" | "submitTask" | "executeAll" | "readTalkMemory" | "writeTalkMemory" | "ensureTalkMemory">;
 
 /**
  * Talk 模式执行器——单 Agent（昔涟默认）。
@@ -26,7 +23,7 @@ type TalkBridge = LlmStreamBridge & Pick<ICortexApi, "chat" | "submitTask" | "ex
  */
 export async function* talkMode(
   input: string,
-  bridge: TalkBridge,
+  bridge: ITuiEngineBridge,
   agent: AgentTypeEnum,
   history?: LlmMessage[],
 ): AsyncGenerator<TuiEvent, string, void> {
@@ -84,7 +81,7 @@ const TALK_TRIO: SpeakerDef[] = [
  */
 export async function* talkTrioMode(
   input: string,
-  bridge: TalkBridge,
+  bridge: ITuiEngineBridge,
   history?: LlmMessage[],
 ): AsyncGenerator<TuiEvent, string, void> {
   // ── 加载昔涟记忆 ──

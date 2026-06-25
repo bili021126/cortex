@@ -8,13 +8,13 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import type { LlmMessage, ICortexApi } from "@cortex/shared";
+import type { LlmMessage, ITuiEngineBridge } from "@cortex/shared";
 import {
   AgentType,
   AGENT_CHINESE_ROLE,
   CHINESE_NAME_TO_TYPE,
 } from "@cortex/shared";
-import type { TuiEvent, LlmStreamBridge } from "../types.js";
+import type { TuiEvent } from "../types.js";
 import { multiSpeakerLoop, type SpeakerDef } from "../multi-speaker-loop.js";
 import { summarizeSubAgents } from "../sub-agent-summarizer.js";
 
@@ -64,7 +64,7 @@ export const DEFAULT_PARTY: AgentType[] = [AgentType.Butler, AgentType.Analysis]
  */
 export async function* partyMode(
   input: string,
-  bridge: LlmStreamBridge & Pick<ICortexApi, "chat" | "submitTask" | "executeAll">,
+  bridge: ITuiEngineBridge,
   agents: AgentType[],
   history?: LlmMessage[],
 ): AsyncGenerator<TuiEvent, string, void> {

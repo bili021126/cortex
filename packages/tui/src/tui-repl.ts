@@ -8,13 +8,11 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import * as readline from "node:readline";
-import { AgentType, CHINESE_NAME_TO_TYPE, AGENT_CHINESE_ROLE, type LlmMessage } from "@cortex/shared";
+import { AgentType, CHINESE_NAME_TO_TYPE, AGENT_CHINESE_ROLE, type LlmMessage, type ITuiEngineBridge } from "@cortex/shared";
 
-// CLI 注入适配器（any 避免循环类型依赖）
-type EngineBridge = any;
+// CLI 注入适配器
+type EngineBridge = ITuiEngineBridge;
 type CommandRegistry = any;
 type CommandContext = any;
 

@@ -24,9 +24,9 @@ import {
   CHINESE_NAME_TO_TYPE,
   type AgentType,
   type LlmMessage,
-  type ICortexApi,
+  type ITuiEngineBridge,
 } from "@cortex/shared";
-import type { TuiEvent, TuiHooks, ReplMode, LlmStreamBridge } from "./types.js";
+import type { TuiEvent, TuiHooks, ReplMode } from "./types.js";
 import { compactMessages } from "./context-compactor.js";
 import { streamExecuteTools } from "./streaming-tool-executor.js";
 import { DEFAULT_MAX_TOOL_ROUNDS } from "@cortex/config";
@@ -182,7 +182,7 @@ function assembleSystemPrompt(mode: ReplMode, agent: AgentType): string {
 /** queryLoop 参数聚合 */
 interface QueryLoopParams {
   input: string;
-  bridge: LlmStreamBridge & Pick<ICortexApi, "chat" | "submitTask" | "executeAll">;
+  bridge: ITuiEngineBridge;
   mode: ReplMode;
   agent: AgentType;
   hooks: TuiHooks;

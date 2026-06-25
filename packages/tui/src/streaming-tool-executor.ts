@@ -10,8 +10,8 @@
  */
 
 import { reversibilityLevel } from "./renderer/permission-dialog.js";
-import type { TuiEvent, TuiHooks, LlmStreamBridge } from "./types.js";
-import type { AgentType, LlmMessage } from "@cortex/shared";
+import type { TuiEvent, TuiHooks } from "./types.js";
+import type { AgentType, LlmMessage, ITuiEngineBridge } from "@cortex/shared";
 
 // ═══════════════════════════════════════════════════════════
 // §1 类型定义
@@ -80,7 +80,7 @@ async function _checkPermission(
 /** 执行一个工具调用（桥接 + 错误兜底）——读写共用 */
 async function _executeOneCall(
   tc: ToolCallInput,
-  bridge: LlmStreamBridge,
+  bridge: Pick<ITuiEngineBridge, "executeToolCall">,
   hooks: TuiHooks,
 ): Promise<{ success: boolean; output: string; durationMs: number }> {
   const startMs = Date.now();
@@ -125,7 +125,7 @@ function _pushToolMessages(
 export async function* streamExecuteTools(
   toolCalls: ToolCallInput[],
   agent: AgentType,
-  bridge: LlmStreamBridge,
+  bridge: Pick<ITuiEngineBridge, "executeToolCall">,
   messages: LlmMessage[],
   hooks: TuiHooks,
   reasoningContent?: string,
