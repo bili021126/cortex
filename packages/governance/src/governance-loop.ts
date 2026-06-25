@@ -19,6 +19,7 @@ import type {
   JudgmentResult,
   AmendmentApplyResult,
 } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IPipelineObserver } from "@cortex/shared";
 import { evaluateAmendment } from "./amendment-judge.js";
 import { applyAmendment, findConstitutionPath } from "./amendment-applier.js";
 import { checkTimeout, updateStaleCount, type TimeoutAction } from "./amendment-timeout.js";
@@ -34,7 +35,7 @@ const AMENDMENTS_DIR = "docs/amendments";
  * 从 amendments 目录读取所有待决提案。
  * 只返回 status 为 "draft" 或 "pending_judgment" 的提案。
  */
-export function loadPendingProposals(rootDir: string): AmendmentProposal[] {
+export function loadPendingProposals(rootDir: string, observer?: IPipelineObserver): AmendmentProposal[] {
   const dir = path.resolve(rootDir, AMENDMENTS_DIR);
   if (!fs.existsSync(dir)) return [];
 
@@ -49,7 +50,17 @@ export function loadPendingProposals(rootDir: string): AmendmentProposal[] {
       }
     } catch (e) {
       // 跳过格式错误的文件
-      console.warn(`[GovernanceLoop] 跳过格式错误的修宪提案: ${entry.name} — ${String(e).slice(0, 200)}`);
+      if (observer) {
+        observer.emit({
+          type: PipelineEventType.InfraComponentDegraded,
+          priority: PipelinePriority.NORMAL,
+          payload: { component: "governance-loop", operation: "loadPendingProposals", detail: `跳过格式错误的修宪提案: ${entry.name} — ${String(e).slice(0, 200)}` },
+          timestamp: Date.now(),
+          notificationType: "FYI",
+        });
+      } else {
+        console.warn(`[GovernanceLoop] 跳过格式错误的修宪提案: ${entry.name} — ${String(e).slice(0, 200)}`);
+      }
     }
   }
   return proposals;

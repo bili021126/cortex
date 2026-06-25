@@ -15,6 +15,8 @@
  */
 
 import { EMBEDDING_DIM } from "./schema.js";
+import { PipelinePriority } from "@cortex/shared";
+import { PipelineEventType, type IPipelineObserver } from "@cortex/shared";
 
 // ── 类型 ──────────────────────────────────────
 
@@ -46,6 +48,12 @@ export interface IEmbeddingService {
 export class EmbeddingService implements IEmbeddingService {
   private _pipeline: EmbeddingPipeline | null = null;
   private _loading: Promise<EmbeddingPipeline> | null = null;
+  /** 可选 PipelineObserver——注入后替代 console.warn 的诊断输出 */
+  private _observer?: IPipelineObserver;
+
+  constructor(observer?: IPipelineObserver) {
+    this._observer = observer;
+  }
 
   // ── 懒加载 ──────────────────────────────────
 
@@ -127,8 +135,19 @@ export class EmbeddingService implements IEmbeddingService {
         results.push(vec);
       } else {
         // @justification 原则五豁免——embedBatch 为实例方法，不持有 PipelineObserver 引用。
-        //   维度不匹配是模型配置错误，仅在开发期触发。console.warn 作为唯一可用的诊断通道。
-        console.warn(`[embedBatch] 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${vec.length}，跳过第 ${results.length} 条文本`);
+        //   维度不匹配是模型配置错误，仅在开发期触发。
+        //   有 observer 时 emit 诊断事件，否则 fallback 到 console.warn。
+        if (this._observer) {
+          this._observer.emit({
+            type: PipelineEventType.MemorySqlDegraded,
+            priority: PipelinePriority.NORMAL,
+            payload: { operation: "embedBatch", detail: `维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${vec.length}` },
+            timestamp: Date.now(),
+            notificationType: "FYI",
+          });
+        } else {
+          console.warn(`[embedBatch] 维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${vec.length}，跳过第 ${results.length} 条文本`);
+        }
       }
     }
     return results;
@@ -168,12 +187,34 @@ export class EmbeddingService implements IEmbeddingService {
       const elapsed = Date.now() - startTime;
       // @justification 原则五豁免——preloadModel 实例方法，在 observer 就绪前调用。
       //   console.warn 作为预热阶段唯一可用的诊断通道。
-      console.warn(`[embedding] ONNX 模型预加载完成 (${(elapsed / 1000).toFixed(1)}s)`);
+      //   有 observer 时 emit 诊断事件，否则 fallback 到 console.warn。
+      if (this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.MemoryEmbeddingWarmupFailed,
+          priority: PipelinePriority.NORMAL,
+          payload: { error: `ONNX 模型预加载完成 (${(elapsed / 1000).toFixed(1)}s)` },
+          timestamp: Date.now(),
+          notificationType: "FYI",
+        });
+      } else {
+        console.warn(`[embedding] ONNX 模型预加载完成 (${(elapsed / 1000).toFixed(1)}s)`);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // @justification 原则五豁免——preloadModel 实例方法，在 observer 就绪前调用。
       //   console.warn 作为预热阶段唯一可用的诊断通道。
-      console.warn(`[embedding] ONNX 模型预加载失败: ${msg}`);
+      //   有 observer 时 emit 诊断事件，否则 fallback 到 console.warn。
+      if (this._observer) {
+        this._observer.emit({
+          type: PipelineEventType.MemoryEmbeddingWarmupFailed,
+          priority: PipelinePriority.NORMAL,
+          payload: { error: `ONNX 模型预加载失败: ${msg}` },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      } else {
+        console.warn(`[embedding] ONNX 模型预加载失败: ${msg}`);
+      }
     }
   }
 }

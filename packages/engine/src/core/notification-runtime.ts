@@ -162,8 +162,8 @@ export class NotificationRuntime {
    */
   private _resolveSemantics(eventType: string): NotificationSemantics {
     // 优先使用用户配置
-    if (this.options.eventSemantics?.[eventType as PipelineEventType]) {
-      return this.options.eventSemantics[eventType as PipelineEventType] ?? "FYI";
+    if (this.options.eventSemantics?.[eventType]) {
+      return this.options.eventSemantics[eventType] ?? "FYI";
     }
     // 回退到默认映射
     return this.defaultSemantics[eventType] ?? "FYI";

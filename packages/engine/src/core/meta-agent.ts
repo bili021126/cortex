@@ -2,7 +2,7 @@
 // @layer 规划-执行层
 // @role 事轴起点——意图拆解为粗粒度 TaskNode 树
 
-import { extractJsonBlock, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
+import { extractJsonBlock, PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
 import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { ContextManager } from "@cortex/context-manager";
@@ -130,7 +130,7 @@ export class MetaAgent {
     // 订阅 NodeComplete（只接——获取 Agent 执行产出）
     // NodeComplete 以 HIGH 优先级发射（cleanup-step.ts + scheduler._dispatchMulti）
     this._onNodeComplete = (event: ObservableEvent) => {
-      if (event.type === "node.complete" as PipelineEventType.NodeComplete) {
+      if (event.type === PipelineEventType.NodeComplete) {
         const { nodeId, agentType, output } = event.payload as { nodeId: string; agentType: string; success: true; output?: string };
         if (output) {
           this._enqueuePipelineCtx(`[${agentType}] ${nodeId}: ${output.slice(0, PIPELINE_CTX_MAX_OUTPUT_LEN)}`);
@@ -141,7 +141,7 @@ export class MetaAgent {
     // 订阅 NodeFailed（只收——感知执行失败）
     // NodeFailed 以 CRITICAL 优先级发射（scheduler._dispatchNode）
     this._onNodeFailed = (event: ObservableEvent) => {
-      if (event.type === "node.failed" as PipelineEventType.NodeFailed) {
+      if (event.type === PipelineEventType.NodeFailed) {
         const { nodeId, error } = event.payload as { nodeId: string; error: string };
         this._enqueuePipelineCtx(`[FAILED] ${nodeId}: ${error.slice(0, PIPELINE_CTX_MAX_ERROR_LEN)}`);
       }
@@ -323,7 +323,7 @@ export class MetaAgent {
       };
     } catch (err) {
       this._observer?.emit({
-        type: "infra.component_degraded" as PipelineEventType,
+        type: PipelineEventType.InfraComponentDegraded,
         priority: PipelinePriority.NORMAL,
         payload: { component: "MetaAgent", operation: "_parseClarification", detail: `意图解析JSON失败: ${String(err)}` },
         timestamp: Date.now(),
@@ -521,7 +521,7 @@ export class MetaAgent {
       this._safeReporter({ source: "MetaAgent._parsePlan", error: msg, severity: "degraded" });
     } else if (this._observer) {
       this._observer.emit({
-        type: "infra.component_degraded" as PipelineEventType,
+        type: PipelineEventType.InfraComponentDegraded,
         priority: PipelinePriority.NORMAL,
         payload: { component: "MetaAgent", operation: "_parsePlan", detail: msg },
         timestamp: Date.now(),
@@ -604,7 +604,7 @@ export class MetaAgent {
       return { nodes, impactScope };
     } catch (err) {
       this._observer?.emit({
-        type: "infra.component_degraded" as PipelineEventType,
+        type: PipelineEventType.InfraComponentDegraded,
         priority: PipelinePriority.NORMAL,
         payload: { component: "MetaAgent", operation: "_parseReplanResult", detail: `Replan JSON解析失败: ${String(err)}` },
         timestamp: Date.now(),
@@ -623,8 +623,8 @@ export class MetaAgent {
   private _resolveContextPolicy(item: PlanItem): string {
     if (this._contextManager) {
       const resolved = this._contextManager.resolve({
-        scene: (item as any).contextScene ?? "code-repair",
-        persona: (item as any).contextPersona,
+        scene: item.contextScene ?? "code-repair",
+        persona: item.contextPersona,
         task: { type: item.type ?? "analysis", tags: item.tags ?? [] },
       });
       return resolved.policyId;
@@ -643,6 +643,10 @@ interface PlanItem {
   reasoningEffort?: "high" | "max";
   recommendedTier?: "fast" | "standard" | "thinking";
   children?: PlanItem[];
+  /** Phase 3 上下文场景 */
+  contextScene?: string;
+  /** Phase 3 上下文人物 */
+  contextPersona?: string;
 }
 
 interface PlanContext {

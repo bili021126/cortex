@@ -99,11 +99,12 @@ export class MemoryStoreMonitor {
     }
 
     // @justification 原则五豁免——_logToStdout 是 monitor 的调试渲染通道，
-    //   monitor 是 PipelineObserver 的消费者，其职责就是将管道事件转化为可读输出。
+    //   monitor 是 PipelineObserver 的终端消费者，其职责就是将管道事件转化为可读输出。
+    //   使用 stderr 确保不被 stdout 吞掉，与 _persistAlert 一致。
     if (this._logToStdout) {
-      console.warn(
+      process.stderr.write(
         `[MemoryStoreMonitor] ${event.type} severity=${event.priority} ` +
-        `window=${this._windowEvents.length}/${this._threshold}`,
+        `window=${this._windowEvents.length}/${this._threshold}\n`,
       );
     }
   }
