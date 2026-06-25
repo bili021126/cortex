@@ -29,3 +29,4 @@ export * from "./doc-registry.js";
 export * from "./amendment.js";
 export * from "./tui-bridge.js";
 export * from "./indexed-registry.js";
+export * from "./id-utils.js";
