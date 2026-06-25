@@ -84,7 +84,8 @@ export function loadSession(projectRoot: string): SessionSnapshot | null {
     if (typeof data.talkTrio !== "boolean") data.talkTrio = false;
 
     return data;
-  } catch {
+  } catch (err) {
+    console.warn('[DEGRADED:tui-session]', err instanceof Error ? err.message : String(err));
     return null;
   }
 }
@@ -98,7 +99,7 @@ export function clearSession(projectRoot: string): void {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
-  } catch {
-    // 静默失败
+  } catch (err) {
+    console.warn('[DEGRADED:tui-session]', err instanceof Error ? err.message : String(err));
   }
 }

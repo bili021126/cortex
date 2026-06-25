@@ -197,17 +197,17 @@ export type EventPayloadMap = {
   [PipelineEventType.GovernanceRoundtableConsensus]: GovernanceEventPayload & { participants: string[] };
 
   // ── Interact（配置交互流）──
-  [PipelineEventType.InteractConfigOverrideApplied]: { type: "interact.config_override_applied"; timestamp: number; key: string; source: 'env' | 'user' | 'project'; oldValue: unknown; newValue: unknown };
-  [PipelineEventType.InteractConfigReloaded]: { type: "interact.config_reloaded"; timestamp: number; watchPath: string; changedKeys: string[] };
-  [PipelineEventType.InteractConfigSchemaViolation]: { type: "interact.config_schema_violation"; timestamp: number; schemaName: string; errors: { path: string; message: string }[] };
+  [PipelineEventType.InteractConfigOverrideApplied]: { timestamp: number; key: string; source: 'env' | 'user' | 'project'; oldValue: unknown; newValue: unknown };
+  [PipelineEventType.InteractConfigReloaded]: { timestamp: number; watchPath: string; changedKeys: string[] };
+  [PipelineEventType.InteractConfigSchemaViolation]: { timestamp: number; schemaName: string; errors: { path: string; message: string }[] };
 
   // ── Mem（记忆流）──
-  [PipelineEventType.MemRetrievalStrategySelected]: { type: "mem.retrieval_strategy_selected"; timestamp: number; query: string; strategy: string; reason: string };
-  [PipelineEventType.MemMemoryWarmupInitiated]: { type: "mem.memory_warmup_initiated"; timestamp: number; embeddingModel: string; dimension: number };
-  [PipelineEventType.MemMemoryObliterationTriggered]: { type: "mem.memory_obliteration_triggered"; timestamp: number; pattern: string; reason: string };
+  [PipelineEventType.MemRetrievalStrategySelected]: { timestamp: number; query: string; strategy: string; reason: string };
+  [PipelineEventType.MemMemoryWarmupInitiated]: { timestamp: number; embeddingModel: string; dimension: number };
+  [PipelineEventType.MemMemoryObliterationTriggered]: { timestamp: number; pattern: string; reason: string };
 
   // ── Tele（遥测流）──
-  [PipelineEventType.TeleDegradationThresholdBreached]: { type: "tele.degradation_threshold_breached"; timestamp: number; source: string; count: number; threshold: number };
+  [PipelineEventType.TeleDegradationThresholdBreached]: { timestamp: number; source: string; count: number; threshold: number };
 };
 
 /** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定

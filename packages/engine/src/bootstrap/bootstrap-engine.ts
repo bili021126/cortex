@@ -198,7 +198,6 @@ export async function bootstrapEngine(
             type: PipelineEventType.TeleDegradationThresholdBreached,
             priority: PipelinePriority.HIGH,
             payload: {
-              type: "tele.degradation_threshold_breached",
               timestamp: Date.now(),
               source,
               count,

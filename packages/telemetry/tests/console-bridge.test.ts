@@ -1,13 +1,15 @@
 // @ci: unit
 // ============================================================
-// console-bridge.test.ts — ConsoleBridge 单元测试
+// @cortex/telemetry —— ConsoleBridge 单元测试
 //
 // 覆盖：install 拦截 console、uninstall 恢复、
 //       白名单豁免、error → ErrorReported 转换
+//
+// 从 @cortex/engine/tests 迁入（console-bridge.ts 已迁至本包）
 // ============================================================
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { installConsoleBridge, uninstallConsoleBridge } from "@cortex/telemetry";
+import { installConsoleBridge, uninstallConsoleBridge } from "../src/index.js";
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 
 // ── Mock observer ──────────────────────────────

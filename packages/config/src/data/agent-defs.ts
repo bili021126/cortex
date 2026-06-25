@@ -9,6 +9,12 @@
 import { AgentType } from "@cortex/shared";
 import type { AgentDefinition } from "@cortex/shared";
 
+// FIXME: AGENT_DEFS 数据已迁入 config，但 shared/src/agent-registry.ts 中的
+// 派生函数（getAgentTags/getAgentToolPermissions 等）仍引用此数据。
+// 迁出会形成 config → shared → config 循环依赖。
+// 等待 shared/agent-registry 剥离派生逻辑到 config 后方可完成迁移。
+// 详见 docs/audit/theory-coverage-review.md Phase 2 阻塞项。
+
 // ─── 工具权限预设 ──────────────────────────────
 
 export const FULL_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code", "web_search", "run_shell", "list_files", "delete_file", "parse_ast", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files", "edit_file", "format_code", "run_test"];
