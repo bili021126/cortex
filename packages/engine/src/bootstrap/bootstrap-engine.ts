@@ -43,7 +43,7 @@ import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
-import { installConsoleBridge, uninstallConsoleBridge } from "@cortex/telemetry";
+import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD } from "@cortex/telemetry";
 
 // 插件类型引用
 import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.js";
@@ -185,6 +185,32 @@ export async function bootstrapEngine(
   });
   addTransport(_loggingBridge.createTransport());
   const _bootstrapLogger = createLogger("bootstrap");
+
+  // §6.0.0a Phase 0 遥测基础设施初始化
+  const auditTrail = new AuditTrail();
+  const metricCounter = new MetricCounter();
+  metricCounter.startPeriodicFlush(
+    60_000, // 每分钟 flush 一次
+    (snapshots) => {
+      for (const { source, count } of snapshots) {
+        if (count >= SILENT_THRESHOLD) {
+          observer.emit({
+            type: PipelineEventType.TeleDegradationThresholdBreached,
+            priority: PipelinePriority.HIGH,
+            payload: {
+              type: "tele.degradation_threshold_breached",
+              timestamp: Date.now(),
+              source,
+              count,
+              threshold: SILENT_THRESHOLD,
+            },
+            timestamp: Date.now(),
+            notificationType: "WARNING",
+          });
+        }
+      }
+    },
+  );
 
   // §6.0.1 LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期
   const lifecycleManager = new LifecycleManager();
@@ -349,11 +375,16 @@ export async function bootstrapEngine(
     governanceEmitter,
     decisionBridge,
     notificationRuntime,
+    auditTrail,
+    metricCounter,
     shutdown: async () => {
       // 先取消注册的所有 handler，防止长期运行中 handler 累积泄漏
       for (const reg of _registeredHandlers) {
         observer.off(reg.priority, reg.handler);
       }
+      // Phase 0 遥测基础设施清理
+      metricCounter.stop();
+      auditTrail.flush();
       // 先优雅关闭 ILifecycle 组件
       await lifecycleManager.shutdown();
       // WorkerPool —— 终止所有 worker 线程

@@ -1,4 +1,4 @@
-import { PipelineEventType, PipelinePriority, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type ObservableEvent, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type EmitMeta, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type ObservableEvent, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter } from "@cortex/shared";
 
 /**
  * PipelineObserver —— 可观测事件管道（优先级回调注册表）
@@ -16,6 +16,31 @@ export class PipelineObserver implements IPipelineObserver {
   /** @fix N-01 — 递归深度上限：0=空闲，≥MAX 时丢弃，防止无限 e→handler 崩→e→handler 崩… */
   private _reentrancyDepth = 0;
   private static readonly MAX_REENTRANCY_DEPTH = 3;
+
+  // ── 死信环形缓冲区 ────────────────────────
+
+  /**
+   * 死信队列——被 DegradationBoundary silent 吞掉的事件记录。
+   * 环形缓冲，满时覆盖最老条目。
+   * 不写磁盘，进程重启清空。
+   */
+  private deadLetterRing: Array<{ id: string; type: string; timestamp: number; spanId?: string }> = [];
+  private deadLetterIndex = 0;
+  private static readonly DEAD_LETTER_MAX = 1000;
+
+  /**
+   * 将事件写入死信队列。
+   * 由外部 DegradationBoundary 在 silent 吞掉事件时调用。
+   */
+  recordDeadLetter(id: string, type: string, timestamp: number, spanId?: string): void {
+    if (this.deadLetterRing.length < PipelineObserver.DEAD_LETTER_MAX) {
+      this.deadLetterRing.push({ id, type, timestamp, spanId });
+    } else {
+      // 环形覆盖最老条目
+      this.deadLetterRing[this.deadLetterIndex % PipelineObserver.DEAD_LETTER_MAX] = { id, type, timestamp, spanId };
+      this.deadLetterIndex++;
+    }
+  }
 
   /**
    * 注入 handler 异常上报后端。
@@ -46,7 +71,27 @@ export class PipelineObserver implements IPipelineObserver {
    *
    * 单 handler 异常不阻断后续 handler（隔离设计）。
    */
-  emit(event: ObservableEvent): void {
+  emit(event: ObservableEvent, meta?: EmitMeta): void {
+    // 非 silent emit：检查死信队列中是否有当前 span 的上游事件
+    if (meta?.causalChain?.spanId) {
+      const upstreamFromDeadLetter = this._findUpstreamInDeadLetter(meta.causalChain.spanId);
+      if (upstreamFromDeadLetter.length > 0) {
+        if (!meta.causalChain.upstreamEvents) {
+          meta.causalChain.upstreamEvents = [];
+        }
+        for (const entry of upstreamFromDeadLetter) {
+          if (!meta.causalChain.upstreamEvents.includes(entry.id)) {
+            meta.causalChain.upstreamEvents.push(entry.id);
+          }
+        }
+        // 标注 deadLetter:true 通过修改 upstreamEvents 来隐式传递
+        // 死信引用标记为 `deadLetter:${entry.id}`
+        meta.causalChain.upstreamEvents = meta.causalChain.upstreamEvents.map(
+          (id) => id.startsWith("deadLetter:") ? id : `deadLetter:${id}`
+        );
+      }
+    }
+
     // 幂等键：每次 emit 自动生成 requestId
     if (!event.requestId) {
       event.requestId = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -72,7 +117,7 @@ export class PipelineObserver implements IPipelineObserver {
               severity: "degraded",
               error: ctx.error,
               hint: `handler error on event=${ctx.eventType} priority=${PipelinePriority[ctx.priority]}`,
-            });
+            }, meta?.causalChain?.spanId);
           }
         }
       }
@@ -118,7 +163,7 @@ export class PipelineObserver implements IPipelineObserver {
 
   // ── 私有：SafeErrorReporter 实现 ─────────────────
 
-  private _reportError(ctx: SafeErrorContext): void {
+  private _reportError(ctx: SafeErrorContext, spanId?: string): void {
     if (this._reentrancyDepth >= PipelineObserver.MAX_REENTRANCY_DEPTH) {
       console.error("[PipelineObserver] _reportError 递归深度超限(≥" + PipelineObserver.MAX_REENTRANCY_DEPTH + ")，丢弃:",
         ctx.source, String(ctx.error).slice(0, 200));
@@ -129,6 +174,13 @@ export class PipelineObserver implements IPipelineObserver {
       if (ctx.severity === "silent") {
         const count = (this._silentCounters.get(ctx.source) ?? 0) + 1;
         this._silentCounters.set(ctx.source, count);
+        // 记录到死信队列
+        this.recordDeadLetter(
+          `silent-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          `silent:${ctx.source}`,
+          Date.now(),
+          spanId,
+        );
         if (count >= PipelineObserver.SILENT_UPGRADE_THRESHOLD) {
           this._silentCounters.delete(ctx.source);
           this.emit({
@@ -166,5 +218,22 @@ export class PipelineObserver implements IPipelineObserver {
     } finally {
       this._reentrancyDepth--;
     }
+  }
+
+  // ── 私有：死信查询 ──────────────────────────
+
+  /**
+   * 在死信队列中查找与给定 spanId 相关的事件。
+   * 匹配规则：死信条目的 type 中包含 spanId 或其关联前缀。
+   */
+  private _findUpstreamInDeadLetter(spanId: string): Array<{ id: string; type: string; timestamp: number; spanId?: string }> {
+    // 只扫描最近的条目（环形缓冲当前有效长度内）
+    const results: Array<{ id: string; type: string; timestamp: number; spanId?: string }> = [];
+    for (const entry of this.deadLetterRing) {
+      if (entry.spanId === spanId) {
+        results.push(entry);
+      }
+    }
+    return results;
   }
 }

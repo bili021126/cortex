@@ -58,3 +58,16 @@ export { getTelemetry, setTelemetry, recordTelemetry, shutdownTelemetry } from "
 
 // ─── Console → Observer 桥接 ────────────────────────
 export { installConsoleBridge, uninstallConsoleBridge } from "./console-bridge.js";
+
+// ─── Phase 0 遥测基础设施 ───────────────────────────
+export { AuditTrail } from "./audit-trail.js";
+export type {
+  AuditEntry,
+  AuditEntryBase,
+  ConfigOverrideEntry,
+  ConfigReloadEntry,
+  ConfigViolationEntry,
+  DomainFilterEntry,
+  DegradationEntry,
+} from "./audit-trail.js";
+export { MetricCounter, SILENT_THRESHOLD } from "./metric-counter.js";

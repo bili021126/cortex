@@ -12,6 +12,7 @@ import type { SkillRegistry } from "@cortex/skill-kit";
 import type { ConsistencyLayer } from "@cortex/consistency";
 import type { BootstrapResult } from "./factory/index.js";
 import type { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
+import type { AuditTrail, MetricCounter } from "@cortex/telemetry";
 // ── Core-2 模块 ──
 import type { TaskRouter } from "../core/task-router.js";
 import type { EnvironmentAwareRouter } from "../core/environment-aware-router.js";
@@ -49,6 +50,10 @@ export interface BootstrapEngineResult {
   decisionBridge?: DecisionGateBridge;
   /** Core-2: NotificationRuntime —— PipelineObserver → NotificationPipe 桥接 */
   notificationRuntime?: NotificationRuntime;
+  /** Phase 0: AuditTrail —— 审计跟踪 */
+  auditTrail?: AuditTrail;
+  /** Phase 0: MetricCounter —— 内存遥测计数器 */
+  metricCounter?: MetricCounter;
   /** 优雅关闭——逆序释放所有引擎资源 */
   shutdown(): Promise<void>;
 }

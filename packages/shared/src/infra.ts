@@ -88,6 +88,19 @@ export enum PipelineEventType {
   // ── Infrastructure ──
   InfraFileLockExpiredReclaimed = "infra.file_lock.expired_reclaimed",
   InfraComponentDegraded = "infra.component_degraded",
+
+  // ── Interact（配置交互流）──
+  InteractConfigOverrideApplied = "interact.config_override_applied",
+  InteractConfigReloaded = "interact.config_reloaded",
+  InteractConfigSchemaViolation = "interact.config_schema_violation",
+
+  // ── Mem（记忆流）──
+  MemRetrievalStrategySelected = "mem.retrieval_strategy_selected",
+  MemMemoryWarmupInitiated = "mem.memory_warmup_initiated",
+  MemMemoryObliterationTriggered = "mem.memory_obliteration_triggered",
+
+  // ── Tele（遥测流）──
+  TeleDegradationThresholdBreached = "tele.degradation_threshold_breached",
 }
 
 /**
@@ -182,6 +195,19 @@ export type EventPayloadMap = {
   [PipelineEventType.GovernanceAuditReport]: GovernanceEventPayload & { auditType: "plan_review" | "doc_audit" | "constitution_check" };
   [PipelineEventType.GovernanceComplianceViolation]: GovernanceEventPayload & { violationLevel: "P0" | "P1" | "P2" | "P3" };
   [PipelineEventType.GovernanceRoundtableConsensus]: GovernanceEventPayload & { participants: string[] };
+
+  // ── Interact（配置交互流）──
+  [PipelineEventType.InteractConfigOverrideApplied]: { type: "interact.config_override_applied"; timestamp: number; key: string; source: 'env' | 'user' | 'project'; oldValue: unknown; newValue: unknown };
+  [PipelineEventType.InteractConfigReloaded]: { type: "interact.config_reloaded"; timestamp: number; watchPath: string; changedKeys: string[] };
+  [PipelineEventType.InteractConfigSchemaViolation]: { type: "interact.config_schema_violation"; timestamp: number; schemaName: string; errors: { path: string; message: string }[] };
+
+  // ── Mem（记忆流）──
+  [PipelineEventType.MemRetrievalStrategySelected]: { type: "mem.retrieval_strategy_selected"; timestamp: number; query: string; strategy: string; reason: string };
+  [PipelineEventType.MemMemoryWarmupInitiated]: { type: "mem.memory_warmup_initiated"; timestamp: number; embeddingModel: string; dimension: number };
+  [PipelineEventType.MemMemoryObliterationTriggered]: { type: "mem.memory_obliteration_triggered"; timestamp: number; pattern: string; reason: string };
+
+  // ── Tele（遥测流）──
+  [PipelineEventType.TeleDegradationThresholdBreached]: { type: "tele.degradation_threshold_breached"; timestamp: number; source: string; count: number; threshold: number };
 };
 
 /** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定
@@ -234,12 +260,25 @@ export interface GovernanceEventPayload {
 export type PipelineHandler = (event: ObservableEvent) => void;
 
 /**
+ * 因果链元数据——作为 emit() 的第三个可选参数传入。
+ * causalChain 不在 EventPayloadMap 的 payload 中，
+ * 它是 emit() 的运行时附加元数据。
+ */
+export interface EmitMeta {
+  causalChain?: {
+    spanId: string;
+    directCause?: string;
+    upstreamEvents?: string[];
+  };
+}
+
+/**
  * IPipelineObserver —— 可观测事件管道接口。
  * PipelineObserver 实现此接口，外部可在测试/生产/桌面端注入不同的 observer 实现。
  * @since v2.8 核心组件接口化与组合式重构
  */
 export interface IPipelineObserver {
-  emit(event: ObservableEvent): void;
+  emit(event: ObservableEvent, meta?: EmitMeta): void;
   on(priority: PipelinePriority, handler: PipelineHandler): void;
   off(priority: PipelinePriority, handler?: PipelineHandler): void;
 }
@@ -437,3 +476,16 @@ export interface Disposable {
 export type Unknown = unknown;
 
 export type StrictNonEmptyArray<T> = T extends readonly [infer F, ...infer R] ? (F extends undefined ? never : readonly [F, ...R]) : never;
+
+// ─── Span ID 前缀常量 ──────────────────────────────────────────
+
+/** 任务执行流程 */
+export const SPAN_PREFIX_TASK = "task-";
+/** 配置变更流程 */
+export const SPAN_PREFIX_CFG = "cfg-";
+/** 场景切换流程 */
+export const SPAN_PREFIX_SCENE = "scene-";
+/** 启动流程 */
+export const SPAN_PREFIX_BOOT = "boot-";
+/** 系统流程 */
+export const SPAN_PREFIX_SYS = "sys-";
