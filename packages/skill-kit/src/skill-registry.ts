@@ -27,6 +27,8 @@ import {
   type SerializedSkillRegistry,
   type Tag,
   type FeedbackEntry,
+  IndexedRegistry,
+  type IndexDefinition,
 } from "@cortex/shared";
 
 // ─── 纯函数：状态推导 ───────────────────────────────────────
@@ -65,56 +67,13 @@ export function deriveStatus(
 
 // ─── 注册表实现 ─────────────────────────────────────────
 
-export class SkillRegistry {
-  /** 按标签索引 */
-  private _byTag: Map<string, SkillTemplate[]> = new Map();
-  /** 按 id 索引 */
-  private _byId: Map<string, SkillTemplate> = new Map();
+export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
+  // ── 索引定义 ─────────────────────────────────────
 
-  // ── 注册 / 注销 ─────────────────────────────────────
-
-  /** 注册一个技能模板（有则覆盖） */
-  register(template: SkillTemplate): void {
-    // id 去重——新模板覆盖旧模板
-    if (this._byId.has(template.id)) {
-      this.unregister(template.id);
-    }
-
-    this._byId.set(template.id, template);
-
-    // 按标签索引
-    for (const tag of template.triggerTags) {
-      const existing = this._byTag.get(tag) ?? [];
-      existing.push(template);
-      this._byTag.set(tag, existing);
-    }
-  }
-
-  /**
-   * 注销技能模板。
-   * 收集待删除 key 到数组后再统一删除，不在 for-of 中修改 Map。
-   */
-  unregister(id: string): boolean {
-    const tmpl = this._byId.get(id);
-    if (!tmpl) return false;
-
-    this._byId.delete(id);
-
-    // 从标签索引中移除
-    const tagsToDelete: string[] = [];
-    for (const [tag, templates] of this._byTag) {
-      const filtered = templates.filter((t) => t.id !== id);
-      if (filtered.length === 0) {
-        tagsToDelete.push(tag);
-      } else {
-        this._byTag.set(tag, filtered);
-      }
-    }
-    for (const tag of tagsToDelete) {
-      this._byTag.delete(tag);
-    }
-
-    return true;
+  protected defineIndexes(): IndexDefinition<SkillTemplate>[] {
+    return [
+      { name: "tag", extractKey: (s) => s.triggerTags },
+    ];
   }
 
   // ── 查询 ────────────────────────────────────────────
@@ -127,28 +86,15 @@ export class SkillRegistry {
   queryByTags(queryTags: Tag[]): SkillTemplate[] {
     const matched = new Map<string, SkillTemplate>();
     for (const tag of queryTags) {
-      const templates = this._byTag.get(tag);
-      if (templates) {
-        for (const t of templates) {
-          const status = deriveStatus(t.weight, t.feedbackHistory);
-          if (status === "active" || status === "trial") {
-            matched.set(t.id, t);
-          }
+      for (const t of this.queryByIndex("tag", tag)) {
+        const status = deriveStatus(t.weight, t.feedbackHistory);
+        if (status === "active" || status === "trial") {
+          matched.set(t.id, t);
         }
       }
     }
     // 按 weight 降序排列——权重高的更可信，排在前面
     return [...matched.values()].sort((a, b) => b.weight - a.weight);
-  }
-
-  /** 按 id 获取 */
-  get(id: string): SkillTemplate | undefined {
-    return this._byId.get(id);
-  }
-
-  /** 获取所有已注册技能 */
-  getAll(): SkillTemplate[] {
-    return [...this._byId.values()];
   }
 
   /** 获取活跃技能数 */
@@ -161,7 +107,7 @@ export class SkillRegistry {
 
   /** 获取总数 */
   get totalCount(): number {
-    return this._byId.size;
+    return this.items.size;
   }
 
   // ── 评价回流 ────────────────────────────────────────
@@ -177,7 +123,7 @@ export class SkillRegistry {
     rating: number,
     suggestion?: string,
   ): boolean {
-    const tmpl = this._byId.get(id);
+    const tmpl = this.items.get(id);
     if (!tmpl) return false;
 
     tmpl.weight += rating; // rating: 1=有效, 0=无感, -1=有害
@@ -203,7 +149,7 @@ export class SkillRegistry {
   cleanupOrphans(maxAgeMs: number = 7 * 24 * 60 * 60 * 1000): string[] {
     const now = Date.now();
     const removed: string[] = [];
-    for (const [id, tmpl] of this._byId) {
+    for (const [id, tmpl] of this.items) {
       if (tmpl.weight === 0 && tmpl.feedbackHistory.length === 0) {
         if (now - tmpl.createdAt > maxAgeMs) {
           this.unregister(id);
@@ -214,25 +160,10 @@ export class SkillRegistry {
     return removed;
   }
 
-  // ── 批量操作 ────────────────────────────────────────
-
-  /** 批量注册 */
-  registerAll(templates: SkillTemplate[]): void {
-    for (const tmpl of templates) {
-      this.register(tmpl);
-    }
-  }
-
-  /** 清空注册表 */
-  clear(): void {
-    this._byId.clear();
-    this._byTag.clear();
-  }
-
   // ── 持久化 ─────────────────────────────────────────
 
   toJSON(): SerializedSkillRegistry {
-    const templates = [...this._byId.values()];
+    const templates = [...this.items.values()];
     return { version: 2, templates };
   }
 
@@ -251,3 +182,4 @@ export class SkillRegistry {
     return JSON.stringify(this.toJSON(), null, 2);
   }
 }
+

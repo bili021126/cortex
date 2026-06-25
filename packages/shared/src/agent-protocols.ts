@@ -85,6 +85,8 @@ export interface Agent extends MemoryAware, Executable {
  * @since v2.7 — Agent 自声明与自组装
  */
 export interface AgentCapability {
+  /** 唯一标识——与 type 值一致 */
+  id: string;
   /** Agent 类型标识 */
   type: AgentType;
   /** 人类可读角色名（格式："短名 — 头衔"） */

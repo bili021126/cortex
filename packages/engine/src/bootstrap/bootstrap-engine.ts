@@ -45,6 +45,7 @@ import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
+import { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
 
 // 插件类型引用
 import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.js";
@@ -56,6 +57,7 @@ import type { MemoryStorePlugin } from "../plugin/memory-store.plugin.js";
 import type { ConsistencyLayerPlugin } from "../plugin/consistency-layer.plugin.js";
 import type { MetaAgentPlugin } from "../plugin/meta-agent.plugin.js";
 import type { SchedulerPlugin } from "../plugin/scheduler.plugin.js";
+import type { ILifecycle } from "@cortex/shared";
 
 // 重导出外部依赖的类型
 import type { BootstrapEngineResult } from "./assemble.js";
@@ -225,6 +227,9 @@ export async function bootstrapEngine(
   // §6.0.1 LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期
   const lifecycleManager = new LifecycleManager(observer);
 
+  // §6.0.2 ShutdownOrchestrator —— 统一关闭编排
+  const orchestrator = new ShutdownOrchestrator(observer);
+
   // ────────────────────────────────────────────────
   // §6.2 Core-2 模块接线——将独立创建的模块接入运行时
   // ────────────────────────────────────────────────
@@ -362,6 +367,12 @@ export async function bootstrapEngine(
   const workerPool = new WorkerPool({ maxWorkers: Math.max(1, os.cpus().length - 1) });
   LlmAdapterValue.setWorkerPool(workerPool);
 
+  // §9.5.1 注册 ILifecycle 组件到 ShutdownOrchestrator
+  //     memory（MemoryStore）实现 ILifecycle，参与统一关闭编排
+  if (memory && typeof (memory as unknown as ILifecycle).stop === 'function') {
+    orchestrator.register("memory", memory as unknown as ILifecycle);
+  }
+
   // §9.6 发射启动完成事件
   observer.emit({
     type: PipelineEventType.ExecLifecyclePhaseChanged,
@@ -392,6 +403,7 @@ export async function bootstrapEngine(
     agents,
     consistencyLayer,
     lifecycleManager,
+    orchestrator,
     // Core-2 模块
     taskRouter,
     envRouter,
@@ -421,7 +433,9 @@ export async function bootstrapEngine(
       // Phase 0 遥测基础设施清理
       metricCounter.stop();
       auditTrail.flush();
-      // 先优雅关闭 ILifecycle 组件
+      // ShutdownOrchestrator —— 统一关闭注册的 ILifecycle 组件
+      await orchestrator.shutdown();
+      // 先优雅关闭 ILifecycle 组件（兼容 LifecycleManager 管理项）
       await lifecycleManager.shutdown();
       // WorkerPool —— 终止所有 worker 线程
       workerPool.shutdown();

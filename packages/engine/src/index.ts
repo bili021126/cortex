@@ -131,6 +131,7 @@ export { PoolAwareState } from "./components/pool-aware.js";
 export { LifecycleManager } from "./lifecycle/lifecycle-manager.js";
 export { ShutdownWarden } from "./core/shutdown-warden.js";
 export type { ShutdownReport } from "./core/shutdown-warden.js";
+export { ShutdownOrchestrator } from "./core/shutdown-orchestrator.js";
 
 // ── v3.1 文件锁管理器 ────────────────────────
 export { FileLockManager } from "./core/file-lock-manager.js";

@@ -539,6 +539,13 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
 
   async shutdown(): Promise<void> {
     if (!this.ctx.initialized) return;
+
+    // 若已 bootstrap，使用 ShutdownOrchestrator 统一关闭
+    if (this.ctx.bootstrapResult?.orchestrator) {
+      await this.ctx.bootstrapResult.orchestrator.shutdown();
+    }
+
+    // MemoryStore 兜底关闭（orchestrator 可能已处理，幂等安全）
     if (this.ctx.memoryStore) {
       try { await this.ctx.memoryStore.flush(); } catch { /* store may not be initialized */ }
       try { await this.ctx.memoryStore.close(); } catch { /* store may not be initialized */ }

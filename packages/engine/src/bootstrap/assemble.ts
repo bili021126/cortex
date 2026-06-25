@@ -12,6 +12,7 @@ import type { SkillRegistry } from "@cortex/skill-kit";
 import type { ConsistencyLayer } from "@cortex/consistency";
 import type { BootstrapResult } from "./factory/index.js";
 import type { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
+import type { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
 import type { AuditTrail, MetricCounter } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 // ── Core-2 模块 ──
@@ -39,6 +40,8 @@ export interface BootstrapEngineResult {
   consistencyLayer?: ConsistencyLayer;
   /** LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期 */
   lifecycleManager?: LifecycleManager;
+  /** ShutdownOrchestrator —— 统一关闭编排 */
+  orchestrator?: ShutdownOrchestrator;
   /** Core-2: TaskRouter —— 统一策略+模型路由 */
   taskRouter?: TaskRouter;
   /** Core-2: EnvironmentAwareRouter —— 环境感知模型降级 */

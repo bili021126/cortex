@@ -56,7 +56,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "代码实现——阿尔贝多",
     capability: {
-      type: AgentType.Code, role: "阿尔贝多 — 首席工匠", emoji: "🎨",
+      id: AgentType.Code, type: AgentType.Code, role: "阿尔贝多 — 首席工匠", emoji: "🎨",
       tags: ["implementation", "code", "refactor", "bugfix"], produces: ["implementation"],
       toolPermissions: ["write_file", "search_replace", "read_file", "run_shell"],
       memoryQueryStrategy: "code", maxInstances: 3, modelKey: "code",
@@ -69,7 +69,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "代码审查——刻晴",
     capability: {
-      type: AgentType.Review, role: "刻晴 — 玉衡星", emoji: "⚡",
+      id: AgentType.Review, type: AgentType.Review, role: "刻晴 — 玉衡星", emoji: "⚡",
       tags: ["review", "audit"], produces: ["review"],
       toolPermissions: ["read_file", "run_shell"],
       memoryQueryStrategy: "review", maxInstances: 2, modelKey: "review",
@@ -82,7 +82,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "深度分析——莫娜",
     capability: {
-      type: AgentType.Analysis, role: "莫娜 — 占星术士", emoji: "🔮",
+      id: AgentType.Analysis, type: AgentType.Analysis, role: "莫娜 — 占星术士", emoji: "🔮",
       tags: ["analysis", "research"], produces: ["analysis"],
       toolPermissions: ["read_file", "search_code", "web_search"],
       memoryQueryStrategy: "analysis", maxInstances: 2, modelKey: "analysis",
@@ -95,7 +95,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "运维操作——北斗",
     capability: {
-      type: AgentType.Ops, role: "北斗 — 南十字船长", emoji: "⚓",
+      id: AgentType.Ops, type: AgentType.Ops, role: "北斗 — 南十字船长", emoji: "⚓",
       tags: ["ops", "deploy", "config"], produces: ["ops"],
       toolPermissions: ["run_shell", "write_file", "search_replace"],
       memoryQueryStrategy: "ops", maxInstances: 2, modelKey: "ops",
@@ -108,7 +108,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "模式发现——莫娜",
     capability: {
-      type: AgentType.Loop, role: "莫娜 — 占星术士", emoji: "🔮",
+      id: AgentType.Loop, type: AgentType.Loop, role: "莫娜 — 占星术士", emoji: "🔮",
       tags: ["loop", "pattern_scan"], produces: ["pattern"],
       toolPermissions: ["read_file", "search_code"],
       memoryQueryStrategy: "loop", maxInstances: 1, modelKey: "loop",
@@ -121,7 +121,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "治理审计——凝光",
     capability: {
-      type: AgentType.DocGovern, role: "凝光 — 天权星", emoji: "💎",
+      id: AgentType.DocGovern, type: AgentType.DocGovern, role: "凝光 — 天权星", emoji: "💎",
       tags: ["doc-govern", "audit"], produces: ["governance"],
       toolPermissions: ["read_file", "write_file", "search_replace"],
       memoryQueryStrategy: "doc-govern", maxInstances: 1, modelKey: "govern",
@@ -134,7 +134,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "API 设计——久岐忍",
     capability: {
-      type: AgentType.Api, role: "久岐忍 — 律法咨询", emoji: "📋",
+      id: AgentType.Api, type: AgentType.Api, role: "久岐忍 — 律法咨询", emoji: "📋",
       tags: ["api", "design"], produces: ["api"],
       toolPermissions: ["write_file", "read_file", "search_code"],
       memoryQueryStrategy: "api", maxInstances: 1, modelKey: "api",
@@ -147,7 +147,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "数据建模——艾尔海森",
     capability: {
-      type: AgentType.Data, role: "艾尔海森 — 知论派", emoji: "📚",
+      id: AgentType.Data, type: AgentType.Data, role: "艾尔海森 — 知论派", emoji: "📚",
       tags: ["data", "modeling"], produces: ["data"],
       toolPermissions: ["write_file", "read_file", "search_code"],
       memoryQueryStrategy: "data", maxInstances: 1, modelKey: "data",
@@ -160,7 +160,7 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
     autoRegister: true,
     description: "缺陷修复——希格雯",
     capability: {
-      type: AgentType.Fix, role: "希格雯 — 医护长", emoji: "💉",
+      id: AgentType.Fix, type: AgentType.Fix, role: "希格雯 — 医护长", emoji: "💉",
       tags: ["fix", "bugfix", "urgent"], produces: ["fix"],
       toolPermissions: ["write_file", "search_replace", "read_file", "run_shell"],
       memoryQueryStrategy: "fix", maxInstances: 2, modelKey: "fix",

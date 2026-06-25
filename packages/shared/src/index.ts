@@ -27,3 +27,4 @@ export * from "./modification-record.js";
 export * from "./doc-registry.js";
 export * from "./amendment.js";
 export * from "./tui-bridge.js";
+export * from "./indexed-registry.js";
