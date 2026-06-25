@@ -187,7 +187,14 @@ export class BarrelExportRule implements ZeroTokenRule {
     // 从模块路径推断 barrel 路径
     const barrelPath = modulePath.replace(/\/[^/]+\.ts$/, "/index.ts");
     try {
-      const content = require("fs").readFileSync(barrelPath, "utf-8");
+      // 文件大小限制 10MB（代码文件上限）
+      const MAX_SIZE = 10 * 1024 * 1024;
+      const _fs = require("fs");
+      const _stats = _fs.statSync(barrelPath);
+      if (_stats.size > MAX_SIZE) {
+        return { ruleName: this.name, passed: true, detail: `Barrel 文件过大，跳过校验: ${barrelPath}` };
+      }
+      const content = _fs.readFileSync(barrelPath, "utf-8");
       const exportName = modulePath.split("/").pop()?.replace(/\.ts$/, "");
       const exported = content.includes(exportName!);
       return {

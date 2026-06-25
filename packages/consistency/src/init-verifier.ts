@@ -342,6 +342,12 @@ export class InitVerifier {
     try {
       const cachePath = this._hashCachePath;
       if (fs.existsSync(cachePath)) {
+        // 文件大小限制 50MB（哈希缓存可能随项目增长）
+        const MAX_SIZE = 50 * 1024 * 1024;
+        const stats = fs.statSync(cachePath);
+        if (stats.size > MAX_SIZE) {
+          throw new Error(`哈希缓存文件过大: ${cachePath} (${stats.size} bytes, max ${MAX_SIZE})`);
+        }
         const raw = fs.readFileSync(cachePath, "utf-8");
         const data = JSON.parse(raw) as Record<string, string>;
         return new Map(Object.entries(data));

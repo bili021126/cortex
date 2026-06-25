@@ -15,7 +15,9 @@
 //   以 FYI 优先级回写给发射方（DocGovernAgent），模型在下一轮自我修正。
 // ============================================================
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type GovernanceEventPayload, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 import { DegradationBoundary } from "./degradation-boundary.js";
 
@@ -132,6 +134,12 @@ export class HardVerificationGate {
     try {
       const barrelPath = modulePath.replace(/\/[^/]+\.ts$/, "/index.ts");
       const fs = require("fs");
+      // 文件大小限制 10MB（代码文件上限）
+      const _MAX_SIZE = 10 * 1024 * 1024;
+      const _stats = fs.statSync(barrelPath);
+      if (_stats.size > _MAX_SIZE) {
+        return { ruleName: "barrel-export", passed: false, reason: `Barrel 文件过大: ${barrelPath} (${_stats.size} bytes)` };
+      }
       const content = fs.readFileSync(barrelPath, "utf-8");
       const exportName = modulePath.split("/").pop()?.replace(/\.ts$/, "");
       const exported = content.includes(exportName!);
@@ -159,15 +167,39 @@ export class HardVerificationGate {
     }
 
     try {
-      const srcDir = `packages/${srcPkg}/src`;
-      const tgtDir = `packages/${tgtPkg}/src`;
-      const out = execSync(
-        `grep -rl "interface ${iface}\\\\|type ${iface}" ${srcDir} ${tgtDir} --include="*.ts" 2>/dev/null || true`,
-        { encoding: "utf-8", timeout: 5000, cwd: process.cwd() },
-      );
-      const files = out.split("\n").filter(Boolean);
-      const defined = files.some(f => f.includes(srcPkg));
-      const consumed = files.some(f => f.includes(tgtPkg));
+      const cwd = process.cwd();
+      const srcDir = path.join(cwd, `packages/${srcPkg}/src`);
+      const tgtDir = path.join(cwd, `packages/${tgtPkg}/src`);
+
+      // 原生 fs 递归搜索，替换 shell grep 调用（防注入 + 跨平台）
+      const ifacePattern = new RegExp(`\\b(interface|type)\\s+${iface}\\b`);
+      const matchingFiles: string[] = [];
+
+      function walkAndMatch(dir: string): void {
+        let entries: fs.Dirent[];
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const entry of entries) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            walkAndMatch(full);
+          } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+            try {
+              // 文件大小限制 10MB（代码文件上限）
+              const _MAX_TS_SIZE = 10 * 1024 * 1024;
+              const _st = fs.statSync(full);
+              if (_st.size > _MAX_TS_SIZE) continue;
+              const content = fs.readFileSync(full, 'utf-8');
+              if (ifacePattern.test(content)) matchingFiles.push(full);
+            } catch { /* skip unreadable */ }
+          }
+        }
+      }
+
+      walkAndMatch(srcDir);
+      walkAndMatch(tgtDir);
+
+      const defined = matchingFiles.some(f => f.includes(srcPkg));
+      const consumed = matchingFiles.some(f => f.includes(tgtPkg));
       return {
         ruleName: "cross-package",
         passed: defined && consumed,
@@ -184,7 +216,7 @@ export class HardVerificationGate {
     const now = Date.now();
     if (this._gitDiffCache && now - this._gitDiffTime < HardVerificationGate.CACHE_TTL) return this._gitDiffCache;
     try {
-      const out = execSync("git diff --name-only HEAD~1", { encoding: "utf-8", timeout: 5000, cwd: process.cwd() });
+      const out = execFileSync("git", ["diff", "--name-only", "HEAD~1"], { encoding: "utf-8", timeout: 5000, cwd: process.cwd() });
       this._gitDiffCache = out.split("\n").filter(Boolean);
       this._gitDiffTime = now;
       return this._gitDiffCache;
@@ -195,7 +227,7 @@ export class HardVerificationGate {
     const now = Date.now();
     if (this._eslintCache && now - this._eslintTime < HardVerificationGate.CACHE_TTL) return this._eslintCache;
     try {
-      const out = execSync("pnpm exec eslint --quiet --format compact packages/", {
+      const out = execFileSync("pnpm", ["exec", "eslint", "--quiet", "--format", "compact", "packages/"], {
         encoding: "utf-8", timeout: 30_000, cwd: process.cwd(),
       });
       const errors: Array<{ file: string; rule: string }> = [];

@@ -4,7 +4,7 @@
 
 import { bootstrap, type AgentDefinition, type BootstrapResult } from "./factory/index.js";
 import { setAgentRegistry, type MemoryQuery, type TaskNode } from "@cortex/shared";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { LlmAdapter } from "@cortex/llm";
 import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
@@ -30,6 +30,12 @@ export function resolveCodingStandards(projectRoot: string): string {
   if (!codingStandardsPath) return "";
   const path = join(projectRoot, codingStandardsPath);
   if (existsSync(path)) {
+    // 文件大小限制 10MB（代码文件上限）
+    const MAX_SIZE = 10 * 1024 * 1024;
+    const stats = statSync(path);
+    if (stats.size > MAX_SIZE) {
+      throw new Error(`编码规范文件过大: ${path} (${stats.size} bytes, max ${MAX_SIZE})`);
+    }
     _codingStandardsCache = readFileSync(path, "utf-8");
   } else {
     _codingStandardsCache = "";

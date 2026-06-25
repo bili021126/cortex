@@ -40,7 +40,7 @@ import { WorkerPool } from "../core/worker-pool.js";
 import * as os from "node:os";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type PipelineHandler, type ReadMode, type TaskNode } from "@cortex/shared";
 import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector } from "@cortex/telemetry";
@@ -116,6 +116,12 @@ export async function bootstrapEngine(
   const pluginsDataDir = resolveConfigDataDir();
   let pluginsJson: { plugins: string[] };
   try {
+    // 文件大小限制 10MB（配置文件上限）
+    const MAX_SIZE = 10 * 1024 * 1024;
+    const _stats = statSync(`${pluginsDataDir}/engine-plugins.json`);
+    if (_stats.size > MAX_SIZE) {
+      throw new Error(`插件清单文件过大: ${_stats.size} bytes`);
+    }
     pluginsJson = JSON.parse(readFileSync(`${pluginsDataDir}/engine-plugins.json`, "utf-8")) as { plugins: string[] };
   } catch (e) {
     throw new Error(

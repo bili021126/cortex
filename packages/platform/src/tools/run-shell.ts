@@ -27,14 +27,21 @@ export function createTool(ctx: ToolContext): Tool {
         return { success: false, error: "run_shell 缺少 command 参数" };
       }
       try {
-        // 命令安全检查：禁止注入元字符（多语句连接符 + 子shell + 重定向 + 换行符）
+        // 第一道防线：注入元字符检测（多语句连接符 + 子shell + 重定向 + 换行符）
         const injectionPattern = /[;&|`$(){}<>]/;
         const newlinePattern = /[\n\r]/;
         if (injectionPattern.test(command) || newlinePattern.test(command)) {
           return { success: false, error: "run_shell 拒绝危险字符: 命令包含 shell 注入元字符（; & | ` $ ( ) { } < >）或换行符。如需执行多条命令或有特殊需求，请分步调用。" };
         }
+
+        // 第二道防线：解析命令为可执行文件 + 参数数组，避免 shell 解释注入
+        const parts = command.trim().split(/\s+/);
+        const cmd = parts[0]!;
+        const args = parts.slice(1);
+
         const cwd = ctx.workspaceRoot ?? ctx.fs.cwd();
-        const output = await ctx.fs.execCommand(command, {
+        // 使用 execFile（参数数组）而非 execCommand（整串传给 shell）
+        const output = await ctx.fs.execFile(cmd, args, {
           cwd,
           timeout: ctx.toolTimeouts.runShell,
         });

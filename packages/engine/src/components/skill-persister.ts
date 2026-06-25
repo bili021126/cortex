@@ -368,6 +368,13 @@ export function scanOutputFilesForSkills(workspaceDir: string): SkillTemplate[] 
     const matches = findFiles(workspaceDir, glob);
     for (const filePath of matches) {
       try {
+        // 文件大小限制 10MB（技能文件上限）
+        const MAX_SIZE = 10 * 1024 * 1024;
+        const stats = fs.statSync(filePath);
+        if (stats.size > MAX_SIZE) {
+          console.warn(`[scanOutputFilesForSkills] 跳过超大文件: ${filePath} (${stats.size} bytes)`);
+          continue;
+        }
         const content = fs.readFileSync(filePath, "utf-8");
         const skills = extractSkillsFromMarkdown(content, kind, filePath);
         for (const skill of skills) {

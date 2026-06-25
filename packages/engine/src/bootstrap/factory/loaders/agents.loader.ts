@@ -261,6 +261,12 @@ function _readPromptFile(projectRoot: string, filePath: string): string {
     throw new Error(`Prompt 文件不存在: ${fullPath}`);
   }
   try {
+    // 文件大小限制 10MB（prompt 文件上限）
+    const MAX_SIZE = 10 * 1024 * 1024;
+    const stats = fs.statSync(fullPath);
+    if (stats.size > MAX_SIZE) {
+      throw new Error(`Prompt 文件过大: ${fullPath} (${stats.size} bytes, max ${MAX_SIZE})`);
+    }
     return fs.readFileSync(fullPath, "utf-8").trim();
   } catch (e) {
     throw new Error(`读取 Prompt 文件失败: ${fullPath}: ${String(e)}`, { cause: e });

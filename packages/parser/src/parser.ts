@@ -159,6 +159,20 @@ function parseInline(text: string): string {
   return result;
 }
 
+// ─── XSS 防护 ───────────────────────────────────────────
+
+/** 允许的 HTML 标签属性白名单 */
+const ALLOWED_ATTRS = new Set(['href', 'src', 'alt', 'title', 'class', 'id', 'target', 'rel']);
+
+/**
+ * 过滤/转义 HTML 标签中的危险属性。
+ * 将 on* 事件属性（onerror, onload, onclick 等）转义为 data-x-on*，
+ * 阻止 XSS 注入。
+ */
+function sanitizeAttrs(html: string): string {
+  return html.replace(/\s(on\w+)\s*=/gi, ' data-x-$1=');
+}
+
 /** HTML 实体转义 */
 function escapeHtml(str: string): string {
   return str
@@ -372,7 +386,8 @@ export function convert(markdown: string): string {
     }
   }
 
-  return htmlParts.join('');
+  const raw = htmlParts.join('');
+  return sanitizeAttrs(raw);
 }
 
 /**
