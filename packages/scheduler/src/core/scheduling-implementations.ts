@@ -1012,7 +1012,7 @@ export class SemanticModelRouter implements IModelRouter {
     recommendedTier?: string,
   ): Promise<{ tier: ModelTier; source: RouteDecision["source"] }> {
     // A 路径：甘雨已在规划时标注 → 零成本
-    if (recommendedTier && _VALID_TIERS.has(recommendedTier)) {
+    if (recommendedTier && VALID_TIERS.has(recommendedTier)) {
       return { tier: recommendedTier as ModelTier, source: "recommended" };
     }
 
@@ -1031,7 +1031,7 @@ export class SemanticModelRouter implements IModelRouter {
             this.classifier(payload),
             this._classifierTimeoutMs,
           );
-          if (_VALID_TIERS.has(tier)) {
+          if (VALID_TIERS.has(tier)) {
             this._cache.set(hash, { tier, at: Date.now() });
             return { tier, source: "classifier" };
           }
@@ -1071,7 +1071,7 @@ export class SemanticModelRouter implements IModelRouter {
         content: payload.slice(0, 2000),
       }]);
       const tier = resp.trim().toLowerCase();
-      return _VALID_TIERS.has(tier) ? tier as ModelTier : "standard";
+      return VALID_TIERS.has(tier) ? tier as ModelTier : "standard";
     };
   }
 }

@@ -53,7 +53,7 @@ export class ContextManager {
     const policies = entries.map(([key, val]) => ({
       ...(val as Record<string, unknown>),
       scene: key,
-    }));
+    })) as Array<Record<string, unknown>>;
 
     const match =
       policies.find((p) => p.scene === input.scene) ??
