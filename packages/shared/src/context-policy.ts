@@ -12,7 +12,7 @@
 // @since Cortex Core-2 — 上下文生命周期管理协议
 // ============================================================
 
-import { LinkType, type ReadMode } from "./memory.js";
+import type { LinkType, ReadMode } from "./memory.js";
 
 // ─── 对话保留策略 ────────────────────────────────────────
 

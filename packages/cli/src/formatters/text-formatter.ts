@@ -36,12 +36,12 @@ export class TextFormatter implements Formatter {
     });
 
     // 表头
-    const headerLine = headers.map((h, i) => h.padEnd(colWidths[i])).join("  ");
+    const headerLine = headers.map((h, i) => h.padEnd(colWidths[i]!)).join("  ");
     const separator = colWidths.map((w) => "─".repeat(w)).join("  ");
 
     // 数据行
     const dataLines = rows.map((r) =>
-      r.map((cell, i) => (cell ?? "").padEnd(colWidths[i])).join("  "),
+      r.map((cell, i) => (cell ?? "").padEnd(colWidths[i]!)).join("  "),
     );
 
     return [headerLine, separator, ...dataLines].join("\n");

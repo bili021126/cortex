@@ -92,7 +92,7 @@ export async function* partyMode(
     outputs,
     roster,
     bridge,
-    { mainSpeaker: roster[0], maxChars: 100 },
+    { mainSpeaker: roster[0]!, maxChars: 100 },
   );
 
   const resultText = summarized.join("\n\n");

@@ -174,7 +174,7 @@ export class Toolkit {
     for (const name of this.tools.keys()) {
       if (name.startsWith("mcp:")) {
         const parts = name.slice(4).split(":");
-        if (parts.length >= 2) ids.add(parts[0]);
+        if (parts.length >= 2) ids.add(parts[0]!);
       }
     }
     return [...ids];
@@ -315,7 +315,10 @@ export class Toolkit {
     const resolved = this.fs.resolve(filePath);
     // 解析符号链接的真实路径（防符号链接沙箱绕过）
     let realResolved: string;
-    try { realResolved = require("fs").realpathSync.native(resolved); } catch { realResolved = resolved; }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      realResolved = require("fs").realpathSync.native(resolved);
+    } catch { realResolved = resolved; }
     const root = this.workspaceRoot;
     if ((realResolved === root || realResolved.startsWith(root + this.fs.sep)) &&
         (resolved === root || resolved.startsWith(root + this.fs.sep))) {

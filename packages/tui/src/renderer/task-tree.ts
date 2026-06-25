@@ -221,7 +221,7 @@ export class TaskTreeRenderer {
   /** 过滤可见节点（已折叠子节点隐藏） */
   private filterVisible(sorted: NodeRenderState[]): NodeRenderState[] {
     const hidden = new Set<string>();
-    for (const [id] of this.collapsedNodes) {
+    for (const id of this.collapsedNodes) {
       this.collectDescendants(id, sorted, hidden);
     }
     return sorted.filter(n => !hidden.has(n.nodeId));

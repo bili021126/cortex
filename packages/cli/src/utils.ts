@@ -59,7 +59,7 @@ export function stripGlobalOptions(argv: string[]): string[] {
   const cleanArgs: string[] = [];
   let skipNext = false;
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
+    const a = argv[i]!;
     if (skipNext) { skipNext = false; continue; }
     if (["--quiet", "-q", "--verbose", "-v", "--no-color"].includes(a)) continue;
     if (a.startsWith("--format=") || a === "--format" || a === "-f") {
@@ -75,9 +75,9 @@ export function stripGlobalOptions(argv: string[]): string[] {
 
 /** 检查当前进程是否为直接运行（非 import） */
 export function isDirectRun(): boolean {
-  return process.argv[1]?.replaceAll("\\", "/").endsWith("/src/main.ts")
+  return (process.argv[1]?.replaceAll("\\", "/").endsWith("/src/main.ts")
     || process.argv[1]?.replaceAll("\\", "/").endsWith("/src/main.js")
-    || process.argv[1]?.replaceAll("\\", "/").endsWith("/dist/main.js");
+    || process.argv[1]?.replaceAll("\\", "/").endsWith("/dist/main.js")) ?? false;
 }
 
 /** 统一帮助请求检测：空参 或 --help/-h */

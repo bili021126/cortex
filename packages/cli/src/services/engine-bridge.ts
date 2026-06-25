@@ -26,7 +26,7 @@ import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { CLIAdapter, type Toolkit } from "@cortex/platform";
 import type { EngineConfig } from "@cortex/config";
 import { MemoryStore } from "@cortex/memory-store";
-import { AgentType, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type ITuiEngineBridge, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
+import { AgentType, PlatformKind, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type ITuiEngineBridge, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
@@ -188,7 +188,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
           return { requestId: msg.id, approved: true };
         },
         notify: (message: string) => process.stdout.write(`[ConfirmGate] ${message}\n`),
-        getPlatformContext: () => ({ kind: 'cli' as const, foreground: true, idle: false }),
+        getPlatformContext: () => ({ kind: PlatformKind.CLI, foreground: true, idle: false }),
       });
     }
 

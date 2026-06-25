@@ -19,7 +19,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cortex/shared": "workspace:*"
+    "@cortex/shared": "workspace:*",
+    "@cortex/config": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

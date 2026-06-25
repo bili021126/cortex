@@ -97,7 +97,7 @@ export class PipelineObserver implements IPipelineObserver {
     if (handlers) {
       for (let i = 0; i < handlers.length; i++) {
         try {
-          handlers[i](event);
+          handlers[i]!(event);
         } catch (e) {
           const ctx: HandlerErrorContext = {
             eventType: event.type,

@@ -76,7 +76,7 @@ export class DefaultConflictDetector implements ConflictDetector {
     for (const group of groups) {
       for (let i = 0; i < group.length; i++) {
         for (let j = i + 1; j < group.length; j++) {
-          const conflict = this._checkPair(group[i], group[j]);
+          const conflict = this._checkPair(group[i]!, group[j]!);
           if (conflict) return conflict;
         }
       }

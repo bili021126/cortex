@@ -65,9 +65,9 @@ import type { CommandContext } from "./types.js";
 function parseProjectRoot(): string {
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith("--dir=")) return nodePath.resolve(argv[i].slice(6));
-    if ((argv[i] === "--dir" || argv[i] === "-d") && i + 1 < argv.length)
-      return nodePath.resolve(argv[i + 1]);
+    if (argv[i]!.startsWith("--dir=")) return nodePath.resolve(argv[i]!.slice(6));
+    if ((argv[i]! === "--dir" || argv[i]! === "-d") && i + 1 < argv.length)
+      return nodePath.resolve(argv[i + 1]!);
   }
   return process.cwd();
 }

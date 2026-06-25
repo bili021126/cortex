@@ -231,7 +231,7 @@ function handleAgentList(
     success: true,
     data: {
       agents: rows.map((r) => ({
-        type: r[0], role: r[1], status: r[2], instances: parseInt(r[3], 10), tags: r[4],
+        type: r[0], role: r[1], status: r[2], instances: parseInt(r[3]!, 10), tags: r[4],
         ...(verbose ? { permissions: r[5] } : {}),
       })),
       total: rows.length, awake: totalAwake, instances: totalInstances,

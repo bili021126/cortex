@@ -68,13 +68,13 @@ export class MiniAgentPool implements IAgentPool {
     return this.statuses.get(instanceId);
   }
 
-  hasAwake(agentType: string): boolean {
+  hasAwake(agentType: AgentType): boolean {
     const instances = this.instances.get(agentType);
     if (!instances) return false;
     return [...instances].some((id) => this.statuses.get(id) === AgentStatus.Awake);
   }
 
-  canSpawn(agentType: string): boolean {
+  canSpawn(agentType: AgentType): boolean {
     const config = this.configs.get(agentType as AgentType);
     if (!config) return false;
     const instances = this.instances.get(agentType);
@@ -88,7 +88,17 @@ export class MiniAgentPool implements IAgentPool {
     this.statuses.delete(instanceId);
   }
 
-  count(agentType: string): number {
+  count(agentType: AgentType): number {
     return this.instances.get(agentType)?.size ?? 0;
+  }
+
+  /** 记录 agent 心跳 */
+  heartbeat(_agentId: string): void {
+    // no-op: MiniAgentPool 不做心跳追踪
+  }
+
+  /** 探测 agent 是否存活 */
+  async ping(agentId: string): Promise<boolean> {
+    return this.statuses.has(agentId);
   }
 }

@@ -142,9 +142,9 @@ function _checkHeadings(content: string): string[] {
   const lines = content.split("\n");
   let prevLevel = 0;
   for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(/^(#{1,6})\s/);
+    const match = lines[i]!.match(/^(#{1,6})\s/);
     if (match) {
-      const level = match[1].length;
+      const level = match[1]!.length;
       if (prevLevel > 0 && level > prevLevel + 1) {
         issues.push(`第 ${i + 1} 行: 标题级别跳跃 (h${prevLevel} → h${level})`);
       }
@@ -159,7 +159,7 @@ function _checkLinks(content: string): string[] {
   const issues: string[] = [];
   const linkMatches = content.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g);
   for (const match of linkMatches) {
-    const url = match[2];
+    const url = match[2]!;
     if (url.startsWith("http") && !url.startsWith("http://localhost")) {
       issues.push(`外部链接: ${match[1]} → ${url}`);
     }

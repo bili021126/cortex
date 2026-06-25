@@ -14,6 +14,7 @@
 // ============================================================
 
 import { execSync } from "node:child_process";
+import fs from "node:fs";
 import { MEMORY_VALID_TRANSITIONS } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import { DegradationBoundary } from "./degradation-boundary.js";
@@ -133,7 +134,7 @@ export class EslintRule implements ZeroTokenRule {
       const errors: Array<{ file: string; line: number; rule: string }> = [];
       for (const line of out.split("\n")) {
         const m = line.match(/^(.+)\((\d+),\d+\):\s+error\s+.+?\s+(\S+)$/);
-        if (m) errors.push({ file: m[1]!, line: parseInt(m[2]!), rule: m[3]! });
+        if (m) errors.push({ file: m[1] ?? "", line: parseInt(m[2] ?? "0"), rule: m[3] ?? "" });
       }
       this._cachedErrors = errors;
       this._cacheTime = now;
@@ -189,14 +190,13 @@ export class BarrelExportRule implements ZeroTokenRule {
     try {
       // 文件大小限制 10MB（代码文件上限）
       const MAX_SIZE = 10 * 1024 * 1024;
-      const _fs = require("fs");
-      const _stats = _fs.statSync(barrelPath);
+      const _stats = fs.statSync(barrelPath);
       if (_stats.size > MAX_SIZE) {
         return { ruleName: this.name, passed: true, detail: `Barrel 文件过大，跳过校验: ${barrelPath}` };
       }
-      const content = _fs.readFileSync(barrelPath, "utf-8");
+      const content = fs.readFileSync(barrelPath, "utf-8");
       const exportName = modulePath.split("/").pop()?.replace(/\.ts$/, "");
-      const exported = content.includes(exportName!);
+      const exported = content.includes(exportName ?? "");
       return {
         ruleName: this.name,
         passed: exported,
@@ -229,7 +229,6 @@ export class CrossPackageContractRule implements ZeroTokenRule {
     try {
       const srcDir = `packages/${sourcePkg}/src`;
       const tgtDir = `packages/${targetPkg}/src`;
-      const fs = require("fs");
 
       // 在源包中查找接口定义
       const srcMatch = this._grepInterface(srcDir, interfaceName as string);
@@ -254,7 +253,6 @@ export class CrossPackageContractRule implements ZeroTokenRule {
   }
 
   private _grepInterface(dir: string, name: string): string[] {
-    const { execSync } = require("node:child_process");
     try {
       const out = execSync(`grep -rl "interface ${name}\\|type ${name}" ${dir} --include="*.ts" 2>/dev/null || true`, {
         encoding: "utf-8", timeout: 5000, cwd: process.cwd(),

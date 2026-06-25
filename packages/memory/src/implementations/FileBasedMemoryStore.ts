@@ -86,9 +86,13 @@ class FileBackend implements MemoryStoreBackend {
           // 文件损坏，跳过
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // 检查索引文件是否存在以区分首次使用和文件损坏
-      try { require("fs").accessSync(this._indexPath); console.warn(`[memory] 索引文件损坏，从空存储启动: ${this._indexPath}`); } catch {}
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        require("fs").accessSync(this._indexPath);
+        console.warn(`[memory] 索引文件损坏，从空存储启动: ${this._indexPath}`);
+      } catch { /* empty */ }
       // 索引不存在 = 首次使用，静默
     }
 

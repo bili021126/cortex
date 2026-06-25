@@ -13,9 +13,6 @@
 
 import type {
   MemoryEntry,
-  MemoryQuery,
-  MemoryLink,
-  ReadMode,
 } from "@cortex/shared";
 
 // ── 只读记忆存储接口 ─────────────────────────

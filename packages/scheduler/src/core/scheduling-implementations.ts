@@ -128,7 +128,7 @@ export class RoundRobinStrategy implements IScheduleStrategy {
     const available = this._availableAgents(agents);
     if (available.length === 0) return null;
     if (available.length === 0) return null;
-    const chosen = available[this._rrIndex % available.length];
+    const chosen = available[this._rrIndex % available.length]!;
     this._rrIndex++;
     return chosen;
   }
@@ -257,7 +257,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
           observer.emit({
             type: PipelineEventType.SchedulerInvariantViolation,
             priority: PipelinePriority.CRITICAL,
-            payload: { nodeId: pendingNodes[0].id, message: `Circular dependency detected among ${pendingNodes.length} pending nodes` },
+            payload: { nodeId: pendingNodes[0]!.id, message: `Circular dependency detected among ${pendingNodes.length} pending nodes` },
             timestamp: Date.now(),
             notificationType: "WARNING",
           });
@@ -270,7 +270,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
         }
 
         for (let li = 0; li < layers.length; li++) {
-          const layer = layers[li];
+          const layer = layers[li]!;
           observer.emit({
             type: PipelineEventType.SchedulerLayerStart,
             priority: PipelinePriority.HIGH,
@@ -802,7 +802,7 @@ async function runDispatchPipeline(ctx: DispatchCtx, steps: IDispatchStep[]): Pr
     ctx = await step.run(ctx);
     if (ctx.result && !ctx.result.success && step.name !== "Cleanup") {
       const result = ctx.result;
-      const lastStep = steps[steps.length - 1];
+      const lastStep = steps[steps.length - 1]!;
       if (lastStep.name === "Cleanup") {
         await lastStep.run(ctx);
       }

@@ -437,9 +437,9 @@ describe("Registry", () => {
 
       const errorEvents = events.filter((e) => e.type === "EXECUTION_ERROR");
       expect(errorEvents.length).toBe(1);
-      expect(errorEvents[0]).toMatchObject({ type: "EXECUTION_ERROR", name: "svc" });
-      expect(errorEvents[0].error).toBeInstanceOf(Error);
-      expect((errorEvents[0].error as Error).message).toBe("boom");
+      expect(errorEvents[0]!).toMatchObject({ type: "EXECUTION_ERROR", name: "svc" });
+      expect(errorEvents[0]!.error).toBeInstanceOf(Error);
+      expect((errorEvents[0]!.error as Error).message).toBe("boom");
     });
 
     it("should use overrides when provided", async () => {
@@ -649,12 +649,12 @@ describe("Registry", () => {
       registry.register("svc", { circuitBreaker: cb });
 
       // Initially CLOSED
-      expect(registry.snapshot()[0].circuitBreaker?.state).toBe("CLOSED");
+      expect(registry.snapshot()[0]!.circuitBreaker?.state).toBe("CLOSED");
 
       // Trip the breaker
       cb.recordFailure();
       cb.recordFailure();
-      expect(registry.snapshot()[0].circuitBreaker?.state).toBe("OPEN");
+      expect(registry.snapshot()[0]!.circuitBreaker?.state).toBe("OPEN");
     });
   });
 

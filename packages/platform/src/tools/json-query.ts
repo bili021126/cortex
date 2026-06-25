@@ -241,7 +241,9 @@ function evaluateFilter(obj: unknown, expr: string): boolean {
   const match = expr.trim().match(/^@\.(\w+)\s*(==|!=|<=|>=|<|>|=~)\s*(.+)$/);
   if (!match) return true; // 无法解析 → 通过
 
-  const [, key, op, valStr] = match;
+  const key = match[1]!;
+  const op = match[2]!;
+  const valStr = match[3]!;
   if (!obj || typeof obj !== "object") return false;
 
   const actual = (obj as Record<string, unknown>)[key];

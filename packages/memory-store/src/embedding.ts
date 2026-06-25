@@ -231,14 +231,14 @@ export const defaultEmbeddingService = new EmbeddingService();
  * 委托给 defaultEmbeddingService.embedText。
  */
 export async function embedText(text: string): Promise<number[]> {
-  return defaultEmbeddingService.embedText(text);
+  return await defaultEmbeddingService.embedText(text);
 }
 
 /**
  * 批量嵌入，委托给 defaultEmbeddingService.embedBatch。
  */
 export async function embedBatch(texts: string[]): Promise<number[][]> {
-  return defaultEmbeddingService.embedBatch(texts);
+  return await defaultEmbeddingService.embedBatch(texts);
 }
 
 /**
@@ -252,5 +252,5 @@ export function isModelLoaded(): boolean {
  * 预热模型（委托给 defaultEmbeddingService）。
  */
 export async function preloadModel(signal?: AbortSignal): Promise<void> {
-  return defaultEmbeddingService.preloadModel(signal);
+  return await defaultEmbeddingService.preloadModel(signal);
 }

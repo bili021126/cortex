@@ -296,7 +296,7 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
     const lines = output.trim().split("\n");
     let jsonLine: string | undefined;
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i].startsWith("{")) { jsonLine = lines[i]; break; }
+      if (lines[i]!.startsWith("{")) { jsonLine = lines[i]; break; }
     }
 
     if (!jsonLine) {

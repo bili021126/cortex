@@ -54,7 +54,7 @@ export async function crystallizeSkillToKnowledge(
     let existingEvidenceIds: string[] = [];
 
     if (existing.length > 0) {
-      const oldEntry = existing[0];
+      const oldEntry = existing[0]!;
       version = ((oldEntry.content_blob?.version as number) ?? 1) + 1;
       existingEvidenceIds = (oldEntry.content_blob?.evidenceIds as string[]) ?? [];
       memory.cas(oldEntry.id, "Active", "Archived");
@@ -277,7 +277,7 @@ const markdownExtractor = new MarkdownPatternExtractor({
 
 function patternDefinitionToSkillTemplate(p: PatternDefinition, kind: SkillKind): SkillTemplate {
   const triggerMatch = p.description.match(/trigger:\s*(.+)/);
-  const trigger = triggerMatch ? triggerMatch[1].trim() : "";
+  const trigger = triggerMatch ? triggerMatch[1]!.trim() : "";
   return {
     id: p.id, kind, name: p.name, triggerTags: p.tags as Tag[], trigger,
     steps: p.body.rules, expectedOutput: p.body.examples?.[0]?.code ?? "",
@@ -317,16 +317,16 @@ function _extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
   const sectionRegex = /(?:^|\n)#{2}\s*P(\d+)\s*[—\-–]\s*(.+?)(?:\n|$)/g;
   let match: RegExpExecArray | null;
   while ((match = sectionRegex.exec(content)) !== null) {
-    const pNumber = match[1];
-    const fullName = match[2].trim();
+    const pNumber = match[1]!;
+    const fullName = match[2]!.trim();
     const name = fullName.replace(/\(.*?\)/g, "").trim();
     const sectionStart = match.index + match[0].length;
     const nextSection = content.slice(sectionStart).search(/(?:^|\n)#{2}\s*P\d+\s*[—\-–]/);
     const sectionContent = nextSection === -1 ? content.slice(sectionStart) : content.slice(sectionStart, sectionStart + nextSection);
     const tagsMatch = sectionContent.match(/Tags?[：:]\s*(.+)/);
-    const triggerTags: Tag[] = tagsMatch ? (tagsMatch[1].split(/[,，、]/).map((t: string) => t.trim()).filter(Boolean) as Tag[]) : ([] as unknown as Tag[]);
+    const triggerTags: Tag[] = tagsMatch ? (tagsMatch[1]!.split(/[,，、]/).map((t: string) => t.trim()).filter(Boolean) as Tag[]) : ([] as unknown as Tag[]);
     const triggerMatch = sectionContent.match(/Trigger[：:]\s*(.+)/);
-    const trigger = triggerMatch ? triggerMatch[1].trim() : `P${pNumber}:${kind}`;
+    const trigger = triggerMatch ? triggerMatch[1]!.trim() : `P${pNumber}:${kind}`;
     const recipeMatch = sectionContent.match(/Recipe[：:]\s*([\s\S]*?)(?:\n(?:#{1,3}|\n)|$)/);
     let steps: string[] = [];
     if (recipeMatch) {
@@ -336,7 +336,7 @@ function _extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
     }
     if (steps.length === 0) steps = ["分析相关代码模式", "遵循已建立的架构约定"];
     const conditionMatch = sectionContent.match(/Condition[：:]\s*([\s\S]*?)(?:\n(?:#{1,3}|\n)|$)/);
-    const conditions = conditionMatch ? conditionMatch[1].split("\n").map((c: string) => c.trim()).filter(Boolean).join("; ") : "";
+    const conditions = conditionMatch ? conditionMatch[1]!.split("\n").map((c: string) => c.trim()).filter(Boolean).join("; ") : "";
     const expectedOutput = conditions || `P${pNumber}:${name}`;
     const skillName = name.replace(/\s+/g, "-").toLowerCase();
     const id = `p${pNumber}-${skillName}-${timestamp}`;
@@ -351,15 +351,15 @@ function _extractPatternSections(content: string, kind: SkillKind): SkillTemplat
   const sectionRegex = /(?:^|\n)#{2}\s*模式\s*(\d+)\s*[：:]\s*(.+?)(?:\n|$)/g;
   let match: RegExpExecArray | null;
   while ((match = sectionRegex.exec(content)) !== null) {
-    const patternNumber = match[1];
-    const name = match[2].trim();
+    const patternNumber = match[1]!;
+    const name = match[2]!.trim();
     const sectionStart = match.index + match[0].length;
     const nextSection = content.slice(sectionStart).search(/(?:^|\n)#{2}\s*模式\s*\d+\s*[：:]/);
     const sectionContent = nextSection === -1 ? content.slice(sectionStart) : content.slice(sectionStart, sectionStart + nextSection);
     const tagsMatch = sectionContent.match(/Tags?[：:]\s*(.+)/);
-    const triggerTags2: Tag[] = tagsMatch ? (tagsMatch[1].split(/[,，、]/).map((t: string) => t.trim()).filter(Boolean) as Tag[]) : ([] as unknown as Tag[]);
+    const triggerTags2: Tag[] = tagsMatch ? (tagsMatch[1]!.split(/[,，、]/).map((t: string) => t.trim()).filter(Boolean) as Tag[]) : ([] as unknown as Tag[]);
     const triggerMatch2 = sectionContent.match(/Trigger[：:]s*(.+)/);
-    const trigger2 = triggerMatch2 ? triggerMatch2[1].trim() : `模式${patternNumber}:${kind}`;
+    const trigger2 = triggerMatch2 ? triggerMatch2[1]!.trim() : `模式${patternNumber}:${kind}`;
     const stepLines2 = sectionContent.match(/[-*]\s*(.+)/g)
       ?.map((s: string) => s.replace(/^[-*]\s*/, "").trim())
       .filter(Boolean);
@@ -367,7 +367,7 @@ function _extractPatternSections(content: string, kind: SkillKind): SkillTemplat
       ? stepLines2.map((s: string) => s.replace(/^-\s*/, "").trim()).filter(Boolean)
       : ["参考文档中的模式描述"];
     const outputMatch = sectionContent.match(/输出[：:]\s*(.+)/);
-    const expectedOutput = outputMatch ? outputMatch[1].trim() : `模式${patternNumber}: ${name}`;
+    const expectedOutput = outputMatch ? outputMatch[1]!.trim() : `模式${patternNumber}: ${name}`;
     const skillName = name.replace(/\s+/g, "-").toLowerCase();
     const id = `pattern-${patternNumber}-${skillName}-${timestamp}`;
     patterns.push({ id, kind, name: `模式${patternNumber}:${name}`, triggerTags: triggerTags2, trigger: trigger2, steps: steps2, expectedOutput, status: "trial" as const, weight: 0, feedbackHistory: [], discoveredBy: "file-scanner-pattern", createdAt: timestamp });

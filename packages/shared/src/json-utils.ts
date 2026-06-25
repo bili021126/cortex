@@ -22,7 +22,7 @@ export function extractJsonBlock(raw: string): string | null {
   // 策略 1：```json ... ``` 标记围栏
   const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (fenceMatch) {
-    const content = fenceMatch[1]!.trim();
+    const content = (fenceMatch[1] ?? '').trim();
     if (content.length > 0) return content;
   }
 

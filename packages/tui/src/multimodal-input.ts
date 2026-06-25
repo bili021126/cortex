@@ -48,7 +48,7 @@ function extractImagePaths(input: string): string[] {
   const regex = /(?<!\w)@?(\/[^\s]+?\.(?:png|jpg|jpeg|webp|gif))/gi;
   let match;
   while ((match = regex.exec(input)) !== null) {
-    const p = match[1].replace(/^@/, "").trim();
+    const p = match[1]!.replace(/^@/, "").trim();
     // 去除末尾可能粘连的标点
     const cleaned = p.replace(/[,;!?。，；！？]+$/, "");
     if (SUPPORTED_EXTENSIONS.has(path.extname(cleaned).toLowerCase())) {

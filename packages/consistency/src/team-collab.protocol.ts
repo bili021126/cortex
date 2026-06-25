@@ -302,7 +302,7 @@ export class TeamCollabManager {
         // M-04 修复：跳过 Active→Active 的 no-op CAS
         // 当前 entries 为 Active，无需 CAS；直接通过 link 标记冲突关系
         if (report.conflictingIds[0] !== entryId) {
-          this._memory.link(report.conflictingIds[0], entryId, LinkType.DerivedFrom);
+          this._memory.link(report.conflictingIds[0]!, entryId, LinkType.DerivedFrom);
         }
       }
     }

@@ -558,7 +558,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     const failed: { index: number; error: string }[] = [];
     for (let idx = 0; idx < is.length; idx++) {
       try {
-        const id = await this.write(is[idx]);
+        const id = await this.write(is[idx]!);
         succeeded.push(id);
       } catch (err) {
         failed.push({ index: idx, error: String(err).slice(0, 200) });
@@ -571,7 +571,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
         payload: {
           source: "MemoryStore.writeMany",
           severity: "degraded",
-          error: `${failed.length}/${inputs.length} items failed`,
+          error: `${failed.length}/${is.length} items failed`,
           hint: JSON.stringify({ succeeded, failed }),
         },
         timestamp: Date.now(),

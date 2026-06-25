@@ -70,7 +70,7 @@ export function extractSkillUsageFromOutput(output: string): Array<{
     const used = match[2] ? match[2].split(",").map(Number).filter((n) => !isNaN(n)) : undefined;
     const skipped = match[3] ? match[3].split(",").map(Number).filter((n) => !isNaN(n)) : undefined;
     results.push({
-      skillName: match[1].trim(),
+      skillName: match[1]!.trim(),
       stepsUsed: used && used.length > 0 ? used : undefined,
       stepsSkipped: skipped && skipped.length > 0 ? skipped : undefined,
       adaptation: match[4] || undefined,

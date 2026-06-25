@@ -75,7 +75,7 @@ export class PipelineRunner {
     } finally {
       // 兜底清理：倒序释放已完成 step 的资源，防止异常跳过 CleanupStep
       for (let i = completed.length - 1; i >= 0; i--) {
-        try { await completed[i].cleanup?.(current); } catch { /* 静默 */ }
+        try { await completed[i]!.cleanup?.(current); } catch { /* 静默 */ }
       }
     }
   }

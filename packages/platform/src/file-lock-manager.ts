@@ -206,7 +206,7 @@ export class FileLockManager extends BaseLifecycle {
     const idx = locks.readLocks.findIndex((e) => e.holderId === holderId);
     if (idx >= 0) {
       const [removed] = locks.readLocks.splice(idx, 1);
-      const ownedTimeMs = now - removed.acquiredAt;
+      const ownedTimeMs = now - removed!.acquiredAt;
       this._emitRelease(filePath, holderId, LockType.Read, "completed");
       this._emitLockStats(filePath, LockType.Read, ownedTimeMs);
       return true;

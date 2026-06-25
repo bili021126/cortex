@@ -209,7 +209,7 @@ function checkTestHeaders(pkgPath: string): string[] {
     const filePath = path.join(testsDir, file);
     try {
       const content = fs.readFileSync(filePath, "utf-8");
-      const firstLine = content.split("\n")[0].trim();
+      const firstLine = content.split("\n")[0]!.trim();
 
       if (!CI_TAG_REGEX.test(firstLine)) {
         issues.push(

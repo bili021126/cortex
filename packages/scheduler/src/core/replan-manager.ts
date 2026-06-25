@@ -151,7 +151,7 @@ export class ReplanManager {
       if (origIdx < 0) continue;
 
       if (this._isChainSuccessful(newIds, allResults)) {
-        if (allResults[origIdx].success === false) {
+        if (allResults[origIdx]!.success === false) {
           failed--;
           completed++;
         }
@@ -266,13 +266,13 @@ export class ReplanManager {
     const results = await Promise.allSettled(promises);
 
     for (let i = 0; i < results.length; i++) {
-      const r = results[i];
+      const r = results[i]!;
       if (r.status === "rejected") {
         const nodeId = batch[i]?.node.id ?? "unknown";
         this.observer.emit({
           type: PipelineEventType.SchedulerReplanFailed,
           priority: PipelinePriority.CRITICAL,
-          payload: { nodeId, error: String(r.reason).slice(0, 200) },
+          payload: { nodeId, error: String((r as PromiseRejectedResult).reason).slice(0, 200) },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });

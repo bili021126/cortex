@@ -48,7 +48,7 @@ export class WorkerPool {
   }
 
   async parseJson<T = unknown>(rawText: string, timeout?: number): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
+    return await new Promise<T>((resolve, reject) => {
       const worker = this._getIdleWorker();
       const task: WorkerTask = { type: "parse-json", payload: rawText, timeout };
       const wrappedResolve = (r: WorkerResult) => {
@@ -71,7 +71,7 @@ export class WorkerPool {
     for (const q of this.queue) {
       q.reject(new Error("WorkerPool shutdown: queued task discarded"));
     }
-    for (const w of this.workers) w.terminate();
+    for (const w of this.workers) void w.terminate();
     this.workers = [];
     this.queue = [];
     this.busy.clear();
@@ -84,7 +84,7 @@ export class WorkerPool {
     return null;
   }
 
-  private _dispatch(worker: Worker, task: WorkerTask, resolve: Function, reject: Function): void {
+  private _dispatch(worker: Worker, task: WorkerTask, resolve: (result: WorkerResult) => void, reject: (err: Error) => void): void {
     this.busy.add(worker);
     const timeout = setTimeout(() => {
       this.busy.delete(worker);
@@ -114,7 +114,8 @@ export class WorkerPool {
     if (this.queue.length === 0) return;
     const idle = this._getIdleWorker();
     if (!idle) return;
-    const next = this.queue.shift()!;
+    const next = this.queue.shift();
+    if (!next) return;
     this._dispatch(idle, next.task, next.resolve, next.reject);
   }
 }

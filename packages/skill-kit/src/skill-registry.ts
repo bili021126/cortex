@@ -50,7 +50,7 @@ export function deriveStatus(
   // 连续有害判定
   let consecutiveNegative = 0;
   for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].rating === -1) {
+    if (history[i]!.rating === -1) {
       consecutiveNegative++;
     } else {
       break;

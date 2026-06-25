@@ -38,7 +38,7 @@ export function syntheticTaskTree(nodeCount: number, parentId?: string): TaskNod
   ];
 
   for (let i = 0; i < nodeCount; i++) {
-    const t = templates[i % templates.length];
+    const t = templates[i % templates.length]!;
     const node = syntheticTaskNode({
       parentId: prevId,
       type: t.type,
@@ -93,14 +93,14 @@ export function generateSyntheticMemories(
   count: number,
   kind: MemoryKind = "TaskLog",
 ): SyntheticMemoryInput[] {
-  const templates = MEMORY_TEMPLATES[kind] ?? MEMORY_TEMPLATES["TaskLog"];
+  const templates = MEMORY_TEMPLATES[kind] ?? MEMORY_TEMPLATES["TaskLog"] ?? [];
   const entries: SyntheticMemoryInput[] = [];
 
   for (let i = 0; i < count; i++) {
     entries.push({
       kind,
-      summary: templates[i % templates.length],
-      agentType: AGENT_TYPES[i % AGENT_TYPES.length],
+      summary: templates[i % templates.length]!,
+      agentType: AGENT_TYPES[i % AGENT_TYPES.length]!,
     });
   }
 

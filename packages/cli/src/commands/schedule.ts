@@ -119,7 +119,7 @@ function handleSchedulePlan(
 function _addTaskNodesFromPlan(board: ITaskBoard, plan: { tasks?: Array<Record<string, unknown>> }): void {
   if (!plan.tasks) return;
   for (let i = 0; i < plan.tasks.length; i++) {
-    const t = plan.tasks[i];
+    const t = plan.tasks[i]!;
     board.addNode({
       id: (t.id as string | undefined) ?? `sched-${Date.now()}-${i}`,
       type: (t.type as string) ?? "analysis",

@@ -61,7 +61,7 @@ export class CommandRegistry {
       };
     }
 
-    const cmdName = args[0];
+    const cmdName = args[0]!;
     const cmd = this.find(cmdName);
 
     if (!cmd) {
@@ -75,7 +75,7 @@ export class CommandRegistry {
     // 解析子命令
     const subArgs = args.slice(1);
     if (cmd.subcommands && subArgs.length > 0) {
-      const subName = subArgs[0];
+      const subName = subArgs[0]!;
       const sub = cmd.subcommands[subName];
       if (sub) {
         // 解析剩余参数和选项
@@ -95,7 +95,7 @@ export class CommandRegistry {
     const remaining: string[] = [];
 
     for (let i = 0; i < args.length; i++) {
-      const arg = args[i];
+      const arg = args[i]!;
 
       if (arg.startsWith("--")) {
         const eqIdx = arg.indexOf("=");
@@ -104,8 +104,8 @@ export class CommandRegistry {
           options[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
         } else {
           const key = arg.slice(2);
-          if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
-            options[key] = args[++i];
+          if (i + 1 < args.length && !args[i + 1]!.startsWith("-")) {
+            options[key] = args[++i]!;
           } else {
             options[key] = true;
           }
@@ -113,8 +113,8 @@ export class CommandRegistry {
       } else if (arg.startsWith("-") && arg.length === 2) {
         // 短选项 -k
         const key = arg.slice(1);
-        if (i + 1 < args.length && !args[i + 1].startsWith("-")) {
-          options[key] = args[++i];
+        if (i + 1 < args.length && !args[i + 1]!.startsWith("-")) {
+          options[key] = args[++i]!;
         } else {
           options[key] = true;
         }

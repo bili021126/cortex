@@ -243,11 +243,11 @@ export class PromptTemplateEngine {
       const [fullMatch, directiveName, params] = match;
 
       // 只处理自闭合指令
-      if (!SELF_CLOSING_DIRECTIVES.has(directiveName)) {
+      if (!SELF_CLOSING_DIRECTIVES.has(directiveName!)) {
         continue;
       }
 
-      const handler = this.directives.get(directiveName);
+      const handler = this.directives.get(directiveName!);
       if (!handler) continue;
 
       const replacement = handler(params?.trim() ?? "", "", context, this, depth);
@@ -281,14 +281,14 @@ export class PromptTemplateEngine {
       }
 
       // 自闭合指令由 renderSelfClosingDirectives 处理，这里跳过
-      if (SELF_CLOSING_DIRECTIVES.has(directiveName)) {
+      if (SELF_CLOSING_DIRECTIVES.has(directiveName!)) {
         continue;
       }
-
-      const handler = this.directives.get(directiveName);
+      
+      const handler = this.directives.get(directiveName!);
       if (!handler) continue;
-
-      const replacement = handler(params?.trim() ?? "", body, context, this, depth);
+      
+      const replacement = handler(params?.trim() ?? "", body!, context, this, depth);
       result = result.replace(fullMatch, replacement);
       regex.lastIndex = 0;
     }

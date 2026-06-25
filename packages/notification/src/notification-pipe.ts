@@ -263,7 +263,7 @@ export class NotificationPipe {
       // 检查时间窗口
       const rule = this.mergeRules.find((r) => r.groupBy === "mergeKey");
       const windowMs = rule?.windowMs ?? 300_000;
-      const firstTimestamp = events[0].timestamp;
+      const firstTimestamp = events[0]!.timestamp;
 
       // @fix N-04 — 移除 `events.length > 0` 恒真条件，仅依赖时间窗口 flush
       if (now - firstTimestamp >= windowMs) {
@@ -287,9 +287,9 @@ export class NotificationPipe {
     const merged: MergedNotification = {
       mergeKey: key,
       events: [...events],
-      primary: events[0],
-      windowStart: events[0].timestamp,
-      windowEnd: events[events.length - 1].timestamp,
+      primary: events[0]!,
+      windowStart: events[0]!.timestamp,
+      windowEnd: events[events.length - 1]!.timestamp,
     };
 
     // 归并后的事件走 primary 的通道

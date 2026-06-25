@@ -7,8 +7,10 @@
  * @layer root — 零依赖，纯类型层
  */
 
+import type { DocType } from "@cortex/shared";
+
 /** 文档类型（由 @cortex/shared 统一定义） */
-export type { DocType } from "@cortex/shared";
+export type { DocType };
 
 /** 文档注册项 */
 export interface DocEntry {

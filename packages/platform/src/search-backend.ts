@@ -72,7 +72,7 @@ export class McpSearchBackend implements SearchBackend {
       else if (toolNames.includes("brave_local_search")) this._searchToolName = "brave_local_search";
       else if (toolNames.includes("tavily_search")) this._searchToolName = "tavily_search";
       else if (toolNames.includes("search")) this._searchToolName = "search";
-      else if (toolNames.length > 0) this._searchToolName = toolNames[0]; // 最后一个 fallback
+      else if (toolNames.length > 0) this._searchToolName = toolNames[0]!; // 最后一个 fallback
     }
 
     this._started = true;
@@ -149,7 +149,7 @@ export class DdgSearchBackend implements SearchBackend {
 
     for (let attempt = 0; attempt <= this._maxRetries; attempt++) {
       try {
-        const ua = UA_POOL[(this._uaRound + attempt) % UA_POOL.length];
+        const ua = UA_POOL[(this._uaRound + attempt) % UA_POOL.length]!;
         const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query.trim())}`;
         const resp = await fetch(ddgUrl, {
           headers: {
@@ -201,7 +201,7 @@ export class DdgSearchBackend implements SearchBackend {
       let url = rawHref;
       const uddgMatch = rawHref.match(/uddg=([^&]+)/);
       if (uddgMatch) {
-        try { url = decodeURIComponent(uddgMatch[1]); } catch { url = rawHref; }
+        try { url = decodeURIComponent(uddgMatch[1]!); } catch { url = rawHref; }
       }
       if (url.startsWith("//")) url = "https:" + url;
 

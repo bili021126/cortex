@@ -36,7 +36,7 @@ export function createTool(ctx: ToolContext): Tool {
 
         // 第二道防线：解析命令为可执行文件 + 参数数组，避免 shell 解释注入
         const parts = command.trim().split(/\s+/);
-        const cmd = parts[0]!;
+        const cmd = parts[0] ?? '';
         const args = parts.slice(1);
 
         const cwd = ctx.workspaceRoot ?? ctx.fs.cwd();

@@ -103,8 +103,8 @@ async function grepFallback(ctx: ToolContext, rootDir: string, query: string): P
           const content = await ctx.fs.readFile(fullPath);
           const lines = content.split("\n");
           for (let i = 0; i < lines.length && results.length < 30; i++) {
-            if (lines[i].toLowerCase().includes(lowerQuery)) {
-              results.push(`${fullPath}:${i + 1}: ${lines[i].trim().slice(0, 200)}`);
+            if (lines[i]!.toLowerCase().includes(lowerQuery)) {
+              results.push(`${fullPath}:${i + 1}: ${lines[i]!.trim().slice(0, 200)}`);
             }
           }
         } catch (e) {

@@ -69,7 +69,7 @@ export function topologicalSort(nodes: TaskNode[], observer?: IPipelineObserver)
         type: PipelineEventType.SchedulerInvariantViolation,
         priority: PipelinePriority.CRITICAL,
         payload: {
-          nodeId: nodes[0].id,
+          nodeId: nodes[0]!.id,
           message: msg,
         },
         timestamp: Date.now(),

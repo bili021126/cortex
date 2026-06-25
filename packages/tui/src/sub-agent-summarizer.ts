@@ -95,7 +95,7 @@ export async function summarizeSubAgents(
     const agent = roster[i];
     if (!agent) {
       // 发言人不可识别，直接保留
-      results.push(outputs[i]);
+      results.push(outputs[i]!);
       continue;
     }
 
@@ -106,7 +106,7 @@ export async function summarizeSubAgents(
       results.push(`[${label}] ${outputs[i]}`);
     } else {
       // 子Agent：摘要化
-      const summary = await llmSummarize(label, outputs[i], bridge, maxChars);
+      const summary = await llmSummarize(label, outputs[i]!, bridge, maxChars);
       results.push(`[${label}] ${summary}`);
     }
   }

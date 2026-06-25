@@ -49,7 +49,7 @@ export function findConstitutionPath(rootDir: string): string {
     return 0;
   });
 
-  return path.join(dir, files[0]);
+  return path.join(dir, files[0]!);
 }
 
 /**

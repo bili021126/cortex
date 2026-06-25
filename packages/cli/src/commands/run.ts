@@ -101,7 +101,7 @@ async function _handleRunExecution(
     const result = report.results[0];
     return {
       success: true,
-      output: result.output ?? "✓ 执行完成",
+      output: result!.output ?? "✓ 执行完成",
       data: { totalNodes: report.totalNodes, completed: report.completed, failed: report.failed, durationMs: report.durationMs, result },
       exitCode: 0,
     };

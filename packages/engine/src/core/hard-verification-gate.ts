@@ -133,7 +133,6 @@ export class HardVerificationGate {
 
     try {
       const barrelPath = modulePath.replace(/\/[^/]+\.ts$/, "/index.ts");
-      const fs = require("fs");
       // 文件大小限制 10MB（代码文件上限）
       const _MAX_SIZE = 10 * 1024 * 1024;
       const _stats = fs.statSync(barrelPath);
@@ -142,7 +141,7 @@ export class HardVerificationGate {
       }
       const content = fs.readFileSync(barrelPath, "utf-8");
       const exportName = modulePath.split("/").pop()?.replace(/\.ts$/, "");
-      const exported = content.includes(exportName!);
+      const exported = content.includes(exportName ?? "");
       return {
         ruleName: "barrel-export",
         passed: exported,
@@ -233,7 +232,7 @@ export class HardVerificationGate {
       const errors: Array<{ file: string; rule: string }> = [];
       for (const line of out.split("\n")) {
         const m = line.match(/^(.+)\(\d+,\d+\):\s+error\s+.+?\s+(\S+)$/);
-        if (m) errors.push({ file: m[1]!, rule: m[2]! });
+        if (m) errors.push({ file: m[1] ?? "", rule: m[2] ?? "" });
       }
       this._eslintCache = errors;
       this._eslintTime = now;

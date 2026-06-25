@@ -213,7 +213,7 @@ export class TaskBoard implements ITaskBoard {
     // 等齐判断之后执行去重：移除重复结果
     const seen = new Set<AgentType>();
     for (let i = node.results.length - 1; i >= 0; i--) {
-      const at = node.results[i].agentType;
+      const at = node.results[i]!.agentType;
       if (at === undefined) continue;
       if (seen.has(at)) {
         node.results.splice(i, 1);

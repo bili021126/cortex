@@ -96,14 +96,14 @@ export class ConfigManager {
     let current: unknown = this.config;
     for (let i = 0; i < parts.length - 1; i++) {
       if (current == null || typeof current !== "object") return;
-      const next = (current as Record<string, unknown>)[parts[i]];
+      const next = (current as Record<string, unknown>)[parts[i]!];
       if (next == null || typeof next !== "object") {
-        (current as Record<string, unknown>)[parts[i]] = {};
+        (current as Record<string, unknown>)[parts[i]!] = {};
       }
-      current = (current as Record<string, unknown>)[parts[i]];
+      current = (current as Record<string, unknown>)[parts[i]!];
     }
     if (current != null && typeof current === "object") {
-      (current as Record<string, unknown>)[parts[parts.length - 1]] = value;
+      (current as Record<string, unknown>)[parts[parts.length - 1]!] = value;
     }
   }
 

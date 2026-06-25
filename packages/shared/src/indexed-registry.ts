@@ -102,9 +102,9 @@ export abstract class IndexedRegistry<T extends { id: string }> {
         if (!this.indexes.has(idx.name)) {
           this.indexes.set(idx.name, new Map());
         }
-        const idxMap = this.indexes.get(idx.name)!;
+        const idxMap = this.indexes.get(idx.name) as Map<string, Set<string>>;
         if (!idxMap.has(key)) idxMap.set(key, new Set());
-        idxMap.get(key)!.add(item.id);
+        (idxMap.get(key) as Set<string>).add(item.id);
       }
     }
   }
@@ -113,6 +113,6 @@ export abstract class IndexedRegistry<T extends { id: string }> {
   protected queryByIndex(indexName: string, key: string): T[] {
     const ids = this.indexes.get(indexName)?.get(key);
     if (!ids) return [];
-    return [...ids].map((id) => this.items.get(id)!).filter(Boolean);
+    return [...ids].map((id) => this.items.get(id)).filter(Boolean) as T[];
   }
 }

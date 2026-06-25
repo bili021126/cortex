@@ -19,7 +19,7 @@ function extractPrinciples(constitution: string): string[] {
   const re = /\*\*(原则[一二三四五六七八九十]+)\*\*\s*\|[^|]+\|\s*不可变/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(constitution)) !== null) {
-    principles.push(m[1]);
+    principles.push(m[1]!);
   }
   return principles;
 }
@@ -27,7 +27,7 @@ function extractPrinciples(constitution: string): string[] {
 /** 从宪法头部提取当前版本号 */
 function extractCurrentVersion(constitution: string): string {
   const m = constitution.match(/\*\*版本\*\*[：:]\s*(v[\d.]+)/);
-  return m ? m[1] : "unknown";
+  return m ? m[1]! : "unknown";
 }
 
 /** 简易语义版本号比较：a > b 为 true */
@@ -391,8 +391,8 @@ export function evaluateAmendment(
   let totalWeightedScore = 0;
   let totalWeight = 0;
   for (let i = 0; i < checks.length; i++) {
-    const w = registrations[i].weight;
-    totalWeightedScore += checks[i].score * w;
+    const w = registrations[i]!.weight;
+    totalWeightedScore += checks[i]!.score * w;
     totalWeight += w;
   }
   const weightedScore = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;

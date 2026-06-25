@@ -281,7 +281,7 @@ function _compressSummary(lines: string[], maxChars: number): string {
   let inEvidenceBlock = false;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+    const line = lines[i]!;
     const trimmed = line.trim();
 
     // 标题 → 始终保留

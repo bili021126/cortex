@@ -108,7 +108,7 @@ async function tryResolve(ctx: ToolContext, sourceDir: string, specifier: string
 
   // 2. 裸模块: 查找 node_modules
   const parts = specifier.split("/");
-  const pkgName = specifier.startsWith("@") ? `${parts[0]}/${parts[1]}` : parts[0];
+  const pkgName = specifier.startsWith("@") ? `${parts[0]!}/${parts[1]!}` : parts[0]!;
   const subPath = specifier.startsWith("@")
     ? parts.slice(2).join("/")
     : parts.slice(1).join("/");

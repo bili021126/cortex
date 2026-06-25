@@ -492,7 +492,7 @@ export class MarkdownPatternExtractor
 
     let match: RegExpExecArray | null;
     while ((match = MarkdownPatternExtractor.JSON_BLOCK_RE.exec(input)) !== null) {
-      const jsonText = match[1];
+      const jsonText = match[1]!;
 
       // ── JSON 解析 ──
       let parsed: unknown;
@@ -566,7 +566,7 @@ export class MarkdownPatternExtractor
           triggerText,
           steps,
           expectedOutput,
-          rawText: jsonText.slice(0, 500),
+          rawText: jsonText!.slice(0, 500),
           strategy: "json-block",
           baseConfidence,
           lineRange: [startLine, endLine],
@@ -741,7 +741,7 @@ export class MarkdownPatternExtractor
       /(?:triggerTags|trigger_tags|tags?)[\s:：]+(.+)/i,
     );
     if (lineMatch) {
-      const raw = lineMatch[1].trim();
+      const raw = lineMatch[1]!.trim();
       // 去掉方括号
       const cleaned = raw.replace(/^\[|\]$/g, "");
       return cleaned
@@ -755,7 +755,7 @@ export class MarkdownPatternExtractor
       /^[\t ]*[-*+]\s*(?:triggerTags|trigger_tags|tags?)[\s:：]+(.+)/im,
     );
     if (listMatch) {
-      const raw = listMatch[1].trim();
+      const raw = listMatch[1]!.trim();
       const cleaned = raw.replace(/^\[|\]$/g, "");
       return cleaned
         .split(/[,，、\s]+/)
@@ -772,13 +772,13 @@ export class MarkdownPatternExtractor
   private _extractTriggerFromPNSection(body: string): string {
     // 格式 1: "Trigger: xxx"
     const lineMatch = body.match(/Trigger[\s:：]+(.+)/im);
-    if (lineMatch) return lineMatch[1].trim();
+    if (lineMatch) return lineMatch[1]!.trim();
 
     // 格式 2: "- trigger: xxx" 列表项
     const listMatch = body.match(
       /^[\t ]*[-*+]\s*trigger[\s:：]+(.+)/im,
     );
-    if (listMatch) return listMatch[1].trim();
+    if (listMatch) return listMatch[1]!.trim();
 
     return "";
   }
@@ -793,7 +793,7 @@ export class MarkdownPatternExtractor
       /(?:Recipe|Steps?|\u6b65\u9aa4|\u6d41\u7a0b)[\s:\u3000-\u303f\uff00-\uffef]+(?:\r?\n)?([\s\S]*?)(?:\r?\n(?:#{1,3}\s|\r?\n)|$)/i,
     );
     if (recipeMatch) {
-      const recipeContent = recipeMatch[1];
+      const recipeContent = recipeMatch[1]!;
       // 提取编号列表项
       const numberedItems = recipeContent.match(
         /^[\t ]*(?:\d+[.、)\]]\s*)(.+)/gm,
@@ -843,20 +843,20 @@ export class MarkdownPatternExtractor
     const lineMatch = body.match(
       /(?:expectedOutput|expected_output|Expected[\s]*Output)[\s:：]+(.+)/i,
     );
-    if (lineMatch) return lineMatch[1].trim();
+    if (lineMatch) return lineMatch[1]!.trim();
 
     // 格式 2: "- expectedOutput: xxx" 列表项
     const listMatch = body.match(
       /^[\t ]*[-*+]\s*(?:expectedOutput|expected_output)[\s:：]+(.+)/im,
     );
-    if (listMatch) return listMatch[1].trim();
+    if (listMatch) return listMatch[1]!.trim();
 
     // 格式 3: "Condition:" 节（旧版约定）
     const conditionMatch = body.match(
       /Condition[\s:\u3000-\u303f\uff00-\uffef]+(?:\r?\n)?([\s\S]*?)(?:\r?\n(?:#{1,3}\s|\r?\n)|$)/i,
     );
     if (conditionMatch) {
-      const conditions = conditionMatch[1]
+      const conditions = conditionMatch[1]!
         .split("\n")
         .map((c) => c.trim())
         .filter(Boolean)
@@ -1016,7 +1016,7 @@ export class MarkdownPatternExtractor
       /(?:tags?|triggerTags|trigger_tags)[\s:：]+(.+)/i,
     );
     if (!match) return [];
-    const raw = match[1].trim().replace(/^\[|\]$/g, "");
+    const raw = match[1]!.trim().replace(/^\[|\]$/g, "");
     return raw
       .split(/[,，、\s]+/)
       .map((t) => t.trim())
@@ -1028,7 +1028,7 @@ export class MarkdownPatternExtractor
    */
   private _extractTriggerFromPatternParagraph(body: string): string {
     const match = body.match(/trigger[\s:：]+(.+)/im);
-    return match ? match[1].trim() : "";
+    return match ? match[1]!.trim() : "";
   }
 
   /**
@@ -1069,7 +1069,7 @@ export class MarkdownPatternExtractor
     // 少于 5 行的文件放弃
     if (lines.length < 5) return null;
 
-    const firstLine = lines[0].replace(/^#+\s*/, "").slice(0, 120);
+    const firstLine = lines[0]!.replace(/^#+\s*/, "").slice(0, 120);
 
     return {
       name: firstLine || "Untitled pattern",
@@ -1115,7 +1115,7 @@ export class MarkdownPatternExtractor
     let currentStartLine = 1;
 
     for (let i = 0; i < lines.length; i++) {
-      const m = headingRe.exec(lines[i]);
+      const m = headingRe.exec(lines[i]!);
       if (m) {
         // 遇到新标题 → 保存前一段
         if (currentHeading) {
@@ -1126,7 +1126,7 @@ export class MarkdownPatternExtractor
             endLine: i,
           });
         }
-        currentHeading = m[2]; // 标题文本（不含 # 前缀）
+        currentHeading = m[2]!; // 标题文本（不含 # 前缀）
         currentBody = "";
         currentStartLine = i + 1;
       } else if (currentHeading) {
@@ -1185,7 +1185,7 @@ export class MarkdownPatternExtractor
         "full-file": 1,
       };
 
-      if (priority[c.strategy] > priority[existing.strategy]) {
+      if (priority[c.strategy!]! > priority[existing.strategy!]!) {
         // 新候选策略优先级更高 → 替换，但合并 tags 和 steps
         existing.tags = [...new Set([...existing.tags, ...c.tags])];
         existing.steps =

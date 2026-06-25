@@ -432,12 +432,12 @@ function analyzeJsonValue(
 
     // 检查数组元素类型同质性
     if (value.length > 0) {
-      const firstType = value.length > 0 ? detectPropertyType(value[0]) : null;
+      const firstType = value.length > 0 ? detectPropertyType(value[0]!) : null;
       let isHomogeneous = true;
 
       if (firstType !== null) {
         for (let i = 1; i < value.length; i++) {
-          const elementType = detectPropertyType(value[i]);
+          const elementType = detectPropertyType(value[i]!);
           if (elementType !== firstType) {
             isHomogeneous = false;
             break;
@@ -478,8 +478,8 @@ function analyzeJsonValue(
       stats.namingCounts[style]++;
 
       // 递归分析属性值
-      const propValue = value[key];
-      analyzeJsonValue(propValue, stats, depth + 1, seen);
+      const propValue = value[key]!;
+      analyzeJsonValue(propValue!, stats, depth + 1, seen);
     }
 
     seen.delete(value);
@@ -606,7 +606,7 @@ function buildNamingPattern(
     {
       code: JSON.stringify(
          
-        { [positiveExample]: "..." },
+        { [positiveExample!]: "..." },
         null,
         2,
       ),
@@ -836,7 +836,7 @@ function buildTypeDistributionPattern(
     Object.entries(stats.typeCounts) as [PropertyType, number][]
   ).sort((a, b) => b[1] - a[1]);
 
-  const dominantType = typeDistribution[0];
+  const dominantType = typeDistribution[0]!;
 
   // 计算占比
   const dominantRatio = dominantType[1] / totalValues;

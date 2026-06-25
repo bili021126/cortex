@@ -18,7 +18,6 @@ import {
   ENV_DEEPSEEK_CYRENE_API_KEY,
   ENV_DEEPSEEK_CHAT_API_KEY,
   ENV_DEEPSEEK_REASONER_API_KEY,
-  ENV_PM_MASTER_KEY,
   DEFAULT_LLM_BASE_URL,
   DEFAULT_LLM_CHAT_MODEL,
   DEFAULT_LLM_REASONER_MODEL,
@@ -81,7 +80,7 @@ export async function bootstrapLlm(): Promise<LlmBootstrapResult> {
   const fallbackKey = process.env[ENV_DEEPSEEK_API_KEY];
 
   // 若设置了 PM_MASTER_KEY，尝试从 pm 加密 vault 加载密钥
-  let pmStore: PmStore | undefined = undefined;
+  const pmStore: PmStore | undefined = undefined;
 
   const adapter = (key: string, label: string, chatModelOverride?: string, extra?: Partial<{ reasoningEffort: "high" | "max" }>) =>
     new LlmAdapter({

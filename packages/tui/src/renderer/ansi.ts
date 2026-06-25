@@ -207,32 +207,32 @@ export class Box {
   /** 在指定位置写入文本（超出截断） */
   write(x: number, y: number, text: string): void {
     if (y < 0 || y >= this.height) return;
-    const row = this.buffer[y];
+    const row = this.buffer[y]!;
     for (let i = 0; i < text.length && x + i < this.width; i++) {
-      row[x + i] = text[i];
+      row[x + i] = text[i]!;
     }
   }
 
   /** 用预格式化行填充 */
   writeRow(y: number, text: string): void {
     if (y < 0 || y >= this.height) return;
-    const row = this.buffer[y];
+    const row = this.buffer[y]!;
     for (let i = 0; i < Math.min(text.length, this.width); i++) {
-      row[i] = text[i];
+      row[i] = text[i]!;
     }
   }
 
   /** 清空缓冲区 */
   clear(): void {
     for (let y = 0; y < this.height; y++) {
-      this.buffer[y].fill(" ");
+      this.buffer[y]!.fill(" ");
     }
   }
 
   /** 获取当前行内容（不含 ANSI escape 的纯文本视图） */
   getRow(y: number): string {
     if (y < 0 || y >= this.height) return "";
-    return this.buffer[y].join("").trimEnd();
+    return this.buffer[y]!.join("").trimEnd();
   }
 
   /**
@@ -245,7 +245,7 @@ export class Box {
     const out: string[] = [];
 
     for (let y = 0; y < this.height; y++) {
-      const curRow = this.buffer[y].join("");
+      const curRow = this.buffer[y]!.join("");
       const prevRow = this.prev?.[y]?.join("") ?? "";
 
       if (curRow !== prevRow) {
@@ -266,7 +266,7 @@ export class Box {
   renderFull(): string {
     const out: string[] = [];
     for (let y = 0; y < this.height; y++) {
-      const curRow = this.buffer[y].join("");
+      const curRow = this.buffer[y]!.join("");
       out.push(`${CSI}${this.topRow + y + 1};1H${eraseLine}${curRow}`);
     }
     this.prev = this.buffer.map((row) => [...row]);

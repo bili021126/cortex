@@ -121,21 +121,21 @@ export async function clarifyAndConfirm(
  */
 function _matchChineseConfirm(raw: string): string | null {
   const patterns: Array<{ re: RegExp; extract: (m: RegExpMatchArray) => string }> = [
-    { re: /^是的[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
+    { re: /^是的[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^是的[！!。]*$/u, extract: () => "" },
-    { re: /^对[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
+    { re: /^对[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^对的?[！!。]*$/u, extract: () => "" },
-    { re: /^嗯[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
+    { re: /^嗯[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^嗯[！!。]*$/u, extract: () => "" },
-    { re: /^好[的的]?[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
+    { re: /^好[的的]?[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^好[的的]?[！!。]*$/u, extract: () => "" },
-    { re: /^是[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
-    { re: /^可以[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
+    { re: /^是[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
+    { re: /^可以[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^可以[！!。]*$/u, extract: () => "" },
-    { re: /^没错[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
+    { re: /^没错[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^没错[！!。]*$/u, extract: () => "" },
     { re: /^嗯嗯[！!。]*$/u, extract: () => "" },
-    { re: /^确认[，,、。\s]+(.+)$/u, extract: (m) => m[1] },
+    { re: /^确认[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^确认[！!。]*$/u, extract: () => "" },
   ];
 
@@ -188,7 +188,7 @@ export function formatPlanTree(nodes: TaskNode[]): string {
     if (children && children.length > 0) {
       for (let i = 0; i < children.length; i++) {
         const childPrefix = depth === 0 ? "" : isLast ? "    " : "  │ ";
-        render(children[i], depth + 1, i === children.length - 1, prefix + childPrefix);
+        render(children[i]!, depth + 1, i === children.length - 1, prefix + childPrefix);
       }
     }
   };
@@ -198,7 +198,7 @@ export function formatPlanTree(nodes: TaskNode[]): string {
   lines.push("═══════════════════════════════════════");
 
   for (let i = 0; i < roots.length; i++) {
-    render(roots[i], 0, i === roots.length - 1, "");
+    render(roots[i]!, 0, i === roots.length - 1, "");
   }
 
   return lines.join("\n");

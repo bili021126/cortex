@@ -144,9 +144,9 @@ function computeEdits(linesA: string[], linesB: string[]): Edit[] {
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       if (linesA[i - 1] === linesB[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
+        dp[i]![j] = dp[i - 1]![j - 1]! + 1;
       } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+        dp[i]![j] = Math.max(dp[i - 1]![j]!, dp[i]![j - 1]!);
       }
     }
   }
@@ -161,7 +161,7 @@ function computeEdits(linesA: string[], linesB: string[]): Edit[] {
       edits.unshift({ type: "equal", aLine: i - 1, bLine: j - 1 });
       i--;
       j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+    } else if (j > 0 && (i === 0 || dp[i]![j - 1]! >= dp[i - 1]![j]!)) {
       edits.unshift({ type: "insert", bLine: j - 1 });
       j--;
     } else {
@@ -181,7 +181,7 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     // 跳过前面的相等部分（留 context 行）
     let equalBefore = 0;
     let scan = i;
-    while (scan < edits.length && edits[scan].type === "equal" && equalBefore < context) {
+    while (scan < edits.length && edits[scan]!.type === "equal" && equalBefore < context) {
       equalBefore++;
       scan++;
     }
@@ -194,13 +194,13 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     const hunkStart = Math.max(0, i - context);
     let changeEnd = scan;
 
-    while (changeEnd < edits.length && edits[changeEnd].type !== "equal") {
+    while (changeEnd < edits.length && edits[changeEnd]!.type !== "equal") {
       changeEnd++;
     }
 
     // 扩展 equal 上下文（后面）
     let equalAfter = 0;
-    while (changeEnd + equalAfter < edits.length && edits[changeEnd + equalAfter].type === "equal" && equalAfter < context) {
+    while (changeEnd + equalAfter < edits.length && edits[changeEnd + equalAfter]!.type === "equal" && equalAfter < context) {
       equalAfter++;
     }
 
@@ -212,7 +212,7 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     let bLine = 0;
 
     for (let k = hunkStart; k < hunkEnd; k++) {
-      const edit = edits[k];
+      const edit = edits[k]!;
       switch (edit.type) {
         case "equal":
           if (edit.aLine !== undefined) {
@@ -239,7 +239,7 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     let endB = -1;
 
     for (let k = hunkStart; k < hunkEnd; k++) {
-      const e = edits[k];
+      const e = edits[k]!;
       if (e.aLine !== undefined) {
         if (startA === -1) startA = e.aLine;
         endA = e.aLine;

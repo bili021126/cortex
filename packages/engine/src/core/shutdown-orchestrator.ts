@@ -52,7 +52,8 @@ export class ShutdownOrchestrator {
    */
   async bootstrap(): Promise<void> {
     for (const name of this.order) {
-      const c = this.components.get(name)!;
+      const c = this.components.get(name);
+      if (!c) throw new Error(`[ShutdownOrchestrator] component not found: ${name}`);
       await c.init?.();
       await c.start?.();
     }
@@ -64,7 +65,8 @@ export class ShutdownOrchestrator {
    */
   async shutdown(): Promise<void> {
     for (const name of [...this.order].reverse()) {
-      const c = this.components.get(name)!;
+      const c = this.components.get(name);
+      if (!c) continue;
       try {
         await Promise.race([
           (async () => {

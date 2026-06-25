@@ -115,7 +115,7 @@ export interface AnalyzerOutput {
 function semverScore(v: string): number {
   const cleaned = v.replace(/^[\^~>=<]/, '');
   const parts = cleaned.split('.').map((s) => parseInt(s, 10) || 0);
-  return parts[0] * 10000 + (parts[1] || 0) * 100 + (parts[2] || 0);
+  return parts[0]! * 10000 + (parts[1] || 0) * 100 + (parts[2] || 0);
 }
 
 function isWorkspaceStar(v: string): boolean {
@@ -137,7 +137,7 @@ function isCortexInternal(name: string): boolean {
 
 function nameToId(name: string): string {
   const m = name.match(/@[^/]+\/(.+)/);
-  return m ? m[1] : name;
+  return m ? m[1]! : name;
 }
 
 function nowISO(): string {
@@ -301,7 +301,7 @@ export function detectCycles(edges: Edge[]): CycleInfo[] {
   for (const edge of edges) {
     if (!adj[edge.from]) adj[edge.from] = [];
     if (!adj[edge.to]) adj[edge.to] = [];
-    if (!adj[edge.from].includes(edge.to)) adj[edge.from].push(edge.to);
+    if (!adj[edge.from]!.includes(edge.to)) adj[edge.from]!.push(edge.to);
   }
 
   const cycles: CycleInfo[] = [];
@@ -310,13 +310,13 @@ export function detectCycles(edges: Edge[]): CycleInfo[] {
   const path: string[] = [];
 
   function normalizePath(p: string[]): string[] {
-    if (p.length <= 1) return [...p, p[0]];
+    if (p.length <= 1) return [...p, p[0]!];
     let minIdx = 0;
     for (let i = 1; i < p.length; i++) {
-      if (p[i] < p[minIdx]) minIdx = i;
+      if (p[i]! < p[minIdx]!) minIdx = i;
     }
     const rotated = [...p.slice(minIdx), ...p.slice(0, minIdx)];
-    rotated.push(rotated[0]);
+    rotated.push(rotated[0]!);
     return rotated;
   }
 
@@ -370,10 +370,10 @@ export function detectDrifts(deps: DepEntry[], ignoreList: string[], verbose: bo
     if (dep.isWorkspaceStar && isCortexInternal(dep.depName)) continue;
 
     if (!groups[dep.depName]) groups[dep.depName] = [];
-    groups[dep.depName].push(dep);
+    groups[dep.depName]!.push(dep);
 
     if (!allDeps[dep.depName]) allDeps[dep.depName] = {};
-    allDeps[dep.depName][dep.pkgId] = dep.version;
+    allDeps[dep.depName]![dep.pkgId] = dep.version;
   }
 
   const drifts: DriftItem[] = [];
@@ -430,8 +430,8 @@ function recommendVersion(entries: DepEntry[]): { version: string; reason: strin
     return semverScore(b[0]) - semverScore(a[0]);
   });
 
-  const bestVersion = sorted[0][0];
-  const bestCount = sorted[0][1];
+  const bestVersion = sorted[0]![0];
+  const bestCount = sorted[0]![1];
   const total = versions.length;
 
   if (bestCount > 1 && bestCount > total / 2) {
@@ -557,7 +557,7 @@ export function computeLayers(
   const layers: string[][] = Array.from({ length: maxLayer + 1 }, () => []);
   for (const pkg of packages) {
     if (pkg.isRoot) continue;
-    layers[pkgLayers.get(pkg.id) ?? 0].push(pkg.id);
+    layers[pkgLayers.get(pkg.id) ?? 0]!.push(pkg.id);
   }
 
   return { layers, pkgLayers };
@@ -628,7 +628,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
     const fromGroups: Record<string, Edge[]> = {};
     for (const edge of edges) {
       if (!fromGroups[edge.from]) fromGroups[edge.from] = [];
-      fromGroups[edge.from].push(edge);
+      fromGroups[edge.from]!.push(edge);
     }
 
     const pkgMap = new Map(output.packages.map((p) => [p.id, p]));
@@ -639,7 +639,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
     });
 
     for (const from of sortedFrom) {
-      const edgeList = fromGroups[from];
+      const edgeList = fromGroups[from]!;
       const targets = edgeList.map((e) => {
         const suffix = e.type === 'devDependencies' ? '[dev]' : '';
         const cycleMark = output.cycles.some((c) => c.packages.includes(e.from) && c.packages.includes(e.to))
@@ -656,7 +656,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
     lines.push('  ✅ 未发现循环依赖');
   } else {
     for (let i = 0; i < output.cycles.length; i++) {
-      const cycle = output.cycles[i];
+      const cycle = output.cycles[i]!;
       lines.push(`  ❌ 循环 #${i + 1}: ${cycle.path.join(' → ')}`);
       lines.push(`     涉及包: ${cycle.packages.join(', ')}`);
     }
@@ -669,7 +669,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
   } else {
     lines.push(`  ❌ 发现 ${output.drifts.length} 处版本漂移:\n`);
     for (let i = 0; i < output.drifts.length; i++) {
-      const d = output.drifts[i];
+      const d = output.drifts[i]!;
       lines.push(`  ${i + 1}. ${d.dependency}（出现 ${d.occurrences} 次）`);
       for (const [pkgId, ver] of Object.entries(d.versions)) {
         const marker = ver !== d.recommended ? '  ← 偏移' : '';
@@ -729,8 +729,8 @@ function main(): number {
   const ignoreList: string[] = [];
   if (ignoreIdx !== -1) {
     for (let i = ignoreIdx + 1; i < args.length; i++) {
-      if (args[i].startsWith('-')) break;
-      ignoreList.push(args[i]);
+      if (args[i]!.startsWith('-')) break;
+      ignoreList.push(args[i]!);
     }
   }
 
@@ -799,7 +799,7 @@ function main(): number {
     for (const edge of edges) {
       if (!adj[edge.from]) adj[edge.from] = [];
       if (!adj[edge.to]) adj[edge.to] = [];
-      if (!adj[edge.from].includes(edge.to)) adj[edge.from].push(edge.to);
+      if (!adj[edge.from]!.includes(edge.to)) adj[edge.from]!.push(edge.to);
     }
 
     const cycles = detectCycles(edges);

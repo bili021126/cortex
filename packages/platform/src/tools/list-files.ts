@@ -32,7 +32,7 @@ export function createTool(ctx: ToolContext): Tool {
         } catch {
           // 沙箱拦截——回退到 workspaceRoot 相对路径
           if (ctx.workspaceRoot) {
-            const relative = given.replace(/^[\/]+/, "").replace(/^[A-Z]:[\/\\]/, "");
+            const relative = given.replace(/^[/]+/, "").replace(/^[A-Z]:[/\\]/, "");
             dirPath = ctx.resolvePath(relative);
           } else {
             dirPath = given;
@@ -40,7 +40,7 @@ export function createTool(ctx: ToolContext): Tool {
         }
         // 如果路径不存在但 workspaceRoot 已知，尝试相对解析
         if (!(await ctx.fs.exists(dirPath)) && ctx.workspaceRoot) {
-          const relative = given.replace(/^[\/]+/, "").replace(/^[A-Z]:[\/\\]/, "");
+          const relative = given.replace(/^[/]+/, "").replace(/^[A-Z]:[/\\]/, "");
           const altPath = ctx.fs.resolve(relative);
           if (altPath !== dirPath && await ctx.fs.exists(altPath)) dirPath = altPath;
         }

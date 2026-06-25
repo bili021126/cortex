@@ -136,7 +136,7 @@ export function parseDecomposeResponse(raw: string): DecomposeResult {
   // 去掉可能的 markdown 代码块包裹
   const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
-    jsonStr = codeBlockMatch[1].trim();
+    jsonStr = codeBlockMatch[1]!.trim();
   }
 
   // 找到第一个 { 到最后一个 } 之间的内容
@@ -198,6 +198,6 @@ export function parseDecomposeResponse(raw: string): DecomposeResult {
 export function shouldExecuteDecomposition(result: DecomposeResult): boolean {
   if (result.confidence < RLM_MIN_CONFIDENCE) return false;
   if (result.subTasks.length === 0) return false;
-  if (result.subTasks.length === 1 && result.subTasks[0].confidence < 0.8) return false;
+  if (result.subTasks.length === 1 && result.subTasks[0]!.confidence < 0.8) return false;
   return true;
 }

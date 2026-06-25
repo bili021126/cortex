@@ -71,12 +71,12 @@ function parseArgs(argv: string[]): CliOptions | null {
       options.title = args[i];
     } else if (arg === '-d' || arg === '--document') {
       options.document = true;
-    } else if (arg.startsWith('-')) {
-      console.error(`✗ 错误: 未知选项 "${arg}"`);
+    } else if (arg!.startsWith('-')) {
+      console.error(`✗ 错误: 未知选项 "${arg!}"`);
       return null;
     } else {
       if (!options.input) {
-        options.input = arg;
+        options.input = arg!;
       } else {
         console.error(`✗ 错误: 多余参数 "${arg}"`);
         return null;

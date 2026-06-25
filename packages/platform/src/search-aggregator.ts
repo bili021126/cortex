@@ -140,9 +140,9 @@ export class SearchAggregator {
     const buckets = [...sourceBuckets.values()];
     let bucketIdx = 0;
     while (deduped.length < maxResults && buckets.length > 0) {
-      const bucket = buckets[bucketIdx % buckets.length];
+      const bucket = buckets[bucketIdx % buckets.length]!;
       if (bucket.length > 0) {
-        const item = bucket.shift();
+        const item = bucket!.shift();
         if (item) deduped.push(item);
       }
       bucketIdx++;

@@ -8,7 +8,7 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import type { AgentType, LlmMessage, ITuiEngineBridge, TaskNode, ExecutionReport } from "@cortex/shared";
+import type { AgentType, LlmMessage, ITuiEngineBridge, TaskNode } from "@cortex/shared";
 import type { TuiEvent, TuiHooks } from "../types.js";
 import { queryLoop } from "../query-loop.js";
 import { formatPlanTree } from "./plan-utils.js";
@@ -112,7 +112,7 @@ export async function* planMode(
     // 需桥接：先收集全部事件，再逐条 yield
     const collectedEvents: TuiEvent[] = [];
     const report = await bridge.executeWithStream(planState.nodes, (event) => {
-      collectedEvents.push(event);
+      collectedEvents.push(event as TuiEvent);
     });
 
     // 逐条发射收集的事件

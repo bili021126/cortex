@@ -96,7 +96,7 @@ function keepBoundary(messages: LlmMessage[], keepTurns: number): number {
   // 从末尾向前数 keepTurns 轮 user 消息
   let userCount = 0;
   for (let i = messages.length - 1; i >= 1; i--) {
-    if (messages[i].role === "user") {
+    if (messages[i]!.role === "user") {
       userCount++;
       if (userCount >= keepTurns) return i;
     }
@@ -180,12 +180,12 @@ function compactL3(
   while (i < messages.length) {
     // system prompt 或保留区之后的消息不压缩
     if (i === 0 || i >= keepIdx) {
-      result.push(messages[i]);
+      result.push(messages[i]!);
       i++;
       continue;
     }
 
-    const m = messages[i];
+    const m = messages[i]!;
     // 查找 assistant(tool_calls) → tool 对
     if (
       m.role === "assistant" &&
@@ -199,10 +199,10 @@ function compactL3(
       // 收集紧随其后的 tool 结果消息
       const toolResults: string[] = [];
       let j = i + 1;
-      while (j < messages.length && messages[j].role === "tool") {
-        const toolCallId = (messages[j] as unknown as Record<string, unknown>).tool_call_id as string | undefined;
+      while (j < messages.length && messages[j]!.role === "tool") {
+        const toolCallId = (messages[j]! as unknown as Record<string, unknown>).tool_call_id as string | undefined;
         if (toolCallId && callIds.has(toolCallId)) {
-          const summary = (messages[j].content ?? "").slice(0, 100);
+          const summary = (messages[j]!.content ?? "").slice(0, 100);
           toolResults.push(summary);
           j++;
         } else {
@@ -222,7 +222,7 @@ function compactL3(
       continue;
     }
 
-    result.push(m);
+    result.push(messages[i]!);
     i++;
   }
 
@@ -252,7 +252,7 @@ async function compactL4(
     const compressed = keepIdx - 1;
     return {
       messages: [
-        messages[0], // system prompt
+        messages[0]!, // system prompt
         { role: "assistant" as const, content: `[对话摘要] ${summary}` },
         ...messages.slice(keepIdx), // 保留区
       ],
@@ -315,7 +315,7 @@ export async function compactMessages(
   const summaryParts: string[] = [];
 
   // 无 system prompt 或消息太少，不压缩
-  if (messages.length < 2 || messages[0].role !== "system") {
+  if (messages.length < 2 || messages[0]!.role !== "system") {
     return {
       messages,
       summary: "跳过压缩（无有效上下文）",

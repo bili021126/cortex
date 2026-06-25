@@ -135,7 +135,7 @@ export function combineSignals(signals: AbortSignal[]): AbortSignal {
   }
 
   if (signals.length === 1) {
-    return signals[0];
+    return signals[0]!;
   }
 
   // 检查是否有已中止的信号

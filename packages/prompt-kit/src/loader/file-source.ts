@@ -181,7 +181,7 @@ export class FilePromptSource implements PromptSource {
       name: templateId,
       version: "1.0.0",
       blocks: [block],
-      tags: [agentName],
+      tags: [agentName!],
       source: filePath,
     };
   }

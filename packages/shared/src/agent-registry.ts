@@ -18,7 +18,7 @@
 // @since v3 统一 agent 域
 // ============================================================
 
-import { AgentType, AgentContext } from "./agent-enums.js";
+import { AgentType, type AgentContext } from "./agent-enums.js";
 
 // ============================================================
 // §1 标签词汇表（TAG_VOCABULARY）

@@ -171,15 +171,15 @@ function collectASTStats(sourceFile: ts.SourceFile): Record<string, number> {
     variables: 0,
   };
   const walk = (node: ts.Node): void => {
-    stats.totalNodes++;
-    if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isArrowFunction(node)) stats.functions++;
-    if (ts.isClassDeclaration(node)) stats.classes++;
-    if (ts.isInterfaceDeclaration(node)) stats.interfaces++;
-    if (ts.isEnumDeclaration(node)) stats.enums++;
-    if (ts.isImportDeclaration(node)) stats.imports++;
-    if (ts.isExportDeclaration(node) || ts.isExportAssignment(node)) stats.exports++;
-    if (ts.isTypeAliasDeclaration(node)) stats.typeAliases++;
-    if (ts.isVariableStatement(node)) stats.variables++;
+    stats.totalNodes!++;
+    if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isArrowFunction(node)) stats.functions!++;
+    if (ts.isClassDeclaration(node)) stats.classes!++;
+    if (ts.isInterfaceDeclaration(node)) stats.interfaces!++;
+    if (ts.isEnumDeclaration(node)) stats.enums!++;
+    if (ts.isImportDeclaration(node)) stats.imports!++;
+    if (ts.isExportDeclaration(node) || ts.isExportAssignment(node)) stats.exports!++;
+    if (ts.isTypeAliasDeclaration(node)) stats.typeAliases!++;
+    if (ts.isVariableStatement(node)) stats.variables!++;
     node.forEachChild(walk);
   };
   walk(sourceFile);

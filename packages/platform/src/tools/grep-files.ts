@@ -52,8 +52,8 @@ export function createTool(ctx: ToolContext): Tool {
           const content = await ctx.fs.readFile(filePath);
           const lines = content.split("\n");
           for (let i = 0; i < lines.length; i++) {
-            if (lines[i].toLowerCase().includes(pattern)) {
-              matches.push(`${rawPath}:${i + 1}: ${lines[i].trim().slice(0, 300)}`);
+            if (lines[i]!.toLowerCase().includes(pattern)) {
+              matches.push(`${rawPath}:${i + 1}: ${lines[i]!.trim().slice(0, 300)}`);
             }
             if (matches.length >= 100) break;
           }

@@ -87,7 +87,7 @@ describe('TaskBoard', () => {
     board.complete('n1', 'review' as AgentType, false, undefined, '出错了');
     const node = board.getNode('n1');
     expect(node!.status).toBe('failed');
-    expect(node!.results[0].success).toBe(false);
+    expect(node!.results[0]!.success).toBe(false);
   });
 
   it('failNode 强制标记失败', () => {
@@ -107,7 +107,7 @@ describe('TaskBoard', () => {
     board.addNode(makeNode('c', { status: 'failed' }));
     const pending = board.getPendingNodes();
     expect(pending).toHaveLength(1);
-    expect(pending[0].id).toBe('a');
+    expect(pending[0]!.id).toBe('a');
   });
 
   it('removeNode 删除节点', () => {
