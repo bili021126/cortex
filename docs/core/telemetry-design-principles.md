@@ -36,9 +36,75 @@
 ```
 
 **遥测层的三轴定位**：
-- 不参与事轴（命令自上而下）
-- 不参与权轴（约束自下而上）
+- 不参与事轴（命令自上而下）——不发出指令
+- 不参与权轴（约束自下而上）——不执行约束
 - 属于横切——监督，但不阻断
+
+### 遥测的双重身份：观测层 + 治理原料层
+
+遥测基础设施不只为人类提供可观测性——它是**权轴 Agent 的感知器官**。
+
+```
+身份一：观测层（原则五）              身份二：治理原料层（原则四+六）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+emit → 人看日志/仪表盘               emit → Agent 消费事件
+"发生了什么"                          "应该做什么"
+事后调试                             事前/事中治理决策
+```
+
+**治理 Agent 消费遥测事件的映射**：
+
+```
+遥测事件                         治理 Agent           治理动作
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DegradationThresholdBreached  →  钟离(strategist)     触发韧性策略调整
+                                   霜凝(strategist)     调整熔断参数
+
+ConfigSchemaViolation         →  凝光(doc_govern)     标记宪法违规
+                                                       生成修宪提案
+
+DomainGateUpdated             →  Sentinel             域隔离审计
+                                                       "亲密记忆是否泄漏到工程侧"
+
+RetrievalStrategySelected     →  甘雨(meta)           plan() 时参考
+                                   + 凝光               策略效果历史记录
+
+ConfigOverrideApplied         →  凝光                  配置漂移告警
+                                                       env vs file 差异追踪
+
+MemoryObliterationTriggered   →  Sentinel              遗忘审计
+                                                       "关键记忆是否被误删"
+
+Tele:HealthDegraded           →  钟离                   系统自愈决策
+```
+
+**关键约束**：遥测事件是权轴 Agent 的**唯一数据来源**。权轴 Agent 不直接查询 MemoryStore、不直接读取 config 文件——它们通过订阅 PipelineObserver 获得系统态势。这保证了：
+
+- 权轴 Agent 的决策可追溯：每个决策都可以回溯到触发它的遥测事件
+- 权轴 Agent 不产生额外的耦合：它们依赖事件流，不依赖具体包的内部结构
+- 原则四（可追溯性）的自然延伸：不只是工具调用可追溯，治理决策本身也可追溯
+
+**三轴闭环**：
+
+```
+事轴（命令自上而下）      权轴（约束自下而上）      横切（监督）
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+甘雨 plan()               钟离 策略审查            SentinelSignalFilter
+  ↓                         ↓                        ↑
+Agent execute()            凝光 合规审计               │
+  ↓                         ↓                        │
+Scheduler 调度             霜凝 韧性调整               │
+                                                        │
+                              ↑                        │
+                              │     遥测事件 ←─────────┘
+                              │     （治理原料）
+                              │
+                        权轴 Agent 不直接查系统状态
+                        只消费遥测事件流
+```
+
+这补齐了三轴的最后一环——横切不只是"看"，它是权轴的"感知层"。没有这条通路，权轴就只剩静态规则，没有动态态势。
 
 ---
 
@@ -204,6 +270,33 @@ MemoryStore.write() {               MemoryStore.write() {
 
 ---
 
+### 遥测子原则 8：治理可消费——事件设计面向 Agent 消费（源自原则四 + 原则六）
+
+> 遥测事件不是仅为人类设计的调试日志——它是权轴 Agent 的感知输入。事件 payload 必须携带足够的语义信息，让 Agent 可以据此做出治理决策，而不需要回头查询系统状态。
+
+```
+❌ 仅面向人的事件                    ✅ 面向 Agent 的事件
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ConfigOverrideApplied {             ConfigOverrideApplied {
+  message: "配置已覆盖"                key: "cognition.weightHybrid",
+}                                      source: "env",
+                                        oldValue: 0.45,
+                                        newValue: 0.60,
+                                        affectedComponents: ["CognitionEngine"],
+                                        risk: "medium"  // Agent 可据此判断
+                                      }
+```
+
+**规则**：
+- 每个事件的 payload 必须包含 Agent 决策所需的最小信息集——不假设 Agent 会去查 MemoryStore 或 config 补全信息。
+- payload 中的语义字段（如 `risk`、`severity`、`affectedComponents`）使用闭合枚举，Agent 可以 switch/case 而非 LLM 推理。
+- 治理 Agent 不得绕过 PipelineObserver 直接查询系统状态——事件流是唯一的态势感知来源。
+
+**检验标准**：如果一个治理 Agent 只看这个事件的 payload，能否判断是否需要行动？如果还需要去查别的东西，payload 不够。
+
+---
+
 ## 三、三层（EventBus / AuditTrail / MetricCounter）的分工
 
 ```
@@ -258,6 +351,7 @@ PipelineObserver（已有）
 | 5 | 事件语义收敛 | 原则五 | 五流共用前缀命名体系 |
 | 6 | 分级存储 | 原则五（性能） | 高频 → Counter，中频 → EventBus，低频 → AuditTrail |
 | 7 | 插桩解耦 | 裂+合 | 被观测方只调 emit()，不知 AuditTrail/MetricCounter 存在 |
+| 8 | 治理可消费 | 原则四 + 六 | event payload 携带 Agent 决策所需最小信息集；Agent 不绕过 PipelineObserver 查状态 |
 
 ---
 
