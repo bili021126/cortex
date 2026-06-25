@@ -95,9 +95,6 @@ importers:
       '@cortex/platform':
         specifier: workspace:*
         version: link:../platform
-      '@cortex/pm':
-        specifier: workspace:*
-        version: link:../pm
       '@cortex/prompt-kit':
         specifier: workspace:*
         version: link:../prompt-kit
@@ -131,6 +128,10 @@ importers:
         version: 2.1.9(@types/node@22.19.17)
 
   packages/config:
+    dependencies:
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       typescript:
         specifier: ^5.7.0
@@ -147,21 +148,6 @@ importers:
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.17
-      eslint:
-        specifier: ^10.4.1
-        version: 10.4.1
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.19.17)
-
-  packages/context-window:
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -200,9 +186,6 @@ importers:
 
   packages/engine:
     dependencies:
-      '@cortex/cache':
-        specifier: workspace:*
-        version: link:../cache
       '@cortex/config':
         specifier: workspace:*
         version: link:../config
@@ -285,25 +268,6 @@ importers:
       tree-sitter-typescript:
         specifier: ^0.23.2
         version: 0.23.2(tree-sitter@0.25.0(patch_hash=sz5xm2zivswrqbsvz4a33knkau))
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.19.17)
-
-  packages/event-bus:
-    dependencies:
-      '@cortex/shared':
-        specifier: workspace:*
-        version: link:../shared
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.17
-      eslint:
-        specifier: ^10.4.1
-        version: 10.4.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
@@ -517,25 +481,6 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
-  packages/pm:
-    dependencies:
-      commander:
-        specifier: ^14.0.3
-        version: 14.0.3
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.17
-      eslint:
-        specifier: ^10.4.1
-        version: 10.4.1
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.19.17)
-
   packages/prompt-kit:
     dependencies:
       '@cortex/config':
@@ -604,6 +549,22 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
+      eslint:
+        specifier: ^10.4.1
+        version: 10.4.1
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  packages/schema:
+    dependencies:
+      '@cortex/result':
+        specifier: workspace:*
+        version: link:../result
+    devDependencies:
       eslint:
         specifier: ^10.4.1
         version: 10.4.1
@@ -765,6 +726,25 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.17)
+
+  projects/pm-legacy:
+    dependencies:
+      commander:
+        specifier: ^14.0.3
+        version: 14.0.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.17
+      eslint:
+        specifier: ^10.4.1
+        version: 10.4.1
       typescript:
         specifier: ^5.7.0
         version: 5.9.3

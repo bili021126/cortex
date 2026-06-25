@@ -19,7 +19,6 @@ export * from "./agent.js";
 export * from "./task.js";
 export * from "./memory.js";
 export * from "./toolkit.js";
-export * from "./file-lock-manager.js"; // @deprecated 运行时实现计划迁至 @cortex/platform，接口保留
 export * from "./cli-adapter.js";
 export * from "./infra.js";
 export * from "./skill-registry.js";
@@ -27,8 +26,3 @@ export * from "./fs-adapter.js";
 export * from "./modification-record.js";
 export * from "./doc-registry.js";
 export * from "./amendment.js";
-export * from "./kv-store.js"; // @deprecated 运行时实现计划迁至独立包，接口保留
-export * from "./id-utils.js"; // @deprecated 工具函数计划迁至 @cortex/config
-export * from "./json-utils.js"; // @deprecated 工具函数计划迁至 @cortex/config
-export * from "./context-policy.js"; // @deprecated 预设数据计划迁至运行时包
-export * from "./lifecycle.js"; // @deprecated 抽象类计划迁至 @cortex/engine

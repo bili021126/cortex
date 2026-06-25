@@ -32,7 +32,6 @@
     "@cortex/skill-kit": "workspace:*",
     "@cortex/llm": "workspace:*",
     "@cortex/parser": "workspace:*",
-    "@cortex/pm": "workspace:*",
     "@cortex/prompt-kit": "workspace:*",
     "@cortex/shared": "workspace:*",
     "@cortex/tools": "workspace:*",

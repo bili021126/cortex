@@ -13,7 +13,6 @@
         { "path": "../platform/tsconfig.src.json" },
     { "path": "../llm" },
     { "path": "../shared" },
-    { "path": "../tools" },
-    { "path": "../pm" }
+    { "path": "../tools" }
   ]
 }

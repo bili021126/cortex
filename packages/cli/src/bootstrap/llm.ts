@@ -8,7 +8,6 @@
  */
 
 import { LlmAdapter } from "@cortex/llm";
-import type { PasswordEntry } from "@cortex/pm";
 import {
   ENV_DEEPSEEK_BASE_URL,
   ENV_DEEPSEEK_CHAT_MODEL,
@@ -25,6 +24,16 @@ import {
   DEFAULT_LLM_REASONER_MODEL,
   LLM_KEY_NAMES,
 } from "@cortex/config";
+
+/** 密码条目数据结构（原 @cortex/pm 内联） */
+interface PasswordEntry {
+  id: string;
+  name: string;
+  username: string;
+  password: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 /** pm vault 的最小接口 */
 interface PmStore {
@@ -75,6 +84,7 @@ export async function bootstrapLlm(): Promise<LlmBootstrapResult> {
   let pmStore: PmStore | undefined;
   if (process.env[ENV_PM_MASTER_KEY]) {
     try {
+      // @ts-expect-error — 动态回退：pm 不可用时退化到环境变量
       pmStore = await import("@cortex/pm");
     } catch {
       // @cortex/pm 不可用，静默回退到环境变量
