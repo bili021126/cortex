@@ -200,7 +200,19 @@ C: DomainGateController   只激活相关域，不激活的不参与检索
 
 ### 6.2 阶段划分
 
-#### Phase 0：清理（0.3 人天）
+#### Phase 0：遥测基础设施——观测先行（1 人天）🔴 必须先做
+
+> 原则五是全流 L0 元约束。没有观测，所有后续变更不可验证。
+
+```
+PipelineEventType 补充 7 个             配置/检索/记忆/降级事件
+EventPayloadMap 补充 7 项               类型安全的事件的契约
+AuditTrail 骨架                         审计日志（配置/域/降级）
+MetricCounter 骨架                      降级计数器 + 阈值触发
+bootstrap 集成                           启动时初始化 TelemetryLayer
+```
+
+#### Phase 1：清理（0.3 人天）
 
 ```
 删 console-bridge.ts         死代码
@@ -209,7 +221,7 @@ C: DomainGateController   只激活相关域，不激活的不参与检索
 清 shared barrel 6 条 @deprecated
 ```
 
-#### Phase 1：解耦——裂（3 人天）
+#### Phase 2：解耦——裂（3 人天）
 
 ```
 shared 运行时类 → engine      file-lock/kv-store/lifecycle
@@ -217,35 +229,35 @@ shared 数据 → config           PRESET_CONTEXT_POLICIES/AGENT_DEFS
 engine-telemetry 副本删除      统一 @cortex/telemetry
 ```
 
-#### Phase 2：基础设施——新概念 1+2（2 人天）
+#### Phase 3：基础设施——新概念 1+2（2 人天）
 
 ```
 ConfigRegistry + Resolver     @cortex/config 升级
 RetrievalScheduler 骨架       @cortex/retrieval-scheduler 新建
 Scene-Aware 冲突化解: scene 由甘雨分配
-Config 事件 EventPayloadMap 补充
+Config 插桩（覆盖/热加载 → AuditTrail + emit）
 ```
 
-#### Phase 3：收敛——合 + 配置表（4 人天）
+#### Phase 4：收敛——合 + 配置表（4 人天）
 
 ```
 重复值合并 ×4                 统一 config 单源
 13 张 config 表分批建立
 env override 全局化
 schema 常量收归
-空 catch → Degradation Boundary（P2 试点）
+空 catch → Degradation Boundary（P2 试点 + MetricCounter 插桩）
 ```
 
-#### Phase 4：门控——新概念 3-6（3 人天）
+#### Phase 5：门控——新概念 3-6（3 人天）
 
 ```
-Memory Domain + Gate          domain 字段 + domain 过滤
-Signal Routing                事件路由矩阵
+Memory Domain + Gate          domain 字段 + domain 过滤 + AuditTrail
+Signal Routing                事件路由矩阵 + 路由元数据附 payload
 Degradation Boundary 全量     23 处迁移 + silent 计数器
 Config Drift                  CI 门禁
 ```
 
-#### Phase 5：记忆世界模型（2 人天）
+#### Phase 6：记忆世界模型（2 人天）
 
 ```
 PredictiveEncoder (V)         写时预测编码
@@ -256,23 +268,28 @@ DomainGateController (C)      域门控
 ### 6.3 依赖图
 
 ```
-Phase 0 清理
+Phase 0 遥测 ──────────→  原则五 L0 元约束落地
+  │                        EventBus + AuditTrail + MetricCounter
+  │                        → 后续所有阶段可观测
   │
   ▼
-Phase 1 裂 ──────────────────────┐
+Phase 1 清理
+  │
+  ▼
+Phase 2 裂 ──────────────────────┐
   │                               │
   ▼                               ▼
-Phase 2 基础设施 ───────→ 新概念 1 (Config as Runtime)
+Phase 3 基础设施 ───────→ 新概念 1 (Config as Runtime)
   │                       新概念 2 (Scene-Aware Retrieval)
   ├──→ 冲突化解: scene 分配权
   │
   ▼
-Phase 3 合 ───→ 配置表 13 张
+Phase 4 合 ───→ 配置表 13 张
   │            重复值合并
   │            Degradation 试点
   │
   ▼
-Phase 4 门控 ──→ 新概念 3 (Domain)
+Phase 5 门控 ──→ 新概念 3 (Domain)
   │             新概念 4 (Signal Routing)
   │             新概念 5 (Degradation 全量)
   │             新概念 6 (Drift)
@@ -280,7 +297,7 @@ Phase 4 门控 ──→ 新概念 3 (Domain)
   ▼
 Phase 5 记忆 ──→ MemoryWorldModel V/M/C
 
-总计: ~14 人天, 6 个阶段
+总计: ~15 人天, 7 个阶段（Phase 0-6）
 ```
 
 ---
@@ -308,6 +325,7 @@ Phase 5 记忆 ──→ MemoryWorldModel V/M/C
   docs/analysis/rim-world-model-cortex-insights.md         RIM+世界模型启示
 
 设计层:
+  docs/core/telemetry-infrastructure-deepening.md           遥测基础设施（Phase 0）
   docs/core/config-management-deepening.md                 配置管理深化
   docs/core/scene-retrieval-scheduler-design.md             场景检索调度层
   docs/core/memory-world-model-design.md                    记忆世界模型
