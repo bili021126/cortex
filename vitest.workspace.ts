@@ -30,7 +30,6 @@ export default defineWorkspace([
   "./packages/parser/vitest.config.ts",
   "./packages/pattern-extractor/vitest.config.ts",
   "./packages/plugin-runner/vitest.config.ts",
-  "./packages/pm/vitest.config.ts",
   "./packages/prompt-kit/vitest.config.ts",
   "./packages/resilience/vitest.config.ts",
   "./packages/skill-kit/vitest.config.ts",

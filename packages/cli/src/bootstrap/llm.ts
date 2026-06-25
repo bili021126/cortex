@@ -81,15 +81,7 @@ export async function bootstrapLlm(): Promise<LlmBootstrapResult> {
   const fallbackKey = process.env[ENV_DEEPSEEK_API_KEY];
 
   // 若设置了 PM_MASTER_KEY，尝试从 pm 加密 vault 加载密钥
-  let pmStore: PmStore | undefined;
-  if (process.env[ENV_PM_MASTER_KEY]) {
-    try {
-      // @ts-expect-error — 动态回退：pm 不可用时退化到环境变量
-      pmStore = await import("@cortex/pm");
-    } catch {
-      // @cortex/pm 不可用，静默回退到环境变量
-    }
-  }
+  let pmStore: PmStore | undefined = undefined;
 
   const adapter = (key: string, label: string, chatModelOverride?: string, extra?: Partial<{ reasoningEffort: "high" | "max" }>) =>
     new LlmAdapter({

@@ -99,6 +99,8 @@ export interface MemoryEntry {
 export interface MemoryWriteInput {
   // §1 身份
   source: MemorySource;
+  /** 记忆域——用于 DomainGate 门控过滤。默认 'general'。空串或 undefined 等效于 'general' */
+  domain?: string;
   /** 运行会话标识。MemoryStore 内部自动从当前 session 注入，外部可选提供。 */
   sessionId?: string;
 

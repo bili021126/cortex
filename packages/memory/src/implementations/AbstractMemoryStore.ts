@@ -477,6 +477,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     const e: MemoryEntry = {
       id,
       source: f.source,
+      domain: f.domain,
       sessionId: f.sessionId ?? this._sid,
       kind: f.kind,
       summary: f.summary,
@@ -694,6 +695,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     const e: MemoryEntry = {
       id: mid,
       source: p.input.source,
+      domain: p.input.domain,
       sessionId: p.input.sessionId ?? this._sid,
       kind: p.input.kind,
       summary: p.input.summary,

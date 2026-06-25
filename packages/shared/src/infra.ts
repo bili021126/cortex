@@ -76,7 +76,7 @@ export enum PipelineEventType {
   GovernanceRoundtableConsensus = "governance.roundtable_consensus",
   // ── RLM 递归分层执行 ──
   RlmDecompose = "rlm.decompose",
-  RlmContextCompress = "context.compress",
+  RlmContextCompress = "rlm.context_compress",
   // ── ManifoldGate 流控 ──
   ManifoldGateWaitStart = "manifold_gate.wait_start",
   ManifoldGateWaitEnd = "manifold_gate.wait_end",
