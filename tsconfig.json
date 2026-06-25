@@ -28,6 +28,7 @@
     { "path": "packages/resilience" },
     { "path": "packages/skill-kit" },
     { "path": "packages/logging" },
+    { "path": "packages/context-manager" },
     { "path": "packages/plugin-runner/tsconfig.src.json" }
   ]
 }

@@ -40,6 +40,7 @@ export default defineWorkspace([
   "./packages/tui/vitest.config.ts",
 
   // ── 引擎 & CLI（较重，独立项目以便单独 --project 筛选） ──
+  "./packages/context-manager/vitest.config.ts",
   "./packages/engine/vitest.config.ts",
   "./packages/cli/vitest.config.ts",
 ]);

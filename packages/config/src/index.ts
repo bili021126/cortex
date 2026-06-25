@@ -205,3 +205,10 @@ export { PRESET_CONTEXT_POLICIES } from "./data/context-policies.js";
 // ── Agent 定义数据 ──
 export { AGENT_DEFS, FULL_TOOLSET, BASE_TOOLSET, READONLY_TOOLSET } from "./data/agent-defs.js";
 
+// ── ConfigRegistry（Phase 3 基础设施）──
+export { ConfigRegistry } from "./registry.js";
+export type { ConfigDomain } from "./registry.js";
+
+// ── 默认域注册入口（Phase 3）──
+export { registerDefaultDomains } from "./registry.js";
+

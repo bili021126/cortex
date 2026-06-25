@@ -18,6 +18,18 @@ import type { AgentType, Tag } from "./agent.js";
 export type DensityLevel = "light" | "medium" | "heavy";
 
 /**
+ * 检索场景——ContextManager 根据此值选择上下文策略。
+ * @since Cortex Phase 3 — 上下文管理层
+ */
+export type RetrievalScene = string;
+
+/**
+ * 人物标识——甘雨/钟离等 Agent persona 的 ID。
+ * @since Cortex Phase 3 — 上下文管理层
+ */
+export type PersonaId = string;
+
+/**
  * 密度压缩后的子任务产出。
  * 含 LLM 自标注的密度标签，下游子任务据此决定精读/扫读。
  */
@@ -127,6 +139,18 @@ export interface TaskNode {
    * @since v2.6.6 模型路由语义重建
    */
   recommendedTier?: 'fast' | 'standard' | 'thinking';
+  /**
+   * 执行场景——ContextManager 解析上下文策略时使用。
+   * MetaAgent plan() 时写入。Phase 3 默认 'code-repair'。
+   * @since Cortex Phase 3 — 上下文管理层
+   */
+  contextScene?: RetrievalScene;
+  /**
+   * 执行人物——ContextManager 解析上下文策略时使用。
+   * MetaAgent plan() 时写入。Phase 3 可选。
+   * @since Cortex Phase 3 — 上下文管理层
+   */
+  contextPersona?: PersonaId;
 }
 
 /**

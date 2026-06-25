@@ -5,6 +5,7 @@
 import { extractJsonBlock, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
 import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
+import type { ContextManager } from "@cortex/context-manager";
 import {
   buildPlanningSystem,
   buildPlanningSystemBlank,
@@ -63,6 +64,8 @@ export class MetaAgent {
   private _workspaceRoot?: string;
   private _promptManager?: PromptManager;
   private _loopStrategyRegistry?: LoopStrategyRegistry;
+  /** Phase 3: 上下文管理器（可选注入——保留 fallback 逻辑） */
+  private _contextManager?: ContextManager;
 
   constructor(
     private readonly llm: LlmAdapter,
@@ -71,12 +74,19 @@ export class MetaAgent {
     replanSystemPrompt?: string,
     observer?: IPipelineObserver,
     workspaceRoot?: string,
+    contextManager?: ContextManager,
   ) {
     this._skillRegistry = skillRegistry;
     this._planningSystem = planningSystemPrompt ?? buildPlanningSystemBlank();
     this._replanSystem = replanSystemPrompt ?? REPLAN_SYSTEM;
     this._workspaceRoot = workspaceRoot;
+    this._contextManager = contextManager;
     if (observer) this.setObserver(observer);
+  }
+
+  /** 注入上下文管理器（可后置绑定 Phase 3） */
+  setContextManager(cm: ContextManager): void {
+    this._contextManager = cm;
   }
 
   /** RLM 拆解用的 LLM 适配器（只读）。Scheduler 通过此入口注入 decompose() 的 LLM 调用能力。 */
@@ -569,7 +579,7 @@ export class MetaAgent {
       createdAt: now,
       reasoningEffort,
       recommendedTier: _validTier(item.recommendedTier),
-      contextPolicyId: _resolveContextPolicy(item.type, item.tags),
+      contextPolicyId: this._resolveContextPolicy(item),
     };
 
     return [self, ...children];
@@ -600,6 +610,24 @@ export class MetaAgent {
       });
       return { nodes: [this._fallbackNode(raw, parentId)], impactScope: "local" };
     }
+  }
+
+  /**
+   * 根据 PlanItem 解析上下文策略。
+   *
+   * 若 ContextManager 已注入，通过场景解析；
+   * 否则回退到旧版 tag→策略路由（Phase 3 fallback）。
+   */
+  private _resolveContextPolicy(item: PlanItem): string {
+    if (this._contextManager) {
+      const resolved = this._contextManager.resolve({
+        scene: (item as any).contextScene ?? "code-repair",
+        persona: (item as any).contextPersona,
+        task: { type: item.type ?? "analysis", tags: item.tags ?? [] },
+      });
+      return resolved.policyId;
+    }
+    return _resolveContextPolicyFallback(item.type, item.tags);
   }
 }
 
@@ -633,17 +661,15 @@ export interface IntentClarification {
 // 系统提示已迁移至 @cortex/config/constants/meta-agent.ts
 // 通过 buildPlanningSystem(workspaceRoot) / REPLAN_SYSTEM 导入使用
 
-// ─── ContextPolicy 自动匹配 ──────────────────────
-
 /**
- * 根据任务类型和标签自动选择 ContextPolicy。
+ * 旧版 tag→策略路由（Phase 3 fallback —— ContextManager 未注入时使用）。
  *
  * 匹配规则：
  *   1. type 精确命中预设 ID → 直接返回
  *   2. tags 包含特征标签 → 匹配对应预设
  *   3. 回退 → "single-step"
  */
-function _resolveContextPolicy(type?: string, tags?: string[]): string {
+function _resolveContextPolicyFallback(type?: string, tags?: string[]): string {
   // 规则 1: type 精确命中
   if (type && PRESET_CONTEXT_POLICIES[type]) return type;
 

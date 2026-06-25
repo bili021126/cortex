@@ -20,6 +20,7 @@
     { "path": "../telemetry" },
     { "path": "../memory" },
     { "path": "../notification" },
-    { "path": "../logging" }
+    { "path": "../logging" },
+    { "path": "../context-manager" }
   ]
 }
