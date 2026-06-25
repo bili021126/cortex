@@ -2,7 +2,8 @@
 // @layer 记忆层
 // @role 记忆管道——检索→增强→执行→写入→校验
 
-import { LinkType, PRESET_CONTEXT_POLICIES, type AgentType, type MemoryEntry, type MemoryKind, type MemoryQuery, type NodeResult, type ReadMode, type SafeErrorReporter, type TaskNode } from "@cortex/shared";
+import { LinkType, type AgentType, type MemoryEntry, type MemoryKind, type MemoryQuery, type NodeResult, type ReadMode, type SafeErrorReporter, type TaskNode } from "@cortex/shared";
+import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import { ContextBuilder, type MemoryStore } from "@cortex/memory-store";
 import type { Toolkit } from "@cortex/platform";

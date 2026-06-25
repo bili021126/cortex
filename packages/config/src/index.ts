@@ -199,3 +199,9 @@ export type { EngineDefaults } from "./engine-defaults.js";
 // ── 治理事件路由表 ──
 export { GOVERNANCE_EVENT_ROUTING } from "./governance-event-routing.js";
 
+// ── 预设上下文策略库 ──
+export { PRESET_CONTEXT_POLICIES } from "./data/context-policies.js";
+
+// ── Agent 定义数据 ──
+export { AGENT_DEFS, FULL_TOOLSET, BASE_TOOLSET, READONLY_TOOLSET } from "./data/agent-defs.js";
+

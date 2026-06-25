@@ -2,7 +2,8 @@
 // @layer 规划-执行层
 // @role 事轴起点——意图拆解为粗粒度 TaskNode 树
 
-import { extractJsonBlock, PRESET_CONTEXT_POLICIES, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
+import { extractJsonBlock, PipelinePriority, type IPipelineObserver, type ImpactScope, type ObservableEvent, type PipelineEventType, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
+import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import {
   buildPlanningSystem,

@@ -110,6 +110,8 @@ const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code
 const READONLY_TOOLSET: readonly string[] = ["read_file", "search_code", "web_search", "list_files", "parse_ast", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files"];
 
 // ─── AGENT_DEFS — 单一起源 ─────────────────────
+// FIXME: 应迁入 @cortex/config，但因 config→shared→config 循环依赖暂缓。
+//        数据副本已保留在 packages/config/src/data/agent-defs.ts
 
 const AGENT_DEFS: Record<AgentType, AgentDefinition> = {
   [AgentType.Meta]: {
