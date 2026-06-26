@@ -2,7 +2,7 @@
 
 > **自治理 AI Agent 运行时** — 带宪法、带人格、带 TUI。
 >
-> 21 个包 · 14 种 Agent 类型 · 17 个角色人格 · 22 个预置技能
+> 26 个包 · 14 种 Agent 类型 · 17 个角色人格 · 22 个预置技能
 
 [📖 包定位文档](PACKAGE_POSITIONING.md) · [📘 使用指南](USAGE.md) · [🏗️ 架构设计](DESIGN.md) · [📜 宪法](docs/constitution/)
 
@@ -47,7 +47,7 @@ pnpm --version   # 需要 >= 9.0.0
 # 2. 安装依赖
 pnpm install
 
-# 3. 全量构建（21 个包）
+# 3. 全量构建（26 个包）
 pnpm build
 
 # 4. 启动 TUI（与昔涟对话）
@@ -66,10 +66,11 @@ pnpm ci
 ```
 cortex/
 │
-├── packages/                     # 21 个 npm 包（pnpm workspace）
+├── packages/                     # 26 个 npm 包（pnpm workspace）
 │   ├── engine/                   # ⭐ 运行时内核（调度、记忆、Agent、工具包）
 │   ├── scheduler/                #   调度执行引擎（三抽象架构）
-│   ├── cli/                      #   TUI 终端界面 + CLI 入口
+│   ├── cli/                      #   命令行入口 + EngineBridge 桥接
+│   ├── tui/                      #   终端渲染层（独立包，被 cli 依赖）
 │   ├── fsm-compiler/             #   有限状态机编译工具链
 │   ├── llm/                      #   DeepSeek API 封装 + 限流
 │   ├── prompt-kit/               #   提示词工程工具包
@@ -78,16 +79,20 @@ cortex/
 │   ├── shared/                   #   共享类型协议层
 │   ├── doctor/                   #   项目健康诊断
 │   ├── telemetry/                #   遥测采集层
-│   ├── policy-validator/         #   宪法策略校验
-│   ├── skill-validator/          #   技能合规校验
 │   ├── notification/             #   事件路由与通知
 │   ├── plugin-runner/            #   插件运行器
-│   ├── factory/                  #   工厂抽象
 │   ├── tools/                    #   工具注册与适配
-│   ├── pm/                       #   包管理
-│   ├── data/                     #   数据层
 │   ├── parser/                   #   AST 解析
-│   └── testing/                  #   测试基础设施
+│   ├── testing/                  #   测试基础设施
+│   ├── governance/               #   治理层——制度化制度
+│   ├── consistency/              #   一致性检查
+│   ├── context-manager/          #   上下文管理
+│   ├── logging/                  #   结构化日志
+│   ├── memory/                   #   记忆系统核心
+│   ├── memory-store/             #   记忆存储与检索
+│   ├── pattern-extractor/        #   模式提取器
+│   ├── platform/                 #   平台层（Toolkit 等）
+│   ├── resilience/               #   容错与重试
 │
 ├── prompts/                      # 17 个角色的人格提示词
 │   ├── cyrene/                   #   昔涟（但丁，记忆守望者）
@@ -107,8 +112,8 @@ cortex/
 ├── cortex-agents.json            # Agent 注册表（14 个 Agent 定义）
 ├── cortex-cognition.json         # 认知配置（激活矩阵 + 注意力策略）
 ├── cortex-docs.json              # 文档治理注册表
-├── PACKAGE_POSITIONING.md        # 🆕 包定位文档（本文档）
-├── USAGE.md                      # 🆕 使用指南
+├── PACKAGE_POSITIONING.md        # 包定位文档
+├── USAGE.md                      # 使用指南
 ├── DESIGN.md                     # 调度器架构设计
 └── tsconfig.base.json            # TypeScript 基础配置
 ```
@@ -251,18 +256,26 @@ Cortex 内置 14 种 Agent 类型，每种绑定一个角色人格：
 | **L1 引擎/调度** | `@cortex/engine` | ⭐ 运行时内核——Agent 生命周期、记忆、工具包 |
 | | `@cortex/scheduler` | 任务调度执行引擎（三抽象架构） |
 | | `@cortex/fsm-compiler` | 有限状态机编译工具链 |
-| | `@cortex/llm` | LLM 适配器（DeepSeek） |
+| | `@cortex/llm` | LLM 适配器（通用） |
 | | `@cortex/plugin-runner` | 插件运行器 |
-| | `@cortex/factory` | 工厂抽象 |
-| **L2 校验/治理** | `@cortex/policy-validator` | 宪法策略校验 |
-| | `@cortex/skill-validator` | 技能合规校验 |
-| | `@cortex/doctor` | 项目健康诊断 |
+| | `@cortex/platform` | 平台层（Toolkit 等） |
+| **L2 校验/治理** | `@cortex/doctor` | 项目健康诊断 |
 | | `@cortex/notification` | 事件路由与通知 |
 | | `@cortex/telemetry` | 遥测采集层 |
-| **L3 交互/技能** | `@cortex/cli` | TUI 终端 + CLI 入口 |
+| | `@cortex/governance` | 治理层——制度化制度 |
+| | `@cortex/consistency` | 一致性检查 |
+| | `@cortex/logging` | 结构化日志 |
+| | `@cortex/resilience` | 容错与重试 |
+| **L3 交互/技能** | `@cortex/cli` | 命令行入口 + EngineBridge 桥接 |
+| | `@cortex/tui` | 终端渲染层（独立包，被 cli 依赖） |
 | | `@cortex/prompt-kit` | 提示词工程工具包 |
 | | `@cortex/skill-kit` | 技能系统 |
-| | `@cortex/pm` / `@cortex/data` / `@cortex/parser` / `@cortex/testing` | 辅助工具 |
+| | `@cortex/context-manager` | 上下文管理 |
+| | `@cortex/memory` | 记忆系统核心 |
+| | `@cortex/memory-store` | 记忆存储与检索 |
+| | `@cortex/pattern-extractor` | 模式提取器 |
+| | `@cortex/parser` | AST 解析 |
+| | `@cortex/testing` | 测试基础设施 |
 
 > 完整包定位分析见 [PACKAGE_POSITIONING.md](PACKAGE_POSITIONING.md)（含依赖图、边界原则）。
 
@@ -322,7 +335,7 @@ npx tsx scripts/show-constitution.ts
 
 | 文档 | 位置 | 说明 |
 |------|------|------|
-| 📖 包定位文档 | `PACKAGE_POSITIONING.md` | 21 个包的职责边界与依赖关系 |
+| 📖 包定位文档 | `PACKAGE_POSITIONING.md` | 26 个包的职责边界与依赖关系 |
 | 📘 使用指南 | `USAGE.md` | 环境配置、CLI 操作、开发工作流 |
 | 🏗️ 调度器设计 | `DESIGN.md` | 三抽象架构、接口契约、数据流 |
 | 📜 宪法体系 | `docs/constitution/` | 不可变原则与治理规则 |
