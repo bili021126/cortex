@@ -16,3 +16,6 @@ export const DEFAULT_COMMAND_TIMEOUT_SEC = 60;
 
 /** 输出格式默认值 */
 export const DEFAULT_OUTPUT_FORMAT = "text" as const;
+
+/** 工具执行超时（毫秒）——configuration-drift / monorepo-analyzer 等工具的最长执行时间 */
+export const TOOL_EXECUTION_TIMEOUT_MS = 300_000;

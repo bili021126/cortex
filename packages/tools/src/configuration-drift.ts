@@ -21,6 +21,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { cwd, argv } from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { TOOL_EXECUTION_TIMEOUT_MS } from '@cortex/config';
 
 /* ── 类型 ── */
 
@@ -349,5 +350,20 @@ function isCliEntry(): boolean {
 
 // 仅在直接运行时执行 CLI（而非作为库导入时）
 if (isCliEntry()) {
-  process.exit(main());
+  const timeoutPromise = new Promise<number>((_, reject) => {
+    setTimeout(
+      () => reject(new Error(`工具执行超时（${TOOL_EXECUTION_TIMEOUT_MS}ms）`)),
+      TOOL_EXECUTION_TIMEOUT_MS,
+    );
+  });
+
+  Promise.race([
+    Promise.resolve().then(() => main()),
+    timeoutPromise,
+  ]).then((exitCode) => {
+    process.exit(exitCode);
+  }).catch((err: Error) => {
+    console.error(`💥 ${err.message}`);
+    process.exit(2);
+  });
 }

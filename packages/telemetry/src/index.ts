@@ -75,3 +75,6 @@ export type {
   RecordDomainFilterOptions,
 } from "./audit-trail.js";
 export { MetricCounter, SILENT_THRESHOLD } from "./metric-counter.js";
+
+// ─── 执行全景追踪 ──────────────────────────────
+export { PanoramaTracker } from "./panorama-tracker.js";

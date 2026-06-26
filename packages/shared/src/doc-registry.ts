@@ -41,6 +41,17 @@ export type DocStatus =
 /** 委员会类型 */
 export type CommitteeType = "standing" | "ad-hoc";
 
+/**
+ * NAHIDA_DOC_TYPES —— 纳西妲 DocGovernAgent 负责的文档类型集合。
+ * 单一事实来源——所有纳西妲文档治理门控引用此常量。
+ */
+export const NAHIDA_DOC_TYPES: ReadonlySet<DocType> = new Set([
+  "review",
+  "self-examination",
+  "architecture",
+  "governance",
+] as const);
+
 /** 触发来源——临时委员会的两条触发路径 */
 export type TriggerSource = "agent" | "user";
 
