@@ -245,11 +245,11 @@ describe("@cortex/config — loadEngineDefaults", () => {
     expect(loaded.embeddingDim).toBe(ENGINE_DEFAULTS.embeddingDim);
   });
 
-  it("无效环境变量值（非数字字段）应转换为 NaN 但不崩溃", () => {
+  it("无效环境变量值（非数字字段）应回退默认值 30000 但不崩溃", () => {
     process.env.CORTEX_LOCK_TIMEOUT_MS = "not-a-number";
     const loaded = loadEngineDefaults();
-    // Number("not-a-number") 返回 NaN, 但 loadEngineDefaults 仍返回对象
-    expect(loaded.lockTimeoutMs).toBeNaN();
+    // Number("not-a-number") 返回 NaN, loadEngineDefaults 回退到默认值
+    expect(loaded.lockTimeoutMs).toBe(30_000);
   });
 
   it("字符串类型环境变量（contentHashAlgo）应保留原值", () => {

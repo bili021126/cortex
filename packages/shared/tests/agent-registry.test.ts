@@ -190,9 +190,9 @@ describe("agent-registry — AGENT_TOOL_PERMISSIONS / resolveAgentPermissions", 
     expect(perms).not.toContain("run_shell");
   });
 
-  it("Resolver: Review SelfExamination → 有 run_shell", () => {
+  it("Resolver: Review SelfExamination → 无 run_shell（context 忽略，走静态表）", () => {
     const perms = resolveAgentPermissions(AgentType.Review, AgentContext.SelfExamination);
-    expect(perms).toContain("run_shell");
+    expect(perms).not.toContain("run_shell");
   });
 
   it("Resolver: Inspector Production → 无 run_shell", () => {
@@ -200,9 +200,9 @@ describe("agent-registry — AGENT_TOOL_PERMISSIONS / resolveAgentPermissions", 
     expect(perms).not.toContain("run_shell");
   });
 
-  it("Resolver: Inspector PostVerification → 有 run_shell", () => {
+  it("Resolver: Inspector PostVerification → 无 run_shell（context 忽略，走静态表）", () => {
     const perms = resolveAgentPermissions(AgentType.Inspector, AgentContext.PostVerification);
-    expect(perms).toContain("run_shell");
+    expect(perms).not.toContain("run_shell");
   });
 
   it("Resolver: 未知 AgentType 返回空数组", () => {

@@ -36,10 +36,10 @@ describe("MemoryStore concurrency", () => {
     );
 
     const results = await Promise.allSettled(writes);
-    // generateId 已知问题可能影响，但不崩溃即为通过
+    // generateId 问题已修复，所有写入均成功
     const fulfilled = results.filter((r) => r.status === "fulfilled");
-    expect(fulfilled.length).toBeGreaterThanOrEqual(0);
-    expect(results.some((r) => r.status === "rejected")).toBe(true); // 已知 generateId 问题
+    expect(fulfilled.length).toBe(count);
+    expect(results.every((r) => r.status === "fulfilled")).toBe(true);
   });
 
   it("should handle concurrent reads and writes", async () => {

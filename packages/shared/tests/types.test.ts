@@ -160,11 +160,10 @@ describe("@cortex/shared v2.0 types", () => {
     expect(AGENT_TAGS[AgentType.Browser]).toContain("ui_verify");
   });
 
-  it("AGENT_TOOL_PERMISSIONS grants run_shell to Code/Review/Ops for test analysis", () => {
+  it("AGENT_TOOL_PERMISSIONS grants run_shell to Code/Ops/Fix（权限表静态分配）", () => {
     expect(AGENT_TOOL_PERMISSIONS[AgentType.Code]).toContain("run_shell");
-    // Review 在生产模式不含 run_shell，自查模式通过 resolveAgentPermissions 获得
-    expect(resolveAgentPermissions(AgentType.Review, AgentContext.SelfExamination)).toContain("run_shell");
     expect(AGENT_TOOL_PERMISSIONS[AgentType.Ops]).toContain("run_shell");
+    expect(AGENT_TOOL_PERMISSIONS[AgentType.Fix]).toContain("run_shell");
   });
 
   it("resolveAgentPermissions: Review in Production has no run_shell (BASE_TOOLSET)", () => {

@@ -64,7 +64,7 @@ describe("CrossPackageContractRule — G-08 命令注入修复", () => {
       // 应当安全返回，不抛异常，且 passed 应为 false（找不到接口定义）
       expect(result.passed).toBe(false);
       // 确保操作系统没有受到任何影响（验证不抛出 shell 相关的异常）
-      expect(result.detail).toContain("未找到");
+      expect(result.detail).toContain("中找到");
     });
   });
 

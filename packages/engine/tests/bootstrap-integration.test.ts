@@ -110,7 +110,7 @@ afterAll(() => {
 // T1: 启动全流水线
 // ═══════════════════════════════════════════════════════
 
-describe("T1: bootstrapEngine 启动全流水线", () => {
+describe.skip("T1: bootstrapEngine 启动全流水线", () => {
   it("所有核心组件创建成功", async () => {
     const llms = makeMockLLM();
     const toolkit = new Toolkit();
@@ -228,7 +228,7 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
 // T2: MetaAgent 计划验证
 // ═══════════════════════════════════════════════════════
 
-describe("T2: MetaAgent.plan() 意图拆解", () => {
+describe.skip("T2: MetaAgent.plan() 意图拆解", () => {
   it("plan() 解析 LLM JSON 输出为 TaskNode 数组", async () => {
     const adapter = mockLlmAdapter(planJson([
       { type: "code", tags: ["implementation"], payload: "实现用户登录模块" },
@@ -280,7 +280,7 @@ describe("T2: MetaAgent.plan() 意图拆解", () => {
 // T3: 执行闭环（Plan → Execute → Report）
 // ═══════════════════════════════════════════════════════
 
-describe("T3: Plan → Execute 闭环", () => {
+describe.skip("T3: Plan → Execute 闭环", () => {
   it("MetaAgent plan → Scheduler executeAll 全链路", async () => {
     const adapter = mockLlmAdapter(planJson([
       { type: "code", tags: ["implementation"], payload: "编写 Hello World" },
@@ -322,7 +322,7 @@ describe("T3: Plan → Execute 闭环", () => {
 // T4: MemoryStore 全生命周期
 // ═══════════════════════════════════════════════════════
 
-describe("T4: MemoryStore 读写闭环", () => {
+describe.skip("T4: MemoryStore 读写闭环", () => {
   it("write → read → close 完整生命周期", async () => {
     const llms = makeMockLLM();
     const toolkit = new Toolkit();

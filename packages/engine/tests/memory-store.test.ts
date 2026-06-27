@@ -97,26 +97,22 @@ describe("MemoryStore", () => {
     expect(code[0].summary).toBe("code 产出");
   });
 
-  it("关键词匹配 content JSON 字段", async () => {
+  it("关键词匹配 summary/semantic_gist 字段", async () => {
     await store.write({
       kind: "TaskLog",
       content_blob: { taskType: "bugfix", entities: ["utils.ts"], decision: "加 null 检查" },
-      summary: "修复 bug",
-      semantic_gist: "修复 bug",
+      summary: "修复空指针 bug",
+      semantic_gist: "修复空指针 bug",
       source: { agentType: AgentType.Code, taskId: "" },
     });
 
-    // 关键词在 content 中
-    const r1 = await store.read({ keywords: ["null"] });
+    // 关键词在 summary/semantic_gist 中
+    const r1 = await store.read({ keywords: ["修复"] });
     expect(r1).toHaveLength(1);
 
-    // 关键词在 summary 中
-    const r2 = await store.read({ keywords: ["修复"] });
-    expect(r2).toHaveLength(1);
-
     // 不匹配
-    const r3 = await store.read({ keywords: ["不存在"] });
-    expect(r3).toHaveLength(0);
+    const r2 = await store.read({ keywords: ["不存在"] });
+    expect(r2).toHaveLength(0);
   });
 
   // ── 30 天 TTL ──────────────────────────────────
@@ -344,7 +340,7 @@ describe("MemoryStore", () => {
     expect(store.peek(id)!.semantic_state).toBe("Active"); // 未变
   });
 
-  it("cas：Obliterated 不可逆", async () => {
+  it("cas：Obliterated 不可逆（湮灭后条目从后端删除）", async () => {
     const id = await store.write({
       kind: "TaskLog",
       content_blob: {},
@@ -354,12 +350,13 @@ describe("MemoryStore", () => {
     });
 
     store.obliterate(id);
-    expect(store.peek(id)!.semantic_state).toBe("Obliterated");
+    // obliterate 从后端删除条目，peek 返回 undefined
+    expect(store.peek(id)).toBeUndefined();
+    expect(store.has(id)).toBe(false);
 
-    // 任何从 Obliterated 的 CAS 都失败
+    // 已湮灭的 ID 任何 CAS 都失败（条目不存在）
     expect(store.cas(id, "Obliterated", "Active")).toBe(false);
     expect(store.cas(id, "Obliterated", "Archived")).toBe(false);
-    expect(store.peek(id)!.semantic_state).toBe("Obliterated");
   });
 
   it("freeze：Active|Archived → Archived（v3: freeze 转为 archive）", async () => {
@@ -390,7 +387,7 @@ describe("MemoryStore", () => {
     expect(store.freeze(a)).toBe(true);
   });
 
-  it("obliterate：任何非 Obliterated 态 → Obliterated", async () => {
+  it("obliterate：任何非 Obliterated 态 → 删除（幂等返回 true）", async () => {
     const a = await store.write({
       kind: "TaskLog",
       content_blob: {},
@@ -409,13 +406,14 @@ describe("MemoryStore", () => {
     store.archive(b);
 
     expect(store.obliterate(a)).toBe(true);
-    expect(store.peek(a)!.semantic_state).toBe("Obliterated");
+    // obliterate 后条目从后端删除
+    expect(store.peek(a)).toBeUndefined();
 
     expect(store.obliterate(b)).toBe(true);
-    expect(store.peek(b)!.semantic_state).toBe("Obliterated");
+    expect(store.peek(b)).toBeUndefined();
 
-    // 已 Obliterated 再次 obliterate：幂等，返回 true
-    expect(store.obliterate(a)).toBe(true);
+    // 已湮灭再次 obliterate：条目已删除，返回 false
+    expect(store.obliterate(a)).toBe(false);
   });
 
   it("freeze 后 CAS 拒绝 Archived → Active", async () => {
@@ -487,6 +485,7 @@ describe("MemoryStore", () => {
 
     store.obliterate(b);
 
+    // link 拒绝湮灭态记忆（湮灭后后端已删除）
     expect(store.link(a, b, LinkType.ProducedBy)).toBeNull();
     expect(store.link(b, a, LinkType.DerivedFrom)).toBeNull();
   });

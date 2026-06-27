@@ -865,13 +865,12 @@ describe("Bench ⑤: MemoryStore 端到端混合管线", () => {
 
     const removed = store.obliterate(id);
     expect(removed).toBe(true);
-    // 湮灭后 peek 为 Obliterated，read 仍返回但标记为 Obliterated
-    expect(store.peek(id)?.semantic_state).toBe("Obliterated");
+    // 湮灭后条目从后端删除，peek 返回 undefined
+    expect(store.peek(id)).toBeUndefined();
 
-    // 查询结果中的记忆已标记为 Obliterated
+    // 查询结果中的记忆已被移除
     const results = await store.read({ keywords: ["临时"] }, "CSA");
-    expect(results.length).toBe(1);
-    expect(results[0].semantic_state).toBe("Obliterated");
+    expect(results.length).toBe(0);
 
     await store.close();
   });
