@@ -79,6 +79,12 @@ export class Scheduler implements IScheduler {
   private _sessionId?: string;
   /** MemoryStore 引用——用于 beginSession/endSession 生命周期管理 */
   private _memoryStore?: IMemoryStore;
+  /**
+   * 多视角节点认领互斥锁——确保 _dispatchMulti 中 
+   * Promise.all 内多个 claim 不会导致竞态条件。
+   * 以 node.id 为 key，串行化同一节点的 claim 请求。
+   */
+  private claimingLocks = new Map<string, Promise<void>>();
 
   constructor(
     private readonly board: ITaskBoard,
@@ -317,7 +323,14 @@ export class Scheduler implements IScheduler {
         modelRouter: this.modelRouter,
       };
 
-      const claimed = this.board.claim(node.id, at as AgentType);
+      // 互斥锁：同一节点上多个 claim 串行化，防止竞态
+      const prevLock = this.claimingLocks.get(node.id) ?? Promise.resolve();
+      const thisLock = prevLock.then(() => {
+        return this.board.claim(node.id, at as AgentType);
+      });
+      this.claimingLocks.set(node.id, thisLock.then(() => {}));
+
+      const claimed = await thisLock;
       if (!claimed) return null;
 
       innerCtx.model = this.models.get(at) ?? "mock";
@@ -333,6 +346,9 @@ export class Scheduler implements IScheduler {
     });
 
     const results = (await Promise.all(promises)).filter((r): r is NonNullable<typeof r> => r !== null);
+
+    // 清理节点锁——执行完毕，释放互斥锁
+    this.claimingLocks.delete(node.id);
 
     if (results.length > 0) {
       const currentNode = this.board.getNode(node.id);

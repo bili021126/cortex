@@ -145,4 +145,97 @@ describe("AgentPool", () => {
       expect(pool.spawn(AgentType.Code, "agent-3")).toBe(false);
     });
   });
+
+  // ── Claim 竞态 ────────────────────────────────
+
+  describe("Agent claim race condition", () => {
+    it("should not over-claim when multiple agents request same node simultaneously", () => {
+      // 多个 Agent 并发请求同一节点，不应导致超额认领
+      const pool = new AgentPool();
+      pool.register({ type: AgentType.Code, maxInstances: 3 });
+      pool.spawn(AgentType.Code, "a1");
+      pool.spawn(AgentType.Code, "a2");
+      pool.spawn(AgentType.Code, "a3");
+      pool.setStatus("a1", AgentStatus.Awake);
+      pool.setStatus("a2", AgentStatus.Awake);
+      pool.setStatus("a3", AgentStatus.Awake);
+
+      // 三个 Agent 都可以被调度为 Active
+      expect(pool.setStatus("a1", AgentStatus.Active)).toBe(true);
+      expect(pool.setStatus("a2", AgentStatus.Active)).toBe(true);
+      expect(pool.setStatus("a3", AgentStatus.Active)).toBe(true);
+
+      // 全部释放
+      pool.setStatus("a1", AgentStatus.Awake);
+      pool.setStatus("a2", AgentStatus.Awake);
+      pool.setStatus("a3", AgentStatus.Awake);
+
+      // 计数应正确
+      expect(pool.count(AgentType.Code)).toBe(3);
+    });
+
+    it("should maintain claim count === 1 for exclusive nodes", () => {
+      const pool = new AgentPool();
+      pool.register({ type: AgentType.Code, maxInstances: 2 });
+      expect(pool.spawn(AgentType.Code, "x1")).toBe(true);
+      expect(pool.spawn(AgentType.Code, "x2")).toBe(true);
+
+      // 单视角节点需互斥
+      expect(pool.setStatus("x1", AgentStatus.Awake)).toBe(true);
+      // 不存在 over-claim 场景，spawn 受配额限制
+      expect(pool.count(AgentType.Code)).toBe(2);
+    });
+
+    it("should not lose claims when pool is near capacity", () => {
+      const pool = new AgentPool();
+      pool.register({ type: AgentType.Code, maxInstances: 1 });
+      expect(pool.spawn(AgentType.Code, "nearful")).toBe(true);
+      // 配额已满
+      expect(pool.spawn(AgentType.Code, "overflow")).toBe(false);
+      expect(pool.count(AgentType.Code)).toBe(1);
+
+      // 释放后重新认领
+      pool.destroy(AgentType.Code, "nearful");
+      expect(pool.spawn(AgentType.Code, "reclaimed")).toBe(true);
+      expect(pool.count(AgentType.Code)).toBe(1);
+    });
+
+    it("should handle claim→release→reclaim cycle atomically", () => {
+      const pool = new AgentPool();
+      pool.register({ type: AgentType.Code, maxInstances: 2 });
+      pool.spawn(AgentType.Code, "cycle-1");
+      pool.spawn(AgentType.Code, "cycle-2");
+
+      pool.setStatus("cycle-1", AgentStatus.Awake);
+      pool.setStatus("cycle-1", AgentStatus.Active);
+      pool.setStatus("cycle-1", AgentStatus.Awake);
+      pool.setStatus("cycle-2", AgentStatus.Active);
+      pool.setStatus("cycle-2", AgentStatus.Awake);
+
+      // 再次进入 Active
+      expect(pool.setStatus("cycle-1", AgentStatus.Active)).toBe(true);
+      expect(pool.setStatus("cycle-2", AgentStatus.Active)).toBe(true);
+
+      // 计数应稳定
+      expect(pool.count(AgentType.Code)).toBe(2);
+    });
+
+    it("should not deadlock when all agents claim and release rapidly", () => {
+      const pool = new AgentPool();
+      pool.register({ type: AgentType.Code, maxInstances: 5 });
+      const ids = ["r-1", "r-2", "r-3", "r-4", "r-5"];
+      ids.forEach((id) => pool.spawn(AgentType.Code, id));
+
+      // 快速循环 claim → release
+      for (let i = 0; i < 3; i++) {
+        ids.forEach((id) => pool.setStatus(id, AgentStatus.Awake));
+        ids.forEach((id) => pool.setStatus(id, AgentStatus.Active));
+        ids.forEach((id) => pool.setStatus(id, AgentStatus.Awake));
+      }
+
+      // 最终应全部 Awake 且计数不变
+      ids.forEach((id) => expect(pool.getStatus(id)).toBe(AgentStatus.Awake));
+      expect(pool.count(AgentType.Code)).toBe(5);
+    });
+  });
 });

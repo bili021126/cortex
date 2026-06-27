@@ -1,4 +1,4 @@
-import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL } from "@cortex/shared";
+import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver } from "@cortex/shared";
 import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS } from "@cortex/config";
 
 /**
@@ -34,6 +34,7 @@ export class ConfirmGate {
   private static readonly BYPASS_TTL_MS = 300_000; // 5 分钟
   private trustModel?: ITrustModel;
   private defaultTimeoutMs: number;
+  private _observer?: IPipelineObserver;
 
   /**
    * @param timeoutMs  默认确认超时（毫秒）。不传时依次回退：
@@ -104,7 +105,10 @@ export class ConfirmGate {
     this.bridge = bridge;
   }
 
-  /** 注入信任模型——使 L1 操作从静态放行变为动态信任判定 */
+  /** 注入 PipelineObserver——用于发射无 bridge 告警等可观测事件 */
+  setObserver(observer: IPipelineObserver): void {
+    this._observer = observer;
+  }
   setTrustModel(tm: ITrustModel): void {
     this.trustModel = tm;
   }
@@ -233,11 +237,15 @@ export class ConfirmGate {
 
   /**
    * 批量确认一组节点（简化接口）。
-   * bypass 或 无 bridge 时默认放行。
+   * bypass 或 无 bridge 时默认放行，但 emit 告警以保证可观测。
    */
   async confirm(nodes: { id: string; payload: string }[]): Promise<boolean> {
     if (this._bypass) return true;
-    if (!this.bridge) return true; // 无交互通道时默认放行
+    if (!this.bridge) {
+      // 无 bridge 时 emit 告警——fail-open 是设计决策，但必须可观测
+      this._emitNoBridgeWarning();
+      return true;
+    }
 
     for (const node of nodes) {
       const req: ConfirmationRequest = {
@@ -257,5 +265,24 @@ export class ConfirmGate {
       }
     }
     return true;
+  }
+
+  /**
+   * 无 bridge 时发射告警——确保 fail-open 决策可观测。
+   * 有 observer 时走 observer 管道，否则 fallback 到 console.warn。
+   */
+  private _emitNoBridgeWarning(): void {
+    const message = "ConfirmGate operating without bridge — fail-open mode";
+    if (this._observer) {
+      this._observer.emit({
+        type: "exec.node.delayed",
+        priority: 1, // NORMAL
+        payload: { nodeId: "confirm-gate", agentId: "", elapsed: 0, action: "wait", level: "warn", reason: message },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      } as any);
+    } else {
+      console.warn("[ConfirmGate] " + message);
+    }
   }
 }

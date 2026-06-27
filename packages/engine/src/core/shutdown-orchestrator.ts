@@ -16,6 +16,11 @@
 import type { ILifecycle } from "@cortex/shared";
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
 
+/** 最小 AgentTracker 接口——避免直接依赖 @cortex/scheduler */
+export interface AgentTrackerLike {
+  syncLifecycleState(agentId: string, lifecyclePhase: 'start' | 'stop' | 'dispose'): void;
+}
+
 /**
  * ShutdownOrchestrator —— 统一关闭编排器。
  *
@@ -31,6 +36,8 @@ export class ShutdownOrchestrator {
   private order: string[] = [];
   private readonly SHUTDOWN_TIMEOUT_MS = 10_000;
   private _observer?: IPipelineObserver;
+  /** 可选的 AgentTracker 引用——shutdown 时同步生命周期状态 */
+  private _agentTracker?: AgentTrackerLike;
 
   constructor(observer?: IPipelineObserver) {
     this._observer = observer;
@@ -62,16 +69,26 @@ export class ShutdownOrchestrator {
   /**
    * 反向关闭——后注册的先关闭。
    * 每个组件依次执行 stop() → dispose()，每步带超时保护。
+   * 同时通知 AgentTracker 生命周期状态变更。
    */
   async shutdown(): Promise<void> {
     for (const name of [...this.order].reverse()) {
       const c = this.components.get(name);
       if (!c) continue;
       try {
+        const componentPhase = c.phase;
         await Promise.race([
           (async () => {
             await c.stop?.();
+            // stop 后同步 AgentTracker——任务不再被调度
+            if (this._agentTracker && componentPhase) {
+              this._agentTracker.syncLifecycleState(name, 'stop');
+            }
             c.dispose?.();
+            // dispose 后同步 AgentTracker——强制标记为 failed
+            if (this._agentTracker && componentPhase) {
+              this._agentTracker.syncLifecycleState(name, 'dispose');
+            }
           })(),
           new Promise<void>((_, reject) =>
             setTimeout(
@@ -84,6 +101,11 @@ export class ShutdownOrchestrator {
         this._emitComponentError(name, err);
       }
     }
+  }
+
+  /** 注入 AgentTracker——生命周期关闭时同步状态 */
+  setAgentTracker(tracker: AgentTrackerLike): void {
+    this._agentTracker = tracker;
   }
 
   /** 发射组件关闭失败事件到 PipelineObserver */

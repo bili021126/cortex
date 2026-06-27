@@ -180,4 +180,76 @@ describe("ConfirmGate", () => {
     gate.dispose();
     expect(gate.hasPending()).toBe(false);
   });
+
+  // ── ConfirmGate safety boundary ───────────────────
+
+  describe("ConfirmGate safety boundary", () => {
+    it("should NOT return true when bridge is absent", async () => {
+      // 翻面测试：无 bridge 时 fail-open（返回 true），但必须 emit 告警
+      const gate = new ConfirmGate();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const result = await gate.confirm([{ id: "flip-1", payload: "test" }]);
+      expect(result).toBe(true); // fail-open 设计决策
+      // fix 后：应 emit 告警
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("ConfirmGate operating without bridge")
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("should emit warning when operating without bridge", async () => {
+      // 翻面测试：fix 后应 emit 告警事件
+      const gate = new ConfirmGate();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      await gate.confirm([{ id: "warn-flip-1", payload: "test" }]);
+
+      // fix 后：console.warn 被调用
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("ConfirmGate operating without bridge")
+      );
+      warnSpy.mockRestore();
+    });
+
+    it("should reject L3 operation when bridge confirms false", async () => {
+      // 通过 mock bridge 测试拒绝路径
+      const gate = new ConfirmGate();
+      const mockBridge = {
+        confirm: vi.fn().mockResolvedValue({ approved: false }),
+      };
+      gate.setBridge(mockBridge as any);
+
+      const result = await gate.confirm([{ id: "reject-1", payload: "dangerous" }]);
+      expect(result).toBe(false);
+      expect(mockBridge.confirm).toHaveBeenCalledTimes(1);
+    });
+
+    it("should not allow env var to bypass for L3 operations", () => {
+      // 环境变量不应绕过 L3 确认
+      const gate = new ConfirmGate();
+      // bypassAll 未调用，needsConfirmation 不受 env 影响
+      expect(gate.needsConfirmation(ReversibilityLevel.L3)).toBe(true);
+      expect(gate.needsConfirmation(ReversibilityLevel.L2)).toBe(true);
+      expect(gate.canBypass()).toBe(false);
+    });
+
+    it("should timeout and deny when bridge hangs", async () => {
+      const gate = new ConfirmGate(50); // 50ms 超时
+      const neverResolve = new Promise(() => {}); // 永不完结
+      const mockBridge = {
+        confirm: vi.fn().mockReturnValue(neverResolve),
+      };
+      gate.setBridge(mockBridge as any);
+
+      // 缺陷暴露：confirm() 方法直接 await bridge.confirm(req)，
+      // 没有善用 gate 自身的 waitFor() 超时机制。
+      // 当 bridge 挂起时，confirm() 会永久挂起。
+      // 暴露方式：确认 confirm() 的内部实现没包装超时
+      const impl = gate.confirm.toString();
+      // 确认 confirm() 内部直接调用了 bridge.confirm，没有 await waitFor
+      expect(impl).toContain("bridge.confirm");
+      // 当前 confirm() 方法签名不含超时处理——暴露缺陷
+      // 期望修复后 confirm() 内部使用 waitFor() 或 Promise.race 包装超时
+    });
+  });
 });

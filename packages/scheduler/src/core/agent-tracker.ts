@@ -130,4 +130,22 @@ export class AgentTracker {
   reset(): void {
     this.states.clear();
   }
+
+  /**
+   * 同步生命周期阶段到 Agent 状态机——ShutdownOrchestrator shutdown 时调用。
+   *
+   * lifecycle dispose → markFailed（释放后不可再调度）
+   * lifecycle stop  → 保持当前状态（正在执行的任务继续完成）
+   *
+   * @param agentId 跟踪标识
+   * @param lifecyclePhase 生命周期阶段：'stop' | 'dispose'
+   */
+  syncLifecycleState(agentId: string, lifecyclePhase: 'start' | 'stop' | 'dispose'): void {
+    const state = this.states.get(agentId);
+    if (!state) return;
+    if (lifecyclePhase === 'dispose') {
+      state.state = AgentExecutionState.Failed;
+    }
+    // 'stop'：保留当前状态，让正在执行的任务自然完成
+  }
 }
