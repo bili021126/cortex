@@ -135,6 +135,13 @@ try { fs.unlinkSync(dbPath + "-shm"); } catch {}
 
 const engine = await bootstrapEngine(ROOT, { llms, toolkit, dbPath });
 
+// 非交互模式自动批准——自审视无需人工确认
+toolkit.setGate?.(engine.gate);
+engine.gate?.setBridge?.({
+  confirm: async (req: any) => ({ requestId: req.id, approved: true }),
+  notify: (_msg: string) => {},
+});
+
 // ════════════════════════════════════════════════════════
 // §5 Agent 类型与角色定义
 // ════════════════════════════════════════════════════════

@@ -11,7 +11,7 @@
 // @contract IFileLockManager in @cortex/shared
 // ============================================================
 
-import { LockType, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { LockType, PipelineEventType, PipelinePriority, type FileLockManagerConfig } from "@cortex/shared";
 import { BaseLifecycle } from "@cortex/shared";
 import type { IPipelineObserver } from "@cortex/shared";
 import { DEFAULT_LOCK_TIMEOUT_MS } from "@cortex/config";
@@ -37,16 +37,16 @@ interface FileLocks {
 
 export class FileLockManager extends BaseLifecycle {
   /** 文件 → 锁持有者映射 */
-  private _locks = new Map<string, FileLocks>();
+  protected _locks = new Map<string, FileLocks>();
 
   /** 锁超时时间（ms） */
-  private _timeoutMs: number;
+  protected _timeoutMs: number;
 
   /** 可选 observer，锁回收时通知 */
-  private _observer?: IPipelineObserver;
+  protected _observer?: IPipelineObserver;
 
   /** dispose() 后拒绝所有操作 */
-  private _disposed = false;
+  protected _disposed = false;
 
   constructor(timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS, observer?: IPipelineObserver) {
     super();
@@ -267,5 +267,121 @@ export class FileLockManager extends BaseLifecycle {
     if (this._disposed) {
       throw new Error(`[FileLockManager] 已释放，拒绝操作: ${op}`);
     }
+  }
+}
+
+// ── InMemoryFileLockManager（插件适配器）───────────────────────
+
+/**
+ * InMemoryFileLockManager — 兼容 FileLockManagerConfig 接口的锁管理器。
+ * 扩展 FileLockManager，增加 clear() 方法和回调桥接（死锁检测 + 僵尸锁回收）。
+ * 适配 plugin/file-lock-manager.plugin.ts 的导入需求。
+ *
+ * @see FileLockManagerConfig in @cortex/shared
+ */
+export class InMemoryFileLockManager extends FileLockManager {
+  private _config: FileLockManagerConfig;
+
+  constructor(config: FileLockManagerConfig) {
+    const timeoutMs = config.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS;
+    super(timeoutMs);
+    this._config = config;
+  }
+
+  /**
+   * 释放所有锁并重置状态。
+   * 先清理过期锁（触发 onStaleLockReclaimed 回调），
+   * 再清空所有持有者。
+   */
+  clear(): void {
+    // 清理过期锁（触发回调）
+    this.cleanStaleLocks();
+    // 清空所有剩余锁
+    this._locks.clear();
+    this._disposed = true;
+  }
+
+  /**
+   * 获取锁——同时检测死锁并触发 onDeadlockDetected 回调。
+   */
+  override acquire(filePath: string, lockType: LockType, ownerId: string): boolean {
+    const result = super.acquire(filePath, lockType, ownerId);
+
+    if (!result && this._config.onDeadlockDetected) {
+      const existing = this._locks.get(filePath);
+      if (existing && existing.holders.length > 0) {
+        const holder = existing.holders[0];
+        if (holder) {
+          this._config.onDeadlockDetected(
+            {
+              filePath,
+              lockType: holder.lockType,
+              ownerId: holder.ownerId,
+              acquiredAt: holder.acquiredAt,
+            },
+            ownerId,
+            filePath,
+          );
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * 清理过期锁——同时触发 onStaleLockReclaimed 回调。
+   */
+  override cleanStaleLocks(): number {
+    const now = Date.now();
+    let cleanedCount = 0;
+
+    for (const [filePath, fileLocks] of this._locks) {
+      const expiredHolders = fileLocks.holders.filter(
+        (h) => now - h.acquiredAt > this._timeoutMs,
+      );
+
+      if (expiredHolders.length > 0) {
+        fileLocks.holders = fileLocks.holders.filter(
+          (h) => now - h.acquiredAt <= this._timeoutMs,
+        );
+
+        if (fileLocks.holders.length === 0) {
+          this._locks.delete(filePath);
+        }
+
+        cleanedCount++;
+
+        // 回调通知
+        if (this._config.onStaleLockReclaimed) {
+          for (const h of expiredHolders) {
+            this._config.onStaleLockReclaimed({
+              filePath,
+              lockType: h.lockType,
+              ownerId: h.ownerId,
+              acquiredAt: h.acquiredAt,
+            });
+          }
+        }
+
+        // observer 通知
+        if (this._observer) {
+          const holderIds = expiredHolders.map((h) => h.ownerId).join(",");
+          this._observer.emit({
+            type: PipelineEventType.InfraFileLockExpiredReclaimed,
+            priority: PipelinePriority.NORMAL,
+            timestamp: Date.now(),
+            payload: {
+              count: expiredHolders.length,
+              path: filePath,
+              holders: holderIds,
+              detail: `回收 ${expiredHolders.length} 个过期锁持有者: ${holderIds}`,
+            },
+          });
+        }
+      }
+    }
+
+    return cleanedCount;
   }
 }

@@ -10,10 +10,10 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import {
-  InMemoryFileLockManager,
   type IFileLockManager,
   type LockEntry,
 } from "@cortex/shared";
+import { InMemoryFileLockManager } from "../core/file-lock-manager.js";
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 import { DEFAULT_LOCK_TIMEOUT_MS } from "@cortex/config";
 
