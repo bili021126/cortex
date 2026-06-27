@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cortex 全量代码深度评审报告</title>
+<style>
+  :root {
+    --critical: #dc2626;
+    --high: #ea580c;
+    --medium: #ca8a04;
+    --low: #2563eb;
+    --good: #16a34a;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 1.75rem; margin-bottom: 0.5rem; }
+  h2 { font-size: 1.35rem; margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
+  h3 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
+  p { margin-bottom: 0.75rem; }
+  .subtitle { color: var(--muted); margin-bottom: 2rem; }
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+  .stat-card .number { font-size: 2rem; font-weight: 700; }
+  .stat-card .label { color: var(--muted); font-size: 0.85rem; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; color: white; }
+  .badge-critical { background: var(--critical); }
+  .badge-high { background: var(--high); }
+  .badge-medium { background: var(--medium); }
+  .badge-low { background: var(--low); }
+  .badge-good { background: var(--good); }
+  .finding { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; border-left: 4px solid var(--border); }
+  .finding.critical { border-left-color: var(--critical); }
+  .finding.high { border-left-color: var(--high); }
+  .finding.medium { border-left-color: var(--medium); }
+  .finding.low { border-left-color: var(--low); }
+  .finding .title { font-weight: 600; margin-bottom: 0.25rem; }
+  .finding .location { font-size: 0.8rem; color: var(--muted); font-family: 'SF Mono', Monaco, Consolas, monospace; }
+  .finding .desc { margin-top: 0.5rem; font-size: 0.9rem; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 0.85em; font-family: 'SF Mono', Monaco, Consolas, monospace; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 0.75rem 0; font-size: 0.8rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+  th { background: #f1f5f9; font-weight: 600; }
+  .layer-diagram { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 1rem 0; font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.8rem; line-height: 1.8; white-space: pre; overflow-x: auto; }
+  .section-intro { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
+  .priority-table tr:hover { background: #f8fafc; }
+  .verdict { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; border-radius: 8px; padding: 1.5rem; margin: 2rem 0; }
+  .verdict h3 { color: #94a3b8; margin-bottom: 0.5rem; }
+  .verdict p { color: #e2e8f0; }
+  .toc { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 1.5rem 0; }
+  .toc h3 { margin-top: 0; }
+  .toc ul { list-style: none; padding-left: 0; }
+  .toc li { padding: 0.25rem 0; }
+  .toc a { color: var(--text); text-decoration: none; }
+  .toc a:hover { color: var(--low); }
+  @media print { body { padding: 0; } .finding { break-inside: avoid; } }
+</style>
+</head>
+<body>
+
+<h1>Cortex Monorepo 全量代码深度评审报告</h1>
+<p class="subtitle">评审日期：2026-06-27 | 评审范围：26 个包、411 个 TS 文件、约 78,880 行代码 | 7 维度并行深度审查</p>
+
+<div class="summary-grid">
+  <div class="stat-card"><div class="number" style="color:var(--critical)">11</div><div class="label">Critical 缺陷</div></div>
+  <div class="stat-card"><div class="number" style="color:var(--high)">28</div><div class="label">High 缺陷</div></div>
+  <div class="stat-card"><div class="number" style="color:var(--medium)">60+</div><div class="label">Medium 缺陷</div></div>
+  <div class="stat-card"><div class="number" style="color:var(--low)">20+</div><div class="label">Low 缺陷</div></div>
+  <div class="stat-card"><div class="number">26</div><div class="label">npm 包</div></div>
+  <div class="stat-card"><div class="number">~79k</div><div class="label">TypeScript 行数</div></div>
+  <div class="stat-card"><div class="number">4,469</div><div class="label">测试用例</div></div>
+  <div class="stat-card"><div class="number">193</div><div class="label">测试文件</div></div>
+</div>
+
+<div class="toc">
+<h3>目录</h3>
+<ul>
+  <li><a href="#arch">一、项目架构总览</a></li>
+  <li><a href="#engine">二、核心引擎评审</a></li>
+  <li><a href="#infra">三、基础设施层评审</a></li>
+  <li><a href="#agent">四、Agent 系统与人格层评审</a></li>
+  <li><a href="#gov">五、治理与安全层评审</a></li>
+  <li><a href="#cross">六、横切面审查（类型系统/错误处理/代码质量）</a></li>
+  <li><a href="#test">七、测试覆盖与质量评估</a></li>
+  <li><a href="#priority">八、优先修复路线图</a></li>
+  <li><a href="#verdict">九、总体评价</a></li>
+</ul>
+</div>
+
+<!-- ==================== 一、架构总览 ==================== -->
+<h2 id="arch">一、项目架构总览</h2>
+
+<p class="section-intro">Cortex 是一个自治理 AI Agent 运行时，采用 TypeScript monorepo（pnpm/ESM/Vitest），包含宪法治理体系 v2.5.35、14 种 Agent 类型和技能系统。</p>
+
+<h3>1.1 依赖拓扑（6 层 DAG）</h3>
+
+<div class="layer-diagram">Layer 0 (叶子包，零内部依赖):
+  shared | logging | parser | fsm-compiler | tools
+
+Layer 1 (仅依赖 L0):
+  config → shared          notification → shared
+  pattern-extractor → shared    resilience → shared
+  telemetry → shared       testing → shared
+  doctor → shared, tools
+
+Layer 2 (依赖 L0-1):
+  memory → config, shared       prompt-kit → config, shared
+  plugin-runner → config, shared   scheduler → config, shared
+  governance → config, shared     context-manager → config, shared
+  llm → resilience, shared
+
+Layer 3 (依赖 L0-2):
+  memory-store → config, fsm-compiler, memory, shared
+  platform → config, scheduler, shared
+
+Layer 4 (依赖 L0-3):
+  consistency → config, memory-store, shared
+  skill-kit → memory-store, pattern-extractor, platform, shared
+
+Layer 5 (核心引擎，汇聚 18 个包):
+  engine → config, consistency, context-manager, governance, llm,
+           logging, memory, memory-store, notification, pattern-extractor,
+           platform, plugin-runner, prompt-kit, resilience, scheduler,
+           shared, skill-kit, telemetry
+
+Layer 6 (上层应用):
+  tui → config, engine, llm, platform, scheduler, shared, skill-kit
+  cli → 14 个内部包 (最终入口)</div>
+
+<h3>1.2 包规模分布（Top 10）</h3>
+
+<table>
+<tr><th>包名</th><th>TS 文件数</th><th>大致行数</th><th>内部依赖数</th></tr>
+<tr><td><strong>engine</strong></td><td>76</td><td>12,710</td><td>18</td></tr>
+<tr><td>scheduler</td><td>27</td><td>5,653</td><td>2</td></tr>
+<tr><td>cli</td><td>33</td><td>5,484</td><td>14</td></tr>
+<tr><td>pattern-extractor</td><td>7</td><td>5,202</td><td>1</td></tr>
+<tr><td>tui</td><td>25</td><td>4,919</td><td>7</td></tr>
+<tr><td>platform</td><td>31</td><td>4,492</td><td>3</td></tr>
+<tr><td>plugin-runner</td><td>10</td><td>3,576</td><td>2</td></tr>
+<tr><td>resilience</td><td>9</td><td>3,511</td><td>1</td></tr>
+<tr><td>memory-store</td><td>12</td><td>3,163</td><td>4</td></tr>
+<tr><td>shared</td><td>25</td><td>3,127</td><td>0</td></tr>
+</table>
+
+<h3>1.3 架构优点</h3>
+<p>依赖图是干净的 DAG，无循环依赖。所有 26 个包均有 barrel export（<code>src/index.ts</code>），命名约定 100% 一致（目录名 = <code>@cortex/{name}</code>）。TypeScript 严格模式全局开启（<code>strict: true</code> + <code>noUncheckedIndexedAccess: true</code>）。外部依赖极少（仅 zod、better-sqlite3、@xenova/transformers、commander）。</p>
+
+<h3>1.4 架构关注点</h3>
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> engine 过度汇聚——18 个内部依赖</div>
+  <div class="desc">engine 依赖几乎全部包，是构建瓶颈。任何底层包变更都触发 engine 重构建。建议评估是否有包可通过接口注入而非硬依赖。</div>
+</div>
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> 构建命令不一致</div>
+  <div class="desc">部分包用 <code>tsc</code>，部分用 <code>tsc -p tsconfig.src.json</code>，typecheck 命令不统一。4 个包缺失 <code>test</code> 脚本（config、logging、context-manager、prompt-kit）。</div>
+</div>
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> 所有包版本均为 0.1.0</div>
+  <div class="desc">使用 <code>workspace:*</code> 协议不影响内部解析，但缺乏语义化版本管理，对外发布前需要统一规划。</div>
+</div>
+
+<!-- ==================== 二、核心引擎 ==================== -->
+<h2 id="engine">二、核心引擎 (engine) 深度评审</h2>
+<p class="section-intro">engine 是 Cortex 最核心的包（76 文件 / 12,710 行），包含 MetaAgent 规划、Scheduler DAG 调度、Dispatch Pipeline、信任模型和重规划闭环。</p>
+
+<h3>2.1 MetaAgent 规划模块</h3>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> M-01: requestReplan / requestBoundaryReplan 未使用实例级系统提示词</div>
+  <div class="location">src/core/meta-agent.ts:224, 279</div>
+  <div class="desc">两个方法硬编码使用模块级常量 <code>REPLAN_SYSTEM</code>，而构造函数中已接受并存储了 <code>replanSystemPrompt</code> 到 <code>this._replanSystem</code>。用户通过构造函数注入的自定义重规划提示词被完全忽略。<br><strong>修复</strong>：将两处 <code>REPLAN_SYSTEM</code> 替换为 <code>this._replanSystem</code>。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> M-02: _parsePlan 对 LLM 输出缺少类型校验</div>
+  <div class="location">src/core/meta-agent.ts:502-532</div>
+  <div class="desc"><code>JSON.parse()</code> 的结果直接断言为 <code>PlanItem[]</code>，未做任何结构校验。LLM 可能输出 <code>["string1"]</code> 或 <code>[123]</code>，解析通过但在 <code>_toTaskNode</code> 中访问 <code>item.task</code> 时产生 undefined，生成垃圾节点。<br><strong>修复</strong>：增加 <code>Array.isArray(result)</code> + 每项 <code>task</code> 字段类型检查。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> M-04: MetaAgentReplanAdapter 丢弃 originalIntent</div>
+  <div class="location">src/core/meta-agent-adapter.ts:17-35</div>
+  <div class="desc">适配器的 <code>requestReplan</code> 将 <code>originalIntent</code> 硬编码为 <code>undefined</code>，<code>_currentDepth</code> 参数被忽略。Scheduler 传入的原始意图信息被静默丢弃，影响重规划质量。</div>
+</div>
+
+<h3>2.2 Scheduler DAG 调度</h3>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> S-01: 多视角调度的 Claim 竞态窗口</div>
+  <div class="location">src/core/scheduler.ts:288-396</div>
+  <div class="desc"><code>_dispatchMulti</code> 在 <code>Promise.all</code> 内对每个 Agent 类型逐个调用 <code>board.claim()</code>。如果 <code>board.claim()</code> 内部依赖异步状态（如远程 TaskBoard），多个 claim 可能同时 pending，导致超额 claim。<br><strong>修复</strong>：在 <code>ITaskBoard</code> 接口契约中明确 <code>claim()</code> 的原子性保证。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> S-02: 每次 dispatch 重新实例化 Pipeline Steps</div>
+  <div class="location">src/core/scheduler.ts:276-284</div>
+  <div class="desc">每次调用创建 5 个新 Step 实例。高吞吐场景（数百节点）下产生大量短生命周期对象。若 Step 无状态，可提升为类成员单例。</div>
+</div>
+
+<h3>2.3 Dispatch Pipeline</h3>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> D-01: handler.ts 是无效代码</div>
+  <div class="location">src/handler.ts</div>
+  <div class="desc">文件仅含一行导出 <code>handler</code> 函数，与引擎逻辑无关，未在 <code>index.ts</code> 中导出，是遗留噪音。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> D-03: react-loop.ts 硬编码 Agent 类型列表</div>
+  <div class="location">src/components/react-loop.ts:123-124</div>
+  <div class="desc"><code>forceWrite</code> 逻辑硬编码 <code>[AgentType.Code, AgentType.Fix, AgentType.Ops]</code>，违反开闭原则。新增 Agent 类型需修改 react-loop 源码。</div>
+</div>
+
+<h3>2.4 架构层面</h3>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> X-01: bootstrapEngine() 是 448 行的上帝函数</div>
+  <div class="location">src/bootstrap/bootstrap-engine.ts:89-448</div>
+  <div class="desc">此函数承担配置加载、PromptManager 初始化、插件加载、Core-2 模块接线、遥测初始化、生命周期管理、技能系统初始化、Agent 创建、WorkerPool 创建、返回对象组装等 12+ 项职责。不可单独测试，任何新模块接入都需修改。返回对象包含 20+ 字段。<br><strong>修复</strong>：拆分为独立阶段函数（<code>initTelemetry()</code>、<code>wireCore2Modules()</code>、<code>createAgentInstances()</code>）。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> X-02: HardVerificationGate 与 ZeroTokenValidator 严重重复</div>
+  <div class="location">src/core/hard-verification-gate.ts + src/core/zero-token-validator.ts</div>
+  <div class="desc">两个模块实现几乎相同的 5 条规则（Git Diff、ESLint、FSM Transition、Barrel Export、Cross Package），独立维护，规则变更需两处同步修改。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> X-03: 零 token 规则引擎在热路径上执行同步 I/O</div>
+  <div class="location">src/core/hard-verification-gate.ts:218, 229</div>
+  <div class="desc"><code>execFileSync("git diff")</code> 和 <code>execFileSync("pnpm exec eslint")</code> 虽有 60 秒缓存，但首次调用或缓存过期时阻塞事件循环 5-30 秒，其他 Agent 超时检测和心跳无法触发。<br><strong>修复</strong>：改用异步 <code>execFile</code>。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> A-01: capability-registry.ts 存在两个同名类定义</div>
+  <div class="location">src/core/capability-registry.ts:15-128, 142-303</div>
+  <div class="desc">文件包含两个 <code>CapabilityRegistry</code> 类。第一个继承 <code>IndexedRegistry</code>，第二个是独立实现。末尾还有两个 <code>export const capabilityRegistry</code>。可能导致运行时行为不可预期。</div>
+</div>
+
+<!-- ==================== 三、基础设施层 ==================== -->
+<h2 id="infra">三、基础设施层评审</h2>
+<p class="section-intro">覆盖 resilience、telemetry、config、logging 四个包。</p>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> I-01: Logger._log() 中 Transport 写入错误被完全静默吞掉</div>
+  <div class="location">packages/logging/src/logger.ts:23</div>
+  <div class="desc"><code>.catch(() => {})</code> 完全吞掉 Transport 写入错误。日志丢失无任何感知，可能导致关键运行时事件无记录。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> I-02: 环境变量注入无校验导致 NaN 风险</div>
+  <div class="location">packages/config/src/engine-defaults.ts:196</div>
+  <div class="desc">数值型环境变量（如 <code>CORTEX_MAX_RETRIES</code>）直接使用 <code>parseInt()</code> 但未校验返回值，NaN 会传播到下游计算。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> I-03: 审计日志写入静默失败</div>
+  <div class="location">packages/telemetry/src/audit-trail.ts:226</div>
+  <div class="desc">审计日志写入失败时 catch 后不抛出、不告警。审计证据可能静默丢失，对治理合规性是严重隐患。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> I-04: 超时错误不通知断路器</div>
+  <div class="location">packages/resilience/src/registry/Registry.ts:612</div>
+  <div class="desc">操作超时后未将失败反馈给 CircuitBreaker，导致断路器无法在超时频发时正确打开。韧性策略失效。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> I-05: 日志系统无敏感信息过滤</div>
+  <div class="location">packages/logging 全局</div>
+  <div class="desc">日志内容无脱敏机制，API Key、用户数据等敏感信息可能被写入日志文件。虽然 LLM 层使用了指纹化日志，但 logging 包本身缺少过滤层。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> I-06: ID 生成策略不统一（4 种方式并存）</div>
+  <div class="location">跨包</div>
+  <div class="desc">resilience 用 <code>crypto.randomUUID()</code>、telemetry 用 <code>Date.now()</code> 拼接、config 用自增计数器、engine 用 <code>Math.random()</code>。ID 格式不一致影响日志关联和调试。</div>
+</div>
+
+<!-- ==================== 四、Agent 系统 ==================== -->
+<h2 id="agent">四、Agent 系统与人格层评审</h2>
+<p class="section-intro">覆盖 14 种 Agent 类型、技能系统、FSM 编译器、15 个人格定义。</p>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> F-01: FSM _buildTransitionTable 静默覆盖重复转换</div>
+  <div class="location">packages/fsm-compiler/src/compiler.ts</div>
+  <div class="desc">当 DSL 中存在相同 <code>from+event</code> 的多条转换规则时，后定义的规则静默覆盖前者，无任何警告。可能导致状态机行为与 DSL 编写者意图不一致。</div>
+</div>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> X-01a: Agent 状态机与组件生命周期两套并行体系</div>
+  <div class="location">packages/engine 全局</div>
+  <div class="desc">FSM 编译器产出状态机 + 引擎自身的生命周期钩子（<code>init/start/stop/dispose</code>）两套体系并行，缺乏统一的编排层。Agent 在 FSM 状态和组件生命周期之间可能产生不一致。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> A-01a: Agent 映射三处定义多处漂移</div>
+  <div class="location">AGENT_DEFS / AGENT_REGISTRY / cortex-agents.json</div>
+  <div class="desc">同一 AgentType 的角色名、emoji、权限在三处定义中存在多处不一致。修改 Agent 属性需同步三处，极易遗漏。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> A-02: Strategist 被两个人格共享</div>
+  <div class="location">packages/shared/src/agent-registry.ts</div>
+  <div class="desc">钟离和霜凝均映射到 Strategist AgentType，导致注册表覆盖和路由歧义。调度器无法确定性地选择人格。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> F-02: FSM 类型三处重复定义</div>
+  <div class="location">types.ts / schema.ts / state-machine.ts</div>
+  <div class="desc">FSM 相关类型在三个文件中各定义一份，容易导致类型漂移。应统一到一个 <code>types.ts</code> 中 re-export。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> 技能系统: weight 无下界校验</div>
+  <div class="location">packages/skill-kit</div>
+  <div class="desc">技能权重（weight）未设下界，负权重可能干扰优先级排序逻辑。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> 人格系统缺少运行时切换机制</div>
+  <div class="location">packages/engine/prompts/</div>
+  <div class="desc">人格本质是 prompt 模板，无运行时人格切换 API。霜凝和希格雯缺少圆桌模板。</div>
+</div>
+
+<!-- ==================== 五、治理与安全 ==================== -->
+<h2 id="gov">五、治理与安全层评审</h2>
+<p class="section-intro">覆盖宪法治理实现、权限模型、安全边界、配置安全。宪法 v2.5.35，26 条修正案。</p>
+
+<h3>5.1 宪法治理</h3>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> G-01: 默认裁决器自动批准所有通过提案，无需人类确认</div>
+  <div class="location">packages/governance/src/governance-pipeline.ts:172-188</div>
+  <div class="desc"><code>stageRulerDecision</code> 在无 <code>onRulerDecision</code> 回调时自动将 APPROVED 提案标记为 approved。宪法修改可在完全没有人类参与的情况下通过并写入，违背"裁决权二分"原则。</div>
+</div>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> G-02: 正则表达式 Bug 导致硬编码检测失效</div>
+  <div class="location">packages/governance/src/constitution-validator.ts:126</div>
+  <div class="desc"><code>/:s*d{5,}/</code> 应为 <code>/:\s*\d{5,}/</code>。当前正则匹配字面量 <code>s</code> 和 <code>d</code>，子约束⑧（硬编码禁令）对绝大多数硬编码数值完全无效。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> G-03: 并发写入无保护——修宪竞态条件</div>
+  <div class="location">packages/governance/src/amendment-applier.ts:185-238</div>
+  <div class="desc"><code>applyAmendment()</code> 执行 read-modify-write 但未使用文件锁。外部并发调用可能导致宪法文本损坏。</div>
+</div>
+
+<h3>5.2 权限模型</h3>
+
+<div class="finding critical">
+  <div class="title"><span class="badge badge-critical">Critical</span> G-04: bypassAll() 可通过环境变量欺骗激活</div>
+  <div class="location">packages/scheduler/src/core/confirm-gate.ts:53-59</div>
+  <div class="desc"><code>bypassAll()</code> 仅检查 <code>NODE_ENV === "production"</code>。攻击者设置 <code>NODE_ENV=test</code> 即可跳过所有确认，L2/L3 操作（文件写入、删除、bash 执行）无需确认直接执行。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> G-05: 无交互通道时批量确认自动放行（fail-open）</div>
+  <div class="location">packages/scheduler/src/core/confirm-gate.ts:234-256</div>
+  <div class="desc"><code>confirm()</code> 方法在无 bridge 时返回 <code>true</code>，bridge 异常时也返回 <code>true</code>。无头部署或 bridge 异常时，所有确认被自动批准。安全门在故障时打开而非关闭。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> G-06: 信任状态纯内存存储，重启即归零</div>
+  <div class="location">packages/scheduler/src/core/trust-model.ts</div>
+  <div class="desc">所有信任条目仅存在于 Map 中，无持久化。引擎重启后所有 Agent 信任回到 L1。被降级的 Agent 可通过重启恢复信任。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> G-07: 运行时权限覆写无验证</div>
+  <div class="location">packages/shared/src/agent-registry.ts:330-332</div>
+  <div class="desc"><code>setAgentToolPermissions()</code> 接受任意权限覆写，无白名单校验。可将 FULL_TOOLSET（含 run_shell、delete_file）授予只读 Agent。</div>
+</div>
+
+<h3>5.3 安全边界</h3>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> G-08: CrossPackageContractRule 存在命令注入风险</div>
+  <div class="location">packages/engine/src/core/zero-token-validator.ts:255-263</div>
+  <div class="desc"><code>_grepInterface()</code> 将 <code>name</code> 和 <code>dir</code> 直接拼接到 shell 命令中。虽有正则校验，但组件独立使用时 dir 注入仍可行。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> G-09: 提案 ID 未做路径遍历校验</div>
+  <div class="location">packages/governance/src/governance-loop.ts:80-84</div>
+  <div class="desc"><code>path.join(dir, proposal.id + ".json")</code> 直接使用提案 ID 作为文件名。若 ID 含 <code>../</code> 可写入任意位置。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> G-10: 硬验证门规则默认放行</div>
+  <div class="location">packages/engine/src/core/hard-verification-gate.ts:84-161</div>
+  <div class="desc">5 条规则中，当 payload 缺少特定字段时直接返回 <code>passed: true</code>。精心构造的 payload 可以不触发任何规则而通过全部验证。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> G-11: approve_all 模式授予会话级全权限无 TTL</div>
+  <div class="location">packages/tui/src/renderer/permission-dialog.ts:146-175</div>
+  <div class="desc"><code>approve_all</code> 后所有工具调用（含 L3 不可逆操作）自动放行直到会话结束，无超时机制。</div>
+</div>
+
+<!-- ==================== 六、横切面 ==================== -->
+<h2 id="cross">六、横切面审查（类型系统 / 错误处理 / 代码质量）</h2>
+<p class="section-intro">跨所有包的模式级问题。</p>
+
+<h3>6.1 类型安全</h3>
+
+<p>全局 strict 模式开启，生产代码仅 1 处实际 <code>any</code>（<code>engine/src/core/worker-pool.ts</code> 的 Worker 消息类型），文件命名 100% kebab-case 一致，barrel export 100% 覆盖。类型安全水平在大型 TS 项目中属上乘。</p>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> tui/context-compactor.ts 的 9 处双重类型断言</div>
+  <div class="location">packages/tui/src/context-compactor.ts</div>
+  <div class="desc"><code>as unknown as X</code> 模式出现 9 次，表明 LLM 消息类型在包间接口定义不完整，需要定义统一的 <code>LlmMessage</code> 接口。</div>
+</div>
+
+<h3>6.2 错误处理——全项目最大系统性风险</h3>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> ~65 处空 catch 静默吞错</div>
+  <div class="location">跨包全局</div>
+  <div class="desc">全项目约 65 处空 catch 块（<code>catch { }</code> 或 <code>catch(e) { }</code>）。最严重的：<code>engine/src/bootstrap/factory/loaders/agents.loader.ts</code> 连续 7 个空 catch，<code>memory-store/src/memory-store.ts</code> 10+ 个空 catch。项目已设计出 <code>DegradationBoundary</code> 作为替代方案（48 处使用），但尚未推广至所有包。</div>
+</div>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> engine 包缺少 Error 层次结构</div>
+  <div class="location">packages/engine/src/</div>
+  <div class="desc">作为 76 个源文件的核心包，没有任何自定义 Error 类。<code>memory</code> 包的 <code>MemoryStoreError</code> 6 层继承体系是现成标杆模板，但 engine 未采用。</div>
+</div>
+
+<h3>6.3 代码模式</h3>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> TODO/FIXME/HACK 注释积累</div>
+  <div class="location">跨包</div>
+  <div class="desc">代码中存在大量 TODO/FIXME 注释，部分标注了具体的修复方案但未执行，属于技术债可视化但未被管理。</div>
+</div>
+
+<div class="finding low">
+  <div class="title"><span class="badge badge-low">Low</span> 少量 magic numbers</div>
+  <div class="location">react-loop.ts:107, scheduler.ts:259</div>
+  <div class="desc"><code>maxLoops - 4</code> 的硬编码警告阈值、<code>"Dispatch completed without result"</code> 等缺少上下文常量。</div>
+</div>
+
+<!-- ==================== 七、测试 ==================== -->
+<h2 id="test">七、测试覆盖与质量评估</h2>
+<p class="section-intro">基于 Vitest 框架，193 个测试文件、约 4,469 个测试用例。</p>
+
+<h3>7.1 覆盖率概况</h3>
+
+<table>
+<tr><th>包名</th><th>源文件数</th><th>测试文件数</th><th>测试比</th><th>评估</th></tr>
+<tr><td>engine</td><td>76</td><td>28</td><td>0.37x</td><td><span class="badge badge-medium">中等</span></td></tr>
+<tr><td>scheduler</td><td>27</td><td>5</td><td>0.19x</td><td><span class="badge badge-high">严重不足</span></td></tr>
+<tr><td>platform</td><td>31</td><td>3</td><td>0.10x</td><td><span class="badge badge-critical">极度不足</span></td></tr>
+<tr><td>tui</td><td>25</td><td>3</td><td>0.12x</td><td><span class="badge badge-critical">极度不足</span></td></tr>
+<tr><td>resilience</td><td>9</td><td>6</td><td>0.67x</td><td><span class="badge badge-good">良好</span></td></tr>
+<tr><td>fsm-compiler</td><td>18</td><td>9</td><td>0.50x</td><td><span class="badge badge-good">良好</span></td></tr>
+<tr><td>governance</td><td>9</td><td>7</td><td>0.78x</td><td><span class="badge badge-good">良好</span></td></tr>
+<tr><td>config</td><td>36</td><td>15</td><td>0.42x</td><td><span class="badge badge-medium">中等</span></td></tr>
+<tr><td>telemetry</td><td>13</td><td>7</td><td>0.54x</td><td><span class="badge badge-good">良好</span></td></tr>
+<tr><td>shared</td><td>25</td><td>12</td><td>0.48x</td><td><span class="badge badge-medium">中等</span></td></tr>
+</table>
+
+<h3>7.2 测试质量</h3>
+<p>抽样 10 个关键测试文件，8 个评级 A-/A/A+。测试以行为驱动为主，异步处理和 mock 使用规范。整体测试质量较高。</p>
+
+<div class="finding high">
+  <div class="title"><span class="badge badge-high">High</span> platform / scheduler / tui 测试严重不足</div>
+  <div class="desc">三个核心包的测试比分别为 0.10x、0.19x、0.12x，远低于项目平均。这些包包含调度逻辑、平台操作和 UI 交互，缺陷影响面大。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> 无覆盖率阈值配置</div>
+  <div class="desc">vitest 配置中未设置覆盖率阈值（branches/functions/lines/statements），CI 管线不强制测试覆盖率。</div>
+</div>
+
+<div class="finding medium">
+  <div class="title"><span class="badge badge-medium">Medium</span> ~15 处裸 setTimeout 构成 flaky 风险</div>
+  <div class="desc">部分测试使用裸 <code>setTimeout</code> 进行异步等待，而非 <code>vi.waitFor</code> 或 <code>vi.useFakeTimers</code>，在 CI 环境下可能产生不稳定结果。</div>
+</div>
+
+<!-- ==================== 八、路线图 ==================== -->
+<h2 id="priority">八、优先修复路线图</h2>
+
+<h3>P0 — 立即修复（安全 & 数据完整性）</h3>
+<table class="priority-table">
+<tr><th>编号</th><th>问题</th><th>位置</th><th>工作量</th></tr>
+<tr><td>G-02</td><td>修复正则 Bug <code>/:s*d{5,}/</code> → <code>/:\s*\d{5,}/</code></td><td>constitution-validator.ts:126</td><td>1 行</td></tr>
+<tr><td>G-04</td><td>bypassAll() 增加 TTY / --test 标志检查</td><td>confirm-gate.ts:54</td><td>1h</td></tr>
+<tr><td>G-01</td><td>默认裁决器在无回调时应阻塞/拒绝，非自动批准</td><td>governance-pipeline.ts:172</td><td>2h</td></tr>
+<tr><td>M-01</td><td>requestReplan 使用 this._replanSystem</td><td>meta-agent.ts:224,279</td><td>1 行</td></tr>
+<tr><td>I-01</td><td>Logger Transport 错误不可静默吞掉</td><td>logger.ts:23</td><td>30min</td></tr>
+</table>
+
+<h3>P1 — 本周修复（可靠性 & 正确性）</h3>
+<table class="priority-table">
+<tr><th>编号</th><th>问题</th><th>位置</th><th>工作量</th></tr>
+<tr><td>A-01</td><td>修复 capability-registry.ts 双类定义</td><td>capability-registry.ts</td><td>2h</td></tr>
+<tr><td>X-03</td><td>HardVerificationGate execFileSync → 异步</td><td>hard-verification-gate.ts</td><td>2h</td></tr>
+<tr><td>G-05</td><td>confirm() fail-open → fail-close 策略</td><td>confirm-gate.ts:234</td><td>1h</td></tr>
+<tr><td>G-06</td><td>信任模型添加持久化快照</td><td>trust-model.ts</td><td>4h</td></tr>
+<tr><td>I-04</td><td>超时错误通知断路器</td><td>Registry.ts:612</td><td>1h</td></tr>
+<tr><td>F-01</td><td>FSM 重复转换应报错而非静默覆盖</td><td>fsm-compiler compiler.ts</td><td>2h</td></tr>
+</table>
+
+<h3>P2 — 本月修复（架构改进）</h3>
+<table class="priority-table">
+<tr><th>编号</th><th>问题</th><th>位置</th><th>工作量</th></tr>
+<tr><td>X-01</td><td>拆分 bootstrapEngine() 为阶段函数</td><td>bootstrap-engine.ts</td><td>1d</td></tr>
+<tr><td>Cross</td><td>~65 处空 catch 推广 DegradationBoundary</td><td>跨包</td><td>2d</td></tr>
+<tr><td>A-01a</td><td>统一 Agent 映射为单一真相源</td><td>shared + engine</td><td>1d</td></tr>
+<tr><td>X-02</td><td>合并 HardVerificationGate 与 ZeroTokenValidator</td><td>engine</td><td>1d</td></tr>
+<tr><td>Test</td><td>platform / scheduler / tui 补充测试</td><td>三个包</td><td>3d</td></tr>
+<tr><td>G-07</td><td>权限覆写添加白名单约束</td><td>agent-registry.ts</td><td>2h</td></tr>
+</table>
+
+<h3>P3 — 持续改进</h3>
+<table class="priority-table">
+<tr><th>编号</th><th>问题</th><th>工作量</th></tr>
+<tr><td>Cross</td><td>engine 包添加 Error 层次结构</td><td>1d</td></tr>
+<tr><td>Cross</td><td>定义统一 LlmMessage 接口消除双重断言</td><td>4h</td></tr>
+<tr><td>Test</td><td>添加覆盖率阈值到 CI 管线</td><td>1h</td></tr>
+<tr><td>Infra</td><td>统一 ID 生成策略</td><td>4h</td></tr>
+<tr><td>Agent</td><td>FSM 类型统一到单一 types.ts</td><td>2h</td></tr>
+</table>
+
+<!-- ==================== 九、总评 ==================== -->
+<h2 id="verdict">九、总体评价</h2>
+
+<div class="verdict">
+<h3>综合评级：B+（良好，有明确改进空间）</h3>
+<p><strong>架构设计（A-）</strong>：模块化方向正确，依赖 DAG 清晰无环，6 层拓扑合理。engine 过度汇聚（18 依赖）和 bootstrapEngine 上帝函数是最大技术债。</p>
+<p><strong>类型安全（A）</strong>：全局 strict + noUncheckedIndexedAccess，生产代码几乎无 any，在大型 TS 项目中属上乘。</p>
+<p><strong>错误处理（C+）</strong>：~65 处空 catch 是最大系统性风险。DegradationBoundary 设计优秀但推广不足。日志/审计静默失败是合规隐患。</p>
+<p><strong>安全性（C）</strong>：fail-open 安全门、环境变量欺骗 bypass、信任模型无持久化、命令注入风险——安全层需要系统性加固。</p>
+<p><strong>测试覆盖（B）</strong>：总量充足（4,469 用例），质量较高，但 platform/scheduler/tui 三个核心包严重不足，且无覆盖率阈值。</p>
+<p><strong>代码质量（B+）</strong>：注释和文档极其详尽，文件命名 100% 一致，barrel export 完整。重复代码（验证规则、Agent 定义）是主要改进方向。</p>
+</div>
+
+<p style="margin-top:2rem; color:var(--muted); font-size:0.85rem; text-align:center;">
+本报告由 7 个并行子代理同时审查生成 | 评审维度：架构 · 引擎 · 基础设施 · Agent系统 · 治理安全 · 横切面 · 测试
+</p>
+
+</body>
+</html>

@@ -221,7 +221,7 @@ export class MetaAgent {
     ].join("\n");
 
     const res = await this.llm.chat(this.llm.reasonerModel, [
-      { role: "system", content: REPLAN_SYSTEM },
+      { role: "system", content: this._replanSystem },
       { role: "user", content: prompt },
     ]);
 
@@ -277,7 +277,7 @@ export class MetaAgent {
     ].join("\n");
 
     const res = await this.llm.chat(this.llm.reasonerModel, [
-      { role: "system", content: REPLAN_SYSTEM },
+      { role: "system", content: this._replanSystem },
       { role: "user", content: prompt },
     ]);
 

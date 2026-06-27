@@ -15,6 +15,7 @@
 
 import { execSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import { MEMORY_VALID_TRANSITIONS } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import { DegradationBoundary } from "./degradation-boundary.js";
@@ -253,14 +254,34 @@ export class CrossPackageContractRule implements ZeroTokenRule {
   }
 
   private _grepInterface(dir: string, name: string): string[] {
+    const result: string[] = [];
     try {
-      const out = execSync(`grep -rl "interface ${name}\\|type ${name}" ${dir} --include="*.ts" 2>/dev/null || true`, {
-        encoding: "utf-8", timeout: 5000, cwd: process.cwd(),
+      const absDir = path.resolve(process.cwd(), dir);
+      this._walkDir(absDir).forEach((filePath) => {
+        const content = fs.readFileSync(filePath, "utf-8");
+        if (content.includes(`interface ${name}`) || content.includes(`type ${name}`)) {
+          result.push(filePath);
+        }
       });
-      return out.split("\n").filter(Boolean);
     } catch (err) { DegradationBoundary.handle(err, 'zero-token-validator', 'trace');
       return [];
     }
+    return result;
+  }
+
+  /** 递归遍历目录，收集所有 .ts 文件路径 */
+  private _walkDir(dir: string): string[] {
+    const files: string[] = [];
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...this._walkDir(fullPath));
+      } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+        files.push(fullPath);
+      }
+    }
+    return files;
   }
 }
 

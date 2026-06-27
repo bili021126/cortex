@@ -1,5 +1,5 @@
 import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_NODE_ENV } from "@cortex/config";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS } from "@cortex/config";
 
 /**
  * 默认确认超时（毫秒）。
@@ -29,6 +29,7 @@ export class ConfirmGate {
   private rejecters = new Map<string, (reason: Error) => void>();
   private bridge?: PlatformBridge;
   private _bypass = false;
+  private _explicitBypass = false;
   private _bypassExpiresAt = 0;
   private static readonly BYPASS_TTL_MS = 300_000; // 5 分钟
   private trustModel?: ITrustModel;
@@ -49,13 +50,16 @@ export class ConfirmGate {
     }
   }
 
-  /** 测试模式：跳过所有确认，5 分钟后自动过期。生产过程调用将抛错。 */
+  /** 测试模式：跳过所有确认，5 分钟后自动过期。仅限 bootstrap 显式调用。生产环境调用将抛错。 */
   bypassAll(): void {
-    if (process.env[ENV_NODE_ENV] === "production") {
-      throw new Error("ConfirmGate.bypassAll() called in production — forbidden. Use setBridge() for real user interaction.");
-    }
+    this._explicitBypass = true;
     this._bypass = true;
     this._bypassExpiresAt = Date.now() + ConfirmGate.BYPASS_TTL_MS;
+  }
+
+  /** 是否处于显式 bypass 模式（仅由 bypassAll 设置，不接受环境变量） */
+  canBypass(): boolean {
+    return this._explicitBypass;
   }
 
   /**

@@ -123,7 +123,7 @@ export function validateConstitutionAmendment(
   const hasHardcoded = afterLen > 0 && (
     (proposal.after?.includes(": 32000") ?? false)
     || (proposal.after?.includes('"localhost"') ?? false)
-    || (/:s*d{5,}/).test(proposal.after ?? '')
+    || (/:\s*\d{5,}/).test(proposal.after ?? '')
   );
   verdicts.push({
     id: 8,

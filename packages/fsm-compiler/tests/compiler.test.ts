@@ -13,7 +13,7 @@
  *   - DiagramGenerator: Mermaid and DOT output format validation
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { FsmParser, FsmParseError } from "../src/compiler/parser.js";
 import { FsmValidator } from "../src/compiler/validator.js";
 import { TypeScriptGenerator } from "../src/compiler/generators/typescript-generator.js";
@@ -444,8 +444,53 @@ describe("TypeScriptGenerator", () => {
   it("should generate import for runtime when guards/actions exist", () => {
     const ast = parser.parseObject(minimalDef);
     const output = generator.generate(ast);
-
+  
     expect(output.imports.some((i) => i.includes("@cortex/fsm-compiler/runtime"))).toBe(true);
+  });
+  
+  it("should warn on duplicate from+event transitions（F-01 修复）", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  
+    const dupDef = {
+      id: "dup_machine",
+      displayName: "Dup Machine",
+      version: "1.0.0",
+      states: [
+        { id: "idle" },
+        { id: "running" },
+        { id: "stopped" },
+      ],
+      transitions: [
+        { id: "t1", from: "idle", to: "running", event: "start" },
+        { id: "t2", from: "idle", to: "stopped", event: "start" },
+      ],
+      initialState: "idle",
+      finalStates: [],
+    };
+  
+    const ast = parser.parseObject(dupDef);
+    const output = generator.generate(ast);
+  
+    // 应至少有一条警告
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("重复转换"),
+    );
+  
+    warnSpy.mockRestore();
+  
+    // 生成结果仍包含 TRANSITION_TABLE（行为不变）
+    expect(output.types).toContain("TRANSITION_TABLE");
+  });
+  
+  it("should NOT warn on unique from+event transitions", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  
+    const ast = parser.parseObject(minimalDef);
+    generator.generate(ast);
+  
+    expect(warnSpy).not.toHaveBeenCalled();
+  
+    warnSpy.mockRestore();
   });
 
   it("should always have imports present (generator always emits guard/action strings)", () => {

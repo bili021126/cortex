@@ -105,7 +105,15 @@ export class TypeScriptGenerator {
     for (const [stateId, transitions] of ast.adjacencyList) {
       const stateKey = this._toEnumKey(stateId);
       lines.push(`  [${stateEnumName}.${stateKey}]: {`);
+      const seenEvents = new Set<string>();
       for (const t of transitions) {
+        if (seenEvents.has(t.event)) {
+          console.warn(
+            `[FsmCompiler] 重复转换: 状态 "${stateId}" 事件 "${t.event}"` +
+            ` 后定义覆盖前定义`,
+          );
+        }
+        seenEvents.add(t.event);
         const eventKey = this._toEnumKey(t.event);
         const toKey = this._toEnumKey(t.to);
         lines.push(`    [${eventEnumName}.${eventKey}]: ${stateEnumName}.${toKey},`);

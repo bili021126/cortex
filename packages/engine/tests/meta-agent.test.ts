@@ -266,4 +266,88 @@ describe("MetaAgent", () => {
 
     expect(result.unclear).toBe("用户未指定具体文件或模块");
   });
+
+  // ── M-01: 注入 replanSystemPrompt 被忽略 ──
+
+  it("requestReplan 使用注入的自定义 replanSystemPrompt（M-01 修复）", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+
+    let capturedSystemContent = "";
+    adapter.injectMock(async (messages) => {
+      const sysMsg = messages.find((m: any) => m.role === "system");
+      if (sysMsg) capturedSystemContent = sysMsg.content;
+      return {
+        content: JSON.stringify({ tasks: [{ task: "alternative", type: "analysis", tags: ["code"] }], impactScope: "local" }),
+        toolCalls: [],
+      };
+    });
+
+    const customPrompt = "CUSTOM_REPLAN_PROMPT_M_01";
+    const meta = new MetaAgent(adapter, undefined, undefined, customPrompt);
+
+    await meta.requestReplan(
+      {
+        id: "failed-1",
+        type: "implementation",
+        tags: ["code"],
+        payload: "写一个函数",
+        status: "failed",
+        results: [],
+        parentId: "parent-1",
+        createdAt: Date.now(),
+        claimedBy: [],
+        needsMultiPerspective: false,
+        contextPolicyId: "single-step",
+      },
+      "出错啦",
+      0,
+    );
+
+    expect(capturedSystemContent).toBe(customPrompt);
+  });
+
+  it("requestBoundaryReplan 使用注入的自定义 replanSystemPrompt（M-01 修复）", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+
+    let capturedSystemContent = "";
+    adapter.injectMock(async (messages) => {
+      const sysMsg = messages.find((m: any) => m.role === "system");
+      if (sysMsg) capturedSystemContent = sysMsg.content;
+      return {
+        content: JSON.stringify({ tasks: [{ task: "fix boundary", type: "analysis", tags: ["code"] }], impactScope: "subtree" }),
+        toolCalls: [],
+      };
+    });
+
+    const customPrompt = "CUSTOM_BOUNDARY_REPLAN_M_01";
+    const meta = new MetaAgent(adapter, undefined, undefined, customPrompt);
+
+    await meta.requestBoundaryReplan(
+      {
+        id: "violate-1",
+        type: "analysis",
+        tags: ["analysis"],
+        payload: "分析代码",
+        status: "failed",
+        results: [],
+        parentId: "parent-2",
+        createdAt: Date.now(),
+        claimedBy: [],
+        needsMultiPerspective: false,
+        contextPolicyId: "single-step",
+      },
+      "越界写入文件",
+      0,
+    );
+
+    expect(capturedSystemContent).toBe(customPrompt);
+  });
 });

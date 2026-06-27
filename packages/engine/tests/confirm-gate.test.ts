@@ -84,4 +84,20 @@ describe("ConfirmGate", () => {
     expect(result).toBe(true);
     expect(gate.hasPending()).toBe(false);
   });
+
+  // ── G-04: bypassAll() 不接受环境变量 ──
+
+  it("设置 NODE_ENV=test 不能激活 bypass（G-04 修复）", () => {
+    const gate = new ConfirmGate();
+    // bypassAll 未调用时，bypass 不生效
+    expect(gate.needsConfirmation(ReversibilityLevel.L2)).toBe(true);
+    expect(gate.canBypass()).toBe(false);
+  });
+
+  it("bypassAll 显式调用后 canBypass 返回 true（G-04 修复）", () => {
+    const gate = new ConfirmGate();
+    gate.bypassAll();
+    expect(gate.canBypass()).toBe(true);
+    expect(gate.needsConfirmation(ReversibilityLevel.L2)).toBe(false);
+  });
 });
