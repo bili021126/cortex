@@ -44,6 +44,14 @@ export { HybridRetriever } from "./hybrid-retrieval.js";
 export type { HybridRetrievalConfig, HybridScoreResult } from "./hybrid-retrieval.js";
 export { DEFAULT_HYBRID_CONFIG, cosineSimilarity, batchCosineSimilarity } from "./hybrid-retrieval.js";
 
+// ── 摄入管线 ───────────────────────────────────
+export { IngestPipeline } from "./ingest-pipeline.js";
+export type { IngestOptions } from "./ingest-pipeline.js";
+
+// ── RAG 编排 ───────────────────────────────────
+export { RagOrchestrator } from "./rag-orchestrator.js";
+export type { RagResult, RagSource, RagQueryOptions } from "./rag-orchestrator.js";
+
 // ── 监控 ───────────────────────────────────────
 export { MemoryStoreMonitor } from "./monitor.js";
 

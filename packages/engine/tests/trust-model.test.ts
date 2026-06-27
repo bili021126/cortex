@@ -1,7 +1,19 @@
 // @ci: unit
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { TrustModel } from "@cortex/scheduler";
 import { TrustLevel, type AgentType } from "@cortex/shared";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+
+const TMP_DIR = path.join(os.tmpdir(), "cortex-trust-test");
+const STATE_PATH = path.join(TMP_DIR, "trust-state.json");
+
+function cleanTemp(): void {
+  try { fs.rmSync(TMP_DIR, { recursive: true }); } catch { /* ok */ }
+}
+
+afterAll(() => cleanTemp());
 
 describe("TrustModel", () => {
   let tm: TrustModel;
@@ -183,5 +195,47 @@ describe("TrustModel", () => {
 
     // 旧实例状态不受影响
     expect(tm.getTrustLevel("ganyu" as AgentType, "file_write")).toBe(TrustLevel.L2);
+  });
+
+  // ── 持久化 save/load ────────────────────────────
+
+  it("save 后 load 恢复信任状态", async () => {
+    const tm1 = new TrustModel(STATE_PATH);
+    for (let i = 0; i < 5; i++) {
+      tm1.recordDecision("ganyu" as AgentType, "write_file", true);
+    }
+    expect(tm1.getTrustLevel("ganyu" as AgentType, "file_write")).toBe(TrustLevel.L2);
+
+    // 显式持久化
+    await tm1.save();
+
+    const tm2 = new TrustModel(STATE_PATH);
+    await tm2.load();
+    expect(tm2.getTrustLevel("ganyu" as AgentType, "file_write")).toBe(TrustLevel.L2);
+  });
+
+  it("load 时文件不存在不抛出", async () => {
+    const nonexistent = path.join(TMP_DIR, "nonexistent.json");
+    const tm = new TrustModel(nonexistent);
+    await expect(tm.load()).resolves.toBeUndefined();
+  });
+
+  it("未设 statePath 时 save/load 静默跳过", async () => {
+    const tm = new TrustModel();
+    await expect(tm.save()).resolves.toBeUndefined();
+    await expect(tm.load()).resolves.toBeUndefined();
+  });
+
+  it("recordDecision 自动触发持久化", async () => {
+    const tm1 = new TrustModel(STATE_PATH);
+    for (let i = 0; i < 5; i++) {
+      tm1.recordDecision("ganyu" as AgentType, "write_file", true);
+    }
+    // 等待异步 save 完成
+    await new Promise((r) => setTimeout(r, 200));
+
+    const tm2 = new TrustModel(STATE_PATH);
+    await tm2.load();
+    expect(tm2.getTrustLevel("ganyu" as AgentType, "file_write")).toBe(TrustLevel.L2);
   });
 });

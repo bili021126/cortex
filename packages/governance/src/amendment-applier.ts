@@ -217,8 +217,10 @@ export function applyAmendment(
     // 3. 追加变更历史条目
     content = appendChangelogEntry(content, proposal);
 
-    // 4. 写入文件
-    fs.writeFileSync(filePath, content, "utf-8");
+    // 4. 原子写入——临时文件 + rename，防止并发写入损坏
+    const tmpPath = `${filePath}.tmp.${Date.now()}`;
+    fs.writeFileSync(tmpPath, content, "utf-8");
+    fs.renameSync(tmpPath, filePath);
 
     // 5. 文件名同步版本号
     const finalPath = renameToVersion(filePath, proposal.version);

@@ -10,7 +10,10 @@
 // ============================================================
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { evaluateAmendment, registerAmendmentCheck, unregisterAmendmentCheck, getAmendmentChecks } from "@cortex/governance";
+import { evaluateAmendment, registerAmendmentCheck, unregisterAmendmentCheck, getAmendmentChecks, applyAmendment } from "@cortex/governance";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 
 // ─── 宪法样本 ───────────────────────────────────────
 
@@ -286,5 +289,74 @@ describe("AmendmentJudge — 自定义检查注册", () => {
   it("默认检查项数量正确", () => {
     const all = getAmendmentChecks();
     expect(all.length).toBeGreaterThanOrEqual(DEFAULT_CHECKS_COUNT);
+  });
+});
+
+// ─── 修宪写入原子性 ─────────────────────────────────────
+
+describe("applyAmendment — 原子写入", () => {
+  const TMP_CONSTITUTION_DIR = path.join(os.tmpdir(), "cortex-amendment-test");
+  const TMP_CONSTITUTION = path.join(TMP_CONSTITUTION_DIR, "Cortex 概念顶层设计 v2.5.10.md");
+
+  beforeEach(() => {
+    fs.mkdirSync(TMP_CONSTITUTION_DIR, { recursive: true });
+    fs.writeFileSync(TMP_CONSTITUTION, SAMPLE_CONSTITUTION.trim(), "utf-8");
+  });
+
+  afterEach(() => {
+    try { fs.rmSync(TMP_CONSTITUTION_DIR, { recursive: true }); } catch { /* ok */ }
+  });
+
+  it("原子写入——临时文件不残留", () => {
+    const proposal = makeProposal();
+    const result = applyAmendment(proposal as any, TMP_CONSTITUTION);
+    expect(result.success).toBe(true);
+
+    // 验证没有 .tmp.* 文件残留
+    const files = fs.readdirSync(TMP_CONSTITUTION_DIR);
+    const tmpFiles = files.filter((f) => f.includes(".tmp."));
+    expect(tmpFiles.length).toBe(0);
+  });
+
+  it("写入后文件内容正确（含版本更新）", () => {
+    const proposal = makeProposal({ version: "v2.6.0" });
+    const result = applyAmendment(proposal as any, TMP_CONSTITUTION);
+    expect(result.success).toBe(true);
+
+    const content = fs.readFileSync(result.filePath, "utf-8");
+    expect(content).toContain("v2.6.0");
+    expect(content).toContain("AM-TEST-001");
+  });
+
+  it("并发写入不损坏文件", () => {
+    const proposalA = makeProposal({
+      id: "AM-CONCUR-A",
+      version: "v2.6.0",
+      before: "## §5.1 工具执行",
+      after: "## §5.1 工具执行（含回滚机制）",
+    });
+
+    // 串行调用（模拟并发时序：A 写完，B 基于同一基线写入另一处）
+    const resultA = applyAmendment(proposalA as any, TMP_CONSTITUTION);
+    expect(resultA.success).toBe(true);
+
+    // 第二次写入不同位置
+    const proposalB = makeProposal({
+      id: "AM-CONCUR-B",
+      version: "v2.7.0",
+      before: "## §7.1 安全约束",
+      after: "## §7.1 安全约束（增强版）",
+    });
+    const resultB = applyAmendment(proposalB as any, resultA.filePath);
+    expect(resultB.success).toBe(true);
+
+    // 文件不应损坏
+    const content = fs.readFileSync(resultB.filePath, "utf-8");
+    expect(content).toBeTruthy();
+    expect(content).not.toMatch(/tmp\.\d+/);
+
+    // 两处修改都应存在
+    expect(content).toMatch(/工具执行（含回滚机制）/);
+    expect(content).toMatch(/安全约束（增强版）/);
   });
 });

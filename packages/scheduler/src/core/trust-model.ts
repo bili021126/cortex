@@ -19,6 +19,8 @@
 // ============================================================
 
 import { TrustLevel, type AgentType, type ITrustModel, type RiskDomain, type TrustEntry, type TrustScore, toolNameToRiskDomain } from "@cortex/shared";
+import * as path from "node:path";
+import * as fs from "node:fs/promises";
 
 // ─── 内部常量 ──────────────────────────────────────────
 
@@ -34,6 +36,11 @@ const DECAY_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 export class TrustModel implements ITrustModel {
   /** 二维聚合表：key = `${agentType}:${domain}` */
   private readonly _entries = new Map<string, TrustEntry>();
+  private readonly _statePath: string | undefined;
+
+  constructor(statePath?: string) {
+    this._statePath = statePath;
+  }
 
   // ── 查询 ──────────────────────────────────────────
 
@@ -97,9 +104,48 @@ export class TrustModel implements ITrustModel {
 
     entry.updatedAt = now;
     this._entries.set(key, entry);
+
+    // 持久化——不阻塞决策逻辑
+    this.save().catch(() => { /* 持久化失败不抛出 */ });
   }
 
   // ── 全局操作 ──────────────────────────────────────
+
+  // ── 持久化 ──────────────────────────────────────
+
+  /** 持久化路径，undefined 表示不持久化 */
+  get statePath(): string | undefined {
+    return this._statePath;
+  }
+
+  /**
+   * 将信任状态写入 JSON 文件。
+   * 仅当构造时传入了 statePath 时才执行写入。
+   */
+  async save(): Promise<void> {
+    if (!this._statePath) return;
+    const data = JSON.stringify([...this._entries.entries()]);
+    await fs.mkdir(path.dirname(this._statePath), { recursive: true });
+    await fs.writeFile(this._statePath, data, "utf-8");
+  }
+
+  /**
+   * 从 JSON 文件加载信任状态。
+   * 首次启动无文件时不报错（静默回退）。
+   */
+  async load(): Promise<void> {
+    if (!this._statePath) return;
+    try {
+      const data = await fs.readFile(this._statePath, "utf-8");
+      const parsed: [string, TrustEntry][] = JSON.parse(data);
+      this._entries.clear();
+      for (const [key, entry] of parsed) {
+        this._entries.set(key, entry);
+      }
+    } catch {
+      // 首次启动无文件，静默忽略
+    }
+  }
 
   resetAll(): void {
     this._entries.clear();

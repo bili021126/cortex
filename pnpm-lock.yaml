@@ -368,6 +368,9 @@ importers:
       '@cortex/fsm-compiler':
         specifier: workspace:*
         version: link:../fsm-compiler
+      '@cortex/llm':
+        specifier: workspace:*
+        version: link:../llm
       '@cortex/memory':
         specifier: workspace:*
         version: link:../memory

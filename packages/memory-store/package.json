@@ -21,6 +21,7 @@
   "dependencies": {
     "@cortex/config": "workspace:*",
     "@cortex/fsm-compiler": "workspace:*",
+    "@cortex/llm": "workspace:*",
     "@cortex/memory": "workspace:*",
     "@cortex/shared": "workspace:*"
   },
