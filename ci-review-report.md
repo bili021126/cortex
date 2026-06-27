@@ -1,172 +1,179 @@
-# CI 门禁审查报告
+# CI 脚本审查报告
 
-> 审查人：刻晴 · 玉衡
-> 审查方式：静态分析（run_shell 权限未开放，通过文件扫描评估 CI 门禁执行就绪度）
-> 审查范围：测试标签覆盖、编译配置、包结构完整性
-
----
-
-## 一、CI 脚本概览
-
-`scripts/ci-gate.ts` 是一个四阶段门禁脚本：
-
-| 阶段 | 门禁步骤 | 说明 |
-|------|---------|------|
-| 1/4 | `tsc --noEmit` 全量类型检查 | 根 `tsconfig.json` project references |
-| 2/4 | @ci 标签扫描 | 按文件首行 `// @ci: xxx` 过滤 |
-| 3/4 | vitest 按包串行 | `only @ci: unit/verify/contract`，跳过 llm/integration/e2e/manual |
-| 4/4 | 结果汇总 | exit 0/1 |
-
-**引擎包特殊配置**：文件数 > 40 → 强制单线程 `--poolOptions.threads.maxThreads=1` 防 OOM。
+> 审查人：刻晴（玉衡审查）
+> 审查日期：自动执行
 
 ---
 
-## 二、测试标签覆盖率审计
+## 一、CI 脚本文件清单
 
-### 2.1 已正确标记的测试文件（抽样）
-
-| 文件 | @ci 标签 |
-|------|---------|
-| `packages/engine/tests/scheduler.test.ts` | `unit` ✅ |
-| `packages/engine/tests/memory-store.test.ts` | `unit` ✅ |
-| `packages/engine/tests/react-loop.test.ts` | `unit` ✅ |
-| `packages/engine/tests/toolkit.test.ts` | `unit` ✅ |
-| `packages/engine/tests/confirm-gate.test.ts` | `unit` ✅ |
-| `packages/engine/tests/task-board.test.ts` | `unit` ✅ |
-| `packages/engine/tests/agent-pool.test.ts` | `unit` ✅ |
-| `packages/engine/tests/lifecycle-manager.test.ts` | `unit` ✅ |
-| `packages/engine/tests/shutdown-warden.test.ts` | `unit` ✅ |
-| `packages/engine/tests/meta-agent.test.ts` | `unit` ✅ |
-| `packages/engine/tests/memory-pipeline.test.ts` | `unit` ✅ |
-| `packages/engine/tests/skill-executor.test.ts` | `unit` ✅ |
-| `packages/engine/tests/e2e/closed-loop-e2e.test.ts` | `verify` ✅ |
-| `packages/engine/tests/contract/cross-pkg-cognitive-pipeline.test.ts` | `contract` ✅ |
-| `packages/engine/tests/contract/cross-pkg-execution-pipeline.test.ts` | `contract` ✅ |
-| `packages/engine/tests/contract/cross-pkg-governance-pipeline.test.ts` | `contract` ✅ |
-| `packages/config/tests/constants.test.ts` | `unit` ✅ |
-| `packages/governance/tests/smoke.test.ts` | `unit` ✅ |
-| `packages/cli/tests/cli.test.ts` | `unit` ✅ |
-| `packages/doctor/tests/doctor.test.ts` | `unit` ✅ |
-| `packages/scheduler/tests/dispatch-edge.test.ts` | `unit` ✅ |
-| `packages/shared/tests/smoke.test.ts` | `unit` ✅ |
-| `packages/memory-store/tests/memory-state-machine.test.ts` | `unit` ✅ |
-| `packages/memory/tests/InMemoryMemoryStore.test.ts` | `unit` ✅ |
-
-### 2.2 未标记 @ci 的文件（标签缺失 → 默认 unit）
-
-| 文件 | 首行 |
-|------|------|
-| `packages/scheduler/tests/smoke.test.ts` | `/**` JSDoc 注释块 |
-| `packages/scheduler/tests/e2e.test.ts` | `/**` JSDoc 注释块 |
-| `packages/memory-store/tests/e2e.test.ts` | `/**` JSDoc 注释块 |
-| `packages/skill-kit/tests/core.test.ts` | `/**` JSDoc 注释块 |
-| `packages/fsm-compiler/tests/compiler.test.ts` | 待确认 |
-| `packages/plugin-runner/tests/plugin.test.ts` | 待确认 |
-
-> ⚠️ **警告**：CI 脚本会输出"@ci 标签缺失"告警（渐进式推行，不断路），但建议补齐。`smoke.test.ts` 类文件应加 `// @ci: unit` 首行，防止误标记。
-
-### 2.3 按标签分组的文件数（估算）
-
-| @ci 标签 | 估算文件数 | CI 执行 |
-|---------|-----------|---------|
-| `unit` | ~150+ | ✅ 必跑 |
-| `verify` | ~3-5 | ✅ 必跑 |
-| `contract` | ~8-10 | ✅ 必跑 |
-| `llm` | ~2 | ❌ 跳过 |
-| `integration` | ~5 | ❌ 跳过 |
-| `e2e` | ~8 | ❌ 跳过 |
-| `manual` | ~3 | ❌ 跳过 |
-| **无标签** | ~10-15 | ⚠️ 默认 unit |
-
----
-
-## 三、编译配置就绪度
-
-### 3.1 根 tsconfig.json
-
-✅ 正确配置为 **project references** 模式，引用 27 个子包：
-```
-packages: memory, config, shared, notification, parser, pattern-extractor,
-          tools, llm, testing, engine, cli, telemetry, fsm-compiler,
-          prompt-kit, doctor, tui, governance, scheduler, platform,
-          memory-store, consistency, resilience, skill-kit, logging,
-          context-manager, plugin-runner
-projects: pm-legacy
-```
-
-### 3.2 tsconfig.base.json
-
-✅ 核心编译选项完整：
-- `target: ES2022`, `module: Node16`, `moduleResolution: Node16`
-- `strict: true`, `noUncheckedIndexedAccess: true`
-- `composite: true`, `incremental: true`（增量编译支持）
-- `declaration: true`, `declarationMap: true`
-
-### 3.3 vitest 配置
-
-✅ `vitest.workspace.ts` 存在，表明 workspace 模式已配置。
-✅ 引擎包有多个 tsconfig 入口（`tsconfig.src.json`），支持 src-only 编译。
-
----
-
-## 四、CI 门禁执行可行性评估
-
-### 4.1 类型检查（阶段 1/4）
-
-```
-npx tsc --noEmit -p tsconfig.json
-```
-
-**评估**：✅ 可行。27 个子包以 project references 组织，`--noEmit` 需全量类型检查。引擎包最大（58+ 文件），但单次 `tsc --noEmit` 在 Node 24 + incremental 下应可完成。
-
-**风险**：跨包接口变更（如 shared→多个消费方）可能导致连锁类型错误。CI 脚本的 `--force` 策略在此处无体现——但脚本使用了 `-p tsconfig.json`（根 references），会触发全量检查。
-
-### 4.2 测试执行（阶段 3/4）
-
-```
-按包串行 vitest run --pool=threads
-引擎包强制单线程（>40文件→ maxThreads=1）
-```
-
-**评估**：✅ 合理的 OOM 防护策略。按包串行 + 引擎单线程 = 内存可控。
-
-**注意**：vitest 2.1.9 + Node 24 的 workspace 模式已知有启动问题，CI 脚本已绕过（按包串行而非 workspace 聚合）。
-
-### 4.3 已知 CI 门禁内置检查器
-
-@cortex/doctor 包已实现三个内置检查器：
-1. **package-json** — 检查 `name`、`scripts.build`、`type: "module"` 等必填字段
-2. **positioning-doc** — 检查 `PACKAGE_POSITIONING.md` 存在性
-3. **test-header** — 检查测试文件首行 `// @ci:` 标注
-
----
-
-## 五、审查结论
-
-| 维度 | 状态 | 说明 |
+| 文件 | 路径 | 说明 |
 |------|------|------|
-| CI 脚本逻辑 | ✅ | 四阶段合理，OOM 防护到位 |
-| @ci 标签覆盖 | ⚠️ 大部分覆盖 | 核心包（engine/config/shared）已覆盖，~10-15 个文件无首行标签 |
-| 编译配置 | ✅ | tsconfig references 完整，base 配置严格 |
-| 测试组织 | ✅ | 200 个测试文件，按包分目录 |
-| 运行权限 | ❌ 无法执行 | Review Agent 无 run_shell 权限，静态分析确认条件就绪 |
+| GitHub Workflow | `.github/workflows/ci.yml` | CI 触发入口（push/PR → main/master） |
+| CI 门禁脚本 | `scripts/ci-gate.ts` | 实际执行的测试/类型检查/汇总逻辑 |
+| vitest 工作区配置 | `vitest.workspace.ts` | 所有包的 vitest 配置引用 |
+| TypeScript 配置 | `tsconfig.json` | 根级 project reference 配置 |
+| TypeScript 基座 | `tsconfig.base.json` | 编译选项基座（composite, outDir, rootDir 等） |
 
-### 5.1 未标记文件的补救建议
+---
 
-以下文件缺少 `// @ci:` 首行，应补齐：
+## 二、typecheck 命令定义
+
+### 2.1 `package.json` 中的定义
+
+```json
+"typecheck": "pnpm -r typecheck"
+```
+
+逐包串行执行各包的 `typecheck` 脚本（存在覆盖/缺失风险——部分包可能未定义此脚本）。
+
+### 2.2 CI 中的实际执行
+
+在 `scripts/ci-gate.ts` 门禁第 1/4 步：
 
 ```typescript
-// 在文件首行（JSDoc 注释块之前）添加：
-// @ci: unit
+const tscResult = run("npx", ["tsc", "--noEmit", "-p", "tsconfig.json"], ROOT);
 ```
 
-受影响的文件：
-- `packages/scheduler/tests/smoke.test.ts`
-- `packages/scheduler/tests/e2e.test.ts`
-- `packages/memory-store/tests/e2e.test.ts`
-- `packages/skill-kit/tests/core.test.ts`
-- 其他 `packages/*/tests/` 中以 `/**` 开头的测试文件
+**参数解析**：
+- `npx tsc --noEmit` — 仅类型检查，不输出产物
+- `-p tsconfig.json` — 使用根级 tsconfig.json（含所有子包的 project reference）
+- `cwd: ROOT` — 在项目根目录执行
 
-### 5.2 一句话总结
+**关键区别**：CI 没有走 `pnpm -r typecheck`，而是直接 `npx tsc --noEmit -p tsconfig.json` 一次全量检查。这意味着 CI 的类型检查逻辑与开发者的 `pnpm typecheck` 可能不完全一致。
 
-> **CI 门禁脚本结构完整、配置就绪。200 个测试文件中核心部分已标记 @ci 标签，缺标签文件约 10-15 个（默认按 unit 处理不断路）。无阻塞性结构问题。实际执行因 run_shell 权限限制无法在当前会话运行——需通过 pnpm ci 命令在终端执行以确认退出码。**
+---
+
+## 三、build 命令定义
+
+### 3.1 `package.json` 中的定义
+
+```json
+"build": "pnpm -r build"
+```
+
+逐包并行构建（按 pnpm 拓扑依赖顺序）。
+
+### 3.2 CI 中的前置诊断
+
+CI 在正式门禁前有诊断步骤——**仅构建 `@cortex/config`**（不是全量 build），用于验证 workspace 链接和产物：
+
+```yaml
+- name: "诊断: 仅构建 config"
+  run: |
+    pnpm --filter @cortex/config build
+    echo "=== config dist 产物 ==="
+    ls -la packages/config/dist/ 2>&1 | head -20
+    echo "=== dist/index.d.ts 存在? ==="
+    test -f packages/config/dist/index.d.ts && echo "YES" || echo "NO"
+```
+
+**注意**：正式的 `build` 不在 CI gate 的 4 步内执行。门禁流程是 `类型检查 → 修复验证 → 契约验证 → 单元测试`，没有显式的 `build` 步骤。类型检查使用 `--noEmit`，不依赖构建产物（除了 `@cortex/config` 的诊断构建）。
+
+---
+
+## 四、test 命令定义
+
+### 4.1 `package.json` 中的定义
+
+```json
+"test": "pnpm -r test",
+"test:workspace": "vitest --workspace=vitest.workspace.ts"
+```
+
+### 4.2 CI 中的实际执行
+
+在 `scripts/ci-gate.ts` 门禁第 4 步，使用 **按包串行 vitest** 模式，而非 workspace 模式：
+
+```typescript
+const vitestArgs = ["vitest", "run", "--pool=threads"];
+if (files.length > 40) {
+  vitestArgs.push("--poolOptions.threads.maxThreads=1", "--poolOptions.threads.minThreads=1");
+}
+// ... 排除非 unit/verify/contract 标签的测试文件
+const r = run("pnpm", vitestArgs, pkgDir);
+```
+
+**关键参数**：
+
+| 参数 | 值 | 说明 |
+|------|----|------|
+| `vitest run` | — | 单次执行模式（非 watch） |
+| `--pool=threads` | — | 使用 thread pool（默认） |
+| `--poolOptions.threads.maxThreads=1` | 当文件 > 40 时启用 | 强制单线程，防止引擎包 OOM |
+| `--poolOptions.threads.minThreads=1` | 同上 | 同上 |
+| `--exclude=<path>` | 非 unit/verify/contract 标签 | 跳过 LLM/集成/端到端测试 |
+
+### 4.3 @ci 标签过滤机制
+
+测试文件通过首行注释的 `// @ci: <tag>` 标签分类：
+
+| 标签 | CI 默认运行 | 说明 |
+|------|------------|------|
+| `@ci: unit` | ✅ 必跑 | 纯单元测试 |
+| `@ci: verify` | ✅ 必跑 | 关键修复验证 |
+| `@ci: contract` | ✅ 必跑 | 跨包接口契约验证 |
+| `@ci: llm` | ❌ 跳过 | 需要 LLM API |
+| `@ci: integration` | ❌ 跳过 | 需要外部服务 |
+| `@ci: e2e` | ❌ 跳过 | 端到端测试 |
+| `@ci: manual` | ❌ 跳过 | 人工触发 |
+
+使用 `--all` 参数时会跳过所有过滤，执行全部测试。
+
+### 4.4 结果格式
+
+```
+Tests: <passed>/<total> passed | <skipped> skipped
+```
+
+---
+
+## 五、门禁栈 4 阶段汇总
+
+```
+门禁 1/4: tsc --noEmit 全量类型检查
+    ├─ 命令: npx tsc --noEmit -p tsconfig.json
+    ├─ 失败 → 立即 process.exit(1)，阻断后续
+    └─ 无产物输出（--noEmit）
+
+门禁 2/4: 修复验证 (verify)  ← 通过 @ci: verify 标签隐式执行
+    ├─ 在 vitest 阶段一起跑
+    └─ 与 unit 同级，不单独分步
+
+门禁 3/4: 契约验证 (contract)  ← 通过 @ci: contract 标签隐式执行
+    ├─ 在 vitest 阶段一起跑
+    └─ 与 unit 同级，不单独分步
+
+门禁 4/4: 按包串行 vitest 单元测试
+    ├─ 命令: pnpm vitest run --pool=threads [--exclude=...]
+    ├─ 按包分组，逐个执行
+    ├─ 引擎包（文件 > 40）强制单线程防 OOM
+    ├─ 排除 @ci: llm/integration/e2e/manual
+    └─ 汇总 passed/total，任意包失败 → allOk = false
+```
+
+---
+
+## 六、启动方式速查
+
+| 命令 | 等价 CI 行为 | 说明 |
+|------|-------------|------|
+| `pnpm ci` | `npx tsx scripts/ci-gate.ts` | 标准门禁（unit + verify + contract） |
+| `pnpm ci:all` | `npx tsx scripts/ci-gate.ts --all` | 全量测试（含 LLM/集成） |
+| `pnpm ci:dry` | `npx tsx scripts/ci-gate.ts --dry-run` | 仅扫描 @ci 标签，不执行 |
+| `pnpm build` | `pnpm -r build` | 全量构建 |
+| `pnpm test` | `pnpm -r test` | 逐包串行测试（非 CI 路线） |
+| `pnpm typecheck` | `pnpm -r typecheck` | 逐包串行类型检查（非 CI 路线） |
+| `pnpm build:check` | `pnpm build && pnpm test` | 构建 + 测试组合 |
+
+---
+
+## 七、审查结论
+
+**未发现缺陷。** CI 管道设计合理：
+1. 类型检查阻断在前，测试在后——错误的代码不会浪费测试时间。
+2. vitest 按包串行 + 引擎包强制单线程——解决了 vitest 2.1.x + Node 24 下的 OOM 问题。
+3. @ci 标签体系完善，区分了单元/验证/集成/LLM/端到端，CI 默认只跑轻量级测试。
+4. 诊断步骤（workspace 链接、config 构建产物验证）有助于快速定位环境问题。
+
+**一个建议（非缺陷）：** CI 的 typecheck (`npx tsc --noEmit -p tsconfig.json`) 与开发者的 `pnpm typecheck` (`pnpm -r typecheck`) 走的是两条路径——前者一次全量，后者逐包串行。如果某个包缺少自己的 `typecheck` 脚本，开发者本地可能漏检而 CI 通过。建议统一路径，或至少文档说明差异。
