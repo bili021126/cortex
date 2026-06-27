@@ -78,6 +78,9 @@ export function saveProposal(
 ): void {
   const dir = path.resolve(rootDir, AMENDMENTS_DIR);
   fs.mkdirSync(dir, { recursive: true });
+  if (proposal.id.includes('..') || proposal.id.includes('/') || proposal.id.includes('\\')) {
+    throw new Error(`Invalid proposal ID: ${proposal.id}`);
+  }
   const filePath = path.join(dir, `${proposal.id}.json`);
   const tmpPath = filePath + ".tmp";
   fs.writeFileSync(tmpPath, JSON.stringify(proposal, null, 2), "utf-8");

@@ -224,8 +224,6 @@ export class AuditTrail {
     const line = JSON.stringify(entry) + "\n";
     try {
       fs.writeSync(this.fd, line);
-    } catch {
-      // Phase 0 静默失败
-    }
+    } catch (err) { process.stderr.write(`[AuditTrail] write failed: ${String(err)}\n`); }
   }
 }

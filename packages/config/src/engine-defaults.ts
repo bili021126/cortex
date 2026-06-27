@@ -192,8 +192,9 @@ function _readEnvOverrides(): Partial<EngineDefaults> {
     if (val !== undefined) {
       const defaultValue = ENGINE_DEFAULTS[configKey];
       // 按默认值类型处理: string 字段保留原值，number 字段做转换
+      const num = Number(val);
       (overrides as Record<string, unknown>)[configKey] =
-        typeof defaultValue === "string" ? val : Number(val);
+        typeof defaultValue === "string" ? val : (isNaN(num) ? defaultValue : num);
     }
   }
   return overrides;

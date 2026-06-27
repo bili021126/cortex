@@ -20,7 +20,7 @@ export class Logger {
   private _log(level: LogLevel, message: string, meta?: Record<string,unknown>, error?: Error) {
     if (LOG_LEVEL_PRIORITY[level] < LOG_LEVEL_PRIORITY[this._minLevel]) return;
     const entry: LogEntry = { timestamp: Date.now(), level, loggerName: this.name, message, meta: this._mergeMeta(meta), error };
-    for (const t of this._transports) { t.write(entry).catch(() => {}); }
+    for (const t of this._transports) { t.write(entry).catch(err => console.warn('[Logger] Transport write failed:', String(err))); }
   }
   private _mergeMeta(meta?: Record<string,unknown>): Record<string,unknown>|undefined {
     if (!this._globalMeta) return meta;

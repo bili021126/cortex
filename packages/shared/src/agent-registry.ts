@@ -328,6 +328,14 @@ export function getAgentToolPermissions(): Record<string, readonly string[]> {
 
 /** 注入运行时权限覆写 */
 export function setAgentToolPermissions(permissions: Record<string, readonly string[]>): void {
+  const WRITE_TOOLS = ['write_file', 'edit_file', 'delete_file', 'run_shell'];
+  for (const [key, tools] of Object.entries(permissions)) {
+    const base = (AGENT_TOOL_PERMISSIONS as unknown as Record<string, readonly string[]>)[key];
+    const isReadonly = (base?.length ?? 0) > 0 && base.every(t => !WRITE_TOOLS.includes(t));
+    if (isReadonly && tools.some(t => WRITE_TOOLS.includes(t))) {
+      return; // 只读Agent不能升级为写入权限
+    }
+  }
   _runtimeToolPermissions = { ...AGENT_TOOL_PERMISSIONS as unknown as Record<string, readonly string[]>, ...permissions };
 }
 
