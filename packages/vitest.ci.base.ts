@@ -7,11 +7,10 @@ import { resolve } from "node:path";
  * 删 dist 不影响测试。每个包的 vitest.config.ts 调用 resolveAlias(__dirname) 即可。
  */
 const ALL_PKGS = [
-  "cache", "cli", "config", "consistency", "doctor", "fsm-compiler",
+  "cli", "config", "consistency", "context-manager", "doctor", "fsm-compiler",
   "governance", "llm", "logging", "memory", "memory-store", "notification",
-  "parser", "pattern-extractor", "platform", "plugin-runner", "pm", "prompt-kit",
-  "resilience", "result", "scheduler", "schema", "self-examination",
-  "shared", "skill-kit", "telemetry", "testing", "toolchain", "tools", "tui",
+  "parser", "pattern-extractor", "platform", "plugin-runner", "prompt-kit",
+  "resilience", "scheduler", "shared", "skill-kit", "telemetry", "testing", "tools", "tui",
 ];
 
 export function resolveAlias(packageDir: string): Record<string, string> {
