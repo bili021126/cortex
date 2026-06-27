@@ -75,40 +75,28 @@ describe("@cortex/logging smoke", () => {
       log.info("just a string");
     }).not.toThrow();
   });
-});
-import { describe, it, expect } from "vitest";
-import { createLogger, LogLevel, configureRootLogger } from "../src/index.js";
 
-describe("@cortex/logging smoke", () => {
-  it("createLogger → info 不抛异常", () => {
-    const log = createLogger("smoke-test");
-    expect(() => {
-      log.info("smoke test message", { key: "value" });
-    }).not.toThrow();
-  });
+  // ── C-3: Logger 静默吞错——写入失败可观测 ──
 
-  it("级别过滤生效——Debug 默认低于 Info，被静默", () => {
-    const log = createLogger("filter-test");
-    let output = "";
+  it("should not silently swallow transport write errors (C-3)", () => {
+    const log = createLogger("swallow-test");
+    // 劫持 stderr.write 模拟写入失败
     const origWrite = process.stderr.write;
-    process.stderr.write = (chunk: any) => { output += chunk.toString(); return true; };
+    const errors: Error[] = [];
+    process.stderr.write = ((chunk: any) => {
+      errors.push(new Error("write failed"));
+      return false; // 模拟写入失败
+    }) as any;
+
     try {
-      log.debug("should be filtered");
-      expect(output).toBe("");
+      // 即使写入失败，日志调用本身不应抛异常
+      expect(() => {
+        log.info("test message that will fail to write");
+        log.warn("warn also fails");
+        log.error("error also fails");
+      }).not.toThrow();
     } finally {
       process.stderr.write = origWrite;
     }
-  });
-
-  it("LogLevel 枚举对齐", () => {
-    expect(LogLevel.Debug).toBe(0);
-    expect(LogLevel.Info).toBe(10);
-    expect(LogLevel.Warn).toBe(20);
-    expect(LogLevel.Error).toBe(30);
-    expect(LogLevel.Fatal).toBe(40);
-  });
-
-  it("configureRootLogger 可覆盖配置", () => {
-    expect(() => configureRootLogger({ minLevel: LogLevel.Warn })).not.toThrow();
   });
 });

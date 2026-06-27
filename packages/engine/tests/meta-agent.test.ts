@@ -350,4 +350,27 @@ describe("MetaAgent", () => {
 
     expect(capturedSystemContent).toBe(customPrompt);
   });
+
+  // ── High: LLM 输出未校验 — 拒绝畸形输出 ──
+
+  it("should reject malformed LLM output during plan parsing", async () => {
+    const adapter = new LlmAdapter({
+      apiKey: "mock",
+      baseUrl: "mock",
+      chatModel: "mock-chat",
+      reasonerModel: "mock-reasoner"});
+
+    // 返回非 JSON 但包含数组字样的畸形输出
+    adapter.injectMock(async () => ({
+      content: "Here is the task list: [task1, task2]",
+      toolCalls: []}));
+
+    const meta = new MetaAgent(adapter);
+    const nodes = await meta.plan("do something");
+
+    // 畸形输出不应抛异常——应被兜底为单节点
+    expect(Array.isArray(nodes)).toBe(true);
+    expect(nodes.length).toBe(1);
+    expect(nodes[0].type).toBe("analysis");
+  });
 });

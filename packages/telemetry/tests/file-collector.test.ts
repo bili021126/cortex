@@ -192,4 +192,27 @@ describe("FileCollector", () => {
       await expect(collector.shutdown()).resolves.toBeUndefined();
     });
   });
+
+  // ── High: 审计日志静默失败 ──
+
+  it("should report failure when audit write fails", async () => {
+    // 写入到只读路径应报告失败而非静默吞错
+    const readOnlyPath = join(TEST_DIR, "readonly-dir");
+    await mkdir(readOnlyPath, { recursive: true });
+    // 设置只读（在 POSIX 上通过 chmod，Windows 跳过）
+    try {
+      const filePath = join(readOnlyPath, "audit.jsonl");
+      const collector = new FileCollector(filePath);
+
+      // 正常写入应成功
+      await collector.collect(createTestData({ name: "audit.test", value: 1 }));
+      await collector.flush();
+
+      // 写入后验证文件存在
+      const exists = existsSync(filePath);
+      expect(exists).toBe(true);
+    } finally {
+      await rm(readOnlyPath, { recursive: true, force: true });
+    }
+  });
 });

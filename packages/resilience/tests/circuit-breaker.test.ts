@@ -1143,4 +1143,33 @@ describe("StateMachineCircuitBreaker", () => {
       expect(cb.state).toBe("OPEN"); // 1 success, but window still has failures
     });
   });
+
+  // ── High: 超时不通知断路器 ──
+
+  it("should receive timeout notification from registry", async () => {
+    const cb = new SimpleCircuitBreaker({ name: "timeout-test", threshold: 2, halfOpenAfterMs: 500 });
+    const stateChanges: string[] = [];
+    cb.onStateChange((newState, oldState) => {
+      stateChanges.push(`${oldState}→${newState}`);
+    });
+
+    // 模拟 registry 超时通知（通过 recordFailure 传播）
+    cb.recordFailure(); // 1st failure
+    expect(cb.state).toBe("CLOSED");
+    expect(cb.consecutiveFailures).toBe(1);
+
+    cb.recordFailure(); // 2nd failure → OPEN
+    expect(cb.state).toBe("OPEN");
+    expect(stateChanges).toContain("CLOSED→OPEN");
+
+    // 超时后应该收到状态变更通知
+    vi.advanceTimersByTime(1000);
+
+    // HALF_OPEN 尝试
+    const result = await cb.call(async () => "success", async () => "fallback");
+    expect(result).toBe("success");
+
+    // Registry timeout 应触发 onStateChange 通知
+    expect(stateChanges.length).toBeGreaterThanOrEqual(2);
+  });
 });

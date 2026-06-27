@@ -114,5 +114,35 @@ describe("AgentPool", () => {
       expect(emitted[0].type).toBe("agent_pool.invariant_violation");
       expect(onInvariantCalls.length).toBe(0);
     });
+
+    // ── High: Claim 竞态——并发调度不应超量认领 ──
+
+    it("should not over-claim when dispatching concurrently", async () => {
+      const pool = new AgentPool();
+      pool.register({ type: AgentType.Code, maxInstances: 2 });
+      pool.spawn(AgentType.Code, "agent-1");
+      pool.spawn(AgentType.Code, "agent-2");
+
+      // 设置为 Awake（可执行）
+      expect(pool.setStatus("agent-1", AgentStatus.Awake)).toBe(true);
+      expect(pool.setStatus("agent-2", AgentStatus.Awake)).toBe(true);
+
+      // 模拟并发调度：设为 Active（正在执行）
+      expect(pool.setStatus("agent-1", AgentStatus.Active)).toBe(true);
+      expect(pool.setStatus("agent-2", AgentStatus.Active)).toBe(true);
+
+      // 重复设 Active 应为 true（Active→Active 合法）
+      expect(pool.setStatus("agent-1", AgentStatus.Active)).toBe(true);
+
+      // release：设回 Awake
+      expect(pool.setStatus("agent-1", AgentStatus.Awake)).toBe(true);
+      expect(pool.setStatus("agent-2", AgentStatus.Awake)).toBe(true);
+
+      // 再次 Active
+      expect(pool.setStatus("agent-1", AgentStatus.Active)).toBe(true);
+
+      // 超量 spawn 应被阻止
+      expect(pool.spawn(AgentType.Code, "agent-3")).toBe(false);
+    });
   });
 });

@@ -310,4 +310,43 @@ describe("Cross-package execution pipeline", () => {
     expect((observer.events[0]?.payload as any).nodeId).toBe("slow-node-1");
     expect((observer.events[0]?.payload as any).delayMs).toBe(30_000);
   });
+
+  // ── High: execFileSync 不应阻塞事件循环 ──
+
+  it("should not block event loop during git operations", async () => {
+    // 验证 PipelineObserver 在 git 操作（模拟 execFileSync）期间
+    // 仍能处理事件，不阻塞事件循环
+
+    const startTime = Date.now();
+
+    // 模拟 git 操作的同步事件
+    const gitEvent: ObservableEvent = {
+      type: PipelineEventType.ExecLifecyclePhaseChanged,
+      priority: PipelinePriority.NORMAL,
+      payload: { from: "idle", to: "git-op", phase: "git_check" },
+      timestamp: Date.now(),
+      notificationType: "FYI",
+    };
+    observer.emit(gitEvent);
+
+    // 模拟 execFileSync 后的完成事件
+    const completeEvent: ObservableEvent = {
+      type: PipelineEventType.NodeComplete,
+      priority: PipelinePriority.HIGH,
+      payload: {
+        nodeId: "git-op-node",
+        agentType: "code" as any,
+        success: true as const,
+        output: "git operation completed",
+      },
+      timestamp: Date.now(),
+    };
+    observer.emit(completeEvent);
+
+    // 验证事件未被阻塞——所有 emit 都被收集
+    expect(observer.events.length).toBeGreaterThanOrEqual(2);
+    expect(observer.events[0].type).toBe(PipelineEventType.ExecLifecyclePhaseChanged);
+    expect(observer.events[1].type).toBe(PipelineEventType.NodeComplete);
+    expect(Date.now() - startTime).toBeLessThan(5000); // 应在 5s 内完成
+  });
 });

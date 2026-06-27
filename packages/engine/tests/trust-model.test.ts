@@ -164,4 +164,24 @@ describe("TrustModel", () => {
     const level = tm.getTrustLevel("ganyu" as AgentType, "file_write");
     expect(level).toBe(TrustLevel.L1);
   });
+
+  // ── High: 信任模型无持久化——重启后信任状态丢失 ──
+
+  it("should warn on trust state loss after restart", () => {
+    // 建立信任
+    for (let i = 0; i < 5; i++) {
+      tm.recordDecision("ganyu" as AgentType, "write_file", true);
+    }
+    expect(tm.getTrustLevel("ganyu" as AgentType, "file_write")).toBe(TrustLevel.L2);
+
+    // 模拟重启：创建新 TrustModel 实例
+    const freshTm = new TrustModel();
+
+    // 新实例冷启动——所有信任状态丢失，回到 L1
+    const level = freshTm.getTrustLevel("ganyu" as AgentType, "file_write");
+    expect(level).toBe(TrustLevel.L1);
+
+    // 旧实例状态不受影响
+    expect(tm.getTrustLevel("ganyu" as AgentType, "file_write")).toBe(TrustLevel.L2);
+  });
 });

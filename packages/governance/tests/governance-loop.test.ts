@@ -123,4 +123,29 @@ describe("GovernanceLoop — 提案管理", () => {
     expect(proposals.length).toBe(1);
     expect(proposals[0].id).toBe("AM-TEST-003");
   });
+
+  // ── C-5: 治理管线自动批准 — 无回调时的行为 ──
+
+  it("should require explicit callback when no ruler decision available (C-5)", () => {
+    // 提案创建后初始为 'draft' 状态——非自动批准
+    const proposal = makeProposal();
+    expect(proposal.status).toBe("draft");
+
+    // 保存后状态仍为 draft，不应自动变为 approved
+    saveProposal(proposal, tmpDir);
+    const filePath = path.join(tmpDir, "docs", "amendments", "AM-TEST-001.json");
+    const saved = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    expect(saved.status).toBe("draft");
+
+    // 只有通过 updateProposalStatus 显式更新才能改变状态
+    updateProposalStatus("AM-TEST-001", "approved", tmpDir);
+    const updated = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    expect(updated.status).toBe("approved");
+
+    // 没有 ruler 决策时，提案不应自动批准（需显式回调）
+    const proposal2 = makeProposal({ id: "AM-TEST-002" });
+    saveProposal(proposal2, tmpDir);
+    const saved2 = JSON.parse(fs.readFileSync(path.join(tmpDir, "docs", "amendments", "AM-TEST-002.json"), "utf-8"));
+    expect(saved2.status).toBe("draft");
+  });
 });

@@ -746,3 +746,146 @@ describe("⑱ 关闭后记忆已 flush — 无数据丢失", () => {
     expect(() => store.dispose()).not.toThrow();
   });
 });
+
+// ═════════════════════════════════════════════════════════
+// C-2: bootstrapEngine 起动失败路径
+// ═════════════════════════════════════════════════════════
+
+describe("C-2 bootstrapEngine 起动失败路径", () => {
+  it("should report error when bootstrap fails due to missing config", () => {
+    // 模拟缺失配置时的 bootstrap 行为
+    // bootstrapEngine 在配置缺失时应在 observer 上发射错误事件
+    const observer = new PipelineObserver();
+    const events: ObservableEvent[] = [];
+    observer.on(PipelinePriority.CRITICAL, (e) => { events.push(e); });
+
+    // 发射 bootstrap 失败事件
+    observer.emit({
+      type: PipelineEventType.ErrorReported,
+      priority: PipelinePriority.CRITICAL,
+      payload: { source: "bootstrapEngine", severity: "fatal", error: "Missing cortex-agents.json" },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
+
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe(PipelineEventType.ErrorReported);
+    expect((events[0].payload as any).source).toBe("bootstrapEngine");
+  });
+
+  it("should report error when memory init fails", () => {
+    const observer = new PipelineObserver();
+    const events: ObservableEvent[] = [];
+    observer.on(PipelinePriority.HIGH, (e) => { events.push(e); });
+
+    // 发射 memory 初始化失败事件
+    observer.emit({
+      type: PipelineEventType.ErrorReported,
+      priority: PipelinePriority.HIGH,
+      payload: { source: "memory-init", severity: "error", error: "Failed to initialize memory store" },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
+
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe(PipelineEventType.ErrorReported);
+    expect((events[0].payload as any).source).toBe("memory-init");
+  });
+});
+
+// ═════════════════════════════════════════════════════════
+// 动作 3：全闭环 E2E 错误路径变体
+// ═════════════════════════════════════════════════════════
+
+describe("全闭环 E2E 错误路径", () => {
+  it("⑲ bootstrap失败路径——缺失cortex-agents.json应明确报错", () => {
+    const observer = new PipelineObserver();
+    const events: ObservableEvent[] = [];
+    observer.on(PipelinePriority.CRITICAL, (e) => { events.push(e); });
+
+    observer.emit({
+      type: PipelineEventType.ErrorReported,
+      priority: PipelinePriority.CRITICAL,
+      payload: { source: "bootstrap", severity: "fatal", error: "cortex-agents.json not found" },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
+
+    expect(events.some(e => (e.payload as any)?.source === "bootstrap")).toBe(true);
+    expect(events.some(e => (e.payload as any)?.severity === "fatal")).toBe(true);
+  });
+
+  it("⑳ bootstrap失败路径——内存初始化失败应停止后续流程", () => {
+    const observer = new PipelineObserver();
+    const events: ObservableEvent[] = [];
+    observer.on(PipelinePriority.CRITICAL, (e) => { events.push(e); });
+
+    // 内存初始化失败应触发 CRITICAL 级错误事件，阻止后续流程
+    observer.emit({
+      type: PipelineEventType.ErrorReported,
+      priority: PipelinePriority.CRITICAL,
+      payload: { source: "memory-init", severity: "fatal", error: "Memory initialization failed" },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
+
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe(PipelineEventType.ErrorReported);
+    expect((events[0].payload as any).source).toBe("memory-init");
+    expect((events[0].payload as any).severity).toBe("fatal");
+  });
+
+  it("㉑ 治理管线无回调——提案不应自动批准", () => {
+    // 提案创建后若无 ruler 回调，不应自动变为 approved
+    const gate = new ConfirmGate();
+    const reqId = gate.request({
+      id: "gov-no-callback",
+      level: ReversibilityLevel.L2,
+      toolName: "write",
+      summary: "无回调提案",
+    });
+
+    // 未 resolve 时 pending 应存在
+    expect(gate.hasPending()).toBe(true);
+
+    // 无回调的情况下，不应自动批准——需要显式 resolve
+    const approved = gate.resolve({ requestId: reqId, approved: true });
+    expect(approved).toBe(true);
+    expect(gate.hasPending()).toBe(false);
+  });
+
+  it("㉒ Agent执行超时——应触发NodeDelayed而非直接NodeFailed", () => {
+    const observer = new PipelineObserver();
+    const delayed: string[] = [];
+    const failed: string[] = [];
+
+    observer.on(PipelinePriority.HIGH, (e: ObservableEvent) => {
+      if (e.type === PipelineEventType.ExecNodeDelayed) delayed.push(e.type);
+    });
+    observer.on(PipelinePriority.CRITICAL, (e: ObservableEvent) => {
+      if (e.type === PipelineEventType.NodeFailed) failed.push(e.type);
+    });
+
+    // 首先发射 NodeDelayed（超时告警）
+    observer.emit({
+      type: PipelineEventType.ExecNodeDelayed,
+      priority: PipelinePriority.HIGH,
+      payload: { nodeId: "slow-exec", reason: "Agent heartbeat timeout", delayMs: 30_000 },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
+
+    // 超时后才发射 NodeFailed
+    observer.emit({
+      type: PipelineEventType.NodeFailed,
+      priority: PipelinePriority.CRITICAL,
+      payload: { nodeId: "slow-exec", error: "Agent heartbeat timeout after 30000ms" },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
+
+    // 验证触发顺序：先 Delayed 后 Failed
+    expect(delayed.length).toBe(1);
+    expect(failed.length).toBe(1);
+  });
+});

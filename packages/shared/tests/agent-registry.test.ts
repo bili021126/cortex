@@ -341,4 +341,30 @@ describe("agent-registry — 集成：AGENT_DEFS 统一派生", () => {
     }
     expect(displayKeys.length).toBe(enumValues.length);
   });
+
+  // ── High: 权限覆写无验证 — 验证覆写合法性 ──
+
+  it("should validate permission overrides against baseline", () => {
+    // 编译期基线：权限表应包含有效工具名
+    for (const [agentType, perms] of Object.entries(AGENT_TOOL_PERMISSIONS)) {
+      expect(Array.isArray(perms)).toBe(true);
+      for (const perm of perms) {
+        expect(typeof perm).toBe("string");
+        expect(perm.length).toBeGreaterThan(0);
+      }
+    }
+
+    // 编译期 Code 应有 run_shell 权限
+    expect(AGENT_TOOL_PERMISSIONS[AgentType.Code]).toContain("run_shell");
+
+    // 运行时覆写：setAgentToolPermissions 后权限表应反映变更
+    setAgentToolPermissions({ code: ["custom_perm"] });
+    const after = getAgentToolPermissions();
+    expect(after.code).toContain("custom_perm");
+    // Review 未覆写，保留编译期值
+    expect(after[AgentType.Review]).toContain("read_file");
+
+    // 恢复默认
+    setAgentToolPermissions({} as Record<string, readonly string[]>);
+  });
 });
