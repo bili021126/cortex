@@ -7,7 +7,6 @@
     { "path": "packages/notification" },
     { "path": "packages/parser" },
     { "path": "packages/pattern-extractor" },
-    { "path": "projects/pm-legacy" },
     { "path": "packages/tools" },
     { "path": "packages/llm" },
     { "path": "packages/testing" },
