@@ -17,6 +17,8 @@
  */
 
 import type { TuiEvent, NodeRenderState, NodeRenderStatus } from "../types.js";
+import type { TuiComponent } from "./diff-renderer.js";
+import { diffRenderer } from "./diff-renderer.js";
 import { writeln, style, StyleCode, ColorCode, eraseLine, cursorUp } from "./ansi.js";
 import * as readline from "node:readline";
 
@@ -39,7 +41,7 @@ const STATUS_ICONS: Record<NodeRenderStatus, string> = {
 /** 交互式面板的键盘操作 */
 type TodoAction = "move_up" | "move_down" | "toggle" | "skip" | "expand" | "reset_all" | "exit";
 
-export class TaskTreeRenderer {
+export class TaskTreeRenderer implements TuiComponent {
   private nodes: Map<string, NodeRenderState> = new Map();
   /** 交互模式下当前焦点索引 */
   private focusedIndex: number = 0;
@@ -49,6 +51,10 @@ export class TaskTreeRenderer {
   private collapsedNodes: Set<string> = new Set();
   /** 上次渲染的行数（用于原地刷新） */
   private lastRenderLines: number = 0;
+
+  invalidate(): void {
+    diffRenderer.requestRender();
+  }
 
   /** 处理事件 */
   handleEvent(event: TuiEvent): void {
@@ -66,7 +72,7 @@ export class TaskTreeRenderer {
           });
         }
         this.calculateDepths();
-        this.render();
+        this.invalidate();
         break;
 
       case "node_start":
@@ -96,7 +102,7 @@ export class TaskTreeRenderer {
     const existing = this.nodes.get(nodeId);
     if (!existing) return;
     this.nodes.set(nodeId, { ...existing, ...partial });
-    this.render();
+    this.invalidate();
   }
 
   /** 计算缩进深度 */
@@ -113,22 +119,24 @@ export class TaskTreeRenderer {
   }
 
   /** 渲染任务树 */
-  private render(): void {
+  render(width: number): string[] {
     const nodeList = Array.from(this.nodes.values());
+    // 空状态不渲染——启动时不要显示 "0 节点"
+    if (nodeList.length === 0) return [];
     const header = style(
       `📋 任务计划 (${nodeList.length} 节点)`,
       StyleCode.bold,
     );
     const lines = [header];
-
+  
     // 按树状结构排序并渲染
     const sorted = this.topologicalSort(nodeList);
     let lineIndex = 0;
-
+  
     for (const node of sorted) {
       // 检查是否被折叠
       if (this.isNodeCollapsed(node)) continue;
-
+  
       const hasChildren = nodeList.some(n => n.parentId === node.nodeId);
       const isCollapsed = this.collapsedNodes.has(node.nodeId);
       const _isLast = this.isLastChild(node.nodeId, sorted);
@@ -142,35 +150,33 @@ export class TaskTreeRenderer {
       const expandIcon = hasChildren
         ? (isCollapsed ? "▸ " : "▾ ")
         : "  ";
-
+  
       let line = `${prefix}${expandIcon}${icon} ${agentLabel} ${desc}${duration}`;
-
+  
       // 高亮当前焦点行
       if (this.interactiveMode && lineIndex === this.focusedIndex) {
         line = style(line, StyleCode.bold + ColorCode.cyan);
       }
-
+  
       if (node.error) {
         lines.push(line);
         lines.push(
-          `  ${" ".repeat(node.depth * 2)}${style(`✗ ${node.error}`, ColorCode.red)}`,
+          `  ${` `.repeat(node.depth * 2)}${style(`✗ ${node.error}`, ColorCode.red)}`,
         );
       } else {
         lines.push(line);
       }
       lineIndex++;
     }
-
+  
     // 交互模式下添加操作提示
     if (this.interactiveMode) {
       lines.push("");
       lines.push(style(" j/k 移动  Space 切换  d 跳过  Enter 折叠  r 重置  q 退出", StyleCode.dim));
     }
-
+  
     this.lastRenderLines = lines.length;
-    for (const line of lines) {
-      writeln(line);
-    }
+    return lines;
   }
 
   /** 树形前缀 */
@@ -375,7 +381,7 @@ export class TaskTreeRenderer {
     }
   }
 
-  /** 原地刷新——清除上次渲染的所有行后重绘 */
+  /** 原地刷新——清除上次渲染的所有行后重绘（交互模式下直接写入终端） */
   private redraw(): void {
     // 上移并清除上次渲染的行
     for (let i = 0; i < this.lastRenderLines; i++) {
@@ -383,7 +389,10 @@ export class TaskTreeRenderer {
       process.stdout.write(eraseLine);
     }
     // 重绘
-    this.render();
+    const lines = this.render(80);
+    for (const line of lines) {
+      writeln(line);
+    }
   }
   private isLastChild(nodeId: string, sorted: NodeRenderState[]): boolean {
     const node = this.nodes.get(nodeId);

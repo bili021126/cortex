@@ -15,36 +15,10 @@
  */
 
 import type { TuiEvent } from "../types.js";
-import { writeln, style, StyleCode, ColorCode } from "./ansi.js";
+import { diffRenderer } from "./diff-renderer.js";
 
 // ═══════════════════════════════════════════════════════════
-// §1 辅助
-// ═══════════════════════════════════════════════════════════
-
-/** 截断长文本 */
-function truncate(text: string, maxLen: number = 60): string {
-  return text.length > maxLen ? text.slice(0, maxLen - 3) + "..." : text;
-}
-
-/** 工具图标映射 */
-const TOOL_ICONS: Record<string, string> = {
-  read_file: "📖",
-  write: "✏️",
-  search_replace: "🔄",
-  delete_file: "🗑",
-  bash: "💻",
-  glob: "🔍",
-  grep: "🔎",
-  web_fetch: "🌐",
-  web_search: "🔎",
-};
-
-function toolIcon(tool: string): string {
-  return TOOL_ICONS[tool] ?? "🔧";
-}
-
-// ═══════════════════════════════════════════════════════════
-// §2 ToolLogRenderer
+// §1 ToolLogRenderer
 // ═══════════════════════════════════════════════════════════
 
 /** 进行中的工具调用（用于计算耗时） */
@@ -74,9 +48,7 @@ export class ToolLogRenderer {
   private onToolStart(tool: string, input: string, nodeId?: string): void {
     const id = nodeId ?? `call_${++this.callSeq}`;
     this.pending.set(id, { tool, input, startTime: Date.now() });
-    writeln(
-      `${toolIcon(tool)} ${style(tool, StyleCode.bold)} ${style("...", StyleCode.dim)}  ${style(truncate(input), StyleCode.dim)}`,
-    );
+    diffRenderer.requestRender();
   }
 
   /** 工具完成 */
@@ -97,16 +69,6 @@ export class ToolLogRenderer {
       this.pending.delete(nodeId);
     }
 
-    const timeStr = duration !== undefined ? `(${duration}ms)` : "";
-    const statusIcon = success
-      ? style("✓", ColorCode.green)
-      : style("✗", ColorCode.red);
-    const detail = success
-      ? style(truncate(output ?? ""), StyleCode.dim)
-      : style(truncate(error ?? output ?? "未知错误"), ColorCode.red);
-
-    writeln(
-      `  ${statusIcon} ${style(timeStr, StyleCode.dim)} ${detail}`,
-    );
+    diffRenderer.requestRender();
   }
 }

@@ -71,6 +71,7 @@ async function _checkPermission(
   if (!hooks.onPreToolUse) return "allow";
   return await hooks.onPreToolUse({
     type: "tool_start",
+    id: tc.id,
     agent,
     tool: tc.name,
     input: JSON.stringify(tc.arguments),
@@ -153,7 +154,7 @@ export async function* streamExecuteTools(
         continue;
       }
 
-      yield { type: "tool_start", agent, tool: tc.name, input: JSON.stringify(tc.arguments) } as TuiEvent;
+      yield { type: "tool_start", id: tc.id, agent, tool: tc.name, input: JSON.stringify(tc.arguments) } as TuiEvent;
 
       readPromises.push((async (): Promise<ToolCallResult> => {
         const { success, output, durationMs } = await _executeOneCall(tc, bridge, hooks);
@@ -165,7 +166,7 @@ export async function* streamExecuteTools(
 
     for (const res of readResults) {
       const resultEv: TuiEvent & { type: "tool_result" } = {
-        type: "tool_result", agent, tool: res.name,
+        type: "tool_result", id: res.id, agent, tool: res.name,
         success: res.success, output: res.output, durationMs: res.durationMs,
       };
       yield resultEv;
@@ -198,7 +199,7 @@ export async function* streamExecuteTools(
     const { success, output, durationMs } = await _executeOneCall(tc, bridge, hooks);
 
     const resultEv: TuiEvent & { type: "tool_result" } = {
-      type: "tool_result", agent, tool: tc.name,
+      type: "tool_result", id: tc.id, agent, tool: tc.name,
       success, output, durationMs,
     };
     yield resultEv;

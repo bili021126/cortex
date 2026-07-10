@@ -25,7 +25,7 @@ import { telemetryController, TelemetryLevel } from "./telemetry-controller.js";
  */
 const MESSAGE_PREFIX_WHITELIST: RegExp[] = [
   /^\[MemoryStoreMonitor\]/i,
-  /^\[TRACE write_file\]/i,
+  // [TRACE write_file] 移出白名单——参数中包含完整文件内容会淹屏
 ];
 
 /**
@@ -45,6 +45,8 @@ let _origWarn: typeof console.warn | null = null;
 let _origError: typeof console.error | null = null;
 let _installed = false;
 let _inErrorHandler = false;
+/** TUI模式下抑制 [console-bridge] stderr 输出 */
+let _tuiQuiet = false;
 
 /**
  * 白名单判决：消息前缀 OR 调用栈任一命中即透传。
@@ -62,12 +64,14 @@ function _isWhitelisted(args: unknown[]): boolean {
 
 /** 将参数列表展平为单条消息字符串 */
 function _flattenArgs(args: unknown[]): string {
-  return args
+  const joined = args
     .map((a) => {
       if (a instanceof Error) return a.message;
       return typeof a === "string" ? a : JSON.stringify(a);
     })
     .join(" ");
+  // 截断超长输出——防止 TUI 被 HTML/大文件内容淹屏
+  return joined.length > 500 ? joined.slice(0, 500) + "…" : joined;
 }
 
 /** 构造 ErrorReported 事件 */
@@ -115,7 +119,7 @@ export function installConsoleBridge(observer: IPipelineObserver): void {
           tags: {},
         });
       }
-      process.stderr.write(`[console-bridge] ${_flattenArgs(args)}\n`);
+      if (!_tuiQuiet) process.stderr.write(`[console-bridge] ${_flattenArgs(args)}\n`);
     }
   };
 
@@ -155,4 +159,9 @@ export function uninstallConsoleBridge(): void {
   _origWarn = null;
   _origError = null;
   _installed = false;
+}
+
+/** TUI 模式下抑制 [console-bridge] stderr 输出 */
+export function setTuiQuietMode(quiet: boolean): void {
+  _tuiQuiet = quiet;
 }

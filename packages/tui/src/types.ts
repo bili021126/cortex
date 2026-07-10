@@ -41,6 +41,7 @@ export type TuiEvent =
 /** 工具调用开始 */
 export interface TuiToolStartEvent {
   type: "tool_start";
+  id: string;
   agent: AgentType;
   tool: string;
   input: string;
@@ -52,6 +53,7 @@ export interface TuiToolStartEvent {
 /** 工具调用结果 */
 export interface TuiToolResultEvent {
   type: "tool_result";
+  id: string;
   agent: AgentType;
   tool: string;
   success: boolean;

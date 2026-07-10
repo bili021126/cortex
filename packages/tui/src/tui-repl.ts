@@ -9,7 +9,7 @@
  */
 
 import * as readline from "node:readline";
-import { existsSync } from "node:fs";
+import { existsSync, createWriteStream } from "node:fs";
 import { AgentType, CHINESE_NAME_TO_TYPE, AGENT_CHINESE_ROLE, type LlmMessage, type ITuiEngineBridge } from "@cortex/shared";
 
 // CLI 注入适配器
@@ -44,6 +44,12 @@ import {
 } from "./index.js";
 import { saveSession, loadSession } from "./session-store.js";
 import type { TuiHooks } from "./types.js";
+
+import { diffRenderer, chatLog, toolCard, footer, layout } from "./renderer/index.js";
+import { SigintHandler } from "./renderer/sigint-handler.js";
+import { sanitizeRenderableText } from "./renderer/sanitize.js";
+import { statusBar } from "./renderer/status-bar.js";
+import { setTuiQuietMode } from "@cortex/telemetry";
 
 /** TUI 会话可变状态 */
 interface TuiSession {
@@ -83,6 +89,22 @@ export async function tuiReplHandler(
   const r = _initRenderers();
   const _eventUnsubs = _bindTuiEvents(r);
 
+  // 引擎日志隔离：重定向 stderr 到文件
+  const projectRoot = context.projectRoot ?? process.cwd();
+  const engineLog = createWriteStream(`${projectRoot}/.cortex/logs/engine.log`, { flags: "a" });
+  const origStderr = process.stderr.write.bind(process.stderr);
+  process.stderr.write = (chunk: any, ...args: any[]) => {
+    const s = String(chunk);
+    if (s.includes("[ConfirmGate]") || s.includes("Approve?")) {
+      return origStderr(chunk, ...args);
+    }
+    engineLog.write(chunk);
+    return true;
+  };
+
+  // 抑制 console-bridge stderr 输出——TUI 有自己的渲染管线
+  setTuiQuietMode(true);
+
   const session: TuiSession = _restoreSession(context.projectRoot ?? process.cwd()) ?? {
     mode: "chat",
     agent: AgentType.Code,
@@ -93,6 +115,33 @@ export async function tuiReplHandler(
       nodes: [], intent: "", approved: false, reviewStatus: "pending" as const,
     },
   };
+
+  // 恢复 session 时回填 ChatLog
+  chatLog.loadHistory(session.history);
+
+  // 注册组件到 Layout 布局引擎
+  layout.add(chatLog, "fill");            // Layer1: 对话
+  layout.add(r.taskTree, "fill");          // Layer1: 任务树
+  layout.add(toolCard, "fill");            // Layer1: 工具卡片
+  layout.add(statusBar, "bottom", 1);      // Layer3: 状态
+  layout.add(footer, "bottom", 1);         // Layer3: 信息条
+
+  // DiffRenderer 只注册 layout 一个顶层组件
+  diffRenderer.register("layout", layout);
+
+  // 旧注册代码注释掉
+  // diffRenderer.register("chat", chatLog);
+  // diffRenderer.register("tool", toolCard);
+  // diffRenderer.register("task", r.taskTree);
+  // diffRenderer.register("status", statusBar);
+  // diffRenderer.register("footer", footer);
+
+  // 监听终端尺寸变化
+  process.stdout.on("resize", () => {
+    layout.setTerminalSize(process.stdout.columns, process.stdout.rows);
+    diffRenderer.requestRender();
+  });
+  layout.setTerminalSize(process.stdout.columns ?? 80, process.stdout.rows ?? 24);
 
   // Hook: onSessionRestore
   if (session.mode !== "chat" || session.history.length > 0) {
@@ -114,29 +163,40 @@ export async function tuiReplHandler(
   const rl = _createReadline(session);
   rl.prompt();
 
+  // 事件驱动渲染——不再用定时器和readline抢屏幕
+  // DiffRenderer在 _bindTuiEvents + ChatLog.invalidate 中按需刷新
+
   const cmdCtx: TuiCmdCtx = {
     rl, setMode: (m) => { session.mode = m; }, setAgent: (a) => { session.agent = a; },
-    session, projectRoot: context.projectRoot ?? process.cwd(), hooks, bridge,
+    session, projectRoot, hooks, bridge,
   };
 
   let running = true;
   let abortCurrent = false;
 
-  // ── Ctrl+C 中断正在运行的 talk/chat/party 生成 ──
-  const sigintHandler = () => {
-    abortCurrent = true;
-    writeln("\n⏹  已中断当前生成 (Ctrl+C)");
+  // ── Ctrl+C: readline 跨平台SIGINT + 三段式确认 ──
+  const sigint = new SigintHandler(() => { rl.close(); });
+  const sigintFn = () => {
+    abortCurrent = true;  // 先中断当前操作
+    const msg = sigint.handle();
+    if (msg) writeln(msg);
   };
-  process.on("SIGINT", sigintHandler);
+  rl.on("SIGINT", sigintFn);  // readline的SIGINT在Windows上也生效
+  process.on("SIGINT", sigintFn);  // *nix fallback
   process.stdin.setRawMode?.(false); // readline 接管 raw mode
 
   rl.on("line", async (line) => {
     let input = line.trim();
     if (!input) { rl.prompt(); return; }
 
-    if (input.startsWith(".")) {
+    // 过滤 ConfirmGate 泄漏：单字符 y/n 或 "yy" 是 stdin 争抢的残余
+    if (/^[yn]{1,2}$/i.test(input)) { rl.prompt(); return; }
+
+    // 兼容中文句号——输入法忘了切回来时不会卡住
+    if (input.startsWith(".") || input.startsWith("。")) {
+      if (input.startsWith("。")) input = "." + input.slice(1);
       running = await handleInternalCommand(input, cmdCtx);
-      if (!running) { process.removeListener("SIGINT", sigintHandler); return; }
+      if (!running) { return; }
       rl.prompt(); return;
     }
 
@@ -145,14 +205,18 @@ export async function tuiReplHandler(
     input = await (hooks.onPreProcessInput?.(input) ?? Promise.resolve(input));
 
     const abort = () => abortCurrent;
-    try { await _dispatchTuiMode(session, input, bridge, registry, context, cmdCtx.projectRoot, abort); }
+    try { await _dispatchTuiMode(session, input, bridge, registry, context, cmdCtx.projectRoot, rl, abort); }
     catch (err) { writeln(`✗ 错误: ${err instanceof Error ? err.message : String(err)}`); }
     rl.prompt();
   });
 
   rl.on("close", () => {
+    process.stderr.write = origStderr;
+    engineLog.end();
     _eventUnsubs.forEach((fn) => fn());
     r.tokenMonitor.dispose();
+    setTuiQuietMode(false);
+    process.removeListener("SIGINT", sigintFn);
   });
   await new Promise<void>((resolve) => rl.on("close", resolve));
   return 0;
@@ -174,12 +238,12 @@ function _initRenderers(): TuiRenderers {
 
 function _bindTuiEvents(r: TuiRenderers): (() => void)[] {
   return [
-    tuiEventBus.on("task_tree_update", (e) => r.taskTree.handleEvent(e)),
-    tuiEventBus.on("node_start", (e) => r.taskTree.handleEvent(e)),
-    tuiEventBus.on("node_complete", (e) => r.taskTree.handleEvent(e)),
-    tuiEventBus.on("node_failed", (e) => r.taskTree.handleEvent(e)),
-    tuiEventBus.on("tool_start", (e) => r.toolLog.handleEvent(e)),
-    tuiEventBus.on("tool_result", (e) => r.toolLog.handleEvent(e)),
+    tuiEventBus.on("task_tree_update", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
+    tuiEventBus.on("node_start", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
+    tuiEventBus.on("node_complete", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
+    tuiEventBus.on("node_failed", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
+    tuiEventBus.on("tool_start", (e) => { r.toolLog.handleEvent(e); const ev = e as any; toolCard.add(ev.id, ev.tool); diffRenderer.requestRender(); }),
+    tuiEventBus.on("tool_result", (e) => { r.toolLog.handleEvent(e); const ev = e as any; toolCard.complete(ev.id, ev.output ?? "", ev.durationMs ?? 0, ev.success); diffRenderer.requestRender(); }),
     tuiEventBus.on("token_usage", (e) => r.tokenMonitor.handleEvent(e)),
   ];
 }
@@ -227,6 +291,7 @@ async function _dispatchTuiMode(
   registry: CommandRegistry,
   context: CommandContext,
   projectRoot: string,
+  rl: readline.Interface,
   abort?: () => boolean,
 ): Promise<void> {
   const { mode: m, agent: a, history: h, planState: ps } = session;
@@ -235,23 +300,53 @@ async function _dispatchTuiMode(
       writeln(await commandMode((args: string[]) => registry.dispatch(args, context), input.split(/\s+/)));
       break;
     case "chat": {
+      statusBar.start("LLM 思考中");
       const result = await consumeGenerator(chatMode(input, bridge, a, h), tuiEventBus, abort);
-      if (result) { h.push({ role: "user", content: input }, { role: "assistant", content: result }); writeln(result); }
+      statusBar.stop();
+      if (result) { chatLog.startAssistant("chat-"+Date.now()); chatLog.updateAssistant("chat-"+Date.now(), sanitizeRenderableText(result).slice(0, 80)); chatLog.finalizeAssistant("chat-"+Date.now()); h.push({ role: "user", content: input }, { role: "assistant", content: result }); }
       break;
     }
     case "talk": {
       if (session.talkTrio) {
+        statusBar.start("LLM 思考中");
         const result = await consumeGenerator(talkTrioMode(input, bridge, h), tuiEventBus, abort);
-        if (result) { h.push({ role: "user", content: input }, { role: "assistant", content: result }); writeln(result); }
+        statusBar.stop();
+        if (result) {
+          chatLog.startAssistant("talk-" + Date.now());
+          chatLog.updateAssistant("talk-" + Date.now(), result.slice(0, 80));
+          chatLog.finalizeAssistant("talk-" + Date.now());
+          h.push({ role: "user", content: input }, { role: "assistant", content: result });
+        }
       } else {
+        statusBar.start("LLM 思考中");
         const result = await consumeGenerator(talkMode(input, bridge, session.agent, h), tuiEventBus, abort);
-        if (result) { h.push({ role: "user", content: input }, { role: "assistant", content: result }); writeln(result); }
+        statusBar.stop();
+        if (result) {
+          chatLog.startAssistant("talk-" + Date.now());
+          chatLog.updateAssistant("talk-" + Date.now(), result.slice(0, 80));
+          chatLog.finalizeAssistant("talk-" + Date.now());
+          h.push({ role: "user", content: input }, { role: "assistant", content: result });
+        }
       }
       break;
     }
     case "plan": {
+      // plan模式：暂停readline→task-tree直出→事件驱动渲染
+      rl.pause();
+      statusBar.start("LLM 思考中");
       const result = await consumeGenerator(planMode(input, bridge, a, ps, h), tuiEventBus, abort);
-      if (result) { session.planState = ps; savePlanState(projectRoot, ps); writeln(result); }
+      statusBar.stop();
+      // 先输出结果，再恢复 prompt——否则 prompt 跑在内容前面
+      if (result) {
+        session.planState = ps; savePlanState(projectRoot, ps);
+        const summary = result.trim();
+        if (summary) {
+          writeln(summary);
+        }
+      }
+      rl.resume();
+      rl.prompt();
+      // 任务节点通过 ToolCard/task-tree 实时展示——不额外输出
       // TUI 落盘自检
       for (const node of ps.nodes) {
         const outputPath = (node as any)._outputPath;
@@ -267,7 +362,7 @@ async function _dispatchTuiMode(
     }
     case "party": {
       const result = await consumeGenerator(partyMode(input, bridge, session.partyRoster, h), tuiEventBus, abort);
-      if (result) { h.push({ role: "user", content: input }, { role: "assistant", content: result }); writeln(result); }
+      if (result) { h.push({ role: "user", content: input }, { role: "assistant", content: result }); }
       break;
     }
   }
@@ -447,12 +542,15 @@ async function handleInternalCommand(input: string, ctx: TuiCmdCtx): Promise<boo
           writeln("⚠️ 计划未经审议，直接执行（建议先 .review）");
         }
         writeln(`🚀 执行计划：${ctx.session.planState.nodes.length} 个节点`);
-        // 重新进入 plan 模式触发执行
+        // 暂停 readline——执行阶段 ConfirmGate 需要独占 stdin
+        ctx.rl.pause();
         const result = await consumeGenerator(
           planMode("execute", ctx.bridge, ctx.session.agent, ctx.session.planState, ctx.session.history),
           tuiEventBus,
           () => false,
         );
+        ctx.rl.resume();
+        ctx.rl.prompt();
         if (result) {
           savePlanState(ctx.projectRoot, ctx.session.planState);
           writeln(result);

@@ -57,7 +57,7 @@ export { TimeBatcher } from "./batcher.js";
 export { getTelemetry, setTelemetry, recordTelemetry, shutdownTelemetry } from "./engine-telemetry.js";
 
 // ─── Console → Observer 桥接 ────────────────────────
-export { installConsoleBridge, uninstallConsoleBridge } from "./console-bridge.js";
+export { installConsoleBridge, uninstallConsoleBridge, setTuiQuietMode } from "./console-bridge.js";
 
 // ─── Phase 0 遥测基础设施 ───────────────────────────
 export { AuditTrail } from "./audit-trail.js";
