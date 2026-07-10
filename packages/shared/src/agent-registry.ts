@@ -19,12 +19,14 @@
 // ============================================================
 
 import { AgentType, type AgentContext } from "./agent-enums.js";
-
 // ============================================================
 // §1 标签词汇表（TAG_VOCABULARY）
 // ============================================================
 
-/** 标签词汇表（封闭集合） */
+/**
+ * 标签词汇表（封闭集合）
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export const TAG_VOCABULARY = [
   "code",
   "implementation",
@@ -54,7 +56,6 @@ export const TAG_VOCABULARY = [
   "repair",
   "diagnose",
   "heal",
-  // Core-2
   "api",
   "data",
   "api_design",
@@ -68,12 +69,16 @@ export const TAG_VOCABULARY = [
   "strategist",
   "contract",
   "direction",
+  "confirm_gate",
+  "gatekeeper",
 ] as const;
 
-export type Tag = (typeof TAG_VOCABULARY)[number];
+/**
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
+export type Tag = string;
 
-// ============================================================
-// §2 AgentDefinition + AGENT_DEFS（单一真相源）
+// §2 剩余内容（AgentDefinition + AGENT_DEFS）
 // ============================================================
 
 /** Agent 展示信息 */
@@ -101,6 +106,10 @@ export interface AgentDefinition {
   toolPermissions: readonly string[];
   /** 额外别名（不含 string-key 和 chineseRole——此二者自动加入） */
   aliases?: readonly string[];
+  /** 角色描述（用于 LLM 系统提示词生成） */
+  role?: string;
+  /** 产出物类型（用于任务匹配） */
+  produces?: string[];
 }
 
 // ─── 工具权限预设 ──────────────────────────────
@@ -110,8 +119,7 @@ const BASE_TOOLSET: readonly string[] = ["read_file", "write_file", "search_code
 const READONLY_TOOLSET: readonly string[] = ["read_file", "search_code", "web_search", "list_files", "parse_ast", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files"];
 
 // ─── AGENT_DEFS — 单一起源 ─────────────────────
-// FIXME: 应迁入 @cortex/config，但因 config→shared→config 循环依赖暂缓。
-//        数据副本已保留在 packages/config/src/data/agent-defs.ts
+// Core-2 已解耦——shared 持有类型定义，config 持有运行时数据。AGENT_DEFS 可留在 shared 作为默认注册表。
 
 const AGENT_DEFS: Record<AgentType, AgentDefinition> = {
   [AgentType.Meta]: {
@@ -119,36 +127,42 @@ const AGENT_DEFS: Record<AgentType, AgentDefinition> = {
     chineseRole: "甘雨",
     display: { emoji: "📋", name: "甘雨", signature: "让我为你梳理任务脉络。" },
     toolPermissions: READONLY_TOOLSET,
+    role: "任务规划与调度",
   },
   [AgentType.Code]: {
     tags: ["code", "implementation", "refactor", "test", "config"],
     chineseRole: "阿贝多",
     display: { emoji: "🧪", name: "阿贝多", signature: "这个结构，值得研究。" },
     toolPermissions: FULL_TOOLSET,
+    role: "代码实现与重构",
   },
   [AgentType.Review]: {
     tags: ["review", "audit"],
     chineseRole: "刻晴",
     display: { emoji: "⚔️", name: "刻晴", signature: "每一行都可能藏着疏漏。" },
     toolPermissions: BASE_TOOLSET,
+    role: "代码审查",
   },
   [AgentType.Analysis]: {
     tags: ["analysis", "research"],
     chineseRole: "纳西妲",
     display: { emoji: "🌿", name: "纳西妲", signature: "有意思……让我再深挖一层。" },
     toolPermissions: BASE_TOOLSET,
+    role: "数据分析与研判",
   },
   [AgentType.Ops]: {
     tags: ["ops", "deploy", "test"],
     chineseRole: "北斗",
     display: { emoji: "⚓", name: "北斗", signature: "死兆星号，准备起航。" },
     toolPermissions: FULL_TOOLSET,
+    role: "运维与部署",
   },
   [AgentType.Loop]: {
     tags: ["loop", "pattern_scan", "skill_precipitate"],
     chineseRole: "莫娜",
     display: { emoji: "🔮", name: "莫娜", signature: "星辰不会说谎。" },
     toolPermissions: BASE_TOOLSET,
+    role: "模式扫描与沉淀",
   },
   [AgentType.DocGovern]: {
     tags: ["doc-govern", "audit", "plan_review", "doc_audit", "constitution_check", "constitution_propose"],
@@ -156,12 +170,14 @@ const AGENT_DEFS: Record<AgentType, AgentDefinition> = {
     display: { emoji: "🏛️", name: "凝光", signature: "天权定论，不得上诉。" },
     toolPermissions: BASE_TOOLSET,
     aliases: ["doc"],
+    role: "文档治理",
   },
   [AgentType.Butler]: {
     tags: [],
     chineseRole: "昔涟",
     display: { emoji: "🍀", name: "昔涟", signature: "三千世轮回。这辈子归你了。" },
     toolPermissions: ["read_file", "search_code", "list_files", "search_symbol", "read_many_files", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files"],
+    role: "陪伴与交互",
   },
   [AgentType.Inspector]: {
     tags: ["inspector", "inspect"],
@@ -169,30 +185,35 @@ const AGENT_DEFS: Record<AgentType, AgentDefinition> = {
     display: { emoji: "🦅", name: "安柏", signature: "侦察完毕，一切正常。" },
     toolPermissions: BASE_TOOLSET,
     aliases: ["inspect"],
-  },
-  [AgentType.Browser]: {
-    tags: ["browser", "ui_verify"],
-    chineseRole: "宵宫",
-    display: { emoji: "🎆", name: "宵宫", signature: "咻~让烟花为你绽放！" },
-    toolPermissions: [...BASE_TOOLSET, "browser_do"],
+    role: "检查与审计",
   },
   [AgentType.Fix]: {
     tags: ["fix", "bugfix", "repair", "diagnose", "heal"],
     chineseRole: "希格雯",
     display: { emoji: "💉", name: "希格雯", signature: "让我看看伤口在哪里。" },
     toolPermissions: FULL_TOOLSET,
+    role: "缺陷修复",
   },
   [AgentType.Api]: {
     tags: ["api", "api_design", "api_integration", "endpoint", "review", "research", "analysis"],
     chineseRole: "久岐忍",
     display: { emoji: "📦", name: "久岐忍", signature: "契约检查完毕。" },
     toolPermissions: BASE_TOOLSET,
+    role: "API 设计与集成",
   },
   [AgentType.Data]: {
     tags: ["data", "data_model", "migration", "storage", "schema", "review", "research", "analysis"],
     chineseRole: "艾尔海森",
     display: { emoji: "📚", name: "艾尔海森", signature: "数据就是数据。" },
     toolPermissions: BASE_TOOLSET,
+    role: "数据建模",
+  },
+  [AgentType.Browser]: {
+    tags: ["browser", "ui_verify"],
+    chineseRole: "宵宫",
+    display: { emoji: "🎆", name: "宵宫", signature: "咻~让烟花为你绽放！" },
+    toolPermissions: [...BASE_TOOLSET, "browser_do"],
+    role: "浏览器操作",
   },
   [AgentType.Strategist]: {
     tags: ["strategy", "contract"],
@@ -200,6 +221,14 @@ const AGENT_DEFS: Record<AgentType, AgentDefinition> = {
     display: { emoji: "⚖️", name: "钟离", signature: "契约既成，食言者当受食岩之罚。" },
     toolPermissions: READONLY_TOOLSET,
     aliases: ["strategy", "霜凝"],
+    role: "战略过滤",
+  },
+  [AgentType.ConfirmGate]: {
+    tags: ["confirm_gate", "gatekeeper"],
+    chineseRole: "烟绯",
+    display: { emoji: "⚖️", name: "烟绯", signature: "让我看看这个操作是否合规。" },
+    toolPermissions: READONLY_TOOLSET,
+    role: "确认裁决",
   },
 };
 

@@ -177,7 +177,7 @@ export class SkillTemplateEngine {
 
       if (elseMatch) {
         trueBody = body.substring(0, body.indexOf(this.openTag + "else" + this.closeTag));
-        falseBody = elseMatch[1];
+        falseBody = elseMatch[1] ?? "";
       } else {
         trueBody = body;
         falseBody = "";

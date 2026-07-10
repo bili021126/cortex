@@ -58,7 +58,7 @@ describe("cortex version", () => {
     const r = await handler([], {}, defaultCtx());
     ok(r);
     expect(r.output).toContain("cortex v");
-    expect(r.output).toContain("Core-1");
+    expect(r.output).toContain("Core-2");
     expect(r.output).toContain("运行时");
     expect(r.exitCode).toBe(0);
   });
@@ -68,7 +68,7 @@ describe("cortex version", () => {
     ok(r);
     expect(r.data).toBeDefined();
     const data = r.data as Record<string, string>;
-    expect(data.version).toContain("Core-1");
+    expect(data.version).toContain("Core-2");
     expect(data.runtime).toContain("Node.js");
     expect(data.platform).toBeDefined();
   });
@@ -369,11 +369,11 @@ describe("CLI 常量", () => {
     expect(CORTEX_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  it("版本 handler text 格式包含 Core-1 标识", async () => {
+  it("版本 handler text 格式包含 Core-2 标识", async () => {
     const handler = createVersionHandler();
     const r = await handler([], {}, defaultCtx());
     ok(r);
-    expect(r.output).toContain("Core-1");
+    expect(r.output).toContain("Core-2");
     expect(r.output).toContain("cortex v");
   });
 

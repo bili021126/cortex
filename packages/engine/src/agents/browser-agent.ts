@@ -3,7 +3,7 @@ import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
 import type { AgentPool } from "@cortex/scheduler";
-import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
+import { createAgent, type AgentFactoryConfig } from "../execution/agent-factory.js";
 import { BROWSER_DEFAULT_VIEWPORT } from "@cortex/config";
 import { chromium, type Browser, type Page } from "playwright";
 import { BUILTIN_BROWSER_ACTIONS, buildBrowserDoHandler, type BrowserActionDef } from "./browser-actions.js";

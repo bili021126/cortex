@@ -87,7 +87,7 @@ function _styleIsolation(speaker: SpeakerDef, hasHistory: boolean, input?: strin
 export async function* multiSpeakerLoop(
   p: MultiSpeakerParams,
 ): AsyncGenerator<TuiEvent, string[], void> {
-  const { input, speakers, bridge, history, maxRounds = 3 } = p;
+  const { input, speakers, bridge, history, maxRounds = 2 } = p;
   const chatModel = bridge.getChatModelName() || "deepseek-v4-flash";
   const outputs: string[] = [];
   const localHistory: LlmMessage[] = history ? [...history] : [];
@@ -95,6 +95,7 @@ export async function* multiSpeakerLoop(
   let round = 0;
   const allSpoke = new Set<string>();
 
+  // 三人模式退出逻辑：所有发言者各说一轮即结束
   while (round < maxRounds && allSpoke.size < speakers.length) {
     for (const speaker of speakers) {
       if (allSpoke.has(speaker.agent)) continue;

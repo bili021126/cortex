@@ -42,6 +42,8 @@ export interface ToolMeta {
   level?: ReversibilityLevel;
   parameters?: Record<string, unknown>;
   required?: string[];
+  /** 工具使用约束——按 Agent 类型声明 */
+  constraint?: Record<string, string>;
 }
 
 /**
@@ -70,6 +72,8 @@ export class Toolkit {
   private readonly config: Required<EngineConfig>;
   /** JSON 注入的元数据覆盖（cortex-agents.json / tools.json 工具域） */
   private _toolMeta: Record<string, ToolMeta> = {};
+  /** 工具使用约束——按工具名 → Agent 类型 → 约束文本 */
+  private _constraints = new Map<string, Record<string, string>>();
   /** 多源搜索聚合器 (默认仅 DDG) */
   private _aggregator: SearchAggregator;
   /** 可观测事件管道 */
@@ -109,6 +113,12 @@ export class Toolkit {
   /** 注入工具元数据覆盖（从 cortex-agents.json "tools" 域加载） */
   setToolMeta(meta: Record<string, ToolMeta>): void {
     this._toolMeta = meta;
+    // 从元数据中提取约束
+    for (const [toolName, tMeta] of Object.entries(meta)) {
+      if (tMeta.constraint) {
+        this._constraints.set(toolName, tMeta.constraint);
+      }
+    }
   }
 
   /** 设置工作区根目录，所有文件操作路径将以此为沙箱根目录 */
@@ -226,6 +236,8 @@ export class Toolkit {
 
     // ── ConfirmGate 拦截 ──
     const level = this.reversibilityOf(inv.toolName);
+    // 填充信任分记录——needsConfirmation 依赖此数据做自动放行
+    (this.gate as any)?.check?.(level, { agentType: callerType, toolName: inv.toolName });
     if (this.gate?.needsConfirmation(level, { agentType: callerType, toolName: inv.toolName })) {
       const reqId = this.gate.request({
         id: `confirm-${inv.toolName}-${Date.now()}`,
@@ -257,6 +269,12 @@ export class Toolkit {
         return { success: false, error: `File locked: ${filePath}` };
       }
       try {
+        if (inv.toolName === "write_file") {
+          const fp = inv.params.file_path as string;
+          let resolvedPath: string;
+          try { resolvedPath = this._resolvePath(fp); } catch { resolvedPath = "(resolve failed)"; }
+          console.log(`[TRACE write_file] toolkit.execute: workspaceRoot=${this.workspaceRoot} resolvedPath=${resolvedPath}`);
+        }
         const result = await tool.execute(inv.params);
         this.lockManager.release(filePath, "toolkit");
         return result;
@@ -264,6 +282,13 @@ export class Toolkit {
         this.lockManager.release(filePath, "toolkit");
         return { success: false, error: String(e) };
       }
+    }
+
+    if (inv.toolName === "write_file") {
+      const fp = inv.params.file_path as string;
+      let resolvedPath: string;
+      try { resolvedPath = this._resolvePath(fp); } catch { resolvedPath = "(resolve failed)"; }
+      console.log(`[TRACE write_file] toolkit.execute: workspaceRoot=${this.workspaceRoot} resolvedPath=${resolvedPath}`);
     }
 
     try {
@@ -293,6 +318,14 @@ export class Toolkit {
           parameters: override?.parameters ?? tool.parameters,
         };
       });
+  }
+
+  /**
+   * 获取工具对指定 Agent 类型的使用约束。
+   * 约束文本将注入 system prompt 中指导 Agent 行为。
+   */
+  getConstraint(toolName: string, agentType: string): string | undefined {
+    return this._constraints.get(toolName)?.[agentType];
   }
 
   /** 获取工具的可逆性等级（JSON 覆盖优先，其次 Tool 内置） */

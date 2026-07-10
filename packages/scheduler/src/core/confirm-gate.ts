@@ -1,5 +1,33 @@
-import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS } from "@cortex/config";
+import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, isTestEnv, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3 } from "@cortex/config";
+
+// ─── 信任分模型（内联实现——镜像 @cortex/engine/agents/confirm-gate-agent）───
+// 因 scheduler → engine 系反向引用（环形依赖），纯函数内联于此。
+// 同步更新时需与 engine 源保持一致的评分公式。
+
+interface TrustRecord {
+  agentType: string;
+  toolName: string;
+  success: boolean;
+  riskLevel: "L0" | "L1" | "L2" | "L3";
+  timestamp: number;
+}
+
+function computeTrustScore(records: TrustRecord[]): number {
+  if (records.length === 0) return 50;
+  let score = 50;
+  for (const r of records.slice(-20)) {
+    if (r.success) score += 0.5;
+    else score -= r.riskLevel === "L3" ? 15 : r.riskLevel === "L2" ? 8 : 3;
+  }
+  return Math.max(0, Math.min(100, score));
+}
+
+function shouldAutoApprove(score: number, riskLevel: string): boolean {
+  if (riskLevel === "L0" || riskLevel === "L1") return true;
+  if (riskLevel === "L2") return score >= TRUST_AUTO_APPROVE_L2;
+  return score >= TRUST_AUTO_APPROVE_L3;
+}
 
 /**
  * 默认确认超时（毫秒）。
@@ -22,6 +50,7 @@ class ConfirmGateDisposedError extends Error {
  * ConfirmGate —— 确认门
  * 基于可逆性等级拦截工具调用。L2/L3 永远确认，L1 视信任放行。
  * 用户交互通道由 PlatformBridge 提供（CLIAdapter / ElectronAdapter）。
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
  */
 export class ConfirmGate {
   private pending = new Map<string, ConfirmationRequest>();
@@ -35,6 +64,8 @@ export class ConfirmGate {
   private trustModel?: ITrustModel;
   private defaultTimeoutMs: number;
   private _observer?: IPipelineObserver;
+  /** 信任分历史记录——供 check() 方法做动态决策 */
+  private _trustRecordsByAgent = new Map<string, TrustRecord[]>();
 
   /**
    * @param timeoutMs  默认确认超时（毫秒）。不传时依次回退：
@@ -53,9 +84,51 @@ export class ConfirmGate {
 
   /** 测试模式：跳过所有确认，5 分钟后自动过期。仅限 bootstrap 显式调用。生产环境调用将抛错。 */
   bypassAll(): void {
+    if (!isTestEnv()) {
+      throw new Error("bypassAll() 仅限 E2E 测试环境使用");
+    }
     this._explicitBypass = true;
     this._bypass = true;
     this._bypassExpiresAt = Date.now() + ConfirmGate.BYPASS_TTL_MS;
+  }
+
+  /**
+   * 信任分驱动的确认检查——替代纯静态 L0-L3 逻辑。
+   * 信任分 ≥ 阈值则自动放行，否则回退到 needsConfirmation。
+   */
+  check(
+    level: ReversibilityLevel,
+    trustContext?: { agentType: AgentType; toolName: string },
+  ): { approved: boolean; reason: string; score?: number } {
+    const agentKey = trustContext?.agentType ?? "unknown";
+    let records = this._trustRecordsByAgent.get(agentKey);
+    if (!records) {
+      records = [];
+      this._trustRecordsByAgent.set(agentKey, records);
+    }
+    const score = computeTrustScore(records);
+    if (shouldAutoApprove(score, level)) {
+      records.push({
+        agentType: trustContext?.agentType ?? "unknown",
+        toolName: trustContext?.toolName ?? "unknown",
+        success: true,
+        riskLevel: level,
+        timestamp: Date.now(),
+      });
+      console.log(`[telemetry] gate.trust_auto tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level} score=${score}`);
+      return { approved: true, reason: "trust auto", score };
+    }
+    // 回退到现有 needsConfirmation 逻辑
+    const needsConfirm = this.needsConfirmation(level, trustContext);
+    const approved = !needsConfirm;
+    records.push({
+      agentType: trustContext?.agentType ?? "unknown",
+      toolName: trustContext?.toolName ?? "unknown",
+      success: approved,
+      riskLevel: level,
+      timestamp: Date.now(),
+    });
+    return { approved, reason: needsConfirm ? "manual confirm" : "low risk", score };
   }
 
   /** 是否处于显式 bypass 模式（仅由 bypassAll 设置，不接受环境变量） */
@@ -77,18 +150,46 @@ export class ConfirmGate {
     level: ReversibilityLevel,
     trustContext?: { agentType: AgentType; toolName: string },
   ): boolean {
-    if (this._bypass && Date.now() < this._bypassExpiresAt) return false;
+    // 自激活信任分记录——防御性填充，确保独立调用 needsConfirmation 时数据已就绪
+    if (trustContext) {
+      const key = trustContext.agentType ?? "unknown";
+      if (!this._trustRecordsByAgent.has(key)) {
+        this._trustRecordsByAgent.set(key, []);
+      }
+    }
+
+    if (this._bypass && Date.now() < this._bypassExpiresAt) {
+      console.log(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      return false;
+    }
     if (this._bypass) this._bypass = false; // 过期后自动关闭
 
     // L0 永不确认
-    if (level === RL.L0) return false;
+    if (level === RL.L0) {
+      console.log(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      return false;
+    }
+
+    // trustScore 自动放行（信任分足够时跳过 L2/L3 确认）
+    if (this.trustModel && trustContext && level !== RL.L1) {
+      const records = this._trustRecordsByAgent.get(trustContext.agentType ?? "unknown") ?? [];
+      const score = computeTrustScore(records);
+      if ((level === "L2" && score >= TRUST_AUTO_APPROVE_L2) || (level === "L3" && score >= TRUST_AUTO_APPROVE_L3)) {
+        console.log(`[telemetry] gate.trust_auto_approve agent=${trustContext.agentType} score=${score} level=${level}`);
+        return false;
+      }
+    }
 
     // L2/L3 永远确认
-    if (level === RL.L2 || level === RL.L3) return true;
+    if (level === RL.L2 || level === RL.L3) {
+      console.log(`[telemetry] gate.verdict verdict=confirm tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      return true;
+    }
 
     // L1：信任模型判定
     if (!this.trustModel || !trustContext) {
       // 原则四 fail-open: TrustModel 离线时不阻断 L1 操作
+      console.log(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
       return false;
     }
     const trustLevel = this.trustModel.getTrustLevelForTool(
@@ -96,6 +197,8 @@ export class ConfirmGate {
       trustContext.toolName,
     );
 
+    const verdict = trustLevel < TL.L3 ? "confirm" : "approved";
+    console.log(`[telemetry] gate.verdict verdict=${verdict} tool=${trustContext.toolName} agent=${trustContext.agentType} risk=${level}`);
     // TrustLevel ≥ L3 → L1 免确认
     return trustLevel < TL.L3;
   }
@@ -240,11 +343,12 @@ export class ConfirmGate {
    * bypass 或 无 bridge 时默认放行，但 emit 告警以保证可观测。
    */
   async confirm(nodes: { id: string; payload: string }[]): Promise<boolean> {
-    if (this._bypass) return true;
+    if (this._bypass && Date.now() < this._bypassExpiresAt) return true;
     if (!this.bridge) {
       // 无 bridge 时 emit 告警——fail-open 是设计决策，但必须可观测
+      // 设计决策：无 bridge 时 fail-open（非阻塞场景优先可用性）。可观测性由 _emitNoBridgeWarning 补偿。
       this._emitNoBridgeWarning();
-      return true;
+      return true; // 设计决策：无 bridge 时 fail-open——CLI stdin 不可达场景。可观测性由 _emitNoBridgeWarning 补偿。
     }
 
     for (const node of nodes) {
@@ -260,8 +364,19 @@ export class ConfirmGate {
         if (!response.approved) {
           return false;
         }
-      } catch {
-        return true;
+      } catch (e) {
+        // 改为 fail-closed：bridge 不可用时默认拒绝，不是批准
+        this._observer?.emit({
+          type: PipelineEventType.InfraComponentDegraded,
+          priority: PipelinePriority.HIGH,
+          payload: {
+            operation: "confirm-gate",
+            detail: `bridge异常，fail-closed拒绝操作: ${e}`,
+          },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+        return false;
       }
     }
     return true;
@@ -275,12 +390,12 @@ export class ConfirmGate {
     const message = "ConfirmGate operating without bridge — fail-open mode";
     if (this._observer) {
       this._observer.emit({
-        type: "exec.node.delayed",
-        priority: 1, // NORMAL
-        payload: { nodeId: "confirm-gate", agentId: "", elapsed: 0, action: "wait", level: "warn", reason: message },
+        type: PipelineEventType.ExecNodeDelayed,
+        priority: PipelinePriority.NORMAL,
+        payload: { nodeId: "confirm-gate", agentId: "", elapsed: 0, action: "wait", level: "warn" },
         timestamp: Date.now(),
         notificationType: "WARNING",
-      } as any);
+      });
     } else {
       console.warn("[ConfirmGate] " + message);
     }

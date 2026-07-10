@@ -102,8 +102,11 @@ export async function* talkTrioMode(
     speakers: TALK_TRIO,
     bridge,
     history,
-    maxRounds: 1,
+    maxRounds: 2,  // 2轮：首轮每人一句→第二轮可回应彼此→自动退出
   }));
+
+  // 全部发言完成——输出退出提示
+  yield { type: "tool_result" as const, agent: AgentType.Butler, tool: "talk_trio_done", success: true, durationMs: 0 } as TuiEvent;
 
   const resultText = outputs
     .map((o, i) => `[${TALK_TRIO[i]?.label ?? "unknown"}] ${o}`)

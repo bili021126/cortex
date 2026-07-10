@@ -18,8 +18,8 @@ describe("D2: react-helper 已删除，react-loop 为唯一版本", () => {
     expect(fs.existsSync(helperPath)).toBe(false);
   });
 
-  it("components/react-loop.ts 存在且包含 runReActLoop", async () => {
-    const loopPath = path.resolve(__dirname, "../src/components/react-loop.ts");
+  it("execution/react-loop.ts 存在且包含 runReActLoop", async () => {
+    const loopPath = path.resolve(__dirname, "../src/execution/react-loop.ts");
     expect(fs.existsSync(loopPath)).toBe(true);
 
     const content = fs.readFileSync(loopPath, "utf-8");

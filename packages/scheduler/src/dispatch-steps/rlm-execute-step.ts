@@ -58,7 +58,10 @@ export class RlmExecuteStep implements IDispatchStep {
     const executeNode = node;
 
     // ── 判断是否需要 RLM 拆解 ──
+    const isRlmSubtask = executeNode.isRlmSubtask === true;
+    const prefStrategy = executeNode.preferredStrategy;
     if (!this._shouldAttemptDecompose(executeNode)) {
+      console.log(`[TRACE dispatch] RlmExecuteStep: agentType=${agentType} nodeId=${node.id} decision=directExecute reason=${isRlmSubtask ? 'isRlmSubtask' : (prefStrategy ? `preferredStrategy=${prefStrategy}` : 'shouldDecompose=false')}`);
       return await this._directExecute(ctx, agent, agentType, executeNode, routedModel);
     }
 

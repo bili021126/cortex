@@ -4,8 +4,8 @@
  *
  * 测试范围:
  * - AgentPool.getStatus() 单实例查询
- * - BaseAgent.status getter 委托到 AgentPool
- * - BaseAgent._setStatus() 走 Pool 写路径
+ * - createAgent().status getter 委托到 AgentPool
+ * - createAgent().wakeup() 走 Pool 写路径
  * - ButlerAgent.status getter 同样委托模式
  * - 无 Pool 时降级为 _localStatus（测试环境兼容）
  * - AgentPool.setStatus() 非法流转拒绝
@@ -14,26 +14,22 @@
  *
  * 测试数据用例:
  *   用例1: AgentPool.getStatus() 查询已注册实例状态
- *   用例2: BaseAgent.setPool() 后 status getter 委托到 Pool
- *   用例3: BaseAgent.wakeup() 通过 Pool 变更为 Awake
- *   用例4: BaseAgent.shutdown() 通过 Pool 变更为 Draining→Destroyed
- *   用例5: BaseAgent 无 Pool 时降级为 _localStatus
+ *   用例2: createAgent().setPool() 后 status getter 委托到 Pool
+ *   用例3: createAgent().wakeup() 通过 Pool 变更为 Awake
+ *   用例4: createAgent().shutdown() 通过 Pool 变更为 Draining→Destroyed
+ *   用例5: createAgent() 无 Pool 时降级为 _localStatus
  *   用例6: AgentPool.setStatus() 非法流转拒绝
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentPool, PipelineObserver, ManifoldGate } from "@cortex/scheduler";
-import { BaseAgent, ButlerAgent } from "@cortex/engine";
+import { ButlerAgent, createAgent } from "@cortex/engine";
 import { Toolkit } from "@cortex/platform";
 import type { TaskNode, NodeResult, AgentType as AT } from "@cortex/shared";
 import { AgentType, AgentStatus as AS } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
-// 测试用具体 Agent 子类
-class TestAgent extends BaseAgent {
-  readonly type = AgentType.Code;
-  readonly systemPrompt = "test";
-}
+// 测试用 Agent —— 由 createAgent() 工厂创建
 
 describe("AgentPool 状态所有权 (方案B)", () => {
   let pool: AgentPool;
@@ -59,8 +55,9 @@ describe("AgentPool 状态所有权 (方案B)", () => {
 
   // ─── 用例2: status getter 委托 Pool ────────────────
 
-  it("用例2: BaseAgent.setPool() 后 status getter 委托到 Pool", () => {
-    const agent = new TestAgent(
+  it("用例2: createAgent().setPool() 后 status getter 委托到 Pool", () => {
+    const agent = createAgent(
+      { type: AgentType.Code, systemPrompt: "test" },
       {} as LlmAdapter,
       {} as Toolkit,
     );
@@ -82,8 +79,9 @@ describe("AgentPool 状态所有权 (方案B)", () => {
 
   // ─── 用例3: wakeup() 走 Pool ──────────────────────
 
-  it("用例3: BaseAgent.wakeup() 通过 Pool.setStatus() 变更为 Awake", () => {
-    const agent = new TestAgent(
+  it("用例3: createAgent().wakeup() 通过 Pool.setStatus() 变更为 Awake", () => {
+    const agent = createAgent(
+      { type: AgentType.Code, systemPrompt: "test" },
       {} as LlmAdapter,
       {} as Toolkit,
     );
@@ -101,8 +99,9 @@ describe("AgentPool 状态所有权 (方案B)", () => {
 
   // ─── 用例4: shutdown() 走 Pool ────────────────────
 
-  it("用例4: BaseAgent.shutdown() 通过 Pool 变更 Draining→Destroyed", async () => {
-    const agent = new TestAgent(
+  it("用例4: createAgent().shutdown() 通过 Pool 变更 Draining→Destroyed", async () => {
+    const agent = createAgent(
+      { type: AgentType.Code, systemPrompt: "test" },
       {} as LlmAdapter,
       {} as Toolkit,
     );
@@ -121,8 +120,9 @@ describe("AgentPool 状态所有权 (方案B)", () => {
 
   // ─── 用例5: 无 Pool 降级 _localStatus ────────────
 
-  it("用例5: BaseAgent 无 Pool 时降级为 _localStatus（测试环境兼容）", () => {
-    const agent = new TestAgent(
+  it("用例5: createAgent() 无 Pool 时降级为 _localStatus（测试环境兼容）", () => {
+    const agent = createAgent(
+      { type: AgentType.Code, systemPrompt: "test" },
       {} as LlmAdapter,
       {} as Toolkit,
     );
@@ -132,9 +132,6 @@ describe("AgentPool 状态所有权 (方案B)", () => {
 
     agent.wakeup();
     expect(agent.status).toBe(AS.Awake);
-
-    // 无 Pool 时仍可正常读写 _localStatus（已迁移至 PoolAwareState）
-    expect((agent as any)._state._localStatus).toBe(AS.Awake);
   });
 
   // ─── 用例6: 非法流转拒绝 ─────────────────────────

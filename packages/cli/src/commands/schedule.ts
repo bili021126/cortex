@@ -9,8 +9,7 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import { isHelpRequest } from "../utils.js";
-import type { ICortexApi, Tag, TaskNode } from "@cortex/shared";
-import type { ITaskBoard, IScheduler } from "@cortex/scheduler";
+import type { ICortexTask, Tag, TaskNode } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -31,7 +30,7 @@ const SCHEDULE_HELP = [
   "  --verbose, -v         显示详细信息",
 ].join("\n");
 
-export function createScheduleHandler(bridge: ICortexApi): CommandHandler {
+export function createScheduleHandler(bridge: ICortexTask): CommandHandler {
   const handler: CommandHandler = async (args, options, context): Promise<CommandResult> => {
     if (isHelpRequest(args)) {
       return { success: true, output: SCHEDULE_HELP, exitCode: 0 };
@@ -115,42 +114,33 @@ function handleSchedulePlan(
   return { success: true, data: planOutput, output: _formatPlanOutput(planOutput, options), exitCode: 0 };
 }
 
-/** 从计划数据批量添加任务节点到看板 */
-function _addTaskNodesFromPlan(board: ITaskBoard, plan: { tasks?: Array<Record<string, unknown>> }): void {
-  if (!plan.tasks) return;
-  for (let i = 0; i < plan.tasks.length; i++) {
-    const t = plan.tasks[i]!;
-    board.addNode({
-      id: (t.id as string | undefined) ?? `sched-${Date.now()}-${i}`,
-      type: (t.type as string) ?? "analysis",
-      tags: (t.tags ?? ["analysis"]) as Tag[],
-      needsMultiPerspective: false,
-      status: "pending",
-      claimedBy: [],
-      payload: (t.payload as string) ?? "",
-      results: [],
-      createdAt: Date.now(),
-    });
-  }
-}
-
 async function handleScheduleRun(
-  bridge: ICortexApi,
+  bridge: ICortexTask,
   planPath: string | undefined,
 ): Promise<CommandResult> {
   if (!planPath) {
     return { success: false, error: "请指定计划文件。用法: cortex schedule run <plan>", exitCode: 1 };
   }
 
-  const board = await bridge.getTaskBoard() as ITaskBoard;
-  const scheduler = await bridge.getScheduler() as IScheduler;
-
   try {
     const content = fs.readFileSync(path.resolve(planPath), "utf-8");
     const plan = JSON.parse(content) as { tasks?: Array<Record<string, unknown>> };
-    _addTaskNodesFromPlan(board, plan);
 
-    const report = await scheduler.executeAll();
+    for (const [i, t] of (plan.tasks ?? []).entries()) {
+      await bridge.submitTask({
+        id: (t.id as string | undefined) ?? `sched-${Date.now()}-${i}`,
+        type: (t.type as string) ?? "analysis",
+        tags: (t.tags ?? ["analysis"]) as Tag[],
+        needsMultiPerspective: false,
+        status: "pending" as const,
+        claimedBy: [],
+        payload: (t.payload as string) ?? "",
+        results: [],
+        createdAt: Date.now(),
+      });
+    }
+
+    const report = await bridge.executeAll();
     return {
       success: report.completed > 0,
       output: `调度执行完成: ${report.completed}/${report.totalNodes} 成功`,
@@ -163,38 +153,10 @@ async function handleScheduleRun(
   }
 }
 
-/** 计算任务板状态统计 */
-function _computeTaskBoardStatus(allNodes: TaskNode[], pendingNodes: TaskNode[]) {
-  return {
-    total: allNodes.length,
-    pending: pendingNodes.length,
-    active: allNodes.filter((n) => n.status === "claimed" || n.status === "running").length,
-    done: allNodes.filter((n) => n.status === "done").length,
-    failed: allNodes.filter((n) => n.status === "failed").length,
-  };
-}
-
-async function handleScheduleStatus(bridge: ICortexApi): Promise<CommandResult> {
-  const board = await bridge.getTaskBoard() as ITaskBoard;
-  const allNodes = board.getAllNodes();
-  const pendingNodes = board.getPendingNodes();
-  const status = _computeTaskBoardStatus(allNodes, pendingNodes);
-
-  if (pendingNodes.length === 0) {
-    return { success: true, data: { taskBoard: status }, output: "调度系统: 空闲（无待处理任务）", exitCode: 0 };
-  }
-
+async function handleScheduleStatus(_bridge: ICortexTask): Promise<CommandResult> {
   return {
     success: true,
-    data: { taskBoard: status },
-    output: [
-      `调度系统状态:`,
-      `  任务板: ${status.total} 总任务`,
-      `    ${status.pending} 待处理`,
-      `    ${status.active} 执行中`,
-      `    ${status.done} 已完成`,
-      `    ${status.failed} 失败`,
-    ].join("\n"),
+    output: "调度系统状态：请用 cortex task list 查看任务状态",
     exitCode: 0,
   };
 }

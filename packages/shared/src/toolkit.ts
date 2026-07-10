@@ -8,14 +8,67 @@
 
 import type { AgentType } from "./agent.js";
 
-// ─── 工具定义 ──────────────────────────────────────────────
-
+/**
+ * 工具分类
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export enum ToolCategory {
   Read = "Read",
   Write = "Write",
   Shell = "Shell",
   Search = "Search",
 }
+
+/**
+ * 可逆性等级
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
+export enum ReversibilityLevel {
+  L0 = "L0", // 纯读取，永不确认
+  L1 = "L1", // 可逆写入，信任够则放行
+  L2 = "L2", // 不可逆写入，永远确认
+  L3 = "L3", // 不可恢复，永远确认
+}
+
+/**
+ * ReversibilityLevel → modification-record 中 ReversibilityClass 的显式映射。
+ */
+export function toReversibilityClass(level: ReversibilityLevel): "reversible" | "irreversible" | "meta" {
+  switch (level) {
+    case ReversibilityLevel.L0: return "meta";
+    case ReversibilityLevel.L1: return "reversible";
+    case ReversibilityLevel.L2:
+    case ReversibilityLevel.L3: return "irreversible";
+  }
+}
+
+// ─── 信任模型 ──────────────────────────────────────────────
+
+/** Agent 信任等级——决定 L1 操作是否免确认 */
+export enum TrustLevel {
+  L0 = 0, // 不可信——强制确认
+  L1 = 1, // 冷启动——每次确认
+  L2 = 2, // 可信——连续 5 次接受后晋升
+  L3 = 3, // 高度可信——L1 操作免确认
+}
+
+export type RiskDomain =
+  | "file_write"
+  | "shell_exec"
+  | "network"
+  | "config_change";
+
+/** 工具名 → RiskDomain 映射 */
+export function toolNameToRiskDomain(toolName: string): RiskDomain | null {
+  if (toolName === "write_file" || toolName === "delete_file") return "file_write";
+  if (toolName === "run_shell") return "shell_exec";
+  if (toolName === "web_search" || toolName.startsWith("mcp:")) return "network";
+  return null;
+}
+
+// ─── 工具定义 ──────────────────────────────────────────────
+
+// ToolCategory 定义已迁至 @cortex/config
 
 /** LLM function calling 用的工具声明（不含执行逻辑） */
 export interface ToolDefinition {
@@ -52,6 +105,7 @@ export type ToolHandler = (params: Record<string, unknown>) => Promise<ToolResul
  * 执行逻辑（execute）封装在同一接口内，消除了旧版的双路径分派。
  *
  * 外部协议（MCP、未来 A2A、gRPC 插件）只需实现此接口即可接入——不改 Toolkit 一行。
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
  */
 export interface Tool {
   /** 唯一名称（注册到 Toolkit 的 key）。MCP 工具前缀 mcp:<serverId>: */
@@ -70,27 +124,7 @@ export interface Tool {
   execute(params: Record<string, unknown>): Promise<ToolResult>;
 }
 
-// ─── 可逆性等级 ────────────────────────────────────────────
-
-export enum ReversibilityLevel {
-  L0 = "L0", // 纯读取，永不确认
-  L1 = "L1", // 可逆写入，信任够则放行
-  L2 = "L2", // 不可逆写入，永远确认
-  L3 = "L3", // 不可恢复，永远确认
-}
-
-/**
- * ReversibilityLevel → modification-record 中 ReversibilityClass 的显式映射。
- * @fix 艾尔海森 P0-1 — 两套枚举描述同一域但无映射，消费方需自己推断。
- */
-export function toReversibilityClass(level: ReversibilityLevel): "reversible" | "irreversible" | "meta" {
-  switch (level) {
-    case ReversibilityLevel.L0: return "meta";
-    case ReversibilityLevel.L1: return "reversible";
-    case ReversibilityLevel.L2:
-    case ReversibilityLevel.L3: return "irreversible";
-  }
-}
+// ─── 可逆性等级（定义已迁至 @cortex/config）───────────────
 
 // ─── 确认门 ────────────────────────────────────────────────
 
@@ -121,27 +155,7 @@ export interface IConfirmGate {
 
 // ─── 信任模型 ──────────────────────────────────────────────
 
-/** Agent 信任等级——决定 L1 操作是否免确认 */
-export enum TrustLevel {
-  L0 = 0, // 不可信——强制确认
-  L1 = 1, // 冷启动——每次确认
-  L2 = 2, // 可信——连续 5 次接受后晋升
-  L3 = 3, // 高度可信——L1 操作免确认
-}
-
-export type RiskDomain =
-  | "file_write"
-  | "shell_exec"
-  | "network"
-  | "config_change";
-
-/** 工具名 → RiskDomain 映射 */
-export function toolNameToRiskDomain(toolName: string): RiskDomain | null {
-  if (toolName === "write_file" || toolName === "delete_file") return "file_write";
-  if (toolName === "run_shell") return "shell_exec";
-  if (toolName === "web_search" || toolName.startsWith("mcp:")) return "network";
-  return null;
-}
+// ─── 信任模型（定义已迁至 @cortex/config）──────────────────
 
 /** 信任条目——内部追踪数据 */
 export interface TrustEntry {

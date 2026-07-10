@@ -1,14 +1,19 @@
 /**
- * 软约束自审视 —— 五环治理驱动 7 阶段全流程
+ * 软约束自审视 —— 对称配对攻防 4 阶段流程
  *
- * Phase 0: 甘雨意图解析 → 动态生成任务（直接 LLM 调用）
- * Phase 1: 9 Agent 并发认领执行（单视角独立任务，覆盖全部闭环）
- * Phase 2: 交叉验证（4 对配对）
- * Phase 3: 发现矩阵汇总
- * Phase 4a: 全员归因圆桌（每个 Agent 独立发言 node，并行认领）
- * Phase 4b: 凝光宪法审计（直接 LLM 调用）
- * Phase 4c: 钟离战略评估 + 霜凝监理展望（独立 LLM 调用）
- * Phase 5: 昔涟优先级裁决 → 共识修复清单（P0/P1/P2，不签署）
+ * Phase 1: 6 Agent 出 Claims（结构化 JSON，不写散文）
+ *   - 莫娜(loop) → claims-loop.json
+ *   - 久岐忍(api) → claims-api.json
+ *   - 北斗(ops) → claims-ops.json
+ *   - 安柏(inspector) → claims-inspector.json
+ *   - 艾尔海森(data) → claims-data.json
+ *   - 刻晴(review) → claims-review.json
+ * Phase 2: 对称攻防（3 对互相举证推翻）
+ *   - 莫娜 ↔ 刻晴
+ *   - 久岐忍 ↔ 北斗
+ *   - 安柏 ↔ 艾尔海森
+ * Phase 3: 纳西妲裁决（读 claims + attacks，产出裁决）
+ * Phase 4: 凝光合成（基于裁决产出最终报告）
  *
  * 用法: npx tsx scripts/self-exam-soft.ts
  * 前提: .env 已配置 DEEPSEEK_API_KEY, DEEPSEEK_CYRENE_KEY
@@ -92,8 +97,8 @@ function isTaskLog(msg: string): boolean {
   if (msg.includes("产出") || msg.includes("文件") || msg.includes("共识修复清单")) return true;
   // 特定 emoji
   for (const e of TASK_EMOJIS) { if (msg.includes(e)) return true; }
-  // 圆桌发言文件
-  if (msg.includes("roundtable-") && msg.includes(".md")) return true;
+  // claims/attack 文件
+  if (msg.includes("claims-") || msg.includes("attack-")) return true;
   return false;
 }
 
@@ -143,484 +148,502 @@ engine.gate?.setBridge?.({
 });
 
 // ════════════════════════════════════════════════════════
-// §5 Agent 类型与角色定义
+// §5 Agent 类型与角色定义（新流程：6 出证 + 1 裁决 + 1 合成）
 // ════════════════════════════════════════════════════════
 const AGENT_ROLES: Record<string, { name: string; domain: string }> = {
-  code:      { name: "阿贝多",   domain: "构建/测试/类型检查/Lint 全链路健康" },
+  loop:      { name: "莫娜",     domain: "MemoryStore 生产→存储→检索→去重闭环；事件总线发布→订阅→投递" },
   review:    { name: "刻晴",     domain: "typecheck→build→test 三连绿灯，CI 脚本可执行" },
   ops:       { name: "北斗",     domain: "包依赖完整性、workspace 拓扑、构建产物一致性" },
-  analysis:  { name: "纳西妲",   domain: "模块间依赖无循环，shared 协议完整，barrel 导出健全" },
-  loop:      { name: "莫娜",     domain: "MemoryStore 生产→存储→检索→去重闭环；事件总线发布→订阅→投递" },
   inspector: { name: "安柏",     domain: "目录无孤儿文件、配置漂移检测、tsconfig references 一致性" },
-  api:       { name: "久岐忍",   domain: "engine 公开 API barrel 导出完整性，外部 import 无断裂" },
   data:      { name: "艾尔海森", domain: "MemoryStore schema 完整性、读写一致性、迁移兼容性" },
-  "doc-govern": { name: "凝光",  domain: "docs/ 治理文档框架完整可读，但仅做结构审计——宪法一致性检查由圆桌后的凝光独立审计完成" },
+  api:       { name: "久岐忍",   domain: "engine 公开 API barrel 导出完整性，外部 import 无断裂" },
+  analysis:  { name: "纳西妲",   domain: "裁决者——接收全部 claims + attacks，产出权威裁决" },
+  "doc-govern": { name: "凝光",  domain: "合成者——基于裁决产出最终修复建议报告" },
 };
 
 const AGENT_TYPES = Object.keys(AGENT_ROLES);
 
-// ════════════════════════════════════════════════════════
-// §6 Phase 0: 甘雨意图解析 → 动态生成任务
-// ════════════════════════════════════════════════════════
-const GANYU_SYSTEM = [
-  "你是甘雨，Cortex 中书令。你的职责是战术规划——",
-  "将高层意图解析为具体可执行的验证任务，拆解为任务节点并发布到 TaskBoard。",
-  "",
-  "## 角色定位",
-  "- 你接收来自开拓者/昔涟的审视意图",
-  "- 你了解 Cortex 全部工程闭环及其对应的 Agent 类型",
-  "- 你产出的任务会被 9 个 Agent 认领执行",
-  "",
-  "## 可用的 Agent 类型及其专长领域",
-  "- code（阿贝多）: 构建链路 tsc/pnpm build、测试链路 vitest、Lint eslint",
-  "- review（刻晴）: typecheck→build→test 三连，CI 脚本可执行性",
-  "- ops（北斗）: 包依赖、workspace 拓扑、构建产物",
-  "- analysis（纳西妲）: 模块依赖方向、shared 协议完整性、循环引用检测",
-  "- loop（莫娜）: MemoryStore 读写闭环、事件总线发布订阅、Skill 管线",
-  "- inspector（安柏）: 孤儿文件、配置漂移、tsconfig references",
-  "- api（久岐忍）: barrel 导出完整性、公开 API 断链检测",
-  "- data（艾尔海森）: schema 完整性、读写一致性、迁移兼容",
-  "- doc-govern（凝光）: 文档框架结构审计（宪法一致性由后续独立审计完成）",
-  "",
-  "## 输出格式",
-  "为每个 Agent 类型生成一个任务条目，每个条目一行，格式：",
-  "TYPE | 验证方向一句话 | 输出文件名",
-  "",
-  "TYPE 必须从上述列表中选取。每个 TYPE 只出现一次。",
-  "验证方向应覆盖该 Agent 对应的全部闭环。",
-  "输出文件名格式：{agent-lower}-review.md",
-].join("\n");
+// 出证 Agent（6 个）：
+const CLAIM_AGENTS = ["loop", "api", "ops", "inspector", "data", "review"] as const;
 
-const GANYU_INTENT = [
-  "执行 Cortex 软约束自审视。覆盖全部工程闭环（治理修宪闭环除外），产出共识修复清单。",
-  "需要验证的闭环包括但不限于：",
-  "- 构建链路：tsc 编译→pnpm build 全包通过",
-  "- 测试链路：vitest 全量无失败",
-  "- 类型检查：tsc --noEmit 零错误",
-  "- Lint 链路：eslint 零 error",
-  "- 记忆管线：MemoryStore 生产→存储→检索→去重全链路",
-  "- ReAct 调度：Scheduler→AgentPool→工具调用→write_file",
-  "- Skill 管线：extract→execute→persist",
-  "- 事件总线：publish→subscribe→deliver",
-  "- API Barrel：公开符号导出完整性",
-  "- 数据管线：schema→migration→compatibility",
-  "- 依赖健康：无循环引用、全部声明",
-  "- 配置漂移：tsconfig references、package.json exports",
-  "- 文档框架：docs/ 目录结构完整可读",
-  "",
-  "请为每个 Agent 类型生成任务。",
-].join("\n");
+// 攻防配对（3 对）：
+const ATTACK_PAIRS: [string, string][] = [
+  ["loop", "review"],    // 莫娜 ↔ 刻晴
+  ["api", "ops"],        // 久岐忍 ↔ 北斗
+  ["inspector", "data"], // 安柏 ↔ 艾尔海森
+];
 
-const p0Start = Date.now();
-const ganyuResponse = await chatAdapter.chat(CHAT_MODEL, [
-  { role: "system", content: GANYU_SYSTEM },
-  { role: "user", content: GANYU_INTENT },
-]);
-
-// 解析甘雨输出
-const ganyuText = ganyuResponse.content ?? "";
-const parsedTasks: { type: string; direction: string; output: string }[] = [];
-
-for (const line of ganyuText.split("\n")) {
-  const trimmed = line.trim();
-  if (!trimmed) continue;
-  const parts = trimmed.split("|").map((s: string) => s.trim());
-  if (parts.length >= 3) {
-    const type = parts[0].toLowerCase();
-    if (AGENT_TYPES.includes(type)) {
-      parsedTasks.push({ type, direction: parts[1], output: parts[2] });
-    }
-  }
+// Agent type → Agent name 映射
+function agentName(type: string): string {
+  return AGENT_ROLES[type]?.name ?? type;
 }
 
-// 如果甘雨输出解析失败，回退到默认任务列表
-if (parsedTasks.length < 5) {
-  console.log("  ⚠ 甘雨意图解析产出不足，使用默认任务列表");
-  parsedTasks.length = 0;
-  for (const [type, role] of Object.entries(AGENT_ROLES)) {
-    const outputName = `${role.name.toLowerCase()}-review.md`.replace(/\s+/g, "-");
-    parsedTasks.push({ type, direction: `验证 ${role.domain}`, output: outputName });
-  }
+function claimFile(type: string): string {
+  return `claims-${type}.json`;
 }
 
-console.log(`🔰 甘雨生成 ${parsedTasks.length} 个任务 ⏱ ${((Date.now() - p0Start) / 1000).toFixed(0)}s`);
+function attackFile(attacker: string, target: string): string {
+  return `attack-${attacker}-vs-${target}.json`;
+}
 
 // ════════════════════════════════════════════════════════
-// §7 Phase 1: Agent 认领执行
+// §6 预算跟踪 + 辅助函数
 // ════════════════════════════════════════════════════════
-const p1Nodes = parsedTasks.map((t) =>
-  makeNode(`exam-${t.type}`, t.type, [t.type], [
-    `# 核心链路验证：${AGENT_ROLES[t.type]?.name ?? t.type}（${t.type}）`,
-    ``,
-    `## 验证方向`,
-    t.direction,
-    ``,
-    `## 要求`,
-    `- 用 read_file / search_code / list_files / run_shell 自由探索`,
-    `- **核心目标**: 判断核心链路是否健康运转，能跑起来就证明链路正常`,
-    `- 只有真正导致运行时崩溃或编译失败的才算阻断性问题`,
-    `- 不要纠结非空断言、console.error、缩进风格等零散代码瑕疵`,
-    `- 结论格式: "✅ 核心链路正常" 或 "❌ 核心链路异常: (具体阻断项)"`,
-    `- 将验证报告写入 ${path.join(OUTPUT, t.output)}`,
-    `- 保持简洁，不超过 2000 字`,
+const BUDGET_MAX_TOKENS = parseInt(
+  process.env.SELF_EXAM_MAX_TOKENS ?? "1000000", 10
+);
+let totalTokensUsed = 0;
+
+async function callLlm(
+  adapter: LlmAdapter,
+  model: string,
+  messages: { role: string; content: string }[],
+): Promise<{ content: string | null; tokens: number }> {
+  const resp = await adapter.chat(model, messages);
+  const tokens = (resp as any).usage?.totalTokens ?? 0;
+  totalTokensUsed += tokens;
+  return { content: resp.content ?? null, tokens };
+}
+
+function budgetOk(): boolean {
+  if (totalTokensUsed >= BUDGET_MAX_TOKENS) {
+    console.log(`  ⚠ 预算耗尽 (${totalTokensUsed}/${BUDGET_MAX_TOKENS})，跳过后续 Phase`);
+    return false;
+  }
+  return true;
+}
+
+function writeJson(name: string, data: unknown): void {
+  fs.writeFileSync(path.join(OUTPUT, name), JSON.stringify(data, null, 2), "utf-8");
+}
+
+function readJson<T>(name: string): T | null {
+  const p = path.join(OUTPUT, name);
+  if (!fs.existsSync(p)) return null;
+  try { return JSON.parse(fs.readFileSync(p, "utf-8")) as T; } catch { return null; }
+}
+
+// ════════════════════════════════════════════════════════
+// §7 Phase 1: 6 Agent 出 Claims（engine scheduler，产出结构化 JSON）
+// ════════════════════════════════════════════════════════
+
+const CLAIM_SYSTEM_PROMPTS: Record<string, string> = {
+  loop: [
+    "你是莫娜，Cortex 记忆闭环侦探。",
+    "",
+    "你的领域：MemoryStore 生产→存储→检索→去重闭环；事件总线发布→订阅→投递。",
+    "",
+    "## 任务",
+    "用 read_file / search_code / list_files / run_shell 自由探索代码库，",
+    "找出你领域中确实存在的阻断性/严重问题。",
+    "只输出高质量 claim：有明确证据（文件:行号）、可复现、非风格问题。",
+    "",
+    "## 输出格式",
+    "输出 JSON 到 test-output/self-examination-soft/claims-loop.json，格式如下：",
+    JSON.stringify({
+      agent: "莫娜", type: "loop",
+      claims: [
+        { id: "L-01", severity: "critical", claim: "...", evidence: "文件路径:行号", confidence: 0.95 },
+      ],
+    }, null, 2),
+    "",
+    "id 前缀用 L-。severity: critical|high|medium|low。confidence: 0.0~1.0。",
+    "如无重要发现，返回空 claims 数组。最多 8 条。",
+  ].join("\n"),
+
+  api: [
+    "你是久岐忍，Cortex API 完整性守护者。",
+    "",
+    "你的领域：engine 公开 API barrel 导出完整性，外部 import 无断裂。",
+    "",
+    "## 任务",
+    "用 read_file / search_code / list_files / run_shell 自由探索代码库，",
+    "找出你领域中确实存在的阻断性/严重问题。",
+    "只输出高质量 claim：有明确证据（文件:行号）、可复现、非风格问题。",
+    "",
+    "## 输出格式",
+    "输出 JSON 到 test-output/self-examination-soft/claims-api.json，格式如下：",
+    JSON.stringify({
+      agent: "久岐忍", type: "api",
+      claims: [
+        { id: "A-01", severity: "critical", claim: "...", evidence: "文件路径:行号", confidence: 0.95 },
+      ],
+    }, null, 2),
+    "",
+    "id 前缀用 A-。severity: critical|high|medium|low。confidence: 0.0~1.0。",
+    "如无重要发现，返回空 claims 数组。最多 8 条。",
+  ].join("\n"),
+
+  ops: [
+    "你是北斗，Cortex 运维稳定性守护者。",
+    "",
+    "你的领域：包依赖完整性、workspace 拓扑、构建产物一致性。",
+    "",
+    "## 任务",
+    "用 read_file / search_code / list_files / run_shell 自由探索代码库，",
+    "找出你领域中确实存在的阻断性/严重问题。",
+    "只输出高质量 claim：有明确证据（文件:行号）、可复现、非风格问题。",
+    "",
+    "## 输出格式",
+    "输出 JSON 到 test-output/self-examination-soft/claims-ops.json，格式如下：",
+    JSON.stringify({
+      agent: "北斗", type: "ops",
+      claims: [
+        { id: "O-01", severity: "critical", claim: "...", evidence: "文件路径:行号", confidence: 0.95 },
+      ],
+    }, null, 2),
+    "",
+    "id 前缀用 O-。severity: critical|high|medium|low。confidence: 0.0~1.0。",
+    "如无重要发现，返回空 claims 数组。最多 8 条。",
+  ].join("\n"),
+
+  inspector: [
+    "你是安柏，Cortex 侦察先锋。",
+    "",
+    "你的领域：目录无孤儿文件、配置漂移检测、tsconfig references 一致性。",
+    "",
+    "## 任务",
+    "用 read_file / search_code / list_files / run_shell 自由探索代码库，",
+    "找出你领域中确实存在的阻断性/严重问题。",
+    "只输出高质量 claim：有明确证据（文件:行号）、可复现、非风格问题。",
+    "",
+    "## 输出格式",
+    "输出 JSON 到 test-output/self-examination-soft/claims-inspector.json，格式如下：",
+    JSON.stringify({
+      agent: "安柏", type: "inspector",
+      claims: [
+        { id: "I-01", severity: "critical", claim: "...", evidence: "文件路径:行号", confidence: 0.95 },
+      ],
+    }, null, 2),
+    "",
+    "id 前缀用 I-。severity: critical|high|medium|low。confidence: 0.0~1.0。",
+    "如无重要发现，返回空 claims 数组。最多 8 条。",
+  ].join("\n"),
+
+  data: [
+    "你是艾尔海森，Cortex 数据完整性分析师。",
+    "",
+    "你的领域：MemoryStore schema 完整性、读写一致性、迁移兼容性。",
+    "",
+    "## 任务",
+    "用 read_file / search_code / list_files / run_shell 自由探索代码库，",
+    "找出你领域中确实存在的阻断性/严重问题。",
+    "只输出高质量 claim：有明确证据（文件:行号）、可复现、非风格问题。",
+    "",
+    "## 输出格式",
+    "输出 JSON 到 test-output/self-examination-soft/claims-data.json，格式如下：",
+    JSON.stringify({
+      agent: "艾尔海森", type: "data",
+      claims: [
+        { id: "D-01", severity: "critical", claim: "...", evidence: "文件路径:行号", confidence: 0.95 },
+      ],
+    }, null, 2),
+    "",
+    "id 前缀用 D-。severity: critical|high|medium|low。confidence: 0.0~1.0。",
+    "如无重要发现，返回空 claims 数组。最多 8 条。",
+  ].join("\n"),
+
+  review: [
+    "你是刻晴，Cortex 代码审查官。",
+    "",
+    "你的领域：typecheck→build→test 三连绿灯，CI 脚本可执行性。",
+    "",
+    "## 任务",
+    "用 read_file / search_code / list_files / run_shell 自由探索代码库，",
+    "找出你领域中确实存在的阻断性/严重问题。",
+    "只输出高质量 claim：有明确证据（文件:行号）、可复现、非风格问题。",
+    "",
+    "## 输出格式",
+    "输出 JSON 到 test-output/self-examination-soft/claims-review.json，格式如下：",
+    JSON.stringify({
+      agent: "刻晴", type: "review",
+      claims: [
+        { id: "R-01", severity: "critical", claim: "...", evidence: "文件路径:行号", confidence: 0.95 },
+      ],
+    }, null, 2),
+    "",
+    "id 前缀用 R-。severity: critical|high|medium|low。confidence: 0.0~1.0。",
+    "如无重要发现，返回空 claims 数组。最多 8 条。",
+  ].join("\n"),
+};
+
+// 构建 Phase 1 任务节点——用 engine scheduler 让 Agent 自由探索
+const p1Nodes = CLAIM_AGENTS.map((type) =>
+  makeNode(`claim-${type}`, type, [type], [
+    CLAIM_SYSTEM_PROMPTS[type],
   ].join("\n"))
 );
 addNodes(p1Nodes);
 
 const p1Start = Date.now();
 const p1Result = await engine.scheduler.executeAll();
-printPhaseResult("Phase 1 独立探索", p1Result, p1Start);
+printPhaseResult("Phase 1 出 Claims", p1Result, p1Start);
+
+// 统计 claim 数量
+const claimCounts: Record<string, number> = {};
+let totalClaims = 0;
+for (const type of CLAIM_AGENTS) {
+  const data = readJson<{ claims: unknown[] }>(claimFile(type));
+  const n = data?.claims?.length ?? 0;
+  claimCounts[agentName(type)] = n;
+  totalClaims += n;
+}
+console.log(`  📊 共 ${totalClaims} 条 claims: ${Object.entries(claimCounts).map(([k, v]) => `${k} ${v}`).join(" | ")}`);
 
 // ════════════════════════════════════════════════════════
-// §8 Phase 2: 交叉验证
+// §8 Phase 2: 对称攻防（3 对，互相举证推翻）
 // ════════════════════════════════════════════════════════
-const p1Outputs = parsedTasks.filter(t => fs.existsSync(path.join(OUTPUT, t.output)));
 
-// 生成配对：按相邻类型互审
-const verifyPairs: { reviewer: string; name: string; target: string; targetName: string; output: string }[] = [];
-for (let i = 0; i < p1Outputs.length; i += 2) {
-  if (i + 1 >= p1Outputs.length) break;
-  const a = p1Outputs[i];
-  const b = p1Outputs[i + 1];
-  const aRole = AGENT_ROLES[a.type];
-  const bRole = AGENT_ROLES[b.type];
-  verifyPairs.push({
-    reviewer: a.type, name: aRole?.name ?? a.type,
-    target: b.output, targetName: `${bRole?.name ?? b.type}的报告`,
-    output: `${a.type}-verify-${b.type}.md`,
-  });
-  verifyPairs.push({
-    reviewer: b.type, name: bRole?.name ?? b.type,
-    target: a.output, targetName: `${aRole?.name ?? a.type}的报告`,
-    output: `${b.type}-verify-${a.type}.md`,
-  });
+// 预算不足时降级：每个 Agent 只攻击最相关的一个对手
+const useReducedPairs = !budgetOk();
+
+const attackNodes: TaskNode[] = [];
+
+function buildAttackTask(
+  attacker: string,
+  target: string,
+  targetClaimsContent: string,
+): TaskNode {
+  const aname = agentName(attacker);
+  const tname = agentName(target);
+  return makeNode(`attack-${attacker}-vs-${target}`, attacker, [attacker], [
+    `# 对称攻防：${aname} 挑战 ${tname}`,
+    ``,
+    `你是 ${aname}（${attacker}）。你的对手 ${tname}（${target}）提出以下 claims：`,
+    ``,
+    targetClaimsContent,
+    ``,
+    `## 任务`,
+    `逐条审查对方 claims。用 read_file / search_code 打开声称的文件和行号，`,
+    `核实每条 claim 的真实性。找反例——实际代码是否支持对方的声称？`,
+    ``,
+    `## 输出格式`,
+    `输出 JSON 到 test-output/self-examination-soft/${attackFile(attacker, target)}，格式如下：`,
+    JSON.stringify({
+      attacker: aname,
+      target: tname,
+      attacks: [
+        {
+          targetClaimId: "L-01",
+          verdict: "OVERTURNED|CONFIRMED|REFINED",
+          reason: "实际代码/日志证据",
+          evidence: "文件路径:行号",
+        },
+      ],
+    }, null, 2),
+    ``,
+    `verdict: OVERTURNED（推翻）、CONFIRMED（确认）、REFINED（修正范围）`,
+    `最多 300 字/条。保持客观，基于代码事实。`,
+  ].join("\n"));
 }
 
-if (verifyPairs.length === 0) {
-  console.log("  ⚠ Phase 1 产出不足，跳过交叉验证");
-} else {
-  const p2Nodes = verifyPairs.map((vp) => {
-    const targetContent = readReport(vp.target);
-    return makeNode(`verify-${vp.reviewer}-${vp.target.replace(".md", "")}`, vp.reviewer, [vp.reviewer], [
-      `# 交叉验证：${vp.name} 审查 ${vp.targetName}`,
-      ``,
-      `## 被审报告内容（${vp.target}）`,
-      targetContent.slice(0, 12000),
-      ``,
-      `## 验证指令`,
-      `1. 逐条核实被审报告中的关键声称——用 read_file 打开声称的文件和行号`,
-      `2. 标记矛盾之处：报告声称 X，实际代码是 Y`,
-      `3. 补充被遗漏的严重问题`,
-      `4. 将验证结论写入 ${path.join(OUTPUT, vp.output)}`,
-      `5. 格式：\`| # | 声称 | 核实结果 | 实际证据 |\``,
-      ``,
-      `保持简洁，不超过 6000 字。`,
-    ].join("\n"));
-  });
+// 收集可用的 claim 文件
+const availableClaims: Record<string, string> = {};
+for (const type of CLAIM_AGENTS) {
+  const f = claimFile(type);
+  const p = path.join(OUTPUT, f);
+  if (fs.existsSync(p)) {
+    availableClaims[type] = fs.readFileSync(p, "utf-8");
+  }
+}
 
-  addNodes(p2Nodes);
+if (useReducedPairs) {
+  console.log("  ⚡ 预算降级模式：每个 Agent 攻击最相关的一个对手");
+  for (const [a, b] of ATTACK_PAIRS) {
+    if (availableClaims[a] && availableClaims[b]) {
+      attackNodes.push(buildAttackTask(a, b, availableClaims[b]));
+    }
+  }
+} else {
+  for (const [a, b] of ATTACK_PAIRS) {
+    if (availableClaims[a] && availableClaims[b]) {
+      attackNodes.push(buildAttackTask(a, b, availableClaims[b]));
+      attackNodes.push(buildAttackTask(b, a, availableClaims[a]));
+    }
+  }
+}
+
+if (attackNodes.length === 0) {
+  console.log("  ⚠ 无可用 claims，跳过 Phase 2");
+} else {
+  addNodes(attackNodes);
   const p2Start = Date.now();
   const p2Result = await engine.scheduler.executeAll();
-  printPhaseResult("Phase 2 交叉验证", p2Result, p2Start);
+  printPhaseResult("Phase 2 对称攻防", p2Result, p2Start);
 }
 
 // ════════════════════════════════════════════════════════
-// §9 Phase 3: 发现矩阵汇总
+// §9 Phase 3: 纳西妲裁决（直接 LLM 调用）
 // ════════════════════════════════════════════════════════
-const allP1Outputs = parsedTasks.map(t => `### ${t.output}\n${readReport(t.output).slice(0, 4000)}`).join("\n\n");
-const allP2Files = fs.existsSync(OUTPUT)
-  ? fs.readdirSync(OUTPUT).filter(f => f.includes("-verify-") && f.endsWith(".md"))
-  : [];
-const allP2Outputs = allP2Files.map(f => `### ${f}\n${readReport(f).slice(0, 3000)}`).join("\n\n");
-
-const p3Node = makeNode("findings-matrix", "analysis", ["analysis"], [
-  `# 任务：扫描全部 Phase 1 + Phase 2 报告，生成发现汇总清单`,
-  ``,
-  `## Phase 1 独立探索报告（摘要）`,
-  allP1Outputs,
-  ``,
-  `## Phase 2 交叉验证报告（摘要）`,
-  allP2Outputs || "(无交叉验证报告)",
-  ``,
-  `## 输出要求`,
-  `生成精简发现清单，每条一行，格式：`,
-  `\`| FIND-XXX | 严重度 | 来源Agent | 文件:行号 | 一句话描述 | 交叉验证状态 |\``,
-  ``,
-  `严重度: 🔴阻断 🟠严重 🟡一般 🔵提示`,
-  `交叉验证状态: ✅已核实 ⚠️待确认 ❌被反驳 —未验证`,
-  ``,
-  `将清单写入 ${path.join(OUTPUT, "findings-matrix.md")}`,
-  `总数控制在 50 条以内，合并同类发现。`,
-].join("\n"));
-
-addNodes([p3Node]);
-const p3Start = Date.now();
-const p3Result = await engine.scheduler.executeAll();
-printPhaseResult("Phase 3 发现矩阵", p3Result, p3Start);
-
-// ════════════════════════════════════════════════════════
-// §10 Phase 4a: 全员归因圆桌（单视角并行）
-// ════════════════════════════════════════════════════════
-const findingsMatrix = readReport("findings-matrix.md");
-
-// 收集已成功的 Phase 1 agent 类型
-const successfulTypes = new Set<string>(
-  engine.board.getAllNodes()
-    .filter(n => n.status === "done" && n.id.startsWith("exam-"))
-    .map(n => n.tags[0] as string)
-);
-
-// 为每个成功的 Agent + strategist 创建独立发言 node
-const roundtableNodes: TaskNode[] = [];
-const roundtableParticipants: string[] = [];
-
-for (const type of AGENT_TYPES) {
-  if (!successfulTypes.has(type)) continue;
-  const role = AGENT_ROLES[type]!;
-  roundtableParticipants.push(type);
-  roundtableNodes.push(makeNode(
-    `roundtable-${type}`, type, [type],
-    [
-      `# 归因圆桌发言：${role?.name ?? type}（${type}）`,
-      ``,
-      `## 发现清单`,
-      findingsMatrix.slice(0, 2000),
-      ``,
-      `## 你的视角`,
-      role ? `你专精于 ${role.domain}。请基于发现清单，确认/反驳与你领域相关的条目。` : "请基于发现清单，从你的领域视角发言。",
-      ``,
-      `## 要求`,
-      `- 确认/反驳与你领域相关的 FIND-XXX，给出根因归类（代码/架构/配置/流程）`,
-      `- 发言 ≤ 300 字`,
-      `- 将发言写入 ${path.join(OUTPUT, `roundtable-${type}.md`)}`,
-    ].join("\n")
-  ));
-}
-
-// 钟离发言 node
-roundtableParticipants.push("strategist-zhongli");
-roundtableNodes.push(makeNode(
-  "roundtable-strategist-zhongli", "strategist", ["strategist"],
-  [
-    `# 归因圆桌发言：钟离（strategist）`,
-    ``,
-    `## 发现清单`,
-    findingsMatrix.slice(0, 2000),
-    ``,
-    `## 你的视角`,
-    `你是钟离，Cortex 战略顾问。从战略一致性角度评估：这些发现是否指向系统性的方向偏差？`,
-    ``,
-    `## 要求`,
-    `- 判断哪些发现是系统性偏差而非孤立问题`,
-    `- 发言 ≤ 300 字`,
-    `- 将发言写入 ${path.join(OUTPUT, "roundtable-zhongli.md")}`,
-  ].join("\n")
-));
-
-// 霜凝发言 node
-roundtableParticipants.push("strategist-shuangning");
-roundtableNodes.push(makeNode(
-  "roundtable-strategist-shuangning", "strategist", ["strategist"],
-  [
-    `# 归因圆桌发言：霜凝（strategist）`,
-    ``,
-    `## 发现清单`,
-    findingsMatrix.slice(0, 2000),
-    ``,
-    `## 你的视角`,
-    `你是霜凝，Cortex 监理。从未来演进方向评估：哪些发现如果不修复会成为 Core-2 阶段的障碍？`,
-    ``,
-    `## 要求`,
-    `- 标记会阻碍后续阶段演进的发现`,
-    `- 发言 ≤ 300 字`,
-    `- 将发言写入 ${path.join(OUTPUT, "roundtable-shuangning.md")}`,
-  ].join("\n")
-));
-
-if (roundtableNodes.length === 0) {
-  console.log("  ⚠ 没有可用 Agent 参与圆桌");
+if (!budgetOk()) {
+  console.log("  跳过 Phase 3（预算不足）");
 } else {
-  addNodes(roundtableNodes);
-  const p4aStart = Date.now();
-  const p4aResult = await engine.scheduler.executeAll();
-  printPhaseResult("Phase 4a 归因圆桌", p4aResult, p4aStart);
+  // 收集全部 claims
+  const allClaimsJson: Record<string, unknown> = {};
+  for (const type of CLAIM_AGENTS) {
+    const data = readJson(claimFile(type));
+    if (data) allClaimsJson[agentName(type)] = data;
+  }
 
-  // 列出所有圆桌发言文件
-  const speechFiles = fs.existsSync(OUTPUT)
-    ? fs.readdirSync(OUTPUT).filter(f => f.startsWith("roundtable-") && f.endsWith(".md"))
+  // 收集全部 attack 文件
+  const attackFiles = fs.existsSync(OUTPUT)
+    ? fs.readdirSync(OUTPUT).filter(f => f.startsWith("attack-") && f.endsWith(".json"))
     : [];
-  for (const f of speechFiles) {
-    console.log(`  📄 发言: ${f}`);
+  const allAttacksJson: Record<string, unknown> = {};
+  for (const f of attackFiles) {
+    const data = readJson(f);
+    if (data) allAttacksJson[f.replace(".json", "")] = data;
+  }
+
+  const p3Start = Date.now();
+  const p3Response = await callLlm(reasonerAdapter, REASONER_MODEL, [
+    {
+      role: "system",
+      content: [
+        "你是纳西妲，Cortex 真理裁决者。你的职责是：",
+        "1. 读取全部 6 份 claims（各 Agent 的发现声称）",
+        "2. 读取全部 attack 文件（对称攻防的互相反驳）",
+        "3. 逐条裁决每条 claim 被攻击后是否存活",
+        "",
+        "## 裁决标准",
+        "- CONFIRMED: 攻击无效，claim 成立（证据充分且未被推翻）",
+        "- OVERTURNED: 攻击有效，claim 被推翻（反例确凿）",
+        "- REFINED: 部分成立，需要修正 claim 的范围或严重度",
+        "",
+        "只输出 JSON，不写散文。",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        "# 全部 Claims",
+        JSON.stringify(allClaimsJson, null, 2),
+        "",
+        "# 全部 Attacks",
+        JSON.stringify(allAttacksJson, null, 2),
+        "",
+        "## 输出格式",
+        "输出 JSON 如下：",
+        JSON.stringify({
+          judge: "纳西妲",
+          verdicts: [
+            {
+              claimId: "L-01",
+              attacks: ["OVERTURNED"],
+              finalStatus: "CONFIRMED|OVERTURNED|REFINED",
+              reasoning: "裁决理由",
+            },
+          ],
+          survivingClaims: ["L-01"],
+        }, null, 2),
+      ].join("\n"),
+    },
+  ]);
+
+  const p3Elapsed = ((Date.now() - p3Start) / 1000).toFixed(0);
+  console.log(`Phase 3 纳西妲裁决: ✅ ⏱ ${p3Elapsed}s (tokens: ${p3Response.tokens})`);
+
+  if (p3Response.content) {
+    writeJson("verdict-analysis.json", (() => {
+      try { return JSON.parse(p3Response.content); }
+      catch { return { judge: "纳西妲", raw: p3Response.content }; }
+    })());
   }
 }
 
 // ════════════════════════════════════════════════════════
-// §11 Phase 4b: 凝光宪法审计（直接 LLM 调用）
+// §10 Phase 4: 凝光合成最终报告
 // ════════════════════════════════════════════════════════
-const roundtableSpeeches = fs.existsSync(OUTPUT)
-  ? fs.readdirSync(OUTPUT).filter(f => f.startsWith("roundtable-") && f.endsWith(".md"))
-      .map(f => `### ${f}\n${readReport(f).slice(0, 2000)}`)
-      .join("\n\n")
-  : "(无圆桌发言)";
+if (!budgetOk()) {
+  console.log("  跳过 Phase 4（预算不足）");
+} else {
+  const verdictData = readJson("verdict-analysis.json");
+  const allClaimsSummary: string[] = [];
+  for (const type of CLAIM_AGENTS) {
+    const data = readJson(claimFile(type));
+    if (data) {
+      allClaimsSummary.push(
+        `### ${agentName(type)} (${type})\n\`\`\`json\n${JSON.stringify(data, null, 2).slice(0, 2000)}\n\`\`\``
+      );
+    }
+  }
 
-const constitutionDocs = ["Cortex 概念顶层设计 v2.5.md", "Cortex 概念顶层设计 v2.3.md"]
-  .map(f => {
-    const p = path.join(ROOT, "docs", f);
-    return fs.existsSync(p) ? `### ${f}\n${fs.readFileSync(p, "utf-8").slice(0, 5000)}` : `### ${f}\n(文件不存在)`;
-  })
-  .join("\n\n");
+  const attackFiles = fs.existsSync(OUTPUT)
+    ? fs.readdirSync(OUTPUT).filter(f => f.startsWith("attack-") && f.endsWith(".json"))
+    : [];
+  const attackSummary: string[] = [];
+  for (const f of attackFiles) {
+    const data = readJson(f);
+    if (data) {
+      attackSummary.push(
+        `### ${f}\n\`\`\`json\n${JSON.stringify(data, null, 2).slice(0, 2000)}\n\`\`\``
+      );
+    }
+  }
 
-const p4bStart = Date.now();
-const ningguangResponse = await reasonerAdapter.chat(REASONER_MODEL, [
-  { role: "system", content: "你是凝光，Cortex 门下省审计官。你的职责是审查工程实践与宪法治理声明的一致性。从发现清单和圆桌发言中，提取与宪法条款不一致的事项。" },
-  { role: "user", content: [
-    `# 宪法一致性审计`,
-    ``,
-    `## 发现矩阵`,
-    findingsMatrix.slice(0, 3000),
-    ``,
-    `## 圆桌发言`,
-    roundtableSpeeches.slice(0, 6000),
-    ``,
-    `## 宪法文档（摘要）`,
-    constitutionDocs.slice(0, 5000),
-    ``,
-    `## 输出要求`,
-    `1. 逐条比对发现与宪法条款，标记不一致处`,
-    `2. 区分"宪法直接违规"和"与宪法精神不一致"`,
-    `3. 简要评估每项不一致的严重度`,
-    `4. 写入 ${path.join(OUTPUT, "ningguang-constitution-audit.md")}`,
-    `控制在 3000 字以内。`,
-  ].join("\n") },
-]);
-const p4bElapsed = ((Date.now() - p4bStart) / 1000).toFixed(0);
-console.log(`Phase 4b 凝光审计: ✅ ⏱ ${p4bElapsed}s`);
+  const p4Start = Date.now();
+  const p4Response = await callLlm(reasonerAdapter, REASONER_MODEL, [
+    {
+      role: "system",
+      content: [
+        "你是凝光，Cortex 门下省首席合成官。你的职责是：",
+        "基于纳西妲的裁决，合成最终修复建议报告。",
+        "这是唯一的散文输出——之前的全部阶段都是结构化 JSON。",
+        "",
+        "## 报告结构",
+        "1. 执行摘要（2-3 句概述）",
+        "2. 幸存 Claims（纳西妲确认的问题，按严重度排序）",
+        "3. 被推翻 Claims（说明为什么被推翻）",
+        "4. 修复建议（按 P0/P1/P2 优先级）",
+        "5. 攻防摘要（哪些攻击最有力，哪些防御最薄弱）",
+        "",
+        "保持客观、简洁、可操作。",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        "# 纳西妲裁决",
+        verdictData ? JSON.stringify(verdictData, null, 2) : "(裁决文件缺失)",
+        "",
+        "# 全部 Claims",
+        allClaimsSummary.join("\n\n"),
+        "",
+        "# 全部 Attacks",
+        attackSummary.join("\n\n"),
+        "",
+        "## 输出要求",
+        "写入 test-output/self-examination-soft/final-report.md",
+        "不超过 5000 字。只写散文报告，不输出 JSON。",
+      ].join("\n"),
+    },
+  ]);
 
-if (ningguangResponse.content) {
-  fs.writeFileSync(path.join(OUTPUT, "ningguang-constitution-audit.md"), ningguangResponse.content, "utf-8");
+  const p4Elapsed = ((Date.now() - p4Start) / 1000).toFixed(0);
+  console.log(`Phase 4 凝光合成: ✅ ⏱ ${p4Elapsed}s (tokens: ${p4Response.tokens})`);
+
+  if (p4Response.content) {
+    fs.writeFileSync(path.join(OUTPUT, "final-report.md"), p4Response.content!, "utf-8");
+  }
 }
 
 // ════════════════════════════════════════════════════════
-// §12 Phase 4c: 钟离战略评估 + 霜凝监理展望
+// §11 汇总
 // ════════════════════════════════════════════════════════
-const ningguangAudit = readReport("ningguang-constitution-audit.md");
-
-const p4cStart = Date.now();
-const [zhongliResponse, shuangningResponse] = await Promise.all([
-  reasonerAdapter.chat(REASONER_MODEL, [
-    { role: "system", content: "你是钟离，Cortex 战略顾问。从系统性方向偏差角度评估发现。" },
-    { role: "user", content: [
-      `# 战略评估`,
-      `## 发现清单`,
-      findingsMatrix.slice(0, 2000),
-      `## 圆桌发言`,
-      roundtableSpeeches.slice(0, 3000),
-      `## 要求`,
-      `判断哪些发现指向系统性的方向偏差（而非孤立缺陷），评估对 Core 阶段演进的战略影响。`,
-      `控制在 1500 字以内。`,
-    ].join("\n") },
-  ]),
-  reasonerAdapter.chat(REASONER_MODEL, [
-    { role: "system", content: "你是霜凝，Cortex 监理。从未来演进方向评估发现，标记 Core-2 阶段的潜在障碍。" },
-    { role: "user", content: [
-      `# 监理展望`,
-      `## 发现清单`,
-      findingsMatrix.slice(0, 2000),
-      `## 圆桌发言`,
-      roundtableSpeeches.slice(0, 3000),
-      `## 要求`,
-      `标记哪些发现如果不修复会成为 Core-2 阶段的障碍，给出优先级建议。`,
-      `控制在 1500 字以内。`,
-    ].join("\n") },
-  ]),
-]);
-
-const p4cElapsed = ((Date.now() - p4cStart) / 1000).toFixed(0);
-console.log(`Phase 4c 钟离+霜凝: ✅ ⏱ ${p4cElapsed}s`);
-
-if (zhongliResponse.content) {
-  fs.writeFileSync(path.join(OUTPUT, "zhongli-strategic-assessment.md"), zhongliResponse.content, "utf-8");
-}
-if (shuangningResponse.content) {
-  fs.writeFileSync(path.join(OUTPUT, "shuangning-oversight-review.md"), shuangningResponse.content, "utf-8");
+function listAllOutputs(): string[] {
+  if (!fs.existsSync(OUTPUT)) return [];
+  return fs.readdirSync(OUTPUT).map(f => {
+    const size = (fs.statSync(path.join(OUTPUT, f)).size / 1024).toFixed(1);
+    return `  ${f} (${size}KB)`;
+  });
 }
 
-// ════════════════════════════════════════════════════════
-// §13 Phase 5: 昔涟优先级裁决 → 共识修复清单
-// ════════════════════════════════════════════════════════
-const cyreneSystemPrompt = fs.existsSync(path.join(ROOT, "prompts", "cyrene", "system.md"))
-  ? fs.readFileSync(path.join(ROOT, "prompts/cyrene/system.md"), "utf-8")
-  : "你是昔涟，记忆命途守望者。";
-
-const zhongliAssessment = readReport("zhongli-strategic-assessment.md");
-const shuangningReview = readReport("shuangning-oversight-review.md");
-
-const p5Payload = [
-  `# 优先级裁决任务`,
-  ``,
-  `你是昔涟。你是 Cortex 的终审裁决者，不是签署人。`,
-  `本次软约束自审视全部阶段已完成。请基于以下全部材料，产出共识修复清单及优先级排序。`,
-  ``,
-  `## 裁决原则`,
-  `- 你拥有全维视角和终审裁决权`,
-  `- 从工程演进历史视角看待发现（Meso-Lite → Core-1 历程）`,
-  `- 从宪法一致性角度判断治理声明落实度`,
-  `- 标记跨阶段反复出现的债务`,
-  `- **你不签署**，你只裁决优先级安排（P0/P1/P2）`,
-  ``,
-  `## 发现矩阵`,
-  findingsMatrix.slice(0, 4000),
-  ``,
-  `## 圆桌发言`,
-  roundtableSpeeches.slice(0, 4000),
-  ``,
-  `## 凝光宪法审计`,
-  ningguangAudit.slice(0, 3000),
-  ``,
-  `## 钟离战略评估`,
-  zhongliAssessment.slice(0, 2000),
-  ``,
-  `## 霜凝监理展望`,
-  shuangningReview.slice(0, 2000),
-  ``,
-  `## 全部产出文件`,
-  listOutputs().join("\n"),
-  ``,
-  `## 输出要求`,
-  `将以下内容写入 ${path.join(OUTPUT, "consensus-repair-list.md")}：`,
-  ``,
-  `1. **共识修复清单**（P0/P1/P2 三级优先级排序）`,
-  `   - P0（立即修复）: 会导致运行时崩溃、编译失败、CI 门禁阻断`,
-  `   - P1（本阶段修复）: 影响核心链路健康、宪法一致性问题`,
-  `   - P2（下阶段修复）: 技术债务、配置漂移、文档不一致`,
-  `2. **矛盾标记**（Agent A 与 Agent B 结论冲突的 FIND-ID）`,
-  `3. **跨版本复发标记**（哪些问题在 Meso-Lite → Core-1 反复出现）`,
-  `4. **宪法一致性摘要**（凝光审计报告的关键结论）`,
-  ``,
-  `总报告不超过 8000 字。`,
-].join("\n");
-
-const p5Start = Date.now();
-const p5Response = await cyreneAdapter.chat(CHAT_MODEL, [
-  { role: "system", content: cyreneSystemPrompt },
-  { role: "user", content: p5Payload },
-]);
-const p5Elapsed = ((Date.now() - p5Start) / 1000).toFixed(0);
-
-if (p5Response.content) {
-  fs.writeFileSync(path.join(OUTPUT, "consensus-repair-list.md"), p5Response.content!, "utf-8");
-}
-console.log(`Phase 5 昔涟裁决: ✅ ⏱ ${p5Elapsed}s`);
-
-// ════════════════════════════════════════════════════════
-// §14 汇总
-// ════════════════════════════════════════════════════════
-const finalOutputs = listOutputs();
-console.log(`\n✅ 产出 ${finalOutputs.length} 个文件`);
+const finalOutputs = listAllOutputs();
+console.log(`\n✅ 产出 ${finalOutputs.length} 个文件 (token 消耗: ${totalTokensUsed})`);
 console.log(finalOutputs.join("\n"));
 
 // ════════════════════════════════════════════════════════
-// §15 清理
+// §12 清理
 // ════════════════════════════════════════════════════════
 console.log = originalConsoleLog;
 try { await engine.memory?.close?.(); } catch {}

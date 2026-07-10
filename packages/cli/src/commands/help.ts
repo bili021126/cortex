@@ -47,7 +47,7 @@ function _buildOverview(commands: string[], aliases: Map<string, string>): strin
   return [
     "Cortex CLI — 统一命令行前端",
     "",
-    "版本: 0.2.0 (Core-1)",
+    "版本: 0.2.0 (Core-2)",
     "",
     "用法:",
     "  cortex <命令> [子命令] [选项]",

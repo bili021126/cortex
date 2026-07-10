@@ -30,6 +30,10 @@ export class MemoryStorePlugin implements EnginePlugin {
     // 初始化持久化层（SQLite 建表 + 加载数据）
     if (ctx.externals.dbPath) {
       await this.instance.init(ctx.externals.dbPath);
+    } else {
+      // TUI/CLI 未指定 dbPath 时，使用默认路径
+      const dbPath = `${ctx.workspaceRoot}/.cortex/memory.db`.replace(/\\/g, "/");
+      await this.instance.init(dbPath);
     }
   }
 

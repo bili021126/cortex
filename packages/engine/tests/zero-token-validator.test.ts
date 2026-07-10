@@ -6,7 +6,7 @@ import path from "node:path";
 import os from "node:os";
 
 // 通过 validate 间接测试 _grepInterface 的命令注入防护
-import { CrossPackageContractRule } from "../src/core/zero-token-validator.js";
+import { CrossPackageContractRule } from "../src/execution/zero-token-validator.js";
 
 describe("CrossPackageContractRule — G-08 命令注入修复", () => {
   /**

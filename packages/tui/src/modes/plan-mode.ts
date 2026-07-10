@@ -108,10 +108,24 @@ export async function* planMode(
 
   // 如果已有批准的计划，执行
   if (planState.approved && planState.nodes.length > 0) {
+    // 过滤已完成/已失败的节点——启动恢复会话或 .approve 时不重演已完成节点
+    const pendingNodes = planState.nodes.filter(n => n.status !== "done" && n.status !== "failed");
+    if (pendingNodes.length === 0) {
+      // 所有节点已完成，重置计划状态，允许新规划
+      planState.approved = false;
+      planState.nodes = [];
+      planState.intent = "";
+      // 持久化由外部 handleInternalCommand(.exit) 或 tui-repl.ts 的 dispatch 统一管理
+      // 继续走到下面 "生成计划" 分支
+    } else {
+
+    // 同步更新 planState，让后续展示和持久化反映过滤后的节点
+    planState.nodes = pendingNodes;
+
     // 收集执行事件——executeWithStream 通过回调推送，planMode 是 async generator
     // 需桥接：先收集全部事件，再逐条 yield
     const collectedEvents: TuiEvent[] = [];
-    const report = await bridge.executeWithStream(planState.nodes, (event) => {
+    const report = await bridge.executeWithStream(pendingNodes, (event) => {
       collectedEvents.push(event as TuiEvent);
     });
 
@@ -124,6 +138,7 @@ export async function* planMode(
       return `计划执行完成：${report.completed}/${report.totalNodes} 成功，${report.failed} 失败`;
     }
     return "计划执行完成";
+    } // else: pendingNodes.length > 0
   }
 
   // 否则：生成计划
@@ -179,16 +194,19 @@ function _extractPlanNodes(text: string): TaskNode[] | null {
 
 /** 规范化原始 JSON 对象为 TaskNode（补全缺失字段） */
 function _normalizeNodes(raw: unknown[]): TaskNode[] {
-  return raw.map((item: any, i: number): TaskNode => ({
-    id: item.id ?? `plan-node-${i}-${Date.now()}`,
-    type: item.type ?? "implementation",
-    tags: item.tags ?? [],
-    needsMultiPerspective: item.needsMultiPerspective ?? false,
-    status: "pending" as const,
-    claimedBy: [],
-    payload: item.task ?? item.payload ?? item.description ?? "",
-    results: [],
-    createdAt: Date.now(),
-    parentId: item.parentId ?? undefined,
-  }));
+  return raw.map((item: unknown, i: number): TaskNode => {
+    const node = item as Record<string, unknown>;
+    return {
+      id: (node.id as string) ?? `plan-node-${i}-${Date.now()}`,
+      type: (node.type as string) ?? "implementation",
+      tags: (node.tags as string[]) ?? [],
+      needsMultiPerspective: (node.needsMultiPerspective as boolean) ?? false,
+      status: "pending" as const,
+      claimedBy: [],
+      payload: (node.task ?? node.payload ?? node.description ?? "") as string,
+      results: [],
+      createdAt: Date.now(),
+      parentId: (node.parentId as string | undefined) ?? undefined,
+    };
+  });
 }

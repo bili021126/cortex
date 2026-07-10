@@ -172,7 +172,7 @@ describe("DocGovernAgent 执行", () => {
 
     await memScheduler.executeAll();
 
-    const mems = await memory.read({ kind: "TaskLog" });
+    const mems = await memory.read({ kind: "Governance" });
     expect(mems.length).toBeGreaterThanOrEqual(1);
     expect(mems[0].source.agentType).toBe(AgentType.DocGovern);
   }, 30000);

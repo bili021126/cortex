@@ -556,8 +556,8 @@ describe("queryLoop — 最大工具轮次", () => {
     // 应该停止
     expect(result).toContain("最大工具调用轮次");
     expect(onMaxToolRounds).toHaveBeenCalledTimes(1);
-    // streamChat 被调用 10 次（MAX_TOOL_ROUNDS）
-    expect(callCount).toBe(10);
+    // streamChat 被调用 20 次（MAX_TOOL_ROUNDS）
+    expect(callCount).toBe(20);
   });
 });
 
@@ -593,8 +593,8 @@ describe("queryLoop — 模式 system prompt", () => {
 
   it("plan 模式包含规划说明", async () => {
     const sysPrompt = await getSystemPrompt("plan", "code" as AgentType);
-    expect(sysPrompt).toContain("规划模式");
-    expect(sysPrompt).toContain("任务计划");
+    expect(sysPrompt).toContain("甘雨");
+    expect(sysPrompt).toContain("时序依赖");
     expect(sysPrompt).toContain("[格式]");
   });
 

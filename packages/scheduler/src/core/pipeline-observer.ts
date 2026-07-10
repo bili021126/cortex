@@ -1,5 +1,8 @@
 import { PipelineEventType, PipelinePriority, type EmitMeta, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type ObservableEvent, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter } from "@cortex/shared";
 
+/** 保存原始 console.error 引用，规避 console-bridge 拦截导致的二次递归 */
+const _origConsoleError = console.error;
+
 /**
  * PipelineObserver —— 可观测事件管道（优先级回调注册表）
  * 替代 v1.1 的 EventBus。所有可观测事件走此管道。
@@ -16,6 +19,8 @@ export class PipelineObserver implements IPipelineObserver {
   /** @fix N-01 — 递归深度上限：0=空闲，≥MAX 时丢弃，防止无限 e→handler 崩→e→handler 崩… */
   private _reentrancyDepth = 0;
   private static readonly MAX_REENTRANCY_DEPTH = 3;
+  /** 遥测：事件发射累计计数 */
+  private _eventCount = 0;
 
   // ── 死信环形缓冲区 ────────────────────────
 
@@ -72,6 +77,11 @@ export class PipelineObserver implements IPipelineObserver {
    * 单 handler 异常不阻断后续 handler（隔离设计）。
    */
   emit(event: ObservableEvent, meta?: EmitMeta): void {
+    // 遥测：事件吞吐计数
+    this._eventCount++;
+    if (this._eventCount % 100 === 0) {
+      console.log(`[telemetry] observer.event_throughput count=${this._eventCount}`);
+    }
     // 非 silent emit：检查死信队列中是否有当前 span 的上游事件
     if (meta?.causalChain?.spanId) {
       const upstreamFromDeadLetter = this._findUpstreamInDeadLetter(meta.causalChain.spanId);
@@ -161,7 +171,7 @@ export class PipelineObserver implements IPipelineObserver {
 
   private _reportError(ctx: SafeErrorContext, spanId?: string): void {
     if (this._reentrancyDepth >= PipelineObserver.MAX_REENTRANCY_DEPTH) {
-      console.error("[PipelineObserver] _reportError 递归深度超限(≥" + PipelineObserver.MAX_REENTRANCY_DEPTH + ")，丢弃:",
+      _origConsoleError("[PipelineObserver] _reportError 递归深度超限(≥" + PipelineObserver.MAX_REENTRANCY_DEPTH + ")，丢弃:",
         ctx.source, String(ctx.error).slice(0, 200));
       return;
     }

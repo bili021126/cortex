@@ -89,8 +89,22 @@ export class UrgentChannel extends BaseChannel {
 
     // 插队：放到队首而非队尾
     if (this.config.maxQueueSize > 0 && this.queue.length >= this.config.maxQueueSize) {
-      // 队列满：丢弃最旧的非 ackRequired 事件，或拒绝
-      this.queue.pop();
+      // 队列满：从队尾向前找第一个非 ackRequired 事件丢弃
+      let dropIndex = -1;
+      for (let i = this.queue.length - 1; i >= 0; i--) {
+        const ev = this.queue[i];
+        if (ev && !ev.ackRequired) {
+          dropIndex = i;
+          break;
+        }
+      }
+      if (dropIndex >= 0) {
+        this.queue.splice(dropIndex, 1);
+      } else {
+        // 队列中全是 ackRequired 事件，拒绝新事件入队
+        process.stderr.write(`[notification] WARNING: UrgentChannel 队列已满且所有事件均为 ackRequired，拒绝新事件: ${event.type}\n`);
+        return;
+      }
     }
     this.queue.unshift(event);
 

@@ -43,7 +43,7 @@ export type SemanticState = "Pending" | "Active" | "Archived" | "Obliterated";
 export const MEMORY_VALID_TRANSITIONS: Record<string, ReadonlySet<string>> = {
   Pending: new Set(["Active", "Obliterated"]),
   Active: new Set(["Archived", "Obliterated", "Active"]),
-  Archived: new Set(["Obliterated", "Archived"]),
+  Archived: new Set(["Obliterated", "Archived", "Active"]),
   Obliterated: new Set(),
 };
 
@@ -183,6 +183,10 @@ export interface MemoryQuery {
 
 // ─── IMemoryStore ──────────────────────────────────────
 
+/**
+ * IMemoryStore —— 记忆存储接口。
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export interface IMemoryStore {
   readonly isPersisted: boolean;
   readonly size: number;

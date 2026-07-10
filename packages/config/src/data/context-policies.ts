@@ -6,8 +6,8 @@
 // 仍保留在 @cortex/shared 中。
 // ============================================================
 
-import { LinkType } from "@cortex/shared";
 import type { ContextPolicy } from "@cortex/shared";
+import type { LinkType } from "@cortex/shared";
 
 /**
  * 内置预设策略 ID 列表。
@@ -53,7 +53,7 @@ export const PRESET_CONTEXT_POLICIES: Record<string, ContextPolicy> = {
     id: "code-refactor",
     description: "代码重构：全轮对话 + CSA + 关键词为主",
     conversation: { mode: "full" },
-    retrieval: { readMode: "CSA", bfsDepth: 2, linkTypes: [LinkType.ProducedBy, LinkType.DerivedFrom] },
+    retrieval: { readMode: "CSA", bfsDepth: 2, linkTypes: ["PRODUCED_BY" as LinkType, "DERIVED_FROM" as LinkType] },
     pipeline: {
       sort: { mode: "weighted", confidenceWeight: 0.7, halfLifeMs: 3_600_000 },
       deduplicate: true,
@@ -85,7 +85,7 @@ export const PRESET_CONTEXT_POLICIES: Record<string, ContextPolicy> = {
     id: "diagnose",
     description: "故障诊断：全轮对话 + 关键词精确匹配",
     conversation: { mode: "full" },
-    retrieval: { readMode: "CSA", bfsDepth: 1, linkTypes: [LinkType.ProducedBy] },
+    retrieval: { readMode: "CSA", bfsDepth: 1, linkTypes: ["PRODUCED_BY" as LinkType] },
     pipeline: {
       sort: { mode: "recency" },
       deduplicate: false,

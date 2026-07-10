@@ -19,6 +19,9 @@ export interface ITaskBoard {
   getPendingNodes(): TaskNode[];
   removeNode(nodeId: string): void;
   removeSubtree(nodeId: string): void;
+
+  /** 清空所有节点（新 plan 执行前调用，防止旧任务残留） */
+  clear(): void;
 }
 
 /**
@@ -258,6 +261,11 @@ export class TaskBoard implements ITaskBoard {
     return Array.from(this.nodes.values()).filter(
       (n) => n.status === "pending" || n.status === "claimed",
     );
+  }
+
+  /** 清空所有节点（新 plan 执行前调用，防止旧任务残留） */
+  clear(): void {
+    this.nodes.clear();
   }
 
   /**

@@ -1,11 +1,14 @@
 // ============================================================
-// @cortex/shared — Agent 枚举域
+// @cortex/shared — Agent 枚举域（从 @cortex/config 迁回）
 //
 // AgentType / AgentStatus / AgentContext —— 零依赖基础枚举。
 // 所有 Agent 域的根节点。
 // ============================================================
 
-/** Agent 角色类型 */
+/**
+ * Agent 角色类型
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export enum AgentType {
   Meta      = "meta",
   Code      = "code",
@@ -22,6 +25,7 @@ export enum AgentType {
   Browser    = "browser",
   Data       = "data",
   Strategist = "strategist",
+  ConfirmGate = "confirm-gate",
 }
 
 /** Agent 生命周期状态 */

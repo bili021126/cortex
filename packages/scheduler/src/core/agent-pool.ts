@@ -18,6 +18,8 @@ export interface ISchedulerAgentPool {
   heartbeat(agentId: string): void;
   /** 探测 agent 是否存活——仍在 pool 活跃列表中返回 true */
   ping(agentId: string): Promise<boolean>;
+  /** 池统计——用于遥测 */
+  getPoolStats(): { total: number; idle: number; busy: number; idleRate: number };
 }
 
 /**
@@ -230,5 +232,25 @@ export class AgentPool implements IAgentPool {
       if (instances.has(agentId)) return true;
     }
     return false;
+  }
+
+  /** 池统计——用于遥测和监控
+   * Core-2 动态扩缩在此扩展——当前仅统计不变更实例数 */
+  getPoolStats(): { total: number; idle: number; busy: number; idleRate: number } {
+    let idle = 0;
+    let total = 0;
+    for (const [, instanceIds] of this.active) {
+      for (const id of instanceIds) {
+        total++;
+        const status = this.statuses.get(id);
+        if (status === AgentStatus.Awake) idle++;
+      }
+    }
+    return {
+      total,
+      idle,
+      busy: total - idle,
+      idleRate: total > 0 ? idle / total : 0,
+    };
   }
 }

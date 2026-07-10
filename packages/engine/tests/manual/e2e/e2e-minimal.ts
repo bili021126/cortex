@@ -1,4 +1,6 @@
 /**
+ * @covers: 最简端到端 — 1个计划+1个Agent+1次write_file
+ *
  * e2e-minimal.ts —— 最简端到端验证：1个计划 + 1个Agent + 1次write_file
  * 用法: npx tsx packages/engine/tests/manual/e2e/e2e-minimal.ts
  */

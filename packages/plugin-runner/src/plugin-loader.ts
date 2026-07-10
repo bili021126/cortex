@@ -106,11 +106,12 @@ export class PluginLoader {
       has: (name: string): boolean => this._plugins.has(name),
       shutdown: async () => {
         // 逆序停止
-        for (let i = sorted.length - 1; i >= 0; i--) {
+        const reversed = [...sorted].reverse();
+        for (const plugin of reversed) {
           try {
-            await sorted[i].stop();
+            await plugin.stop();
           } catch (e) {
-            console.warn(`[PluginLoader] 停止插件 "${sorted[i].name}" 时出错:`, e);
+            console.warn(`[PluginLoader] 停止插件 "${plugin.name}" 时出错:`, e);
           }
         }
         this._started = false;

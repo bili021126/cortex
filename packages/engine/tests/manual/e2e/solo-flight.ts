@@ -1,4 +1,6 @@
 /**
+ * @covers: 全系统闭环 — Agent 自主构建完整 TypeScript 包
+ *
  * solo-flight.ts —— 全系统闭环基准 E2E
  *
  * 唯一约束: 建造一个完整 TypeScript 包。其余一切由 Agent 自主决定。

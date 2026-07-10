@@ -92,6 +92,11 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
    */
   setBootstrapConfig(bootstrapConfig: BootstrapConfig): void {
     this._bootstrapConfig = bootstrapConfig;
+    // §尽早设置 Toolkit workspaceRoot——确保 executeToolCall() 在
+    //   ensureBootstrapped() 被调用前也能正确解析文件路径沙箱。
+    bootstrapConfig.toolkit.setWorkspaceRoot(
+      bootstrapConfig.workspaceRoot ?? bootstrapConfig.projectRoot,
+    );
   }
 
   /**
@@ -279,6 +284,9 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     if (!toolkit) {
       return { success: false, output: "Toolkit 未初始化——请通过 setBootstrapConfig() 注入 Toolkit" };
     }
+    if (name === "write_file") {
+      console.log(`[TRACE write_file] engine-bridge.executeToolCall: tool=${name} workspaceRoot=${(toolkit as any).workspaceRoot}`);
+    }
     const result = await toolkit.execute({ toolName: name, params: args }, AgentType.Code);
     return { success: result.success, output: result.success ? (result.output ?? "") : (result.error ?? "未知错误") };
   }
@@ -311,7 +319,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
 
   /** 提交任务节点到 TaskBoard（ICortexApi） */
   async submitTask(node: TaskNode): Promise<void> {
-    const ctx = await (this.ctx.bootstrapped ? this._ensureBootstrapped() : this.ensureInitialized());
+    const ctx = await (this.isBootstrapConfigured ? this._ensureBootstrapped() : this.ensureInitialized());
     if (ctx.taskBoard) {
       ctx.taskBoard.addNode(node as unknown as TaskNode);
     }
@@ -337,7 +345,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     nodes: TaskNode[],
     onEvent: (event: TuiEvent) => void,
   ): Promise<ExecutionReport> {
-    const ctx = await (this.ctx.bootstrapped ? this._ensureBootstrapped() : this.ensureInitialized());
+    const ctx = await (this.isBootstrapConfigured ? this._ensureBootstrapped() : this.ensureInitialized());
     const board = ctx.taskBoard;
     const scheduler = ctx.scheduler;
 
@@ -345,7 +353,8 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
       throw new Error("[EngineBridge] executeWithStream 需要初始化的 taskBoard 和 scheduler");
     }
 
-    // 1. 发射任务树更新事件
+    // 1. 清空旧任务板，发射任务树更新事件
+    board.clear();
     onEvent({ type: "task_tree_update", nodes });
 
     // 2. 提交所有节点

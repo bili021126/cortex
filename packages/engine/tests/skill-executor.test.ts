@@ -250,7 +250,7 @@ describe("Scene C: 评价回流闭环 — recordFeedback + deriveStatus", () => 
     registry.register(makeSkill({
       id: "recover",
       status: "trial",
-      weight: 2,
+      weight: 4,
       feedbackHistory: [
         { agentId: "a1", rating: -1, timestamp: Date.now() - 2000 },
         { agentId: "a2", rating: -1, timestamp: Date.now() - 1000 },
@@ -260,7 +260,7 @@ describe("Scene C: 评价回流闭环 — recordFeedback + deriveStatus", () => 
     registry.recordFeedback("recover", "a3", 1);
     const skill = registry.get("recover")!;
     const status = deriveStatus(skill.weight, skill.feedbackHistory);
-    // weight=3, at least one positive → active
+    // weight=5, at least one positive → active
     expect(status).toBe("active");
   });
 

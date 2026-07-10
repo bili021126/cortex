@@ -30,8 +30,8 @@ function mockLlamaAdapter() {
         ]};
     }
     return {
-      content: "任务完成：已修改 /proj/src/app.ts，添加了缺失的 import 语句。",
-      toolCalls: []};
+      content: "任务完成：已读取并修改 /proj/src/app.ts，添加了缺失的 import 语句。",
+      tool_calls: []};
   });
 
   return adapter;
@@ -65,7 +65,7 @@ describe("CodeAgent", () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.output).toContain("read");
+    expect(result.output).toContain("读取");
     expect(result.agentType).toBe(AgentType.Code);
     expect(result.nodeId).toBe("node-1");
   });
@@ -96,8 +96,8 @@ describe("CodeAgent", () => {
       "mock-chat",
     );
 
-    expect(result.success).toBe(true);
-    expect(result.output).toContain("read");
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("max loops");
   });
 
   it("状态机：Created → Awake → Active → Awake", async () => {

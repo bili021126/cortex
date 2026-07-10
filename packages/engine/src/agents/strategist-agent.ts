@@ -1,7 +1,7 @@
 import { AgentType as AT, AgentStatus as AS, PipelineEventType, type AgentType, type AgentStatus, type TaskNode, type NodeResult, type SafeErrorReporter, type ObservableEvent } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { AgentPool } from "@cortex/scheduler";
-import { PoolAwareState } from "../components/pool-aware.js";
+import { PoolAwareState } from "../execution/pool-aware.js";
 
 /**
  * StrategistAgent（钟离）—— 岩王帝君，战略 MetaAgent。

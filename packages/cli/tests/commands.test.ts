@@ -75,7 +75,7 @@ describe("cortex version", () => {
     const result = await handler([], {}, ctx);
     expect(result.success).toBe(true);
     expect(result.output).toContain("cortex v");
-    expect(result.output).toContain("Core-1");
+    expect(result.output).toContain("Core-2");
     expect(result.exitCode).toBe(0);
   });
 
@@ -84,7 +84,7 @@ describe("cortex version", () => {
     const result = await handler([], { json: true }, ctx);
     expect(result.success).toBe(true);
     const data = result.data as Record<string, string>;
-    expect(data.version).toContain("Core-1");
+    expect(data.version).toContain("Core-2");
     expect(data.runtime).toContain("Node.js");
     expect(data.platform).toBeDefined();
   });

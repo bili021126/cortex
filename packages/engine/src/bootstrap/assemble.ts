@@ -8,6 +8,7 @@ import type { IScheduler, IAgentPool, ITaskBoard, ConfirmGate } from "@cortex/sc
 import type { CLIAdapter } from "@cortex/platform";
 import type { MetaAgent } from "../core/meta-agent.js";
 import type { StrategistAgent } from "../agents/strategist-agent.js";
+import type { AgentFactoryConfig } from "../execution/agent-factory.js";
 import type { SkillRegistry } from "@cortex/skill-kit";
 import type { ConsistencyLayer } from "@cortex/consistency";
 import type { BootstrapResult } from "./factory/index.js";
@@ -16,12 +17,12 @@ import type { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
 import type { AuditTrail, MetricCounter } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 // ── Core-2 模块 ──
-import type { TaskRouter } from "../core/task-router.js";
-import type { EnvironmentAwareRouter } from "../core/environment-aware-router.js";
-import type { SentinelSignalFilter } from "../core/sentinel-signal-filter.js";
-import type { GovernanceEventEmitter } from "../core/governance-events.js";
-import type { DecisionGateBridge } from "../core/decision-gate-bridge.js";
-import type { NotificationRuntime } from "../core/notification-runtime.js";
+import type { TaskRouter } from "../execution/task-router.js";
+import type { EnvironmentAwareRouter } from "../execution/environment-aware-router.js";
+import type { SentinelSignalFilter } from "../planning/sentinel-signal-filter.js";
+import type { GovernanceEventEmitter } from "../planning/governance-events.js";
+import type { DecisionGateBridge } from "../execution/decision-gate-bridge.js";
+import type { NotificationRuntime } from "../planning/notification-runtime.js";
 
 export interface BootstrapEngineResult {
   scheduler: IScheduler;
@@ -34,6 +35,8 @@ export interface BootstrapEngineResult {
   metaAgent: MetaAgent;
   butler: ButlerAgent;
   strategists: Map<string, StrategistAgent>;
+  /** ConfirmGate Agent 工厂配置映射 */
+  confirmGateAgents?: Map<string, AgentFactoryConfig>;
   skillRegistry: SkillRegistry;
   config: BootstrapResult;
   agents: Map<string, Agent>;

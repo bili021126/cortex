@@ -416,21 +416,21 @@ describe("MemoryStore", () => {
     expect(store.obliterate(a)).toBe(false);
   });
 
-  it("freeze 后 CAS 拒绝 Archived → Active", async () => {
+  it("freeze 后 CAS 允许 Archived → Active（恢复）", async () => {
     const id = await store.write({
       kind: "TaskLog",
       content_blob: {},
-      summary: "冻结不可回 Active",
-      semantic_gist: "冻结不可回 Active",
+      summary: "冻结后可回 Active",
+      semantic_gist: "冻结后可回 Active",
       source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.freeze(id);
     expect(store.peek(id)!.semantic_state).toBe("Archived");
 
-    // Archived → Active 被 _isValidTransition 拒绝
-    expect(store.cas(id, "Archived", "Active")).toBe(false);
-    expect(store.peek(id)!.semantic_state).toBe("Archived");
+    // Archived → Active 现在合法（P0-07：恢复语义）
+    expect(store.cas(id, "Archived", "Active")).toBe(true);
+    expect(store.peek(id)!.semantic_state).toBe("Active");
   });
 
   it("freeze 后 cas Archived→Archived 幂等（自引用允许）", async () => {
@@ -450,21 +450,21 @@ describe("MemoryStore", () => {
     expect(store.peek(id)!.semantic_state).toBe("Archived");
   });
 
-  it("cas 拒绝 Archived → Active", async () => {
+  it("cas 允许 Archived → Active（恢复）", async () => {
     const id = await store.write({
       kind: "TaskLog",
       content_blob: {},
-      summary: "归档不可回 Active",
-      semantic_gist: "归档不可回 Active",
+      summary: "归档后可回 Active",
+      semantic_gist: "归档后可回 Active",
       source: { agentType: AgentType.Code, taskId: "" },
     });
 
     store.archive(id);
     expect(store.peek(id)!.semantic_state).toBe("Archived");
 
-    // Archived → Active 被 _isValidTransition 拒绝
-    expect(store.cas(id, "Archived", "Active")).toBe(false);
-    expect(store.peek(id)!.semantic_state).toBe("Archived");
+    // Archived → Active 现在合法（P0-07：恢复语义）
+    expect(store.cas(id, "Archived", "Active")).toBe(true);
+    expect(store.peek(id)!.semantic_state).toBe("Active");
   });
 
   it("link 拒绝湮灭态记忆", async () => {

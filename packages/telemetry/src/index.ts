@@ -78,3 +78,12 @@ export { MetricCounter, SILENT_THRESHOLD } from "./metric-counter.js";
 
 // ─── 执行全景追踪 ──────────────────────────────
 export { PanoramaTracker } from "./panorama-tracker.js";
+
+// ─── 遥测控制器 ────────────────────────────────
+export { TelemetryController, telemetryController } from "./telemetry-controller.js";
+export type { TelemetryPoint, TrendReport } from "./telemetry-controller.js";
+export { TelemetryLevel } from "./telemetry-controller.js";
+
+// ─── 告警引擎 ──────────────────────────────────
+export { AlertEngine, alertEngine } from "./alert-engine.js";
+export type { AlertRule } from "./alert-engine.js";

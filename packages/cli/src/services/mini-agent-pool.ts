@@ -101,4 +101,18 @@ export class MiniAgentPool implements IAgentPool {
   async ping(agentId: string): Promise<boolean> {
     return this.statuses.has(agentId);
   }
+
+  getPoolStats(): { total: number; idle: number; busy: number; idleRate: number } {
+    const all = this.instances.values();
+    let total = 0;
+    let idle = 0;
+    for (const instances of all) {
+      for (const id of instances) {
+        total++;
+        const s = this.statuses.get(id);
+        if (s === AgentStatus.Created || s === AgentStatus.Awake) idle++;
+      }
+    }
+    return { total, idle, busy: total - idle, idleRate: total > 0 ? idle / total : 0 };
+  }
 }

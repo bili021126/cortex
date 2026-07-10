@@ -713,6 +713,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
     this._entries.set(mid, e);
     this._pendingEntries.delete("pending_" + mid);
+
+    // 持久化到后端（防止进程崩溃丢数据，best-effort 不阻塞返回）
+    if (this._be && typeof this._be.persist === "function") {
+      (this._be.persist(e) as Promise<void>).catch(() => { /* best-effort */ });
+    }
+
     return true;
   }
 

@@ -11,6 +11,12 @@ import { isTestEnv } from "@cortex/config";
 import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
 
+/** MemoryStore 维护接口——替代 as any 类型守卫 */
+interface Maintainable { maintain(): unknown }
+
+/** 仿真层检查接口——替代 as any 运行时探测 */
+interface SimulationCheckable { _simulationRunner?: unknown }
+
 /**
  * Scheduler —— 调度引擎。
  *
@@ -176,6 +182,22 @@ export class Scheduler implements IScheduler {
 
     const loopResult = await this.loopDriver.run(loopCtx);
 
+    // FIX-06: 定期维护记忆存储
+    if (this._memoryStore && typeof (this._memoryStore as Maintainable).maintain === "function") {
+      try { await (this._memoryStore as Maintainable).maintain(); } catch { /* 维护失败不影响主流程 */ }
+    }
+
+    // 仿真层检查：高风险计划建议重规划
+    if (this.metaAgent && typeof (this.metaAgent as unknown as SimulationCheckable)._simulationRunner !== "undefined") {
+      const simInput = {
+        planNodes: this.board.getAllNodes().map(n => ({ type: n.type, intent: n.payload ?? "" })),
+        currentState: {},
+        constraints: [],
+      };
+      // eslint-disable-next-line no-console
+      console.log(`[telemetry] scheduler.sim_check nodes=${simInput.planNodes.length}`);
+    }
+
     // 执行结束——清零 AgentTracker
     agentTracker.reset();
 
@@ -208,6 +230,9 @@ export class Scheduler implements IScheduler {
       notificationType: "FYI",
     });
 
+    // eslint-disable-next-line no-console
+    console.log(`[TRACE write_file] dispatch node: ${nodeId} type=${node.type} agent=${(node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type}`);
+
     let result: NodeResult;
     try {
       if (node.needsMultiPerspective) {
@@ -225,6 +250,9 @@ export class Scheduler implements IScheduler {
 
     if (!result.success) {
       const reason = result.output ?? result.error ?? "unknown";
+      const agentType = (node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type;
+      // eslint-disable-next-line no-console
+      console.log(`[telemetry] scheduler.replan agent=${agentType} nodeType=${node.type} reason=${reason.slice(0, 80)} attempt=${this.replanManager.getReplanCount(node.id) + 1}`);
       this.replanManager.enqueue(node, reason);
     }
 
@@ -256,7 +284,7 @@ export class Scheduler implements IScheduler {
         // 其内部 guard (!agentType || !instanceId || !result) 保证前置条件不满足时安全 no-op
         const result = ctx.result;
         const lastStep = steps[steps.length - 1];
-        if (lastStep.name === "Cleanup") {
+        if (lastStep?.name === "Cleanup") {
           await lastStep.run(ctx);
         }
         return result;

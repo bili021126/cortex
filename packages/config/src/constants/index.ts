@@ -83,6 +83,19 @@ export {
   DEFAULT_SKILL_MAX_RETRIES,
 } from "./skills.js";
 
+// ── ConfirmGate 信任分阈值 ──
+export {
+  TRUST_AUTO_APPROVE_L2,
+  TRUST_AUTO_APPROVE_L3,
+  TRUST_BASE_SCORE,
+  TRUST_L0_L1_BONUS,
+  TRUST_L2_PENALTY,
+  TRUST_L3_PENALTY,
+} from "./confirm-gate.js";
+
+// ── 遥测告警规则 ──
+export { PRESET_ALERT_RULES } from "./alert-rules.js";
+
 // ── 修宪 ──
 export { DEFAULT_AMENDMENT_TIMEOUT } from "./amendment.js";
 
@@ -137,6 +150,36 @@ export {
 
 // ── Tier 校验常量（Phase 4 收敛）──
 export { VALID_TIERS } from "./tiers.js";
+
+// ── FSM Guard 条件配置 ──
+export {
+  FSM_ARCHIVE_WEIGHT_THRESHOLD,
+  FSM_RESTORE_ACCESS_THRESHOLD,
+  FSM_OBLITERATE_DAYS_THRESHOLD,
+} from "./fsm-guards.js";
+
+// ── ReAct 硬检测参数 ──
+export {
+  REACT_MAX_LOOPS,
+  REACT_CONTEXT_HARD_LIMIT,
+  REACT_FORCE_WRITE_LOOP,
+  REACT_HARD_REMINDER_LOOP,
+} from "./react-strategy.js";
+
+// ── Scheduler 调度参数 ──
+export {
+  SCHEDULER_MAX_REPLAN_PER_NODE,
+  SCHEDULER_MAX_TOTAL_REPLANS,
+  SCHEDULER_ROUND_TIMEOUT_MS,
+} from "./scheduler-params.js";
+
+// ── 技能结晶权重阈值 ──
+export {
+  SKILL_TRIAL_TO_ACTIVE_THRESHOLD,
+  SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD,
+  SKILL_FEEDBACK_POSITIVE_WEIGHT,
+  SKILL_FEEDBACK_NEGATIVE_WEIGHT,
+} from "./skill-crystallization.js";
 
 // ── 测试环境检测 ──────────────────────────────────
 import { ENV_VITEST as _ENV_VITEST, ENV_NODE_ENV as _ENV_NODE_ENV } from "./env.js";

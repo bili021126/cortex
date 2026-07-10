@@ -20,6 +20,7 @@ export class NodeFileSystemAdapter implements IFileSystemAdapter {
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
+    console.log(`[TRACE write_file] adapter.writeFile: path=${filePath} contentLength=${content.length}`);
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

@@ -108,3 +108,11 @@ export type { CompactionOptions, CompactionResult } from "./context-compactor.js
 
 // ─── REPL 主入口 ──────────────────────────────────
 export { tuiReplHandler } from "./tui-repl.js";
+
+// ─── WebUI ──────────────────────────────────────────
+export { startWebUI } from "./web/index.js";
+export type { StartWebUIOptions, StartWebUIResult } from "./web/index.js";
+export { WSGateway } from "./web/gateway.js";
+export { StateAggregator } from "./web/state-aggregator.js";
+export type { WebUIState, TaskNodeSnapshot, AgentStatusSnapshot, PipelineSnapshot } from "./web/state-aggregator.js";
+export { APIRouter } from "./web/api-router.js";

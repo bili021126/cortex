@@ -87,6 +87,7 @@ export async function crystallizeSkillToKnowledge(
     if (existing.length > 0) {
       // 2. 已有记录 → 归档旧版本 → 继承版本号 + 证据链
       const oldEntry = existing[0];
+      if (!oldEntry) throw new Error('Unexpected: existing entry is null');
       version = ((oldEntry.content_blob?.version as number) ?? 1) + 1;
       existingEvidenceIds = (oldEntry.content_blob?.evidenceIds as string[]) ?? [];
       memory.cas(oldEntry.id, "Active", "Archived");
@@ -139,10 +140,7 @@ export async function crystallizeSkillToKnowledge(
 
     return { memId, isUpdate: existing.length > 0, version, verified };
   } catch (e) {
-    console.error(
-      `[skill-persister] 技能结晶为知识失败: [${skill.kind}] ${skill.name}`,
-      e instanceof Error ? e.message : String(e),
-    );
+    DegradationBoundary.handle(e, "skill-persister.crystallize", "escalate");
     return null;
   }
 }
@@ -296,10 +294,7 @@ export function persistSkillsToMemory(
       memory.commitMemory(memId);
       count++;
     } catch (e) {
-      console.error(
-        `[skill-persister] 写入技能失败: [${skill.kind}] ${skill.name}`,
-        e instanceof Error ? e.message : String(e),
-      );
+      DegradationBoundary.handle(e, "skill-persister.persist", "escalate");
     }
   }
 
@@ -335,10 +330,7 @@ export async function loadSkillsFromMemory(memory: MemoryStore): Promise<SkillTe
       skillTemplates.push(skill);
     }
   } catch (e) {
-    console.error(
-      "[skill-persister] 从 MemoryStore 加载技能失败",
-      e instanceof Error ? e.message : String(e),
-    );
+    DegradationBoundary.handle(e, "skill-persister.load", "escalate");
   }
 
   return skillTemplates;
@@ -372,7 +364,7 @@ export function scanOutputFilesForSkills(workspaceDir: string): SkillTemplate[] 
         const MAX_SIZE = 10 * 1024 * 1024;
         const stats = fs.statSync(filePath);
         if (stats.size > MAX_SIZE) {
-          console.warn(`[scanOutputFilesForSkills] 跳过超大文件: ${filePath} (${stats.size} bytes)`);
+          DegradationBoundary.handle(new Error(`跳过超大文件: ${filePath}`), "skill-persister.oversized", "trace");
           continue;
         }
         const content = fs.readFileSync(filePath, "utf-8");
@@ -384,10 +376,7 @@ export function scanOutputFilesForSkills(workspaceDir: string): SkillTemplate[] 
           }
         }
       } catch (e) {
-        console.error(
-          `[skill-persister] 扫描文件失败: ${filePath}`,
-          e instanceof Error ? e.message : String(e),
-        );
+        DegradationBoundary.handle(e, "skill-persister.scan", "escalate");
       }
     }
   }
@@ -420,10 +409,7 @@ function findFiles(root: string, glob: string): string[] {
         }
       }
     } catch (e) {
-      console.error(
-        `[skill-persister] 遍历目录失败: ${dir}`,
-        e instanceof Error ? e.message : String(e),
-      );
+      DegradationBoundary.handle(e, "skill-persister.traverse", "escalate");
     }
   }
 
@@ -477,7 +463,7 @@ function patternDefinitionToSkillTemplate(
   // 从 description 中提取 trigger 文本
   // description 格式: "[{strategy}] trigger: {triggerText}"
   const triggerMatch = p.description.match(/trigger:\s*(.+)/);
-  const trigger = triggerMatch ? triggerMatch[1].trim() : "";
+  const trigger = triggerMatch?.[1] ? triggerMatch[1].trim() : "";
 
   return {
     id: p.id,
@@ -564,8 +550,8 @@ function _extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
   let match: RegExpExecArray | null;
 
   while ((match = sectionRegex.exec(content)) !== null) {
-    const pNumber = match[1];
-    const fullName = match[2].trim();
+    const pNumber = match[1] ?? "";
+    const fullName = (match[2] ?? "").trim();
     const name = fullName.replace(/\(.*?\)/g, "").trim();
 
     const sectionStart = match.index + match[0].length;
@@ -578,13 +564,13 @@ function _extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
 
     // 提取 tags（在 section 内容中查找 "Tags:" 行）
     const tagsMatch = sectionContent.match(/Tags?[：:]\s*(.+)/);
-    const triggerTags: Tag[] = tagsMatch
+    const triggerTags: Tag[] = tagsMatch?.[1]
       ? (tagsMatch[1].split(/[,，、]/).map((t: string) => t.trim()).filter(Boolean) as Tag[])
       : ([] as unknown as Tag[]);
 
     // 提取 trigger
     const triggerMatch = sectionContent.match(/Trigger[：:]\s*(.+)/);
-    const trigger = triggerMatch
+    const trigger = triggerMatch?.[1]
       ? triggerMatch[1].trim()
       : `P${pNumber}:${kind}`;
 
@@ -606,7 +592,7 @@ function _extractPNSections(content: string, kind: SkillKind): SkillTemplate[] {
 
     // 提取 conditions → expectedOutput
     const conditionMatch = sectionContent.match(/Condition[：:]\s*([\s\S]*?)(?:\n(?:#{1,3}|\n)|$)/);
-    const conditions = conditionMatch
+    const conditions = conditionMatch?.[1]
       ? conditionMatch[1].split("\n").map((c: string) => c.trim()).filter(Boolean).join("; ")
       : "";
     const expectedOutput = conditions || `P${pNumber}:${name}`;
@@ -646,8 +632,8 @@ function _extractPatternSections(content: string, kind: SkillKind): SkillTemplat
   let match: RegExpExecArray | null;
 
   while ((match = sectionRegex.exec(content)) !== null) {
-    const patternNumber = match[1];
-    const name = match[2].trim();
+    const patternNumber = match[1] ?? "";
+    const name = (match[2] ?? "").trim();
 
     const sectionStart = match.index + match[0].length;
 
@@ -659,13 +645,13 @@ function _extractPatternSections(content: string, kind: SkillKind): SkillTemplat
 
     // 提取 tags
     const tagsMatch = sectionContent.match(/Tags?[：:]\s*(.+)/);
-    const triggerTags2: Tag[] = tagsMatch
+    const triggerTags2: Tag[] = tagsMatch?.[1]
       ? (tagsMatch[1].split(/[,，、]/).map((t: string) => t.trim()).filter(Boolean) as Tag[])
       : ([] as unknown as Tag[]);
     
     // 提取 trigger
     const triggerMatch2 = sectionContent.match(/Trigger[：:]s*(.+)/);
-    const trigger2 = triggerMatch2
+    const trigger2 = triggerMatch2?.[1]
       ? triggerMatch2[1].trim()
       : `模式${patternNumber}:${kind}`;
     
@@ -689,7 +675,7 @@ function _extractPatternSections(content: string, kind: SkillKind): SkillTemplat
 
     // 提取 expected output
     const outputMatch = sectionContent.match(/输出[：:]\s*(.+)/);
-    const expectedOutput = outputMatch
+    const expectedOutput = outputMatch?.[1]
       ? outputMatch[1].trim()
       : `模式${patternNumber}: ${name}`;
 

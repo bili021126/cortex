@@ -41,6 +41,12 @@ export { createInspectorAgent, createBrowserAgent, ButlerAgent } from "./agents/
 // 特殊 Agent & Core-2 实验性
 export { MetaAgent, StrategistAgent, type IntentClarification } from "./agents/index.js";
 
+// ── Core-2: 烟绯确认门 Agent ──────────────────────
+// @experimental 信任分计算 + 自动放行决策
+// @yanfei confirm-gate-agent — trust score computation & auto-approval
+export { createConfirmGateAgent, computeTrustScore, shouldAutoApprove } from "./agents/confirm-gate-agent.js";
+export type { TrustRecord, TrustScore } from "./agents/confirm-gate-agent.js";
+
 // ── Core-2: Prompt 管理 ────────────────────────
 // @experimental prompt-kit 引擎集成层
 export { PromptManager } from "./core/prompt-manager.js";
@@ -53,48 +59,53 @@ export type { LoopStrategy } from "./core/loop-strategy-registry.js";
 
 // ── Core-2: 任务路由器 ─────────────────────────
 // @experimental 统一策略+模型路由决策
-export { TaskRouter } from "./core/task-router.js";
-export type { RouteDecision } from "./core/task-router.js";
+export { TaskRouter } from "./execution/task-router.js";
+export type { RouteDecision } from "./execution/task-router.js";
+
+// ── Core-2: 世界模型仿真层 ───────────────────────
+// @experimental 计划执行因果推演（Phase 1 stub）
+export { SimulationRunner, simulationRunner } from "./planning/simulation-runner.js";
+export type { SimulationInput, SimulationResult, SimulationConfig } from "./planning/simulation-runner.js";
 
 // ── Core-2: 环境感知路由器 ─────────────────────
 // @experimental 运行时环境约束（模型可用性/配额/延迟）
-export { EnvironmentAwareRouter } from "./core/environment-aware-router.js";
-export type { ModelHealth, EnvironmentRouterOptions } from "./core/environment-aware-router.js";
+export { EnvironmentAwareRouter } from "./execution/environment-aware-router.js";
+export type { ModelHealth, EnvironmentRouterOptions } from "./execution/environment-aware-router.js";
 
 // ── Core-2: 哨兵信号分层过滤器 ─────────────────
 // @experimental L1/L2/L3 信号分层 + 去噪 + 采样
-export { SentinelSignalFilter } from "./core/sentinel-signal-filter.js";
-export { ZeroTokenValidator } from "./core/zero-token-validator.js";
-export type { ZeroTokenRule, RuleResult, RuleContext } from "./core/zero-token-validator.js";
-export type { SignalLevel, FilteredSignal, SignalFilterOptions } from "./core/sentinel-signal-filter.js";
-export { getRejections } from "./core/hard-verification-gate.js";
+export { SentinelSignalFilter } from "./planning/sentinel-signal-filter.js";
+export { ZeroTokenValidator } from "./execution/zero-token-validator.js";
+export type { ZeroTokenRule, RuleResult, RuleContext } from "./execution/zero-token-validator.js";
+export type { SignalLevel, FilteredSignal, SignalFilterOptions } from "./planning/sentinel-signal-filter.js";
+export { getRejections } from "./planning/hard-verification-gate.js";
 
 // ── Core-2: 治理事件发射器 ─────────────────────
 // @experimental DocGovernAgent 治理事件（修宪/审计/合规/圆桌）
-export { GovernanceEventEmitter } from "./core/governance-events.js";
-export type { GovernanceEventType, GovernanceEventPayload } from "./core/governance-events.js";
+export { GovernanceEventEmitter } from "./planning/governance-events.js";
+export type { GovernanceEventType, GovernanceEventPayload } from "./planning/governance-events.js";
 
 // ── Core-2: 决策门桥接器 ───────────────────────
 // @experimental DECISION_REQUIRED → ConfirmGate 桥接
-export { DecisionGateBridge } from "./core/decision-gate-bridge.js";
-export type { DecisionRequest, DecisionResult } from "./core/decision-gate-bridge.js";
+export { DecisionGateBridge } from "./execution/decision-gate-bridge.js";
+export type { DecisionRequest, DecisionResult } from "./execution/decision-gate-bridge.js";
 
 // ── Core-2: 韧性策略集成 ───────────────────────
 // @experimental retry/circuit-breaker/timeout 引擎集成
-export { ResiliencePolicyFactory, resilienceFactory } from "./core/resilience-integration.js";
-export type { ResilienceOptions } from "./core/resilience-integration.js";
+export { ResiliencePolicyFactory, resilienceFactory } from "./execution/resilience-integration.js";
+export type { ResilienceOptions } from "./execution/resilience-integration.js";
 
 // ── Core-2: 通知运行时接入 ─────────────────────
 // @experimental PipelineObserver → NotificationPipe 桥接
-export { NotificationRuntime } from "./core/notification-runtime.js";
-export type { NotificationRuntimeOptions } from "./core/notification-runtime.js";
+export { NotificationRuntime } from "./planning/notification-runtime.js";
+export type { NotificationRuntimeOptions } from "./planning/notification-runtime.js";
 
 // ── Core-2: 技能作用域 ─────────────────────────
 // @experimental 四级作用域技能解析（跨域/项目/包级/Agent）
-export { resolveByScope, tagSkillScope, type SkillScope } from "./core/skill-scope.js";
+export { resolveByScope, tagSkillScope, type SkillScope } from "./planning/skill-scope.js";
 
 // ── 记忆子系统（仅引擎胶水层） ──────────────────
-export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE, registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "./memory/index.js";
+export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE, registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "./memory-bridge/index.js";
 
 // ── Bootstrap 集成入口 ──────────────────────────
 export { bootstrapEngine, resolveLlm } from "./bootstrap/bootstrap-engine.js";
@@ -102,7 +113,6 @@ export type { BootstrapEngineOptions, BootstrapEngineResult } from "./bootstrap/
 
 // ── 引擎核心 ──────────────────────────────
 // @note v3.x stable — 调度/平台/配置/LLM 类型请直接从对应包导入，engine barrel 不再重导出
-export { BaseAgent } from "./base-agent.js";
 export { Scheduler } from "./core/scheduler.js";
 export { MetaAgentReplanAdapter } from "./core/meta-agent-adapter.js";
 
@@ -115,7 +125,7 @@ export type { DegradationLevel } from "./core/degradation-boundary.js";
 // @note v2.6.7 兼容层已砍，直接导入 @cortex/consistency
 
 // ── 引擎组件 ────────────────────────────────────
-export { PoolAwareState } from "./components/pool-aware.js";
+export { PoolAwareState } from "./execution/pool-aware.js";
 // DocRegistry → 从 @cortex/governance 直接导入
 
 // ── 搜索后端 ───────────────────────────────────
@@ -155,6 +165,10 @@ export { CapabilityRegistry, capabilityRegistry } from "./core/capability-regist
 
 // ── v3.1 调度层接口类型（仅供测试兼容） ──────
 // PipelineCtx/IStep → 从 @cortex/scheduler 直接导入
+
+// ── Core-2 Batch1: AgentRegistry ───────────────
+export { AgentRegistry, agentRegistry } from "./registry/agent-registry.js";
+export type { AgentRegistration } from "./registry/agent-registry.js";
 
 // ── 插件体系（v3.2 迁入 @cortex/plugin-runner）────
 // PluginLoader → 从 @cortex/plugin-runner 直接导入

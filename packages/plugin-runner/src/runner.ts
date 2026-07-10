@@ -135,7 +135,7 @@ export class PluginRunner {
     }
 
     // 1-b. Schema 配置校验（使用插件配置，无配置时回退默认值）
-    const config = (plugin as unknown as Record<string, unknown>).config ?? { enabled: true };
+    const config: Record<string, unknown> = (plugin as unknown as { config?: Record<string, unknown> }).config ?? {};
     const configResult = this._validator.validateConfig(name, config);
     if (!configResult.valid) {
       return {
@@ -236,9 +236,10 @@ export class PluginRunner {
       );
 
       // 收集结果
-      for (let i = 0; i < batch.length; i++) {
-        const pluginName = batch[i].name;
+      for (const [i, plugin] of batch.entries()) {
+        const pluginName = plugin.name;
         const settled = batchResults[i];
+        if (!settled) continue;
 
         if (settled.status === "fulfilled") {
           results.set(pluginName, settled.value);
@@ -246,7 +247,7 @@ export class PluginRunner {
           // Promise.allSettled 理论上不会走到 rejected 分支，
           // 因为 execute() 自身 catch 了所有异常。
           // 此处作为防御式兜底。
-          const reason = settled.reason;
+          const reason = (settled as PromiseRejectedResult).reason;
           results.set(pluginName, {
             success: false,
             error: reason instanceof Error ? reason.message : String(reason),

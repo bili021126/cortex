@@ -1,4 +1,5 @@
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type NodeResult, type TaskNode } from "@cortex/shared";
+import { SCHEDULER_MAX_REPLAN_PER_NODE, SCHEDULER_MAX_TOTAL_REPLANS } from "@cortex/config";
 import type { ITaskBoard } from "./task-board.js";
 import type { EngineConfig } from "@cortex/config";
 
@@ -79,6 +80,11 @@ export class ReplanManager {
     return this.replanQueue.length > 0;
   }
 
+  /** 获取指定节点的重规划尝试次数 */
+  getReplanCount(nodeId: string): number {
+    return this.replanCount.get(nodeId) ?? 0;
+  }
+
   /**
    * 将节点入队重规划队列。
    * @param node 失败/越界节点
@@ -92,7 +98,7 @@ export class ReplanManager {
     if (isReActTimeout) return;
 
     const count = this.replanCount.get(node.id) ?? 0;
-    if (count >= this.config.maxReplanPerNode) return;
+    if (count >= SCHEDULER_MAX_REPLAN_PER_NODE) return;
 
     this.replanQueue.push({ node, reason, count, disposition });
     this.observer.emit({
@@ -110,12 +116,24 @@ export class ReplanManager {
    * @returns Promise（调用方可 await 或 fire-and-forget），上限触顶时返回 null
    */
   tryFireReplan(): Promise<void> | null {
-    if (this.totalReplans >= this.config.maxTotalReplans) {
-      this._emitBudgetExhausted();
-      return null;
+    if (this.totalReplans >= SCHEDULER_MAX_TOTAL_REPLANS) {
+      // 发射 SchedulerReplanLimit 事件后降级（小范围修复），不直接放弃
+      this.observer.emit({
+        type: PipelineEventType.SchedulerReplanLimit,
+        priority: PipelinePriority.CRITICAL,
+        payload: {
+          totalReplans: this.totalReplans,
+          maxReplans: SCHEDULER_MAX_TOTAL_REPLANS,
+          deferred: this.replanQueue.length,
+          degraded: true,
+        },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+      return this._drainDegraded();
     }
     return this._drain().then(() => {
-      if (this.totalReplans >= this.config.maxTotalReplans) {
+      if (this.totalReplans >= SCHEDULER_MAX_TOTAL_REPLANS) {
         this._emitBudgetExhausted();
       }
     });
@@ -128,13 +146,55 @@ export class ReplanManager {
       priority: PipelinePriority.CRITICAL,
       payload: {
         totalReplans: this.totalReplans,
-        maxReplans: this.config.maxTotalReplans,
+        maxReplans: SCHEDULER_MAX_TOTAL_REPLANS,
         deferred: this.replanQueue.length,
       },
       timestamp: Date.now(),
       notificationType: "WARNING",
     });
     this.replanQueue.length = 0;
+  }
+
+  /**
+   * 降级 drain：配额耗尽时的小范围修复（不占 replan 配额，local scope only）。
+   * maxReplanPerNode 压缩到 1，impactScope 限制为 local。
+   */
+  private async _drainDegraded(): Promise<void> {
+    const provider = this.replanProvider;
+    if (!provider) {
+      this.replanQueue.length = 0;
+      return;
+    }
+
+    const batch = this.replanQueue.splice(0);
+    if (batch.length === 0) return;
+
+    const promises = batch.map(async (item) => {
+      const count = item.count + 1;
+      this.replanCount.set(item.node.id, count);
+
+      // 降级：maxReplanPerNode=1，只做 local 范围修复
+      const result = item.disposition === "boundary_violation"
+        ? await provider.requestBoundaryReplan(item.node, item.reason, count, undefined, 1)
+        : await provider.requestReplan(item.node, item.reason, count, undefined, 1);
+
+      const newIds: string[] = [];
+      for (const n of result.nodes) {
+        n.isRlmSubtask = true;
+        this.board.addNode(n);
+        this.replanCount.set(n.id, 0);
+        newIds.push(n.id);
+      }
+      this.replanMap.set(item.node.id, newIds);
+
+      if (result.impactScope === "subtree") {
+        this.board.removeSubtree(item.node.id);
+      } else {
+        this.board.removeNode(item.node.id);
+      }
+    });
+
+    await Promise.allSettled(promises);
   }
 
   /**
@@ -221,7 +281,7 @@ export class ReplanManager {
 
     const fullBatch = this.replanQueue.splice(0); // 原子取出
 
-    const available = this.config.maxTotalReplans - this.totalReplans;
+    const available = SCHEDULER_MAX_TOTAL_REPLANS - this.totalReplans;
     if (available <= 0) return;
     const batch = fullBatch.slice(0, available);
     this.totalReplans += batch.length;
@@ -240,10 +300,10 @@ export class ReplanManager {
 
       const result = item.disposition === "boundary_violation"
         ? await provider.requestBoundaryReplan(
-            item.node, item.reason, count, undefined, this.config.maxReplanPerNode,
+            item.node, item.reason, count, undefined, SCHEDULER_MAX_REPLAN_PER_NODE,
           )
         : await provider.requestReplan(
-            item.node, item.reason, count, undefined, this.config.maxReplanPerNode,
+            item.node, item.reason, count, undefined, SCHEDULER_MAX_REPLAN_PER_NODE,
           );
 
       const newIds: string[] = [];
@@ -268,6 +328,7 @@ export class ReplanManager {
     for (let i = 0; i < results.length; i++) {
       const r = results[i]!;
       if (r.status === "rejected") {
+        this.totalReplans -= 1; // 回退预扣配额
         const nodeId = batch[i]?.node.id ?? "unknown";
         this.observer.emit({
           type: PipelineEventType.SchedulerReplanFailed,

@@ -109,16 +109,45 @@ export interface PluginContext {
  * PluginContainer —— PluginLoader.load() 的返回结果。
  * 封装了全部已加载插件的生命周期管理。
  */
+export interface Plugin<TConfig = Record<string, unknown>> {
+  readonly name: string;
+  readonly version: string;
+  readonly description: string;
+  readonly dependencies: string[];
+  readonly tags: string[];
+  readonly hooks: PluginHooks;
+  init(config: TConfig): Promise<void>;
+  execute(context: ExecuteContext): Promise<void>;
+  destroy(): Promise<void>;
+}
+
+export interface PluginSchema<TConfig = Record<string, unknown>> {
+  name: string;
+  validateConfig(config: unknown): string[];
+  validateInput?(input: unknown): string[];
+  validateOutput?(output: unknown): string[];
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
 export interface PluginMeta {
   name: string;
   version?: string;
   description?: string;
   dependencies: string[];
+  tags: string[];
+  hooks: PluginHooks;
+  filePath?: string;
 }
 
 export interface PluginConfig {
   name: string;
   enabled: boolean;
+  timeout?: number;
+  env?: Record<string, string>;
   settings?: Record<string, unknown>;
 }
 

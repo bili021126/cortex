@@ -49,6 +49,13 @@ class FileBackend implements MemoryStoreBackend {
   private _indexPath = "";
   private _linksPath = "";
   private _prettyPrint: boolean;
+  private _flushQueue: Promise<unknown> = Promise.resolve();
+
+  /** 串行化 flush 操作，防止并发 rename 竞争 */
+  private _serializedFlush<T>(fn: () => Promise<T>): Promise<T> {
+    this._flushQueue = this._flushQueue.then(fn, fn);
+    return this._flushQueue as Promise<T>;
+  }
 
   constructor(options: FileBasedMemoryStoreOptions) {
     this._prettyPrint = options.prettyPrint ?? false;
@@ -128,27 +135,31 @@ class FileBackend implements MemoryStoreBackend {
   }
 
   async flushIndex(entries: Map<string, MemoryEntry>): Promise<void> {
-    const index: IndexFile = {
-      version: STORAGE_VERSION,
-      updatedAt: Date.now(),
-      entries: {},
-    };
-    for (const [id, entry] of entries) {
-      index.entries[id] = { id, kind: entry.kind, summary: entry.summary, semantic_state: entry.semantic_state, createdAt: entry.createdAt, weight: entry.weight };
-    }
-    const tmpPath = this._indexPath + ".tmp";
-    await fs.writeFile(tmpPath, JSON.stringify(index, null, this._prettyPrint ? 2 : undefined), "utf-8");
-    await fs.rename(tmpPath, this._indexPath);
+    return this._serializedFlush(async () => {
+      const index: IndexFile = {
+        version: STORAGE_VERSION,
+        updatedAt: Date.now(),
+        entries: {},
+      };
+      for (const [id, entry] of entries) {
+        index.entries[id] = { id, kind: entry.kind, summary: entry.summary, semantic_state: entry.semantic_state, createdAt: entry.createdAt, weight: entry.weight };
+      }
+      const tmpPath = this._indexPath + ".tmp";
+      await fs.writeFile(tmpPath, JSON.stringify(index, null, this._prettyPrint ? 2 : undefined), "utf-8");
+      await fs.rename(tmpPath, this._indexPath);
+    });
   }
 
   async flushLinks(links: Map<string, MemoryLink[]>): Promise<void> {
-    const linksFile: LinksFile = { version: STORAGE_VERSION, updatedAt: Date.now(), links: {} };
-    for (const [sourceId, linkList] of links) {
-      linksFile.links[sourceId] = linkList.map(l => ({ ...l, linkType: l.linkType }));
-    }
-    const tmpPath = this._linksPath + ".tmp";
-    await fs.writeFile(tmpPath, JSON.stringify(linksFile, null, this._prettyPrint ? 2 : undefined), "utf-8");
-    await fs.rename(tmpPath, this._linksPath);
+    return this._serializedFlush(async () => {
+      const linksFile: LinksFile = { version: STORAGE_VERSION, updatedAt: Date.now(), links: {} };
+      for (const [sourceId, linkList] of links) {
+        linksFile.links[sourceId] = linkList.map(l => ({ ...l, linkType: l.linkType }));
+      }
+      const tmpPath = this._linksPath + ".tmp";
+      await fs.writeFile(tmpPath, JSON.stringify(linksFile, null, this._prettyPrint ? 2 : undefined), "utf-8");
+      await fs.rename(tmpPath, this._linksPath);
+    });
   }
 
   async flushAll(entries: Map<string, MemoryEntry>, links: Map<string, MemoryLink[]>): Promise<void> {

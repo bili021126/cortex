@@ -74,7 +74,6 @@ export function createE2eAdapter(): LlmAdapter {
     chatModel: process.env["DEEPSEEK_CHAT_MODEL"] ?? "deepseek-v4-flash",
     reasonerModel: process.env["DEEPSEEK_REASONER_MODEL"] ?? "deepseek-v4-pro",
     label: "e2e-test",
-    extraBody: baseUrl.includes("deepseek") ? { thinking: { type: "enabled" } } : undefined,
   });
 }
 

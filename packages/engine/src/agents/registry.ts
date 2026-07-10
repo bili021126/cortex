@@ -8,8 +8,8 @@
 // ============================================================
 
 import { AgentType, type TaskNode, type MemoryQuery, type MemoryKind, type LinkType, type ReadMode, type AgentCapability } from "@cortex/shared";
-import type { AgentFactoryConfig } from "../components/agent-factory.js";
-import { makeMemoryQuery } from "../memory/pipeline.js";
+import type { AgentFactoryConfig } from "../execution/agent-factory.js";
+import { makeMemoryQuery } from "../memory-bridge/pipeline.js";
 import { capabilityRegistry } from "../core/capability-registry.js";
 
 // ─── Memory Query 参数（每个 Agent 的唯一差异点） ──────────
@@ -165,6 +165,19 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
       toolPermissions: ["write_file", "search_replace", "read_file", "run_shell"],
       memoryQueryStrategy: "fix", maxInstances: 2, modelKey: "fix",
       applicableScenarios: ["紧急修复", "缺陷定位", "回滚操作"], outputFormat: "code", collaborationMode: "solo",
+    },
+  },
+  {
+    type: AgentType.Strategist,
+    memoryParams: { kind: "TaskLog", linkTypes: ["ProducedBy" as LinkType, "DerivedFrom" as LinkType], bfsDepth: 2, limit: 3 },
+    autoRegister: false,
+    description: "战略监理——钟离 / 霜凝",
+    capability: {
+      id: AgentType.Strategist, type: AgentType.Strategist, role: "钟离 / 霜凝 — 战略监理", emoji: "☄️",
+      tags: ["strategist", "strategy", "contract"], produces: ["strategy"],
+      toolPermissions: ["read_file", "search_code", "web_search", "list_files", "search_symbol", "grep_files", "file_info", "glob_find", "resolve_import", "json_query", "diff_files"],
+      memoryQueryStrategy: "strategist", maxInstances: 1, modelKey: "strategist",
+      applicableScenarios: ["战略评估", "架构审查", "契约守护", "阶段跃迁判定"], outputFormat: "decision", collaborationMode: "reviewer",
     },
   },
 ];

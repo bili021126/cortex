@@ -6,6 +6,11 @@
       "sourceType": "well-known",
       "computedHash": "346216e395f0dcd5a5747c6f38f114df850dddc582de375a41c4cdff4da7bad8"
     },
+    "frontend-design": {
+      "source": "modelscope.cn",
+      "sourceType": "well-known",
+      "computedHash": "3e0be122a3db8206b6d0d6b07cca898b5c75fb9b7b2101abe143fb2851734d2e"
+    },
     "github": {
       "source": "modelscope.cn",
       "sourceType": "well-known",

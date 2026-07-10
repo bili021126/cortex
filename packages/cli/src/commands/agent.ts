@@ -9,7 +9,7 @@
 
 import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
-import { AGENT_CHINESE_ROLE, AgentStatus, AgentType, CHINESE_NAME_TO_TYPE, getAgentTags, getAgentToolPermissions, type AgentConfig, type ICortexApi } from "@cortex/shared";
+import { AGENT_CHINESE_ROLE, AgentStatus, AgentType, CHINESE_NAME_TO_TYPE, getAgentTags, getAgentToolPermissions, type AgentConfig, type ICortexComponents, type ICortexLifecycle } from "@cortex/shared";
 import type { StrategistAgent } from "@cortex/engine";
 import type { IAgentPool } from "@cortex/scheduler";
 import * as fs from "node:fs";
@@ -71,7 +71,7 @@ const HELP_TEXT = [
   "  --verbose, -v        显示详细信息",
 ].join("\n");
 
-export function createAgentHandler(bridge: ICortexApi): CommandHandler {
+export function createAgentHandler(bridge: ICortexComponents & ICortexLifecycle): CommandHandler {
   return async (args, options, _context): Promise<CommandResult> => {
     if (isHelpRequest(args)) {
       return { success: true, output: HELP_TEXT, exitCode: 0 };
@@ -81,7 +81,7 @@ export function createAgentHandler(bridge: ICortexApi): CommandHandler {
 }
 
 async function dispatchAgent(
-  bridge: ICortexApi,
+  bridge: ICortexComponents & ICortexLifecycle,
   args: string[],
   options: Record<string, unknown>,
 ): Promise<CommandResult> {
@@ -144,7 +144,7 @@ interface AgentRowsCtx {
   persisted: PersistedInstances;
   statusFilter: string | undefined;
   verbose: unknown;
-  bridge: ICortexApi;
+  bridge: ICortexComponents & ICortexLifecycle;
   tally: (instances: number, awake: boolean) => void;
   rows: string[][];
 }
@@ -212,7 +212,7 @@ function _buildAgentRows(ctx: AgentRowsCtx): string[][] {
 function handleAgentList(
   pool: IAgentPool,
   options: Record<string, unknown>,
-  bridge: ICortexApi,
+  bridge: ICortexComponents & ICortexLifecycle,
 ): CommandResult {
   const p = safePool(pool);
   const statusFilter = options["status"] as string | undefined;
@@ -252,7 +252,7 @@ interface AgentInspectInfo {
 }
 
 /** 解析 Strategist 的 inspect 信息 */
-function _resolveStrategistInspect(bridge: ICortexApi, typeName: string): AgentInspectInfo {
+function _resolveStrategistInspect(bridge: ICortexComponents & ICortexLifecycle, typeName: string): AgentInspectInfo {
   const strategists = bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
   const id = typeName === "钟离" || typeName === "zhongli" ? "zhongli" : "shuangning";
   const strategist = strategists?.get(id);
@@ -283,7 +283,7 @@ function _inspectRegularAgent(pool: IAgentPool, agentType: AgentType): AgentInsp
 function handleAgentInspect(
   pool: IAgentPool,
   typeName: string | undefined,
-  bridge: ICortexApi,
+  bridge: ICortexComponents & ICortexLifecycle,
 ): CommandResult {
   if (!typeName) {
     return { success: false, error: "请指定 Agent 类型。用法: cortex agent inspect <type>", exitCode: 1 };

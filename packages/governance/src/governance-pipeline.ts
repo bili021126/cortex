@@ -24,6 +24,9 @@ import {
   type GovernanceSummary,
 } from "./governance-loop.js";
 
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
+import type { IPipelineObserver } from "@cortex/shared";
+
 // ─── 类型 ────────────────────────────────────────
 
 /** 管线阶段标识 */
@@ -61,6 +64,8 @@ export interface PipelineContext {
   stageResults: StageResult[];
   /** 用户回调：请求开拓者裁决 */
   onRulerDecision?: (proposals: BatchJudgment[]) => Promise<BatchJudgment[]>;
+  /** PipelineObserver 引用——用于发射可观测事件 */
+  observer?: IPipelineObserver;
 }
 
 /** 管线配置 */
@@ -73,6 +78,8 @@ export interface PipelineConfig {
   onRulerDecision?: (proposals: BatchJudgment[]) => Promise<BatchJudgment[]>;
   /** 阶段注册覆盖 */
   stageOverrides?: Partial<Record<PipelineStageId, StageFn>>;
+  /** PipelineObserver 引用——用于发射可观测事件 */
+  observer?: IPipelineObserver;
 }
 
 /** 管线运行结果 */
@@ -319,6 +326,23 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
 
     const passed = ciResult.allPassed;
 
+    // 发射可观测信号——修宪CI验证结果
+    const approvedDecisions = decisions?.filter((d) => d.proposal.status === "approved");
+    const proposalId = approvedDecisions?.[0]?.proposal.id;
+    ctx.observer?.emit({
+      type: PipelineEventType.GovernanceAmendmentProposed,
+      priority: PipelinePriority.NORMAL,
+      payload: {
+        severity: "FYI",
+        source: "governance-loop",
+        summary: `CI verify ${passed ? "passed" : "failed"}`,
+        amendmentId: proposalId ?? "unknown",
+        detail: JSON.stringify({ action: "ci_verify", passed }),
+      },
+      timestamp: Date.now(),
+      notificationType: "FYI",
+    });
+
     if (!passed) {
       const failures: string[] = [];
       if (!ciResult.configValid) failures.push("配置校验");
@@ -418,6 +442,7 @@ export async function runPipeline(config: PipelineConfig): Promise<PipelineResul
     artifacts: new Map(),
     stageResults: [],
     onRulerDecision,
+    observer: config.observer,
   };
 
   let blockedAt: PipelineStageId | null = null;

@@ -370,6 +370,7 @@ export class PluginConfigManager {
     const merged = this.getPluginConfig(pluginName);
 
     return {
+      name: pluginName,
       enabled: (merged.enabled as boolean) ?? true,
       timeout: (merged.timeout as number) ?? undefined,
       env: (merged.env as Record<string, string>) ?? undefined,

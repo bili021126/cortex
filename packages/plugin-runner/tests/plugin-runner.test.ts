@@ -1,3 +1,22 @@
+// @ci: unit
+import { describe, it, expect } from "vitest";
+
+describe("@cortex/plugin-runner smoke", () => {
+  it("barrel export 可导入", async () => {
+    const mod = await import("@cortex/plugin-runner");
+    expect(mod).toBeDefined();
+  });
+
+  it("PluginRunner 可导入", async () => {
+    const { PluginRunner } = await import("@cortex/plugin-runner");
+    expect(PluginRunner).toBeDefined();
+  });
+
+  it("PluginLoader 可导入", async () => {
+    const { PluginLoader } = await import("@cortex/plugin-runner");
+    expect(PluginLoader).toBeDefined();
+  });
+});
 /**
  * @cortex/plugin-runner — 包级冒烟测试
  * @ci: unit

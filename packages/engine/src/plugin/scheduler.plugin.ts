@@ -10,8 +10,10 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import type { Agent, AgentType, Disposable, MemoryEntry, ReadMode } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { tagRegistry } from "@cortex/config";
 import { Scheduler } from "../core/scheduler.js";
-import { createAgent, type AgentFactoryConfig } from "../components/agent-factory.js";
+import { createAgent, type AgentFactoryConfig } from "../execution/agent-factory.js";
 import { createInspectorAgent } from "../agents/inspector-agent.js";
 import { createBrowserAgent } from "../agents/browser-agent.js";
 import { ButlerAgent } from "../agents/butler-agent.js";
@@ -104,6 +106,26 @@ export class SchedulerPlugin implements EnginePlugin {
     // ── 注册特殊 Agent 工厂（配置驱动：新增 Agent 类型在别处 registerAgentFactory 即可）──
     _registerBuiltinAgentFactories(ctx, observer, tk, memory as MemoryStore, codingStandards, filterRead, llmMap);
 
+    // ── 标签校验：运行时检查所有 Agent 的 tag 是否已注册 ──
+    for (const def of fConfig.agentDefinitions) {
+      for (const tag of def.tags ?? []) {
+        if (!tagRegistry.has(tag)) {
+          observer.emit({
+            type: PipelineEventType.ErrorReported,
+            priority: PipelinePriority.HIGH,
+            payload: {
+              source: "scheduler.plugin",
+              severity: "WARNING",
+              error: `Agent ${def.type}: 未知标签 "${tag}" 未在 TagRegistry 中注册`,
+              hint: `如需使用新标签，请在 agents.json 中声明或调用 tagRegistry.register("${tag}")`,
+            },
+            timestamp: Date.now(),
+            notificationType: "WARNING",
+          });
+        }
+      }
+    }
+
     for (const def of fConfig.agentDefinitions) {
       const agentType = def.type;
 
@@ -142,10 +164,13 @@ export class SchedulerPlugin implements EnginePlugin {
           await agent.wakeup();
            
         } catch (e) {
-          console.warn(
-            `[Scheduler] ${agentType} Agent wakeup 失败（将跳过注册）:`,
-            e instanceof Error ? e.message : String(e),
-          );
+        observer.emit({
+          type: PipelineEventType.ErrorReported,
+          priority: PipelinePriority.NORMAL,
+          payload: { message: `[Scheduler] ${agentType} Agent wakeup 失败（将跳过注册）: ${e instanceof Error ? e.message : String(e)}` },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
           continue;
         }
         this.instance.register(agentType, agent, def.model);

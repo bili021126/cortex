@@ -391,7 +391,7 @@ describe("Registry", () => {
       expect(exhaustedEvents.length).toBe(1);
     });
 
-    it("should still execute via fallback when circuit is open", async () => {
+    it("should throw CircuitBreakerOpenError when circuit is open", async () => {
       const cb = new SimpleCircuitBreaker({ name: "svc", threshold: 1, halfOpenAfterMs: 10000 });
       registry.register("svc", {
         retry: new FixedRetry({ maxAttempts: 1 }),
@@ -402,8 +402,7 @@ describe("Registry", () => {
       cb.recordFailure();
       expect(cb.state).toBe("OPEN");
 
-      const result = await registry.execute("svc", async () => "fallback-executed");
-      expect(result).toBe("fallback-executed");
+      await expect(registry.execute("svc", async () => "should-not-execute")).rejects.toThrow(CircuitBreakerOpenError);
     });
 
     it("should throw TimeoutError when timeout exceeded", async () => {
@@ -466,7 +465,7 @@ describe("Registry", () => {
       expect(callCount).toBe(3);
     });
 
-    it("should override circuit breaker in execute", async () => {
+    it("should throw CircuitBreakerOpenError when override circuit breaker is open", async () => {
       const originalCb = new SimpleCircuitBreaker({ name: "original", threshold: 10, halfOpenAfterMs: 1000 });
       const overrideCb = new SimpleCircuitBreaker({ name: "override", threshold: 1, halfOpenAfterMs: 1000 });
 
@@ -479,13 +478,12 @@ describe("Registry", () => {
       overrideCb.recordFailure(); // Trip the override CB
       expect(overrideCb.state).toBe("OPEN");
 
-      // With override CB open, the function should still execute via fallback
-      const result = await registry.execute(
+      // With override CB open, execute should throw CircuitBreakerOpenError
+      await expect(registry.execute(
         "svc",
-        async () => "override-cb-ok",
+        async () => "should-not-execute",
         { circuitBreaker: overrideCb },
-      );
-      expect(result).toBe("override-cb-ok");
+      )).rejects.toThrow(CircuitBreakerOpenError);
     });
 
     it("should override timeout in execute", async () => {

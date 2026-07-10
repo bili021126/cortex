@@ -5,7 +5,7 @@
  
 import { AgentType as AT, AgentStatus as AS, PipelinePriority, type AgentStatus, type ObservableEvent, type SafeErrorReporter, type IPipelineObserver, type PlatformBridge } from "@cortex/shared";
 import type { AgentPool } from "@cortex/scheduler";
-import { PoolAwareState } from "../components/pool-aware.js";
+import { PoolAwareState } from "../execution/pool-aware.js";
 
 /**
  * ButlerAgent（管家）—— IDE 工程交互出口。

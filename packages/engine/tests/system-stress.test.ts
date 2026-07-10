@@ -455,9 +455,9 @@ describe("场景 3：重规划预算耗尽", () => {
     expect(doomedResult).toBeDefined();
     expect(doomedResult!.success).toBe(false);
 
-    // 重规划尝试次?= 3（maxReplanPerNode?
+    // 重规划尝试次数 = 10（SCHEDULER_MAX_TOTAL_REPLANS，全局 budget）
     const replanAttempts = replanEvents.filter((e) => e.type === "replan");
-    expect(replanAttempts).toHaveLength(3);
+    expect(replanAttempts).toHaveLength(10);
 
     // SchedulerReplanLimit 事件被触?
     expect(replanLimitHit).toBe(true);
@@ -500,7 +500,7 @@ describe("场景 3：重规划预算耗尽", () => {
 
     // 总重规划 ?3
     const totalReplans = replanByNode.A + replanByNode.B;
-    expect(totalReplans).toBeLessThanOrEqual(3);
+    expect(totalReplans).toBeLessThanOrEqual(10);
 
     // 两个节点都最终失败了
     expect(report.failed).toBeGreaterThanOrEqual(2);
@@ -597,7 +597,7 @@ describe("场景 3：重规划预算耗尽", () => {
 
     // 基础断言
     expect(report.failed).toBeGreaterThanOrEqual(1);
-    expect(runReplanCount).toBeLessThanOrEqual(3);
+    expect(runReplanCount).toBeLessThanOrEqual(10);
 
     // @fix D2 验证：SchedulerReplanLimit 事件已发射，队列被清?
     //   修复前：hasPending=true ?tryFireReplan()→null ?continue 死循??依赖 executeAllTimeout
@@ -636,7 +636,7 @@ describe("场景 3：重规划预算耗尽", () => {
 
     const report1 = await scheduler.executeAll();
     expect(report1.failed).toBeGreaterThanOrEqual(1);
-    expect(run1ReplanCount).toBeLessThanOrEqual(3);
+    expect(run1ReplanCount).toBeLessThanOrEqual(10);
 
     // Run 2: reset() 后新 run 应有独立预算
     board.addNode(makeNode({

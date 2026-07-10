@@ -12,7 +12,10 @@ import { crystallizeSkillToKnowledge, loadSkillsFromMemory, persistSkillsToMemor
 import type { ExternalSearcher } from "@cortex/skill-kit";
 import type { MemoryStore } from "@cortex/memory-store";
 import type { IMemoryStore, IPipelineObserver, SkillTemplate } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { MetaAgent } from "../core/meta-agent.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export async function initSkillSystem(
   observer: IPipelineObserver,
@@ -27,10 +30,13 @@ export async function initSkillSystem(
       try {
         persistSkillsToMemory([skill], memory as MemoryStore);
       } catch (e) {
-        console.warn(
-          `[bootstrapEngine] 技能状态变更持久化失败 (MemoryStore): ${skill.id}`,
-          e instanceof Error ? e.message : String(e),
-        );
+        observer.emit({
+          type: PipelineEventType.ErrorReported,
+          priority: PipelinePriority.NORMAL,
+          payload: { message: `[bootstrapEngine] 技能状态变更持久化失败 (MemoryStore): ${skill.id}: ${e instanceof Error ? e.message : String(e)}` },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
       }
 
       // 结晶为知识：trial → active 时，先事实认证再写入 MemoryKind.Knowledge（幂等更新）
@@ -54,10 +60,13 @@ export async function initSkillSystem(
             process.stderr.write(`[bootstrapEngine] 技能结晶为知识: ${skill.name} ${tag} verified=${result.verified}`);
           }
         } catch (e) {
-          console.warn(
-            `[bootstrapEngine] 技能结晶为知识失败: ${skill.id}`,
-            e instanceof Error ? e.message : String(e),
-          );
+          observer.emit({
+            type: PipelineEventType.ErrorReported,
+            priority: PipelinePriority.NORMAL,
+            payload: { message: `[bootstrapEngine] 技能结晶为知识失败: ${skill.id}: ${e instanceof Error ? e.message : String(e)}` },
+            timestamp: Date.now(),
+            notificationType: "WARNING",
+          });
         }
       }
     }
@@ -71,9 +80,11 @@ export async function initSkillSystem(
   registerSkillPipeline(observer, skillRegistry, memory);
 
   // 从 MemoryStore 恢复已持久化的技能模板
+  // Core-2 Batch1: 若 MemoryStore 为空，回退从 skills/ 目录加载 JSON
+  let loadedSkills: SkillTemplate[] = [];
   if (memory) {
     try {
-      const loadedSkills = await loadSkillsFromMemory(memory as MemoryStore);
+      loadedSkills = await loadSkillsFromMemory(memory as MemoryStore);
       if (loadedSkills.length > 0) {
         skillRegistry.registerAll(loadedSkills);
         process.stderr.write(
@@ -82,7 +93,51 @@ export async function initSkillSystem(
         );
       }
     } catch (e) {
-      console.warn("[bootstrapEngine] 从记忆库加载技能失败（非致命）:", e);
+      observer.emit({
+        type: PipelineEventType.ErrorReported,
+        priority: PipelinePriority.NORMAL,
+        payload: { message: `[bootstrapEngine] 从记忆库加载技能失败（非致命）: ${e}` },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+    }
+  }
+
+  // Core-2 Batch1: MemoryStore 为空时回退——从 skills/ 目录加载 JSON 文件
+  if (loadedSkills.length === 0) {
+    try {
+      const skillDir = path.join(projectRoot, "skills");
+      if (fs.existsSync(skillDir)) {
+        const files = fs.readdirSync(skillDir).filter((f) => f.endsWith(".json"));
+        const fileSkills: SkillTemplate[] = [];
+        for (const f of files) {
+          try {
+            const raw = fs.readFileSync(path.join(skillDir, f), "utf-8");
+            const skill = JSON.parse(raw) as SkillTemplate;
+            if (skill.id && skill.triggerTags && skill.steps) {
+              fileSkills.push(skill);
+            }
+          } catch {
+            // 单个文件解析失败不阻断
+            process.stderr.write(`[bootstrapEngine] 跳过技能文件（解析失败）: ${f}\n`);
+          }
+        }
+        if (fileSkills.length > 0) {
+          skillRegistry.registerAll(fileSkills);
+          process.stderr.write(
+            `[bootstrapEngine] 从 skills/ 目录加载 ${fileSkills.length} 个技能模板: ` +
+            fileSkills.map((s) => `${s.name}(${s.id})`).join(", "),
+          );
+        }
+      }
+    } catch (e) {
+      observer.emit({
+        type: PipelineEventType.ErrorReported,
+        priority: PipelinePriority.NORMAL,
+        payload: { message: `[bootstrapEngine] 从 skills/ 目录加载技能失败（非致命）: ${e}` },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
     }
   }
 

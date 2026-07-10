@@ -152,7 +152,7 @@ async function main() {
   const dryRun = args.includes("--dry-run");
   const jsonMode = args.includes("--json");
 
-  // ── 门禁栈：类型检查 → 修复验证 → 契约验证 → 单元测试 ──
+  // ── 门禁栈：类型检查 → Lint → 修复验证 → 契约验证 → 单元测试 ──
   if (!dryRun) {
     console.log("\n🔒 [门禁 1/4] tsc --noEmit 全量类型检查...");
     try {
@@ -164,6 +164,21 @@ async function main() {
       console.log("   ✅ 类型检查通过\n");
     } catch (e) {
       console.error(`❌ tsc 执行异常: ${e}`);
+      process.exit(1);
+    }
+
+    // ── 门禁 2/4：ESLint ──
+    console.log("\n🔒 [门禁 2/4] eslint packages/engine/src...");
+    try {
+      const eslintResult = run("npx", ["eslint", "packages/engine/src", "--max-warnings", "999"], ROOT);
+      if (!eslintResult.ok) {
+        const problems = eslintResult.stdout.match(/✖ \d+ problems?/);
+        console.error(`❌ eslint 失败${problems ? " — " + problems[0] : ""}`);
+        process.exit(1);
+      }
+      console.log("   ✅ lint 通过\n");
+    } catch (e) {
+      console.error(`❌ eslint 执行异常: ${e}`);
       process.exit(1);
     }
   }

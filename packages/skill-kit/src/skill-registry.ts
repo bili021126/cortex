@@ -30,6 +30,7 @@ import {
   IndexedRegistry,
   type IndexDefinition,
 } from "@cortex/shared";
+import { SKILL_TRIAL_TO_ACTIVE_THRESHOLD, SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD, SKILL_FEEDBACK_POSITIVE_WEIGHT, SKILL_FEEDBACK_NEGATIVE_WEIGHT } from "@cortex/config";
 
 // ─── 纯函数：状态推导 ───────────────────────────────────────
 
@@ -56,9 +57,9 @@ export function deriveStatus(
       break;
     }
   }
-  if (consecutiveNegative >= 3) return "deprecated";
+  if (consecutiveNegative >= Math.abs(SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD)) return "deprecated";
 
-  if (weight >= 1 && history.some((f) => f.rating === 1)) {
+  if (weight >= SKILL_TRIAL_TO_ACTIVE_THRESHOLD && history.some((f) => f.rating === SKILL_FEEDBACK_POSITIVE_WEIGHT)) {
     return "active";
   }
 
@@ -82,8 +83,10 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
    * 按标签查询匹配的技能模板。
    * 匹配规则：template.triggerTags ∩ queryTags ≠ ∅
    * 仅返回 trial 或 active 状态的模板。
+   *
+   * @note 返回全量结果，大技能库场景调用方需自行分页。
    */
-  queryByTags(queryTags: Tag[]): SkillTemplate[] {
+  queryByTags(queryTags: Tag[], opts?: { limit?: number; offset?: number }): SkillTemplate[] {
     const matched = new Map<string, SkillTemplate>();
     for (const tag of queryTags) {
       for (const t of this.queryByIndex("tag", tag)) {
@@ -94,7 +97,13 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
       }
     }
     // 按 weight 降序排列——权重高的更可信，排在前面
-    return [...matched.values()].sort((a, b) => b.weight - a.weight);
+    let results = [...matched.values()].sort((a, b) => b.weight - a.weight);
+    // ── 分页支持 ──
+    if (opts?.offset) results = results.slice(opts.offset);
+    if (opts?.limit) results = results.slice(0, opts.limit);
+    // ── 遥测：Skill 命中率 ──
+    console.log(`[telemetry] skill.query_by_tags tags=${queryTags.join(",")} hitCount=${matched.size} returned=${results.length}`);
+    return results;
   }
 
   /** 获取活跃技能数 */
@@ -126,6 +135,7 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
     const tmpl = this.items.get(id);
     if (!tmpl) return false;
 
+    const oldStatus = tmpl.status;
     tmpl.weight += rating; // rating: 1=有效, 0=无感, -1=有害
     tmpl.feedbackHistory.push({
       agentId,
@@ -136,6 +146,11 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
 
     // 评价后重新计算状态
     tmpl.status = deriveStatus(tmpl.weight, tmpl.feedbackHistory);
+
+    // 遥测：状态转换记录
+    if (oldStatus && oldStatus !== tmpl.status) {
+      console.log(`[telemetry] skill.status_changed skill=${id} from=${oldStatus} to=${tmpl.status}`);
+    }
 
     return true;
   }

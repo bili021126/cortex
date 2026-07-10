@@ -9,12 +9,12 @@
 // ============================================================
 
 // ── Agent 工厂 ──────────────────────────────────
-export { createAgent } from "./agent-factory.js";
-export type { AgentFactoryConfig } from "./agent-factory.js";
+export { createAgent } from "../execution/agent-factory.js";
+export type { AgentFactoryConfig } from "../execution/agent-factory.js";
 
 // ── ReAct 循环 ──────────────────────────────────
-export { runReActLoop } from "./react-loop.js";
-export type { ReActContext } from "./react-loop.js";
+export { runReActLoop } from "../execution/react-loop.js";
+export type { ReActContext } from "../execution/react-loop.js";
 
 // ── 技能提取 ─────────────────────────────────────
 export { extractSkillsFromOutput, resolveOutputFile } from "@cortex/skill-kit";

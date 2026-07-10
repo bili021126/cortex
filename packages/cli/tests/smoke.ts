@@ -8,7 +8,7 @@
  *   npx tsx packages/cli/tests/smoke.ts
  *   npx tsx packages/cli/tests/smoke.ts --verbose
  *
- * 验收标准（Core-1 终局）:
+ * 验收标准（Core-2 终局）:
  *   全部 PASS → 退出码 0
  *   任一 FAIL → 退出码 1
  */
@@ -77,7 +77,7 @@ function cleanup(): void {
 // ── 题目 ─────────────────────────────────────────
 
 console.log("╔══════════════════════════════════╗");
-console.log("║  🚬  CLI 冒烟测试   Core-1 终局  ║");
+console.log("║  🚬  CLI 冒烟测试   Core-2 终局  ║");
 console.log("╚══════════════════════════════════╝");
 
 // ═════════════════════════════════════════
@@ -90,14 +90,14 @@ section("cortex version");
   const r = await h([], {}, ctx());
   ok("返回成功", r);
   pass("输出包含版本号", typeof r.output === "string" && r.output.includes("cortex v"));
-  pass("输出包含阶段标识", typeof r.output === "string" && r.output.includes("Core-1"));
+  pass("输出包含阶段标识", typeof r.output === "string" && r.output.includes("Core-2"));
   pass("退出码为 0", r.exitCode === 0);
 
   const rj = await h([], { json: true }, ctx());
   ok("--json 返回成功", rj);
   pass("--json 包含 data 字段", rj.data != null && typeof rj.data === "object");
   const data = rj.data as Record<string, unknown>;
-  pass("--json version 包含 Core-1", typeof data.version === "string" && (data.version as string).includes("Core-1"));
+  pass("--json version 包含 Core-2", typeof data.version === "string" && (data.version as string).includes("Core-2"));
   pass("--json runtime 非空", typeof data.runtime === "string" && data.runtime.length > 0);
 }
 

@@ -67,7 +67,11 @@ function _handleTimeoutActions(actions: TimeoutAction[], ctx: LoopContext): void
         break;
 
       case 'kill':
-        try { ctx.board.failNode(a.nodeId); } catch { /* best-effort */ }
+        try { ctx.board.failNode(a.nodeId); } catch (e) {
+          if (ctx.observer) {
+            try { ctx.observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "agent-kill-best-effort", detail: String(e) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${e}\n`); }
+          }
+        }
         ctx.observer.emit({
           type: PipelineEventType.NodeFailed,
           priority: PipelinePriority.CRITICAL,
@@ -219,7 +223,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
         const remaining = board.getPendingNodes();
         for (const n of remaining) {
           allResults.push({ nodeId: n.id, success: false, error: `Scheduler global timeout (round ${round})` });
-          try { board.failNode(n.id); } catch { /* best-effort */ }
+          try { board.failNode(n.id); } catch { process.stderr.write(`[scheduler] global-timeout failNode failed for ${n.id}\n`); }
           failed++;
         }
         observer.emit({
@@ -234,6 +238,9 @@ export class TopologicalLayeredDriver implements ILoopDriver {
 
       try {
         round++;
+        // ── 遥测：AgentPool 空闲率 ──
+        const poolStats = ctx.pool.getPoolStats();
+        console.log(`[telemetry] agent_pool.idle_rate total=${poolStats.total} idle=${poolStats.idle} busy=${poolStats.busy} idleRate=${poolStats.idleRate}`);
         const pendingNodes = board.getPendingNodes();
 
         if (pendingNodes.length === 0) {
@@ -262,7 +269,11 @@ export class TopologicalLayeredDriver implements ILoopDriver {
             notificationType: "WARNING",
           });
           for (const n of pendingNodes) {
-            try { board.failNode(n.id); } catch { /* best-effort */ }
+            try { board.failNode(n.id); } catch (e) {
+              if (observer) {
+                try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "circular-dep-fail-best-effort", detail: String(e) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] circular-dep observer.emit failed: ${String(e)}\n`); }
+              }
+            }
             allResults.push({ nodeId: n.id, success: false, error: "Circular dependency" });
             failed++;
           }
@@ -285,8 +296,16 @@ export class TopologicalLayeredDriver implements ILoopDriver {
 
             // dispatchNode 优先——经典 Scheduler 已自行处理 NodeStart/NodeFailed/replan
             if (ctx.dispatchNode) {
+              const waitTime = Date.now() - node.createdAt;
+              if (waitTime > 500) {
+                console.log(`[telemetry] scheduler.node_wait_time_ms value=${waitTime} nodeType=${node.type}`);
+              }
               return ctx.dispatchNode(node).catch((e) => {
-                try { board.failNode(nodeId); } catch { /* best-effort */ }
+                try { board.failNode(nodeId); } catch (fe) {
+                  if (observer) {
+                    try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "dispatch-node-reject-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] dispatch-node-reject observer.emit failed: ${String(fe)}\n`); }
+                  }
+                }
                 return { nodeId, success: false, error: `Promise rejected: ${String(e).slice(0, 200)}` } as NodeResult;
               });
             }
@@ -298,6 +317,11 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               timestamp: Date.now(),
               notificationType: "FYI",
             });
+
+            const waitTime = Date.now() - node.createdAt;
+            if (waitTime > 500) {
+              console.log(`[telemetry] scheduler.node_wait_time_ms value=${waitTime} nodeType=${node.type}`);
+            }
 
             const execCtx: ExecutionContext = {
               node, agents, models, board, pool, observer,
@@ -312,7 +336,11 @@ export class TopologicalLayeredDriver implements ILoopDriver {
             const NODE_DISPATCH_TIMEOUT_MS = Math.min(config.reactLoopTimeoutMs, 120_000);
             const timeoutPromise = new Promise<NodeResult>((resolve) => {
               setTimeout(() => {
-                try { board.failNode(nodeId); } catch { /* best-effort */ }
+                try { board.failNode(nodeId); } catch (fe) {
+                  if (observer) {
+                    try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "dispatch-timeout-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] dispatch-timeout observer.emit failed: ${String(fe)}\n`); }
+                  }
+                }
                 observer.emit({
                   type: PipelineEventType.NodeFailed,
                   priority: PipelinePriority.CRITICAL,
@@ -339,7 +367,11 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               }
               return result;
             }).catch((e) => {
-              try { board.failNode(nodeId); } catch { /* best-effort */ }
+              try { board.failNode(nodeId); } catch (fe) {
+                if (observer) {
+                  try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "promise-reject-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] promise-reject observer.emit failed: ${String(fe)}\n`); }
+                }
+              }
               return { nodeId, success: false, error: `Promise rejected: ${String(e).slice(0, 200)}` } as NodeResult;
             });
           });
@@ -373,7 +405,11 @@ export class TopologicalLayeredDriver implements ILoopDriver {
           notificationType: "WARNING",
         });
         for (const n of snappedPending) {
-          try { board.failNode(n.id); } catch { /* best-effort */ }
+          try { board.failNode(n.id); } catch (fe) {
+            if (observer) {
+              try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "loop-crash-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${fe}\n`); }
+            }
+          }
           allResults.push({ nodeId: n.id, success: false, error: `Scheduler loop crashed at round ${round}` });
           failed++;
         }
@@ -407,7 +443,11 @@ export class TopologicalLayeredDriver implements ILoopDriver {
         notificationType: "WARNING",
       });
       for (const n of orphaned) {
-        try { board.failNode(n.id); } catch { /* best-effort */ }
+        try { board.failNode(n.id); } catch (fe) {
+          if (observer) {
+            try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "orphaned-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${fe}\n`); }
+          }
+        }
         allResults.push({
           nodeId: n.id,
           success: false,
@@ -492,7 +532,11 @@ export class SequentialDriver implements ILoopDriver {
 
         const timeoutPromise = new Promise<NodeResult>((resolve) => {
           setTimeout(() => {
-            try { board.failNode(node.id); } catch { /* best-effort */ }
+            try { board.failNode(node.id); } catch (fe) {
+              if (observer) {
+                try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "seq-timeout-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${fe}\n`); }
+              }
+            }
             observer.emit({
               type: PipelineEventType.NodeFailed,
               priority: PipelinePriority.CRITICAL,
@@ -522,7 +566,11 @@ export class SequentialDriver implements ILoopDriver {
             });
           }
         } catch (e) {
-          try { board.failNode(node.id); } catch { /* best-effort */ }
+          try { board.failNode(node.id); } catch (fe) {
+            if (observer) {
+              try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "seq-catch-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${fe}\n`); }
+            }
+          }
           allResults.push({ nodeId: node.id, success: false, error: String(e).slice(0, 200) });
           failed++;
         }
@@ -549,7 +597,11 @@ export class SequentialDriver implements ILoopDriver {
     );
     if (orphaned.length > 0) {
       for (const n of orphaned) {
-        try { board.failNode(n.id); } catch { /* best-effort */ }
+        try { board.failNode(n.id); } catch (fe) {
+          if (observer) {
+            try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "orphaned-fail-best-effort-sequential", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${fe}\n`); }
+          }
+        }
         allResults.push({
           nodeId: n.id,
           success: false,
@@ -638,13 +690,20 @@ export class WaveDriver implements ILoopDriver {
         const remaining = board.getPendingNodes();
         for (const n of remaining) {
           allResults.push({ nodeId: n.id, success: false, error: "Timeout" });
-          try { board.failNode(n.id); } catch { /* best-effort */ }
+          try { board.failNode(n.id); } catch (fe) {
+            if (observer) {
+              try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "wave-timeout-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${fe}\n`); }
+            }
+          }
           failed++;
         }
         break;
       }
 
       round++;
+      // ── 遥测：AgentPool 空闲率 ──
+      const poolStats = ctx.pool.getPoolStats();
+      console.log(`[telemetry] agent_pool.idle_rate total=${poolStats.total} idle=${poolStats.idle} busy=${poolStats.busy} idleRate=${poolStats.idleRate}`);
       const pendingNodes = board.getPendingNodes();
       if (pendingNodes.length === 0) {
         if (replanFlight) { await replanFlight; replanFlight = null; }
@@ -770,7 +829,11 @@ export class WaveDriver implements ILoopDriver {
         notificationType: "WARNING",
       });
       for (const n of orphaned) {
-        try { board.failNode(n.id); } catch { /* best-effort */ }
+        try { board.failNode(n.id); } catch (fe) {
+          if (observer) {
+            try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "orphaned-fail-best-effort-wave", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { process.stderr.write(`[scheduler] best-effort failed: ${fe}\n`); }
+          }
+        }
         allResults.push({
           nodeId: n.id,
           success: false,
@@ -1112,6 +1175,7 @@ export class SemanticModelRouter implements IModelRouter {
           }
         } catch {
           // 超时或异常——重试或回退
+          process.stderr.write(`[scheduler] classifier timeout/error at attempt ${attempt}\n`);
         }
       }
     }

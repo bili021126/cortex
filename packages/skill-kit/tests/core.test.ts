@@ -123,8 +123,8 @@ describe("deriveStatus", () => {
     expect(deriveStatus(-1, [])).toBe("trial");
   });
 
-  it("should return active when weight >= 1 and has positive feedback", () => {
-    expect(deriveStatus(1, [{ agentId: "a", rating: 1, timestamp: 0 }])).toBe("active");
+  it("should return active when weight >= 5 and has positive feedback", () => {
+    expect(deriveStatus(5, [{ agentId: "a", rating: 1, timestamp: 0 }])).toBe("active");
   });
 
   it("should return deprecated when 3+ consecutive negative", () => {
@@ -136,7 +136,7 @@ describe("deriveStatus", () => {
   });
 
   it("should handle null/undefined feedbackHistory", () => {
-    expect(deriveStatus(1, undefined as any)).toBe("trial");
+    expect(deriveStatus(5, undefined as any)).toBe("trial");
   });
 });
 

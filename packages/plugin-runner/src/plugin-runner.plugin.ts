@@ -7,7 +7,7 @@
  *   init(ctx) → start() → stop()
  */
 
-import type { EnginePlugin, PluginContext } from "@cortex/engine";
+import type { EnginePlugin, PluginContext } from "./types.js";
 import { PluginRegistry } from "./registry.js";
 import { PluginRunner } from "./runner.js";
 import { PluginValidator } from "./validator.js";

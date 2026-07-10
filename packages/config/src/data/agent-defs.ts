@@ -6,14 +6,10 @@
 // 仍保留在 @cortex/shared 中。
 // ============================================================
 
-import { AgentType } from "@cortex/shared";
+import { AgentType } from "../vocabularies/agent-enums.js";
 import type { AgentDefinition } from "@cortex/shared";
 
-// FIXME: AGENT_DEFS 数据已迁入 config，但 shared/src/agent-registry.ts 中的
-// 派生函数（getAgentTags/getAgentToolPermissions 等）仍引用此数据。
-// 迁出会形成 config → shared → config 循环依赖。
-// 等待 shared/agent-registry 剥离派生逻辑到 config 后方可完成迁移。
-// 详见 docs/audit/theory-coverage-review.md Phase 2 阻塞项。
+// Core-2 已解耦——shared 持有类型定义，config 持有运行时数据。AGENT_DEFS 保留在此作为默认注册表。
 
 // ─── 工具权限预设 ──────────────────────────────
 

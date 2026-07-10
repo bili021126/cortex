@@ -49,7 +49,7 @@ describe("RLM 拆解闭环", () => {
 
 describe("Governance 事件闭环", () => {
   it("C-01: HardVerificationGate 拒绝非法接口名（命令注入防护）", async () => {
-    const { HardVerificationGate } = await import("../../src/core/hard-verification-gate.js");
+    const { HardVerificationGate } = await import("../../src/planning/hard-verification-gate.js");
     const gate = new HardVerificationGate();
     const result = gate.check({
       eventType: PipelineEventType.ConstitutionViolation,
@@ -66,7 +66,7 @@ describe("Governance 事件闭环", () => {
   });
 
   it("C-01: HardVerificationGate 合法接口名正常通过", async () => {
-    const { HardVerificationGate } = await import("../../src/core/hard-verification-gate.js");
+    const { HardVerificationGate } = await import("../../src/planning/hard-verification-gate.js");
     const gate = new HardVerificationGate();
     const result = gate.check({
       eventType: PipelineEventType.GovernanceAuditReport,
@@ -109,7 +109,7 @@ describe("修复验证闭环", () => {
 
   it("C-03: try/finally 确保 _loading 重置", () => {
     let finallyHit = false;
-    try { Promise.reject(new Error("x")); }
+    try { Promise.reject(new Error("x")).catch(() => {}); }
     finally { finallyHit = true; }
     expect(finallyHit).toBe(true);
   });

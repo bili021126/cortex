@@ -97,6 +97,7 @@ export class CapabilityRegistry extends IndexedRegistry<AgentCapability> {
       if (reviewers.length > 0) {
         // 按与 requiredTags 的重叠度选择最匹配的 reviewer
         let best = reviewers[0];
+        if (!best) return [...team.values()];
         let bestScore = 0;
         for (const r of reviewers) {
           const overlap = r.tags.filter((t) => requiredTags.includes(t)).length;

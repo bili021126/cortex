@@ -17,15 +17,18 @@ import { enhancePrompts } from "./factory/loaders/agents.loader.js";
 import { PromptManager } from "../core/prompt-manager.js";
 import { StrategistAgent } from "../agents/strategist-agent.js";
 import { ButlerAgent } from "../agents/butler-agent.js";
+import { createConfirmGateAgent } from "../agents/confirm-gate-agent.js";
+import type { AgentFactoryConfig } from "../execution/agent-factory.js";
 // ── Core-2: 新模块 ─────────────────────────────
-import { TaskRouter } from "../core/task-router.js";
-import { EnvironmentAwareRouter } from "../core/environment-aware-router.js";
-import { SentinelSignalFilter } from "../core/sentinel-signal-filter.js";
-import { GovernanceEventEmitter } from "../core/governance-events.js";
-import { DecisionGateBridge } from "../core/decision-gate-bridge.js";
-import { resilienceFactory } from "../core/resilience-integration.js";
-import { NotificationRuntime } from "../core/notification-runtime.js";
-import { ZeroTokenValidator } from "../core/zero-token-validator.js";
+import { TaskRouter } from "../execution/task-router.js";
+import { EnvironmentAwareRouter } from "../execution/environment-aware-router.js";
+// bootstrap 层 import planning/ 为装配层正常引用（加载阶段构造引擎容器）
+import { SentinelSignalFilter } from "../planning/sentinel-signal-filter.js";
+import { GovernanceEventEmitter } from "../planning/governance-events.js";
+import { DecisionGateBridge } from "../execution/decision-gate-bridge.js";
+import { resilienceFactory } from "../execution/resilience-integration.js";
+import { NotificationRuntime } from "../planning/notification-runtime.js";
+import { ZeroTokenValidator } from "../execution/zero-token-validator.js";
 import { NotificationPipe } from "@cortex/notification";
 import type { IModelRouter } from "@cortex/scheduler";
 // 集中注册：触发全部插件注册至 PluginLoader
@@ -46,6 +49,10 @@ import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
+
+// Core-2 Batch1: AgentRegistry 引用——遍历此注册表而非 JSON
+import { agentRegistry } from "../registry/agent-registry.js";
+export { agentRegistry };
 
 // 插件类型引用
 import type { PipelineObserverPlugin } from "../plugin/pipeline-observer.plugin.js";
@@ -101,6 +108,7 @@ export async function bootstrapEngine(
     await enhancePrompts(config.agentDefinitions, promptManager);
   } catch (e) {
     // prompt-kit 增强失败不阻断启动——使用同步加载的原始 prompt
+    // G1-5: bootstrap 阶段 observer 可能未就绪，console.warn 是故意的——见 G1-5
     console.warn(`[bootstrapEngine] prompt-kit 增强失败，回退到原始 prompt: ${String(e)}`);
   }
 
@@ -124,13 +132,16 @@ export async function bootstrapEngine(
     if (_stats.size > MAX_SIZE) {
       throw new Error(`插件清单文件过大: ${_stats.size} bytes`);
     }
-    pluginsJson = JSON.parse(readFileSync(`${pluginsDataDir}/engine-plugins.json`, "utf-8")) as { plugins: string[] };
+    try {
+      pluginsJson = JSON.parse(readFileSync(`${pluginsDataDir}/engine-plugins.json`, "utf-8")) as { plugins: string[] };
+    } catch (e) {
+      // G1-5: bootstrap 阶段 observer 可能未就绪，console.warn 是故意的——见 G1-5
+      console.warn(`[bootstrap] engine-plugins.json 解析失败，使用最小插件集: ${e}`);
+      pluginsJson = { plugins: [] };
+    }
   } catch (e) {
-    throw new Error(
-      `[bootstrapEngine] 无法加载引擎插件清单 ${pluginsDataDir}/engine-plugins.json: ` +
-      (e instanceof Error ? e.message : String(e)),
-      { cause: e },
-    );
+    console.warn(`[bootstrap] engine-plugins.json 缺失或无法读取，使用最小插件集: ${e instanceof Error ? e.message : String(e)}`);
+    pluginsJson = { plugins: [] };
   }
   const pluginConfig: EnginePluginLoadConfig = {
     plugins: pluginsJson.plugins,
@@ -202,6 +213,8 @@ export async function bootstrapEngine(
   // §6.0.0b HealthCollector —— 降级健康聚合
   const healthCollector = new HealthCollector();
   DegradationBoundary.collector = healthCollector;
+  // G1-5: bootstrap 阶段 observer 已就绪，注入 DegradationBoundary 使其 handle() 走 observer.emit
+  DegradationBoundary._observer = observer;
   metricCounter.startPeriodicFlush(
     60_000, // 每分钟 flush 一次
     (snapshots) => {
@@ -338,6 +351,13 @@ export async function bootstrapEngine(
     strategists.set(def.id, agent);
   }
 
+  // §7.2 创建 ConfirmGate Agent（烟绯）
+  const confirmGateDefs = config.agentDefinitions.filter((d: AgentDefinition) => d.type === "confirm-gate");
+  const confirmGateAgents = new Map<string, AgentFactoryConfig>();
+  for (const def of confirmGateDefs) {
+    confirmGateAgents.set(def.id, createConfirmGateAgent(def.systemPrompt));
+  }
+
   // §7.1 StrategistAgent 订阅治理事件
   const strategistHandlers: Array<(event: ObservableEvent) => void> = [];
   for (const agent of strategists.values()) {
@@ -398,6 +418,7 @@ export async function bootstrapEngine(
     metaAgent,
     butler: butler ?? new ButlerAgent(observer),
     strategists,
+    confirmGateAgents,
     skillRegistry,
     config,
     agents,

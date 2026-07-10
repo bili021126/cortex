@@ -73,3 +73,6 @@ export { StateMachine } from "./runtime.js";
 export { GuardRegistry } from "./runtime.js";
 export { ActionRegistry } from "./runtime.js";
 export { HistoryRecorder } from "./runtime.js";
+
+// ── 编译时类型安全辅助函数 ──
+export { defineFsm } from "./define-fsm.js";

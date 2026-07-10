@@ -1,5 +1,13 @@
 {
   "description": "Agent 定义集合。每个 Agent 的完整声明——类型、模型、权限、标签、提示词等。",
+  "trustScore": {
+    "autoApproveL2": 70,
+    "autoApproveL3": 85,
+    "baseScore": 50,
+    "l0l1Bonus": 0.5,
+    "l2Penalty": 8,
+    "l3Penalty": 15
+  },
   "agents": {
     "albedo": {
       "id": "albedo",
@@ -643,6 +651,7 @@
     "zhongli": {
       "id": "zhongli",
       "type": "strategist",
+      "status": "awake",
       "role": "钟离 — 往生堂客卿，契约守护者",
       "produces": [
         "strategy_assessed",
@@ -688,6 +697,7 @@
     "shuangning": {
       "id": "shuangning",
       "type": "strategist",
+      "status": "awake",
       "role": "霜凝 — 超越者，方向监理",
       "produces": [
         "direction_supervised",
@@ -725,6 +735,44 @@
         "title": "超越者，方向监理"
       },
       "systemPromptFile": "prompts/shuangning/system.md"
+    },
+    "yanfei": {
+      "id": "yanfei",
+      "type": "confirm-gate",
+      "status": "awake",
+      "role": "烟绯 — 确认裁决者",
+      "produces": [
+        "trust_assessed",
+        "decision_made"
+      ],
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "maxInstances": 1,
+      "tags": [
+        "confirm_gate",
+        "gatekeeper"
+      ],
+      "toolPermissions": [
+        "read_file",
+        "search_code",
+        "web_search",
+        "list_files",
+        "parse_ast",
+        "search_symbol",
+        "read_many_files",
+        "grep_files",
+        "file_info",
+        "glob_find",
+        "resolve_import",
+        "json_query",
+        "diff_files"
+      ],
+      "display": {
+        "emoji": "⚖️",
+        "shortName": "烟绯",
+        "title": "确认门守护者"
+      },
+      "systemPromptFile": "prompts/yanfei/system.md"
     }
   }
 }

@@ -14,7 +14,7 @@ describe("@cortex/shared smoke", () => {
     expect(AgentType.Ops).toBe("ops");
     expect(AgentType.Review).toBe("review");
     expect(AgentType.Meta).toBe("meta");
-    expect(Object.values(AgentType).length).toBe(14);
+    expect(Object.values(AgentType).length).toBe(15);
   });
 
   it("AgentStatus 枚举值对齐", () => {

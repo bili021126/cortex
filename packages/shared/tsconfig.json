@@ -7,5 +7,5 @@
   "include": ["src"],
   // 排除 src/__tests__/：测试文件统一放在 tests/ 目录下，src/__tests__/ 为历史残留（空文件），
   // 排除可防止其被 tsc 编译至 dist/__tests__/ 污染消费者产物。
-  "exclude": ["src/__tests__"]
+  "exclude": ["src/__tests__", "dist"]
 }

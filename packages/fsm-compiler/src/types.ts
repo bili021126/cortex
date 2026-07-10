@@ -18,6 +18,9 @@
 // Layer 1 — DSL Schema Types
 // ════════════════════════════════════════════════════════════════
 
+/**
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export interface FsmDefinition {
   /** Machine metadata */
   id: string;

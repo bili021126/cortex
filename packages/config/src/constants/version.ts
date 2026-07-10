@@ -8,8 +8,8 @@
 /** CLI 自身版本 */
 export const CORTEX_VERSION = "0.2.1";
 
-/** Core-1 阶段标识 */
-export const CORTEX_PHASE = "Core-1";
+/** Core-2 阶段标识 */
+export const CORTEX_PHASE = "Core-2";
 
 /** 依赖包版本（同步自各包 package.json） */
 export const DEPENDENCY_VERSIONS: Record<string, string> = {

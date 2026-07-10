@@ -2,7 +2,7 @@
 // @layer 规划-执行层
 // @role 事轴起点——意图拆解为粗粒度 TaskNode 树
 
-import { extractJsonBlock, PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type Tag, type TaskNode } from "@cortex/shared";
+import { extractJsonBlock, PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type SkillTemplate, type Tag, type TaskNode } from "@cortex/shared";
 import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { ContextManager } from "@cortex/context-manager";
@@ -19,7 +19,6 @@ import {
 import type { SkillRegistry } from "@cortex/skill-kit";
 import type { PromptManager, PlanningPromptBlocks } from "./prompt-manager.js";
 import { DegradationBoundary } from "./degradation-boundary.js";
-import { resolveByScope, type SkillScope } from "./skill-scope.js";
 import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
 
 /**
@@ -108,9 +107,22 @@ export class MetaAgent {
 
   /** Core-2: 注入技能作用域上下文（包名 + agentType） */
   private _skillScope?: SkillScope;
+  /** Core-2: 注入仿真运行器（依赖注入替代直接 import） */
+  private _simulationRunner?: SimRunner;
+  /** 注入 resolveByScope 函数（依赖注入替换 direct import） */
+  private _resolveByScope?: (allSkills: SkillTemplate[], scope: SkillScope) => SkillTemplate[];
 
   setSkillScope(scope: SkillScope): void {
     this._skillScope = scope;
+  }
+
+  setSimulationRunner(r: SimRunner): void {
+    this._simulationRunner = r;
+  }
+
+  /** 注入技能作用域解析函数 */
+  setResolveByScope(fn: (allSkills: SkillTemplate[], scope: SkillScope) => SkillTemplate[]): void {
+    this._resolveByScope = fn;
   }
 
   /** 注入 PromptManager（prompt-kit 编排器，可后置绑定） */
@@ -322,13 +334,7 @@ export class MetaAgent {
         originalIntent,
       };
     } catch (err) {
-      this._observer?.emit({
-        type: PipelineEventType.InfraComponentDegraded,
-        priority: PipelinePriority.NORMAL,
-        payload: { component: "MetaAgent", operation: "_parseClarification", detail: `意图解析JSON失败: ${String(err)}` },
-        timestamp: Date.now(),
-        notificationType: "FYI",
-      });
+      DegradationBoundary.handle(err, 'meta-agent', 'trace');
       return {
         goal: originalIntent.slice(0, 80),
         actionType: "inquiry",
@@ -356,21 +362,53 @@ export class MetaAgent {
     intent: string,
     context?: PlanContext,
   ): Promise<TaskNode[]> {
-    const prompt = await this._planningPrompt(intent, context);
-    // 有工作区时注入到系统提示词，确保边界校验规则生效
-    const systemPrompt = this._workspaceRoot
-      ? buildPlanningSystem(this._workspaceRoot)
-      : this._planningSystem;
     try {
-      const res = await this.llm.chat(this.llm.reasonerModel, [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
-      ]);
-      return this._parsePlan(res.content ?? "", context?.parentId);
+      const t0 = Date.now();
+      const nodes = await this._generatePlan(intent, context);
+      // ── 遥测：MetaAgent 规划耗时 ──
+      // eslint-disable-next-line no-console
+      console.log(`[telemetry] meta.plan_time_ms value=${Date.now() - t0} nodesCount=${nodes.length}`);
+
+      // ── 仿真层因果推演 ──
+      // 对已规划的节点做轻量风险评估，若建议重规划则触发遥测
+      if (this._simulationRunner) {
+        const simResult = await this._simulationRunner.simulate({
+          planNodes: nodes.map((n) => ({ type: n.type, intent: n.payload ?? "" })),
+          currentState: {},
+          constraints: [],
+        });
+        if (simResult.suggestedReplan || simResult.riskLevel === "high") {
+          // eslint-disable-next-line no-console
+          console.log(`[telemetry] meta.replan_from_simulation risk=${simResult.riskLevel}`);
+          // 重规划：重新生成计划
+          const replanResult = await this._generatePlan(intent, context);
+          if (replanResult.length > 0) {
+            return replanResult;
+          }
+        }
+      }
+
+      return nodes;
     } finally {
       // 无论 LLM 调用成功或异常，都必须清理，防止下一次 plan() 注入过期上下文
       this._clearPipelineContext();
     }
+  }
+
+  /**
+   * 生成计划：调用 LLM 规划并解析为 TaskNode 列表。
+   * 提取为独立方法以供 plan() 首次生成和仿真重规划复用。
+   */
+  private async _generatePlan(intent: string, context?: PlanContext): Promise<TaskNode[]> {
+    const prompt = await this._planningPrompt(intent, context);
+    const systemPrompt = this._workspaceRoot
+      ? buildPlanningSystem(this._workspaceRoot)
+      : this._planningSystem;
+    const res = await this.llm.chat(this.llm.reasonerModel, [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt },
+    ]);
+    return this._parsePlan(res.content ?? "", context?.parentId);
   }
 
   /**
@@ -397,11 +435,14 @@ export class MetaAgent {
       }
 
       // 技能增强
-      if (this._skillRegistry && context?.existingTags) {
+      const existingTags = context?.existingTags;
+      if (this._skillRegistry && existingTags) {
         const scope = this._skillScope ?? {};
-        const skills = resolveByScope(this._skillRegistry.getAll(), scope);
+        const skills = this._resolveByScope
+          ? this._resolveByScope(this._skillRegistry.getAll(), scope)
+          : [];
         const matched = skills.filter((s) =>
-          context.existingTags.some((t) => (s.triggerTags as readonly string[]).includes(t)),
+          existingTags.some((t) => (s.triggerTags as readonly string[]).includes(t)),
         );
         if (matched.length > 0) {
           const skillLines = matched.map((s) =>
@@ -444,11 +485,14 @@ export class MetaAgent {
     }
 
       // 技能增强
-      if (this._skillRegistry && context?.existingTags) {
+      const existingTags = context?.existingTags;
+      if (this._skillRegistry && existingTags) {
         const scope = this._skillScope ?? {};
-        const skills = resolveByScope(this._skillRegistry.getAll(), scope);
+        const skills = this._resolveByScope
+          ? this._resolveByScope(this._skillRegistry.getAll(), scope)
+          : [];
         const matched = skills.filter((s) =>
-          context.existingTags.some((t) => (s.triggerTags as readonly string[]).includes(t)),
+          existingTags.some((t) => (s.triggerTags as readonly string[]).includes(t)),
         );
       if (matched.length > 0) {
         const skillLines = matched.map((s) =>
@@ -536,18 +580,18 @@ export class MetaAgent {
     if (!jsonStr || jsonStr.length < 2) return null;
 
     // 策略 1: 直接解析
-    try { return JSON.parse(jsonStr); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
-
+    try { return JSON.parse(jsonStr); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
+    
     // 策略 2: 去除尾部多余逗号（LLM 经典错误）
-    try { return JSON.parse(jsonStr.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
-
+    try { return JSON.parse(jsonStr.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
+    
     // 策略 3: 截取首 [ 到末 ]，再做一次字符串感知提取（双保险）
     const firstBracket = jsonStr.indexOf("[");
     const lastBracket = jsonStr.lastIndexOf("]");
     if (firstBracket !== -1 && lastBracket > firstBracket) {
       const trimmed = jsonStr.slice(firstBracket, lastBracket + 1);
-      try { return JSON.parse(trimmed); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
-      try { return JSON.parse(trimmed.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); return null; }
+      try { return JSON.parse(trimmed); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
+      try { return JSON.parse(trimmed.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
     }
 
     return null;
@@ -583,6 +627,14 @@ export class MetaAgent {
       recommendedTier: _validTier(item.recommendedTier),
       contextPolicyId: this._resolveContextPolicy(item),
     };
+
+    // 如果 intent 中包含文件路径，注入到节点元数据
+    if ((item.type === "code" || item.type === "implementation") && item.task) {
+      const pathMatch = item.task.match(/["']?([\w./_-]+\.\w+)["']?/);
+      if (pathMatch) {
+        (self as any)._outputPath = pathMatch[1];
+      }
+    }
 
     return [self, ...children];
   }
@@ -634,6 +686,21 @@ export class MetaAgent {
 }
 
 // ─── 类型 ───────────────────────────────────────
+
+/** 技能作用域（从 planning/skill-scope 迁入以避免反向依赖） */
+export interface SkillScope {
+  /** 跨域技能目录（用户级，跨项目） */
+  crossDomainDir?: string;
+  /** 当前包名（task 涉及该包文件时激活包级技能） */
+  packageName?: string;
+  /** 目标 Agent 类型 */
+  agentType?: string;
+}
+
+/** 仿真运行器接口（依赖注入用，替代 direct import from planning） */
+export interface SimRunner {
+  simulate(input: { planNodes: Array<{ type: string; intent: string }>; currentState: Record<string, unknown>; constraints: string[] }): Promise<{ riskLevel: string; predictedFailures: string[]; suggestedReplan: boolean; confidence: number }>;
+}
 
 interface PlanItem {
   task: string;

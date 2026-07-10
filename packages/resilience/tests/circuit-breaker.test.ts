@@ -146,7 +146,7 @@ describe("SimpleCircuitBreaker", () => {
     });
 
     it("should call fallback when fn throws", async () => {
-      const cb = new SimpleCircuitBreaker({ name: "t", threshold: 3, halfOpenAfterMs: 1000 });
+      const cb = new SimpleCircuitBreaker({ name: "t", threshold: 1, halfOpenAfterMs: 1000 });
       const fn = async () => { throw new Error("fail"); };
       const fallback = async () => "fallback-ok";
       const result = await cb.call(fn, fallback);

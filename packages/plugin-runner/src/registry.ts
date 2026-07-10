@@ -77,7 +77,11 @@ function globToRegex(pattern: string): RegExp {
   // 处理 {a,b} 展开 — 简单版本（不支持嵌套）
   const braceMatch = normalized.match(/{([^}]+)}/);
   if (braceMatch) {
-    const alternatives = braceMatch[1].split(",").map((s) => s.trim());
+    const group = braceMatch[1];
+    if (group === undefined) {
+      throw new Error("globToRegex: brace match has no capture group");
+    }
+    const alternatives = group.split(",").map((s) => s.trim());
     const prefix = normalized.slice(0, braceMatch.index);
     if (braceMatch.index === undefined) {
       throw new Error("globToRegex: brace match has no index");
@@ -103,7 +107,7 @@ function globToRegexSource(pattern: string): string {
   let i = 0;
 
   while (i < pattern.length) {
-    const ch = pattern[i];
+    const ch = pattern.charAt(i);
 
     if (ch === "*" && pattern[i + 1] === "*") {
       // ** 匹配零或多个路径段

@@ -51,25 +51,25 @@ Usage:
 
 async function runBuild(): Promise<void> {
   console.log("[fsm-compiler] Building FSM definitions...");
-  // TODO: implement definition discovery & batch build
+  // Core-2 待办：实现 definition discovery（扫描 packages/*/fsm/）& 批量编译
   console.log("[fsm-compiler] Build complete.");
 }
 
 async function runValidate(): Promise<void> {
   console.log("[fsm-compiler] Validating FSM definitions...");
-  // TODO: implement validation
+  // Core-2 待办：实现多文件交叉校验（状态可达性、转换完备性）
   console.log("[fsm-compiler] Validation complete.");
 }
 
 async function runDiagram(): Promise<void> {
   console.log("[fsm-compiler] Generating diagrams...");
-  // TODO: implement diagram generation
+  // Core-2 待办：实现 Mermaid/PlantUML 图生成，--out <dir> 控制输出路径
   console.log("[fsm-compiler] Diagram generation complete.");
 }
 
 async function runWatch(): Promise<void> {
   console.log("[fsm-compiler] Watch mode started...");
-  // TODO: implement file watcher
+  // Core-2 待办：实现 chokidar 文件监听 + 增量重编译
 }
 
 main().catch((err) => {

@@ -15,6 +15,7 @@
 /* eslint-disable no-console */
 
 import { PipelinePriority, PipelineEventType, type IPipelineObserver } from "@cortex/shared";
+import { telemetryController, TelemetryLevel } from "./telemetry-controller.js";
 
 // ─── 白名单 ────────────────────────────────────────
 
@@ -24,6 +25,7 @@ import { PipelinePriority, PipelineEventType, type IPipelineObserver } from "@co
  */
 const MESSAGE_PREFIX_WHITELIST: RegExp[] = [
   /^\[MemoryStoreMonitor\]/i,
+  /^\[TRACE write_file\]/i,
 ];
 
 /**
@@ -42,6 +44,7 @@ let _origLog: typeof console.log | null = null;
 let _origWarn: typeof console.warn | null = null;
 let _origError: typeof console.error | null = null;
 let _installed = false;
+let _inErrorHandler = false;
 
 /**
  * 白名单判决：消息前缀 OR 调用栈任一命中即透传。
@@ -98,6 +101,20 @@ export function installConsoleBridge(observer: IPipelineObserver): void {
 
   console.log = (...args: unknown[]) => {
     if (_isWhitelisted(args)) { _origLog?.(...args); } else {
+      // [telemetry] 前缀 → 转发到 TelemetryController
+      if (typeof args[0] === "string" && (args[0] as string).startsWith("[telemetry]")) {
+        const parts = (args[0] as string).split(" ");
+        const levelStr = parts.find(p => p.startsWith("level="))?.split("=")[1];
+        const level = levelStr === "alert" ? TelemetryLevel.ALERT
+          : levelStr === "notice" ? TelemetryLevel.NOTICE
+          : TelemetryLevel.TRACE;
+        telemetryController.record({
+          metric: parts[1] ?? "unknown",
+          value: parseFloat(parts.find(p => p.includes("="))?.split("=")[1] ?? "0"),
+          level,
+          tags: {},
+        });
+      }
       process.stderr.write(`[console-bridge] ${_flattenArgs(args)}\n`);
     }
   };
@@ -109,7 +126,20 @@ export function installConsoleBridge(observer: IPipelineObserver): void {
 
   console.error = (...args: unknown[]) => {
     if (_isWhitelisted(args)) { _origError?.(...args); return; }
-    observer.emit(_buildErrorEvent("error", _flattenArgs(args)));
+    // 防重入锁：已在错误处理中时直接透传原始 console，防止 emit→handler 崩溃→console.error→emit 无限递归
+    if (_inErrorHandler) {
+      _origError?.(...args);
+      return;
+    }
+    _inErrorHandler = true;
+    try {
+      const msg = _flattenArgs(args);
+      const errType = args.find(a => a instanceof Error)?.constructor?.name ?? "Unknown";
+      console.log(`[telemetry] error.type_distribution type=${errType} msg=${msg.slice(0,100)}`);
+      observer.emit(_buildErrorEvent("error", msg));
+    } finally {
+      _inErrorHandler = false;
+    }
   };
 
   _installed = true;

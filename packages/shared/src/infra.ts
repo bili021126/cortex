@@ -21,8 +21,7 @@ export enum PipelinePriority {
 /**
  * 事件类型枚举——封闭集合，镜像代码库中所有 emit 点。
  * 用枚举替代裸 string，编译期约束事件名拼写。
- *
- * @fix N-07 — 新增 NodeRemoved 事件类型，供 TaskBoard.removeNode() 使用
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
  */
 export enum PipelineEventType {
   // ── AgentPool ──
@@ -89,22 +88,18 @@ export enum PipelineEventType {
   // ── Infrastructure ──
   InfraFileLockExpiredReclaimed = "infra.file_lock.expired_reclaimed",
   InfraComponentDegraded = "infra.component_degraded",
-
   // ── Interact（配置交互流）──
   InteractConfigOverrideApplied = "interact.config_override_applied",
   InteractConfigReloaded = "interact.config_reloaded",
   InteractConfigSchemaViolation = "interact.config_schema_violation",
-
   // ── Mem（记忆流）──
   MemRetrievalStrategySelected = "mem.retrieval_strategy_selected",
   MemMemoryWarmupInitiated = "mem.memory_warmup_initiated",
   MemMemoryObliterationTriggered = "mem.memory_obliteration_triggered",
   MemMemoryWritten = "mem.memory_written",
-
   // ── Exec（执行流——调度器心跳/超时/生命周期）──
   ExecNodeDelayed = "exec.node_delayed",
   ExecLifecyclePhaseChanged = "exec.lifecycle_phase_changed",
-
   // ── Tele（遥测流）──
   TeleDegradationThresholdBreached = "tele.degradation_threshold_breached",
 }
@@ -112,6 +107,7 @@ export enum PipelineEventType {
 /**
  * 事件 Payload 类型联合——按事件类型锁定额外字段。
  * 不在枚举中的事件类型不会通过类型检查。
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
  */
 export type EventPayloadMap = {
   [PipelineEventType.AgentPoolInvariantViolation]: { source: string; transition?: string; detail: string };
@@ -125,11 +121,6 @@ export type EventPayloadMap = {
   [PipelineEventType.SchedulerNonstandardType]: { nodeId: string; nodeType: string; matchedCount: number; assigned: string; totalAgents: number };
   [PipelineEventType.SchedulerInvariantViolation]: { nodeId: string; message: string };
   [PipelineEventType.NodeStart]: { nodeId: string; type: string };
-  /** 
-   * NodeComplete — 节点完成事件。
-   * @field perspectives 多视角节点场景下，所有参与视角的 agentType 列表；单视角节点不包含此字段。
-   * @field allSuccess   多视角节点场景下，是否所有视角均成功；单视角节点不包含此字段。
-   */
   [PipelineEventType.NodeComplete]: { nodeId: string; agentType: AgentType; success: true; output?: string; perspectives?: (AgentType | string | undefined)[]; allSuccess?: boolean };
   [PipelineEventType.NodeFailed]: { nodeId: string; error: string; agentType?: AgentType };
   [PipelineEventType.NodeReplan]: { nodeId: string; reason: string; attempt: number };
@@ -148,56 +139,9 @@ export type EventPayloadMap = {
   [PipelineEventType.ErrorReported]: { source: string; severity: string; error: string; hint?: string };
   [PipelineEventType.ErrorSilentUpgraded]: { source: string; consecutive: number; threshold: number; lastError: string; hint?: string };
   [PipelineEventType.Analysis]: unknown;
-  [PipelineEventType.SkillReferenced]: {
-    nodeId: string;
-    agentType: AgentType;
-    skillId: string;
-    skillName: string;
-    /** 实际采信的步骤索引（0-based） */
-    stepsUsed?: number[];
-    /** 跳过的步骤索引 */
-    stepsSkipped?: number[];
-    /** Agent 对步骤的临时调整说明 */
-    adaptation?: string;
-  };
-  [PipelineEventType.SkillToolPermissionDenied]: {
-    agentType: AgentType;
-    toolName: string;
-    reason: string;
-  };
-  [PipelineEventType.AgentBoundaryViolation]: {
-    nodeId: string;
-    agentType: AgentType;
-    violatingFiles: string[];
-    reason: string;
-    expectedScope: string;
-  };
-  // ── RLM 递归分层执行 ──
-  [PipelineEventType.RlmDecompose]: {
-    nodeId: string;
-    subTaskCount: number;
-    depth: number;
-    confidence: number;
-    rationale?: string;
-  };
-  [PipelineEventType.RlmContextCompress]: {
-    nodeId: string;
-    density: string;
-    originalLength: number;
-    compressedLength: number;
-  };
-  // ── ManifoldGate 流控 ──
-  [PipelineEventType.ManifoldGateWaitStart]: { agentType: string; queuePosition: number; active: number; max: number; requestId: string };
-  [PipelineEventType.ManifoldGateWaitEnd]: { agentType: string; remainingWaiters: number; requestId: string };
-  [PipelineEventType.ManifoldGateAcquireTimeout]: { agentType: string; timeoutMs: number; requestId: string };
-  [PipelineEventType.ManifoldGateReleased]: { agentType: string; active: number; waiting: number; requestId: string };
-  [PipelineEventType.ManifoldGateInvariantViolation]: { agentType: string; message: string };
-  [PipelineEventType.ManifoldGateReleaseOrphan]: { agentType: string; message: string };
-  [PipelineEventType.ManifoldGateMaxUpdated]: { agentType: string; newMax: number; oldMax: number };
-  // ── Infrastructure ──
-  [PipelineEventType.InfraFileLockExpiredReclaimed]: { count: number; path?: string; holders?: string; detail: string };
-  [PipelineEventType.InfraComponentDegraded]: { component: string; operation: string; detail: string };
-
+  [PipelineEventType.SkillReferenced]: { nodeId: string; agentType: AgentType; skillId: string; skillName: string; stepsUsed?: number[]; stepsSkipped?: number[]; adaptation?: string };
+  [PipelineEventType.SkillToolPermissionDenied]: { agentType: AgentType; toolName: string; reason: string };
+  [PipelineEventType.AgentBoundaryViolation]: { nodeId: string; agentType: AgentType; violatingFiles: string[]; reason: string; expectedScope: string };
   // ── Governance ──
   [PipelineEventType.ConstitutionViolation]: GovernanceEventPayload & { rule: string; detail: string };
   [PipelineEventType.ConstitutionSessionConvened]: GovernanceEventPayload & { sessionId: string };
@@ -206,46 +150,45 @@ export type EventPayloadMap = {
   [PipelineEventType.GovernanceAuditReport]: GovernanceEventPayload & { auditType: "plan_review" | "doc_audit" | "constitution_check" };
   [PipelineEventType.GovernanceComplianceViolation]: GovernanceEventPayload & { violationLevel: "P0" | "P1" | "P2" | "P3" };
   [PipelineEventType.GovernanceRoundtableConsensus]: GovernanceEventPayload & { participants: string[] };
-
   // ── Interact（配置交互流）──
   [PipelineEventType.InteractConfigOverrideApplied]: { timestamp: number; key: string; source: 'env' | 'user' | 'project'; oldValue: unknown; newValue: unknown };
   [PipelineEventType.InteractConfigReloaded]: { timestamp: number; watchPath: string; changedKeys: string[] };
   [PipelineEventType.InteractConfigSchemaViolation]: { timestamp: number; schemaName: string; errors: { path: string; message: string }[] };
-
   // ── Mem（记忆流）──
   [PipelineEventType.MemRetrievalStrategySelected]: { timestamp: number; query: string; strategy: string; reason: string };
   [PipelineEventType.MemMemoryWarmupInitiated]: { timestamp: number; embeddingModel: string; dimension: number };
   [PipelineEventType.MemMemoryObliterationTriggered]: { timestamp: number; pattern: string; reason: string };
-  [PipelineEventType.MemMemoryWritten]: {
-    entryId: string;
-    domain?: string;
-    /** 记忆域场景 */
-    scene?: string;
-    /** 字节大小 */
-    byteSize: number;
-  };
-
+  [PipelineEventType.MemMemoryWritten]: { entryId: string; domain?: string; scene?: string; byteSize: number };
   // ── Exec（执行流——调度器心跳/超时/生命周期）──
-  [PipelineEventType.ExecNodeDelayed]: {
-    nodeId: string;
-    agentId: string;
-    elapsed: number;
-    action: 'wait' | 'extend';
-    level: 'warn' | 'ping';
-  };
-  [PipelineEventType.ExecLifecyclePhaseChanged]: {
-    from: "uninitialized" | "running" | "shutdown";
-    to: "uninitialized" | "running" | "shutdown";
-    phase: "bootstrap_done" | "shutdown_start" | "shutdown_done" | "component_error";
-    component?: string;
-    error?: string;
-  };
-
+  [PipelineEventType.ExecNodeDelayed]: { nodeId: string; agentId: string; elapsed: number; action: 'wait' | 'extend'; level: 'warn' | 'ping' };
+  [PipelineEventType.ExecLifecyclePhaseChanged]: { from: "uninitialized" | "running" | "shutdown"; to: "uninitialized" | "running" | "shutdown"; phase: "bootstrap_done" | "shutdown_start" | "shutdown_done" | "component_error"; component?: string; error?: string };
   // ── Tele（遥测流）──
   [PipelineEventType.TeleDegradationThresholdBreached]: { timestamp: number; source: string; count: number; threshold: number };
 };
 
-/** 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定
+/**
+ * 治理事件统一上下文。
+ * 所有治理组件 emit 的 ObservableEvent 中，payload 应符合此结构。
+ */
+export interface GovernanceEventPayload {
+  /** 事件严重性 */
+  severity: "FYI" | "WARNING" | "DECISION_REQUIRED";
+  /** 发射源 */
+  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop";
+  /** 摘要 */
+  summary: string;
+  /** 详情（可选） */
+  detail?: string;
+  /** 建议动作（可选） */
+  suggestedAction?: "fix" | "ignore" | "escalate";
+  /** 三轴归属（可选） */
+  axis?: "事轴" | "权轴" | "横切";
+  /** 是否需要决策（可选——权轴拦截信号） */
+  requiresDecision?: boolean;
+}
+
+/**
+ * 类型化 ObservableEvent——type 必须是枚举成员，payload 按 type 锁定
  *
  * @governance 久岐忍 P2-6：Cortex 可观测性管道结构性缺陷 → 已闭合
  *   requestId 使下游可区分"未上报"与"上报失败"，消除报警盲区。
@@ -269,27 +212,6 @@ export interface ObservableEvent<T extends PipelineEventType = PipelineEventType
    * undefined 为向后兼容，行为不变。
    */
   notificationType?: "FYI" | "WARNING" | "DECISION_REQUIRED";
-}
-
-/**
- * 治理事件统一上下文。
- * 所有治理组件 emit 的 ObservableEvent 中，payload 应符合此结构。
- */
-export interface GovernanceEventPayload {
-  /** 事件严重性 */
-  severity: "FYI" | "WARNING" | "DECISION_REQUIRED";
-  /** 发射源 */
-  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop";
-  /** 摘要 */
-  summary: string;
-  /** 详情（可选） */
-  detail?: string;
-  /** 建议动作（可选） */
-  suggestedAction?: "fix" | "ignore" | "escalate";
-  /** 三轴归属（可选） */
-  axis?: "事轴" | "权轴" | "横切";
-  /** 是否需要决策（可选——权轴拦截信号） */
-  requiresDecision?: boolean;
 }
 
 export type PipelineHandler = (event: ObservableEvent) => void;
@@ -434,61 +356,56 @@ export interface ChatOptions {
   reasoningEffort?: "high" | "max";
 }
 
-/**
- * ICortexApi —— CLI 与引擎的公共通信契约。
- *
- * CLI 命令只依赖此接口，不感知引擎内部组件（Scheduler/TaskBoard/MemoryStore 等）。
- * EngineBridge 实现此契约，bootstrapEngine 产出的结果也实现了此契约。
- *
- * @since v2.7 替代桥接模式的直接组件暴露
- */
-export interface ICortexApi {
-  // ── 生命周期 ──
+/** 生命周期管理
+ * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。 */
+export interface ICortexLifecycle {
   readonly ready: boolean;
   readonly bootstrapped: boolean;
   ensureReady(): Promise<void>;
   ensureBootstrapped(): Promise<void>;
   shutdown(): Promise<void>;
+}
 
-  // ── 直接对话（闲聊，不经调度器）──
+/** 对话能力
+ * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。 */
+export interface ICortexChat {
   chat(systemPrompt: string, messages: LlmMessage[], opts?: ChatOptions): Promise<string>;
-
-  // ── 模型名（用于 talk/trio/party 的双模型分流）──
   getChatModelName(): string;
   getReasonerModelName(): string;
+}
 
-  // ── 任务执行 ──
+/** 任务执行
+ * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。 */
+export interface ICortexTask {
   submitTask(node: TaskNode): Promise<void>;
   executeAll(): Promise<ExecutionReport>;
+}
 
-  // ── Talk 专用记忆 ──
+/** Talk 记忆 / 主记忆库
+ * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。 */
+export interface ICortexMemory {
   ensureTalkMemory(): Promise<void>;
   readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
   writeTalkMemory(entry: MemoryWriteInput): Promise<void>;
+  readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
+}
 
-  // ── Agent 查询（WebUI/CLI 需具体类型展示状态）──
+/** 引擎组件访问
+ * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。 */
+export interface ICortexComponents {
   getMetaAgent(): Promise<{ plan(intent: string, context?: Record<string, unknown>): Promise<unknown> } | undefined>;
   getStrategists(): Map<string, unknown> | undefined;
-
-  // ── 确认门（已有 IConfirmGate 契约）──
   getConfirmGate(): Promise<IConfirmGate>;
-
-  // ── 主记忆库（只读，用于获取工程上下文）──
-  readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
-
-  // ── 引擎组件访问（管理命令用）──
-  /** 获取记忆库（管理命令：memory write/read/search/link/archive/freeze/obliterate） */
   getMemoryStore(): Promise<IMemoryStore>;
-
-  /** 获取任务板（返回具体类型，WebUI 需展示任务状态） */
   getTaskBoard(): Promise<{ getNode(id: string): unknown; getAllNodes(): unknown[]; addNode(node: unknown): void }>;
-
-  /** 获取调度器（返回具体类型，WebUI 需触发执行） */
   getScheduler(): Promise<{ executeAll(): Promise<unknown>; register(type: string, agent: unknown, model: string): void }>;
-
-  /** 获取 AgentPool（管理命令：agent list/inspect/spawn/destroy） */
   getAgentPool(): unknown;
 }
+
+/**
+ * @since Core-2 — 拆分为5个域接口。ICortexApi 保留作为组合兼容面。新增消费方优先使用子接口。
+ */
+export interface ICortexApi extends ICortexLifecycle, ICortexChat, ICortexTask, ICortexMemory, ICortexComponents {}
 
 // ─── 运行时类型约束 ──────────────────────────────────────────
 

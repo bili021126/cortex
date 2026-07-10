@@ -77,6 +77,7 @@ export class ShutdownOrchestrator {
       if (!c) continue;
       try {
         const componentPhase = c.phase;
+        let shutdownTimer: ReturnType<typeof setTimeout> | undefined;
         await Promise.race([
           (async () => {
             await c.stop?.();
@@ -89,13 +90,13 @@ export class ShutdownOrchestrator {
             if (this._agentTracker && componentPhase) {
               this._agentTracker.syncLifecycleState(name, 'dispose');
             }
-          })(),
-          new Promise<void>((_, reject) =>
-            setTimeout(
+          })().finally(() => clearTimeout(shutdownTimer)),
+          new Promise<void>((_, reject) => {
+            shutdownTimer = setTimeout(
               () => reject(new Error(`[ShutdownOrchestrator] shutdown timeout: ${name}`)),
               this.SHUTDOWN_TIMEOUT_MS,
-            ),
-          ),
+            );
+          }),
         ]);
       } catch (err) {
         this._emitComponentError(name, err);

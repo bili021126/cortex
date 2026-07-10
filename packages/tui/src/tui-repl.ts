@@ -9,6 +9,7 @@
  */
 
 import * as readline from "node:readline";
+import { existsSync } from "node:fs";
 import { AgentType, CHINESE_NAME_TO_TYPE, AGENT_CHINESE_ROLE, type LlmMessage, type ITuiEngineBridge } from "@cortex/shared";
 
 // CLI 注入适配器
@@ -251,6 +252,17 @@ async function _dispatchTuiMode(
     case "plan": {
       const result = await consumeGenerator(planMode(input, bridge, a, ps, h), tuiEventBus, abort);
       if (result) { session.planState = ps; savePlanState(projectRoot, ps); writeln(result); }
+      // TUI 落盘自检
+      for (const node of ps.nodes) {
+        const outputPath = (node as any)._outputPath;
+        if (outputPath) {
+          if (!existsSync(outputPath)) {
+            console.warn(`[TUI] 预期产出文件不存在: ${outputPath}`);
+          } else {
+            console.log(`[TUI] ✅ 产出文件已落盘: ${outputPath}`);
+          }
+        }
+      }
       break;
     }
     case "party": {
@@ -303,7 +315,7 @@ async function handleInternalCommand(input: string, ctx: TuiCmdCtx): Promise<boo
       writeln(`  ${dim("─────────────────────────")}`);
       writeln(`  .mode chat|talk|plan|party|command   切换模式`);
       writeln(`  .agent code|review|analysis|...      切换角色`);
-      writeln(`  .with                                三人模式（talk 下启用昔涟+纳西妲）`);
+      writeln(`  .with/.without                        三人模式 开/关（talk 下启用/关闭 昔涟+纳西妲）`);
       writeln(`  .roster list|add|remove|reset        管理群聊成员`);
       writeln(`  .save                                手动保存会话`);
       writeln(`  .help                                显示帮助`);
@@ -370,9 +382,11 @@ async function handleInternalCommand(input: string, ctx: TuiCmdCtx): Promise<boo
       }
       return _handleRosterCommand(args.slice(1), ctx);
 
-    case "with":
+    case "with": case "without":
       if (ctx.session.mode === "talk") {
-        ctx.session.talkTrio = !ctx.session.talkTrio;
+        // .with = 启用三人模式 | .without = 关闭三人模式
+        const targetedState = cmd === "without" ? false : !ctx.session.talkTrio;
+        ctx.session.talkTrio = targetedState;
         ctx.session.history = [];
         // Hook: onTalkTrioToggle
         ctx.hooks.onTalkTrioToggle?.(ctx.session.talkTrio);

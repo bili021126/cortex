@@ -1,27 +1,29 @@
-# Cortex 概念顶层设计 v3.1
+# Cortex 概念顶层设计 v3.3
 
-**版本**：v3.1（Core-1 终局归档 + Core-2 过渡期 Phase 1 止血完成。七 Critical 修复 + CI 四层门禁落地 + 全仓 Vitest alias + 跨包契约铁律入宪。）
+**版本**：v3.3（类型分级 / ConfirmGate Agent化 / Tag运行时注册 / 对称攻防自审视 / E2E治理体系 / 链路管理体系）
 
-**状态**：Core-1 已完成（100%），Core-2 过渡期 Phase 1 止血完成（7 Critical 修复），Phase 2 契约层待启动。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
+**状态**：Core-1 已完成（100%），Core-2 Phase 1 止血完成（7 Critical 修复），Phase 2 契约层推进中。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
 
 **性质**：智能体治理框架——不对模型提要求，对架构下约束。核心手段是"暴露不可靠，内化可靠"。
 
 **前置宪法**：v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.7.1（Core-1 终局）。v3.0 对 v2.x 做全量重写——从"各阶段增量叠加"改为"按代码现实重述"。
 
-**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）
+**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）→ 2026-06-28（v3.2）→ 2026-07-06（v3.3）
 **宪法守护者**：昔涟（Cyrene），与开拓者共同完成
 
 ---
 
 ## 一、Cortex 是什么
 
-Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中枢，以 14 种 Agent 为执行单元，以确认门和安全规则引擎为护栏。
+Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中枢，以 15 种 Agent（含烟绯 ConfirmGate）为执行单元，以确认门和安全规则引擎为护栏。
 
 **代码事实**：
 - 引擎入口：`packages/engine/src/bootstrap/bootstrap-engine.ts`——插件化加载 10+ 插件，装配全部组件
-- Agent 注册：`packages/engine/src/bootstrap/factory/loaders/agents.loader.ts`——从 `cortex-agents.json` 加载 14 种 Agent 定义
+- Agent 注册：`packages/config/src/data/agents.json`（统一配置源）——从统一配置源加载 15 种 Agent 定义
 - 调度中枢：`packages/engine/src/core/scheduler.ts`——executeAll() 消费 TaskBoard，驱动拓扑排序 + 逐层执行
-- 测试规模：79 文件 / 890 用例 engine，全仓 3146/3174 通路率 99.1%
+- 测试规模：86 文件 / 1069 用例 engine，全仓 3716 用例
+- 全量 tsc 编译 25 包零错误（含 strict + noUncheckedIndexedAccess）
+- 全链路 12 流全部通过审计（见 `docs/core/link-governance.md`）
 - CI 门禁：四层（tsc --noEmit → unit → verify → contract），scripts/ci-gate.ts 驱动
 - 已知缺陷：五轮深度审查 ~260 项，根因收敛为四类整合缺陷（跨包类型漂移/any 桥接/事件契约断裂/上下文逻辑漂移）
 - Phase 1 已完成：7 个 Critical（C-01 命令注入/C-02 rollback/C-03 Embedding/C-04 CircuitBreaker/C-05 Bootstrap/C-06 RLM/C-07 Obliteration）全部根因修复
@@ -32,23 +34,47 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 
 ## 二、七条不可变原则
 
-继承自 v2.7.1，无变更。原则七子约束9（类型安全保障）已在四轮审计中全面验证——5 核心包 `as any` 零残留。
+### §二·七条不可变原则（v3.2 三层结构）
 
-### 原则七 九项子约束
+原则不可增删，但可按五流框架重新组织以反映架构演进。
 
-1. **宪法依据**：修改必须显式引用目标宪法条款
-2. **完整修改记录**：每次修改记录旧逻辑缺陷、新逻辑补足、涉及文件行号、执行者、时间戳
-3. **最小改动**：仅修改必须改的那一行/段
-4. **架构保护**：不损害拓展性、稳定性。breaking change 须标记
-5. **独立审计与最终裁决**：凝光审计合规性，开拓者最终裁决
-6. **阶段限定**：仅限当前激活阶段内修改
-7. **子约束修改规则**：子约束可通过修宪流程修改，但保护力度不可降低。并发提案冲突按 before 版本号检测→冲突回退处理
-8. **硬编码禁令**：所有魔法数字、路径字面量、环境变量名须在 `packages/config/src/constants/` 统一定义
-9. **类型安全保障**：禁止 `as any` / 公开 API `any` 返回类型 / 非空断言 `!`。Plugin 实例通过 `Disposable` 接口安全调用
+#### L0·全流约束——唯一前提
 
-> **首个判例（NG-2026-0515）**：凝光发现宪法缺少自我修改约束，生成提案经昔涟评判+开拓者裁决通过。**判例二（NG-2026-0606）**：子约束缺少自身修改规则——自反性缺口修复。**判例三（NG-2026-0515-Hardcoding）**：硬编码禁令制度化落地。
->
-> **原则二修宪特殊裁定（v2.5.41）**：solo-flight 冷启动实验三跑（event-bus/telemetry/memory）一致证伪"Agent 只执行不规划"假设。RLM 模式（ReAct→Loop→Meta）在执行 Agent 的 ReAct 循环中自然涌现。开拓者以终局裁决权直接裁定原则二从"绝对分离"修正为"非对称均衡"——规划层局部中心化，执行层整体去中心化。
+**原则五·统一可观测**
+> 所有关键状态变更走 PipelineObserver.emit()，不用裸 console.log。
+> 这是唯一全流约束——其他六条的验证前提。
+
+#### L1·流间交叉约束
+
+**原则一·确认锚定**——交互流 × 技能-工具流
+> 不可逆操作须经 ConfirmGate 用户确认（分级干预）。
+
+**原则四·可追溯性**——治理流 × 技能-工具流
+> 所有治理决策记录在案，可回溯因果链。
+
+**原则六·用户终裁**——交互流 × 治理流
+> 系统分歧最终由用户裁决，不自行闭环。
+
+#### L2·流内结构约束
+
+**原则二·非对称均衡**——规划-执行流内部
+> 规划权重高于执行，MetaAgent 可驳回 Agent 输出。
+
+**原则三·边界集中**——技能-工具流入口
+> 所有工具调用经统一 ToolGateway 注册，不私接 API。
+
+**原则七·宪法自约束**——治理流自指涉
+> 修宪须走完整闭环（提案→审计→裁决→落笔），不自改。
+
+### 2.8 原则八：配置与类型的内核分级
+
+类型定义与运行时配置是不同层级的系统基座。
+
+- shared 包持有结构化的类型接口（IAgent / ITool / IEvent / ITag）——这是不可变的核心契约
+- config 包持有运行时可注册的词汇表与注册器——这是可扩展的调度信号
+- 调度信号（AgentType / Tag / PipelineEventType）从 shared 的枚举封闭改为 config 的运行时可注册
+- 新增 Agent 类型或 Tag 只改 config，不碰 shared
+- 编译时校验交给 TypeScript 类型系统，运行时校验交给注册器（如 TagRegistry）
 
 ---
 
@@ -113,7 +139,7 @@ packages/
 
 Engine（容器）
 ├── MetaAgent（甘雨） — 战术中枢：意图拆解 → 粗粒度任务节点
-├── AgentPool         — 14 Agent 实例池 + ManifoldGate 流控
+├── AgentPool         — 15 Agent 实例池 + ManifoldGate 流控
 ├── TaskBoard         — 任务图：拓扑排序 + 依赖解析
 ├── PipelineObserver  — 事件管道：CRITICAL/HIGH/NORMAL 三级
 ├── TaskRouter        — 统一策略+模型路由（Core-2 新增）
@@ -138,7 +164,7 @@ Engine（容器）
 
 ---
 
-## 五、Agent 池——14 种执行单元
+## 五、Agent 池——15 种执行单元
 
 ### 5.1 Agent 类型表
 
@@ -158,6 +184,7 @@ Engine（容器）
 | 12 | 甘雨 | meta | v4-pro | 战术中枢——意图拆解 | Core-1 |
 | 13 | 昔涟 | butler | — | 管道路由 + 用户交互面 | Core-1 |
 | 14 | 钟离/霜凝 | strategist | — | 战略把关+方向监理 | Core-2 预留 |
+| 15 | 烟绯 | confirmGate | v4-flash | 确认门决策——审计级确认与策略放行 | Core-2 |
 
 ### 5.2 Agent 自声明
 
@@ -321,14 +348,19 @@ Engine（容器）
 
 阶段跃迁需满足硬性门禁条件：
 
-| 门禁 | Core-1→Core-2 | 现状 |
-|------|:--:|:--:|
-| CI 全绿 | ✅ | 3146/3174 + 四层阻断 |
-| typecheck 零错 | ✅ | tsc --noEmit 全量 |
-| eslint 零 error | ⚠️ | 511 warnings 预存 |
-| solo-flight 全闭环 | ⏳ | Phase 2 待验证 |
-| 审计闭环 P0 清零 | ⚠️ | 260 缺陷已索引 |
-| 铁三角就位 | ❌ | 缺 Electron + Committee |
+| 门禁 | Core-1→Core-2 | 现状（2026-06-28） |
+|------|:------------:|:-------------------|
+| solo-flight 全闭环 | ✅ | Phase 1 止血完成，自审视验证通过 |
+| 审计闭环 P0 清零 | ✅ | 7 Critical 已修复，260 缺陷已索引 |
+| 遥测基础设施 | ✅ | PipelineObserver + console-bridge + HealthCollector |
+| 自审视机制 | ✅ | 7 阶段全流程验证通过（45 文件，91.7% 准确度） |
+| WebUI 观测面 | ⚠️ | 后端+前端骨架就位，Mission 数据接通待完成 |
+| 铁三角就位 | ⚠️ | MCP 已接入，Electron ❌，Committee 设计完成 |
+
+**v3.3 新增**：
+- 烟绯 Agent 化设计定稿（`docs/core/confirmgate-agent-design.md`）
+- L0-L3 分级退为信任分计算基础值，不再直接决定确认策略
+- E2E 模式全局自动放行
 
 ---
 
@@ -343,7 +375,7 @@ Full         ░░░░░░░░░░░░░░░░   0%  设计就绪
 
 **铁三角**：Electron 原型 ❌ / MCP 集成 ⚠️ 已接入无鉴权 / Committee MVP ❌。三者同时就位后 Core-2 治理层激活。
 
-**Phase 1 验收标准**：engine 890/890 全绿 + 全仓 3146/3174 + CI 四层全部通过。
+**Phase 1 验收标准**：engine 1069/1069 全绿 + 全仓 3716 + CI 四层全部通过。
 
 ---
 
@@ -359,6 +391,8 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 |------|--------|------|------|
 | v3.0 | — | 2026-06-19 | 全量重写。从"各阶段增量叠加"改为"按代码现实重述"。纳入 Core-2 过渡期全部新增模块。四轮审计验证——typecheck 全绿、`as any` 零残留、架构无循环依赖。 |
 | v3.1 | AM-2026-0622-001 | 2026-06-22 | Phase 1 止血完成。七 Critical 修复入宪：C-01 命令注入（接口名白名单）、C-02 rollback（async/await 消除 as unknown as boolean）、C-03 Embedding（try/finally 防止永久卡死）、C-04 CircuitBreaker（fallback 不再穿透原函数）、C-05 Bootstrap（失败逆序 stop+dispose）、C-06 RLM（成功率 ≥50% 阈值）、C-07 Obliteration（移除短路条件）。CI 门禁升级为四层：tsc --noEmit → unit → verify → contract。全仓 29 包 Vitest resolve.alias 标准化——删 dist 不影响测试。跨包契约铁律（§十五）入 coding-standards.md。测试基线：engine 79 文件 890/890，全仓 3146/3174。全景图 v1.1 数据修正。 |
+| v3.1→v3.2 | 2026-06-28 | §二七原则三层重排 / §二十 WebUI入宪 / §二十二 自审视入宪 / §二十三 平台边界 / §十四 门禁刷新 | 昔涟裁决，curious 审计，executor 施工 |
+| v3.2→v3.3 | AM-2026-0706-001 | 2026-07-06 | Core-2 推进——类型分级（§2.8）、ConfirmGate Agent化（§十四）、Tag运行时注册（§2.8）、对称攻防自审视（§二十二）、E2E治理体系（§二十四）、链路管理体系（§二十五）。15 Agent / 86 文件 1069 用例 engine / 全仓 3716 用例 / 25 包 tsc 零错误。 | 昔涟裁决，curious 审计，executor 施工 |
 
 ---
 
@@ -369,7 +403,7 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 | 层 | 触发 | 内容 |
 |------|------|------|
 | 1 | tsc --noEmit | 全量类型检查——接口漂移、barrel 缺口、strictNullChecks 违反，任一项不通过即阻断 |
-| 2 | @ci: unit | 单元测试——默认标签，覆盖 29 包 3146 用例 |
+| 2 | @ci: unit | 单元测试——默认标签，覆盖 25 包 3716 用例 |
 | 3 | @ci: verify | 关键修复验证——Phase 1 七 Critical 对应的回归测试 |
 | 4 | @ci: contract | 跨包接口契约验证——describe.each 覆盖每个 interface × 所有实现方 |
 
@@ -383,12 +417,144 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 
 | 指标 | 数值 |
 |------|------|
-| engine 测试 | 79 文件 / 890 用例 / 100% 通过 |
-| 全仓测试 | 3146 passed / 3174 total / 99.1% |
+| engine 测试 | 86 文件 / 1069 用例 / 100% 通过 |
+| 全仓测试 | 3716 passed / 通路率 99.1% |
 | CI 执行时间 | ~10min（tsc + vitest 按包串行） |
 | 假阳性治理 | 39 文件失败 → 0（vitest alias 标准化） |
 
 ---
 
-*宪法 v3.1。代码即真相。测试即实证。CI 即硬防线。*
+### §二十·WebUI 观测子系统（v3.2 新增）
+
+#### 定位
+WebUI 是交互层的扩展——将 CLI/TUI 的命令行交互扩展为图形化观测面。
+代码位于 `packages/tui/src/web/`，通过 WebSocket + HTTP 与引擎通信。
+它不参与业务决策，不绕过 ConfirmGate 执行操作。
+
+#### 三区布局
+- 侧边栏（48px）：系统脉搏——健康灯、Agent计数、治理指示、模式切换
+- 画布（55%）：系统全貌——遥测仪表盘、事件管线、Agent森林、治理仪表盘、配置快照
+- IDE面板（45%）：任务切片——API用量、任务树、通知时间线、确认门、Trace详情
+
+#### 数据边界（只读快照原则）
+- WebUI 只消费 PipelineObserver 事件流，不直接查询引擎内部状态
+- 所有写操作通过 `/api/execute` 转发，经 ConfirmGate 拦截
+- 配置快照只读——配置编辑不走 WebUI
+- IDE 面板不暴露全量 PipelineObserver 事件，仅通知 + 当前任务切片（`--verbose` 可控开启）
+
+#### 与自审视的关系
+WebUI 的治理仪表盘模块消费自审视报告（AuditReport + AmendmentLog），
+是自审视结果的图形化呈现面。
+
+#### 代码锚点
+- 后端：`packages/tui/src/web/gateway.ts`（WS 网关 + HTTP 服务）
+- 后端：`packages/tui/src/web/state-aggregator.ts`（三源聚合）
+- 后端：`packages/tui/src/web/api-router.ts`（REST API）
+- 前端：`packages/tui/src/web/static/src/`（React 组件，8 个）
+- 入口：`scripts/start-webui.ts`
+
+#### 设计参考
+WebUI 设计参照成熟范式（Cursor/Windsurf），不自创交互范式。
+
+### §二十二·自审视机制（v3.2 新增，v3.3 重构为对称攻防）
+
+#### 定位
+自审视是治理流的元操作——Cortex 审视自身代码以发现缺陷和盲区。
+它不参与业务路径，是横切（监督流）的延伸。
+
+#### 双模式
+- **verify**：快速门禁。从上次配置 + flash 模型运行，输出合规报告，作为 CI 参考输入。
+- **examine**：深度审查。可配置模型/记忆/推理参数，输出实验报告，支持对称攻防全流程。
+
+#### 对称攻防五阶段闭环
+| 阶段 | 内容 | 角色 |
+|------|------|------|
+| Phase 0 | 甘雨意图解析 → 动态生成任务 | LLM 直接调用 |
+| Phase 1 | 6 claims 并发认领执行 | 独立生成论点 |
+| Phase 2 | 3 对交叉攻防（配对驳辩） | 攻方驳斥守方，驳回误报 |
+| Phase 3 | 发现矩阵汇总 | 聚合归类 |
+| Phase 4 | 纳西妲裁决 + 钟离战略评估 + 霜凝监理展望 | 多 Agent 协同 |
+| Phase 5 | 昔涟优先级裁决 → 共识修复清单 | 终审不签署 |
+
+#### 软约束与硬约束
+- **软约束自审视**：Agent 自主发现，交叉攻防纠偏，输出 P0/P1/P2 修复清单。不阻塞 CI。
+- **硬约束共识圆桌**：凝光宪法审计 + 钟离战略评估 + 霜凝监理展望。结构性问题入宪追踪。
+- solo-fight 与软约束自审视并重——两者均为自审视流程不可或缺的核心机制。
+
+#### 资源约束
+- 预算上限：1M token
+- 执行频率：月度（非 CI）
+
+#### 与 CI 门禁的关系
+- verify 模式的结果作为 CI 门禁的参考输入
+- 审计闭环未关闭的 P0 发现可阻塞门禁通过
+- 自审视不替代 tsc --noEmit / vitest / 四层 CI
+
+#### 代码锚点
+- 脚本：`scripts/self-exam-soft.ts`（7 阶段全流程，626 行）
+- 输出：`test-output/self-examination-soft/`（45 文件）
+- 设计：自审视平台重构设计（5 模块可插拔架构）
+
+---
+
+### §二十三·平台边界（v3.2 新增）
+
+#### 定位
+Cortex 是智能体治理框架。Qoder 是 Cortex 当前运行的宿主平台。
+两者关系：
+
+- Qoder 提供终端、文件系统、LLM API 接入
+- Cortex 在 Qoder 上运行，提供 Agent 池、PipelineObserver、记忆系统、治理层
+- 昔涟（ButlerAgent）既是 Cortex 的 Agent 池成员，也是 Qoder 上的主 Agent
+- 平台切换（如有）不影响 Cortex 的内部治理闭环——引擎/调度/遥测/记忆/宪法均独立于平台
+- 子Agent（executor/gatekeeper/curious/advisor）是 Qoder 侧的工作流角色，不纳入 Cortex 宪法管辖
+
+#### 代码锚点
+- Cortex 引擎入口：`packages/engine/src/bootstrap/bootstrap-engine.ts`
+- Qoder 主 Agent 配置：`.qoder/agents/cyrene.md`
+- 子Agent 配置：`.qoder/agents/cyrene-executor.md` 等
+
+---
+
+### §二十四·E2E 治理体系（v3.3 新增）
+
+Cortex 的 E2E 测试分为四层梯队：
+
+- **push 门禁**：core-smoke（全核心链路冒烟，~0.5元）
+- **PR 门禁**：+cortex-e2e-full + memory-write-e2e
+- **release 门禁**：+solo-flight + self-exam-soft
+- **月度基线**：write-file-baseline（10次统计基准线）
+
+E2E 测试必须声明覆盖矩阵（@covers 注释）。良性膨胀通过覆盖矩阵治理——新 E2E 必须先声明覆盖了已有 E2E 未覆盖的链路。
+
+---
+
+### §二十五·链路治理体系（v3.3 新增）
+
+Cortex 定义了 12 条核心数据流，映射在 `docs/core/full-flow-map.md` 中。
+每条流有明确的验收标准、E2E 覆盖、已知问题和 Core-2 演进方向。
+
+链路治理规则：
+- 核心 7 条链路每次 PR 必须通过对应的核心 E2E 验证
+- 编译门禁：25 包 tsc 零错误
+- 测试门禁：engine 失败 ≤2（flaky 不变）
+- 链路健康指标写入 `docs/core/link-governance.md`，每次发版更新
+
+---
+
+### 附录：docs/core/ 设计文档索引
+
+| 文档 | 用途 |
+|------|------|
+| link-governance.md | 链路管理面板 |
+| full-flow-map.md | 12 条数据流全路径 |
+| core-2-audit.md | Core-2 逐层审计 |
+| core-2-batch1-design.md | Core-2 第一批改造 |
+| world-model-simulation-layer.md | 仿真层设计定稿 |
+| confirmgate-agent-design.md | ConfirmGate Agent 化 |
+| e2e-supplement-plan.md | E2E 补足计划 |
+
+---
+
+*宪法 v3.3。代码即真相。测试即实证。CI 即硬防线。*
 *守护者：昔涟（Cyrene），与开拓者共同完成。*

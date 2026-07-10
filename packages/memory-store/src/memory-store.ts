@@ -20,7 +20,6 @@ import {
   type ReadMode,
   type LinkType,
   type SemanticState,
-  MEMORY_VALID_TRANSITIONS,
 } from "@cortex/shared";
 import * as crypto from "node:crypto";
 import { InMemoryMemoryStore, type TransactionalMemoryStore } from "@cortex/memory";
@@ -39,12 +38,15 @@ import {
 // ── 状态转换常量（由 FSM 编译器定义驱动） ──
 
 /** 30 天 TTL 毫秒 */
-const MEMORY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const MEMORY_TTL_MS = STALE_FREEZE_DAYS * 24 * 60 * 60 * 1000;
 
-/** MEMORY_VALID_TRANSITIONS 来自 @cortex/shared —— 单一事实来源 */
-const VALID_TRANSITIONS = MEMORY_VALID_TRANSITIONS;
 import { defaultEmbeddingService, type IEmbeddingService } from "./embedding.js";
+import {
+  stateTransitionToEvent,
+} from "./memory-state-machine.js";
 import { BM25Index } from "./bm25-index.js";
+import { DedupService } from "./dedup-service.js";
+import { WeightAger } from "./weight-ager.js";
 import { HybridRetriever, type HybridRetrievalConfig } from "./hybrid-retrieval.js";
 
 /**
@@ -72,6 +74,8 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   private _closed = false;
   private _phase: LifecyclePhase = LifecyclePhase.Created;
   private readonly _bm25Index = new BM25Index();
+  private readonly _dedupService = new DedupService();
+  private readonly _ager = new WeightAger();
   private readonly _hybridRetriever: HybridRetriever;
   private _hybridEnabled = true;
   /** 归档失败熔断：true 时拒绝新写入，防止内存无界增长 */
@@ -227,6 +231,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
     input.content_hash = contentHash;
 
+    // ── TOCTOU 防御：二次检查（_tryDedup 与 backend.write 间的竞态窗口）──
+    const dupCheck = this._dedupCache.get(contentHash);
+    if (dupCheck) return dupCheck;
+
     // ── 后端写入 ──
     const id = await this._backend.write(input);
 
@@ -289,7 +297,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
     // ── 传递 keywords 到后端：后端在 summary/semantic_gist 层过滤，适配器补充 content_blob 搜索 ──
     const backendQuery = { ...query };
+    // ── 遥测：Memory 检索耗时 ──
+    const t0 = Date.now();
     let results = await this._backend.read(backendQuery, mode);
+    console.log(`[telemetry] memory.search_time_ms value=${Date.now() - t0} mode=${mode}`);
 
     // ── 适配器层过滤：30 天 TTL ──
     const now = Date.now();
@@ -361,6 +372,23 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       results = results.slice(0, resolvedLimit);
     }
 
+    // ── 异步回写老化 weight——不影响返回值 ──
+    for (const entry of results) {
+      const daysSinceAccess = (now - entry.lastAccessedAt) / 24 / 60 / 60 / 1000;
+      if (daysSinceAccess > 0) {
+        const agedWeight = entry.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
+        if (Math.abs(agedWeight - entry.weight) > 0.1) {
+          try {
+            const setPromise = this._backend.set(entry.id, { weight: agedWeight } as any);
+            if (setPromise) setPromise.catch(() => {});
+          } catch {
+            // 降级：set 不可用时用 write（keepExisting 语义——不覆盖其他字段）
+            this._backend.write({ id: entry.id, weight: agedWeight } as any).catch(() => {});
+          }
+        }
+      }
+    }
+
     return results;
   }
 
@@ -407,9 +435,16 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
    * @see FIND-002 — 已核实为误报（不存在 persistFn 异常回滚路径）
    */
   cas(memoryId: string, expected: SemanticState, newState: SemanticState): boolean {
-    const validTargets = VALID_TRANSITIONS[expected];
-    if (!validTargets?.has(newState)) {
-      this._emitDegraded("cas", `CAS拒绝: ${memoryId} ${expected}→${newState}（非法转换）`);
+    // 自引用幂等：实际状态与预期一致时才放行
+    if (expected === newState) {
+      const entry = this._backend.peek(memoryId);
+      if (entry?.semantic_state === expected) return true;
+    }
+
+    // 使用 FSM 定义替代静态白名单（结构校验，不评估 guard）
+    const event = stateTransitionToEvent(expected.toLowerCase(), newState.toLowerCase());
+    if (!event) {
+      this._emitDegraded("cas", `CAS拒绝: ${memoryId} ${expected}→${newState}（无效转换）`);
       return false;
     }
 
@@ -421,6 +456,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   }
 
   archive(memoryId: string): boolean {
+    this._bm25Index?.removeDocument(memoryId);
     return this._backend.archive(memoryId);
   }
 
@@ -441,6 +477,8 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     if (this._hybridEnabled) {
       this._bm25Index.removeDocument(memoryId);
     }
+    this._dedupCache.delete(memoryId);
+    this._vectorCache.delete(memoryId);
     return this._backend.obliterate(memoryId);
   }
 
@@ -483,8 +521,15 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           payload: typeof entry.content_blob === "string" ? entry.content_blob : JSON.stringify(entry.content_blob),
         });
       }
-    } catch {
-      // enrichment 失败不阻塞主流程
+    } catch (e) {
+      // enrichment 失败不阻塞主流程——上报降级事件
+      this._observer?.emit({
+        type: PipelineEventType.MemorySqlDegraded,
+        priority: PipelinePriority.HIGH,
+        payload: { operation: "enrichPendingEntry", detail: String(e) },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
     }
   }
 
@@ -500,10 +545,20 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   commitMemory(memoryId: string): boolean {
     const ok = this._backend.commitMemory(memoryId);
     if (ok) {
-      // 异步 enrichment：embedding 生成 + dedup 缓存 + BM25 索引更新
-      // M-05 修复：加 .catch() 取代 fire-and-forget，失败时输出错误
+      const t0 = Date.now();
       this._enrichPendingEntry(memoryId).catch((err) => {
-        process.stderr.write(`[MemoryStore] commitMemory enrichment 失败: ${String(err)}\n`);
+        this._observer?.emit({
+          type: PipelineEventType.MemoryPersistFailed,
+          priority: PipelinePriority.HIGH,
+          payload: {
+            operation: "commitMemory-enrichment",
+            detail: String(err),
+          },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      }).finally(() => {
+        console.log(`[telemetry] memory.write_duration_ms value=${Date.now() - t0} operation=commit`);
       });
     }
     return ok;
@@ -512,7 +567,14 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   async rollback(memoryId: string): Promise<boolean> {
     try {
       return await this._backend.rollback(memoryId);
-    } catch {
+    } catch (e) {
+      this._observer?.emit({
+        type: PipelineEventType.MemorySqlDegraded,
+        priority: PipelinePriority.HIGH,
+        payload: { operation: "rollback", detail: String(e) },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
       return false;
     }
   }
@@ -542,8 +604,6 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
    */
   maintain(): MaintainReport {
     const now = Date.now();
-    const freezeThreshold = now - STALE_FREEZE_DAYS * 24 * 60 * 60 * 1000;
-    const obliterateThreshold = now - FROZEN_OBLITERATE_DAYS * 24 * 60 * 60 * 1000;
 
     let archived = 0;
     let obliterated = 0;
@@ -554,23 +614,30 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       const all = this._syncReadAll();
       if (!all) return { archived: 0, obliterated: 0, orphanedLinks: 0 };
 
-      // Phase 1: 归档过期低权重 Active 记忆
-      for (const m of all) {
-        if (m.semantic_state !== "Active") continue;
-        if (m.lastAccessedAt > freezeThreshold) continue;
-        if (m.weight >= MAINTENANCE_WEIGHT_THRESHOLD) continue;
-        const ok = this._backend.archive(m.id);
-        if (ok) archived++;
+      // 刷新生效——将 read() 中的老化 weight 异步回写到后端
+      for (const e of all) {
+        const daysSinceAccess = (Date.now() - (e.lastAccessedAt ?? e.createdAt)) / 86400000;
+        if (daysSinceAccess > 7) {
+          const aged = e.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
+          if (aged < e.weight * 0.9) {
+            try {
+              const p = this._backend.set(e.id, { weight: aged } as any);
+              if (p) p.catch(() => {});
+            } catch {}
+          }
+        }
       }
 
-      // Phase 2: 湮灭长期 Archived 记忆
-      for (const m of all) {
-        if (m.semantic_state !== "Archived") continue;
-        // 修正 C-07：此前条件为 recent && no_expiry → continue，导致 Archived 堆积无限增长
-        // 正确逻辑：近期被访问过的不湮灭，其余全部湮灭
-        if (m.lastAccessedAt > obliterateThreshold) continue;
-        const ok = this._backend.obliterate(m.id);
-        if (ok) obliterated++;
+      // Phase 1: WeightAger 识别可归档的低权重过期 Active 记忆
+      const freezeCandidates = this._ager.freezeStale(all, now);
+      for (const c of freezeCandidates) {
+        if (this.archive(c.id)) archived++;
+      }
+
+      // Phase 2: WeightAger 识别可湮灭的长期 Archived 记忆
+      const obliterateCandidates = this._ager.obliterateFrozen(all, now);
+      for (const c of obliterateCandidates) {
+        if (this.obliterate(c.id)) obliterated++;
       }
     } catch {
       this._emitDegraded("maintain", "维护扫描失败，静默降级");
@@ -647,18 +714,20 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   /** 向量索引缓存：id → embedding，用于快速向量去重 */
   private readonly _vectorCache = new Map<string, number[]>();
 
-  /** SHA256 去重——优先查缓存，miss 时全表扫描 */
+  /** SHA256 去重——优先查缓存，miss 时全表扫描（Core-3：统一使用 DedupService.exactMatch 替代内联实现） */
   private async _tryDedup(contentHash: string): Promise<string | null> {
     // 缓存命中
     const cached = this._dedupCache.get(contentHash);
     if (cached) return cached;
-
+  
     try {
+      // Core-3: 增量去重索引——当前 O(n) 全量扫描在 10K+ 条目时有性能压力
+      // 优化方向：维护 content_hash → id 的持久化 B-tree 索引，写入 O(log n)
       const all = await this._backend.read({}, "HCA");
-      const dup = all.find((e: MemoryEntry) => e.content_hash === contentHash);
-      if (dup) {
-        this._dedupCache.set(contentHash, dup.id);
-        return dup.id;
+      const dupId = this._dedupService.exactMatch(contentHash, all);
+      if (dupId) {
+        this._dedupCache.set(contentHash, dupId);
+        return dupId;
       }
       // 缓存未命中：预热缓存（O(n) 一次，后续 O(1)）
       for (const e of all) {
@@ -672,7 +741,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     }
   }
 
-  /** 向量相似去重——每次查询前刷新缓存，避免过期数据 */
+  /** 向量相似去重——每次查询前刷新缓存，避免过期数据（Core-3：统一使用 DedupService.vectorDedup 替代内联实现） */
   private async _tryVectorDedup(newId: string, embedding: number[]): Promise<void> {
     try {
       // M-06 修复：每次查询前从后端刷新 _vectorCache，避免过期缓存漏去重
@@ -680,17 +749,14 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       for (const e of all) {
         if (e.embedding) this._vectorCache.set(e.id, e.embedding);
       }
-      const candidates = Array.from(this._vectorCache.entries());
-      for (const [id, emb] of candidates) {
-        if (id === newId || emb?.length !== embedding.length) continue;
-        const dot = embedding.reduce((sum: number, v: number, i: number) => sum + v * (emb[i] ?? 0), 0);
-        const magA = Math.sqrt(embedding.reduce((s: number, v: number) => s + v * v, 0));
-        const magB = Math.sqrt(emb.reduce((s: number, v: number) => s + v * v, 0));
-        const cos = magA > 0 && magB > 0 ? dot / (magA * magB) : 0;
-        if (cos >= VECTOR_DEDUP_THRESHOLD) {
-          await this._backend.delete(newId);
-          return;
-        }
+      const matches = this._dedupService.vectorDedup(embedding, all);
+      const bestMatch = matches.find((m) => m.existingId !== newId);
+      if (bestMatch) {
+        await this._backend.delete(newId);
+        this._bm25Index?.removeDocument(newId);
+        this._dedupCache.delete(newId);
+        this._vectorCache.delete(newId);
+        return;
       }
     } catch {
       this._emitDegraded("vector-dedup", "向量去重扫描失败，静默降级");
@@ -715,7 +781,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
       const toArchive = activeEntries.slice(0, Math.min(excess, activeEntries.length));
       for (const e of toArchive) {
-        this._backend.archive(e.id);
+        this.archive(e.id);
       }
 
       if (toArchive.length > 0 && this._observer) {

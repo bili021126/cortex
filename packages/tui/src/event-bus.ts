@@ -96,6 +96,16 @@ export class TuiEventBus {
     }
     return count;
   }
+
+  /**
+   * onEvent —— 引擎 PipelineObserver 事件桥接方法。
+   * 将 engine 的管线事件（ObservableEvent）桥接到 TUI 事件总线。
+   * @param type 事件类型标识
+   * @param handler 事件处理函数
+   */
+  onEvent(type: string, handler: (event: unknown) => void): void {
+    this.on(type as TuiEvent["type"], handler as TuiEventListener);
+  }
 }
 
 /** 全局单例事件总线 */

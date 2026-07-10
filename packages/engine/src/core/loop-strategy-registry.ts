@@ -14,7 +14,6 @@
 
 import type { TaskNode } from "@cortex/shared";
 import type { IStep } from "@cortex/scheduler";
-import { DEFAULT_PIPELINE, DIRECT_PIPELINE } from "../memory/pipeline.js";
 
 /**
  * 循环策略定义——描述一个可插拔的执行策略。
@@ -40,6 +39,22 @@ export interface LoopStrategy {
  */
 export class LoopStrategyRegistry {
   private map = new Map<string, LoopStrategy>();
+  /** 默认管道（由外部通过 setter 注入，打破对 memory-bridge 的反向依赖） */
+  static defaultPipeline: IStep[] = [];
+  /** 直接管道（由外部通过 setter 注入） */
+  static directPipeline: IStep[] = [];
+
+  /** 注入默认管道（替换数组内容以保留引用） */
+  static setDefaultPipeline(pipeline: IStep[]): void {
+    LoopStrategyRegistry.defaultPipeline.length = 0;
+    LoopStrategyRegistry.defaultPipeline.push(...pipeline);
+  }
+
+  /** 注入直接管道 */
+  static setDirectPipeline(pipeline: IStep[]): void {
+    LoopStrategyRegistry.directPipeline.length = 0;
+    LoopStrategyRegistry.directPipeline.push(...pipeline);
+  }
 
   register(s: LoopStrategy): void {
     this.map.set(s.name, s);
@@ -48,8 +63,14 @@ export class LoopStrategyRegistry {
   /** 规则路由——按注册顺序匹配，返回第一个 canHandle 为 true 的策略 */
   selectByRule(task: TaskNode): LoopStrategy | null {
     for (const s of this.map.values()) {
-      if (s.canHandle(task)) return s;
+      if (s.canHandle(task)) {
+        // eslint-disable-next-line no-console
+        console.log(`[TRACE dispatch] LoopStrategyRegistry.selectByRule: matched=${s.name} payloadLen=${task.payload.length} tags=[${task.tags.join(",")}] preferredStrategy=${task.preferredStrategy ?? "(none)"}`);
+        return s;
+      }
     }
+    // eslint-disable-next-line no-console
+    console.log(`[TRACE dispatch] LoopStrategyRegistry.selectByRule: noMatch → fallback=react payloadLen=${task.payload.length} tags=[${task.tags.join(",")}] preferredStrategy=${task.preferredStrategy ?? "(none)"}`);
     return null; // 调用方回退到 "react"
   }
 
@@ -85,7 +106,7 @@ loopStrategyRegistry.register({
     const hasToolDeps = task.tags.some(t => TOOL_DEPENDENCY_TAGS.includes(t as typeof TOOL_DEPENDENCY_TAGS[number]));
     return !hasToolDeps && task.payload.length < 200;
   },
-  pipeline: DIRECT_PIPELINE,
+  pipeline: LoopStrategyRegistry.directPipeline,
 });
 
 // 2. Decompose — 大任务天然可分解
@@ -98,7 +119,7 @@ loopStrategyRegistry.register({
     const decomposeTags = ["audit", "scan", "migration"] as const;
     return task.tags.some(t => decomposeTags.includes(t as typeof decomposeTags[number]));
   },
-  pipeline: DEFAULT_PIPELINE, // 未来替换为 DECOMPOSE_PIPELINE
+  pipeline: LoopStrategyRegistry.defaultPipeline, // 未来替换为 DECOMPOSE_PIPELINE
 });
 
 // 3. Jury — 多视角交叉验证
@@ -106,7 +127,7 @@ loopStrategyRegistry.register({
   name: "jury",
   description: "多视角并行采样+审校，适合需要交叉验证的任务（宪法审查、安全检查）",
   canHandle: (task) => task.needsMultiPerspective === true,
-  pipeline: DEFAULT_PIPELINE, // 未来替换为 JURY_PIPELINE
+  pipeline: LoopStrategyRegistry.defaultPipeline, // 未来替换为 JURY_PIPELINE
 });
 
 // 4. React — 默认 fallback（不注册 canHandle，作为 selectByRule 返回 null 时的回退）
@@ -114,5 +135,5 @@ loopStrategyRegistry.register({
   name: "react",
   description: "标准推理+工具循环，适合有工具依赖的多步任务（默认策略）",
   canHandle: () => false, // 永不匹配，作为 fallback
-  pipeline: DEFAULT_PIPELINE,
+  pipeline: LoopStrategyRegistry.defaultPipeline,
 });

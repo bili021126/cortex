@@ -4,8 +4,8 @@ import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
 import type { AgentPool } from "@cortex/scheduler";
-import { createAgent } from "../components/agent-factory.js";
-import type { AgentFactoryConfig } from "../components/agent-factory.js";
+import { createAgent } from "../execution/agent-factory.js";
+import type { AgentFactoryConfig } from "../execution/agent-factory.js";
 import { execSync } from "node:child_process";
 import { resolveConfig, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
@@ -47,28 +47,8 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, t
     safeReporter?.({ source: "InspectorAgent.collectFacts.tsc", error: "tsc not available", severity: "silent" });
   }
 
-  try {
-    try {
-      const tsxOut = execSync("npx tsx test/calculator.test.ts", {
-        cwd: root,
-        timeout: Math.min(T.testTimeout ?? SAFE_EXEC_TIMEOUT, SAFE_EXEC_TIMEOUT),
-        encoding: "utf-8",
-        maxBuffer: 256 * 1024,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      facts.push(`[tsx] ✅ 测试全部通过。`);
-      if (tsxOut.trim()) facts.push(`[tsx 输出]\n${tsxOut.trim().slice(0, 500)}`);
-    } catch (e) {
-      const err = e as { stdout?: unknown; stderr?: unknown; status?: number | string };
-      const stdout = err.stdout?.toString() ?? "";
-      const stderr = err.stderr?.toString() ?? "";
-      facts.push(`[tsx] ❌ 测试失败 (exit ${err.status ?? "?"})`);
-      if (stdout.trim()) facts.push(`[tsx stdout]\n${stdout.trim().slice(0, 600)}`);
-      if (stderr.trim()) facts.push(`[tsx stderr]\n${stderr.trim().slice(0, 600)}`);
-    }
-  } catch {
-    safeReporter?.({ source: "InspectorAgent.collectFacts.tsx", error: "tsx not available", severity: "silent" });
-  }
+  // calculator.test.ts 已移除，不执行
+  facts.push(`[tsx] ⏭️ calculator.test.ts 已移除，跳过。`);
 
   try {
     try {

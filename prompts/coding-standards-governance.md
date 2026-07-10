@@ -5,7 +5,33 @@
 > 
 > 标注约定：「✅ 已实现」= 代码中有对应实现；「📋 规划」= 设计目标，尚未落地；「规范要求」= 应遵守的约束，但代码中未强制执行。
 > 
-> 版本：v1.3（v1.2 + 记忆系统业界定位 + Harness 四层架构 + 技能系统闭环）
+> 版本：v1.4（v1.3 + E2E分层规范 + FSM治理）
+
+---
+
+## E2E 分层执行规范
+
+```
+✅ 分层策略（宪法 §24）：
+  push 门禁    → core-smoke (~0.5元)
+  PR 门禁      → +cortex-e2e-full + memory-write + skill-e2e
+  release 门禁 → +solo-flight + self-exam-soft + budget-cap
+  月度基线     → write-file-baseline + fcall-stability
+
+✅ E2E 文件必须声明 @covers 注释
+✅ 新 E2E 必须先声明覆盖了已有 E2E 未覆盖的链路
+```
+
+## FSM 状态机治理
+
+```
+✅ 记忆状态变更必须通过 MemoryEntryStateMachine
+  - commit 前走 cas("pending", "commit", ctx) guard 校验
+  - rollback 前走 cas("pending", "rollback", ctx) guard 校验
+  - archive 前走 canArchive（weight < 0.5）守卫
+❌ 禁止绕过状态机直接调用 store.commitMemory() 或 store.archive()
+✅ defineFsm<State, Event> 编译期锁定状态/事件——新增类型即编译报错
+```
 
 ---
 

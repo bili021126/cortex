@@ -144,6 +144,29 @@ export {
   isTestEnv,
   ifNotTest,
   VALID_TIERS,
+  PRESET_ALERT_RULES,
+  TRUST_AUTO_APPROVE_L2,
+  TRUST_AUTO_APPROVE_L3,
+  TRUST_BASE_SCORE,
+  TRUST_L0_L1_BONUS,
+  TRUST_L2_PENALTY,
+  TRUST_L3_PENALTY,
+  // ── FSM Guard ──
+  FSM_ARCHIVE_WEIGHT_THRESHOLD,
+  FSM_RESTORE_ACCESS_THRESHOLD,
+  FSM_OBLITERATE_DAYS_THRESHOLD,
+  // ── ReAct ──
+  REACT_CONTEXT_HARD_LIMIT,
+  REACT_FORCE_WRITE_LOOP,
+  REACT_HARD_REMINDER_LOOP,
+  // ── Scheduler ──
+  SCHEDULER_MAX_REPLAN_PER_NODE,
+  SCHEDULER_MAX_TOTAL_REPLANS,
+  // ── Skill 结晶 ──
+  SKILL_TRIAL_TO_ACTIVE_THRESHOLD,
+  SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD,
+  SKILL_FEEDBACK_POSITIVE_WEIGHT,
+  SKILL_FEEDBACK_NEGATIVE_WEIGHT,
 } from "./constants/index.js";
 
 // ── 默认值 + 解析 ─────────────────────────────────
@@ -217,4 +240,37 @@ export { ConfigRegistry } from "./registry.js";
 
 // ── 默认域注册入口（Phase 3）──
 export { registerDefaultDomains } from "./registry.js";
+
+// ── 词汇表（从 @cortex/shared 迁入的封闭类型）──
+export {
+  AgentType,
+  AgentStatus,
+  AgentContext,
+} from "./vocabularies/agent-enums.js";
+export {
+  TAG_VOCABULARY,
+  tagRegistry,
+  TagRegistry,
+} from "./vocabularies/tags.js";
+export type {
+  Tag,
+} from "./vocabularies/tags.js";
+export {
+  PipelineEventType,
+  PipelinePriority,
+} from "./vocabularies/event-types.js";
+export type {
+  EventPayloadMap,
+  GovernanceEventPayload,
+} from "./vocabularies/event-types.js";
+export {
+  ToolCategory,
+  ReversibilityLevel,
+  TrustLevel,
+  toReversibilityClass,
+  toolNameToRiskDomain,
+} from "./vocabularies/tool-enums.js";
+export type {
+  RiskDomain,
+} from "./vocabularies/tool-enums.js";
 

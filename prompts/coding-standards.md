@@ -318,11 +318,65 @@ prompts/
 
 ---
 
-> **此文件是 Cortex 的代码法典·核心篇——全量注入所有 Agent。**
+> 此文件是 Cortex 的代码法典·核心篇——全量注入所有 Agent。
 > 
 > 治理篇（架构规范、Agent 交互协议）见 `prompts/coding-standards-governance.md`。
+> dev篇（开发者补充）见 `prompts/coding-standards-dev.md`。
 > 
-> **宪法依据**：Cortex 概念顶层设计 v2.6.3——七条不可变原则（含子约束9 类型安全保障）
+> **宪法依据**：Cortex 概念顶层设计 v3.3——七条不可变原则（含子约束9 类型安全保障）
+
+---
+
+## 十六、类型更新联动——编译期强制拦截（v4.3 新增）
+
+> **地位：新增类型定义时必须同步更新关联文件。TypeScript 不替你做的事，此节替你强制执行。**
+
+### 16.1 状态机类型联动
+
+```
+❌ error：新增 MemState 或 MemEvent 时，必须同步更新 defineFsm<MemState, MemEvent>({...}) 的 FSM 定义
+✅ 保证：defineFsm 是类型安全辅助函数——新状态未加入 states 数组 → 编译报错
+✅ 保证：新事件未加入 transitions 数组 → 编译报错
+```
+
+### 16.2 Agent/Event 类型联动
+
+```
+❌ error：新增 AgentType → 必须更新 agents.json 和 agent-registry.ts
+❌ error：新增 PipelineEventType → 必须更新 EventPayloadMap（共享类型定义）
+```
+
+### 16.3 联动速查
+
+| 新增 | 必须同步更新 |
+|------|-------------|
+| MemState/Event | defineFsm 定义（fsm-compiler + memory-state-machine） |
+| AgentType | agents.json + agent-registry.ts + TAG_VOCABULARY |
+| PipelineEventType | EventPayloadMap（shared + config 双份） |
+| 工具权限 | AGENT_TOOL_PERMISSIONS（agent-registry.ts） |
+
+---
+
+## 十七、Engine 层依赖方向——架构约束（v4.3 新增）
+
+> **地位：Core-2 引擎拆分后的强制层依赖规则。**
+
+```
+engine/src/
+  core/           ← 最小内核（scheduler, meta-agent, 基础设施）
+  execution/      ← 执行层（agent-factory, react-loop, pool-aware）
+  planning/       ← 规划层（simulation-runner, governance-events）
+  memory-bridge/  ← 记忆桥接（pipeline, skill-pipeline）
+
+✅ 依赖方向：core ← execution ← planning ← memory-bridge（单向无环）
+❌ 禁止：core/ 直接引用 execution/ 或 planning/
+❌ 禁止：memory-bridge/ 反向引用 core/
+```
+
+---
+
+> **§十五管"跨包整合"，§十六管"类型联动"，§十七管"层依赖"。**
+> 代码法典从单体规范扩展到架构约束——至此闭合。
 
 ---
 

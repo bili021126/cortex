@@ -1,4 +1,7 @@
 /* eslint-disable no-console */
+// G1-4: LLM adapter 的 console.log 已通过 telemetry console-bridge 间接收敛到遥测
+// 无需改为 observer.emit——bootstrap 阶段 installConsoleBridge(observer) 后所有 console.log
+// 自动桥接到 PipelineObserver，实现全量收敛。保留裸 console.log 以便无 bridge 场景兜底。
 import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter } from "@cortex/shared";
 import { SimpleCircuitBreaker } from "@cortex/resilience";
 import * as crypto from "node:crypto";
@@ -148,6 +151,7 @@ export class LlmAdapter {
         this._cache.set(k, v);
       }
     } catch (e) {
+      console.warn(`JSON解析失败: ${e}`);
       // Cache file corrupted, report but continue running
       this._safeReporter?.({ source: "LlmAdapter.loadCache", error: e, severity: "silent", hint: "cache file corrupted, ignored" });
     }
@@ -223,7 +227,8 @@ export class LlmAdapter {
     };
 
     const effort = reasoningEffort ?? this.config.reasoningEffort;
-    if (effort) {
+    // reasoning_effort 仅 deepseek-v4-pro / reasoner 模型支持；Flash 模型不兼容
+    if (effort && (model.includes("pro") || model.includes("reasoner"))) {
       body.reasoning_effort = effort;
     }
 
@@ -260,6 +265,10 @@ export class LlmAdapter {
     if (!limitCheck.allowed) {
       throw new Error(`[RateLimit] ${limitCheck.reason}`);
     }
+
+    // ── 遥测：请求体大小 ──
+    const bodySize = JSON.stringify(body).length;
+    console.log(`[telemetry] llm.request_body_size model=${model} size=${bodySize} tools_count=${tools?.length ?? 0} stream=false`);
 
     try {
       // ── 请求 + 读取响应体（含一次 body-read 重试）──
@@ -318,11 +327,15 @@ export class LlmAdapter {
           const msg = json.choices[0]?.message;
           if (!msg) throw new Error("LLM returned no choices");
 
-          const toolCalls: LlmToolCall[] = (msg.tool_calls ?? []).map((tc) => ({
-            id: tc.id,
-            name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments),
-          }));
+          const toolCalls: LlmToolCall[] = (msg.tool_calls ?? []).map((tc) => {
+            let toolArgs: Record<string, unknown> = {};
+            try {
+              toolArgs = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+            } catch {
+              process.stderr.write(`[llm-adapter] 工具参数 JSON 解析失败: ${tc.function.name}\n`);
+            }
+            return { id: tc.id, name: tc.function.name, arguments: toolArgs };
+          });
 
           response = {
             content: msg.content,
@@ -355,6 +368,10 @@ export class LlmAdapter {
 
           // 记录 token 消耗（权限配额追踪，异步 fire-and-forget）
           void limiter.recordTokens(fp, json.usage?.total_tokens ?? 0);
+
+          // ── 遥测：LLM 响应延迟 ──
+          const callElapsed = Date.now() - t0;
+          console.log(`[telemetry] llm.response_time_ms value=${callElapsed} model=${model} stream=false`);
 
           return response;
         } catch (bodyReadErr) {
@@ -395,6 +412,15 @@ export class LlmAdapter {
         total_tokens: 0,
         error: (e as Error).message.slice(0, 200),
       });
+      // FIX-09: Flash→Pro 降级——429/503 时自动切换
+      const _err = e as Error;
+      const statusMatch = _err.message.match(/(\d{3})/);
+      const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
+      if ((extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
+        const fallbackModel = model.replace("flash", "pro");
+        console.log(`[telemetry] model.degraded from=${model} to=${fallbackModel}`);
+        return await this.chat(fallbackModel, messages, tools, reasoningEffort, toolChoice);
+      }
       throw e;
     }
   }
@@ -419,10 +445,12 @@ export class LlmAdapter {
       temperature: 0.0,
       max_tokens: 32768,
       stream: true,
+      stream_options: { include_usage: true },
     };
 
     const effort = reasoningEffort ?? this.config.reasoningEffort;
-    if (effort) {
+    // reasoning_effort 仅 deepseek-v4-pro / reasoner 模型支持；Flash 模型不兼容
+    if (effort && (model.includes("pro") || model.includes("reasoner"))) {
       body.reasoning_effort = effort;
     }
 
@@ -435,8 +463,12 @@ export class LlmAdapter {
           parameters: t.parameters,
         },
       }));
+      // _toolChoice 仅测试/integration 使用——DeepSeek 不支持强制 tool_choice
       if (_toolChoice) body.tool_choice = _toolChoice;
     }
+
+    // FIX-07: 流式场景对称注入 extraBody（与 chat() 保持一致）
+    if (this.config.extraBody) body.extra_body = this.config.extraBody;
 
     const t0 = Date.now();
     let status = 0;
@@ -449,6 +481,10 @@ export class LlmAdapter {
     if (!limitCheck.allowed) {
       throw new Error(`[RateLimit] ${limitCheck.reason}`);
     }
+
+    // ── 遥测：请求体大小 ──
+    const bodySize = JSON.stringify(body).length;
+    console.log(`[telemetry] llm.request_body_size model=${model} size=${bodySize} tools_count=${tools?.length ?? 0} stream=true`);
 
     try {
       const res = await this._circuitBreaker.call(
@@ -503,6 +539,10 @@ export class LlmAdapter {
       const totalTokens = (sse.streamUsage?.prompt_tokens ?? 0) + (sse.streamUsage?.completion_tokens ?? 0);
       void limiter.recordTokens(fp, totalTokens);
 
+      // ── 遥测：LLM 响应延迟 ──
+      const callElapsed = Date.now() - t0;
+      console.log(`[telemetry] llm.response_time_ms value=${callElapsed} model=${model} stream=true`);
+
       return response;
     } catch (e) {
       this._auditLog({
@@ -515,6 +555,15 @@ export class LlmAdapter {
         stream: true,
         error: (e as Error).message.slice(0, 200),
       });
+      // FIX-09: Flash→Pro 降级——429/503 时自动切换
+      const _err = e as Error;
+      const statusMatch = _err.message.match(/(\d{3})/);
+      const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
+      if ((extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
+        const fallbackModel = model.replace("flash", "pro");
+        console.log(`[telemetry] model.degraded from=${model} to=${fallbackModel}`);
+        return await this.chatStream(fallbackModel, messages, tools, onChunk, reasoningEffort, _toolChoice);
+      }
       throw e;
     }
   }
@@ -664,7 +713,8 @@ async function _readSseStream(
           if (delta.tool_calls) {
             collectedToolCalls = accumulateToolCalls(collectedToolCalls, delta.tool_calls);
           }
-        } catch {
+        } catch (e) {
+          console.warn(`JSON解析失败: ${e}`);
           skippedChunks++;
         }
       }

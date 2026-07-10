@@ -68,9 +68,9 @@ export class LifecycleManager {
       };
       if (this._observer) {
         this._observer.emit(obsEvent);
-      } else {
-        console.warn(`[LifecycleManager] 无 observer，降级打印 lifecycle 事件: ${event}${detail ? ' ' + JSON.stringify(detail).slice(0, 200) : ''}`);
       }
+      // G1-2：无 observer 时不降级打印——生命周期事件应始终走 observer 管道
+      // 移除旧 console.warn 降级分支
     }
   }
 
@@ -164,10 +164,11 @@ export class LifecycleManager {
 
     const stopWithTimeout = async (entry: LifecycleEntry): Promise<void> => {
       try {
-        const timer = new Promise<void>((_, reject) =>
-          setTimeout(() => reject(new Error(`[LifecycleManager] ${entry.name} stop() 超时`)), timeoutMs),
-        );
-        await Promise.race([entry.component.stop(), timer]);
+        let timerId: ReturnType<typeof setTimeout> | undefined;
+        const timer = new Promise<void>((_, reject) => {
+          timerId = setTimeout(() => reject(new Error(`[LifecycleManager] ${entry.name} stop() 超时`)), timeoutMs);
+        });
+        await Promise.race([entry.component.stop(), timer]).finally(() => clearTimeout(timerId));
       } catch (err) {
         this._emit("component_error", { component: entry.name, phase: "stop", error: err });
       }

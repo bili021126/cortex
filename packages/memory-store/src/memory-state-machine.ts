@@ -17,14 +17,15 @@
 // @since Core-1 第四轮 — FSM 编译器集成
 // ============================================================
 
-import { StateMachine, GuardRegistry, ActionRegistry } from "@cortex/fsm-compiler";
-import type { FsmDefinition, TransitionRecord } from "@cortex/fsm-compiler";
+import { StateMachine, GuardRegistry, ActionRegistry, defineFsm } from "@cortex/fsm-compiler";
+import type { TransitionRecord } from "@cortex/fsm-compiler";
+import { FSM_ARCHIVE_WEIGHT_THRESHOLD } from "@cortex/config";
 
 // ══════════════════════════════════════════════
 // 嵌入式 FSM 定义（来自 definitions/memory-entry.fsm.json v2.0.0）
 // ══════════════════════════════════════════════
 
-const MEMORY_ENTRY_FSM_DEFINITION: FsmDefinition = {
+const MEMORY_ENTRY_FSM_DEFINITION = defineFsm<MemState, MemEvent>({
   id: "memory_entry",
   displayName: "Memory Entry Lifecycle",
   version: "2.0.0",
@@ -46,16 +47,22 @@ const MEMORY_ENTRY_FSM_DEFINITION: FsmDefinition = {
   ],
   initialState: "pending",
   finalStates: ["obliterated"],
-};
+});
 
 // ══════════════════════════════════════════════
 // 事件 & 状态类型别名
 // ══════════════════════════════════════════════
 
-/** 记忆生命周期事件 */
+/**
+ * 记忆生命周期事件
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export type MemEvent = "commit" | "rollback" | "archive" | "obliterate" | "restore";
 
-/** 记忆语义状态 */
+/**
+ * 记忆语义状态
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export type MemState = "pending" | "active" | "archived" | "obliterated";
 
 /**
@@ -105,6 +112,10 @@ export type MemAction = (ctx: MemTransitionContext) => void;
 // MemoryEntryStateMachine
 // ══════════════════════════════════════════════
 
+/**
+ * MemoryEntryStateMachine —— 记忆状态机。
+ * @since Core-2 — 接口固化，后续新增字段需向下兼容
+ */
 export class MemoryEntryStateMachine {
   private readonly _machine: StateMachine<MemState, MemEvent, MemTransitionContext>;
   private readonly _guardRegistry: GuardRegistry;
@@ -248,8 +259,8 @@ export class MemoryEntryStateMachine {
       if (!c) return false; // 无上下文无法评估 → 拒绝
       const now = Date.now();
       const daysSinceAccess = (now - c.lastAccessedAt) / (24 * 60 * 60 * 1000);
-      // 归档条件：weight < 0.5 或 30 天未访问
-      return c.weight < 0.5 || daysSinceAccess > 30;
+      // 归档条件：weight < FSM_ARCHIVE_WEIGHT_THRESHOLD 或 30 天未访问
+      return c.weight < FSM_ARCHIVE_WEIGHT_THRESHOLD || daysSinceAccess > 30;
     });
 
     // canObliterate: Active/Archived → Obliterated，允许任何非 Pending 条目湮灭
