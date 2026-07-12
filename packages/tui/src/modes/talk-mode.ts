@@ -26,7 +26,14 @@ export async function* talkMode(
   bridge: ITuiEngineBridge,
   agent: AgentTypeEnum,
   history?: LlmMessage[],
+  externalHooks?: TuiHooks,
 ): AsyncGenerator<TuiEvent, string, void> {
+  // 使用外部 hooks 或回退内部 hooks
+  if (externalHooks) {
+    const result = yield* queryLoop({ input, bridge, mode: "talk", agent, hooks: externalHooks, history });
+    return result;
+  }
+
   const hooks: TuiHooks = {
     onPreToolUse: async (_event) => "deny",
     onChunk: (_event) => {},

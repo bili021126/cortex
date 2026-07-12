@@ -17,6 +17,7 @@ export class StatusBar implements TuiComponent {
   private _startTime = 0;
   private _spinning = false;
   private _frame = 0;
+  private _animTimer: ReturnType<typeof setInterval> | null = null;
   private _tokenCount = 0;
   private _maxTokens = 0;
 
@@ -31,16 +32,21 @@ export class StatusBar implements TuiComponent {
 
   invalidate(): void { this._frame++; }
 
-  /** 开始加载动画 */
+  /** 开始加载动画——纯流式模式：不再触发渲染 */
   start(message: string): void {
     this._message = message;
     this._startTime = Date.now();
-    this._spinning = true;
+    this._spinning = false;
+    /* 纯流式模式——StatusBar 不再触发渲染 */
   }
 
-  /** 停止加载 */
+  /** 停止加载（清空消息行） */
   stop(): void {
     this._spinning = false;
+    this._message = "";
+    this._startTime = 0;
+    if (this._animTimer) { clearInterval(this._animTimer); this._animTimer = null; }
+    /* 纯流式模式——StatusBar 不再触发渲染 */
   }
 
   /** 更新 token 计数 */

@@ -65,7 +65,7 @@ export function useCortexState() {
 
         // 事件去重：用 eventId / requestId / type+timestamp+payload hash 做键
         const dedupKey = String(
-          (evt as any).eventId ?? (evt as any).requestId ??
+          evt.eventId ?? evt.requestId ??
           `${evt.type}-${evt.timestamp}-${JSON.stringify(evt.payload).slice(0, 100)}`
         )
         if (seenEventIds.current.has(dedupKey)) {

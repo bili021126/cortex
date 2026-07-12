@@ -62,7 +62,10 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
       dataDir,
     );
     roundtableTemplates = raw ?? [];
-  } catch {
+  } catch (e) {
+    if (typeof process !== "undefined") {
+      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
     roundtableTemplates = [];
   }
 
@@ -74,7 +77,10 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
       readFileNode,
       dataDir,
     );
-  } catch {
+  } catch (e) {
+    if (typeof process !== "undefined") {
+      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
     searchProviders = undefined;
   }
 
@@ -86,7 +92,10 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
       readFileNode,
       dataDir,
     );
-  } catch {
+  } catch (e) {
+    if (typeof process !== "undefined") {
+      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
     selfExamination = undefined;
   }
 
@@ -98,7 +107,10 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
       readFileNode,
       dataDir,
     );
-  } catch {
+  } catch (e) {
+    if (typeof process !== "undefined") {
+      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
     crossVerification = undefined;
   }
 
@@ -110,7 +122,10 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
       readFileNode,
       dataDir,
     );
-  } catch {
+  } catch (e) {
+    if (typeof process !== "undefined") {
+      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
     seedMemories = undefined;
   }
 
@@ -122,7 +137,10 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
       readFileNode,
       dataDir,
     );
-  } catch {
+  } catch (e) {
+    if (typeof process !== "undefined") {
+      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
     governancePipeline = undefined;
   }
 
@@ -139,7 +157,10 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
     if (raw && typeof raw === "object") {
       tools = raw as Record<string, unknown>;
     }
-  } catch {
+  } catch (e) {
+    if (typeof process !== "undefined") {
+      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
+    }
     tools = undefined;
   }
 

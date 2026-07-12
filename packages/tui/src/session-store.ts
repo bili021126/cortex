@@ -1,31 +1,34 @@
 /**
- * tui/session-store.ts — TUI 会话持久化
+ * tui/session-store.ts — TUI 会话持久化（v4 群聊版）
  *
  * 纯文件 I/O 模块，与 EngineBridge 零依赖。
  * 会话状态序列化为 .cortex/tui-session.json，退出保存、启动恢复。
  *
+ * v4: 移除 mode 字段，添加 groups 序列化。
+ *
  * @module tui/session-store
- * @since v3 — Claude Code 对标：Append-only durable state
+ * @since v4 — 群聊架构更新
  */
 
 import type { AgentType, LlmMessage } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+/** Group 快照 */
+export interface GroupSnapshot {
+  id: string;
+  agents: string[];
+  status: "active" | "dissolved";
+  summary?: string;
+}
+
 /** 会话持久化快照——与 TuiSession 同构 */
 export interface SessionSnapshot {
-  mode: string;
   agent: AgentType;
   history: LlmMessage[];
+  groups: GroupSnapshot[];
+  /** 三人模式（昔涟+纳西妲） */
   talkTrio: boolean;
-  partyRoster: AgentType[];
-  /** Plan 模式状态（可选，仅 plan 模式有意义） */
-  planState?: {
-    nodes: unknown[];
-    intent: string;
-    approved: boolean;
-    reviewStatus: string;
-  };
 }
 
 const SESSION_FILE = ".cortex/tui-session.json";
@@ -71,16 +74,12 @@ export function loadSession(projectRoot: string): SessionSnapshot | null {
     const data = JSON.parse(raw) as SessionSnapshot;
 
     // 基本合法性校验
-    if (!data || typeof data.mode !== "string" || !Array.isArray(data.history)) {
+    if (!data || !Array.isArray(data.history)) {
       return null;
     }
 
-    // 校验 mode 值合法性
-    const validModes = ["chat", "talk", "plan", "party", "command"];
-    if (!validModes.includes(data.mode)) return null;
-
-    // 确保 roster 是数组
-    if (!Array.isArray(data.partyRoster)) data.partyRoster = [];
+    // 确保 groups 是数组
+    if (!Array.isArray(data.groups)) data.groups = [];
     if (typeof data.talkTrio !== "boolean") data.talkTrio = false;
 
     return data;

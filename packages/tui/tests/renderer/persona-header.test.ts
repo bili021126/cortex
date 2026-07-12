@@ -1,0 +1,25 @@
+// @ci: unit
+import { describe, it, expect } from "vitest";
+import { PersonaHeader, personaHeader, renderPersonaHeader } from "../../src/renderer/persona-header.js";
+import { AgentType } from "@cortex/shared";
+
+describe("PersonaHeader（直接输出）", () => {
+  it("update 方法存在", () => {
+    const ph = new PersonaHeader();
+    expect(typeof ph.update).toBe("function");
+  });
+
+  it("updateMulti 方法存在", () => {
+    const ph = new PersonaHeader();
+    expect(typeof ph.updateMulti).toBe("function");
+  });
+
+  it("全局单例 personaHeader 可用", () => {
+    expect(personaHeader).toBeDefined();
+    expect(typeof personaHeader.update).toBe("function");
+  });
+
+  it("renderPersonaHeader 遗留兼容不抛错", () => {
+    expect(() => renderPersonaHeader(AgentType.Code, "chat")).not.toThrow();
+  });
+});

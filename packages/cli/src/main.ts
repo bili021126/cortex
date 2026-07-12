@@ -65,8 +65,8 @@ import type { CommandContext } from "./types.js";
 function parseProjectRoot(): string {
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i]!.startsWith("--dir=")) return nodePath.resolve(argv[i]!.slice(6));
-    if ((argv[i]! === "--dir" || argv[i]! === "-d") && i + 1 < argv.length)
+    if (argv[i]?.startsWith("--dir=")) return nodePath.resolve(argv[i]!.slice(6));
+    if ((argv[i] === "--dir" || argv[i] === "-d") && i + 1 < argv.length)
       return nodePath.resolve(argv[i + 1]!);
   }
   return process.cwd();
@@ -157,9 +157,9 @@ export async function main(): Promise<number> {
   // bare cortex → TUI REPL（v3 全量替换）
   if (argv.length === 0) {
     if (!hasAnyLlmKey()) {
-      console.log("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
-      console.log("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。");
-      console.log("   command 模式无需 Key——输入 .mode command 切换。\n");
+      console.error("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
+      console.error("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。");
+      console.error("   command 模式无需 Key——输入 .mode command 切换。\n");
     }
     return await tuiReplHandler(registry, engineBridge, createDefaultContext(PROJECT_ROOT));
   }

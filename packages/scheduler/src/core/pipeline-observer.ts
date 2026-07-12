@@ -80,7 +80,7 @@ export class PipelineObserver implements IPipelineObserver {
     // 遥测：事件吞吐计数
     this._eventCount++;
     if (this._eventCount % 100 === 0) {
-      console.log(`[telemetry] observer.event_throughput count=${this._eventCount}`);
+      console.error(`[telemetry] observer.event_throughput count=${this._eventCount}`);
     }
     // 非 silent emit：检查死信队列中是否有当前 span 的上游事件
     if (meta?.causalChain?.spanId) {

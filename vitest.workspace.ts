@@ -10,6 +10,17 @@ import { defineWorkspace } from "vitest/config";
  *   vitest --workspace               并行跑所有项目
  */
 export default defineWorkspace([
+  // ── 共享配置——覆盖层（传递给所有项目） ──────────────
+  {
+    test: {
+      coverage: {
+        provider: "v8",
+        reporter: ["text-summary"],
+        include: ["packages/*/src/**/*.ts"],
+      },
+    },
+  },
+
   // ── 基础 / 核心包 ───────────────────────────────────
   "./packages/config/vitest.config.ts",
   "./packages/shared/vitest.config.ts",

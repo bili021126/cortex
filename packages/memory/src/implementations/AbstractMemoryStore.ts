@@ -691,6 +691,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     const p = this._pendingEntries.get("pending_" + mid);
     if (!p) return false;
 
+    // FSM guard: 校验 pending→active 合法性
+    const transitionOk = MEMORY_VALID_TRANSITIONS["Pending"]?.has("Active") ?? false;
+    if (!transitionOk) return false;
+
     const n = Date.now();
     const e: MemoryEntry = {
       id: mid,
@@ -716,7 +720,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
     // 持久化到后端（防止进程崩溃丢数据，best-effort 不阻塞返回）
     if (this._be && typeof this._be.persist === "function") {
-      (this._be.persist(e) as Promise<void>).catch(() => { /* best-effort */ });
+      (this._be.persist(e) as Promise<void>).catch((err) => {
+        // Core-3: 失败应写 WAL 恢复日志
+        if (typeof process !== "undefined") {
+          process.stderr.write(`[memory] persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
+        }
+      });
     }
 
     return true;

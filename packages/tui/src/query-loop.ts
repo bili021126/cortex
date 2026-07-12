@@ -130,18 +130,30 @@ export function agentTalkPersona(agent: string): string {
   return cyrenePersona();
 }
 
-/** Agent 角色 system prompt */
+/** Agent 角色 system prompt——chat模式也加载对应的系统文件 */
 function agentSystemPrompt(agent: AgentType): string {
+  // chat 模式下也尝试加载 agent 的 persona/system.md
+  const personaText = agentTalkPersona(agent);
+  // 如果加载到了 persona 文件, 用它（但ler+analysis 直接使用完整 persona）
+  if (personaText && (agent === "butler" || agent === "analysis" || personaText !== cyrenePersona())) {
+    return personaText;
+  }
   const chinese = AGENT_CHINESE_ROLE[agent] ?? agent;
   const display = AGENT_DISPLAY_BY_TYPE[agent] ?? AGENT_DISPLAY_FALLBACK;
-  return `${display.emoji} 你现在是 ${chinese}（${agent}）。${display.signature}`;
+  return `你的身份是 ${chinese}（${agent}）。${display.signature}\n\n` +
+    `[关键] 你的名字叫${chinese}，不叫"用户"。你是Cortex的${agent}类型智能体。`;
 }
 
 /** 模式 system prompt */
 function modeSystemPrompt(mode: ReplMode, agent: AgentType): string {
   switch (mode) {
     case "chat":
-      return "这是对话模式。你是 Cortex 工程助手，直接回答用户的问题。如果用户有编程任务，可以调用工具完成。";
+      return `[智能模式] 分析用户输入，自行判断应该:
+- 生成执行计划(task) → 输出 TaskNode JSON
+- 直接对话回答(chat) → 自然语言回复
+- 执行命令(command) → 调用工具
+
+你是 Cortex 工程助手，直接回答用户的问题。如果用户有编程任务，可以调用工具完成。`;
     case "plan":
       // 加载甘雨完整战术中枢 prompt（含时序依赖、标签匹配规则、输出格式等）
       return PLANNING_SYSTEM;
@@ -149,8 +161,6 @@ function modeSystemPrompt(mode: ReplMode, agent: AgentType): string {
       return agentTalkPersona(agent);
     case "party":
       return "这是群聊模式。多个角色在同一个对话中发言。你可以用角色特有的风格说话。";
-    case "command":
-      return "这是命令模式。你只需要执行用户输入的命令，给出简洁的执行结果。";
     default:
       return "";
   }
@@ -160,14 +170,14 @@ function modeSystemPrompt(mode: ReplMode, agent: AgentType): string {
 function assembleSystemPrompt(mode: ReplMode, agent: AgentType): string {
   const parts: string[] = [];
 
-  // talk 模式：agent 专属 persona 文件自包含角色+行为规范，不再叠加通用前缀
-  if (mode === "talk") {
+  // butler/analysis: persona 文件自包含身份+格式——不叠加通用前缀
+  if (agent === "butler" || agent === "analysis") {
+    parts.push(agentSystemPrompt(agent));
+  } else if (mode === "talk") {
     parts.push(modeSystemPrompt(mode, agent));
   } else {
     parts.push(BASE_SYSTEM_PROMPT);
-    if (mode !== "command") {
-      parts.push(agentSystemPrompt(agent));
-    }
+    parts.push(agentSystemPrompt(agent));
     parts.push(modeSystemPrompt(mode, agent));
     parts.push("[格式] 直接说话/做事，不要用（）写旁白或动作描述。");
   }
@@ -278,6 +288,8 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
         chunkQueue.push({ type: "llm_chunk", agent, content, reasoning } as TuiEvent);
         signal();
       },
+      // chat/talk: 不传 reasoningEffort — llm-adapter 默认不启用 thinking
+      undefined,
     ).then(r => { streamResult = r; streamDone = true; signal(); return r; })
      .catch(e => { streamError = e as Error; streamDone = true; signal(); });
 

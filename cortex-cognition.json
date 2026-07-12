@@ -1,4 +1,6 @@
 {
+  "// DEPRECATED": "Core-2 Batch1: 已弃用。激活矩阵和注意力策略已合并到 TS AgentRegistry 注册中。",
+  "// 迁移指引": "请使用 agentRegistry.register() 中的 active 字段替代 activationMatrix。注意力策略将在 Core-2 Batch2 迁移至 config 域。",
   "activationMatrix": [
     { "agentType": "code", "active": true, "orientation": "implementation" },
     { "agentType": "review", "active": true, "orientation": "quality_assurance" },

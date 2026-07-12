@@ -71,8 +71,8 @@ function parseArgs(argv: string[]): CliOptions | null {
       options.title = args[i];
     } else if (arg === '-d' || arg === '--document') {
       options.document = true;
-    } else if (arg!.startsWith('-')) {
-      console.error(`✗ 错误: 未知选项 "${arg!}"`);
+    } else if (arg?.startsWith('-')) {
+      console.error(`✗ 错误: 未知选项 "${arg}"`);
       return null;
     } else {
       if (!options.input) {
@@ -161,9 +161,9 @@ function main(): void {
     process.exit(CLI_EXIT_INTERNAL_ERROR);
   }
 
-  console.log(`✓ 转换完成: ${path.basename(resolvedInput)} → ${path.basename(outputPath)}`);
-  console.log(`  输出路径: ${outputPath}`);
-  console.log(`  输出大小: ${html.length} 字节`);
+  console.error(`✓ 转换完成: ${path.basename(resolvedInput)} → ${path.basename(outputPath)}`);
+  console.error(`  输出路径: ${outputPath}`);
+  console.error(`  输出大小: ${html.length} 字节`);
 }
 
 main();

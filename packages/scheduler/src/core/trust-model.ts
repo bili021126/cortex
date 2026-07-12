@@ -143,6 +143,7 @@ export class TrustModel implements ITrustModel {
         this._entries.set(key, entry);
       }
     } catch {
+      console.error(`[scheduler] trust_model.load_failed_first_start`);
       // 首次启动无文件，静默忽略
     }
   }

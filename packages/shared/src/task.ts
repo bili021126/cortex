@@ -151,6 +151,12 @@ export interface TaskNode {
    * @since Cortex Phase 3 — 上下文管理层
    */
   contextPersona?: PersonaId;
+  /**
+   * 输出文件路径——MetaAgent 在规划时从 intent 中提取并注入。
+   * react-loop 和 TUI 层据此验证文件落盘。
+   * @internal 运行时注入，非序列化持久字段
+   */
+  _outputPath?: string;
 }
 
 /**

@@ -45,7 +45,7 @@ export function createDefaultContext(projectRoot: string): CommandContext {
 export function outputResult(result: CommandResult, format: OutputFormat): void {
   const fmt = getFormatter(format);
   if (result.success) {
-    console.log(fmt.formatSuccess(result));
+    console.error(fmt.formatSuccess(result));
   } else {
     console.error(fmt.formatError(result));
   }

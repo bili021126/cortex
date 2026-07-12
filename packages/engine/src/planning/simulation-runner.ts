@@ -56,8 +56,7 @@ export class SimulationRunner {
   async simulate(input: SimulationInput): Promise<SimulationResult> {
     // 如果没有 LLM 注入，退化为保守 stub
     if (!this._llm) {
-      // eslint-disable-next-line no-console
-      console.log(`[telemetry] simulation.stub_fallback nodes=${input.planNodes.length}`);
+      console.error(`[telemetry] simulation.stub_fallback nodes=${input.planNodes.length}`);
       // Core-3: 接入工具/记忆/调度仿真，替代节点数简单判定
       return {
         riskLevel: input.planNodes.length > 5 ? "medium" : "low",

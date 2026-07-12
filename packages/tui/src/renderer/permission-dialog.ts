@@ -129,7 +129,7 @@ export async function waitForSingleKey(timeoutMs: number = 30000): Promise<"appr
 
     const cleanup = () => {
       process.stdin.removeListener("keypress", onKeypress);
-      if (prevRaw !== undefined) process.stdin.setRawMode?.(prevRaw as boolean);
+      if (prevRaw !== undefined) process.stdin.setRawMode?.(prevRaw);
       rl.close();
     };
 

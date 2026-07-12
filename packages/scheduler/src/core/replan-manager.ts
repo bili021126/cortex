@@ -341,8 +341,11 @@ export class ReplanManager {
     }
   }
 
-  private _isChainSuccessful(nodeIds: string[], allResults: NodeResult[], visited = new Set<string>()): boolean {
-    for (const id of nodeIds) {
+  private _isChainSuccessful(nodeIds: string[], allResults: NodeResult[]): boolean {
+    const visited = new Set<string>();
+    const stack = [...nodeIds];
+    while (stack.length > 0) {
+      const id = stack.pop()!;
       if (visited.has(id)) continue;
       visited.add(id);
 
@@ -351,7 +354,9 @@ export class ReplanManager {
 
       const childIds = this.replanMap.get(id);
       if (childIds && childIds.length > 0) {
-        if (this._isChainSuccessful(childIds, allResults, visited)) return true;
+        for (let i = childIds.length - 1; i >= 0; i--) {
+          stack.push(childIds[i]!);
+        }
       }
     }
     return false;

@@ -120,15 +120,15 @@ function handleDocServe(
   const server = createServer(_createDocRequestHandler(rootDir, port));
 
   server.listen(port, () => {
-    console.log(`📖 文档服务器启动: http://localhost:${port}`);
-    console.log(`   根目录: ${rootDir}`);
+    console.error(`📖 文档服务器启动: http://localhost:${port}`);
+    console.error(`   根目录: ${rootDir}`);
   });
 
   let _cleanedUp = false;
   const cleanup = () => {
     if (_cleanedUp) return;
     _cleanedUp = true;
-    server.close(() => { console.log("\n📖 文档服务器已关闭"); process.exit(0); });
+    server.close(() => { console.error("\n📖 文档服务器已关闭"); process.exit(0); });
   };
   process.once("SIGINT", cleanup);
   process.once("SIGTERM", cleanup);
@@ -142,7 +142,7 @@ function _checkHeadings(content: string): string[] {
   const lines = content.split("\n");
   let prevLevel = 0;
   for (let i = 0; i < lines.length; i++) {
-    const match = lines[i]!.match(/^(#{1,6})\s/);
+    const match = lines[i]?.match(/^(#{1,6})\s/);
     if (match) {
       const level = match[1]!.length;
       if (prevLevel > 0 && level > prevLevel + 1) {

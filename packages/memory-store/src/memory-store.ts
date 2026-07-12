@@ -380,9 +380,15 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         if (Math.abs(agedWeight - entry.weight) > 0.1) {
           try {
             const setPromise = this._backend.set(entry.id, { weight: agedWeight } as any);
+            // Core-3: as any 因 backend.set() 泛型签名不完整——待 SQLite 后端接口升级
             if (setPromise) setPromise.catch(() => {});
-          } catch {
+          } catch (e) {
+            // best-effort: 非关键降级路径
+            if (typeof process !== "undefined") {
+              process.stderr.write(`[memory-store] degraded: ${e instanceof Error ? e.message : String(e)}\n`);
+            }
             // 降级：set 不可用时用 write（keepExisting 语义——不覆盖其他字段）
+            // Core-3: as any 因 backend.write() 泛型签名不完整——待 SQLite 后端接口升级
             this._backend.write({ id: entry.id, weight: agedWeight } as any).catch(() => {});
           }
         }
@@ -622,8 +628,14 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           if (aged < e.weight * 0.9) {
             try {
               const p = this._backend.set(e.id, { weight: aged } as any);
+              // Core-3: as any 因 backend.set() 泛型签名不完整——待 SQLite 后端接口升级
               if (p) p.catch(() => {});
-            } catch {}
+            } catch (e) {
+              // best-effort: 非关键降级路径
+              if (typeof process !== "undefined") {
+                process.stderr.write(`[memory-store] degraded: ${e instanceof Error ? e.message : String(e)}\n`);
+              }
+            }
           }
         }
       }

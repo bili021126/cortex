@@ -64,13 +64,11 @@ export class LoopStrategyRegistry {
   selectByRule(task: TaskNode): LoopStrategy | null {
     for (const s of this.map.values()) {
       if (s.canHandle(task)) {
-        // eslint-disable-next-line no-console
-        console.log(`[TRACE dispatch] LoopStrategyRegistry.selectByRule: matched=${s.name} payloadLen=${task.payload.length} tags=[${task.tags.join(",")}] preferredStrategy=${task.preferredStrategy ?? "(none)"}`);
+        console.error(`[TRACE dispatch] LoopStrategyRegistry.selectByRule: matched=${s.name} payloadLen=${task.payload.length} tags=[${task.tags.join(",")}] preferredStrategy=${task.preferredStrategy ?? "(none)"}`);
         return s;
       }
     }
-    // eslint-disable-next-line no-console
-    console.log(`[TRACE dispatch] LoopStrategyRegistry.selectByRule: noMatch → fallback=react payloadLen=${task.payload.length} tags=[${task.tags.join(",")}] preferredStrategy=${task.preferredStrategy ?? "(none)"}`);
+    console.error(`[TRACE dispatch] LoopStrategyRegistry.selectByRule: noMatch → fallback=react payloadLen=${task.payload.length} tags=[${task.tags.join(",")}] preferredStrategy=${task.preferredStrategy ?? "(none)"}`);
     return null; // 调用方回退到 "react"
   }
 

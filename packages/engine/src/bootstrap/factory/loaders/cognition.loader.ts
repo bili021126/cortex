@@ -32,6 +32,7 @@ export function loadCognitionConfig(_projectRoot: string, dataDirOverride?: stri
       dataDir,
     );
   } catch {
+    console.error(`[bootstrap] cognition.config_load_failed`);
     return {
       activationMatrix: [],
       attention: DEFAULT_ATTENTION,

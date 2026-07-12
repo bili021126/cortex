@@ -25,6 +25,7 @@ export function loadDocsConfig(_projectRoot: string, dataDirOverride?: string): 
       dataDir,
     );
   } catch {
+    console.error(`[bootstrap] docs.config_load_failed`);
     return {
       constitutionPath: "docs/constitution/Cortex 概念顶层设计 v2.5.35.md",
       docRegistry: [],

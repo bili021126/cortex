@@ -16,4 +16,5 @@ export { sanitizeRenderableText } from "./sanitize.js";
 export { OverlayManager, overlay } from "./overlay.js";
 export { Footer, footer } from "./footer.js";
 export { Layout, layout } from "./layout.js";
+export { PersonaHeader, personaHeader } from "./persona-header.js";
 export type { TuiComponent } from "./diff-renderer.js";

@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEXUS · 登录</title>
+  <style>
+    /* ============================================================
+       RESET & BASE
+       ============================================================ */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #08080e;
+      color: #e8e4dc;
+      overflow: hidden;
+      line-height: 1.5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ============================================================
+       CANVAS — 动态粒子背景
+       ============================================================ */
+    #particle-canvas {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+    }
+
+    /* 背景网格光晕 */
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(120, 180, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120, 180, 255, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    /* ============================================================
+       LOGIN CONTAINER
+       ============================================================ */
+    .login-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    /* ============================================================
+       LOGIN CARD — 毛玻璃 + 霓虹边框
+       ============================================================ */
+    .login-card {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      padding: 3rem 2.5rem 2.8rem;
+      background: rgba(12, 12, 22, 0.65);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border-radius: 24px;
+      border: 1px solid rgba(120, 180, 255, 0.12);
+      box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.5),
+        0 0 60px rgba(120, 180, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      transition: box-shadow 0.4s ease;
+      overflow: hidden;
+    }
+
+    /* 霓虹边框光晕 — 伪元素 */
+    .login-card::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      z-index: -1;
+      border-radius: 26px;
+      background: conic-gradient(
+        from var(--angle, 0deg),
+        rgba(120, 180, 255, 0.4),
+        rgba(180, 122, 255, 0.4),
+        rgba(255, 122, 180, 0.3),
+        rgba(255, 180, 122, 0.3),
+        rgba(120, 255, 180, 0.3),
+        rgba(120, 180, 255, 0.4)
+      );
+      animation: neonSpin 4s linear infinite;
+    }
+
+    /* 辉光模糊层 */
+    .login-card::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      z-index: -2;
+      border-radius: 30px;
+      background: conic-gradient(
+        from var(--angle, 0deg),
+        rgba(120, 180, 255, 0.15),
+        rgba(180, 122, 255, 0.15),
+        rgba(255, 122, 180, 0.1),
+        rgba(255, 180, 122, 0.1),
+        rgba(120, 255, 180, 0.1),
+        rgba(120, 180, 255, 0.15)
+      );
+      filter: blur(20px);
+      opacity: 0.6;
+      animation: neonSpin 4s linear infinite;
+    }
+
+    @property --angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
+    @keyframes neonSpin {
+      to { --angle: 360deg; }
+    }
+
+    /* 卡片顶部的光条 */
+    .login-card .card-glow-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(120, 180, 255, 0.6),
+        rgba(180, 122, 255, 0.6),
+        transparent
+      );
+      filter: blur(2px);
+      animation: glowBarSweep 3s ease-in-out infinite;
+    }
+
+    @keyframes glowBarSweep {
+      0%, 100% { opacity: 0.3; transform: scaleX(0.5); }
+      50%      { opacity: 1;   transform: scaleX(1); }
+    }
+
+    /* ============================================================
+       LOGO / TITLE
+       ============================================================ */
+    .login-header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .login-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(120, 180, 255, 0.15), rgba(180, 122, 255, 0.15));
+      border: 1px solid rgba(120, 180, 255, 0.2);
+      margin-bottom: 1.2rem;
+      font-size: 1.8rem;
+      box-shadow: 0 0 30px rgba(120, 180, 255, 0.1);
+    }
+
+    .login-header h1 {
+      font-size: 1.8rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      background: linear-gradient(135deg, #f0e8d8, #78b4ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .login-header p {
+      margin-top: 0.4rem;
+      font-size: 0.85rem;
+      color: rgba(232, 228, 220, 0.4);
+      letter-spacing: 0.08em;
+    }
+
+    /* ============================================================
+       FORM
+       ============================================================ */
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.3rem;
+    }
+
+    /* ---------- 输入组 ---------- */
+    .input-group {
+      position: relative;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: rgba(232, 228, 220, 0.5);
+      margin-bottom: 0.4rem;
+      transition: color 0.3s ease;
+    }
+
+    .input-group:focus-within label {
+      color: rgba(120, 180, 255, 0.8);
+    }
+
+    /* ---------- 输入框容器（含霓虹底部线条） ---------- */
+    .input-wrap {
+      position: relative;
+    }
+
+    .input-wrap input {
+      width: 100%;
+      padding: 0.85rem 1rem 0.85rem 2.6rem;
+      font-size: 0.95rem;
+      font-family: inherit;
+      color: #e8e4dc;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      outline: none;
+      transition:
+        border-color 0.3s ease,
+        box-shadow 0.3s ease,
+        background 0.3s ease;
+    }
+
+    .input-wrap input::placeholder {
+      color: rgba(232, 228, 220, 0.2);
+      font-size: 0.85rem;
+    }
+
+    .input-wrap input:focus {
+      border-color: rgba(120, 180, 255, 0.35);
+      background: rgba(120, 180, 255, 0.04);
+      box-shadow:
+        0 0 0 3px rgba(120, 180, 255, 0.06),
+        0 0 20px rgba(120, 180, 255, 0.03);
+    }
+
+    /* 霓虹底部光条 */
+    .input-wrap::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%) scaleX(0);
+      width: 80%;
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(120, 180, 255, 0.6),
+        rgba(180, 122, 255, 0.6),
+        transparent
+      );
+      border-radius: 2px;
+      filter: blur(1px);
+      transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+      pointer-events: none;
+    }
+
+    .input-wrap:focus-within::after {
+      transform: translateX(-50%) scaleX(1);
+    }
+
+    /* ---------- 输入图标 ---------- */
+    .input-icon {
+      position: absolute;
+      left: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 1rem;
+      color: rgba(232, 228, 220, 0.25);
+      transition: color 0.3s ease;
+      pointer-events: none;
+    }
+
+    .input-group:focus-within .input-icon {
+      color: rgba(120, 180, 255, 0.6);
+    }
+
+    /* ---------- 密码切换 ---------- */
+    .toggle-pwd {
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: rgba(232, 228, 220, 0.25);
+      font-size: 0.9rem;
+      cursor: pointer;
+      padding: 0.25rem;
+      transition: color 0.3s ease;
+      line-height: 1;
+    }
+
+    .toggle-pwd:hover {
+      color: rgba(232, 228, 220, 0.6);
+    }
+
+    /* ---------- 验证反馈 ---------- */
+    .validation-msg {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.35rem;
+      font-size: 0.72rem;
+      min-height: 1.2rem;
+      padding-left: 0.2rem;
+      transition: all 0.3s ease;
+    }
+
+    .validation-msg .v-icon {
+      font-size: 0.75rem;
+      flex-shrink: 0;
+    }
+
+    .validation-msg.error {
+      color: #ff6b6b;
+    }
+
+    .validation-msg.success {
+      color: #69db7c;
+    }
+
+    .validation-msg.info {
+      color: rgba(232, 228, 220, 0.35);
+    }
+
+    /* 输入框验证状态颜色 */
+    .input-wrap.has-error input {
+      border-color: rgba(255, 107, 107, 0.35);
+      box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.05);
+    }
+
+    .input-wrap.has-error .input-icon {
+      color: rgba(255, 107, 107, 0.5);
+    }
+
+    .input-wrap.has-success input {
+      border-color: rgba(105, 219, 124, 0.3);
+    }
+
+    .input-wrap.has-success .input-icon {
+      color: rgba(105, 219, 124, 0.5);
+    }
+
+    /* ---------- 密码强度指示器 ---------- */
+    .pwd-strength {
+      display: flex;
+      gap: 4px;
+      margin-top: 0.5rem;
+      height: 4px;
+    }
+
+    .pwd-strength .bar {
+      flex: 1;
+      height: 100%;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      transition: background 0.4s ease, box-shadow 0.4s ease;
+    }
+
+    .pwd-strength .bar.active.level-0 {
+      background: #ff6b6b;
+      box-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
+    }
+    .pwd-strength .bar.active.level-1 {
+      background: #ffa94d;
+      box-shadow: 0 0 8px rgba(255, 169, 77, 0.4);
+    }
+    .pwd-strength .bar.active.level-2 {
+      background: #ffd43b;
+      box-shadow: 0 0 8px rgba(255, 212, 59, 0.4);
+    }
+    .pwd-strength .bar.active.level-3 {
+      background: #69db7c;
+      box-shadow: 0 0 8px rgba(105, 219, 124, 0.4);
+    }
+
+    .pwd-strength-label {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 0.3rem;
+      font-size: 0.65rem;
+      color: rgba(232, 228, 220, 0.3);
+      letter-spacing: 0.04em;
+    }
+
+    .pwd-strength-label .score-text {
+      color: rgba(232, 228, 220, 0.5);
+      font-weight: 600;
+      transition: color 0.3s ease;
+    }
+
+    /* ---------- 密码要求列表 ---------- */
+    .pwd-requirements {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.3rem 1rem;
+      margin-top: 0.5rem;
+      padding: 0.6rem 0.8rem;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    .pwd-requirements.visible {
+      max-height: 200px;
+      opacity: 1;
+      margin-top: 0.5rem;
+    }
+
+    .pwd-requirements .req-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.7rem;
+      color: rgba(232, 228, 220, 0.3);
+      transition: color 0.3s ease;
+    }
+
+    .pwd-requirements .req-item .req-icon {
+      font-size: 0.6rem;
+      flex-shrink: 0;
+    }
+
+    .pwd-requirements .req-item.met {
+      color: rgba(105, 219, 124, 0.7);
+    }
+
+    /* ---------- 提交按钮 ---------- */
+    .btn-submit {
+      position: relative;
+      width: 100%;
+      padding: 0.95rem;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      letter-spacing: 0.04em;
+      color: #08080e;
+      background: linear-gradient(135deg, #78b4ff, #7a5cff);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition:
+        transform 0.2s ease,
+        box-shadow 0.3s ease,
+        opacity 0.3s ease;
+      box-shadow:
+        0 4px 20px rgba(120, 180, 255, 0.25),
+        0 0 40px rgba(120, 180, 255, 0.1);
+      margin-top: 0.5rem;
+      overflow: hidden;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow:
+        0 8px 28px rgba(120, 180, 255, 0.35),
+        0 0 60px rgba(120, 180, 255, 0.15);
+    }
+
+    .btn-submit:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .btn-submit:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* 按钮霓虹脉冲 */
+    .btn-submit::after {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #78b4ff, #7a5cff, #b47aff, #78b4ff);
+      background-size: 300% 300%;
+      z-index: -1;
+      filter: blur(8px);
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      animation: btnGlow 3s ease infinite;
+    }
+
+    .btn-submit:hover:not(:disabled)::after {
+      opacity: 0.6;
+    }
+
+    @keyframes btnGlow {
+      0%, 100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+
+    /* 按钮加载状态 */
+    .btn-submit.loading {
+      pointer-events: none;
+    }
+
+    .btn-submit .btn-text {
+      transition: opacity 0.3s ease;
+    }
+
+    .btn-submit.loading .btn-text {
+      opacity: 0;
+    }
+
+    .btn-submit .spinner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .btn-submit.loading .spinner {
+      opacity: 1;
+    }
+
+    .spinner-ring {
+      width: 22px;
+      height: 22px;
+      border: 2.5px solid rgba(8, 8, 14, 0.3);
+      border-top-color: #08080e;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ---------- 底部链接 ---------- */
+    .login-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1.8rem;
+      font-size: 0.78rem;
+    }
+
+    .login-footer a {
+      color: rgba(120, 180, 255, 0.5);
+      text-decoration: none;
+      transition: color 0.3s ease;
+      position: relative;
+    }
+
+    .login-footer a::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: rgba(120, 180, 255, 0.3);
+      transform: scaleX(0);
+      transform-origin: right;
+      transition: transform 0.3s ease;
+    }
+
+    .login-footer a:hover {
+      color: rgba(120, 180, 255, 0.8);
+    }
+
+    .login-footer a:hover::after {
+      transform: scaleX(1);
+      transform-origin: left;
+    }
+
+    /* ---------- 表单提交成功消息 ---------- */
+    .form-success {
+      display: none;
+      text-align: center;
+      padding: 2rem 0;
+    }
+
+    .form-success .success-icon {
+      font-size: 3.5rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+      animation: successPop 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    }
+
+    @keyframes successPop {
+      0%   { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .form-success h2 {
+      font-size: 1.3rem;
+      background: linear-gradient(135deg, #69db7c, #78b4ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.4rem;
+    }
+
+    .form-success p {
+      font-size: 0.85rem;
+      color: rgba(232, 228, 220, 0.4);
+    }
+
+    .login-form.submitted .form-body {
+      display: none;
+    }
+
+    .login-form.submitted .form-success {
+      display: block;
+    }
+
+    /* ============================================================
+       右上角状态灯
+       ============================================================ */
+    .status-dot {
+      position: absolute;
+      top: 1.2rem;
+      right: 1.2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.6rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(232, 228, 220, 0.2);
+    }
+
+    .status-dot .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #69db7c;
+      box-shadow: 0 0 8px rgba(105, 219, 124, 0.4);
+      animation: dotPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.4; }
+      50%      { opacity: 1; }
+    }
+
+    /* ============================================================
+       RESPONSIVE
+       ============================================================ */
+    @media (max-width: 768px) {
+      .login-card {
+        padding: 2.5rem 1.8rem 2.2rem;
+        max-width: 400px;
+      }
+
+      .login-header h1 {
+        font-size: 1.5rem;
+      }
+
+      .login-logo {
+        width: 54px;
+        height: 54px;
+        font-size: 1.5rem;
+      }
+
+      .pwd-requirements {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .login-wrapper {
+        padding: 1rem;
+        align-items: flex-start;
+        padding-top: 3rem;
+      }
+
+      .login-card {
+        padding: 2rem 1.2rem 1.8rem;
+        border-radius: 20px;
+        max-width: 100%;
+      }
+
+      .login-card::before {
+        border-radius: 22px;
+      }
+
+      .login-card::after {
+        border-radius: 26px;
+      }
+
+      .login-header {
+        margin-bottom: 1.8rem;
+      }
+
+      .login-header h1 {
+        font-size: 1.3rem;
+      }
+
+      .login-logo {
+        width: 48px;
+        height: 48px;
+        font-size: 1.3rem;
+        border-radius: 14px;
+        margin-bottom: 0.8rem;
+      }
+
+      .input-wrap input {
+        padding: 0.75rem 0.85rem 0.75rem 2.3rem;
+        font-size: 0.9rem;
+      }
+
+      .btn-submit {
+        padding: 0.85rem;
+        font-size: 0.95rem;
+      }
+
+      .login-footer {
+        flex-direction: column;
+        gap: 0.6rem;
+        align-items: center;
+      }
+
+      .status-dot {
+        top: 0.8rem;
+        right: 0.8rem;
+      }
+
+      .pwd-requirements {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .login-card {
+        padding: 1.5rem 1rem 1.5rem;
+      }
+
+      .login-header h1 {
+        font-size: 1.1rem;
+      }
+    }
+
+    /* ============================================================
+       减少动画偏好
+       ============================================================ */
+    @media (prefers-reduced-motion: reduce) {
+      .login-card::before,
+      .login-card::after {
+        animation: none;
+      }
+      .login-card .card-glow-bar {
+        animation: none;
+      }
+      .btn-submit::after {
+        animation: none;
+      }
+      .status-dot .dot {
+        animation: none;
+      }
+      .btn-submit:hover:not(:disabled) {
+        transform: none;
+      }
+      #particle-canvas {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================
+       背景层
+       ========================================================== -->
+  <div class="bg-grid"></div>
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- ==========================================================
+       LOGIN
+       ========================================================== -->
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="card-glow-bar"></div>
+
+      <!-- 状态灯 -->
+      <div class="status-dot">
+        <span class="dot"></span>
+        <span>系统就绪</span>
+      </div>
+
+      <!-- 头部 -->
+      <div class="login-header">
+        <div class="login-logo">✦</div>
+        <h1>NEXUS</h1>
+        <p>安全网关 · 身份验证</p>
+      </div>
+
+      <!-- 表单 -->
+      <form class="login-form" id="loginForm" novalidate autocomplete="off">
+
+        <!-- 表单体（提交后隐藏） -->
+        <div class="form-body">
+
+          <!-- 邮箱 -->
+          <div class="input-group">
+            <label for="email">电子邮箱</label>
+            <div class="input-wrap" id="emailWrap">
+              <span class="input-icon">✉</span>
+              <input
+                type="email"
+                id="email"
+                placeholder="your@domain.com"
+                autocomplete="email"
+                required
+              />
+            </div>
+            <div class="validation-msg info" id="emailMsg">
+              <span class="v-icon">ⓘ</span>
+              <span class="v-text">请输入有效的邮箱地址</span>
+            </div>
+          </div>
+
+          <!-- 密码 -->
+          <div class="input-group">
+            <label for="password">密码</label>
+            <div class="input-wrap" id="pwdWrap">
+              <span class="input-icon">🔒</span>
+              <input
+                type="password"
+                id="password"
+                placeholder="••••••••"
+                autocomplete="new-password"
+                required
+              />
+              <button type="button" class="toggle-pwd" id="togglePwd" aria-label="切换密码可见性">👁</button>
+            </div>
+            <div class="validation-msg info" id="pwdMsg">
+              <span class="v-icon">ⓘ</span>
+              <span class="v-text">至少 8 个字符</span>
+            </div>
+
+            <!-- 密码强度条 -->
+            <div class="pwd-strength" id="pwdStrength">
+              <div class="bar" data-index="0"></div>
+              <div class="bar" data-index="1"></div>
+              <div class="bar" data-index="2"></div>
+              <div class="bar" data-index="3"></div>
+            </div>
+            <div class="pwd-strength-label">
+              <span>密码强度</span>
+              <span class="score-text" id="pwdScoreText">—</span>
+            </div>
+
+            <!-- 密码要求详情 -->
+            <div class="pwd-requirements" id="pwdReqs">
+              <span class="req-item" data-req="length">
+                <span class="req-icon">○</span> ≥ 8 个字符
+              </span>
+              <span class="req-item" data-req="lower">
+                <span class="req-icon">○</span> 小写字母
+              </span>
+              <span class="req-item" data-req="upper">
+                <span class="req-icon">○</span> 大写字母
+              </span>
+              <span class="req-item" data-req="digit">
+                <span class="req-icon">○</span> 数字
+              </span>
+              <span class="req-item" data-req="special">
+                <span class="req-icon">○</span> 特殊字符
+              </span>
+              <span class="req-item" data-req="noSpace">
+                <span class="req-icon">○</span> 无空格
+              </span>
+            </div>
+          </div>
+
+          <!-- 提交 -->
+          <button type="submit" class="btn-submit" id="submitBtn" disabled>
+            <span class="btn-text">登 录</span>
+            <span class="spinner"><span class="spinner-ring"></span></span>
+          </button>
+        </div>
+
+        <!-- 成功状态 -->
+        <div class="form-success">
+          <div class="success-icon">✓</div>
+          <h2>验证通过</h2>
+          <p>正在重定向至安全仪表板…</p>
+        </div>
+      </form>
+
+      <!-- 底部链接 -->
+      <div class="login-footer">
+        <a href="#" id="forgotLink">忘记密码？</a>
+        <a href="#" id="registerLink">创建新账户</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================
+       JAVASCRIPT
+       ========================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* ==========================================================
+         1. Canvas 粒子系统
+         ========================================================== */
+      const canvas = document.getElementById('particle-canvas');
+      const ctx = canvas.getContext('2d');
+      let W, H;
+
+      const P_CONFIG = {
+        count: 100,
+        connectDist: 150,
+        mouseRadius: 140,
+        mouseForce: 0.6,
+        baseSpeed: 0.25,
+        lineOpacity: 0.1,
+      };
+
+      /* -------- 粒子类 -------- */
+      class Particle {
+        constructor() { this.reset(); }
+
+        reset() {
+          this.x = Math.random() * W;
+          this.y = Math.random() * H;
+          const a = Math.random() * Math.PI * 2;
+          const s = P_CONFIG.baseSpeed * (0.4 + Math.random() * 1.2);
+          this.vx = Math.cos(a) * s;
+          this.vy = Math.sin(a) * s;
+          this.r = 1.2 + Math.random() * 2.2;
+          this.op = 0.25 + Math.random() * 0.6;
+          // 随机色调：蓝紫色系
+          this.hue = 210 + Math.random() * 40; // 210~250
+          this.sat = 40 + Math.random() * 40;
+        }
+
+        update(mouse) {
+          if (mouse.active) {
+            const dx = this.x - mouse.x;
+            const dy = this.y - mouse.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < P_CONFIG.mouseRadius && dist > 0.5) {
+              const force = ((P_CONFIG.mouseRadius - dist) / P_CONFIG.mouseRadius) * P_CONFIG.mouseForce;
+              this.vx += (dx / dist) * force * 0.12;
+              this.vy += (dy / dist) * force * 0.12;
+            }
+          }
+
+          this.vx *= 0.97;
+          this.vy *= 0.97;
+
+          const speed = Math.hypot(this.vx, this.vy);
+          const maxS = P_CONFIG.baseSpeed * 4;
+          if (speed > maxS) {
+            this.vx = (this.vx / speed) * maxS;
+            this.vy = (this.vy / speed) * maxS;
+          }
+
+          this.x += this.vx;
+          this.y += this.vy;
+
+          if (this.x < -30 || this.x > W + 30 || this.y < -30 || this.y > H + 30) {
+            this.x = 60 + Math.random() * (W - 120);
+            this.y = 60 + Math.random() * (H - 120);
+          }
+        }
+
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${this.hue}, ${this.sat}%, 75%, ${this.op})`;
+          ctx.fill();
+        }
+      }
+
+      let particles = [];
+
+      function initParticles() {
+        particles = [];
+        for (let i = 0; i < P_CONFIG.count; i++) {
+          particles.push(new Particle());
+        }
+      }
+
+      /* -------- 鼠标 -------- */
+      const mouse = { x: -9999, y: -9999, active: false };
+
+      document.addEventListener('mousemove', function (e) {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+        mouse.active = true;
+      });
+
+      document.addEventListener('mouseleave', function () {
+        mouse.active = false;
+      });
+
+      document.addEventListener('touchmove', function (e) {
+        const touch = e.touches[0];
+        if (touch) {
+          const rect = canvas.getBoundingClientRect();
+          mouse.x = touch.clientX - rect.left;
+          mouse.y = touch.clientY - rect.top;
+          mouse.active = true;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', function () {
+        mouse.active = false;
+      });
+
+      /* -------- 尺寸 -------- */
+      function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        W = window.innerWidth;
+        H = window.innerHeight;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        canvas.style.width = W + 'px';
+        canvas.style.height = H + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const area = W * H;
+        const baseArea = 1920 * 1080;
+        const target = Math.round(P_CONFIG.count * Math.min(area / baseArea, 1.6));
+        while (particles.length < target) {
+          const p = new Particle();
+          p.x = Math.random() * W;
+          p.y = Math.random() * H;
+          particles.push(p);
+        }
+        while (particles.length > target) {
+          particles.pop();
+        }
+      }
+
+      /* -------- 连线 -------- */
+      function drawConnections() {
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < P_CONFIG.connectDist) {
+              const op = P_CONFIG.lineOpacity * (1 - dist / P_CONFIG.connectDist);
+              const hue = (particles[i].hue + particles[j].hue) / 2;
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.strokeStyle = `hsla(${hue}, 50%, 70%, ${op})`;
+              ctx.lineWidth = 0.5;
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      /* -------- 循环 -------- */
+      function loop() {
+        ctx.clearRect(0, 0, W, H);
+
+        for (const p of particles) {
+          p.update(mouse);
+          p.draw();
+        }
+
+        drawConnections();
+        requestAnimationFrame(loop);
+      }
+
+      function initCanvas() {
+        resizeCanvas();
+        initParticles();
+        window.addEventListener('resize', resizeCanvas);
+        loop();
+      }
+
+
+      /* ==========================================================
+         2. 表单验证引擎
+         ========================================================== */
+      const form = document.getElementById('loginForm');
+      const email = document.getElementById('email');
+      const password = document.getElementById('password');
+      const emailWrap = document.getElementById('emailWrap');
+      const pwdWrap = document.getElementById('pwdWrap');
+      const emailMsg = document.getElementById('emailMsg');
+      const pwdMsg = document.getElementById('pwdMsg');
+      const submitBtn = document.getElementById('submitBtn');
+      const togglePwd = document.getElementById('togglePwd');
+      const pwdStrength = document.getElementById('pwdStrength');
+      const pwdScoreText = document.getElementById('pwdScoreText');
+      const pwdReqs = document.getElementById('pwdReqs');
+      const bars = pwdStrength.querySelectorAll('.bar');
+
+      /* -------- 邮箱验证 -------- */
+      const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+      function validateEmail(value) {
+        const v = value.trim();
+        if (v.length === 0) return { valid: false, msg: '请输入邮箱地址', type: 'info', icon: 'ⓘ' };
+        if (v.length > 254) return { valid: false, msg: '邮箱地址过长（最大 254 字符）', type: 'error', icon: '✕' };
+        if (!EMAIL_RE.test(v)) return { valid: false, msg: '邮箱格式不正确（示例：user@domain.com）', type: 'error', icon: '✕' };
+        return { valid: true, msg: '邮箱格式正确 ✓', type: 'success', icon: '✓' };
+      }
+
+      /* -------- 密码验证 -------- */
+      function checkPasswordReqs(val) {
+        return {
+          length:  val.length >= 8,
+          lower:   /[a-z]/.test(val),
+          upper:   /[A-Z]/.test(val),
+          digit:   /[0-9]/.test(val),
+          special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(val),
+          noSpace: !/\s/.test(val),
+        };
+      }
+
+      function scorePassword(val) {
+        if (val.length === 0) return 0;
+        let score = 0;
+        if (val.length >= 8) score++;
+        if (/[a-z]/.test(val) && /[A-Z]/.test(val)) score++;
+        if (/[0-9]/.test(val)) score++;
+        if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(val)) score++;
+        // Normalize to 0-4
+        return Math.min(score, 4);
+      }
+
+      const STRENGTH_LABELS = ['—', '弱', '较弱', '中等', '强'];
+      const STRENGTH_COLORS = ['', 'level-0', 'level-1', 'level-2', 'level-3'];
+
+      function validatePassword(val) {
+        const v = val;
+        if (v.length === 0) return { valid: false, msg: '请输入密码', type: 'info', icon: 'ⓘ' };
+
+        const reqs = checkPasswordReqs(v);
+        const allMet = Object.values(reqs).every(Boolean);
+        const score = scorePassword(v);
+
+        if (!allMet) {
+          return { valid: false, msg: '部分要求未满足', type: 'error', icon: '✕', score, reqs, allMet: false };
+        }
+        return { valid: true, msg: '密码强度合格 ✓', type: 'success', icon: '✓', score, reqs, allMet: true };
+      }
+
+      /* -------- 更新密码强度 UI -------- */
+      function updatePwdStrength(score) {
+        bars.forEach((bar, i) => {
+          bar.className = 'bar';
+          if (i < score) {
+            bar.classList.add('active', STRENGTH_COLORS[score] || 'level-0');
+          }
+        });
+        pwdScoreText.textContent = STRENGTH_LABELS[score] || '—';
+      }
+
+      /* -------- 更新密码要求列表 -------- */
+      function updatePwdReqs(reqs) {
+        if (!reqs) {
+          pwdReqs.querySelectorAll('.req-item').forEach(el => el.classList.remove('met'));
+          return;
+        }
+        const map = {
+          length:  'length',
+          lower:   'lower',
+          upper:   'upper',
+          digit:   'digit',
+          special: 'special',
+          noSpace: 'noSpace',
+        };
+        Object.entries(map).forEach(([attr, key]) => {
+          const el = pwdReqs.querySelector(`[data-req="${attr}"]`);
+          if (!el) return;
+          const met = reqs[key];
+          el.classList.toggle('met', met);
+          const icon = el.querySelector('.req-icon');
+          if (icon) icon.textContent = met ? '✓' : '○';
+        });
+      }
+
+      /* -------- 更新输入框状态 -------- */
+      function setInputState(wrap, msgEl, result) {
+        wrap.classList.remove('has-error', 'has-success');
+        msgEl.className = 'validation-msg ' + result.type;
+        const icon = msgEl.querySelector('.v-icon');
+        const text = msgEl.querySelector('.v-text');
+        if (icon) icon.textContent = result.icon || 'ⓘ';
+        if (text) text.textContent = result.msg;
+
+        if (result.type === 'error') {
+          wrap.classList.add('has-error');
+        } else if (result.type === 'success') {
+          wrap.classList.add('has-success');
+        }
+      }
+
+      /* -------- 实时验证 -------- */
+      let emailValid = false;
+      let pwdValid = false;
+
+      function onEmailInput() {
+        const result = validateEmail(email.value);
+        setInputState(emailWrap, emailMsg, result);
+        emailValid = result.valid;
+        updateSubmitBtn();
+      }
+
+      function onPwdInput() {
+        const result = validatePassword(password.value);
+        setInputState(pwdWrap, pwdMsg, result);
+        pwdValid = result.valid;
+        updatePwdStrength(result.score || 0);
+        if (result.reqs) {
+          updatePwdReqs(result.reqs);
+          pwdReqs.classList.add('visible');
+        } else {
+          pwdReqs.classList.remove('visible');
+        }
+        updateSubmitBtn();
+      }
+
+      /* -------- 提交按钮状态 -------- */
+      function updateSubmitBtn() {
+        submitBtn.disabled = !(emailValid && pwdValid);
+      }
+
+      /* -------- 密码可见性切换 -------- */
+      let pwdVisible = false;
+
+      togglePwd.addEventListener('click', function () {
+        pwdVisible = !pwdVisible;
+        password.type = pwdVisible ? 'text' : 'password';
+        togglePwd.textContent = pwdVisible ? '🙈' : '👁';
+      });
+
+      /* -------- 提交 -------- */
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        // 最终验证
+        const eResult = validateEmail(email.value);
+        const pResult = validatePassword(password.value);
+        setInputState(emailWrap, emailMsg, eResult);
+        setInputState(pwdWrap, pwdMsg, pResult);
+        if (!eResult.valid || !pResult.valid) {
+          updateSubmitBtn();
+          return;
+        }
+
+        // 提交动画
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+
+        // 模拟 API 调用
+        setTimeout(function () {
+          submitBtn.classList.remove('loading');
+          form.classList.add('submitted');
+        }, 1800);
+      });
+
+      /* -------- 底部链接点击 -------- */
+      document.getElementById('forgotLink').addEventListener('click', function (e) {
+        e.preventDefault();
+        email.focus();
+        password.value = '';
+        onPwdInput();
+        pwdReqs.classList.remove('visible');
+        updatePwdStrength(0);
+        pwdScoreText.textContent = '—';
+        // 模拟提示
+        emailMsg.querySelector('.v-text').textContent = '输入邮箱后，重置链接将发送至该地址';
+        emailMsg.className = 'validation-msg info';
+        emailMsg.querySelector('.v-icon').textContent = 'ⓘ';
+      });
+
+      document.getElementById('registerLink').addEventListener('click', function (e) {
+        e.preventDefault();
+        form.classList.remove('submitted');
+        email.value = '';
+        password.value = '';
+        emailValid = false;
+        pwdValid = false;
+        updateSubmitBtn();
+        onEmailInput();
+        onPwdInput();
+        pwdReqs.classList.remove('visible');
+        updatePwdStrength(0);
+        pwdScoreText.textContent = '—';
+        email.focus();
+      });
+
+      /* -------- 绑定事件 -------- */
+      email.addEventListener('input', onEmailInput);
+      password.addEventListener('input', onPwdInput);
+
+      /* -------- 初始状态 -------- */
+      onEmailInput();
+      onPwdInput();
+
+
+      /* ==========================================================
+         3. 启动
+         ========================================================== */
+      function init() {
+        initCanvas();
+
+        // 初始聚焦
+        setTimeout(function () { email.focus(); }, 400);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -94,7 +94,7 @@ async function _runDebateRounds(
   ];
   let consensusContent = "";
   for (let r = 1; r <= template.rounds; r++) {
-    console.log(`  ⏳ 第 ${r}/${template.rounds} 轮辩论中...`);
+    console.error(`  ⏳ 第 ${r}/${template.rounds} 轮辩论中...`);
     const response = await bridge.directChat(systemPrompt, messages);
     if (response) {
       messages.push({ role: "assistant", content: response });
@@ -211,10 +211,10 @@ async function handleRoundtableStart(
   if (dryRun) return { success: true, output: _buildDryRunOutput(template, topic, outputPath), exitCode: 0 };
 
   const topicText = topic ?? template.description;
-  console.log(`🧠 圆桌会议启动: ${template.name}`);
-  console.log(`   轮次: ${template.rounds}  |  参与: ${template.agents.join(", ")}`);
-  console.log(`   议题: ${topicText.slice(0, 80)}${topicText.length > 80 ? "..." : ""}`);
-  console.log("");
+  console.error(`🧠 圆桌会议启动: ${template.name}`);
+  console.error(`   轮次: ${template.rounds}  |  参与: ${template.agents.join(", ")}`);
+  console.error(`   议题: ${topicText.slice(0, 80)}${topicText.length > 80 ? "..." : ""}`);
+  console.error("");
 
   let consensusContent = "";
   try {

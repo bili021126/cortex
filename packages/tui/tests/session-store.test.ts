@@ -28,18 +28,16 @@ describe("SessionStore", () => {
   /** 创建有效的会话快照 */
   function validSession(overrides?: Partial<SessionSnapshot>): SessionSnapshot {
     return {
-      mode: "chat",
       agent: "code" as any,
       history: [{ role: "user", content: "hello" }],
       talkTrio: false,
-      partyRoster: [],
+      groups: [],
       ...overrides,
     };
   }
 
   it("should save and load session", () => {
     const session = validSession({
-      mode: "plan",
       agent: "architect" as any,
       history: [
         { role: "user" as const, content: "plan this" },
@@ -51,11 +49,10 @@ describe("SessionStore", () => {
     const loaded = loadSession(tmpDir);
 
     expect(loaded).not.toBeNull();
-    expect(loaded!.mode).toBe("plan");
     expect(loaded!.agent).toBe("architect");
     expect(loaded!.history).toHaveLength(2);
     expect(loaded!.talkTrio).toBe(false);
-    expect(loaded!.partyRoster).toEqual([]);
+    expect(loaded!.groups).toEqual([]);
   });
 
   it("should handle missing session file", () => {
@@ -97,16 +94,6 @@ describe("SessionStore", () => {
     expect(loaded!.agent).toBe("fix");
   });
 
-  it("should preserve session mode", () => {
-    const modes: SessionSnapshot["mode"][] = ["chat", "talk", "plan", "party", "command"];
-    for (const mode of modes) {
-      const session = validSession({ mode });
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded!.mode).toBe(mode);
-    }
-  });
-
   it("should preserve session history", () => {
     const history = [
       { role: "user" as const, content: "hello" },
@@ -121,9 +108,10 @@ describe("SessionStore", () => {
     expect(loaded!.history[2]!.content).toBe("how are you?");
   });
 
-  it("should reject invalid mode in session file", () => {
+  it("should handle invalid/extra fields gracefully", () => {
     const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
     fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    // \u65E7\u7248\u672C\u5B57\u6BB5\uFF08mode/partyRoster/planState\uFF09\u4E0D\u5E94\u963B\u6B62\u52A0\u8F7D
     fs.writeFileSync(
       sessionPath,
       JSON.stringify({ mode: "invalid_mode", agent: "code", history: [], talkTrio: false, partyRoster: [] }),
@@ -131,7 +119,9 @@ describe("SessionStore", () => {
     );
 
     const result = loadSession(tmpDir);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.agent).toBe("code");
+    expect(result!.history).toEqual([]);
   });
 
   it("should reject session without history array", () => {
@@ -147,26 +137,18 @@ describe("SessionStore", () => {
     expect(result).toBeNull();
   });
 
-  it("should save with talkTrio and partyRoster", () => {
+  it("should save with talkTrio and groups", () => {
     const session = validSession({
-      mode: "party",
       talkTrio: true,
-      partyRoster: ["code" as any, "fix" as any],
-      planState: {
-        nodes: [{ id: "n1" }],
-        intent: "refactor",
-        approved: false,
-        reviewStatus: "pending",
-      },
+      groups: [{ id: "g1", agents: ["code", "fix"], status: "active" }],
     });
 
     saveSession(tmpDir, session);
     const loaded = loadSession(tmpDir);
 
     expect(loaded!.talkTrio).toBe(true);
-    expect(loaded!.partyRoster).toHaveLength(2);
-    expect(loaded!.planState).toBeDefined();
-    expect(loaded!.planState!.intent).toBe("refactor");
+    expect(loaded!.groups).toHaveLength(1);
+    expect(loaded!.groups[0]!.id).toBe("g1");
   });
 
   it("should handle history truncation (> MAX_HISTORY)", () => {
@@ -207,19 +189,19 @@ describe("SessionStore", () => {
     expect(() => clearSession(tmpDir)).not.toThrow();
   });
 
-  it("loadSession should fix missing roster/talkTrio defaults", () => {
+  it("loadSession should fix missing groups/talkTrio defaults", () => {
     const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
     fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
-    // 缺少 partyRoster 和 talkTrio 字段
+    // \u7F3A\u5C11 groups \u548C talkTrio \u5B57\u6BB5
     fs.writeFileSync(
       sessionPath,
-      JSON.stringify({ mode: "chat", agent: "code", history: [] }),
+      JSON.stringify({ agent: "code", history: [] }),
       "utf-8",
     );
-
+  
     const loaded = loadSession(tmpDir);
     expect(loaded).not.toBeNull();
-    expect(Array.isArray(loaded!.partyRoster)).toBe(true);
+    expect(Array.isArray(loaded!.groups)).toBe(true);
     expect(loaded!.talkTrio).toBe(false);
   });
 });

@@ -1,5 +1,7 @@
 // @ci: unit
-// SKIP: 已知竞态测试，连续数十次运行均 2 固定失败。核心链路另有 core-smoke 验证。
+// 已评估：保留 skip。mock adapter 返回纯文本无 toolCall，
+// 但 ReAct loop 强制 code agent 调用 write_file 导致无限循环。
+// 需 mock 提供 write_file toolCall 后才能激活。
 /**
  * TaskBoard 树稳健性压力测试
  * 覆盖六大暗雷：并发 claim、父节点失败级联、重规划插入运行中层、

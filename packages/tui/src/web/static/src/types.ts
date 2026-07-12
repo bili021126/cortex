@@ -75,6 +75,10 @@ export interface PipelineEvent {
   timestamp: number
   /** 通知语义类型——FYI / WARNING / DECISION_REQUIRED */
   notificationType?: 'FYI' | 'WARNING' | 'DECISION_REQUIRED'
+  /** 事件去重 ID（服务端下发时可选注入） */
+  eventId?: string
+  /** 请求追踪 ID（服务端下发时可选注入） */
+  requestId?: string
 }
 
 /** 确认门事件（permission_required 类型） */

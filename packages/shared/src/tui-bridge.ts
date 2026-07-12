@@ -26,7 +26,7 @@ export interface ITuiEngineBridge {
     messages: LlmMessage[],
     tools: { name: string; description: string; parameters?: Record<string, unknown> }[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
-    opts?: { reasoningEffort?: "high" | "max" },
+    opts?: { reasoningEffort?: "high" | "max" | null },
   ): Promise<{
     content: string | null;
     tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[];

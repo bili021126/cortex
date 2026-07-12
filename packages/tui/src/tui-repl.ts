@@ -10,29 +10,25 @@
 
 import * as readline from "node:readline";
 import { existsSync, createWriteStream } from "node:fs";
-import { AgentType, CHINESE_NAME_TO_TYPE, AGENT_CHINESE_ROLE, type LlmMessage, type ITuiEngineBridge } from "@cortex/shared";
+import { AgentType, CHINESE_NAME_TO_TYPE, AGENT_CHINESE_ROLE, AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK, type LlmMessage, type ITuiEngineBridge } from "@cortex/shared";
+import type { TuiToolStartEvent, TuiToolResultEvent, TuiTokenUsageEvent } from "./types.js";
 
 // CLI 注入适配器
 type EngineBridge = ITuiEngineBridge;
 type CommandRegistry = any;
 type CommandContext = any;
 
-import type { ReplMode, TuiEvent } from "./types.js";
+import type { TuiEvent } from "./types.js";
 import {
   tuiEventBus,
   chatMode,
   planMode,
-  talkMode,
-  talkTrioMode,
-  partyMode,
-  DEFAULT_PARTY,
   commandMode,
-  TaskTreeRenderer,
-  ToolLogRenderer,
+  classifyIntent,
+  parseAgentFromInput,
   TokenMonitor,
   renderPersonaHeader,
   renderAgentTransition,
-  renderMultiPersonaHeader,
   loadPlanState,
   savePlanState,
   clearPlanState,
@@ -45,28 +41,81 @@ import {
 import { saveSession, loadSession } from "./session-store.js";
 import type { TuiHooks } from "./types.js";
 
-import { diffRenderer, chatLog, toolCard, footer, layout } from "./renderer/index.js";
+import { chatLog, toolCard, overlay, personaHeader } from "./renderer/index.js";
 import { SigintHandler } from "./renderer/sigint-handler.js";
 import { sanitizeRenderableText } from "./renderer/sanitize.js";
-import { statusBar } from "./renderer/status-bar.js";
 import { setTuiQuietMode } from "@cortex/telemetry";
 
-/** TUI 会话可变状态 */
+/** SIGINT 三段式处理器——模块级以便 plan/approve 路径重置 */
+let sigint: SigintHandler;
+
+/** TUI 会话可变状态（v4 群聊版） */
 interface TuiSession {
-  mode: ReplMode;
   agent: AgentType;
   history: LlmMessage[];
   planState: PlanModeState;
-  /** talk 模式下是否启用三人（昔涟+纳西妲） */
+  /** 三人模式（昔涟+纳西妲） */
   talkTrio: boolean;
-  /** party 模式参与者名单 */
-  partyRoster: AgentType[];
+  /** 群聊组 */
+  groups: Map<string, Group>;
+  /** 群聊成员名单 */
+  roster: AgentType[];
+}
+
+// stdin 互斥锁——plan/approve 执行期间不响应 readline
+let _stdinLocked = false;
+let _lastReasoning = ""; // chat 模式攒的思维链——.think 命令查看
+let _contextWarned = false; // 上下文告警——每会话仅输出一次
+
+// ─── Group 管理 ──────────────────────────────
+
+interface Group {
+  agents: AgentType[];
+  history: LlmMessage[];
+  status: "active" | "dissolved";
+  createdAt: number;
+  summary?: string;
+}
+
+/** 全局群聊组存储 */
+const groups = new Map<string, Group>();
+
+/** 创建群聊组 */
+function createGroup(task: string, agents: AgentType[]): string {
+  const id = `g-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const g: Group = { agents, history: [], status: "active", createdAt: Date.now() };
+  groups.set(id, g);
+  const displayNames = agents.map(a => {
+    const d = AGENT_DISPLAY_BY_TYPE[a] ?? AGENT_DISPLAY_FALLBACK;
+    return `${d.emoji} ${d.name}`;
+  });
+  chatLog.addEmbed(`📋 ${task}`, displayNames);
+  return id;
+}
+
+/** 向群聊组中添加消息 */
+function addToGroup(id: string, agent: AgentType, msg: string): void {
+  const g = groups.get(id);
+  if (g) {
+    g.history.push({ role: "assistant", content: `${agent}: ${msg}` });
+  }
+}
+
+/** 解散群聊组并返回摘要 */
+function dissolveGroup(id: string): { summary?: string } {
+  const g = groups.get(id);
+  if (!g) return {};
+  g.status = "dissolved";
+  const duration = Math.round((Date.now() - g.createdAt) / 1000);
+  const display = g.agents.map(a => AGENT_DISPLAY_BY_TYPE[a]?.name ?? a);
+  const summary = `⏱️ ${duration}s · ${display.join(" + ")}`;
+  chatLog.addEmbed(`✅ 群聊结束`, [summary]);
+  return { summary };
 }
 
 /** handleInternalCommand 聚合参数 */
 interface TuiCmdCtx {
   rl: readline.Interface;
-  setMode: (m: ReplMode) => void;
   setAgent: (a: AgentType) => void;
   session: TuiSession;
   projectRoot: string;
@@ -96,6 +145,8 @@ export async function tuiReplHandler(
   process.stderr.write = (chunk: any, ...args: any[]) => {
     const s = String(chunk);
     if (s.includes("[ConfirmGate]") || s.includes("Approve?")) {
+      // gate交互透传——但截断超长参数(防止HTML淹屏)
+      if (s.length > 500) return origStderr(s.slice(0, 500) + "…\n", ...args);
       return origStderr(chunk, ...args);
     }
     engineLog.write(chunk);
@@ -104,13 +155,26 @@ export async function tuiReplHandler(
 
   // 抑制 console-bridge stderr 输出——TUI 有自己的渲染管线
   setTuiQuietMode(true);
+  // 硬拦截：console.log 的 [telemetry] 前缀不输出到 stdout
+  const _realLog = console.log.bind(console);
+  console.log = (...args: unknown[]) => {
+    const s = typeof args[0] === "string" ? args[0] : "";
+    if (s.startsWith("[telemetry]")) return;
+    _realLog(...args);
+  };
+
+  // 清屏——避免 build 输出等旧行残留在右侧混排
+  process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
+
+  // 保存原 console.log——退出时恢复
+  const _tuiSavedLog = console.log;
 
   const session: TuiSession = _restoreSession(context.projectRoot ?? process.cwd()) ?? {
-    mode: "chat",
-    agent: AgentType.Code,
+    agent: AgentType.Butler,
     history: [],
     talkTrio: false,
-    partyRoster: [...DEFAULT_PARTY],
+    groups: new Map(),
+    roster: [AgentType.Butler, AgentType.Analysis],
     planState: loadPlanState(context.projectRoot ?? process.cwd()) ?? {
       nodes: [], intent: "", approved: false, reviewStatus: "pending" as const,
     },
@@ -118,56 +182,48 @@ export async function tuiReplHandler(
 
   // 恢复 session 时回填 ChatLog
   chatLog.loadHistory(session.history);
+  // 恢复提示走 ChatLog——不走 writeln
+  if (session.history.length > 0) {
+    chatLog.loadHistory([{ role: "assistant", content: `\uD83D\uDCC2 已恢复上次会话（${session.history.length} 条）` }]);
+  }
 
-  // 注册组件到 Layout 布局引擎
-  layout.add(chatLog, "fill");            // Layer1: 对话
-  layout.add(r.taskTree, "fill");          // Layer1: 任务树
-  layout.add(toolCard, "fill");            // Layer1: 工具卡片
-  layout.add(statusBar, "bottom", 1);      // Layer3: 状态
-  layout.add(footer, "bottom", 1);         // Layer3: 信息条
-
-  // DiffRenderer 只注册 layout 一个顶层组件
-  diffRenderer.register("layout", layout);
-
-  // 旧注册代码注释掉
-  // diffRenderer.register("chat", chatLog);
-  // diffRenderer.register("tool", toolCard);
-  // diffRenderer.register("task", r.taskTree);
-  // diffRenderer.register("status", statusBar);
-  // diffRenderer.register("footer", footer);
-
-  // 监听终端尺寸变化
+  // 监听终端尺寸变化——纯流式模式，无需重绘
   process.stdout.on("resize", () => {
-    layout.setTerminalSize(process.stdout.columns, process.stdout.rows);
-    diffRenderer.requestRender();
+    /* 纯流式模式——尺寸变化不触发重绘 */
   });
-  layout.setTerminalSize(process.stdout.columns ?? 80, process.stdout.rows ?? 24);
+  // 纯流式模式——无需 setTerminalSize
 
   // Hook: onSessionRestore
-  if (session.mode !== "chat" || session.history.length > 0) {
+  if (session.history.length > 0) {
     hooks.onSessionRestore?.({
-      mode: session.mode,
       agent: session.agent,
       history: session.history,
       talkTrio: session.talkTrio,
-      partyRoster: session.partyRoster,
+      groups: [...session.groups.entries()].map(([id, g]) => ({
+        id, agents: g.agents.map(a => a.toString()),
+        status: g.status as "active" | "dissolved",
+        summary: g.summary,
+      })),
     });
   }
 
-  renderPersonaHeader(session.agent, session.mode);
-  _printTuiWelcome();
+  // 使用 PersonaHeader TuiComponent 替代 writeln 直出
+  personaHeader.update(session.agent, "chat" as any);
+  // 欢迎信息走 ChatLog——不走 writeln 避免被 DiffRenderer 覆盖
+  chatLog.loadHistory([
+    { role: "assistant", content: `${bold("Cortex TUI v4")} — ${dim("\u667A\u80FD\u6A21\u5F0F")}` },
+  ]);
 
   // Hook: onSessionStart
-  hooks.onSessionStart?.(session.mode, session.agent);
+  hooks.onSessionStart?.(session.agent);
 
-  const rl = _createReadline(session);
+  const rl = _createReadline();
   rl.prompt();
 
   // 事件驱动渲染——不再用定时器和readline抢屏幕
-  // DiffRenderer在 _bindTuiEvents + ChatLog.invalidate 中按需刷新
 
   const cmdCtx: TuiCmdCtx = {
-    rl, setMode: (m) => { session.mode = m; }, setAgent: (a) => { session.agent = a; },
+    rl, setAgent: (a) => { session.agent = a; },
     session, projectRoot, hooks, bridge,
   };
 
@@ -175,7 +231,7 @@ export async function tuiReplHandler(
   let abortCurrent = false;
 
   // ── Ctrl+C: readline 跨平台SIGINT + 三段式确认 ──
-  const sigint = new SigintHandler(() => { rl.close(); });
+  sigint = new SigintHandler(() => { rl.close(); });
   const sigintFn = () => {
     abortCurrent = true;  // 先中断当前操作
     const msg = sigint.handle();
@@ -185,37 +241,63 @@ export async function tuiReplHandler(
   process.on("SIGINT", sigintFn);  // *nix fallback
   process.stdin.setRawMode?.(false); // readline 接管 raw mode
 
-  rl.on("line", async (line) => {
-    let input = line.trim();
+  rl.on("line", async (input) => {
+    input = input.trim();
     if (!input) { rl.prompt(); return; }
 
-    // 过滤 ConfirmGate 泄漏：单字符 y/n 或 "yy" 是 stdin 争抢的残余
-    if (/^[yn]{1,2}$/i.test(input)) { rl.prompt(); return; }
-
-    // 兼容中文句号——输入法忘了切回来时不会卡住
-    if (input.startsWith(".") || input.startsWith("。")) {
-      if (input.startsWith("。")) input = "." + input.slice(1);
-      running = await handleInternalCommand(input, cmdCtx);
-      if (!running) { return; }
-      rl.prompt(); return;
+    // 内部命令
+    if (input.startsWith(".")) {
+      const running = await handleInternalCommand(input, cmdCtx);
+      if (!running) rl.close();
+      else rl.prompt();
+      return;
     }
 
-    // Hook: onUserInput → onPreProcessInput
-    input = await (hooks.onUserInput?.(input) ?? Promise.resolve(input));
-    input = await (hooks.onPreProcessInput?.(input) ?? Promise.resolve(input));
-
     const abort = () => abortCurrent;
-    try { await _dispatchTuiMode(session, input, bridge, registry, context, cmdCtx.projectRoot, rl, abort); }
-    catch (err) { writeln(`✗ 错误: ${err instanceof Error ? err.message : String(err)}`); }
+    try {
+      const { agent: a, history: h, planState: ps } = session;
+      
+      // @ 路由
+      const targetAgent = parseAgentFromInput(input);
+      const dispatchAgent = targetAgent ?? a;
+      if (targetAgent && targetAgent !== a) {
+        session.agent = targetAgent;
+        personaHeader.update(targetAgent, "chat");
+        // 清空历史——防止旧 agent 的 persona 对话污染新 agent 上下文
+        session.history = [];
+      }
+      
+      // 剥掉 @agent
+      const cleanedInput = targetAgent ? input.replace(/@\S+\s*/, "").trim() || input : input;
+      
+      // 意图路由
+      const intent = classifyIntent(cleanedInput);
+      switch (intent) {
+        case "command":
+          await _dispatchCommand(cleanedInput, registry, context);
+          break;
+        case "task":
+          await _dispatchPlan(cleanedInput, bridge, dispatchAgent, ps, h, cmdCtx.projectRoot, rl, abort);
+          break;
+        case "chat":
+          await _dispatchChat(cleanedInput, bridge, dispatchAgent, h);
+          break;
+      }
+    } catch (err) {
+      writeln(`\u2717 错误: ${err instanceof Error ? err.message : String(err)}`);
+    }
     rl.prompt();
   });
 
   rl.on("close", () => {
     process.stderr.write = origStderr;
     engineLog.end();
+    process.stdout.removeAllListeners("resize");
+    rl.removeAllListeners("SIGINT");
     _eventUnsubs.forEach((fn) => fn());
     r.tokenMonitor.dispose();
     setTuiQuietMode(false);
+    console.log = _tuiSavedLog;
     process.removeListener("SIGINT", sigintFn);
   });
   await new Promise<void>((resolve) => rl.on("close", resolve));
@@ -226,40 +308,63 @@ export async function tuiReplHandler(
 // 辅助函数
 // ═══════════════════════════════════════════════════════════
 
-interface TuiRenderers { taskTree: TaskTreeRenderer; toolLog: ToolLogRenderer; tokenMonitor: TokenMonitor; }
+interface TuiRenderers { tokenMonitor: TokenMonitor; }
 
 function _initRenderers(): TuiRenderers {
   return {
-    taskTree: new TaskTreeRenderer(),
-    toolLog: new ToolLogRenderer(),
     tokenMonitor: new TokenMonitor(),
   };
 }
 
 function _bindTuiEvents(r: TuiRenderers): (() => void)[] {
   return [
-    tuiEventBus.on("task_tree_update", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
-    tuiEventBus.on("node_start", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
-    tuiEventBus.on("node_complete", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
-    tuiEventBus.on("node_failed", (e) => { r.taskTree.handleEvent(e); diffRenderer.requestRender(); }),
-    tuiEventBus.on("tool_start", (e) => { r.toolLog.handleEvent(e); const ev = e as any; toolCard.add(ev.id, ev.tool); diffRenderer.requestRender(); }),
-    tuiEventBus.on("tool_result", (e) => { r.toolLog.handleEvent(e); const ev = e as any; toolCard.complete(ev.id, ev.output ?? "", ev.durationMs ?? 0, ev.success); diffRenderer.requestRender(); }),
-    tuiEventBus.on("token_usage", (e) => r.tokenMonitor.handleEvent(e)),
+    // llm_chunk: 不处理——由各 dispatch 函数的 for-await 循环自行输出
+    // tool_start: 行内指示器
+    tuiEventBus.on("tool_start", (e) => {
+      const ev = e as TuiToolStartEvent;
+      process.stdout.write(`  \u23F3 ${ev.tool}\n`);
+    }),
+    // tool_result: 覆盖上行
+    tuiEventBus.on("tool_result", (e) => {
+      const ev = e as TuiToolResultEvent;
+      const icon = ev.success ? "\u2705" : "\u274C";
+      const durStr = ev.durationMs ? ` \u00B7 ${ev.durationMs}ms` : "";
+      process.stdout.write(`\x1b[1A\x1b[2K  ${icon} ${ev.tool}${durStr}\n`);
+    }),
+    // token_usage: 仅超90%告警一次
+    tuiEventBus.on("token_usage", (e) => {
+      const ev = e as TuiTokenUsageEvent;
+      r.tokenMonitor.handleEvent(e);
+      const pct = Math.round((ev.sessionTotalTokens / ev.contextWindowSize) * 100);
+      if (pct >= 90 && !_contextWarned) {
+        _contextWarned = true;
+        process.stdout.write(`\n\u26A0\uFE0F \u4E0A\u4E0B\u6587 \u7528\u91CF ${pct}%\n\n`);
+      }
+    }),
   ];
 }
 
 function _printTuiWelcome(): void {
-  writeln(`  ${bold("Cortex TUI v3")} — ${dim("新架构预览")}`);
-  writeln(`  ${dim(".help 查看帮助 | .mode <模式> 切换 | .agent <角色> 切换 | .exit 退出")}`);
+  writeln(`  ${bold("Cortex TUI v4")} — ${dim("\u667A\u80FD\u6A21\u5F0F")}`);
+  writeln(`  ${dim(".help \u67E5\u770B\u5E2E\u52A9 | .agent <\u89D2\u8272> \u5207\u6362 | @\u540D\u5B57 \u7FA4\u804A | .exit \u9000\u51FA")}`);
   writeln("");
 }
 
-function _createReadline(session: TuiSession): readline.Interface {
-  return readline.createInterface({
+function _createReadline(): readline.Interface {
+  const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
-    prompt: buildPrompt(session.mode, session.agent, session.talkTrio),
+    prompt: "\u25B6 ",
+    terminal: true,
   });
+  // 劫持 _writeToOutput——只写 prompt，不写用户输入
+  const origWrite = (rl as any)._writeToOutput.bind(rl);
+  (rl as any)._writeToOutput = function (s: string) {
+    if (s === rl.getPrompt() || s.startsWith("\x1b") || s === "\r\n") {
+      origWrite(s);
+    }
+  };
+  return rl;
 }
 
 /** 尝试从 .cortex/tui-session.json 恢复上次会话 */
@@ -272,112 +377,142 @@ function _restoreSession(projectRoot: string): TuiSession | null {
     nodes: [], intent: "", approved: false, reviewStatus: "pending" as const,
   };
 
-  writeln(`📂 已恢复上次会话（模式: ${snap.mode}, 历史: ${snap.history.length} 条）`);
+  // 重建 groups Map
+  const restoredGroups = new Map<string, Group>();
+  if (snap.groups) {
+    for (const g of snap.groups) {
+      restoredGroups.set(g.id, {
+        agents: g.agents.map(a => a as AgentType),
+        history: [],
+        status: g.status,
+        createdAt: Date.now(),
+        summary: g.summary,
+      });
+    }
+  }
 
   return {
-    mode: snap.mode as ReplMode,
     agent: snap.agent,
     history: snap.history,
     talkTrio: snap.talkTrio,
-    partyRoster: snap.partyRoster,
+    groups: restoredGroups,
+    roster: [AgentType.Butler, AgentType.Analysis],
     planState,
   };
 }
 
-async function _dispatchTuiMode(
-  session: TuiSession,
+/** Chat 模式——流式 LLM 回答 */
+async function _dispatchChat(
   input: string,
   bridge: EngineBridge,
-  registry: CommandRegistry,
-  context: CommandContext,
+  agent: AgentType,
+  history: LlmMessage[],
+): Promise<void> {
+  // 用户消息
+  chatLog.addUser(input);
+  
+  // Agent 前缀
+  const display = AGENT_DISPLAY_BY_TYPE[agent] ?? AGENT_DISPLAY_FALLBACK;
+  process.stdout.write(`${display.emoji} ${display.name}: `);
+  
+  // 流式输出
+  let full = "";
+  let reasoning = "";
+  for await (const ev of chatMode(input, bridge, agent, history)) {
+    if (ev.type === "llm_chunk") {
+      if (ev.content?.startsWith("[telemetry]")) continue;
+      if (ev.reasoning) reasoning += ev.reasoning;
+      if (ev.content) {
+        process.stdout.write(ev.content);
+        full += ev.content;
+      }
+    }
+  }
+  
+  process.stdout.write("\n\n");
+  
+  // 思维链
+  if (reasoning) {
+    _lastReasoning = reasoning;
+    process.stdout.write(`\x1b[90m\uD83E\uDDE0 \u601D\u8003\u94FE\u5DF2\u8BB0\u5F55 (${Math.ceil(reasoning.length / 4)} tokens, \u8F93\u5165 .think \u67E5\u770B)\x1b[0m\n`);
+  }
+  
+  // 历史
+  if (full) {
+    history.push(
+      { role: "user", content: input },
+      { role: "assistant", content: full, reasoning_content: reasoning || undefined }
+    );
+  }
+}
+
+/** Plan 模式——LLM 生成计划 → 展示 → 等待审批 */
+async function _dispatchPlan(
+  input: string,
+  bridge: EngineBridge,
+  agent: AgentType,
+  ps: PlanModeState,
+  history: LlmMessage[],
   projectRoot: string,
   rl: readline.Interface,
   abort?: () => boolean,
 ): Promise<void> {
-  const { mode: m, agent: a, history: h, planState: ps } = session;
-  switch (m) {
-    case "command":
-      writeln(await commandMode((args: string[]) => registry.dispatch(args, context), input.split(/\s+/)));
-      break;
-    case "chat": {
-      statusBar.start("LLM 思考中");
-      const result = await consumeGenerator(chatMode(input, bridge, a, h), tuiEventBus, abort);
-      statusBar.stop();
-      if (result) { chatLog.startAssistant("chat-"+Date.now()); chatLog.updateAssistant("chat-"+Date.now(), sanitizeRenderableText(result).slice(0, 80)); chatLog.finalizeAssistant("chat-"+Date.now()); h.push({ role: "user", content: input }, { role: "assistant", content: result }); }
-      break;
+  // plan模式：纯 writeln 输出——不走 ChatLog
+  _stdinLocked = true;
+  rl.pause();
+  process.stdout.write("\n📋 LLM 思考中...\n");
+  const result = await consumeGenerator(planMode(input, bridge, agent, ps, history), tuiEventBus, abort);
+  // plan 结果通过 task-tree 的 writeln 事件已经输出了
+  // 这里只保存状态，不重复输出
+  if (result || ps.nodes.length > 0) {
+    savePlanState(projectRoot, ps);
+    if (result && result.trim()) {
+      process.stdout.write("\n");
+      writeln("─".repeat(60));
+      writeln(result.trim());
+      writeln("─".repeat(60));
+      process.stdout.write("\n");
     }
-    case "talk": {
-      if (session.talkTrio) {
-        statusBar.start("LLM 思考中");
-        const result = await consumeGenerator(talkTrioMode(input, bridge, h), tuiEventBus, abort);
-        statusBar.stop();
-        if (result) {
-          chatLog.startAssistant("talk-" + Date.now());
-          chatLog.updateAssistant("talk-" + Date.now(), result.slice(0, 80));
-          chatLog.finalizeAssistant("talk-" + Date.now());
-          h.push({ role: "user", content: input }, { role: "assistant", content: result });
-        }
+    // fallback: result 为空但 ps.nodes 有内容
+    if (!result && ps.nodes.length > 0) {
+      writeln("📋 任务计划 (" + ps.nodes.length + " 节点)");
+    }
+  }
+  // 完全空内容的兜底——consumeGenerator 返回 null 且无节点
+  if (!result && ps.nodes.length === 0) {
+    process.stdout.write("\n⚠️ 计划生成返回空内容\n");
+  }
+  while (process.stdin.read() !== null) { /* drain */ }
+  rl.resume();
+  _stdinLocked = false;
+  sigint.reset();
+  process.stdout.write("\n");  // 隔离旧输出
+  rl.prompt();
+  // 任务节点通过 ToolCard/task-tree 实时展示——不额外输出
+  // TUI 落盘自检
+  for (const node of ps.nodes) {
+    const outputPath = node._outputPath;
+    if (outputPath) {
+      if (!existsSync(outputPath)) {
+        console.warn(`[TUI] 预期产出文件不存在: ${outputPath}`);
       } else {
-        statusBar.start("LLM 思考中");
-        const result = await consumeGenerator(talkMode(input, bridge, session.agent, h), tuiEventBus, abort);
-        statusBar.stop();
-        if (result) {
-          chatLog.startAssistant("talk-" + Date.now());
-          chatLog.updateAssistant("talk-" + Date.now(), result.slice(0, 80));
-          chatLog.finalizeAssistant("talk-" + Date.now());
-          h.push({ role: "user", content: input }, { role: "assistant", content: result });
-        }
+        console.log(`[TUI] ✅ 产出文件已落盘: ${outputPath}`);
       }
-      break;
-    }
-    case "plan": {
-      // plan模式：暂停readline→task-tree直出→事件驱动渲染
-      rl.pause();
-      statusBar.start("LLM 思考中");
-      const result = await consumeGenerator(planMode(input, bridge, a, ps, h), tuiEventBus, abort);
-      statusBar.stop();
-      // 先输出结果，再恢复 prompt——否则 prompt 跑在内容前面
-      if (result) {
-        session.planState = ps; savePlanState(projectRoot, ps);
-        const summary = result.trim();
-        if (summary) {
-          writeln(summary);
-        }
-      }
-      rl.resume();
-      rl.prompt();
-      // 任务节点通过 ToolCard/task-tree 实时展示——不额外输出
-      // TUI 落盘自检
-      for (const node of ps.nodes) {
-        const outputPath = (node as any)._outputPath;
-        if (outputPath) {
-          if (!existsSync(outputPath)) {
-            console.warn(`[TUI] 预期产出文件不存在: ${outputPath}`);
-          } else {
-            console.log(`[TUI] ✅ 产出文件已落盘: ${outputPath}`);
-          }
-        }
-      }
-      break;
-    }
-    case "party": {
-      const result = await consumeGenerator(partyMode(input, bridge, session.partyRoster, h), tuiEventBus, abort);
-      if (result) { h.push({ role: "user", content: input }, { role: "assistant", content: result }); }
-      break;
     }
   }
 }
 
-function buildPrompt(mode: ReplMode, agent: AgentType, talkTrio?: boolean): string {
-  const modeIcons: Record<ReplMode, string> = {
-    command: "⌨",
-    chat: "💬",
-    talk: talkTrio ? "👥" : "🗣",
-    plan: "📋",
-    party: "👥",
-  };
-  const label = mode === "talk" && talkTrio ? "昔涟+纳西妲" : agent;
-  return `${modeIcons[mode]} ${label} > `;
+/** Command 模式——直接命令分发 */
+async function _dispatchCommand(
+  input: string,
+  registry: CommandRegistry,
+  ctx: CommandContext,
+): Promise<void> {
+  writeln(await commandMode((args: string[]) => registry.dispatch(args, ctx), input.split(/\s+/)));
+}
+
+function buildPrompt(_agent: AgentType): string {
+  return "\u25B6 ";
 }
 
 async function handleInternalCommand(input: string, ctx: TuiCmdCtx): Promise<boolean> {
@@ -385,18 +520,28 @@ async function handleInternalCommand(input: string, ctx: TuiCmdCtx): Promise<boo
   const cmd = args[0];
 
   switch (cmd) {
+    case "think": {
+      if (!_lastReasoning) { writeln("\u2717 \u6CA1\u6709\u4E0A\u6B21\u601D\u8003\u94FE\u8BB0\u5F55"); return true; }
+      writeln(`\u250C\u2500 \uD83E\uDDE0 \u601D\u8003\u94FE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`);
+      process.stdout.write("\x1b[90m" + _lastReasoning + "\x1b[0m\n");
+      writeln("\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500");
+      return true;
+    }
     case "exit": case "quit": {
-      writeln("👋 再见！");
+      writeln("\uD83D\uDC4B \u518D\u89C1\uFF01");
       // Hook: onSessionSave
       const snap = {
-        mode: ctx.session.mode,
         agent: ctx.session.agent,
         history: ctx.session.history,
         talkTrio: ctx.session.talkTrio,
-        partyRoster: ctx.session.partyRoster,
+        groups: [...ctx.session.groups.entries()].map(([id, g]) => ({
+          id, agents: g.agents.map(a => a.toString()),
+          status: g.status as "active" | "dissolved",
+          summary: g.summary,
+        })),
       };
       ctx.hooks.onSessionSave?.(snap);
-      saveSession(ctx.projectRoot, ctx.session);
+      saveSession(ctx.projectRoot, snap);
       clearPlanState(ctx.projectRoot);
       // Hook: onSessionEnd
       await ctx.hooks.onSessionEnd?.();
@@ -406,166 +551,75 @@ async function handleInternalCommand(input: string, ctx: TuiCmdCtx): Promise<boo
 
     case "help":
       writeln("");
-      writeln(`  ${bold("Cortex TUI 内部命令")}`);
-      writeln(`  ${dim("─────────────────────────")}`);
-      writeln(`  .mode chat|talk|plan|party|command   切换模式`);
-      writeln(`  .agent code|review|analysis|...      切换角色`);
-      writeln(`  .with/.without                        三人模式 开/关（talk 下启用/关闭 昔涟+纳西妲）`);
-      writeln(`  .roster list|add|remove|reset        管理群聊成员`);
-      writeln(`  .save                                手动保存会话`);
+      writeln(`  ${bold("Cortex TUI \u5185\u90E8\u547D\u4EE4")}`);
+      writeln(`  ${dim("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")}`);
+      writeln(`  .agent code|review|analysis|...      \u5207\u6362\u89D2\u8272`);
+      writeln(`  @\u540D\u5B57                            \u7FA4\u804A @\u63D0\u53CA`);
+      writeln(`  .with/.without                        \u4E09\u4EBA\u6A21\u5F0F \u5F00/\u5173`);
+      writeln(`  .roster list|add|remove|reset         \u7BA1\u7406\u7FA4\u804A\u6210\u5458`);
+      writeln(`  .save                                \u624B\u52A8\u4FDD\u5B58\u4F1A\u8BDD`);
       writeln(`  .help                                显示帮助`);
+      writeln(`  .think                               查看上次思考链`);
       writeln(`  .exit                                退出`);
       writeln("");
-      return true;
-
-    case "mode":
-      if (args[1]) {
-        const newMode = args[1] as ReplMode;
-        if (["chat", "talk", "plan", "party", "command"].includes(newMode)) {
-          const prevMode = ctx.session.mode;
-          ctx.setMode(newMode);
-          ctx.session.history = []; // 切模式清历史
-          // Hook: onModeChange
-          ctx.hooks.onModeChange?.(prevMode, newMode);
-          if (newMode === "party") {
-            ctx.session.partyRoster = [...DEFAULT_PARTY];
-            renderMultiPersonaHeader(ctx.session.partyRoster, "party");
-            const names = ctx.session.partyRoster.map(a => AGENT_CHINESE_ROLE[a] ?? a).join(" + ");
-            writeln(`✓ 已切换到 ${newMode} 模式（${names}）`);
-            writeln(`  ${dim(".roster add/remove 管理成员 | @名字 点名发言")}`);
-          } else {
-            writeln(`✓ 已切换到 ${newMode} 模式`);
-          }
-          ctx.rl.setPrompt(buildPrompt(newMode, ctx.session.agent, ctx.session.talkTrio));
-        } else { writeln(`✗ 未知模式: ${args[1]}`); }
-      }
       return true;
 
     case "agent":
       if (args[1]) {
         const resolved = _resolveAgentName(args[1]);
-        if (!resolved) { writeln(`✗ 未知角色: ${args[1]}`); return true; }
-
-        if (ctx.session.mode === "party") {
-          // party 模式：添加进 roster
-          if (!ctx.session.partyRoster.includes(resolved)) {
-            ctx.session.partyRoster.push(resolved);
-            writeln(`✓ ${AGENT_CHINESE_ROLE[resolved] ?? resolved} 已加入群聊`);
-          } else {
-            // 已在 roster → 设为主发言人（放到第一位）
-            ctx.session.partyRoster = [resolved, ...ctx.session.partyRoster.filter(a => a !== resolved)];
-            writeln(`✓ ${AGENT_CHINESE_ROLE[resolved] ?? resolved} 已是群聊成员`);
-          }
-        } else {
-          const prevAgent = ctx.session.agent;
-          ctx.session.agent = resolved;
-          ctx.rl.setPrompt(buildPrompt(ctx.session.mode, resolved, ctx.session.talkTrio));
-          writeln(`✓ 已切换到 ${resolved}`);
-          renderAgentTransition(prevAgent, resolved);
-          // 切换 agent 时清空历史——防止旧 persona 对话残留污染新角色上下文
-          ctx.session.history = [];
-          // Hook: onAgentSwitch
-          ctx.hooks.onAgentSwitch?.(prevAgent, resolved);
-        }
+        if (!resolved) { writeln(`\u2717 \u672A\u77E5\u89D2\u8272: ${args[1]}`); return true; }
+        const prevAgent = ctx.session.agent;
+        ctx.session.agent = resolved;
+        ctx.rl.setPrompt("\u25B6 ");
+        writeln(`\u2713 \u5DF2\u5207\u6362\u5230 ${resolved}`);
+        personaHeader.update(resolved, "chat" as any);
+        renderAgentTransition(prevAgent, resolved);
+        // \u5207\u6362 agent \u65F6\u6E05\u7A7A\u5386\u53F2
+        ctx.session.history = [];
+        // Hook: onAgentSwitch
+        ctx.hooks.onAgentSwitch?.(prevAgent, resolved);
       }
       return true;
 
     case "roster":
-      if (ctx.session.mode !== "party") {
-        writeln("✗ .roster 仅在 party 模式下可用（先 .mode party）");
-        return true;
-      }
       return _handleRosterCommand(args.slice(1), ctx);
 
     case "with": case "without":
-      if (ctx.session.mode === "talk") {
-        // .with = 启用三人模式 | .without = 关闭三人模式
-        const targetedState = cmd === "without" ? false : !ctx.session.talkTrio;
-        ctx.session.talkTrio = targetedState;
-        ctx.session.history = [];
-        // Hook: onTalkTrioToggle
-        ctx.hooks.onTalkTrioToggle?.(ctx.session.talkTrio);
-        if (ctx.session.talkTrio) {
-          renderMultiPersonaHeader([AgentType.Butler, AgentType.Analysis], "talk-trio");
-          writeln("👥 三人模式：昔涟 + 纳西妲");
-          writeln("   （再输 .with 切回单昔涟）");
-        } else {
-          writeln("🗣 已切回单昔涟模式");
-        }
-        ctx.rl.setPrompt(buildPrompt(ctx.session.mode, ctx.session.agent, ctx.session.talkTrio));
+      // .with = \u542F\u7528\u4E09\u4EBA\u6A21\u5F0F | .without = \u5173\u95ED\u4E09\u4EBA\u6A21\u5F0F
+      const targetedState = cmd === "without" ? false : !ctx.session.talkTrio;
+      ctx.session.talkTrio = targetedState;
+      ctx.session.history = [];
+      ctx.hooks.onTalkTrioToggle?.(ctx.session.talkTrio);
+      if (ctx.session.talkTrio) {
+        writeln("\uD83D\uDC65 \u4E09\u4EBA\u6A21\u5F0F\uFF1A\u6614\u6D9F + \u7EB3\u897F\u5B1B");
+        writeln("   (\u518D\u8F93 .with \u5207\u56DE\u5355\u6614\u6D9F)");
       } else {
-        writeln("✗ .with 仅在 talk 模式下可用（先 .mode talk）");
+        writeln("\uD83D\uDDE3 \u5DF2\u5207\u56DE\u5355\u6614\u6D9F\u6A21\u5F0F");
       }
       return true;
 
     case "save": {
       // Hook: onSessionSave
       const saveSnap = {
-        mode: ctx.session.mode,
         agent: ctx.session.agent,
         history: ctx.session.history,
         talkTrio: ctx.session.talkTrio,
-        partyRoster: ctx.session.partyRoster,
+        groups: [...ctx.session.groups.entries()].map(([id, g]) => ({
+          id, agents: g.agents.map(a => a.toString()),
+          status: g.status as "active" | "dissolved",
+          summary: g.summary,
+        })),
       };
       ctx.hooks.onSessionSave?.(saveSnap);
-      saveSession(ctx.projectRoot, ctx.session);
-      writeln(`💾 会话已保存（模式: ${ctx.session.mode}, 历史: ${ctx.session.history.length} 条）`);
-      return true;
-    }
-
-    case "review": {
-      if (!ctx.session.planState || ctx.session.planState.nodes.length === 0) {
-        writeln("✗ 没有待审议的计划（请先在 plan 模式下输入意图）");
-        return true;
-      }
-      if (ctx.session.planState.reviewStatus === "reviewed") {
-        writeln("⚠️ 计划已通过审议，输入 .approve 执行");
-        return true;
-      }
-      writeln(`🏛 启动三省审议（${ctx.session.planState.nodes.length} 个节点）...`);
-      writeln(`  凝光(合规审计) → 钟离(契约监督) → 霜凝(方向监理)`);
-      // 标记为已审议——实际三省审议需要凝光/钟离/霜凝 Agent 在线，当前阶段标记通过
-      ctx.session.planState.reviewStatus = "reviewed";
-      writeln("✅ 三省审议通过（当前阶段默认放行，完整审议待凝光/钟离/霜凝激活）");
-      writeln("  输入 .approve 执行计划");
-      return true;
-    }
-
-    case "approve": {
-      if (!ctx.session.planState || ctx.session.planState.nodes.length === 0) {
-        writeln("✗ 没有待执行的计划（请先在 plan 模式下输入意图）");
-        return true;
-      }
-      if (!ctx.session.planState.approved) {
-        ctx.session.planState.approved = true;
-        if (ctx.session.planState.reviewStatus !== "reviewed") {
-          writeln("⚠️ 计划未经审议，直接执行（建议先 .review）");
-        }
-        writeln(`🚀 执行计划：${ctx.session.planState.nodes.length} 个节点`);
-        // 暂停 readline——执行阶段 ConfirmGate 需要独占 stdin
-        ctx.rl.pause();
-        const result = await consumeGenerator(
-          planMode("execute", ctx.bridge, ctx.session.agent, ctx.session.planState, ctx.session.history),
-          tuiEventBus,
-          () => false,
-        );
-        ctx.rl.resume();
-        ctx.rl.prompt();
-        if (result) {
-          savePlanState(ctx.projectRoot, ctx.session.planState);
-          writeln(result);
-        }
-        // 执行完成清理
-        clearPlanState(ctx.projectRoot);
-        ctx.session.planState = { nodes: [], intent: "", approved: false, reviewStatus: "pending" };
-      } else {
-        writeln("⚠️ 计划已批准，正在执行中...");
-      }
+      saveSession(ctx.projectRoot, saveSnap);
+      writeln(`\uD83D\uDCBE \u4F1A\u8BDD\u5DF2\u4FDD\u5B58\uFF08\u5386\u53F2: ${ctx.session.history.length} \u6761\uFF09`);
       return true;
     }
 
     default:
-      writeln(`✗ 未知命令: .${cmd}（.help 查看帮助）`);
+      // \u7A7A\u547D\u4EE4(. \u6216 \u3002)\u9759\u9ED8\u5FFD\u7565
+      if (!cmd) return true;
+      writeln(`\u2717 \u672A\u77E5\u547D\u4EE4: .${cmd}\uFF08.help \u67E5\u770B\u5E2E\u52A9\uFF09`);
       return true;
   }
 }
@@ -597,50 +651,50 @@ function _resolveAgentName(raw: string): AgentType | null {
   return ID_TO_TYPE[raw] ?? null;
 }
 
-/** .roster 子命令处理 */
+/** .roster 子命令处理——管理群聊成员名单 */
 function _handleRosterCommand(args: string[], ctx: TuiCmdCtx): boolean {
   const sub = args[0];
   switch (sub) {
     case "list": {
-      const names = ctx.session.partyRoster.map(a => AGENT_CHINESE_ROLE[a] ?? a);
-      writeln(`👥 群聊成员：${names.join(", ")}`);
+      const names = ctx.session.roster.map(a => AGENT_CHINESE_ROLE[a] ?? a);
+      writeln(`\uD83D\uDC65 \u7FA4\u804A\u6210\u5458\uFF1A${names.join(", ")}`);
       return true;
     }
     case "add": {
-      if (!args[1]) { writeln("✗ .roster add <角色名>"); return true; }
+      if (!args[1]) { writeln("\u2717 .roster add <\u89D2\u8272\u540D>"); return true; }
       const resolved = _resolveAgentName(args[1]);
-      if (!resolved) { writeln(`✗ 未知角色: ${args[1]}`); return true; }
-      if (ctx.session.partyRoster.includes(resolved)) {
-        writeln(`✗ ${AGENT_CHINESE_ROLE[resolved] ?? resolved} 已在群聊中`);
+      if (!resolved) { writeln(`\u2717 \u672A\u77E5\u89D2\u8272: ${args[1]}`); return true; }
+      if ((ctx.session.roster as AgentType[]).includes(resolved)) {
+        writeln(`\u2717 ${AGENT_CHINESE_ROLE[resolved] ?? resolved} \u5DF2\u5728\u7FA4\u804A\u4E2D`);
       } else {
-        ctx.session.partyRoster.push(resolved);
-        writeln(`✓ ${AGENT_CHINESE_ROLE[resolved] ?? resolved} 已加入群聊`);
+        ctx.session.roster.push(resolved);
+        writeln(`\u2713 ${AGENT_CHINESE_ROLE[resolved] ?? resolved} \u5DF2\u52A0\u5165\u7FA4\u804A`);
       }
       return true;
     }
     case "remove": case "rm": {
-      if (!args[1]) { writeln("✗ .roster remove <角色名>"); return true; }
+      if (!args[1]) { writeln("\u2717 .roster remove <\u89D2\u8272\u540D>"); return true; }
       const resolved = _resolveAgentName(args[1]);
-      if (!resolved) { writeln(`✗ 未知角色: ${args[1]}`); return true; }
-      const idx = ctx.session.partyRoster.indexOf(resolved);
+      if (!resolved) { writeln(`\u2717 \u672A\u77E5\u89D2\u8272: ${args[1]}`); return true; }
+      const idx = ctx.session.roster.indexOf(resolved);
       if (idx < 0) {
-        writeln(`✗ ${AGENT_CHINESE_ROLE[resolved] ?? resolved} 不在群聊中`);
-      } else if (ctx.session.partyRoster.length <= 1) {
-        writeln("✗ 至少保留一位成员");
+        writeln(`\u2717 ${AGENT_CHINESE_ROLE[resolved] ?? resolved} \u4E0D\u5728\u7FA4\u804A\u4E2D`);
+      } else if (ctx.session.roster.length <= 1) {
+        writeln("\u2717 \u81F3\u5C11\u4FDD\u7559\u4E00\u4F4D\u6210\u5458");
       } else {
-        ctx.session.partyRoster.splice(idx, 1);
-        writeln(`✓ ${AGENT_CHINESE_ROLE[resolved] ?? resolved} 已移出群聊`);
+        ctx.session.roster.splice(idx, 1);
+        writeln(`\u2713 ${AGENT_CHINESE_ROLE[resolved] ?? resolved} \u5DF2\u79FB\u51FA\u7FA4\u804A`);
       }
       return true;
     }
     case "reset": {
-      ctx.session.partyRoster = [...DEFAULT_PARTY];
-      const names = ctx.session.partyRoster.map(a => AGENT_CHINESE_ROLE[a] ?? a).join(" + ");
-      writeln(`✓ 已重置为默认：${names}`);
+      ctx.session.roster = [AgentType.Butler, AgentType.Analysis];
+      const names = ctx.session.roster.map(a => AGENT_CHINESE_ROLE[a] ?? a).join(" + ");
+      writeln(`\u2713 \u5DF2\u91CD\u7F6E\u4E3A\u9ED8\u8BA4\uFF1A${names}`);
       return true;
     }
     default:
-      writeln("✗ .roster list|add <名>|remove <名>|reset");
+      writeln("\u2717 .roster list|add <\u540D>|remove <\u540D>|reset");
       return true;
   }
 }

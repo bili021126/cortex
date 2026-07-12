@@ -366,8 +366,7 @@ export class MetaAgent {
       const t0 = Date.now();
       const nodes = await this._generatePlan(intent, context);
       // ── 遥测：MetaAgent 规划耗时 ──
-      // eslint-disable-next-line no-console
-      console.log(`[telemetry] meta.plan_time_ms value=${Date.now() - t0} nodesCount=${nodes.length}`);
+      console.error(`[telemetry] meta.plan_time_ms value=${Date.now() - t0} nodesCount=${nodes.length}`);
 
       // ── 仿真层因果推演 ──
       // 对已规划的节点做轻量风险评估，若建议重规划则触发遥测
@@ -378,8 +377,7 @@ export class MetaAgent {
           constraints: [],
         });
         if (simResult.suggestedReplan || simResult.riskLevel === "high") {
-          // eslint-disable-next-line no-console
-          console.log(`[telemetry] meta.replan_from_simulation risk=${simResult.riskLevel}`);
+          console.error(`[telemetry] meta.replan_from_simulation risk=${simResult.riskLevel}`);
           // 重规划：重新生成计划
           const replanResult = await this._generatePlan(intent, context);
           if (replanResult.length > 0) {
@@ -632,7 +630,7 @@ export class MetaAgent {
     if ((item.type === "code" || item.type === "implementation") && item.task) {
       const pathMatch = item.task.match(/["']?([\w./_-]+\.\w+)["']?/);
       if (pathMatch) {
-        (self as any)._outputPath = pathMatch[1];
+        self._outputPath = pathMatch[1];
       }
     }
 

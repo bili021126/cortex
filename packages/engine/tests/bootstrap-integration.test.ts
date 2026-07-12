@@ -1,4 +1,7 @@
 // @ci: unit
+// 已评估：保留 skip。bootstrapEngine 跨字段校验失败——
+// yanfei produces trust_assessed/decision_made 但 routeTable 中无对应路由。
+// 需 governance routeTable 配置补齐后激活。
 /**
  * bootstrap-integration.test.ts — Core-2 引擎集成验证
  *

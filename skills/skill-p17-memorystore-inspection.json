@@ -1,0 +1,88 @@
+{
+  "id": "skill-p17-memorystore-inspection",
+  "name": "MemoryStore 全域水镜：实现与调用追踪",
+  "tags": ["memory-store", "imemory-store", "type-safety", "compilation", "runtime", "cross-package"],
+  "trigger": "需要审计 MemoryStore 实现完整性或排查跨包类型崩溃时",
+  "steps": [
+    {
+      "order": 1,
+      "action": "用 glob_find **/*memory* 定位所有相关文件：packages/memory-store/ 和 packages/memory/ 为核心域",
+      "rationale": "两个包存在功能重叠，必须同时追踪"
+    },
+    {
+      "order": 2,
+      "action": "读取 packages/shared/src/memory.ts——权威 IMemoryStore 接口定义",
+      "rationale": "所有实现必须单源对齐此接口"
+    },
+    {
+      "order": 3,
+      "action": "读取 packages/memory-store/src/memory-store.ts——MemoryStore 适配器类，验证其完整实现 IMemoryStore 所有方法",
+      "rationale": "缺失任一方法→编译期断裂"
+    },
+    {
+      "order": 4,
+      "action": "读取 packages/memory/src/interfaces/TransactionalMemoryStore.ts——验证 backend 接口完整性",
+      "rationale": "MemoryStore 委托所有存储操作至此接口，任何新增方法未在此接口声明→编译错误"
+    },
+    {
+      "order": 5,
+      "action": "用 grep_files 搜索 `as MemoryStore` 和 `as unknown as`——定位所有跨包类型强制转换",
+      "rationale": "关键文件：pipeline.ts(5处), init-memory.ts(1处), memory-store.plugin.ts(1处), skill-pipeline.ts(1处)"
+    },
+    {
+      "order": 6,
+      "action": "检查 memory-store/package.json 中 @xenova/transformers 的依赖位置——应在 dependencies 而非 devDependencies",
+      "rationale": "运行时动态 import 的包在 devDependencies 中→生产环境 embedding 崩溃"
+    }
+  ],
+  "known_issues": [
+    {
+      "severity": "high",
+      "category": "runtime-dependency",
+      "file": "packages/memory-store/package.json",
+      "detail": "@xenova/transformers ^2.17.2 在 devDependencies 中，但 embedding.ts 在运行时动态 import它。生产环境 pnpm install --prod 不会安装此包→embedText/embedBatch 调用失败。",
+      "fix": "移至 dependencies"
+    },
+    {
+      "severity": "medium",
+      "category": "type-safety",
+      "files": [
+        "packages/engine/src/memory/pipeline.ts:92,119,165,184",
+        "packages/engine/src/bootstrap/init-memory.ts:47",
+        "packages/engine/src/plugin/memory-store.plugin.ts:23",
+        "packages/engine/src/memory/skill-pipeline.ts:149"
+      ],
+      "detail": "8 处 `as MemoryStore` 或 `as unknown as MemoryStore` 类型绕过。运行时正确（仅 MemoryStore 实现被使用），但编译期类型安全被破坏——若未来引入第二个 IMemoryStore 实现则静默崩溃。",
+      "fix": "将 PipelineCtx 的 memory 字段类型从 IMemoryStore 改为具体 MemoryStore，或引入 MemoryStoreAware 接口"
+    },
+    {
+      "severity": "medium",
+      "category": "type-safety",
+      "files": [
+        "packages/memory-store/src/ingest-pipeline.ts:66",
+        "packages/memory-store/tests/e2e.test.ts:52,64"
+      ],
+      "detail": "`\"code\" as any` 和 `\"Code\" as any` 绕过 AgentType 枚举类型。违反 §10.3-bis as any 禁令。",
+      "fix": "用正确的 AgentType 枚举值替代 as any"
+    },
+    {
+      "severity": "low",
+      "category": "interface-inheritance",
+      "files": [
+        "packages/memory/src/interfaces/MemoryStore.ts"
+      ],
+      "detail": "memory 包的 IMemoryStore extends SharedIMemoryStore 并添加 get(id) 方法。但 AbstractMemoryStore 同时 implements 此 IMemoryStore 和 TransactionalMemoryStore——存在菱形继承风险。当前编译通过但需监控 shared 接口变更时的影响。",
+      "fix": "考虑移除 memory 包的自定义 IMemoryStore，仅使用 shared 的 IMemoryStore"
+    },
+    {
+      "severity": "low",
+      "category": "code-quality",
+      "files": [
+        "packages/memory/src/implementations/FileBasedMemoryStore.ts:74-78,84-86"
+      ],
+      "detail": "空 catch 块（load 方法中文件损坏/不存在的静默降级）。有注释说明意图但违反 §一 异常处理死线。",
+      "fix": "添加至少 process.stderr.write 或 observer emit"
+    }
+  ],
+  "verdict": "MemoryStore 实现当前无阻断性编译错误或运行时崩溃。8 处 `as MemoryStore` 类型绕过和 1 处运行时依赖错位（@xenova/transformers 在 devDependencies）是需要优先修复的中等风险项，但不会导致当前系统崩溃。"
+}

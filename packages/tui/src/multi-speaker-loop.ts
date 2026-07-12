@@ -145,7 +145,7 @@ export async function* multiSpeakerLoop(
           while (chunkQueue.length > 0) {
             const ev = chunkQueue.shift();
             if (!ev) break;
-            if (ev.type === "llm_chunk" && !(ev as unknown as Record<string, unknown>).content) continue;
+            if (ev.type === "llm_chunk" && !ev.content) continue;
             yield ev;
           }
           if (streamDone) break;
@@ -154,7 +154,7 @@ export async function* multiSpeakerLoop(
         while (chunkQueue.length > 0) {
           const ev = chunkQueue.shift();
           if (!ev) break;
-          if (ev.type === "llm_chunk" && !(ev as unknown as Record<string, unknown>).content) continue;
+          if (ev.type === "llm_chunk" && !ev.content) continue;
           yield ev;
         }
         if (streamError) {

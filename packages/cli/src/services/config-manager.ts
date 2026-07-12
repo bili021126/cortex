@@ -174,6 +174,7 @@ export class ConfigManager {
       const content = fs.readFileSync(filePath, "utf-8");
       const parsed = JSON.parse(content) as Partial<CliConfig>;
        
+      // Core-3: 泛型擦除——待接口泛型化
       deepMerge(config as unknown as Record<string, unknown>, parsed as Record<string, unknown>);
     } catch {
       // 文件不存在或格式错误 — 静默忽略

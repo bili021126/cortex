@@ -92,6 +92,10 @@ export {
   densityToStrategy,
 } from "./core/density-compress.js";
 
+// ── 补偿策略 ────────────────────────────────────────────────────
+export { computeCompensation, isTerminalAction } from "./core/compensation.js";
+export type { CompensationAction, CompensationEvent } from "./core/compensation.js";
+
 // ── 确认门 & 信任模型 ───────────────────────────────────────────
 export { ConfirmGate } from "./core/confirm-gate.js";
 export { TrustModel } from "./core/trust-model.js";

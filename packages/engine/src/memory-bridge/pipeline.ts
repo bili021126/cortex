@@ -407,8 +407,8 @@ async function _rememberResult(
          
         console.warn(`[memory] FSM guard 拒绝 commit: memId=${memId} from=${sm.current}`);
         // 清理半成品 Pending 条目
-        try { if (memId !== undefined) memory.cancel(memId); } catch { /* cleanup */ }
-        try { if (ctxMemId !== undefined) memory.cancel(ctxMemId); } catch { /* cleanup */ }
+        try { if (memId !== undefined) memory.cancel(memId); } catch { console.error(`[memory] cancel.memId_failed`); }
+        try { if (ctxMemId !== undefined) memory.cancel(ctxMemId); } catch { console.error(`[memory] cancel.ctxMemId_failed`); }
         return;
       }
     }

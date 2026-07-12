@@ -41,20 +41,20 @@ export function displayClarification(cl: IntentClarification): void {
     analysis: "分析", modification: "修改", audit: "审计",
     refactor: "重构", generation: "生成", inquiry: "询问",
   };
-  console.log(`\n┌─ 意图确认 ─────────────────────────────`);
+  console.error(`\n┌─ 意图确认 ─────────────────────────────`);
 /* eslint-disable-next-line no-console */
-  console.log(`│ 🎯 目标: ${cl.goal}`);
+  console.error(`│ 🎯 目标: ${cl.goal}`);
 /* eslint-disable-next-line no-console */
-  console.log(`│ ${actionIcon[cl.actionType] ?? "❓"} 类型: ${actionLabel[cl.actionType] ?? cl.actionType}`);
+  console.error(`│ ${actionIcon[cl.actionType] ?? "❓"} 类型: ${actionLabel[cl.actionType] ?? cl.actionType}`);
 /* eslint-disable-next-line no-console */
-  console.log(`│ 📂 范围: ${cl.scope}`);
+  console.error(`│ 📂 范围: ${cl.scope}`);
 /* eslint-disable-next-line no-console */
-  console.log(`│ ⚠️ 约束: ${cl.constraints}`);
+  console.error(`│ ⚠️ 约束: ${cl.constraints}`);
   if (cl.unclear) {
-    console.log(`│ ❓ 不明确: ${cl.unclear}`);
+    console.error(`│ ❓ 不明确: ${cl.unclear}`);
   }
 /* eslint-disable-next-line no-console */
-  console.log(`└─────────────────────────────────────────`);
+  console.error(`└─────────────────────────────────────────`);
 }
 
 /**
@@ -89,7 +89,7 @@ export async function clarifyAndConfirm(
       return currentIntent;
     }
     if (response === ".reject") {
-      console.log("🛑 已取消。");
+      console.error("🛑 已取消。");
       return null;
     }
 
@@ -99,18 +99,18 @@ export async function clarifyAndConfirm(
       if (confirmed === "") return currentIntent;
       // 确认 + 补充上下文：拼接原意图和补充信息
       currentIntent = `${currentIntent}\n补充说明：${confirmed}`;
-      console.log(`📝 已确认并记录补充说明。`);
+      console.error(`📝 已确认并记录补充说明。`);
       return currentIntent;
     }
 
     // 用户输入了修正——用修正后的意图重新确认
     currentIntent = response;
-    console.log(`📝 已修正意图，重新确认…`);
+    console.error(`📝 已修正意图，重新确认…`);
   }
 
   // 三次确认仍未通过，最后一次机会
 /* eslint-disable-next-line no-console */
-  console.log("⚠️ 多次修正未确认，直接使用最后意图进入规划。");
+  console.error("⚠️ 多次修正未确认，直接使用最后意图进入规划。");
   return currentIntent;
 }
 

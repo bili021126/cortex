@@ -137,6 +137,8 @@ export function installConsoleBridge(observer: IPipelineObserver): void {
     }
     _inErrorHandler = true;
     try {
+      // TUI 模式下抑制整个事件发射——避免 [telemetry] 泄漏
+      if (_tuiQuiet) return;
       const msg = _flattenArgs(args);
       const errType = args.find(a => a instanceof Error)?.constructor?.name ?? "Unknown";
       console.log(`[telemetry] error.type_distribution type=${errType} msg=${msg.slice(0,100)}`);

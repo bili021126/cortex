@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@cortex/testing": "workspace:*",
+    "@cortex/tools": "workspace:*",
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^2.1.9",

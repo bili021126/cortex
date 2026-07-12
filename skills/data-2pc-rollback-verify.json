@@ -1,0 +1,51 @@
+{
+  "id": "skill-data-2pc-rollback-verify",
+  "tags": ["data", "two-phase-commit", "rollback", "verification", "memory-store"],
+  "trigger": "对 MemoryStore 的两阶段提交、事务回滚、状态转换进行全链路审计",
+  "steps": [
+    {
+      "action": "read_file",
+      "target": "packages/memory-store/src/memory-store.ts",
+      "focus": "writePending / commitMemory / rollback / cas / maintain 方法",
+      "verify": "确认适配器层正确委托给后端 @cortex/memory 的 AbstractMemoryStore"
+    },
+    {
+      "action": "read_file",
+      "target": "packages/memory/src/implementations/AbstractMemoryStore.ts",
+      "focus": "writePending → _pendingEntries Map / commitMemory 转换 / rollback 重载",
+      "verify": "确认两阶段提交的 Storage Phase 实现：pending_ 前缀、清理逻辑、事务补偿回滚"
+    },
+    {
+      "action": "read_file",
+      "target": "packages/memory/src/interfaces/TransactionalMemoryStore.ts",
+      "focus": "TransactionContext / TransactionStatus 类型定义",
+      "verify": "确认 discriminated union 类型窄化：active/committed/rolledback/error"
+    },
+    {
+      "action": "read_file",
+      "target": "packages/memory-store/src/memory-state-machine.ts",
+      "focus": "FSM 定义中的 6 条转换规则 / guard / action",
+      "verify": "确认 MEMORY_VALID_TRANSITIONS 静态白名单 + FSM guard 运行时评估双重保护"
+    },
+    {
+      "action": "read_file",
+      "target": "packages/memory-store/src/weight-ager.ts",
+      "focus": "freezeStale / obliterateFrozen 的筛选条件",
+      "verify": "确认维护扫描的身份识别逻辑与 maintain() 中的 Phase 1/2 一致"
+    },
+    {
+      "action": "read_file",
+      "target": "packages/memory/tests/InMemoryMemoryStore.test.ts",
+      "focus": "two-phase commit / transactions / lifecycle / error handling 用例",
+      "verify": "确认 writePending→commitMemory, writePending→rollback, begin→commit→rollback 全部有测试覆盖"
+    },
+    {
+      "action": "read_file",
+      "target": "packages/memory-store/tests/read-write-consistency.test.ts",
+      "focus": "5 个 describe 块的状态转换字段完整性",
+      "verify": "确认写入→读取、归档后字段不变、回滚后条目湮灭均已验证"
+    }
+  ],
+  "output": "data-verification-report.md",
+  "risk_note": "rollback() 返回类型为 async Promise<boolean>，适配器层正确 await 后端。未发现 as unknown as 类型擦除。"
+}

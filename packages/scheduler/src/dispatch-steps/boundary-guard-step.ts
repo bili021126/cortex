@@ -119,10 +119,10 @@ async function walkDir(dirPath: string): Promise<Array<[string, number]>> {
         try {
           const fileStat = await stat(fullPath);
           results.push([fullPath, fileStat.mtimeMs]);
-        } catch { /* skip */ }
+        } catch { console.error(`[scheduler] boundary.stat_failed path=${fullPath}`); }
       }
     }
-  } catch { /* skip */ }
+  } catch { console.error(`[scheduler] boundary.readdir_failed`); }
   return results;
 }
 
@@ -266,6 +266,7 @@ export class BoundaryGuardStep implements IDispatchStep {
         }
       }
     } catch {
+      console.error(`[scheduler] boundary.file_scan_failed`);
       // 文件扫描失败不阻塞管线
     }
 

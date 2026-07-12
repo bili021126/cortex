@@ -195,7 +195,7 @@ export class LlmAdapter {
     model: string,
     messages: LlmMessage[],
     tools?: ToolDef[],
-    reasoningEffort?: "high" | "max",
+    reasoningEffort?: "high" | "max" | null,
     toolChoice?: "auto" | "required" | "none" | string,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
@@ -226,10 +226,10 @@ export class LlmAdapter {
       max_tokens: 32768,
     };
 
-    const effort = reasoningEffort ?? this.config.reasoningEffort;
-    // reasoning_effort 仅 deepseek-v4-pro / reasoner 模型支持；Flash 模型不兼容
-    if (effort && (model.includes("pro") || model.includes("reasoner"))) {
-      body.reasoning_effort = effort;
+    // 全部模式启用 thinking——chat攒着不展示, plan直出
+    if (model.includes("pro") || model.includes("reasoner")) {
+      body.reasoning_effort = reasoningEffort ?? "high";
+      body.thinking = { type: "enabled" };
     }
 
     if (tools && tools.length > 0) {
@@ -430,7 +430,7 @@ export class LlmAdapter {
     messages: LlmMessage[],
     tools: ToolDef[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
-    reasoningEffort?: "high" | "max",
+    reasoningEffort?: "high" | "max" | null,
     _toolChoice?: string,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
@@ -448,10 +448,10 @@ export class LlmAdapter {
       stream_options: { include_usage: true },
     };
 
-    const effort = reasoningEffort ?? this.config.reasoningEffort;
-    // reasoning_effort 仅 deepseek-v4-pro / reasoner 模型支持；Flash 模型不兼容
-    if (effort && (model.includes("pro") || model.includes("reasoner"))) {
-      body.reasoning_effort = effort;
+    // 全部模式启用 thinking——chat攒着不展示, plan直出
+    if (model.includes("pro") || model.includes("reasoner")) {
+      body.reasoning_effort = reasoningEffort ?? "high";
+      body.thinking = { type: "enabled" };
     }
 
     if (tools && tools.length > 0) {
@@ -572,7 +572,7 @@ export class LlmAdapter {
     model: string,
     messages: LlmMessage[],
     tools?: ToolDef[],
-    reasoningEffort?: "high" | "max",
+    reasoningEffort?: "high" | "max" | null,
   ): string {
     if (this._cacheMode === "fingerprint") {
       const parts = messages.map((m) => {
@@ -602,7 +602,7 @@ export class LlmAdapter {
     // Windows Node.js 下 AbortController.signal 在 TCP 层面可能不生效，
     // Promise.race 确保无论如何超时后都会抛出。
     const id = attempt === 1 ? "" : ` (重试#${attempt - 1})`;
-    console.log(`  🌐 [LLM] 请求${id}...`);
+    console.error(`  🌐 [LLM] 请求${id}...`); // TUI静默: 受 _tuiQuiet 控制
 
     const timeout = setTimeout(() => {
       console.log(`  ⏰ [LLM] 超时 ${LlmAdapter.REQUEST_TIMEOUT_MS / 1000}s——触发 abort`);
@@ -620,7 +620,7 @@ export class LlmAdapter {
           );
         }),
       ]);
-      console.log(`  🌐 [LLM] 响应——状态码 ${res.status}`);
+      console.error(`  🌐 [LLM] 响应——状态码 ${res.status}`); // TUI静默: 受 _tuiQuiet 控制
       if (!res.ok && (res.status >= 500 || res.status === 429) && attempt < LlmAdapter.MAX_RETRIES) {
         const retryAfter = res.headers.get("Retry-After");
         const serverDelay = retryAfter ? parseInt(retryAfter) * 1000 : 0;

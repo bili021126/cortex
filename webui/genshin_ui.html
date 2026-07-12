@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>原神 · 提瓦特大陆界面</title>
+<style>
+/* ============================================================
+   CSS RESET + 基础变量
+   ============================================================ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#f5d742;
+  --gold-light:#fae570;
+  --gold-dark:#c9a820;
+  --teal:#5bc0be;
+  --teal-dark:#3a8a88;
+  --deep-blue:#0b1a30;
+  --mid-blue:#132b4a;
+  --light-blue:#2a5f7a;
+  --card-bg:rgba(15,30,55,0.75);
+  --text-primary:#f0e6d3;
+  --text-secondary:#a8c4d8;
+  --text-gold:#ffd780;
+  --font-main:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --star-5:#f5d742;
+  --star-4:#b584e8;
+  --star-3:#5bc0be;
+}
+html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font-main);background:var(--deep-blue);color:var(--text-primary)}
+/* ============================================================
+   画布层
+   ============================================================ */
+#bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+#particle-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:1;pointer-events:none}
+
+/* ============================================================
+   主容器
+   ============================================================ */
+.app-wrapper{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column}
+
+/* ============================================================
+   顶部菜单栏  —— 原神风格
+   ============================================================ */
+.top-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 32px;height:62px;
+  background:linear-gradient(135deg,rgba(11,26,48,0.92) 0%,rgba(19,43,74,0.88) 100%);
+  border-bottom:1px solid rgba(90,140,180,0.25);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  flex-shrink:0;
+  position:relative;z-index:10;
+}
+.top-bar::after{
+  content:'';position:absolute;bottom:-1px;left:10%;width:80%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(245,215,66,0.3),transparent);
+}
+.top-left{display:flex;align-items:center;gap:28px}
+.brand{
+  display:flex;align-items:center;gap:10px;
+  font-size:20px;font-weight:700;letter-spacing:2px;
+  background:linear-gradient(135deg,var(--gold-light),var(--gold-dark));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.brand-icon{font-size:26px}
+.menu-nav{display:flex;gap:6px}
+.menu-item{
+  position:relative;padding:6px 18px;cursor:pointer;
+  font-size:14px;color:var(--text-secondary);border-radius:4px;
+  transition:all 0.3s;letter-spacing:1px;user-select:none;
+}
+.menu-item::before{
+  content:'';position:absolute;bottom:0;left:50%;width:0;height:2px;
+  background:var(--gold);transition:all 0.3s;transform:translateX(-50%);border-radius:2px;
+}
+.menu-item:hover{color:var(--text-primary)}
+.menu-item:hover::before{width:60%}
+.menu-item.active{color:var(--gold)}
+.menu-item.active::before{width:80%}
+
+.top-right{display:flex;align-items:center;gap:16px}
+.stats-display{display:flex;gap:20px;font-size:13px}
+.stat-item{display:flex;align-items:center;gap:6px;color:var(--text-secondary)}
+.stat-item .num{color:var(--gold);font-weight:600}
+.user-avatar{
+  width:34px;height:34px;border-radius:50%;
+  border:2px solid var(--gold-dark);
+  background:linear-gradient(135deg,var(--mid-blue),var(--deep-blue));
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;cursor:pointer;transition:border-color 0.3s;
+}
+.user-avatar:hover{border-color:var(--gold)}
+
+/* ============================================================
+   主内容区 —— 左右分栏
+   ============================================================ */
+.main-content{
+  flex:1;display:flex;overflow:hidden;padding:20px 28px 20px;
+  gap:24px;min-height:0;
+}
+
+/* ============================================================
+   左侧 —— 角色展示卡片
+   ============================================================ */
+.char-section{
+  flex:0 0 340px;display:flex;flex-direction:column;gap:14px;overflow:hidden;
+}
+.char-section-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 4px;
+}
+.char-section-header h2{
+  font-size:16px;font-weight:600;letter-spacing:2px;
+  color:var(--text-gold);
+  text-shadow:0 0 20px rgba(245,215,66,0.15);
+}
+.char-nav{display:flex;gap:4px}
+.char-nav-btn{
+  width:28px;height:28px;border-radius:50%;
+  border:1px solid rgba(90,140,180,0.3);
+  background:rgba(255,255,255,0.05);
+  color:var(--text-secondary);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;transition:all 0.3s;
+}
+.char-nav-btn:hover{background:rgba(245,215,66,0.15);border-color:var(--gold-dark);color:var(--gold)}
+
+.char-cards-wrapper{
+  flex:1;overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:rgba(90,140,180,0.3) transparent;
+  padding-right:4px;
+}
+.char-cards-wrapper::-webkit-scrollbar{width:4px}
+.char-cards-wrapper::-webkit-scrollbar-thumb{background:rgba(90,140,180,0.3);border-radius:4px}
+.char-cards-wrapper::-webkit-scrollbar-track{background:transparent}
+
+/* 角色卡片 */
+.char-card{
+  position:relative;
+  background:var(--card-bg);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid rgba(90,140,180,0.2);
+  border-radius:12px;padding:14px 16px;margin-bottom:12px;
+  cursor:pointer;transition:all 0.4s cubic-bezier(0.4,0,0.2,1);
+  overflow:hidden;
+  display:flex;align-items:center;gap:14px;
+}
+.char-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;bottom:0;
+  background:linear-gradient(135deg,transparent 60%,rgba(245,215,66,0.05));
+  pointer-events:none;
+}
+.char-card:hover{
+  transform:translateY(-3px) scale(1.01);
+  border-color:rgba(245,215,66,0.3);
+  box-shadow:0 8px 32px rgba(0,0,0,0.3),0 0 20px rgba(245,215,66,0.05);
+}
+.char-card:active{transform:translateY(-1px) scale(0.99)}
+.char-card.selected{
+  border-color:var(--gold-dark);
+  box-shadow:0 0 24px rgba(245,215,66,0.08),inset 0 0 40px rgba(245,215,66,0.02);
+}
+
+.char-avatar{
+  width:56px;height:56px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:28px;position:relative;
+  border:2px solid rgba(90,140,180,0.3);
+  background:linear-gradient(135deg,rgba(45,85,125,0.4),rgba(25,50,80,0.4));
+  transition:border-color 0.3s;
+}
+.char-card:hover .char-avatar{border-color:rgba(245,215,66,0.4)}
+.char-card[data-rarity="5"] .char-avatar{border-color:rgba(245,215,66,0.3)}
+.char-card[data-rarity="5"] .char-avatar::after{
+  content:'✦';position:absolute;top:-4px;right:-4px;font-size:12px;color:var(--gold);
+  text-shadow:0 0 8px rgba(245,215,66,0.5);
+}
+
+.char-info{flex:1;min-width:0}
+.char-name{font-size:15px;font-weight:600;color:var(--text-primary);margin-bottom:2px}
+.char-title{font-size:11px;color:var(--text-secondary);margin-bottom:4px;opacity:0.7}
+.char-tags{display:flex;gap:4px;flex-wrap:wrap}
+.char-tag{
+  font-size:10px;padding:1px 8px;border-radius:10px;
+  background:rgba(90,140,180,0.15);color:var(--text-secondary);
+}
+.char-tag.element-pyro{background:rgba(255,100,50,0.2);color:#ff8a50}
+.char-tag.element-hydro{background:rgba(50,150,255,0.2);color:#64b5f6}
+.char-tag.element-anemo{background:rgba(100,210,180,0.2);color:#5bc0be}
+.char-tag.element-geo{background:rgba(200,170,60,0.2);color:#d4a843}
+.char-tag.element-electro{background:rgba(150,80,200,0.2);color:#b080e0}
+.char-tag.element-cryo{background:rgba(100,180,220,0.2);color:#7ec8e3}
+.char-tag.element-dendro{background:rgba(100,200,100,0.2);color:#7cc87c}
+
+.char-rarity{
+  font-size:11px;letter-spacing:1px;flex-shrink:0;
+}
+.char-rarity.star-5{color:var(--star-5)}
+.char-rarity.star-4{color:var(--star-4)}
+
+/* ============================================================
+   右侧 —— 抽卡面板 + 展示区
+   ============================================================ */
+.right-panel{
+  flex:1;display:flex;flex-direction:column;gap:16px;overflow:hidden;
+}
+
+/* --- 抽卡面板 --- */
+.gacha-panel{
+  background:var(--card-bg);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid rgba(90,140,180,0.2);border-radius:14px;
+  padding:20px 24px;flex-shrink:0;
+}
+.gacha-header{
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;
+}
+.gacha-header h3{
+  font-size:15px;font-weight:600;letter-spacing:1px;
+  color:var(--text-gold);
+}
+.gacha-pity{font-size:12px;color:var(--text-secondary)}
+.gacha-pity span{color:var(--gold);font-weight:600}
+.gacha-banners{
+  display:flex;gap:14px;margin-bottom:18px;flex-wrap:wrap;
+}
+.gacha-banner{
+  flex:1;min-width:180px;padding:12px 16px;border-radius:10px;
+  cursor:pointer;transition:all 0.3s;user-select:none;
+  border:1px solid rgba(90,140,180,0.15);
+  background:linear-gradient(135deg,rgba(25,50,80,0.5),rgba(15,30,55,0.5));
+  text-align:center;
+}
+.gacha-banner:hover{transform:translateY(-2px);border-color:rgba(245,215,66,0.2)}
+.gacha-banner.active{
+  border-color:var(--gold-dark);
+  background:linear-gradient(135deg,rgba(40,60,90,0.6),rgba(25,45,70,0.6));
+  box-shadow:0 0 20px rgba(245,215,66,0.06);
+}
+.banner-name{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:2px}
+.banner-desc{font-size:11px;color:var(--text-secondary);opacity:0.7}
+.banner-rate{font-size:11px;color:var(--text-gold);margin-top:4px}
+
+.gacha-actions{
+  display:flex;gap:12px;align-items:center;justify-content:center;
+}
+.gacha-btn{
+  padding:10px 28px;border:none;border-radius:8px;
+  font-size:14px;font-weight:600;letter-spacing:1px;
+  cursor:pointer;transition:all 0.3s;position:relative;overflow:hidden;
+  font-family:var(--font-main);
+}
+.gacha-btn::after{
+  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:radial-gradient(circle,rgba(255,255,255,0.1) 0%,transparent 60%);
+  opacity:0;transition:opacity 0.4s;
+}
+.gacha-btn:hover::after{opacity:1}
+.gacha-btn:active{transform:scale(0.96)}
+.gacha-btn.wish1{
+  background:linear-gradient(135deg,var(--gold-dark),var(--gold));
+  color:var(--deep-blue);
+}
+.gacha-btn.wish1:hover{box-shadow:0 4px 20px rgba(245,215,66,0.3)}
+.gacha-btn.wish10{
+  background:linear-gradient(135deg,#8a5cc0,#b584e8);
+  color:#fff;
+}
+.gacha-btn.wish10:hover{box-shadow:0 4px 20px rgba(150,80,200,0.3)}
+.gacha-btn:disabled{
+  opacity:0.5;cursor:not-allowed;transform:none!important;box-shadow:none!important;
+}
+
+/* --- 抽卡结果动画区 --- */
+.gacha-stage{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;min-height:200px;
+  background:var(--card-bg);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border:1px solid rgba(90,140,180,0.2);border-radius:14px;
+}
+.gacha-stage.waiting .placeholder-text{opacity:1}
+.gacha-stage.waiting .result-content{opacity:0;transform:scale(0.8)}
+.gacha-stage.result .placeholder-text{opacity:0}
+.gacha-stage.result .result-content{opacity:1;transform:scale(1)}
+
+.placeholder-text{
+  position:absolute;text-align:center;transition:all 0.6s;
+  color:var(--text-secondary);opacity:0.5;
+  font-size:14px;letter-spacing:2px;
+}
+.placeholder-text .icon{font-size:40px;display:block;margin-bottom:10px;opacity:0.4}
+
+.result-content{
+  display:flex;flex-wrap:wrap;gap:16px;justify-content:center;
+  align-items:center;padding:20px;transition:all 0.6s cubic-bezier(0.34,1.56,0.64,1);
+}
+.result-item{
+  width:100px;height:140px;border-radius:10px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;position:relative;overflow:hidden;
+  animation:cardPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+  background:linear-gradient(180deg,rgba(25,50,80,0.6),rgba(15,30,55,0.8));
+  border:1px solid rgba(90,140,180,0.15);
+}
+.result-item:nth-child(1){animation-delay:0.05s}
+.result-item:nth-child(2){animation-delay:0.15s}
+.result-item:nth-child(3){animation-delay:0.25s}
+.result-item:nth-child(4){animation-delay:0.35s}
+.result-item:nth-child(5){animation-delay:0.45s}
+.result-item:nth-child(6){animation-delay:0.55s}
+.result-item:nth-child(7){animation-delay:0.65s}
+.result-item:nth-child(8){animation-delay:0.75s}
+.result-item:nth-child(9){animation-delay:0.85s}
+.result-item:nth-child(10){animation-delay:0.95s}
+.result-item.rarity-5{border-color:rgba(245,215,66,0.5);box-shadow:0 0 30px rgba(245,215,66,0.1)}
+.result-item.rarity-4{border-color:rgba(180,132,232,0.4);box-shadow:0 0 20px rgba(180,132,232,0.08)}
+.result-item.rarity-3{border-color:rgba(90,192,190,0.3)}
+.result-item .ri-avatar{font-size:36px;line-height:1}
+.result-item .ri-name{font-size:11px;color:var(--text-primary);font-weight:500}
+.result-item .ri-stars{font-size:9px;letter-spacing:1px}
+.result-item.rarity-5 .ri-stars{color:var(--star-5)}
+.result-item.rarity-4 .ri-stars{color:var(--star-4)}
+.result-item.rarity-3 .ri-stars{color:var(--star-3)}
+
+/* 抽卡闪光动画 */
+.gacha-stage.rolling .result-content{opacity:0;transform:scale(0.6)}
+.gacha-stage.rolling{
+  animation:rollFlash 0.15s ease 4;
+}
+@keyframes rollFlash{
+  0%,100%{background:var(--card-bg)}
+  50%{background:rgba(245,215,66,0.06)}
+}
+
+@keyframes cardPop{
+  0%{opacity:0;transform:scale(0.3) rotate(-8deg)}
+  60%{transform:scale(1.08) rotate(1deg)}
+  100%{opacity:1;transform:scale(1) rotate(0deg)}
+}
+
+/* 5星特别光效 */
+.result-item.rarity-5::before{
+  content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;
+  background:conic-gradient(from 0deg,transparent,rgba(245,215,66,0.08),transparent,rgba(245,215,66,0.08),transparent);
+  animation:starSpin 3s linear infinite;
+}
+@keyframes starSpin{to{transform:rotate(360deg)}}
+
+/* ============================================================
+   信息栏
+   ============================================================ */
+.info-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 24px;flex-shrink:0;
+  background:linear-gradient(135deg,rgba(11,26,48,0.85),rgba(19,43,74,0.8));
+  border-top:1px solid rgba(90,140,180,0.15);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  font-size:12px;color:var(--text-secondary);gap:16px;
+  position:relative;z-index:5;
+}
+.info-bar .info-left{display:flex;gap:20px;align-items:center}
+.info-bar .info-right{display:flex;gap:16px;align-items:center}
+.info-bar .version{color:var(--gold);font-weight:600}
+.info-bar .region{display:flex;align-items:center;gap:4px}
+.info-bar .region::before{content:'🌍';font-size:12px}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+@media(max-width:860px){
+  .main-content{flex-direction:column;padding:12px 16px}
+  .char-section{flex:0 0 auto;max-height:260px}
+  .top-bar{padding:8px 16px;flex-wrap:wrap;height:auto;gap:8px}
+  .top-left{flex-wrap:wrap;gap:12px}
+  .menu-nav{gap:2px}
+  .menu-item{padding:4px 10px;font-size:12px}
+  .stats-display{gap:10px;font-size:12px}
+  .right-panel{gap:12px}
+  .gacha-banners{flex-direction:column}
+  .gacha-banner{min-width:0}
+  .result-item{width:80px;height:120px}
+}
+@media(max-width:480px){
+  .char-section{max-height:200px}
+  .char-card{padding:10px 12px}
+  .char-avatar{width:44px;height:44px;font-size:22px}
+  .gacha-panel{padding:14px 16px}
+  .gacha-btn{padding:8px 18px;font-size:13px}
+  .result-item{width:64px;height:100px}
+  .result-item .ri-avatar{font-size:28px}
+  .result-item .ri-name{font-size:10px}
+  .info-bar{flex-direction:column;gap:4px;padding:6px 12px;font-size:11px}
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== 背景画布 ==================== -->
+<canvas id="bg-canvas"></canvas>
+<canvas id="particle-canvas"></canvas>
+
+<!-- ==================== 主应用 ==================== -->
+<div class="app-wrapper">
+
+  <!-- ===== 顶部菜单栏 ===== -->
+  <header class="top-bar">
+    <div class="top-left">
+      <div class="brand">
+        <span class="brand-icon">⚜️</span>
+        <span>原神 · 提瓦特</span>
+      </div>
+      <nav class="menu-nav">
+        <span class="menu-item active">角色</span>
+        <span class="menu-item">祈愿</span>
+        <span class="menu-item">探索</span>
+        <span class="menu-item">背包</span>
+        <span class="menu-item">图鉴</span>
+      </nav>
+    </div>
+    <div class="top-right">
+      <div class="stats-display">
+        <span class="stat-item">✨ <span class="num">2,846</span></span>
+        <span class="stat-item">💎 <span class="num">128</span></span>
+        <span class="stat-item">⭐ <span class="num">56</span></span>
+      </div>
+      <div class="user-avatar" title="旅行者">🧑</div>
+    </div>
+  </header>
+
+  <!-- ===== 主内容区 ===== -->
+  <div class="main-content">
+
+    <!-- 左侧：角色展示 -->
+    <section class="char-section">
+      <div class="char-section-header">
+        <h2>✦ 我的角色</h2>
+        <div class="char-nav">
+          <button class="char-nav-btn" id="char-scroll-up">‹</button>
+          <button class="char-nav-btn" id="char-scroll-down">›</button>
+        </div>
+      </div>
+      <div class="char-cards-wrapper" id="char-cards-container">
+        <!-- 由 JS 动态渲染 -->
+      </div>
+    </section>
+
+    <!-- 右侧：抽卡面板 -->
+    <div class="right-panel">
+      <div class="gacha-panel">
+        <div class="gacha-header">
+          <h3>⚡ 祈愿 · 众生之诗</h3>
+          <div class="gacha-pity">保底计数：<span id="pity-counter">0</span></div>
+        </div>
+        <div class="gacha-banners" id="banner-container">
+          <!-- 由 JS 动态渲染 -->
+        </div>
+        <div class="gacha-actions">
+          <button class="gacha-btn wish1" id="wish-1">单抽 ×1</button>
+          <button class="gacha-btn wish10" id="wish-10">十连 ×10</button>
+        </div>
+      </div>
+
+      <div class="gacha-stage waiting" id="gacha-stage">
+        <div class="placeholder-text">
+          <span class="icon">🌟</span>
+          星光闪烁，命运在此交汇……
+        </div>
+        <div class="result-content" id="result-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 底部信息栏 ===== -->
+  <footer class="info-bar">
+    <div class="info-left">
+      <span class="version">v5.0 · 荣花与炎日之途</span>
+      <span class="region">璃月港 · 绯云坡</span>
+    </div>
+    <div class="info-right">
+      <span>📡 信号稳定</span>
+      <span>⚙️ 炼金术引擎正常运行</span>
+      <span id="clock-display"></span>
+    </div>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   数据
+   ============================================================ */
+const CHARACTERS = [
+  {name:'钟离',title:'尘世闲游 · 岩王帝君',element:'geo',rarity:5,emoji:'🏛️',tag:'岩'},
+  {name:'胡桃',title:'雪霁梅香 · 往生堂主',element:'pyro',rarity:5,emoji:'🌸',tag:'火'},
+  {name:'甘雨',title:'循循守月 · 璃月秘书',element:'cryo',rarity:5,emoji:'🌙',tag:'冰'},
+  {name:'刻晴',title:'霆霓快雨 · 玉衡星',element:'electro',rarity:5,emoji:'⚡',tag:'雷'},
+  {name:'温迪',title:'风色诗人 · 自由之神',element:'anemo',rarity:5,emoji:'🎵',tag:'风'},
+  {name:'雷电将军',title:'一心净土 · 永恒主宰',element:'electro',rarity:5,emoji:'⚡',tag:'雷'},
+  {name:'纳西妲',title:'白草净华 · 智慧主',element:'dendro',rarity:5,emoji:'🌿',tag:'草'},
+  {name:'枫原万叶',title:'红叶逐荒波 · 浪人武士',element:'anemo',rarity:5,emoji:'🍁',tag:'风'},
+  {name:'夜兰',title:'兰生幽谷 · 幽谷兰香',element:'hydro',rarity:5,emoji:'💧',tag:'水'},
+  {name:'神里绫华',title:'白鹭霜华 · 社奉行',element:'cryo',rarity:5,emoji:'❄️',tag:'冰'},
+  {name:'香菱',title:'万民百味 · 大厨',element:'pyro',rarity:4,emoji:'🔥',tag:'火'},
+  {name:'行秋',title:'少年春华 · 飞云商会',element:'hydro',rarity:4,emoji:'📖',tag:'水'},
+  {name:'菲谢尔',title:'断罪皇女！！ · 幽夜净土',element:'electro',rarity:4,emoji:'🦅',tag:'雷'},
+  {name:'班尼特',title:'命运试金石 · 冒险家',element:'pyro',rarity:4,emoji:'🍀',tag:'火'},
+  {name:'砂糖',title:'无害甜度 · 炼金术士',element:'anemo',rarity:4,emoji:'🧪',tag:'风'},
+  {name:'凝光',title:'天权 · 群玉阁主',element:'geo',rarity:4,emoji:'💎',tag:'岩'},
+  {name:'琳妮特',title:'粉团猫尾 · 巧变助手',element:'anemo',rarity:4,emoji:'🐱',tag:'风'},
+  {name:'琳妮',title:'舞台聚光灯 · 大魔术师',element:'pyro',rarity:5,emoji:'🎩',tag:'火'},
+  {name:'芙宁娜',title:'谢幕的水神 · 众水之上',element:'hydro',rarity:5,emoji:'💧',tag:'水'},
+  {name:'那维莱特',title:'最高审判官 · 谕示裁定',element:'hydro',rarity:5,emoji:'⚖️',tag:'水'},
+];
+
+const BANNERS = [
+  {id:0,name:'杯装之诗',desc:'五星概率提升 · 温迪',rateDesc:'5★ 0.6% → 1.6%',rate5:0.016,featured:'温迪'},
+  {id:1,name:'陵薮市朝',desc:'五星概率提升 · 钟离',rateDesc:'5★ 0.6% → 1.6%',rate5:0.016,featured:'钟离'},
+  {id:2,name:'叶落风随',desc:'五星概率提升 · 枫原万叶',rateDesc:'5★ 0.6% → 1.6%',rate5:0.016,featured:'枫原万叶'},
+];
+
+/* 抽卡池（五星/四星/三星角色和物品） */
+const POOL = {
+  star5: ['钟离','胡桃','甘雨','刻晴','温迪','雷电将军','纳西妲','枫原万叶','夜兰','神里绫华','琳妮','芙宁娜','那维莱特'],
+  star4: ['香菱','行秋','菲谢尔','班尼特','砂糖','凝光','琳妮特'],
+  star3: ['翡玉剑','弹弓','魔导绪论','黑缨枪','铁影阔剑','鸦羽弓','讨龙英杰谭','黎明神剑','飞天御剑','沐浴龙血的剑'],
+};
+
+/* ============================================================
+   工具
+   ============================================================ */
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)]}
+function rand(min,max){return Math.random()*(max-min)+min}
+
+/* ============================================================
+   角色卡片渲染
+   ============================================================ */
+function renderCharCards(){
+  const container = document.getElementById('char-cards-container');
+  container.innerHTML = CHARACTERS.map((c,i)=>{
+    const stars = '★'.repeat(c.rarity) + '☆'.repeat(5-c.rarity);
+    const cls = c.rarity===5?'star-5':'star-4';
+    return `
+    <div class="char-card ${i===0?'selected':''}" data-index="${i}" data-rarity="${c.rarity}" data-element="${c.element}">
+      <div class="char-avatar">${c.emoji}</div>
+      <div class="char-info">
+        <div class="char-name">${c.name}</div>
+        <div class="char-title">${c.title}</div>
+        <div class="char-tags">
+          <span class="char-tag element-${c.element}">${c.tag}</span>
+          <span class="char-tag">${c.rarity===5?'五星':'四星'}</span>
+        </div>
+      </div>
+      <div class="char-rarity ${cls}">${stars}</div>
+    </div>`;
+  }).join('');
+
+  /* 点击选择 */
+  container.querySelectorAll('.char-card').forEach(el=>{
+    el.addEventListener('click',()=>{
+      container.querySelectorAll('.char-card').forEach(c=>c.classList.remove('selected'));
+      el.classList.add('selected');
+    });
+  });
+}
+
+/* ============================================================
+   祈愿横幅渲染
+   ============================================================ */
+function renderBanners(){
+  const container = document.getElementById('banner-container');
+  container.innerHTML = BANNERS.map((b,i)=>{
+    return `
+    <div class="gacha-banner ${i===0?'active':''}" data-banner="${b.id}">
+      <div class="banner-name">${b.name}</div>
+      <div class="banner-desc">${b.desc}</div>
+      <div class="banner-rate">${b.rateDesc}</div>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.gacha-banner').forEach(el=>{
+    el.addEventListener('click',()=>{
+      container.querySelectorAll('.gacha-banner').forEach(c=>c.classList.remove('active'));
+      el.classList.add('active');
+    });
+  });
+}
+
+/* ============================================================
+   祈愿逻辑
+   ============================================================ */
+let pity = 0;
+let isRolling = false;
+
+function getActiveBanner(){
+  const el = document.querySelector('.gacha-banner.active');
+  return el ? BANNERS[parseInt(el.dataset.banner)] : BANNERS[0];
+}
+
+function doWish(){
+  const banner = getActiveBanner();
+  const r = Math.random();
+  /* 五星判定 */
+  if(r < banner.rate5){
+    const name = pick(POOL.star5);
+    const char = CHARACTERS.find(c=>c.name===name);
+    return {name,rarity:5,emoji:char?char.emoji:'🌟',stars:'★★★★★'};
+  }
+  /* 四星判定 (基础5% + 软保底) */
+  if(r < 0.06 + (pity>=9?0.04:0)){
+    const name = pick(POOL.star4);
+    const char = CHARACTERS.find(c=>c.name===name);
+    return {name,rarity:4,emoji:char?char.emoji:'✨',stars:'★★★★'};
+  }
+  /* 三星 */
+  const name = pick(POOL.star3);
+  return {name,rarity:3,emoji:'📜',stars:'★★★'};
+}
+
+function doWishes(count){
+  if(isRolling) return;
+  isRolling = true;
+  const btn1 = document.getElementById('wish-1');
+  const btn10 = document.getElementById('wish-10');
+  btn1.disabled = true; btn10.disabled = true;
+
+  const stage = document.getElementById('gacha-stage');
+  stage.className = 'gacha-stage rolling';
+  const resultContent = document.getElementById('result-content');
+  resultContent.innerHTML = '';
+
+  /* 滚动动画后揭晓 */
+  setTimeout(()=>{
+    const results = [];
+    for(let i=0;i<count;i++){
+      pity++;
+      const r = doWish();
+      results.push(r);
+      if(r.rarity===5) pity=0;
+    }
+
+    resultContent.innerHTML = results.map(r=>{
+      const rCls = 'rarity-'+r.rarity;
+      return `<div class="result-item ${rCls}">
+        <div class="ri-avatar">${r.emoji}</div>
+        <div class="ri-name">${r.name}</div>
+        <div class="ri-stars">${r.stars}</div>
+      </div>`;
+    }).join('');
+
+    stage.className = 'gacha-stage result';
+    document.getElementById('pity-counter').textContent = pity;
+    isRolling = false;
+    btn1.disabled = false; btn10.disabled = false;
+  },600);
+}
+
+/* ============================================================
+   Canvas 背景绘制 —— 动态星空 + 远山/云海
+   ============================================================ */
+(function initBgCanvas(){
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let W,H;
+  const stars = [];
+  const STAR_COUNT = 200;
+
+  function resize(){
+    W=canvas.width=window.innerWidth;
+    H=canvas.height=window.innerHeight;
+  }
+  window.addEventListener('resize',resize);
+  resize();
+
+  /* 星星 */
+  for(let i=0;i<STAR_COUNT;i++){
+    stars.push({
+      x:rand(0,W),y:rand(0,H*0.7),
+      r:rand(0.5,2),alpha:rand(0.2,0.8),
+      speed:rand(0.002,0.008),
+      phase:rand(0,Math.PI*2),
+    });
+  }
+
+  /* 远山轮廓 */
+  function drawMountains(t){
+    ctx.save();
+    const baseY = H*0.65;
+    ctx.beginPath();
+    ctx.moveTo(0,H);
+    for(let x=0;x<=W;x+=3){
+      const y1 = Math.sin(x*0.003 + t*0.0001)*20;
+      const y2 = Math.sin(x*0.007 + t*0.0002 + 1.5)*12;
+      const y3 = Math.sin(x*0.015 + t*0.0003 + 3.0)*6;
+      const py = baseY + y1 + y2 + y3;
+      ctx.lineTo(x,py);
+    }
+    ctx.lineTo(W,H);
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0,baseY-20,0,H);
+    grad.addColorStop(0,'rgba(20,40,70,0.35)');
+    grad.addColorStop(0.5,'rgba(10,25,50,0.25)');
+    grad.addColorStop(1,'rgba(5,15,30,0.1)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawClouds(t){
+    ctx.save();
+    for(let i=0;i<6;i++){
+      const cx = ((i*0.7 + t*0.003)*W*0.2) % (W+200) - 100;
+      const cy = H*(0.15 + i*0.02) + Math.sin(i*2.3+t*0.0005)*8;
+      ctx.beginPath();
+      ctx.ellipse(cx,cy,60+Math.sin(i*1.1)*15,14,0,0,Math.PI*2);
+      ctx.fillStyle = `rgba(60,120,160,${0.03+Math.sin(i+t*0.0003)*0.01})`;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx+50,cy-5,40+Math.cos(i*0.8)*10,10,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx-40,cy+3,35+Math.sin(i*0.9)*8,9,0,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawGradient(){
+    const grad = ctx.createRadialGradient(W*0.7,H*0.3,0,W*0.5,H*0.4,W*0.9);
+    grad.addColorStop(0,'rgba(20,50,90,0.6)');
+    grad.addColorStop(0.5,'rgba(15,35,65,0.8)');
+    grad.addColorStop(1,'rgba(8,18,38,1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,W,H);
+
+    /* 底部微光 */
+    const grad2 = ctx.createLinearGradient(0,H*0.7,0,H);
+    grad2.addColorStop(0,'transparent');
+    grad2.addColorStop(1,'rgba(30,60,90,0.15)');
+    ctx.fillStyle = grad2;
+    ctx.fillRect(0,H*0.7,W,H*0.3);
+  }
+
+  let frame=0;
+  function animate(){
+    frame++;
+    const t = performance.now();
+    ctx.clearRect(0,0,W,H);
+    drawGradient();
+
+    /* 星星 */
+    for(const s of stars){
+      const flicker = 0.5 + 0.5*Math.sin(t*s.speed + s.phase);
+      ctx.beginPath();
+      ctx.arc(s.x,s.y,s.r*flicker,0,Math.PI*2);
+      ctx.fillStyle = `rgba(200,220,255,${s.alpha*flicker*0.8})`;
+      ctx.fill();
+    }
+
+    drawClouds(t);
+    drawMountains(t);
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();
+
+/* ============================================================
+   Canvas 粒子特效 —— 元素微粒漂浮
+   ============================================================ */
+(function initParticleCanvas(){
+  const canvas = document.getElementById('particle-canvas');
+  const ctx = canvas.getContext('2d');
+  let W,H;
+  const particles = [];
+  const PARTICLE_COUNT = 60;
+  const ELEMENT_COLORS = [
+    {h:15,s:90,l:60},   /* 火 */
+    {h:210,s:80,l:65},  /* 水 */
+    {h:170,s:60,l:65},  /* 风 */
+    {h:45,s:70,l:55},   /* 岩 */
+    {h:270,s:60,l:65},  /* 雷 */
+    {h:190,s:60,l:65},  /* 冰 */
+    {h:120,s:55,l:60},  /* 草 */
+  ];
+
+  function resize(){
+    W=canvas.width=window.innerWidth;
+    H=canvas.height=window.innerHeight;
+  }
+  window.addEventListener('resize',resize);
+  resize();
+
+  for(let i=0;i<PARTICLE_COUNT;i++){
+    const col = ELEMENT_COLORS[i%ELEMENT_COLORS.length];
+    particles.push({
+      x:rand(0,W),y:rand(0,H),
+      vx:rand(-0.3,0.3),vy:rand(-0.4,-0.1),
+      r:rand(2,6),alpha:rand(0.08,0.25),
+      hue:col.h,sat:col.s,lig:col.l,
+      phase:rand(0,Math.PI*2),
+      pulseSpeed:rand(0.005,0.015),
+    });
+  }
+
+  function animate(){
+    ctx.clearRect(0,0,W,H);
+    const t = performance.now();
+
+    for(const p of particles){
+      p.x += p.vx;
+      p.y += p.vy;
+      if(p.x< -20) p.x=W+20;
+      if(p.x>W+20) p.x=-20;
+      if(p.y< -20) p.y=H+20;
+      if(p.y>H+20) p.y=-20;
+
+      const pulse = 0.6 + 0.4*Math.sin(t*p.pulseSpeed + p.phase);
+      const alpha = p.alpha * pulse;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r*pulse,0,Math.PI*2);
+      ctx.fillStyle = `hsla(${p.hue},${p.sat}%,${p.lig}%,${alpha})`;
+      ctx.fill();
+
+      /* 光晕 */
+      const grad = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r*3);
+      grad.addColorStop(0,`hsla(${p.hue},${p.sat}%,${p.lig}%,${alpha*0.3})`);
+      grad.addColorStop(1,'transparent');
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r*3,0,Math.PI*2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    requestAnimationFrame(animate);
+  }
+  animate();
+})();
+
+/* ============================================================
+   时钟
+   ============================================================ */
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock-display').textContent =
+    now.toLocaleTimeString('zh-CN',{hour12:false,hour:'2-digit',minute:'2-digit'});
+}
+setInterval(updateClock,1000);
+updateClock();
+
+/* ============================================================
+   事件绑定
+   ============================================================ */
+document.getElementById('wish-1').addEventListener('click',()=>doWishes(1));
+document.getElementById('wish-10').addEventListener('click',()=>doWishes(10));
+
+document.getElementById('char-scroll-up').addEventListener('click',()=>{
+  const c = document.getElementById('char-cards-container');
+  c.scrollBy({top:-200,behavior:'smooth'});
+});
+document.getElementById('char-scroll-down').addEventListener('click',()=>{
+  const c = document.getElementById('char-cards-container');
+  c.scrollBy({top:200,behavior:'smooth'});
+});
+
+/* 菜单项点击 */
+document.querySelectorAll('.menu-item').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.menu-item').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+  });
+});
+
+/* ============================================================
+   渲染启动
+   ============================================================ */
+renderCharCards();
+renderBanners();
+</script>
+</body>
+</html>

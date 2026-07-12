@@ -104,8 +104,8 @@ export class CommandRegistry {
           options[arg.slice(2, eqIdx)] = arg.slice(eqIdx + 1);
         } else {
           const key = arg.slice(2);
-          if (i + 1 < args.length && !args[i + 1]!.startsWith("-")) {
-            options[key] = args[++i]!;
+          if (i + 1 < args.length && !args[i + 1]?.startsWith("-")) {
+            options[key] = args[++i];
           } else {
             options[key] = true;
           }
@@ -113,8 +113,8 @@ export class CommandRegistry {
       } else if (arg.startsWith("-") && arg.length === 2) {
         // 短选项 -k
         const key = arg.slice(1);
-        if (i + 1 < args.length && !args[i + 1]!.startsWith("-")) {
-          options[key] = args[++i]!;
+        if (i + 1 < args.length && !args[i + 1]?.startsWith("-")) {
+          options[key] = args[++i];
         } else {
           options[key] = true;
         }

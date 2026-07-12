@@ -61,7 +61,7 @@ export class RlmExecuteStep implements IDispatchStep {
     const isRlmSubtask = executeNode.isRlmSubtask === true;
     const prefStrategy = executeNode.preferredStrategy;
     if (!this._shouldAttemptDecompose(executeNode)) {
-      console.log(`[TRACE dispatch] RlmExecuteStep: agentType=${agentType} nodeId=${node.id} decision=directExecute reason=${isRlmSubtask ? 'isRlmSubtask' : (prefStrategy ? `preferredStrategy=${prefStrategy}` : 'shouldDecompose=false')}`);
+      console.error(`[TRACE dispatch] RlmExecuteStep: agentType=${agentType} nodeId=${node.id} decision=directExecute reason=${isRlmSubtask ? 'isRlmSubtask' : (prefStrategy ? `preferredStrategy=${prefStrategy}` : 'shouldDecompose=false')}`);
       return await this._directExecute(ctx, agent, agentType, executeNode, routedModel);
     }
 
@@ -235,6 +235,7 @@ export class RlmExecuteStep implements IDispatchStep {
 
       return annotated;
     } catch {
+      console.error(`[scheduler] rlm.subtask_failed nodeId=${ctx.node.id}`);
       return null;
     }
   }

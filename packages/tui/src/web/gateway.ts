@@ -249,7 +249,7 @@ export class WSGateway {
     });
 
     // TypeScript 类型体操：socket 在 writeHead 后可用
-    const socket = (res as unknown as { socket: import("node:net").Socket }).socket;
+    const socket = res.socket!;
     socket.setTimeout(0);
     socket.setNoDelay(true);
 

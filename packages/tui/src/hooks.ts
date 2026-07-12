@@ -7,7 +7,7 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import type { TuiHooks, TuiToolStartEvent, TuiToolResultEvent, TuiLlmChunkEvent, TuiNodeCompleteEvent, TuiNodeFailedEvent, ReplMode } from "./types.js";
+import type { TuiHooks, TuiToolStartEvent, TuiToolResultEvent, TuiLlmChunkEvent, TuiNodeCompleteEvent, TuiNodeFailedEvent } from "./types.js";
 import type { AgentType, LlmMessage } from "@cortex/shared";
 import type { CompactionResult } from "./context-compactor.js";
 import type { SessionSnapshot } from "./session-store.js";
@@ -21,7 +21,7 @@ import { reversibilityLevel } from "./renderer/permission-dialog.js";
  */
 export const defaultHooks: TuiHooks = {
   // ── 会话级 ──
-  onSessionStart: (_mode: ReplMode, _agent: AgentType) => {},
+  onSessionStart: (_agent: AgentType) => {},
   onSessionEnd: async () => {},
   onSessionSave: (_snapshot: SessionSnapshot) => {},
   onSessionRestore: (_snapshot: SessionSnapshot) => {},
@@ -52,7 +52,7 @@ export const defaultHooks: TuiHooks = {
   onPostProcessOutput: async (output: string) => output,
 
   // ── 模式级 ──
-  onModeChange: (_from: ReplMode, _to: ReplMode) => {},
+  onModeChange: (_from: string, _to: string) => {},
   onAgentSwitch: (_from: AgentType, _to: AgentType) => {},
   onTalkTrioToggle: (_enabled: boolean) => {},
 

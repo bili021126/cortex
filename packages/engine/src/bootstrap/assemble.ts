@@ -89,9 +89,9 @@ export function assemble(input: AssembleInput): BootstrapEngineResult {
     try { (input.scheduler as unknown as { stop?(): void }).stop?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
     try { (input.pool as unknown as { destroyAll?(): void }).destroyAll?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
     try { (input.observer as unknown as { clear?(): void }).clear?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
-    try { await input.memory?.close(); } catch { /* best-effort */ }
-    try { (input.gate as unknown as { dispose?(): void }).dispose?.(); } catch { /* best-effort */ }
-    try { input.cliAdapter.close?.(); } catch { /* best-effort */ }
+    try { await input.memory?.close(); } catch { console.error(`[assemble] memory.close_failed`); }
+    try { (input.gate as unknown as { dispose?(): void }).dispose?.(); } catch { console.error(`[assemble] gate.dispose_failed`); }
+    try { input.cliAdapter.close?.(); } catch { console.error(`[assemble] cliAdapter.close_failed`); }
   };
 
   return {

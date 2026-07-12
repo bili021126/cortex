@@ -68,17 +68,16 @@ export function estimateTokens(messages: LlmMessage[]): number {
   let total = 0;
   for (const m of messages) {
     total += (m.content?.length ?? 0);
-    const raw = m as unknown as Record<string, unknown>;
-    if (typeof raw.reasoning_content === "string") {
-      total += raw.reasoning_content.length;
+    if (typeof m.reasoning_content === "string") {
+      total += m.reasoning_content.length;
     }
-    if (Array.isArray(raw.tool_calls)) {
-      for (const tc of raw.tool_calls as Array<Record<string, unknown>>) {
+    if (Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
         total += JSON.stringify(tc).length;
       }
     }
-    if (m.role === "tool" && raw.tool_call_id) {
-      total += String(raw.tool_call_id).length;
+    if (m.role === "tool" && m.tool_call_id) {
+      total += String(m.tool_call_id).length;
     }
   }
   return Math.ceil(total / 4);
@@ -118,8 +117,8 @@ function compactL1(messages: LlmMessage[]): { messages: LlmMessage[]; removed: n
   // 收集所有被后续引用的 tool_call_id
   const referencedIds = new Set<string>();
   for (const m of messages) {
-    if (m.role === "assistant" && "tool_calls" in m && Array.isArray((m as unknown as Record<string, unknown>).tool_calls)) {
-      for (const tc of (m as unknown as Record<string, unknown>).tool_calls as { id?: string }[]) {
+    if (m.role === "assistant" && Array.isArray(m.tool_calls)) {
+      for (const tc of m.tool_calls) {
         if (tc.id) referencedIds.add(tc.id);
       }
     }
@@ -129,7 +128,7 @@ function compactL1(messages: LlmMessage[]): { messages: LlmMessage[]; removed: n
   const filtered: LlmMessage[] = [];
   for (const m of messages) {
     if (m.role === "tool") {
-      const toolCallId = (m as unknown as Record<string, unknown>).tool_call_id as string | undefined;
+      const toolCallId = m.tool_call_id;
       if (toolCallId && !referencedIds.has(toolCallId)) {
         removed++;
         continue; // 孤儿 tool 结果，丢弃
@@ -189,18 +188,17 @@ function compactL3(
     // 查找 assistant(tool_calls) → tool 对
     if (
       m.role === "assistant" &&
-      "tool_calls" in m &&
-      Array.isArray((m as unknown as Record<string, unknown>).tool_calls) &&
-      ((m as unknown as Record<string, unknown>).tool_calls as unknown[]).length > 0
+      Array.isArray(m.tool_calls) &&
+      m.tool_calls.length > 0
     ) {
-      const toolCalls = (m as unknown as Record<string, unknown>).tool_calls as { id: string; name: string; arguments: Record<string, unknown> }[];
+      const toolCalls = m.tool_calls;
       const callIds = new Set(toolCalls.map((tc) => tc.id));
 
       // 收集紧随其后的 tool 结果消息
       const toolResults: string[] = [];
       let j = i + 1;
       while (j < messages.length && messages[j]!.role === "tool") {
-        const toolCallId = (messages[j]! as unknown as Record<string, unknown>).tool_call_id as string | undefined;
+        const toolCallId = messages[j]!.tool_call_id;
         if (toolCallId && callIds.has(toolCallId)) {
           const summary = (messages[j]!.content ?? "").slice(0, 100);
           toolResults.push(summary);

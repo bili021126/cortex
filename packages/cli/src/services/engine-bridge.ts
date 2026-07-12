@@ -32,6 +32,7 @@ import type { LlmAdapter } from "@cortex/llm";
 import type { ConfigManager } from "./config-manager.js";
 import { LLM_KEY_NAMES } from "@cortex/config";
 import type { TuiEvent } from "@cortex/tui";
+import { toolRollbackRegistry } from "@cortex/tools";
 
 export interface BridgeContext {
   scheduler?: IScheduler;
@@ -79,6 +80,8 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   private dbPath?: string;
   private engineConfig?: EngineConfig;
   private _bootstrapConfig?: BootstrapConfig;
+  /** 当前执行中的任务 ID（用于 rollback 追踪） */
+  private _currentRollbackTaskId: string | undefined;
 
   constructor(config: ConfigManager, dbPath?: string, engineConfig?: EngineConfig) {
     this.config = config;
@@ -285,9 +288,21 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
       return { success: false, output: "Toolkit 未初始化——请通过 setBootstrapConfig() 注入 Toolkit" };
     }
     if (name === "write_file") {
-      console.log(`[TRACE write_file] engine-bridge.executeToolCall: tool=${name} workspaceRoot=${(toolkit as any).workspaceRoot}`);
+      const wsRoot = (toolkit as unknown as { workspaceRoot?: string | null }).workspaceRoot;
+      console.log(`[TRACE write_file] engine-bridge.executeToolCall: tool=${name} workspaceRoot=${wsRoot}`);
     }
     const result = await toolkit.execute({ toolName: name, params: args }, AgentType.Code);
+
+    // ── Rollback 跟踪：write_file 成功后记录文件路径 ──
+    if (name === "write_file" && result.success) {
+      const filePath = (args["file_path"] ?? args["path"] ?? "") as string;
+      if (filePath) {
+        const absPath = path.resolve(filePath);
+        const currentTaskId = this._currentRollbackTaskId ?? "executeToolCall";
+        toolRollbackRegistry.trackCreate(currentTaskId, absPath);
+      }
+    }
+
     return { success: result.success, output: result.success ? (result.output ?? "") : (result.error ?? "未知错误") };
   }
 
@@ -309,7 +324,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     messages: LlmMessage[],
     tools: { name: string; description: string; parameters?: Record<string, unknown> }[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
-    opts?: { reasoningEffort?: "high" | "max" },
+    opts?: { reasoningEffort?: "high" | "max" | null },
   ): Promise<{ content: string | null; tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[]; usage?: { prompt_tokens: number; completion_tokens: number }; reasoning_content?: string }> {
     const l = this.llm;
     if (!l) throw new Error("LLM 未配置——请设置 DEEPSEEK_API_KEY 环境变量");
@@ -321,14 +336,27 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   async submitTask(node: TaskNode): Promise<void> {
     const ctx = await (this.isBootstrapConfigured ? this._ensureBootstrapped() : this.ensureInitialized());
     if (ctx.taskBoard) {
-      ctx.taskBoard.addNode(node as unknown as TaskNode);
+      ctx.taskBoard.addNode(node);
     }
   }
 
   /** 执行 TaskBoard 上所有待处理节点（ICortexApi） */
   async executeAll(): Promise<ExecutionReport> {
     const scheduler = await this.getScheduler();
-    return await scheduler.executeAll();
+    const report = await scheduler.executeAll();
+
+    // ── Rollback：如果有失败节点，清理已创建文件 ──
+    const failedNodes = report.results.filter(r => !r.success);
+    if (failedNodes.length > 0) {
+      for (const f of failedNodes) {
+        const deleted = toolRollbackRegistry.rollback(f.nodeId);
+        if (deleted.length > 0) {
+          console.error(`[rollback] 节点 ${f.nodeId} 失败，清理 ${deleted.length} 个文件`);
+        }
+      }
+    }
+
+    return report;
   }
 
   /**
@@ -359,7 +387,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
 
     // 2. 提交所有节点
     for (const node of nodes) {
-      board.addNode(node as unknown as TaskNode);
+      board.addNode(node);
       onEvent({
         type: "node_start",
         nodeId: node.id,
@@ -386,6 +414,12 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
           durationMs,
         });
       } else {
+        // ── Rollback：失败节点清理已创建文件 ──
+        const deleted = toolRollbackRegistry.rollback(result.nodeId);
+        if (deleted.length > 0) {
+          console.error(`[rollback] 流式执行节点 ${result.nodeId} 失败，清理 ${deleted.length} 个文件`);
+        }
+
         onEvent({
           type: "node_failed",
           nodeId: result.nodeId,
@@ -548,6 +582,10 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
 
   async shutdown(): Promise<void> {
     if (!this.ctx.initialized) return;
+
+    // ── Rollback Registry 重置 ──
+    toolRollbackRegistry.reset();
+    this._currentRollbackTaskId = undefined;
 
     // 若已 bootstrap，使用 ShutdownOrchestrator 统一关闭
     if (this.ctx.bootstrapResult?.orchestrator) {

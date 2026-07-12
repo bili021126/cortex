@@ -117,6 +117,7 @@ export async function decompose(
       { role: "user", content: prompt },
     ]);
   } catch {
+    console.error(`[scheduler] rlm.decompose_llm_failed`);
     return {
       subTasks: [],
       confidence: 0,
@@ -179,6 +180,7 @@ export function parseDecomposeResponse(raw: string): DecomposeResult {
       rationale: parsed.rationale ?? (subTasks.length === 0 ? "任务已原子化" : `拆解为 ${subTasks.length} 个子任务`),
     };
   } catch {
+    console.error(`[scheduler] rlm.decompose_parse_failed`);
     return {
       subTasks: [],
       confidence: 0,

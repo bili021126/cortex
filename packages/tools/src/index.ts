@@ -22,6 +22,9 @@ export type {
   JsonReport as DriftJsonReport,
 } from './configuration-drift.js';
 
+// ── Tool 层回滚注册表 ──
+export { ToolRollbackRegistry, toolRollbackRegistry } from './rollback-registry.js';
+
 // ── Monorepo 分析器 ──
 export {
   findProjectRoot,

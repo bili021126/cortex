@@ -108,8 +108,7 @@ export function createAgent(
       const t0 = Date.now();
       try {
         state.transition(AS.Awake);
-        // eslint-disable-next-line no-console
-        console.log(`[telemetry] agent.lifecycle agent=${config.type} event=wakeup durationMs=${Date.now() - t0}`);
+        console.error(`[telemetry] agent.lifecycle agent=${config.type} event=wakeup durationMs=${Date.now() - t0}`);
       } catch (e) {
         console.error(`Agent ${config.type} wakeup 失败: ${e}`);
       }
@@ -141,12 +140,10 @@ export function createAgent(
         // @fix code-agent-no-writefile: loopStrategyRegistry 对 payload<200 的任务返回 "direct"，
         //   DirectStep 不传工具定义给 LLM，Agent 永远不调 write_file。
         if (strategyName === "direct" && ["code", "fix", "ops"].includes(config.type)) {
-          // eslint-disable-next-line no-console
-          console.log(`[TRACE dispatch] agentType=${config.type} originalStrategy=direct → forced=react (reason: tool-dependent agent must use ReAct loop)`);
+          console.error(`[TRACE dispatch] agentType=${config.type} originalStrategy=direct → forced=react (reason: tool-dependent agent must use ReAct loop)`);
           strategyName = "react";
         } else {
-          // eslint-disable-next-line no-console
-          console.log(`[TRACE dispatch] agentType=${config.type} strategy=${strategyName ?? "react(fallback)"} nodeId=${node.id}`);
+          console.error(`[TRACE dispatch] agentType=${config.type} strategy=${strategyName ?? "react(fallback)"} nodeId=${node.id}`);
         }
 
         const steps = resolvePipeline(strategyName);
@@ -178,8 +175,7 @@ export function createAgent(
       try {
         state.transition(AS.Draining);
         state.transition(AS.Destroyed);
-        // eslint-disable-next-line no-console
-        console.log(`[telemetry] agent.lifecycle agent=${config.type} event=shutdown durationMs=${Date.now() - t0}`);
+        console.error(`[telemetry] agent.lifecycle agent=${config.type} event=shutdown durationMs=${Date.now() - t0}`);
       } catch (e) {
         console.error(`Agent ${config.type} shutdown 失败: ${e}`);
       }

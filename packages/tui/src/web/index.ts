@@ -115,16 +115,20 @@ export async function startWebUI(options: StartWebUIOptions): Promise<StartWebUI
   const stateAggregator = new StateAggregator(
     options.taskBoard,
     options.agentPool,
+    // Core-3: 泛型擦除——待接口泛型化
     options.panoramaTracker ?? null as unknown as PanoramaTracker,
+    // Core-3: 泛型擦除——待接口泛型化
     options.healthCollector ?? null as unknown as HealthCollector,
   );
 
   // ── API 路由 ──
   const apiRouter = new APIRouter(
     stateAggregator,
+    // Core-3: 泛型擦除——待接口泛型化
     options.engineBridge ?? null as unknown as ITuiEngineBridge,
     options.taskBoard,
     options.agentPool,
+    // Core-3: 泛型擦除——待接口泛型化
     options.healthCollector ?? null as unknown as HealthCollector,
   );
 

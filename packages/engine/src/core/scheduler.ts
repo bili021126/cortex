@@ -184,7 +184,7 @@ export class Scheduler implements IScheduler {
 
     // FIX-06: 定期维护记忆存储
     if (this._memoryStore && typeof (this._memoryStore as Maintainable).maintain === "function") {
-      try { await (this._memoryStore as Maintainable).maintain(); } catch { /* 维护失败不影响主流程 */ }
+      try { await (this._memoryStore as Maintainable).maintain(); } catch { console.error(`[telemetry] scheduler.maintain_failed`); }
     }
 
     // 仿真层检查：高风险计划建议重规划
@@ -194,8 +194,7 @@ export class Scheduler implements IScheduler {
         currentState: {},
         constraints: [],
       };
-      // eslint-disable-next-line no-console
-      console.log(`[telemetry] scheduler.sim_check nodes=${simInput.planNodes.length}`);
+      console.error(`[telemetry] scheduler.sim_check nodes=${simInput.planNodes.length}`);
     }
 
     // 执行结束——清零 AgentTracker
@@ -230,8 +229,7 @@ export class Scheduler implements IScheduler {
       notificationType: "FYI",
     });
 
-    // eslint-disable-next-line no-console
-    console.log(`[TRACE write_file] dispatch node: ${nodeId} type=${node.type} agent=${(node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type}`);
+    console.error(`[TRACE write_file] dispatch node: ${nodeId} type=${node.type} agent=${(node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type}`);
 
     let result: NodeResult;
     try {
@@ -251,8 +249,7 @@ export class Scheduler implements IScheduler {
     if (!result.success) {
       const reason = result.output ?? result.error ?? "unknown";
       const agentType = (node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type;
-      // eslint-disable-next-line no-console
-      console.log(`[telemetry] scheduler.replan agent=${agentType} nodeType=${node.type} reason=${reason.slice(0, 80)} attempt=${this.replanManager.getReplanCount(node.id) + 1}`);
+      console.error(`[telemetry] scheduler.replan agent=${agentType} nodeType=${node.type} reason=${reason.slice(0, 80)} attempt=${this.replanManager.getReplanCount(node.id) + 1}`);
       this.replanManager.enqueue(node, reason);
     }
 

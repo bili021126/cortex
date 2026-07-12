@@ -47,3 +47,7 @@ export type { MemoryStoreBackend } from "./implementations/AbstractMemoryStore.j
 // ─── 注册表 ────────────────────────────────────────
 export { MemoryStoreRegistry } from "./registry/MemoryStoreRegistry.js";
 export type { StoreRegistration } from "./registry/MemoryStoreRegistry.js";
+
+// ─── 世界书 ────────────────────────────────────────
+export { WorldbookEngine } from "./worldbook.js";
+export type { WorldbookEntry, EntryState, DmaeState, DmaeParams } from "./worldbook.js";

@@ -1,3 +1,28 @@
+# @cortex/pattern-extractor
+
+## 定位
+模式提取基础设施层——位于技能系统（skill-kit）和 Agent 引擎（engine）之间，提供可替换的多策略模式提取能力，将代码/文本分析结果转化为标准化的 PatternDefinition 供下游消费。
+
+## 上游依赖
+- @cortex/shared（仅 workspace 类型依赖，零额外运行时依赖）
+
+## 下游消费者
+- @cortex/engine（LoopAgent / AnalysisAgent 产出模式时调用）
+- @cortex/skill-kit（消费 PatternDefinition 沉淀为 Skill）
+
+## 接口契约
+- `PatternScanner` — 面向消费层的扫描契约（scan / canScan 高级异步 API）
+- `IPatternExtractor` — 面向实现层的单次提取接口（extract 同步契约）
+- `PatternDefinition` — 模式定义数据结构（score / confidence 元数据）
+- `PatternKind` — 模式类型枚举
+- `PatternExtractorRegistry` — 提取器注册中心，按 language + kind 匹配策略
+- `DEFAULT_SCAN_OPTIONS` / `DEFAULT_SCANNER_NAME` — 默认扫描配置
+
+## 不做什么
+- 不沉淀 Skill 生命周期管理（委托 @cortex/skill-kit）
+- 不调度 Agent / 任务编排（委托 @cortex/engine）
+- 不管理记忆存储与向量检索（委托 @cortex/memory-store）
+- 不提供 CLI 交互 / TUI 渲染（委托 @cortex/cli / @cortex/tui）
 # @cortex/pattern-extractor 包定位文档
 
 > **作者**：阿贝多（CodeAgent）  

@@ -15,7 +15,6 @@
  */
 
 import type { TuiEvent } from "../types.js";
-import { diffRenderer } from "./diff-renderer.js";
 
 // ═══════════════════════════════════════════════════════════
 // §1 ToolLogRenderer
@@ -48,7 +47,7 @@ export class ToolLogRenderer {
   private onToolStart(tool: string, input: string, nodeId?: string): void {
     const id = nodeId ?? `call_${++this.callSeq}`;
     this.pending.set(id, { tool, input, startTime: Date.now() });
-    diffRenderer.requestRender();
+    /* 纯流式模式——ToolLog 不再触发渲染 */
   }
 
   /** 工具完成 */
@@ -69,6 +68,6 @@ export class ToolLogRenderer {
       this.pending.delete(nodeId);
     }
 
-    diffRenderer.requestRender();
+    /* 纯流式模式——ToolLog 不再触发渲染 */
   }
 }

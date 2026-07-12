@@ -124,7 +124,7 @@ function buildTree(nodes: TaskNodeSnapshot[]): TaskNodeSnapshot[][] {
     return nodes.map((n) => [{ ...n }])
   }
 
-  return result.map((r) => [{ ...r.node, ...{ _depth: r.depth } }] as unknown as TaskNodeSnapshot[])
+  return result.map((r) => [{ ...r.node, ...{ _depth: r.depth } }] as TaskNodeSnapshot[])
 }
 
 export function TaskSlice({ nodes }: TaskSliceProps) {
@@ -139,7 +139,7 @@ export function TaskSlice({ nodes }: TaskSliceProps) {
       <div style={styles.tree}>
         {treeItems.map((item, i) => {
           const node = item[0] as TaskNodeSnapshot & { _depth?: number }
-          const depth = (node as unknown as { _depth?: number })._depth ?? 0
+          const depth = node._depth ?? 0
           return (
             <div
               key={node.id || i}

@@ -8,43 +8,13 @@
       "canonical": true
     },
     {
-      "path": "docs/core/Core-2治理层架构推演全记录.md",
-      "type": "design",
-      "version": "1.0.0",
-      "canonical": true
-    },
-    {
-      "path": "docs/core/治理层设计.md",
-      "type": "design",
-      "version": "1.0.0",
-      "canonical": true
-    },
-    {
-      "path": "docs/core/Agent标签词汇表-v2.0.md",
-      "type": "design",
-      "version": "2.0.0",
-      "canonical": true
-    },
-    {
       "path": "docs/core/意图响应体系设计.md",
       "type": "design",
       "version": "1.0.0",
       "canonical": true
     },
     {
-      "path": "docs/core/事件总线宪法定位审查报告-v1.1历史.md",
-      "type": "audit",
-      "version": "1.1.0",
-      "canonical": false
-    },
-    {
-      "path": "docs/conformity-audit.md",
-      "type": "audit",
-      "version": "1.0.0",
-      "canonical": true
-    },
-    {
-      "path": "docs/consistency-design.md",
+      "path": "docs/core/consistency-design.md",
       "type": "design",
       "version": "1.0.0",
       "canonical": true

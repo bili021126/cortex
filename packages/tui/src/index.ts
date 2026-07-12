@@ -27,7 +27,6 @@ export type {
   TuiCompactionEvent,
   TuiLifecycleEvent,
   TuiHooks,
-  ReplMode,
   NodeRenderState,
   NodeRenderStatus,
   ConfirmResult,
@@ -42,7 +41,7 @@ export { queryLoop, extractHistory, agentTalkPersona } from "./query-loop.js";
 export { chatMode } from "./modes/chat-mode.js";
 export { planMode } from "./modes/plan-mode.js";
 export type { PlanModeState } from "./modes/plan-mode.js";
-export { loadPlanState, savePlanState, clearPlanState } from "./modes/plan-mode.js";
+export { loadPlanState, savePlanState, clearPlanState, canTransition, reviewStatusToFsmState } from "./modes/plan-mode.js";
 export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "./modes/plan-utils.js";
 export { talkMode, talkTrioMode } from "./modes/talk-mode.js";
 export { partyMode, parseMentions, DEFAULT_PARTY } from "./modes/party-mode.js";
@@ -52,6 +51,8 @@ export { streamExecuteTools } from "./streaming-tool-executor.js";
 export { summarizeSubAgents, summarizeOne } from "./sub-agent-summarizer.js";
 export { processMultimodalInput, hasImagePaths } from "./multimodal-input.js";
 export { commandMode } from "./modes/command-mode.js";
+export { classifyIntent, parseAgentFromInput } from "./intent-router.js";
+export type { UserIntent } from "./intent-router.js";
 
 // ─── 渲染器 ────────────────────────────────────────
 export {
@@ -92,6 +93,8 @@ export {
   renderPersonaHeader,
   renderAgentTransition,
   renderMultiPersonaHeader,
+  PersonaHeader,
+  personaHeader,
 } from "./renderer/persona-header.js";
 export { renderDiff, renderDiffText } from "./renderer/diff-viewer.js";
 

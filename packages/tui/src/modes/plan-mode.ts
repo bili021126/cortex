@@ -15,6 +15,40 @@ import { formatPlanTree } from "./plan-utils.js";
 import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 
+/** Plan 模式 FSM——合法状态转移表 */
+const PLAN_FSM: Record<string, string[]> = {
+  idle: ["planning"],
+  planning: ["reviewing", "idle"],
+  reviewing: ["approved", "idle"],
+  approved: ["executing", "idle"],
+  executing: ["completed", "failed", "aborted"],
+  completed: ["idle"],
+  failed: ["idle"],
+  aborted: ["idle"],
+};
+
+/**
+ * 检查 FSM 状态转移合法性。
+ * 非法转移时返回 false 并输出警告。
+ */
+export function canTransition(from: string, to: string): boolean {
+  const allowed = PLAN_FSM[from];
+  if (!allowed) return false;
+  if (allowed.includes(to)) return true;
+  console.warn(`[DEGRADED:tui-plan-fsm] 非法状态转移: ${from} → ${to}（允许: ${allowed.join(", ")}）`);
+  return false;
+}
+
+/** 将 reviewStatus 映射到 FSM 状态 */
+export function reviewStatusToFsmState(reviewStatus: string): string {
+  switch (reviewStatus) {
+    case "pending": return "idle";
+    case "reviewing": return "planning";
+    case "reviewed": return "reviewing";
+    default: return "idle";
+  }
+}
+
 /** Plan 模式状态持久化文件路径 */
 const PLAN_STATE_FILE = ".cortex/plan-state.json";
 
@@ -144,7 +178,25 @@ export async function* planMode(
   // 否则：生成计划
   const planText = yield* queryLoop({ input, bridge, mode: "plan", agent, hooks, history });
 
-  // —— 后处理：解析甘雨输出的 JSON → TaskNode[] ——
+  // —— 通过 MetaAgent 标准化节点（补上被绕过的规划层） ——
+  try {
+    const metaAgent = (bridge as unknown as { getMetaAgent?: () => { plan: (input: string) => Promise<TaskNode[]> } }).getMetaAgent?.();
+    // Core-3: 泛型擦除——待接口泛型化
+    if (metaAgent && typeof metaAgent.plan === "function") {
+      const metaNodes: TaskNode[] = await metaAgent.plan(input);
+      if (metaNodes && metaNodes.length > 0) {
+        planState.nodes = metaNodes;
+        planState.intent = input;
+        planState.reviewStatus = "reviewing";
+        yield { type: "plan_generated", nodes: metaNodes } as const;
+        return "\n" + formatPlanTree(metaNodes) + "\n\n📋 请输入 .review 启动三省审议，或 .approve 直接执行";
+      }
+    }
+  } catch {
+    // MetaAgent 不可用时降级为 queryLoop 解析
+  }
+
+  // —— 后处理：降级路径——解析甘雨输出的 JSON → TaskNode[] ——
   const parsed = _extractPlanNodes(planText);
   if (parsed && parsed.length > 0) {
     planState.nodes = parsed;

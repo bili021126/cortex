@@ -14,8 +14,8 @@ import type { SessionSnapshot } from "./session-store.js";
 
 // ─── 复用 REPL 模式类型 ───────────────────────
 
-/** REPL 运行模式（与老 repl/types.ts 的 ReplMode 同构） */
-export type ReplMode = "command" | "chat" | "talk" | "plan" | "party";
+/** @deprecated v4 — 统一智能模式，不再区分 REPL 运行模式 */
+export type ReplMode = "chat" | "talk" | "party" | "plan" | "command";
 
 // ─── 执行事件流 ───────────────────────────────
 
@@ -36,7 +36,8 @@ export type TuiEvent =
   | TuiTaskTreeUpdateEvent
   | TuiTokenUsageEvent
   | TuiCompactionEvent
-  | TuiLifecycleEvent;
+  | TuiLifecycleEvent
+  | TuiPlanGeneratedEvent;
 
 /** 工具调用开始 */
 export interface TuiToolStartEvent {
@@ -139,10 +140,15 @@ export interface TuiCompactionEvent {
   estimatedTokens: number;
 }
 
+/** 计划生成事件 */
+export interface TuiPlanGeneratedEvent {
+  type: "plan_generated";
+  nodes: TaskNode[];
+}
+
 /** 生命周期事件 */
 export interface TuiLifecycleEvent {
-  type: "session_start" | "session_end" | "mode_change";
-  mode?: ReplMode;
+  type: "session_start" | "session_end";
   agent?: AgentType;
 }
 
@@ -158,7 +164,7 @@ export interface TuiLifecycleEvent {
 export interface TuiHooks {
   // ── 会话级（4）──
   /** 会话启动 */
-  onSessionStart?: (mode: ReplMode, agent: AgentType) => void;
+  onSessionStart?: (agent: AgentType) => void;
   /** 会话结束（退出前清理） */
   onSessionEnd?: () => Promise<void>;
   /** 会话持久化前 */
@@ -202,7 +208,8 @@ export interface TuiHooks {
 
   // ── 模式级（3）──
   /** 模式切换 */
-  onModeChange?: (from: ReplMode, to: ReplMode) => void;
+  /** @deprecated v4 — 统一智能模式，不再有 mode 切换 */
+  onModeChange?: (from: string, to: string) => void;
   /** Agent 切换 */
   onAgentSwitch?: (from: AgentType, to: AgentType) => void;
   /** 三人模式切换 */
@@ -252,7 +259,6 @@ export type ConfirmResult = "approve_once" | "approve_all" | "deny" | "skip";
 /** queryLoop 的输入上下文 */
 export interface QueryLoopContext {
   input: string;
-  mode: ReplMode;
   agent: AgentType;
   hooks: TuiHooks;
   /** 对话历史（多轮） */

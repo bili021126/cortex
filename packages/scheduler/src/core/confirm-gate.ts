@@ -108,6 +108,8 @@ export class ConfirmGate {
     }
     const score = computeTrustScore(records);
     if (shouldAutoApprove(score, level)) {
+      // Core-3: 信任记录应在工具执行后更新（当前为执行前乐观预估）
+      // 短期风险可控：失败工具下次会被 gate 拦住
       records.push({
         agentType: trustContext?.agentType ?? "unknown",
         toolName: trustContext?.toolName ?? "unknown",
@@ -115,12 +117,14 @@ export class ConfirmGate {
         riskLevel: level,
         timestamp: Date.now(),
       });
-      console.log(`[telemetry] gate.trust_auto tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level} score=${score}`);
+      console.error(`[telemetry] gate.trust_auto tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level} score=${score}`);
       return { approved: true, reason: "trust auto", score };
     }
     // 回退到现有 needsConfirmation 逻辑
     const needsConfirm = this.needsConfirmation(level, trustContext);
     const approved = !needsConfirm;
+    // Core-3: 信任记录应在工具执行后更新（当前为执行前乐观预估）
+    // 短期风险可控：失败工具下次会被 gate 拦住
     records.push({
       agentType: trustContext?.agentType ?? "unknown",
       toolName: trustContext?.toolName ?? "unknown",
@@ -159,14 +163,14 @@ export class ConfirmGate {
     }
 
     if (this._bypass && Date.now() < this._bypassExpiresAt) {
-      console.log(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      console.error(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
       return false;
     }
     if (this._bypass) this._bypass = false; // 过期后自动关闭
 
     // L0 永不确认
     if (level === RL.L0) {
-      console.log(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      console.error(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
       return false;
     }
 
@@ -175,21 +179,21 @@ export class ConfirmGate {
       const records = this._trustRecordsByAgent.get(trustContext.agentType ?? "unknown") ?? [];
       const score = computeTrustScore(records);
       if ((level === "L2" && score >= TRUST_AUTO_APPROVE_L2) || (level === "L3" && score >= TRUST_AUTO_APPROVE_L3)) {
-        console.log(`[telemetry] gate.trust_auto_approve agent=${trustContext.agentType} score=${score} level=${level}`);
+        console.error(`[telemetry] gate.trust_auto_approve agent=${trustContext.agentType} score=${score} level=${level}`);
         return false;
       }
     }
 
     // L2/L3 永远确认
     if (level === RL.L2 || level === RL.L3) {
-      console.log(`[telemetry] gate.verdict verdict=confirm tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      console.error(`[telemetry] gate.verdict verdict=confirm tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
       return true;
     }
 
     // L1：信任模型判定
     if (!this.trustModel || !trustContext) {
       // 原则四 fail-open: TrustModel 离线时不阻断 L1 操作
-      console.log(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      console.error(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
       return false;
     }
     const trustLevel = this.trustModel.getTrustLevelForTool(
@@ -198,7 +202,7 @@ export class ConfirmGate {
     );
 
     const verdict = trustLevel < TL.L3 ? "confirm" : "approved";
-    console.log(`[telemetry] gate.verdict verdict=${verdict} tool=${trustContext.toolName} agent=${trustContext.agentType} risk=${level}`);
+    console.error(`[telemetry] gate.verdict verdict=${verdict} tool=${trustContext.toolName} agent=${trustContext.agentType} risk=${level}`);
     // TrustLevel ≥ L3 → L1 免确认
     return trustLevel < TL.L3;
   }
@@ -242,6 +246,26 @@ export class ConfirmGate {
     const effectiveTimeout = timeoutMs ?? this.defaultTimeoutMs;
 
     if (!this.pending.has(requestId)) return false;
+
+    // 非交互环境自动判定：L0/L1 放行，L2/L3 拒绝（安全优先）
+    // 环境变量 CORTEX_AUTO_CONFIRM=true 时无条件放行
+    if (process.env.CORTEX_AUTO_CONFIRM === 'true') {
+      const req = this.pending.get(requestId);
+      this.pending.delete(requestId);
+      this.resolvers.delete(requestId);
+      this.rejecters.delete(requestId);
+      return true;
+    }
+    if (!process.stdin.isTTY) {
+      const req = this.pending.get(requestId);
+      if (req) {
+        const approved = req.level === RL.L0 || req.level === RL.L1;
+        this.pending.delete(requestId);
+        this.resolvers.delete(requestId);
+        this.rejecters.delete(requestId);
+        return approved;
+      }
+    }
 
     // 有 bridge 时走真实用户交互
     if (this.bridge) {

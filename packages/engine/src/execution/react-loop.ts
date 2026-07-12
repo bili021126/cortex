@@ -69,7 +69,7 @@ export async function runReActLoop(
   ];
 
   // 如果节点携带 _outputPath，注入目标文件路径到第一条系统消息
-  const outputPath = (node as any)._outputPath;
+  const outputPath = node._outputPath;
   if (outputPath) {
     messages.unshift({
       role: "system",
@@ -88,7 +88,7 @@ export async function runReActLoop(
 
   const REACT_DEBUG = process.env["CORTEX_DEBUG"] === "1" || process.env["REACT_DEBUG"] === "1";
   const diagnostic = (msg: string): void => {
-    if (REACT_DEBUG) process.stderr.write(`  🔁 [ReAct-${agentType}#${loops}] ${msg}\n`);
+    if (REACT_DEBUG) console.error(`  🔁 [ReAct-${agentType}#${loops}] ${msg}`);
   };
 
   diagnostic(`启动——maxLoops=${maxLoops}, timeout=${ctx.reactLoopTimeoutMs}ms, tools=${toolDefs.length}个`);
@@ -130,19 +130,18 @@ export async function runReActLoop(
       // ── 遥测：Context 膨胀 ──
       const totalChars = messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
       const avgPerMsg = messages.length > 0 ? Math.round(totalChars / messages.length) : 0;
-      // eslint-disable-next-line no-console
-      console.log(`[telemetry] context.inflate agent=${agentType} loops=${loops} totalChars=${totalChars} msgs=${messages.length} avgPerMsg=${avgPerMsg}`);
+      console.error(`[telemetry] context.inflate agent=${agentType} loops=${loops} totalChars=${totalChars} msgs=${messages.length} avgPerMsg=${avgPerMsg}`);
       diagnostic(`🛰️  调用 LLM (${model})——上下文 ${msgCount} 条消息，工具 ${toolDefs.length} 个...`);
       if (REACT_DEBUG) {
-        process.stderr.write(`  📋 [ReAct-${agentType}#${loops}] 系统消息: ${(messages[0]?.content ?? "(空)").slice(0, 100)}\n`);
-        process.stderr.write(`  📋 [ReAct-${agentType}#${loops}] 工具列表: ${toolDefs.map(t=>t.name).join(", ")}\n`);
+        console.error(`  📋 [ReAct-${agentType}#${loops}] 系统消息: ${(messages[0]?.content ?? "(空)").slice(0, 100)}`);
+        console.error(`  📋 [ReAct-${agentType}#${loops}] 工具列表: ${toolDefs.map(t=>t.name).join(", ")}`);
       }
       const callStart = Date.now();
       // 🎯 硬核：code/fix/ops 类 Agent 首次 LLM 调用必须选工具（不指定具体工具名，兼容 DeepSeek）
       const forceWrite = (loops === REACT_FORCE_WRITE_LOOP && [AgentType.Code, AgentType.Fix, AgentType.Ops].includes(agentType as AgentType) && toolDefs.some(t => t.name === "write_file"))
         ? "required" : undefined;
-      if (forceWrite) // eslint-disable-next-line no-console
-        console.log(`[TRACE write_file] react-loop: forceTool=required (loops=${loops})`);
+      if (forceWrite)
+        console.error(`[TRACE write_file] react-loop: forceTool=required (loops=${loops})`);
       // reasoning_effort 和 tool_choice 均不发送——DeepSeek Flash 不支持，Pro 需 extra_body 配套
       // FIX-02: forceWrite 仅对 Pro/Reasoner 发送——Flash 返回 400 on tool_choice
       const shouldForce = forceWrite && (model.includes("pro") || model.includes("reasoner"));
@@ -163,13 +162,13 @@ export async function runReActLoop(
       if (res.reasoning_content) {
         if (REACT_DEBUG) {
           const preview = res.reasoning_content.slice(0, 300);
-          process.stderr.write(`  💭 [ReAct-${agentType}#${loops}] 思维链预览: ${preview}${res.reasoning_content.length > 300 ? "...(截断)" : ""}\n`);
+          console.error(`  💭 [ReAct-${agentType}#${loops}] 思维链预览: ${preview}${res.reasoning_content.length > 300 ? "...(截断)" : ""}`);
         }
       }
       if (res.content) {
         if (REACT_DEBUG) {
           const preview = res.content.slice(0, 200);
-          process.stderr.write(`  📝 [ReAct-${agentType}#${loops}] 文本响应: ${preview}${res.content.length > 200 ? "...(截断)" : ""}\n`);
+          console.error(`  📝 [ReAct-${agentType}#${loops}] 文本响应: ${preview}${res.content.length > 200 ? "...(截断)" : ""}`);
         }
       }
 
@@ -182,12 +181,11 @@ export async function runReActLoop(
       }
       diagnostic(`✅ LLM 响应耗时 ${callElapsed}ms——工具调用 ${toolCallCount} 个`);
       if (REACT_DEBUG) {
-        process.stderr.write(`  🔍 [ReAct-${agentType}#${loops}] tool_calls=${JSON.stringify(res.tool_calls)?.slice(0,200)}\n`);
+        console.error(`  🔍 [ReAct-${agentType}#${loops}] tool_calls=${JSON.stringify(res.tool_calls)?.slice(0,200)}`);
       }
 
       if (toolCallCount === 0) {
-        // eslint-disable-next-line no-console
-        console.log(`[TRACE write_file] react-loop: 零工具调用 (loops=${loops}, agentType=${agentType}, hasWriteFile=${toolCallHistory.some(tc => tc.name === 'write_file')})`);
+        console.error(`[TRACE write_file] react-loop: 零工具调用 (loops=${loops}, agentType=${agentType}, hasWriteFile=${toolCallHistory.some(tc => tc.name === 'write_file')})`);
         // ── 硬检测：代码类任务必须调用 write_file ──
         const hasWriteFile = toolCallHistory.some(tc => tc.name === 'write_file');
         const payload = (node.payload ?? '').toLowerCase();
@@ -198,8 +196,7 @@ export async function runReActLoop(
         const hasWriteTool = toolDefs.some(t => t.name === 'write_file');
 
         if (isCodeTask && !hasWriteFile && hasWriteTool && loops < maxLoops) {
-          // eslint-disable-next-line no-console
-          console.log(`[TRACE write_file] react-loop: 强制追加 write_file 提醒 (loops=${loops}, agentType=${agentType})`);
+          console.error(`[TRACE write_file] react-loop: 强制追加 write_file 提醒 (loops=${loops}, agentType=${agentType})`);
           diagnostic('⚠️ 代码任务但未调用 write_file，强制追加提醒');
           messages.push({
             role: 'user',
@@ -232,8 +229,7 @@ export async function runReActLoop(
         const l0Results = await Promise.allSettled(
           l0Calls.map(async (tc) => {
             if (tc.name === "write_file") {
-              // eslint-disable-next-line no-console
-              console.log(`[TRACE write_file] agent=${agentType} calling tool=${tc.name} params=${JSON.stringify(tc.arguments)}`);
+              console.error(`[TRACE write_file] agent=${agentType} calling tool=${tc.name} params=${JSON.stringify(tc.arguments)}`);
             }
             const toolStart = Date.now();
             const result = await toolkit.execute(
@@ -243,8 +239,7 @@ export async function runReActLoop(
             const toolElapsed = Date.now() - toolStart;
             const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
             diagnostic(`🔧 ${tc.name} → ${outcome}`);
-            // eslint-disable-next-line no-console
-            console.log(`[telemetry] agent.tool_called agent=${agentType} tool=${tc.name}`);
+            console.error(`[telemetry] agent.tool_called agent=${agentType} tool=${tc.name}`);
             return { tc, result, toolElapsed };
           })
         );
@@ -272,8 +267,7 @@ export async function runReActLoop(
       // L2/L3 串行执行
       for (const tc of writeCalls) {
         if (tc.name === "write_file") {
-          // eslint-disable-next-line no-console
-          console.log(`[TRACE write_file] agent=${agentType} calling tool=${tc.name} params=${JSON.stringify(tc.arguments)}`);
+          console.error(`[TRACE write_file] agent=${agentType} calling tool=${tc.name} params=${JSON.stringify(tc.arguments)}`);
         }
         diagnostic(`🔧 执行工具 ${tc.name}`);
         const toolStart = Date.now();
@@ -284,8 +278,7 @@ export async function runReActLoop(
         const toolElapsed = Date.now() - toolStart;
         const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
         diagnostic(`🔧 ${tc.name} → ${outcome}`);
-        // eslint-disable-next-line no-console
-        console.log(`[telemetry] agent.tool_called agent=${agentType} tool=${tc.name}`);
+        console.error(`[telemetry] agent.tool_called agent=${agentType} tool=${tc.name}`);
 
         messages.push({
           role: "tool",
@@ -310,8 +303,7 @@ export async function runReActLoop(
   // ── 遥测：Token 消耗汇总 ──
   const totalPromptTokens = usageLog.reduce((s,u) => s + (u.prompt_tokens??0), 0);
   const totalCompTokens = usageLog.reduce((s,u) => s + (u.completion_tokens??0), 0);
-  // eslint-disable-next-line no-console
-  console.log(`[telemetry] agent.token_used agent=${agentType} promptTokens=${totalPromptTokens} compTokens=${totalCompTokens}`);
+  console.error(`[telemetry] agent.token_used agent=${agentType} promptTokens=${totalPromptTokens} compTokens=${totalCompTokens}`);
 
   const totalElapsed = Date.now() - startTime;
   diagnostic(`🏁 循环结束——耗时 ${totalElapsed}ms, loops=${loops}/${maxLoops}, success=${finalOutput !== undefined}`);
