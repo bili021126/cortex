@@ -55,7 +55,7 @@ export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
 
     const subcommand = args[0];
     try {
-      const memory = await bridge.getMemoryStore() as IMemoryStore;
+      const memory = await bridge.getMemoryStore();
       switch (subcommand) {
         case "write":      return await handleMemoryWrite(memory, { rawKey: args[1], rawValue: args.slice(2).join(" "), options });
         case "read":       return await handleMemoryRead(memory, args[1], options);

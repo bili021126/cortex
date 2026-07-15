@@ -29,6 +29,8 @@ export {
   AGENT_DISPLAY_BY_TYPE,
   AGENT_DISPLAY_FALLBACK,
   CHAT_AGENT_ALIASES,
+  AGENT_TYPE_TO_DIR,
+  AGENT_ALIAS_TO_TYPE,
   getAgentTags,
   getTagVocabulary,
   setAgentTags,
@@ -161,7 +163,13 @@ export type {
   ICortexApi,
   Disposable,
 } from "./infra.js";
-export type { Unknown, StrictNonEmptyArray } from "./infra.js";
+export type { StrictNonEmptyArray } from "./infra.js";
+
+export type {
+  ICommandDispatcher,
+  ICommandContext,
+  ICommandResult,
+} from "./command-dispatcher.js";
 
 // ── Platform 域 ──
 export {
@@ -249,6 +257,8 @@ export {
   shortId,
 } from "./id-utils.js";
 
+export { clamp } from "./math-utils.js";
+
 export {
   extractJsonBlock,
 } from "./json-utils.js";
@@ -287,6 +297,18 @@ export type {
   EventCounts,
   PanoramaSnapshot,
 } from "./panorama-types.js";
+
+// ── Scheduler 契约 ──
+export type {
+  ITaskBoard,
+  ISchedulerAgentPool,
+  IAgentPool,
+  IScheduler,
+  IStrategistAgent,
+} from "./scheduler-contracts.js";
+
+// ── Intent 契约 ──
+export type { IntentClarification } from "./intent-clarification.js";
 // ============================================================
 // @cortex/shared —— Cortex 类型中枢（Public API Surface）
 //

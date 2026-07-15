@@ -2,7 +2,7 @@
 // @layer 规划-执行层
 // @role 事轴起点——意图拆解为粗粒度 TaskNode 树
 
-import { extractJsonBlock, PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type SkillTemplate, type Tag, type TaskNode } from "@cortex/shared";
+import { extractJsonBlock, PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type SkillTemplate, type Tag, type TaskNode, type IntentClarification } from "@cortex/shared";
 import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { ContextManager } from "@cortex/context-manager";
@@ -19,6 +19,7 @@ import {
 import type { SkillRegistry } from "@cortex/skill-kit";
 import type { PromptManager, PlanningPromptBlocks } from "./prompt-manager.js";
 import { DegradationBoundary } from "./degradation-boundary.js";
+import { resilienceFactory } from "../execution/resilience-integration.js";
 import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
 
 /**
@@ -232,10 +233,12 @@ export class MetaAgent {
       "impactScope: the assessed scope of impact.",
     ].join("\n");
 
-    const res = await this.llm.chat(this.llm.reasonerModel, [
-      { role: "system", content: this._replanSystem },
-      { role: "user", content: prompt },
-    ]);
+    const res = await resilienceFactory.execute("llm-call", async () =>
+      this.llm.chat(this.llm.reasonerModel, [
+        { role: "system", content: this._replanSystem },
+        { role: "user", content: prompt },
+      ]),
+    );
 
     return this._parseReplanResult(res.content ?? "", failedNode.parentId);
   }
@@ -288,10 +291,12 @@ export class MetaAgent {
       "impactScope: use 'subtree' unless absolutely certain only local is affected.",
     ].join("\n");
 
-    const res = await this.llm.chat(this.llm.reasonerModel, [
-      { role: "system", content: this._replanSystem },
-      { role: "user", content: prompt },
-    ]);
+    const res = await resilienceFactory.execute("llm-call", async () =>
+      this.llm.chat(this.llm.reasonerModel, [
+        { role: "system", content: this._replanSystem },
+        { role: "user", content: prompt },
+      ]),
+    );
 
     return this._parseReplanResult(res.content ?? "", violatingNode.parentId);
   }
@@ -309,10 +314,12 @@ export class MetaAgent {
       `User intent: ${intent}`,
     ].join("\n");
 
-    const res = await this.llm.chat(this.llm.reasonerModel, [
-      { role: "system", content: "You are a precise intent parser. Extract structured intent from user input. Respond only with the JSON object, no other text." },
-      { role: "user", content: prompt },
-    ]);
+    const res = await resilienceFactory.execute("llm-call", async () =>
+      this.llm.chat(this.llm.reasonerModel, [
+        { role: "system", content: "You are a precise intent parser. Extract structured intent from user input. Respond only with the JSON object, no other text." },
+        { role: "user", content: prompt },
+      ]),
+    );
 
     return this._parseClarification(res.content ?? "", intent);
   }
@@ -402,10 +409,12 @@ export class MetaAgent {
     const systemPrompt = this._workspaceRoot
       ? buildPlanningSystem(this._workspaceRoot)
       : this._planningSystem;
-    const res = await this.llm.chat(this.llm.reasonerModel, [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: prompt },
-    ]);
+    const res = await resilienceFactory.execute("llm-call", async () =>
+      this.llm.chat(this.llm.reasonerModel, [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ]),
+    );
     return this._parsePlan(res.content ?? "", context?.parentId);
   }
 
@@ -719,15 +728,8 @@ interface PlanContext {
   existingTags?: string[];
 }
 
-/** 意图确认结果——clarifyIntent() 返回 */
-export interface IntentClarification {
-  goal: string;
-  actionType: "analysis" | "modification" | "audit" | "refactor" | "generation" | "inquiry";
-  scope: string;
-  constraints: string;
-  unclear?: string;
-  originalIntent: string;
-}
+/** 意图确认结果——契约已上迁至 @cortex/shared，此处 re-export 以兼容旧消费方 */
+export type { IntentClarification } from "@cortex/shared";
 
 // 系统提示已迁移至 @cortex/config/constants/meta-agent.ts
 // 通过 buildPlanningSystem(workspaceRoot) / REPLAN_SYSTEM 导入使用

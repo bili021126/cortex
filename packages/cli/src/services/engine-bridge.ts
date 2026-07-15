@@ -21,7 +21,8 @@ import {
   type BootstrapEngineResult,
 } from "@cortex/engine";
 import { SlashCommandParser } from "./slash-command.js";
-import type { IScheduler, ITaskBoard, IAgentPool } from "@cortex/scheduler";
+import type { IScheduler, ITaskBoard } from "@cortex/scheduler";
+import type { IAgentPool } from "@cortex/shared";
 import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { CLIAdapter, type Toolkit } from "@cortex/platform";
 import type { EngineConfig } from "@cortex/config";
@@ -31,7 +32,7 @@ import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
 import { LLM_KEY_NAMES } from "@cortex/config";
-import type { TuiEvent } from "@cortex/tui";
+import type { TuiEvent } from "../tui/types.js";
 import { toolRollbackRegistry } from "@cortex/tools";
 
 export interface BridgeContext {
@@ -503,7 +504,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   }
 
   /** ICortexApi.getAgentPool() —— 返回 AgentPool 实例（管理命令用） */
-  getAgentPool(): unknown {
+  getAgentPool(): IAgentPool | undefined {
     return this.agentPool;
   }
 
@@ -594,12 +595,12 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
 
     // MemoryStore 兜底关闭（orchestrator 可能已处理，幂等安全）
     if (this.ctx.memoryStore) {
-      try { await this.ctx.memoryStore.flush(); } catch { /* store may not be initialized */ }
-      try { await this.ctx.memoryStore.close(); } catch { /* store may not be initialized */ }
+      try { await this.ctx.memoryStore.flush(); } catch (err) { console.error(`[engine-bridge] memoryStore.flush failed:`, err); }
+      try { await this.ctx.memoryStore.close(); } catch (err) { console.error(`[engine-bridge] memoryStore.close failed:`, err); }
     }
     if (this.ctx.talkMemoryStore) {
-      try { await this.ctx.talkMemoryStore.flush(); } catch { /* store may not be initialized */ }
-      try { await this.ctx.talkMemoryStore.close(); } catch { /* store may not be initialized */ }
+      try { await this.ctx.talkMemoryStore.flush(); } catch (err) { console.error(`[engine-bridge] talkMemoryStore.flush failed:`, err); }
+      try { await this.ctx.talkMemoryStore.close(); } catch (err) { console.error(`[engine-bridge] talkMemoryStore.close failed:`, err); }
     }
     if (this.ctx.cliAdapter) {
       this.ctx.cliAdapter.close();

@@ -61,7 +61,7 @@ export class FileLockManager extends BaseLifecycle {
    * - 读锁：允许多个 holder 共存（只要没有写锁）
    * - 写锁：独占（没有其他读写锁时才能获取）
    */
-  acquire(filePath: string, lockType: LockType, ownerId: string): boolean {
+  acquire(filePath: string, ownerId: string, lockType?: LockType): boolean {
     this._ensureNotDisposed("acquire");
 
     const now = Date.now();
@@ -304,8 +304,8 @@ export class InMemoryFileLockManager extends FileLockManager {
   /**
    * 获取锁——同时检测死锁并触发 onDeadlockDetected 回调。
    */
-  override acquire(filePath: string, lockType: LockType, ownerId: string): boolean {
-    const result = super.acquire(filePath, lockType, ownerId);
+  override acquire(filePath: string, ownerId: string, lockType?: LockType): boolean {
+    const result = super.acquire(filePath, ownerId, lockType);
 
     if (!result && this._config.onDeadlockDetected) {
       const existing = this._locks.get(filePath);

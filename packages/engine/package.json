@@ -23,7 +23,6 @@
   },
   "dependencies": {
     "@cortex/config": "workspace:*",
-    "@cortex/consistency": "workspace:*",
     "@cortex/context-manager": "workspace:*",
     "@cortex/governance": "workspace:*",
     "@cortex/llm": "workspace:*",

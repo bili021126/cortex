@@ -1,14 +1,14 @@
-# Cortex 概念顶层设计 v3.3
+# Cortex 概念顶层设计 v3.4
 
-**版本**：v3.3（类型分级 / ConfirmGate Agent化 / Tag运行时注册 / 对称攻防自审视 / E2E治理体系 / 链路管理体系）
+**版本**：v3.4（包结构收敛 / 运行时防护增强 / 重复实现统一 / 40 项缺陷闭合）
 
-**状态**：Core-1 已完成（100%），Core-2 Phase 1 止血完成（7 Critical 修复），Phase 2 契约层推进中。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
+**状态**：Core-2 深度治理推进中。五轮审查 ~110 发现，七轮修复闭合 40 项（含 TOCTOU 防控、role 交替修复、claimedBy 终态清理、inflight 去重、maintain 标记删除、dispatchMulti 容错）。6 项设计决策排入 Core-3。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
 
 **性质**：智能体治理框架——不对模型提要求，对架构下约束。核心手段是"暴露不可靠，内化可靠"。
 
 **前置宪法**：v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.7.1（Core-1 终局）。v3.0 对 v2.x 做全量重写——从"各阶段增量叠加"改为"按代码现实重述"。
 
-**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）→ 2026-06-28（v3.2）→ 2026-07-06（v3.3）
+**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）→ 2026-06-28（v3.2）→ 2026-07-06（v3.3）→ 2026-07-16（v3.4）
 **宪法守护者**：昔涟（Cyrene），与开拓者共同完成
 
 ---
@@ -25,7 +25,7 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 - 全量 tsc 编译 25 包零错误（含 strict + noUncheckedIndexedAccess）
 - 全链路 12 流全部通过审计（见 `docs/core/link-governance.md`）
 - CI 门禁：四层（tsc --noEmit → unit → verify → contract），scripts/ci-gate.ts 驱动
-- 已知缺陷：五轮深度审查 ~260 项，根因收敛为四类整合缺陷（跨包类型漂移/any 桥接/事件契约断裂/上下文逻辑漂移）
+- 已知缺陷：五轮深度审查 ~110 发现，七轮修复闭合 40 项（含 ICortexComponents 收敛 / claimedBy 终态清理 / TOCTOU 防控 / role 交替修复 / dispatchMulti 容错 / 重复实现统一）。6 项设计决策排入 Core-3（Logger 推广 / execSync→async / WebUI 鉴权 / EventPayloadMap 补完 / Disposable 推广 / shared export*）。
 - Phase 1 已完成：7 个 Critical（C-01 命令注入/C-02 rollback/C-03 Embedding/C-04 CircuitBreaker/C-05 Bootstrap/C-06 RLM/C-07 Obliteration）全部根因修复
 
 **核心隐喻**：工具链。每个组件是可替换、可验证、职责清晰的工具。不存在"数字生命体"的不可知性——每个行为可审计。用户是工具的使用者和最终裁决者。
@@ -80,41 +80,35 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 
 ## 三、系统架构——代码现实
 
-### 3.1 包结构（31 包）
+### 3.1 包结构（25 包）
 
 ```
 packages/
 ├── engine/           # 引擎容器——bootstrap + Agent + Scheduler
 ├── scheduler/        # 调度引擎——TaskBoard/AgentPool/PipelineObserver/ConfirmGate
-├── shared/           # 共享类型
+├── shared/           # 共享类型中枢
 ├── platform/         # 平台抽象——Toolkit
 ├── config/           # 配置——EngineConfig/常量集中
 ├── memory-store/     # 记忆持久化
 ├── memory/           # 内存记忆
-├── consistency/      # 一致性校验
 ├── skill-kit/        # 技能工具包
 ├── prompt-kit/       # 提示词工程
 ├── resilience/       # 韧性策略
 ├── notification/     # 通知管线
-├── governance/       # 治理
+├── governance/       # 治理 + 一致性校验（consistency 已并入）
 ├── telemetry/        # 遥测
 ├── logging/          # 日志
 ├── plugin-runner/    # 插件运行时
 ├── fsm-compiler/     # FSM 编译
 ├── pattern-extractor/# 模式提取
 ├── llm/              # LLM 适配层
-├── cli/              # CLI
-├── tui/              # TUI
-├── cache/            # 缓存
+├── cli/              # CLI + TUI（tui 已并入）
+├── context-manager/  # 上下文压缩
 ├── doctor/           # 诊断
 ├── tools/            # 内部工具
 ├── testing/          # 测试工具
-├── pm/               # 进程管理
 ├── parser/           # 解析器
-├── schema/           # Schema 定义
-├── result/           # Result 类型
-├── self-examination/ # 自审视
-└── toolchain/        # 工具链
+└── desktop/          # Electron 桌面端
 ```
 
 ### 3.2 三层架构
@@ -263,7 +257,7 @@ Engine（容器）
 **代码**：
 - `packages/memory-store/src/memory-store.ts`——SQLite 持久化 + 委托模式（Facade + 7 组件族）
 - `packages/memory/src/`——InMemoryMemoryStore 内存实现
-- `packages/consistency/src/consistency-layer.ts`——六层防御（IntentFactWall/InitVerifier/SchemaEnforcer/GitHookBridge/SemiFinishedMgr）
+- `packages/governance/src/consistency/consistency-layer.ts`——六层防御（IntentFactWall/InitVerifier/SchemaEnforcer/GitHookBridge/SemiFinishedMgr）（原 consistency 包已并入 governance）
 
 **四态模型**：Active → Archived → Frozen → Obliterated。CAS 原子流转。
 
@@ -393,6 +387,7 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 | v3.1 | AM-2026-0622-001 | 2026-06-22 | Phase 1 止血完成。七 Critical 修复入宪：C-01 命令注入（接口名白名单）、C-02 rollback（async/await 消除 as unknown as boolean）、C-03 Embedding（try/finally 防止永久卡死）、C-04 CircuitBreaker（fallback 不再穿透原函数）、C-05 Bootstrap（失败逆序 stop+dispose）、C-06 RLM（成功率 ≥50% 阈值）、C-07 Obliteration（移除短路条件）。CI 门禁升级为四层：tsc --noEmit → unit → verify → contract。全仓 29 包 Vitest resolve.alias 标准化——删 dist 不影响测试。跨包契约铁律（§十五）入 coding-standards.md。测试基线：engine 79 文件 890/890，全仓 3146/3174。全景图 v1.1 数据修正。 |
 | v3.1→v3.2 | 2026-06-28 | §二七原则三层重排 / §二十 WebUI入宪 / §二十二 自审视入宪 / §二十三 平台边界 / §十四 门禁刷新 | 昔涟裁决，curious 审计，executor 施工 |
 | v3.2→v3.3 | AM-2026-0706-001 | 2026-07-06 | Core-2 推进——类型分级（§2.8）、ConfirmGate Agent化（§十四）、Tag运行时注册（§2.8）、对称攻防自审视（§二十二）、E2E治理体系（§二十四）、链路管理体系（§二十五）。15 Agent / 86 文件 1069 用例 engine / 全仓 3716 用例 / 25 包 tsc 零错误。 | 昔涟裁决，curious 审计，executor 施工 |
+| v3.3→v3.4 | AM-2026-0716-001 | 2026-07-16 | 包结构收敛（27→25）：tui 并入 cli、consistency 并入 governance。运行时防护增强：Context compactor role 交替修复（§二十六）、Memory write inflight 去重（§二十六）、maintain 标记删除（§二十六）、claimedBy 终态清理（§二十六）、dispatchMulti 容错（§二十六）。重复实现统一（§二十七）：PipelineEventType/config event-types.ts 删除（238行）、AGENT_DEFS config版删除（117行）、file-lock-manager platform版删除（285行）。Disposable 接口补 dispose。ShutdownWarden @deprecated 标注。ICortexComponents 零 unknown。core-smoke 修复——根 tsconfig.json 清理 tui/consistency 残留引用。 | 昔涟裁决，五轮审查+七轮修复闭合 40 项缺陷 |
 
 ---
 
@@ -428,7 +423,7 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 
 #### 定位
 WebUI 是交互层的扩展——将 CLI/TUI 的命令行交互扩展为图形化观测面。
-代码位于 `packages/tui/src/web/`，通过 WebSocket + HTTP 与引擎通信。
+代码位于 `packages/cli/src/tui/web/`，通过 WebSocket + HTTP 与引擎通信。
 它不参与业务决策，不绕过 ConfirmGate 执行操作。
 
 #### 三区布局
@@ -447,10 +442,10 @@ WebUI 的治理仪表盘模块消费自审视报告（AuditReport + AmendmentLog
 是自审视结果的图形化呈现面。
 
 #### 代码锚点
-- 后端：`packages/tui/src/web/gateway.ts`（WS 网关 + HTTP 服务）
-- 后端：`packages/tui/src/web/state-aggregator.ts`（三源聚合）
-- 后端：`packages/tui/src/web/api-router.ts`（REST API）
-- 前端：`packages/tui/src/web/static/src/`（React 组件，8 个）
+- 后端：`packages/cli/src/tui/web/gateway.ts`（WS 网关 + HTTP 服务）
+- 后端：`packages/cli/src/tui/web/state-aggregator.ts`（三源聚合）
+- 后端：`packages/cli/src/tui/web/api-router.ts`（REST API）
+- 前端：`packages/cli/src/tui/web/static/src/`（React 组件，8 个）
 - 入口：`scripts/start-webui.ts`
 
 #### 设计参考
@@ -556,5 +551,47 @@ Cortex 定义了 12 条核心数据流，映射在 `docs/core/full-flow-map.md` 
 
 ---
 
-*宪法 v3.3。代码即真相。测试即实证。CI 即硬防线。*
+### §二十六·运行时防护增强（v3.4 新增）
+
+基于五轮深度审查中发现的运行时脆弱点，实施以下系统性防护：
+
+**Context compactor role 交替修复**：L3/L4/L5 压缩后可能产生连续同 role 消息（违规的 user/assistant 交替）。新增 `_fixRoleAlternation()` 后处理步骤，扫描结果消息列表，连续同 role 消息合并为单条，保证 LLM API 协议合规。代码：`packages/cli/src/tui/context-compactor.ts`。
+
+**Memory write TOCTOU 防控**：并发同内容写入时，`_tryDedup()` 与 `backend.write()` 间的 await 间隙可被利用穿透去重。新增 `_inflightWrites` Map（contentHash → writePromise）——并发请求等待已有写入完成，写入成功后立即缓存。代码：`packages/memory-store/src/memory-store.ts`。
+
+**maintain/read 互斥**：`maintain()` 同步执行 archive/obliterate 时，`read()` 中的 await 可能让出事件循环导致读到已删除条目。改为标记删除模式——`_pendingObliterate` Set 存储待湮灭 ID，`read()` 过滤，批量湮灭后清空。代码：同上。
+
+**claimedBy 终态清理**：`TaskBoard.complete()` 和 `failNode()` 后 `node.claimedBy` 残留。新增终态 `node.claimedBy = []`，清理已调度印记。代码：`packages/scheduler/src/core/task-board.ts`。
+
+**dispatchMulti 容错**：`Promise.all(promises)` → `Promise.allSettled(promises)`，单 agent 管线异常不影响其他 agent。代码：`packages/scheduler/src/core/scheduling-implementations.ts`。
+
+**runDispatchPipeline try/finally**：新增 try/finally 包裹，异常路径仍执行 CleanupStep 释放 claimedBy/ManifoldGate/Pool。代码：同上。
+
+**LLM 中间轮次恢复**：ReAct 崩溃时返回 `bestEffortOutput`（最后一次成功输出）而非 `[partial output...]` 占位。代码：`packages/engine/src/execution/react-loop.ts`。
+
+**endSession 顺序修正**：`memory.endSession()` 移到 `orchestrator.shutdown()`（含 dispose）之前执行——先归档再关存储。代码：`packages/engine/src/bootstrap/bootstrap-engine.ts`。
+
+---
+
+### §二十七·重复实现统一治理（v3.4 新增）
+
+代码重复是架构债务的核心信号。以下重复实现已完成统一：
+
+| 重复项 | 权威源 | 删除 | 消除量 |
+|--------|--------|------|:---:|
+| PipelineEventType 双定义 | `@cortex/shared` | `config/src/vocabularies/event-types.ts` | -238 行 |
+| AGENT_DEFS 双源 | `@cortex/shared` | `config/src/data/agent-defs.ts` | -117 行 |
+| file-lock-manager 双实现 | `engine/src/core` | `platform/src/file-lock-manager.ts` | -285 行 |
+| engine/components 死代码 | `@cortex/skill-kit` | 4 文件（skill-extractor/json-validator/persister/template-engine） | -1738 行 |
+| clamp() 三份 → 一份 | `@cortex/shared` | memory-store/desktop 本地实现 | -2 份 |
+| RagMemoryEntry 同名异义 | `@cortex/shared` | memory/cyrene/rag 局部定义更名 | -1 份 |
+
+**治理原则**：
+1. 删除前先确认消费方——grep 全仓零引用方可删除
+2. 权威源为被最多包依赖的实现——shared 优先于 config，engine 优先于 platform
+3. 接口对齐先于删除——如 `IFileLockManager.acquire` 参数顺序需与调用方一致
+
+---
+
+*宪法 v3.4。代码即真相。测试即实证。CI 即硬防线。*
 *守护者：昔涟（Cyrene），与开拓者共同完成。*

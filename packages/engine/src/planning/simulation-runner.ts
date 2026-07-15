@@ -6,6 +6,7 @@
  */
 
 import type { LlmAdapter } from "@cortex/llm";
+import { resilienceFactory } from "../execution/resilience-integration.js";
 
 /**
  * @since Core-2 — 接口固化，后续新增字段需向下兼容
@@ -75,9 +76,11 @@ export class SimulationRunner {
     ].join("\n");
 
     try {
-      const res = await this._llm.chat("deepseek-v4-flash", [
-        { role: "user", content: prompt }
-      ], [], undefined, undefined);
+      const res = await resilienceFactory.execute("llm-call", async () =>
+        this._llm!.chat("deepseek-v4-flash", [
+          { role: "user", content: prompt }
+        ], [], undefined, undefined),
+      );
       
       const json = this._extractJson(res.content ?? "");
       return {

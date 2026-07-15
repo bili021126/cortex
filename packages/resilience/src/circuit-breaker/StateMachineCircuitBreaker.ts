@@ -479,8 +479,9 @@ export class StateMachineCircuitBreaker implements ICircuitBreaker {
    * });
    * ```
    */
-  onStateChange(handler: (state: CircuitState, previous: CircuitState) => void): void {
+  onStateChange(handler: (state: CircuitState, previous: CircuitState) => void): () => void {
     this._stateChangeHandlers.push(handler);
+    return () => { this._stateChangeHandlers = this._stateChangeHandlers.filter(h => h !== handler); };
   }
 
   // ────────────────────────────────────────

@@ -97,6 +97,9 @@ export {
   ENV_CONFIRM_GATE_TIMEOUT_MS,
   ENV_VITEST,
   ENV_NODE_ENV,
+  ENV_AUTO_CONFIRM,
+  ENV_MAX_TOOL_ROUNDS,
+  withAutoConfirm,
   FILE_CORTEX_AGENTS_JSON,
   FILE_PERSONA_TALK_TXT,
   DIR_CONSTITUTION,
@@ -232,9 +235,6 @@ export { GOVERNANCE_EVENT_ROUTING } from "./governance-event-routing.js";
 // ── 预设上下文策略库 ──
 export { PRESET_CONTEXT_POLICIES } from "./data/context-policies.js";
 
-// ── Agent 定义数据 ──
-export { AGENT_DEFS, FULL_TOOLSET, BASE_TOOLSET, READONLY_TOOLSET } from "./data/agent-defs.js";
-
 // ── ConfigRegistry（Phase 3 基础设施）──
 export { ConfigRegistry } from "./registry.js";
 
@@ -255,14 +255,6 @@ export {
 export type {
   Tag,
 } from "./vocabularies/tags.js";
-export {
-  PipelineEventType,
-  PipelinePriority,
-} from "./vocabularies/event-types.js";
-export type {
-  EventPayloadMap,
-  GovernanceEventPayload,
-} from "./vocabularies/event-types.js";
 export {
   ToolCategory,
   ReversibilityLevel,

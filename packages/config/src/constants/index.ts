@@ -53,6 +53,9 @@ export {
   ENV_CONFIRM_GATE_TIMEOUT_MS,
   ENV_VITEST,
   ENV_NODE_ENV,
+  ENV_AUTO_CONFIRM,
+  ENV_MAX_TOOL_ROUNDS,
+  withAutoConfirm,
 } from "./env.js";
 
 // ── 文件路径 ──

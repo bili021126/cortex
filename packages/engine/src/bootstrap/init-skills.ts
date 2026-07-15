@@ -14,7 +14,7 @@ import type { MemoryStore } from "@cortex/memory-store";
 import type { IMemoryStore, IPipelineObserver, SkillTemplate } from "@cortex/shared";
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { MetaAgent } from "../core/meta-agent.js";
-import * as fs from "node:fs";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 export async function initSkillSystem(
@@ -107,28 +107,33 @@ export async function initSkillSystem(
   if (loadedSkills.length === 0) {
     try {
       const skillDir = path.join(projectRoot, "skills");
-      if (fs.existsSync(skillDir)) {
-        const files = fs.readdirSync(skillDir).filter((f) => f.endsWith(".json"));
-        const fileSkills: SkillTemplate[] = [];
-        for (const f of files) {
-          try {
-            const raw = fs.readFileSync(path.join(skillDir, f), "utf-8");
-            const skill = JSON.parse(raw) as SkillTemplate;
-            if (skill.id && skill.triggerTags && skill.steps) {
-              fileSkills.push(skill);
-            }
-          } catch {
-            // 单个文件解析失败不阻断
-            process.stderr.write(`[bootstrapEngine] 跳过技能文件（解析失败）: ${f}\n`);
+      let dirEntries: string[] = [];
+      try {
+        dirEntries = await fs.readdir(skillDir);
+      } catch {
+        // 目录不存在 → 静默跳过
+        return skillRegistry;
+      }
+      const files = dirEntries.filter((f) => f.endsWith(".json"));
+      const fileSkills: SkillTemplate[] = [];
+      for (const f of files) {
+        try {
+          const raw = await fs.readFile(path.join(skillDir, f), "utf-8");
+          const skill = JSON.parse(raw) as SkillTemplate;
+          if (skill.id && skill.triggerTags && skill.steps) {
+            fileSkills.push(skill);
           }
+        } catch {
+          // 单个文件解析失败不阻断
+          process.stderr.write(`[bootstrapEngine] 跳过技能文件（解析失败）: ${f}\n`);
         }
-        if (fileSkills.length > 0) {
-          skillRegistry.registerAll(fileSkills);
-          process.stderr.write(
-            `[bootstrapEngine] 从 skills/ 目录加载 ${fileSkills.length} 个技能模板: ` +
-            fileSkills.map((s) => `${s.name}(${s.id})`).join(", "),
-          );
-        }
+      }
+      if (fileSkills.length > 0) {
+        skillRegistry.registerAll(fileSkills);
+        process.stderr.write(
+          `[bootstrapEngine] 从 skills/ 目录加载 ${fileSkills.length} 个技能模板: ` +
+          fileSkills.map((s) => `${s.name}(${s.id})`).join(", "),
+        );
       }
     } catch (e) {
       observer.emit({

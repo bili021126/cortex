@@ -18,10 +18,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { AgentType, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ExecutionReport } from "@cortex/shared";
 import type { ITuiEngineBridge } from "@cortex/shared";
-import { chatMode } from "@cortex/tui";
-import { talkMode } from "@cortex/tui";
-import { planMode } from "@cortex/tui";
-import type { PlanModeState } from "@cortex/tui";
+import { chatMode } from "@cortex/cli";
+import { talkMode } from "@cortex/cli";
+import { planMode } from "@cortex/cli";
+import type { PlanModeState } from "@cortex/cli";
 import { LlmAdapter } from "@cortex/llm";
 
 // ══════════════════════════════════════════════════════════════

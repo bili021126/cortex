@@ -22,6 +22,7 @@ export enum AgentType {
   Browser    = "browser",
   Data       = "data",
   Strategist = "strategist",
+  ConfirmGate = "confirm-gate",
 }
 
 /** Agent 生命周期状态 */

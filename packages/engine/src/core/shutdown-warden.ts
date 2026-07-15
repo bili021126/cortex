@@ -37,18 +37,8 @@ export interface ShutdownReport {
 /**
  * ShutdownWarden —— 引擎优雅关闭监护。
  *
- * 编排 shutdown 顺序：
- *   1. Scheduler 完成进行中的任务
- *   2. LifecycleManager.shutdown() — 反向 stop + dispose 所有 ILifecycle 组件
- *   3. MemoryStore.endSession() — 归档 Active 记忆，湮灭 Pending 记忆
- *   4. MemoryStore.close() — 释放存储连接
- *   5. 资源泄漏报告
- *
- * @example
- * ```typescript
- * const warden = new ShutdownWarden(lifecycleManager, memory, observer);
- * const report = await warden.shutdown();
- * ```
+ * @deprecated 功能已被 ShutdownOrchestrator 替代。
+ * 本类保留用于兼容已有测试引用，新代码请使用 ShutdownOrchestrator。
  */
 export class ShutdownWarden {
   private readonly lifecycleManager: LifecycleManager;

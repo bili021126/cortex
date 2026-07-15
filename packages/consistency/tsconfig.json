@@ -1,9 +1,0 @@
-{
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.src.json" },
-    { "path": "../shared" },
-    { "path": "../config" },
-    { "path": "../memory-store" }
-  ]
-}

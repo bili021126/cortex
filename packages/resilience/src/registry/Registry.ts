@@ -108,8 +108,8 @@ export interface ICircuitBreaker {
   /** 强制转换到指定状态（测试/运维用） */
   forceState(state: CircuitState): void;
 
-  /** 订阅状态变更事件 */
-  onStateChange(handler: (state: CircuitState, previous: CircuitState) => void): void;
+  /** 订阅状态变更事件。返回取消订阅的函数 */
+  onStateChange(handler: (state: CircuitState, previous: CircuitState) => void): () => void;
 }
 
 /**
@@ -223,8 +223,8 @@ class NoBreaker implements ICircuitBreaker {
     // 无操作
   }
 
-  onStateChange(_handler: (state: CircuitState, previous: CircuitState) => void): void {
-    // 无操作
+  onStateChange(_handler: (state: CircuitState, previous: CircuitState) => void): () => void {
+    return () => {};
   }
 }
 

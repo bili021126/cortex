@@ -1,7 +1,7 @@
 import { ToolCategory, ReversibilityLevel as RL, getAgentToolPermissions, resolveAgentPermissions, LockType, PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { ToolInvocation, ToolResult, ToolDefinition, Tool, ReversibilityLevel, AgentType, IFileSystemAdapter, AgentContext, IPipelineObserver } from "@cortex/shared";
 import type { ConfirmGate } from "@cortex/scheduler";
-import type { FileLockManager } from "./file-lock-manager.js";
+import type { IFileLockManager } from "@cortex/shared";
 import { NodeFileSystemAdapter } from "./node-fs-adapter.js";
 import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
@@ -66,7 +66,7 @@ export class Toolkit {
   /** 统一工具注册表——本地 + MCP，不再区分来源 */
   private tools = new Map<string, Tool>();
   private gate?: ConfirmGate;
-  private lockManager?: FileLockManager;
+  private lockManager?: IFileLockManager;
   private workspaceRoot: string | null = null;
   private fs: IFileSystemAdapter;
   private readonly config: Required<EngineConfig>;
@@ -79,7 +79,7 @@ export class Toolkit {
   /** 可观测事件管道 */
   private _observer?: IPipelineObserver;
 
-  constructor(gate?: ConfirmGate, lockManager?: FileLockManager, fsAdapter?: IFileSystemAdapter, engineConfig?: EngineConfig) {
+  constructor(gate?: ConfirmGate, lockManager?: IFileLockManager, fsAdapter?: IFileSystemAdapter, engineConfig?: EngineConfig) {
     this.gate = gate;
     this.lockManager = lockManager;
     this.fs = fsAdapter ?? new NodeFileSystemAdapter();
@@ -157,7 +157,7 @@ export class Toolkit {
   }
 
   /** 注入 FileLockManager（可选，无锁管理器时跳过文件锁） */
-  setLockManager(lm: FileLockManager): void {
+  setLockManager(lm: IFileLockManager): void {
     this.lockManager = lm;
   }
 
@@ -193,7 +193,7 @@ export class Toolkit {
   /** 释放资源——级联清理 lockManager 定时器、gate 监听器 */
   dispose(): void {
     if (this.lockManager) {
-      this.lockManager.dispose();
+      this.lockManager.dispose?.();
       this.lockManager = undefined;
     }
     this.gate = undefined;

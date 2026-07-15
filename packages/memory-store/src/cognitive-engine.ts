@@ -15,6 +15,7 @@
 // ============================================================
 
 import type { MemoryEntry, MemoryLink } from "@cortex/shared";
+import { clamp } from "@cortex/shared";
 
 // ── 类型 ──────────────────────────────────────
 
@@ -110,11 +111,6 @@ export const DEFAULT_COGNITIVE_CONFIG: CognitiveConfig = {
 /** Sigmoid 归一化: 1 / (1 + e^(-x)) */
 function sigmoid(x: number): number {
   return 1 / (1 + Math.exp(-x));
-}
-
-/** 将值裁剪到 [minV, maxV] */
-function clamp(v: number, minV: number, maxV: number): number {
-  return Math.max(minV, Math.min(maxV, v));
 }
 
 // ── 贝叶斯相关性评分 ─────────────────────────

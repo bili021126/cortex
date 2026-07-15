@@ -14,9 +14,13 @@ const ALL_PKGS = [
 ];
 
 export function resolveAlias(packageDir: string): Record<string, string> {
-  return Object.fromEntries(
+  const base = Object.fromEntries(
     ALL_PKGS.map((p) => [`@cortex/${p}`, resolve(packageDir, `../${p}/src/index.ts`)]),
   );
+  // 子路径导出——pkg.json 的 exports["./subpath"] 映射
+  // @cortex/memory/cyrene → memory/src/cyrene/index.ts
+  base["@cortex/memory/cyrene"] = resolve(packageDir, "../memory/src/cyrene/index.ts");
+  return base;
 }
 
 /**

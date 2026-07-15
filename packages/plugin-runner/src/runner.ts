@@ -195,8 +195,8 @@ export class PluginRunner {
       // 尝试销毁插件（即使执行失败也要清理资源）
       try {
         await plugin.destroy();
-      } catch {
-        // 销毁失败不影响主流程——静默忽略
+      } catch (derr) {
+        console.warn(`[plugin-runner] destroy failed for ${name}:`, derr instanceof Error ? derr.message : String(derr));
       }
 
       // 更新状态 → error
@@ -297,8 +297,8 @@ export class PluginRunner {
     const cleanupTasks: Promise<void>[] = [];
     for (const dir of this._ownedWorkDirs) {
       cleanupTasks.push(
-        rm(dir, { recursive: true, force: true }).catch(() => {
-          // 单个目录清理失败 — 静默忽略
+        rm(dir, { recursive: true, force: true }).catch((err) => {
+          console.warn(`[plugin-runner] cleanup dir failed: ${dir}:`, err instanceof Error ? err.message : String(err));
         }),
       );
     }

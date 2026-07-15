@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./cyrene": {
+      "types": "./dist/cyrene/index.d.ts",
+      "import": "./dist/cyrene/index.js"
     }
   },
   "scripts": {

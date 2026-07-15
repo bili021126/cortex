@@ -11,6 +11,7 @@ import { runReActLoop, type ReActContext } from "../execution/react-loop.js";
 import { PipelineRunner, type PipelineCtx, type IStep } from "@cortex/scheduler";
 import { recordTelemetry } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
+import { resilienceFactory } from "../execution/resilience-integration.js";
 
 /**
  * 默认记忆检索策略——调用统一入口 makeMemoryQuery。
@@ -367,15 +368,17 @@ async function _rememberResult(
   let memId: string | undefined;
   let ctxMemId: string | undefined;
   try {
-    memId = memory.writePending({
-      source,
-      kind: memoryKind,
-      summary: mainSummary,
-      semantic_gist: mainSummary.slice(0, 200),
-      content_blob: content,
-      content_hash: "", // 由 writePending 内部计算
-      weight: isSuccess ? 5 : 3,
-    });
+    memId = await resilienceFactory.execute("memory-write", async () =>
+      memory.writePending({
+        source,
+        kind: memoryKind,
+        summary: mainSummary,
+        semantic_gist: mainSummary.slice(0, 200),
+        content_blob: content,
+        content_hash: "", // 由 writePending 内部计算
+        weight: isSuccess ? 5 : 3,
+      }),
+    );
 
     const ctxContent: Record<string, unknown> = {
       nodeId: node.id,
@@ -386,15 +389,17 @@ async function _rememberResult(
     };
     const ctxSummary = `[上下文] 节点 ${node.id} (${node.type}): ${node.payload.slice(0, 120)}`;
 
-    ctxMemId = memory.writePending({
-      source,
-      kind: memoryKind,
-      summary: ctxSummary,
-      semantic_gist: ctxSummary.slice(0, 200),
-      content_blob: ctxContent,
-      content_hash: "",
-      weight: 2,
-    });
+    ctxMemId = await resilienceFactory.execute("memory-write", async () =>
+      memory.writePending({
+        source,
+        kind: memoryKind,
+        summary: ctxSummary,
+        semantic_gist: ctxSummary.slice(0, 200),
+        content_blob: ctxContent,
+        content_hash: "",
+        weight: 2,
+      }),
+    );
 
     // FSM guard: 验证 Pending→Commit 转换合法
     {

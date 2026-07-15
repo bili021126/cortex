@@ -26,7 +26,6 @@ export default defineWorkspace([
   "./packages/shared/vitest.config.ts",
   "./packages/memory/vitest.config.ts",
   "./packages/memory-store/vitest.config.ts",
-  "./packages/consistency/vitest.config.ts",
   "./packages/governance/vitest.config.ts",
   "./packages/platform/vitest.config.ts",
   "./packages/scheduler/vitest.config.ts",
@@ -46,7 +45,6 @@ export default defineWorkspace([
   "./packages/telemetry/vitest.config.ts",
   "./packages/testing/vitest.config.ts",
   "./packages/tools/vitest.config.ts",
-  "./packages/tui/vitest.config.ts",
 
   // ── 引擎 & CLI（较重，独立项目以便单独 --project 筛选） ──
   "./packages/context-manager/vitest.config.ts",

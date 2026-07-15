@@ -32,10 +32,9 @@
     "@cortex/skill-kit": "workspace:*",
     "@cortex/llm": "workspace:*",
     "@cortex/parser": "workspace:*",
-    "@cortex/prompt-kit": "workspace:*",
     "@cortex/shared": "workspace:*",
-    "@cortex/tools": "workspace:*",
-    "@cortex/tui": "workspace:*"
+    "@cortex/telemetry": "workspace:*",
+    "@cortex/tools": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

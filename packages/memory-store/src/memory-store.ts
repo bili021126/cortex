@@ -80,6 +80,26 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   private _hybridEnabled = true;
   /** 归档失败熔断：true 时拒绝新写入，防止内存无界增长 */
   private _overflowThrottled = false;
+  /** inflight 去重：contentHash → writePromise，防 TOCTOU 竞态 */
+  private _inflightWrites = new Map<string, Promise<string>>();
+  /** 标记删除集：maintain() 标记，read() 过滤，避免并发读写不一致 */
+  private _pendingObliterate = new Set<string>();
+
+  /** 权重老化写回失败 → observer 发射 + stderr fallback，永不抛异常 */
+  private _safeAgingError(err: unknown, entryId: string, phase: "set" | "write"): void {
+    const msg = `[memory-store] weight aging ${phase} failed for ${entryId}: ${err instanceof Error ? err.message : String(err)}`;
+    if (this._observer) {
+      this._observer.emit({
+        type: PipelineEventType.ErrorReported,
+        priority: PipelinePriority.NORMAL,
+        payload: { message: msg },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+    } else if (typeof process !== "undefined") {
+      process.stderr.write(msg + "\n");
+    }
+  }
 
   constructor(
     backend?: TransactionalMemoryStore,
@@ -235,10 +255,23 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     const dupCheck = this._dedupCache.get(contentHash);
     if (dupCheck) return dupCheck;
 
-    // ── 后端写入 ──
-    const id = await this._backend.write(input);
+    // ── inflight 去重（防 TOCTOU 竞态）──
+    const inflight = this._inflightWrites.get(contentHash);
+    if (inflight) return inflight;
 
-    // ── 发射写入成功事件
+    // ── 后端写入 + inflight 注册 ──
+    const writePromise = (async (): Promise<string> => {
+      const id = await this._backend.write(input);
+      this._dedupCache.set(contentHash, id); // 写入成功立即缓存
+      return id;
+    })();
+    this._inflightWrites.set(contentHash, writePromise);
+    let id: string;
+    try {
+      id = await writePromise;
+    } finally {
+      this._inflightWrites.delete(contentHash);
+    }
     if (this._observer) {
       const blobStr = typeof input.content_blob === "string" ? input.content_blob : JSON.stringify(input.content_blob);
       this._observer.emit({
@@ -302,10 +335,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     let results = await this._backend.read(backendQuery, mode);
     console.log(`[telemetry] memory.search_time_ms value=${Date.now() - t0} mode=${mode}`);
 
-    // ── 适配器层过滤：30 天 TTL ──
+    // ── 适配器层过滤：30 天 TTL + 标记删除 ──
     const now = Date.now();
     results = results.filter(
-      (m: MemoryEntry) => (now - m.createdAt) <= MEMORY_TTL_MS,
+      (m: MemoryEntry) => (now - m.createdAt) <= MEMORY_TTL_MS && !this._pendingObliterate.has(m.id),
     );
 
     // ── 适配器层过滤：content_blob 关键词匹配 ──
@@ -381,15 +414,12 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           try {
             const setPromise = this._backend.set(entry.id, { weight: agedWeight } as any);
             // Core-3: as any 因 backend.set() 泛型签名不完整——待 SQLite 后端接口升级
-            if (setPromise) setPromise.catch(() => {});
+            if (setPromise) setPromise.catch((e) => this._safeAgingError(e, entry.id, "set"));
           } catch (e) {
-            // best-effort: 非关键降级路径
-            if (typeof process !== "undefined") {
-              process.stderr.write(`[memory-store] degraded: ${e instanceof Error ? e.message : String(e)}\n`);
-            }
-            // 降级：set 不可用时用 write（keepExisting 语义——不覆盖其他字段）
+            // best-effort: set 不可用时用 write（keepExisting 语义——不覆盖其他字段）
             // Core-3: as any 因 backend.write() 泛型签名不完整——待 SQLite 后端接口升级
-            this._backend.write({ id: entry.id, weight: agedWeight } as any).catch(() => {});
+            this._backend.write({ id: entry.id, weight: agedWeight } as any)
+              .catch((err) => this._safeAgingError(err, entry.id, "write"));
           }
         }
       }
@@ -483,7 +513,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     if (this._hybridEnabled) {
       this._bm25Index.removeDocument(memoryId);
     }
-    this._dedupCache.delete(memoryId);
+    // _dedupCache 是 content_hash → id 映射，需按 value 查找后删除
+    for (const [hash, id] of this._dedupCache) {
+      if (id === memoryId) { this._dedupCache.delete(hash); break; }
+    }
     this._vectorCache.delete(memoryId);
     return this._backend.obliterate(memoryId);
   }
@@ -629,12 +662,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
             try {
               const p = this._backend.set(e.id, { weight: aged } as any);
               // Core-3: as any 因 backend.set() 泛型签名不完整——待 SQLite 后端接口升级
-              if (p) p.catch(() => {});
+              if (p) p.catch((err) => this._safeAgingError(err, e.id, "set"));
             } catch (e) {
               // best-effort: 非关键降级路径
-              if (typeof process !== "undefined") {
-                process.stderr.write(`[memory-store] degraded: ${e instanceof Error ? e.message : String(e)}\n`);
-              }
+              this._safeAgingError(e, "batch", "set");
             }
           }
         }
@@ -646,11 +677,16 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         if (this.archive(c.id)) archived++;
       }
 
-      // Phase 2: WeightAger 识别可湮灭的长期 Archived 记忆
+      // Phase 2: WeightAger 识别可湮灭的长期 Archived 记忆 — 先标记
       const obliterateCandidates = this._ager.obliterateFrozen(all, now);
       for (const c of obliterateCandidates) {
-        if (this.obliterate(c.id)) obliterated++;
+        this._pendingObliterate.add(c.id);
       }
+      // 批量湮灭
+      for (const id of this._pendingObliterate) {
+        if (this.obliterate(id)) obliterated++;
+      }
+      this._pendingObliterate.clear();
     } catch {
       this._emitDegraded("maintain", "维护扫描失败，静默降级");
     }

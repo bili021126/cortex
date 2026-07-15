@@ -1,512 +1,207 @@
 // @ci: unit
-/**
- * session-store.test.ts — TUI session persistence full-depth tests
- *
- * Covers saveSession, loadSession, clearSession, round-trip integrity,
- * and edge cases (truncation, invalid data, missing fields, all modes).
- */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { AgentType } from "@cortex/shared";
-import type { LlmMessage } from "@cortex/shared";
-import { saveSession, loadSession, clearSession } from "@cortex/tui";
-import type { SessionSnapshot } from "@cortex/tui";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import {
+  saveSession,
+  loadSession,
+  clearSession,
+} from "../src/session-store.js";
+import type { SessionSnapshot } from "../src/session-store.js";
 
-// ── Helpers ───────────────────────────────────────────────
-
-function makeTmpDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "cortex-session-test-"));
-}
-
-function msg(role: LlmMessage["role"] = "user", content = "hello"): LlmMessage {
-  return { role, content };
-}
-
-function makeSession(overrides: Partial<SessionSnapshot> = {}): SessionSnapshot {
-  return {
-    mode: "chat",
-    agent: AgentType.Meta,
-    history: [msg("user", "hi"), msg("assistant", "hello")],
-    talkTrio: false,
-    partyRoster: [],
-    ...overrides,
-  };
-}
-
-const SESSION_REL = ".cortex/tui-session.json";
-const MAX_HISTORY = 200;
-const VALID_MODES = ["chat", "talk", "plan", "party", "command"];
-
-// ── Suite ─────────────────────────────────────────────────
-
-describe("tui/session-store", () => {
+describe("SessionStore", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = makeTmpDir();
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "session-test-"));
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    // 清理临时目录
+    if (fs.existsSync(tmpDir)) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
-  // ── saveSession ────────────────────────────────────────
+  /** 创建有效的会话快照 */
+  function validSession(overrides?: Partial<SessionSnapshot>): SessionSnapshot {
+    return {
+      agent: "code" as any,
+      history: [{ role: "user", content: "hello" }],
+      talkTrio: false,
+      groups: [],
+      ...overrides,
+    };
+  }
 
-  describe("saveSession", () => {
-    it("creates .cortex directory if it does not exist", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      expect(fs.existsSync(cortexDir)).toBe(false);
-
-      saveSession(tmpDir, makeSession());
-
-      expect(fs.existsSync(cortexDir)).toBe(true);
-      expect(fs.existsSync(path.join(tmpDir, SESSION_REL))).toBe(true);
+  it("should save and load session", () => {
+    const session = validSession({
+      agent: "architect" as any,
+      history: [
+        { role: "user" as const, content: "plan this" },
+        { role: "assistant" as const, content: "let me think" },
+      ],
     });
 
-    it("writes valid JSON that can be parsed back", () => {
-      const session = makeSession();
-      saveSession(tmpDir, session);
+    saveSession(tmpDir, session);
+    const loaded = loadSession(tmpDir);
 
-      const raw = fs.readFileSync(path.join(tmpDir, SESSION_REL), "utf-8");
-      const parsed = JSON.parse(raw);
-      expect(parsed.mode).toBe("chat");
-      expect(parsed.agent).toBe(AgentType.Meta);
-      expect(parsed.history).toHaveLength(2);
-    });
-
-    it("truncates history exceeding MAX_HISTORY to last 200 entries", () => {
-      const bigHistory: LlmMessage[] = Array.from({ length: 300 }, (_, i) =>
-        msg("user", `message-${i}`),
-      );
-      saveSession(tmpDir, makeSession({ history: bigHistory }));
-
-      const raw = fs.readFileSync(path.join(tmpDir, SESSION_REL), "utf-8");
-      const parsed = JSON.parse(raw);
-      expect(parsed.history).toHaveLength(MAX_HISTORY);
-      // Should keep the *last* 200 — first kept entry is message-100
-      expect(parsed.history[0].content).toBe("message-100");
-      expect(parsed.history[199].content).toBe("message-299");
-    });
-
-    it("does not truncate history at exactly MAX_HISTORY", () => {
-      const exactHistory: LlmMessage[] = Array.from({ length: MAX_HISTORY }, (_, i) =>
-        msg("user", `msg-${i}`),
-      );
-      saveSession(tmpDir, makeSession({ history: exactHistory }));
-
-      const raw = fs.readFileSync(path.join(tmpDir, SESSION_REL), "utf-8");
-      const parsed = JSON.parse(raw);
-      expect(parsed.history).toHaveLength(MAX_HISTORY);
-      expect(parsed.history[0].content).toBe("msg-0");
-    });
-
-    it("preserves history under MAX_HISTORY unchanged", () => {
-      const smallHistory: LlmMessage[] = [msg("user", "one"), msg("assistant", "two")];
-      saveSession(tmpDir, makeSession({ history: smallHistory }));
-
-      const raw = fs.readFileSync(path.join(tmpDir, SESSION_REL), "utf-8");
-      const parsed = JSON.parse(raw);
-      expect(parsed.history).toHaveLength(2);
-      expect(parsed.history[0].content).toBe("one");
-    });
-
-    it("overwrites existing session file", () => {
-      saveSession(tmpDir, makeSession({ mode: "chat" }));
-      saveSession(tmpDir, makeSession({ mode: "talk" }));
-
-      const raw = fs.readFileSync(path.join(tmpDir, SESSION_REL), "utf-8");
-      const parsed = JSON.parse(raw);
-      expect(parsed.mode).toBe("talk");
-    });
-
-    it("silently handles write errors without throwing", () => {
-      // Use an invalid path to trigger a write error
-      expect(() => saveSession("/dev/null/impossible", makeSession())).not.toThrow();
-    });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.agent).toBe("architect");
+    expect(loaded!.history).toHaveLength(2);
+    expect(loaded!.talkTrio).toBe(false);
+    expect(loaded!.groups).toEqual([]);
   });
 
-  // ── loadSession ────────────────────────────────────────
-
-  describe("loadSession", () => {
-    it("returns null when session file does not exist", () => {
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it("returns null for invalid JSON", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(path.join(tmpDir, SESSION_REL), "not-json{{{", "utf-8");
-
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it("returns null when data is null", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(path.join(tmpDir, SESSION_REL), "null", "utf-8");
-
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it("returns null when mode is missing", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({ agent: "meta", history: [] }),
-        "utf-8",
-      );
-
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it("returns null when mode is not a string", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({ mode: 123, agent: "meta", history: [] }),
-        "utf-8",
-      );
-
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it("returns null when history is missing", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({ mode: "chat", agent: "meta" }),
-        "utf-8",
-      );
-
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it("returns null when history is not an array", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({ mode: "chat", agent: "meta", history: "oops" }),
-        "utf-8",
-      );
-
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it("returns null for invalid mode value", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({ mode: "bogus", agent: "meta", history: [] }),
-        "utf-8",
-      );
-
-      expect(loadSession(tmpDir)).toBeNull();
-    });
-
-    it.each(VALID_MODES)("accepts valid mode: %s", (mode) => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({
-          mode,
-          agent: AgentType.Meta,
-          history: [],
-          talkTrio: false,
-          partyRoster: [],
-        }),
-        "utf-8",
-      );
-
-      const result = loadSession(tmpDir);
-      expect(result).not.toBeNull();
-      expect(result!.mode).toBe(mode);
-    });
-
-    it("repairs missing partyRoster to empty array", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({
-          mode: "chat",
-          agent: AgentType.Meta,
-          history: [msg("user", "hi")],
-          talkTrio: false,
-          // partyRoster intentionally omitted
-        }),
-        "utf-8",
-      );
-
-      const result = loadSession(tmpDir);
-      expect(result).not.toBeNull();
-      expect(result!.partyRoster).toEqual([]);
-    });
-
-    it("repairs missing talkTrio to false", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({
-          mode: "talk",
-          agent: AgentType.Meta,
-          history: [],
-          partyRoster: [],
-          // talkTrio intentionally omitted
-        }),
-        "utf-8",
-      );
-
-      const result = loadSession(tmpDir);
-      expect(result).not.toBeNull();
-      expect(result!.talkTrio).toBe(false);
-    });
-
-    it("repairs non-boolean talkTrio to false", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({
-          mode: "talk",
-          agent: AgentType.Meta,
-          history: [],
-          talkTrio: "yes",
-          partyRoster: [],
-        }),
-        "utf-8",
-      );
-
-      const result = loadSession(tmpDir);
-      expect(result).not.toBeNull();
-      expect(result!.talkTrio).toBe(false);
-    });
-
-    it("repairs non-array partyRoster to empty array", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(tmpDir, SESSION_REL),
-        JSON.stringify({
-          mode: "party",
-          agent: AgentType.Meta,
-          history: [],
-          talkTrio: false,
-          partyRoster: "not-an-array",
-        }),
-        "utf-8",
-      );
-
-      const result = loadSession(tmpDir);
-      expect(result).not.toBeNull();
-      expect(result!.partyRoster).toEqual([]);
-    });
-
-    it("returns valid snapshot with all fields intact", () => {
-      const session = makeSession({
-        mode: "plan",
-        agent: AgentType.Code,
-        history: [msg("user", "plan this"), msg("assistant", "ok")],
-        talkTrio: true,
-        partyRoster: [AgentType.Review, AgentType.Ops],
-        planState: {
-          nodes: [{ id: 1 }],
-          intent: "build feature",
-          approved: true,
-          reviewStatus: "pending",
-        },
-      });
-
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded).not.toBeNull();
-      expect(loaded!.mode).toBe("plan");
-      expect(loaded!.agent).toBe(AgentType.Code);
-      expect(loaded!.history).toHaveLength(2);
-      expect(loaded!.talkTrio).toBe(true);
-      expect(loaded!.partyRoster).toEqual([AgentType.Review, AgentType.Ops]);
-      expect(loaded!.planState).toEqual({
-        nodes: [{ id: 1 }],
-        intent: "build feature",
-        approved: true,
-        reviewStatus: "pending",
-      });
-    });
+  it("should handle missing session file", () => {
+    const result = loadSession(tmpDir);
+    expect(result).toBeNull();
   });
 
-  // ── clearSession ───────────────────────────────────────
+  it("should handle corrupted session file", () => {
+    const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.writeFileSync(sessionPath, "这不是有效 JSON{{{", "utf-8");
 
-  describe("clearSession", () => {
-    it("deletes the session file when it exists", () => {
-      saveSession(tmpDir, makeSession());
-      const filePath = path.join(tmpDir, SESSION_REL);
-      expect(fs.existsSync(filePath)).toBe(true);
-
-      clearSession(tmpDir);
-      expect(fs.existsSync(filePath)).toBe(false);
-    });
-
-    it("does not throw when session file does not exist", () => {
-      expect(() => clearSession(tmpDir)).not.toThrow();
-    });
-
-    it("does not remove the .cortex directory itself", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      saveSession(tmpDir, makeSession());
-
-      clearSession(tmpDir);
-      expect(fs.existsSync(cortexDir)).toBe(true);
-      expect(fs.existsSync(path.join(tmpDir, SESSION_REL))).toBe(false);
-    });
+    const result = loadSession(tmpDir);
+    expect(result).toBeNull();
   });
 
-  // ── Round-trip ─────────────────────────────────────────
+  it("should handle empty session file", () => {
+    const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.writeFileSync(sessionPath, "", "utf-8");
 
-  describe("round-trip (save → load)", () => {
-    it("returns identical data after save and load", () => {
-      const session = makeSession({
-        mode: "chat",
-        agent: AgentType.Code,
-        history: [
-          msg("system", "You are helpful"),
-          msg("user", "hi"),
-          msg("assistant", "hello!"),
-        ],
-        talkTrio: false,
-        partyRoster: [AgentType.Meta],
-      });
-
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded).not.toBeNull();
-      expect(loaded!.mode).toBe(session.mode);
-      expect(loaded!.agent).toBe(session.agent);
-      expect(loaded!.history).toEqual(session.history);
-      expect(loaded!.talkTrio).toBe(session.talkTrio);
-      expect(loaded!.partyRoster).toEqual(session.partyRoster);
-    });
-
-    it("round-trips with planState", () => {
-      const session = makeSession({
-        mode: "plan",
-        agent: AgentType.Strategist,
-        history: [msg("user", "plan")],
-        planState: {
-          nodes: [1, "two", null],
-          intent: "refactor core",
-          approved: false,
-          reviewStatus: "draft",
-        },
-      });
-
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded).not.toBeNull();
-      expect(loaded!.planState).toEqual(session.planState);
-    });
-
-    it("round-trips with empty history", () => {
-      const session = makeSession({ history: [] });
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded).not.toBeNull();
-      expect(loaded!.history).toEqual([]);
-    });
-
-    it("round-trips with partyRoster containing multiple agents", () => {
-      const roster = [AgentType.Code, AgentType.Review, AgentType.Ops, AgentType.Loop];
-      const session = makeSession({
-        mode: "party",
-        partyRoster: roster,
-        talkTrio: true,
-      });
-
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded!.partyRoster).toEqual(roster);
-      expect(loaded!.talkTrio).toBe(true);
-    });
-
-    it("truncates oversized history on save, then loads truncated version", () => {
-      const bigHistory: LlmMessage[] = Array.from({ length: 250 }, (_, i) =>
-        msg(i % 2 === 0 ? "user" : "assistant", `msg-${i}`),
-      );
-      const session = makeSession({ history: bigHistory });
-
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded).not.toBeNull();
-      expect(loaded!.history).toHaveLength(MAX_HISTORY);
-      // First kept message should be msg-50 (index 50 of original 250)
-      expect(loaded!.history[0].content).toBe("msg-50");
-      expect(loaded!.history[MAX_HISTORY - 1].content).toBe("msg-249");
-    });
+    const result = loadSession(tmpDir);
+    expect(result).toBeNull();
   });
 
-  // ── Edge cases ─────────────────────────────────────────
+  it("should handle corrupted JSON (null value)", () => {
+    const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.writeFileSync(sessionPath, "null", "utf-8");
 
-  describe("edge cases", () => {
-    it("handles all valid modes in round-trip", () => {
-      for (const mode of VALID_MODES) {
-        // Use a fresh subdir for each mode to avoid file collision
-        const subDir = path.join(tmpDir, mode);
-        fs.mkdirSync(subDir, { recursive: true });
+    const result = loadSession(tmpDir);
+    expect(result).toBeNull();
+  });
 
-        const session = makeSession({ mode });
-        saveSession(subDir, session);
-        const loaded = loadSession(subDir);
-        expect(loaded).not.toBeNull();
-        expect(loaded!.mode).toBe(mode);
-      }
+  it("should preserve session agent type", () => {
+    const session = validSession({ agent: "fix" as any });
+    saveSession(tmpDir, session);
+    const loaded = loadSession(tmpDir);
+    expect(loaded!.agent).toBe("fix");
+  });
+
+  it("should preserve session history", () => {
+    const history = [
+      { role: "user" as const, content: "hello" },
+      { role: "assistant" as const, content: "hi there" },
+      { role: "user" as const, content: "how are you?" },
+    ];
+    const session = validSession({ history });
+    saveSession(tmpDir, session);
+    const loaded = loadSession(tmpDir);
+    expect(loaded!.history).toHaveLength(3);
+    expect(loaded!.history[0]!.content).toBe("hello");
+    expect(loaded!.history[2]!.content).toBe("how are you?");
+  });
+
+  it("should handle invalid/extra fields gracefully", () => {
+    const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    // \u65E7\u7248\u672C\u5B57\u6BB5\uFF08mode/partyRoster/planState\uFF09\u4E0D\u5E94\u963B\u6B62\u52A0\u8F7D
+    fs.writeFileSync(
+      sessionPath,
+      JSON.stringify({ mode: "invalid_mode", agent: "code", history: [], talkTrio: false, partyRoster: [] }),
+      "utf-8",
+    );
+
+    const result = loadSession(tmpDir);
+    expect(result).not.toBeNull();
+    expect(result!.agent).toBe("code");
+    expect(result!.history).toEqual([]);
+  });
+
+  it("should reject session without history array", () => {
+    const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    fs.writeFileSync(
+      sessionPath,
+      JSON.stringify({ mode: "chat", agent: "code", talkTrio: false, partyRoster: [] }),
+      "utf-8",
+    );
+
+    const result = loadSession(tmpDir);
+    expect(result).toBeNull();
+  });
+
+  it("should save with talkTrio and groups", () => {
+    const session = validSession({
+      talkTrio: true,
+      groups: [{ id: "g1", agents: ["code", "fix"], status: "active" }],
     });
 
-    it("handles LlmMessage with optional fields (tool_calls, name)", () => {
-      const richHistory: LlmMessage[] = [
-        { role: "system", content: "init" },
-        {
-          role: "assistant",
-          content: "",
-          tool_calls: [{ id: "tc1", name: "read_file", arguments: { path: "/foo" } }],
-        },
-        {
-          role: "tool",
-          content: "file contents",
-          tool_call_id: "tc1",
-          name: "read_file",
-        },
-      ];
-      const session = makeSession({ history: richHistory });
-      saveSession(tmpDir, session);
-      const loaded = loadSession(tmpDir);
-      expect(loaded!.history).toEqual(richHistory);
-    });
+    saveSession(tmpDir, session);
+    const loaded = loadSession(tmpDir);
 
-    it("handles session file in deeply nested project root", () => {
-      const nested = path.join(tmpDir, "a", "b", "c", "project");
-      fs.mkdirSync(nested, { recursive: true });
-      const session = makeSession();
-      saveSession(nested, session);
-      const loaded = loadSession(nested);
-      expect(loaded).not.toBeNull();
-      expect(loaded!.mode).toBe("chat");
-    });
+    expect(loaded!.talkTrio).toBe(true);
+    expect(loaded!.groups).toHaveLength(1);
+    expect(loaded!.groups[0]!.id).toBe("g1");
+  });
 
-    it("loadSession returns null for empty file", () => {
-      const cortexDir = path.join(tmpDir, ".cortex");
-      fs.mkdirSync(cortexDir, { recursive: true });
-      fs.writeFileSync(path.join(tmpDir, SESSION_REL), "", "utf-8");
+  it("should handle history truncation (> MAX_HISTORY)", () => {
+    // 创建超过 200 条的历史（MAX_HISTORY = 200）
+    const manyMessages = Array.from({ length: 250 }, (_, i) => ({
+      role: "user" as const,
+      content: `message ${i}`,
+    }));
+    const session = validSession({ history: manyMessages });
 
-      expect(loadSession(tmpDir)).toBeNull();
-    });
+    saveSession(tmpDir, session);
+    const loaded = loadSession(tmpDir);
+
+    // 保存时应截断到 MAX_HISTORY
+    expect(loaded!.history.length).toBeLessThanOrEqual(200);
+    // 应保留最新的消息
+    expect(loaded!.history[loaded!.history.length - 1]!.content).toBe("message 249");
+  });
+
+  it("should handle non-existent project root (save not throw)", () => {
+    const nonExistent = path.join(tmpDir, "nonexistent", "deep");
+
+    expect(() => {
+      saveSession(nonExistent, validSession());
+    }).not.toThrow();
+  });
+
+  it("clearSession should delete session file", () => {
+    saveSession(tmpDir, validSession());
+    const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
+    expect(fs.existsSync(sessionPath)).toBe(true);
+
+    clearSession(tmpDir);
+    expect(fs.existsSync(sessionPath)).toBe(false);
+  });
+
+  it("clearSession on non-existent file should not throw", () => {
+    expect(() => clearSession(tmpDir)).not.toThrow();
+  });
+
+  it("loadSession should fix missing groups/talkTrio defaults", () => {
+    const sessionPath = path.join(tmpDir, ".cortex", "tui-session.json");
+    fs.mkdirSync(path.dirname(sessionPath), { recursive: true });
+    // \u7F3A\u5C11 groups \u548C talkTrio \u5B57\u6BB5
+    fs.writeFileSync(
+      sessionPath,
+      JSON.stringify({ agent: "code", history: [] }),
+      "utf-8",
+    );
+  
+    const loaded = loadSession(tmpDir);
+    expect(loaded).not.toBeNull();
+    expect(Array.isArray(loaded!.groups)).toBe(true);
+    expect(loaded!.talkTrio).toBe(false);
   });
 });

@@ -45,4 +45,11 @@ export interface ITuiEngineBridge {
   writeTalkMemory(entry: MemoryWriteInput): Promise<void>;
   /** 流式执行任务节点（plan mode） */
   executeWithStream(nodes: TaskNode[], onEvent: (event: unknown) => void): Promise<ExecutionReport>;
+  /** 获取 MetaAgent（甘雨）——用于 plan mode 生成任务计划 */
+  getMetaAgent?(): Promise<IMetaAgent | undefined>;
+}
+
+/** 最小 MetaAgent 契约——plan mode 任务规划 */
+export interface IMetaAgent {
+  plan(intent: string, context?: Record<string, unknown>): Promise<TaskNode[]>;
 }

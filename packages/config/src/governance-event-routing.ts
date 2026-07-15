@@ -1,4 +1,4 @@
-import { PipelineEventType } from "./vocabularies/event-types.js";
+import { PipelineEventType } from "@cortex/shared";
 
 /**
  * 治理事件 → 通知类型映射表。

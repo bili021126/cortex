@@ -1,28 +1,12 @@
-import { PipelineEventType, PipelinePriority, getAgentTags, type AgentType, type IPipelineObserver, type InvariantReporter, type InvariantViolation, type TaskNode } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, getAgentTags, type AgentType, type IPipelineObserver, type InvariantReporter, type InvariantViolation, type TaskNode, type ITaskBoard } from "@cortex/shared";
 
 /**
- * ITaskBoard —— TaskBoard 抽象接口。
+ * ITaskBoard —— TaskBoard 抽象接口（契约已上迁至 @cortex/shared）。
  *
- * 解耦点：Scheduler 不再依赖具体 TaskBoard 类，而是通过此接口与任务板交互。
- * 方便测试 mock 和未来扩展（如分布式任务板）。
- *
- * claim/release/complete 三方法构成 Scheduler 与 TaskBoard 之间的核心协议。
+ * 本处以兼容方式 re-export，保持旧消费方（@cortex/scheduler）可用。
+ * 新消费方应从 @cortex/shared 导入。
  */
-export interface ITaskBoard {
-  addNode(node: TaskNode): void;
-  claim(nodeId: string, agentType: AgentType): TaskNode | null;
-  release(nodeId: string, agentType: AgentType): boolean;
-  complete(nodeId: string, agentType: AgentType, success: boolean, output?: string, error?: string): void;
-  failNode(nodeId: string): boolean;
-  getNode(nodeId: string): TaskNode | undefined;
-  getAllNodes(): TaskNode[];
-  getPendingNodes(): TaskNode[];
-  removeNode(nodeId: string): void;
-  removeSubtree(nodeId: string): void;
-
-  /** 清空所有节点（新 plan 执行前调用，防止旧任务残留） */
-  clear(): void;
-}
+export type { ITaskBoard };
 
 /**
  * TaskBoard —— 任务板
@@ -187,6 +171,7 @@ export class TaskBoard implements ITaskBoard {
       });
 
       node.status = success ? "done" : "failed";
+      node.claimedBy = []; // 终态清理
       return;
     }
 
@@ -211,6 +196,7 @@ export class TaskBoard implements ITaskBoard {
     const done = new Set(node.results.map((r) => r.agentType));
     if (claimed.size === done.size && [...claimed].every((t) => done.has(t))) {
       node.status = "done";
+      node.claimedBy = []; // 终态清理
     }
 
     // 等齐判断之后执行去重：移除重复结果
@@ -235,6 +221,7 @@ export class TaskBoard implements ITaskBoard {
     if (!node) return false;
     if (node.status === "done" || node.status === "failed") return false;
     node.status = "failed";
+    node.claimedBy = []; // 终态清理
     return true;
   }
 

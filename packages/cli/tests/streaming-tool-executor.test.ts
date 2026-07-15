@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { streamExecuteTools } from "@cortex/tui";
-import type { LlmStreamBridge, TuiHooks, TuiEvent } from "@cortex/tui";
+import { streamExecuteTools } from "@cortex/cli";
+import type { LlmStreamBridge, TuiHooks, TuiEvent } from "@cortex/cli";
 import type { AgentType, LlmMessage } from "@cortex/shared";
 
 // ── 类型辅助 ──────────────────────────────────────────────

@@ -8,7 +8,6 @@
 // ── 核心工具 ───────────────────────────────────
 export { Toolkit } from "./toolkit.js";
 export type { ToolMeta } from "./toolkit.js";
-export { FileLockManager } from "./file-lock-manager.js";
 export { CLIAdapter } from "./cli-adapter.js";
 export { NodeFileSystemAdapter } from "./node-fs-adapter.js";
 export { validatePath, resolveSafePath } from "./path-utils.js";

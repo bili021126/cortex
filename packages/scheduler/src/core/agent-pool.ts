@@ -1,41 +1,13 @@
-import { AgentStatus, PipelineEventType, PipelinePriority, type AgentConfig, type AgentType, type IPipelineObserver, type InvariantReporter } from "@cortex/shared";
+import { AgentStatus, PipelineEventType, PipelinePriority, type AgentConfig, type AgentType, type IPipelineObserver, type InvariantReporter, type ISchedulerAgentPool, type IAgentPool, type Disposable } from "@cortex/shared";
 import { isTestEnv } from "@cortex/config";
 import { ManifoldGate } from "../dispatch-steps/manifold-gate.js";
 
 /**
- * ISchedulerAgentPool —— Scheduler 依赖的 AgentPool 最小契约。
- * 提取此接口使 Scheduler 不依赖具体 AgentPool 实现，
- * 允许 CLI 侧 MiniAgentPool 在轻量模式下替代完整 AgentPool。
+ * ISchedulerAgentPool / IAgentPool —— 契约已上迁至 @cortex/shared。
+ * 本处 re-export 以兼容旧消费方（@cortex/scheduler）。
+ * 新消费方应从 @cortex/shared 导入。
  */
-export interface ISchedulerAgentPool {
-  spawn(agentType: AgentType, instanceId: string): boolean;
-  /** RLM 子任务——不占主配额 */
-  spawnSubtask(agentType: AgentType, instanceId: string): boolean;
-  getStatus(instanceId: string): AgentStatus | undefined;
-  setStatus(instanceId: string, status: AgentStatus): boolean;
-  destroy(agentType: AgentType, instanceId: string): void;
-  /** 记录 agent 心跳——更新最后活跃时间戳 */
-  heartbeat(agentId: string): void;
-  /** 探测 agent 是否存活——仍在 pool 活跃列表中返回 true */
-  ping(agentId: string): Promise<boolean>;
-  /** 池统计——用于遥测 */
-  getPoolStats(): { total: number; idle: number; busy: number; idleRate: number };
-}
-
-/**
- * IAgentPool —— AgentPool 完整管理接口。
- * 扩展 ISchedulerAgentPool（Scheduler 最小依赖），补全管理端方法。
- */
-export interface IAgentPool extends ISchedulerAgentPool {
-  register(config: AgentConfig): void;
-  /** 动态调整 AgentType 最大并发数（热扩容/缩容） */
-  setMaxInstances(agentType: AgentType, newMax: number): void;
-  setObserver(observer: IPipelineObserver): void;
-  getStatuses(agentType: AgentType): AgentStatus[];
-  hasAwake(agentType: AgentType): boolean;
-  canSpawn(agentType: AgentType): boolean;
-  count(agentType: AgentType): number;
-}
+export type { ISchedulerAgentPool, IAgentPool };
 
 /**
  * AgentPool —— Agent 生命周期管理 + 状态机追踪

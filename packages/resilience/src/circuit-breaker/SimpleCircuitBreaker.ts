@@ -291,8 +291,9 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
    * });
    * ```
    */
-  onStateChange(handler: (state: CircuitState, previous: CircuitState) => void): void {
+  onStateChange(handler: (state: CircuitState, previous: CircuitState) => void): () => void {
     this._handlers.push(handler);
+    return () => { this._handlers = this._handlers.filter(h => h !== handler); };
   }
 
   // ────────────────────────────────────────

@@ -1,5 +1,5 @@
-import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, isTestEnv, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3 } from "@cortex/config";
+import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3 } from "@cortex/config";
 
 // ─── 信任分模型（内联实现——镜像 @cortex/engine/agents/confirm-gate-agent）───
 // 因 scheduler → engine 系反向引用（环形依赖），纯函数内联于此。
@@ -249,7 +249,7 @@ export class ConfirmGate {
 
     // 非交互环境自动判定：L0/L1 放行，L2/L3 拒绝（安全优先）
     // 环境变量 CORTEX_AUTO_CONFIRM=true 时无条件放行
-    if (process.env.CORTEX_AUTO_CONFIRM === 'true') {
+    if (process.env[ENV_AUTO_CONFIRM] === 'true') {
       const req = this.pending.get(requestId);
       this.pending.delete(requestId);
       this.resolvers.delete(requestId);

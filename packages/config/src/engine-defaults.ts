@@ -41,10 +41,10 @@ export const SHUTDOWN_FORCE_EXIT_DELAY_MS = 2_000;
 export const SCHEDULER_MAX_ROUNDS = 25;
 
 /** 调度器每轮超时（毫秒） */
-export const SCHEDULER_ROUND_TIMEOUT_MS = 120_000;
+export const SCHEDULER_ROUND_TIMEOUT_MS = 300_000;
 
 /** ReAct 最大循环次数 */
-export const REACT_MAX_LOOPS = 20;
+export const REACT_MAX_LOOPS = 64;
 
 /** ManifoldGate 获取锁超时（毫秒） */
 export const DEFAULT_ACQUIRE_TIMEOUT_MS = 60_000;

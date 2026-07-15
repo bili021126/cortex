@@ -49,3 +49,21 @@ export const ENV_VITEST = "VITEST";
 
 /** NODE_ENV 环境变量名 */
 export const ENV_NODE_ENV = "NODE_ENV";
+
+/** CORTEX_AUTO_CONFIRM — 自动确认所有工具调用 */
+export const ENV_AUTO_CONFIRM = "CORTEX_AUTO_CONFIRM";
+
+/** CORTEX_MAX_TOOL_ROUNDS — 最大工具调用轮次 */
+export const ENV_MAX_TOOL_ROUNDS = "CORTEX_MAX_TOOL_ROUNDS";
+
+/** 临时设置 AUTO_CONFIRM 执行 fn，完成后恢复 */
+export async function withAutoConfirm<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = process.env[ENV_AUTO_CONFIRM];
+  process.env[ENV_AUTO_CONFIRM] = "true";
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env[ENV_AUTO_CONFIRM];
+    else process.env[ENV_AUTO_CONFIRM] = prev;
+  }
+}

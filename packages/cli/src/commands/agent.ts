@@ -9,9 +9,7 @@
 
 import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
-import { AGENT_CHINESE_ROLE, AgentStatus, AgentType, CHINESE_NAME_TO_TYPE, getAgentTags, getAgentToolPermissions, type AgentConfig, type ICortexComponents, type ICortexLifecycle } from "@cortex/shared";
-import type { StrategistAgent } from "@cortex/engine";
-import type { IAgentPool } from "@cortex/scheduler";
+import { AGENT_CHINESE_ROLE, AgentStatus, AgentType, CHINESE_NAME_TO_TYPE, getAgentTags, getAgentToolPermissions, type AgentConfig, type ICortexComponents, type ICortexLifecycle, type IAgentPool, type IStrategistAgent } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -92,7 +90,8 @@ async function dispatchAgent(
       try { await bridge.ensureBootstrapped(); } catch { /* fall through */ }
     }
     await bridge.ensureReady();
-    const pool = bridge.getAgentPool() as IAgentPool;
+    const pool = bridge.getAgentPool();
+    if (!pool) return { success: false, error: "AgentPool 不可用", exitCode: 1 };
 
     switch (subcommand) {
       case "list": return handleAgentList(pool, options, bridge);
@@ -150,7 +149,7 @@ interface AgentRowsCtx {
 }
 
 /** 将单个 Strategist 实例追加为行 */
-function _appendStrategistRow(ctx: AgentRowsCtx, id: string, agent: StrategistAgent): void {
+function _appendStrategistRow(ctx: AgentRowsCtx, id: string, agent: IStrategistAgent): void {
   const statusStr = agent.status === AgentStatus.Awake ? "awake" : String(agent.status);
   const tags = getAgentTags()[AgentType.Strategist] ?? [];
 
@@ -200,7 +199,7 @@ function _buildAgentRows(ctx: AgentRowsCtx): string[][] {
     ctx.tally(count, hasAwake);
   }
 
-  const strategists = ctx.bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
+  const strategists = ctx.bridge.getStrategists();
   if (strategists && strategists.size > 0) {
     for (const [id, agent] of strategists) 
       _appendStrategistRow(ctx, id, agent);
@@ -253,7 +252,7 @@ interface AgentInspectInfo {
 
 /** 解析 Strategist 的 inspect 信息 */
 function _resolveStrategistInspect(bridge: ICortexComponents & ICortexLifecycle, typeName: string): AgentInspectInfo {
-  const strategists = bridge.getStrategists() as Map<string, StrategistAgent> | undefined;
+  const strategists = bridge.getStrategists();
   const id = typeName === "钟离" || typeName === "zhongli" ? "zhongli" : "shuangning";
   const strategist = strategists?.get(id);
 

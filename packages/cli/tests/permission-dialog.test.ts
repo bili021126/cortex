@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   reversibilityLevel,
   ConfirmGateState,
-} from "@cortex/tui";
+} from "@cortex/cli";
 
 // ═══════════════════════════════════════════════════════════
 // reversibilityLevel

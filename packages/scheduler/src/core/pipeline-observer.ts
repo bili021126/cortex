@@ -1,4 +1,4 @@
-import { PipelineEventType, PipelinePriority, type EmitMeta, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type ObservableEvent, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type EmitMeta, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type ObservableEvent, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter, type Disposable } from "@cortex/shared";
 
 /** 保存原始 console.error 引用，规避 console-bridge 拦截导致的二次递归 */
 const _origConsoleError = console.error;

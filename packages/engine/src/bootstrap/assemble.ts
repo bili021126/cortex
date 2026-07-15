@@ -2,7 +2,7 @@
 // @cortex/engine/bootstrap/assemble —— 最终组装 BootstrapResult
 // ============================================================
 
-import type { Agent, IMemoryStore, IPipelineObserver } from "@cortex/shared";
+import type { Agent, IMemoryStore, IPipelineObserver, Disposable } from "@cortex/shared";
 import { ButlerAgent } from "../agents/butler-agent.js";
 import type { IScheduler, IAgentPool, ITaskBoard, ConfirmGate } from "@cortex/scheduler";
 import type { CLIAdapter } from "@cortex/platform";
@@ -10,7 +10,7 @@ import type { MetaAgent } from "../core/meta-agent.js";
 import type { StrategistAgent } from "../agents/strategist-agent.js";
 import type { AgentFactoryConfig } from "../execution/agent-factory.js";
 import type { SkillRegistry } from "@cortex/skill-kit";
-import type { ConsistencyLayer } from "@cortex/consistency";
+import type { ConsistencyLayer } from "@cortex/governance";
 import type { BootstrapResult } from "./factory/index.js";
 import type { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import type { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
@@ -86,12 +86,12 @@ export function assemble(input: AssembleInput): BootstrapEngineResult {
 
   const shutdown = async (): Promise<void> => {
     // 逆序释放资源——各组件以 best-effort 关闭，未实现的方法静默跳过
-    try { (input.scheduler as unknown as { stop?(): void }).stop?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
-    try { (input.pool as unknown as { destroyAll?(): void }).destroyAll?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
-    try { (input.observer as unknown as { clear?(): void }).clear?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
-    try { await input.memory?.close(); } catch { console.error(`[assemble] memory.close_failed`); }
-    try { (input.gate as unknown as { dispose?(): void }).dispose?.(); } catch { console.error(`[assemble] gate.dispose_failed`); }
-    try { input.cliAdapter.close?.(); } catch { console.error(`[assemble] cliAdapter.close_failed`); }
+    try { (input.scheduler as unknown as Disposable).stop?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    try { (input.pool as unknown as Disposable).destroyAll?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    try { (input.observer as unknown as Disposable).clear?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    try { await input.memory?.close(); } catch (err) { console.error(`[assemble] memory.close_failed`, err); }
+    try { (input.gate as unknown as Disposable).dispose?.(); } catch (err) { console.error(`[assemble] gate.dispose_failed`, err); }
+    try { input.cliAdapter.close?.(); } catch (err) { console.error(`[assemble] cliAdapter.close_failed`, err); }
   };
 
   return {

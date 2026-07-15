@@ -8,8 +8,9 @@
  */
 
 import type { CommandDefinition, CommandContext, CommandResult } from "../types.js";
+import type { ICommandDispatcher, ICommandContext, ICommandResult } from "@cortex/shared";
 
-export class CommandRegistry {
+export class CommandRegistry implements ICommandDispatcher {
   private commands = new Map<string, CommandDefinition>();
   private aliases = new Map<string, string>();
 
@@ -45,31 +46,23 @@ export class CommandRegistry {
   }
 
   /**
-   * 解析并执行命令。
+   * 解析并执行命令（实现 ICommandDispatcher）。
    * 输入格式：["agent", "list", "--status", "awake"]
    * 返回执行结果。
    */
   async dispatch(
     args: string[],
-    context: CommandContext,
-  ): Promise<CommandResult> {
+    context?: ICommandContext,
+  ): Promise<ICommandResult> {
     if (args.length === 0) {
-      return {
-        success: false,
-        error: "未指定命令。输入 'cortex help' 查看可用命令。",
-        exitCode: 1,
-      };
+      return { code: 1, output: "未指定命令。输入 'cortex help' 查看可用命令。" };
     }
 
     const cmdName = args[0]!;
     const cmd = this.find(cmdName);
 
     if (!cmd) {
-      return {
-        success: false,
-        error: `未知命令: "${cmdName}"。输入 'cortex help' 查看可用命令。`,
-        exitCode: 1,
-      };
+      return { code: 1, output: `未知命令: "${cmdName}"。输入 'cortex help' 查看可用命令。` };
     }
 
     // 解析子命令
@@ -80,13 +73,15 @@ export class CommandRegistry {
       if (sub) {
         // 解析剩余参数和选项
         const { options, remaining } = this._parseOptions(subArgs.slice(1));
-        return await sub.handler(remaining, options, context);
+        const r = await sub.handler(remaining, options, context as unknown as CommandContext);
+        return { code: r.exitCode, output: r.output ?? r.error ?? "" };
       }
     }
 
     // 解析选项并调用顶级处理器
     const { options: _parsedOptions, remaining: _parsedRemaining } = this._parseOptions(subArgs);
-    return await cmd.handler(_parsedRemaining, _parsedOptions, context);
+    const r = await cmd.handler(_parsedRemaining, _parsedOptions, context as unknown as CommandContext);
+    return { code: r.exitCode, output: r.output ?? r.error ?? "" };
   }
 
   /** 简单选项解析器 */

@@ -46,6 +46,7 @@ import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
 import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
+import { initCyreneMemory } from "./init-memory.js";
 import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
@@ -164,6 +165,12 @@ export async function bootstrapEngine(
       }
     },
   };
+
+  // §4.5 Cyrene 记忆层初始化
+  const cyreneMemoryPromise = initCyreneMemory().catch((err) => {
+    console.warn(`[bootstrap] Cyrene 记忆层初始化失败（非致命）: ${err instanceof Error ? err.message : String(err)}`);
+    return undefined;
+  });
 
   // §5 加载并启动全部插件
   const loader = new PluginLoader();
@@ -324,6 +331,11 @@ export async function bootstrapEngine(
     circuitBreaker: { threshold: 3, halfOpenAfterMs: 30000 },
     timeout: { timeoutMs: 30000 },
   });
+  resilienceFactory.registerPolicies("memory-write", {
+    retry: { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 5000 },
+    circuitBreaker: { threshold: 3, halfOpenAfterMs: 30000 },
+    timeout: { timeoutMs: 10000 },
+  });
 
   // §6.2.6 GovernanceEventEmitter + DecisionGateBridge
   const governanceEmitter = new GovernanceEventEmitter(observer);
@@ -393,6 +405,13 @@ export async function bootstrapEngine(
     orchestrator.register("memory", memory as unknown as ILifecycle);
   }
 
+  // §9.5.2 等待 Cyrene 记忆层初始化（fire-and-forget 的 await）
+  const cyreneMemory = await cyreneMemoryPromise;
+  if (cyreneMemory) {
+    const { manager, store } = cyreneMemory;
+    // RAG 桥接已在 initCyreneMemory() 内完成——manager.deps 指向 ragAddMemory / ragSearchMemoryEntries
+  }
+
   // §9.6 发射启动完成事件
   observer.emit({
     type: PipelineEventType.ExecLifecyclePhaseChanged,
@@ -454,8 +473,15 @@ export async function bootstrapEngine(
       // Phase 0 遥测基础设施清理
       metricCounter.stop();
       auditTrail.flush();
-      // ShutdownOrchestrator —— 统一关闭注册的 ILifecycle 组件
+      // MemoryStore 归档——在 shutdown orchestrator close 存储之前先 endSession
+      if (memory) {
+        try { await memory.endSession(); } catch (err) { console.error(`[bootstrapEngine] memory.endSession failed:`, err); }
+      }
+      // ShutdownOrchestrator —— 统一关闭注册的 ILifecycle 组件（含 memory.stop/dispose）
       await orchestrator.shutdown();
+      if (memory) {
+        try { await memory.close(); } catch (err) { console.error(`[bootstrapEngine] memory.close failed:`, err); }
+      }
       // 先优雅关闭 ILifecycle 组件（兼容 LifecycleManager 管理项）
       await lifecycleManager.shutdown();
       // WorkerPool —— 终止所有 worker 线程

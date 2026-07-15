@@ -57,7 +57,7 @@ function _handleTimeoutActions(actions: TimeoutAction[], ctx: LoopContext): void
 
       case 'ping':
         // 异步探测——不 blocking
-        ctx.pool.ping(a.agentId).catch(() => {});
+        ctx.pool.ping(a.agentId).catch((err) => { console.warn(`[scheduler] agent ping failed for ${a.agentId}:`, err instanceof Error ? err.message : String(err)); });
         ctx.observer.emit({
           type: PipelineEventType.ExecNodeDelayed,
           priority: PipelinePriority.NORMAL,
@@ -335,8 +335,9 @@ export class TopologicalLayeredDriver implements ILoopDriver {
 
             // 单个节点超时兜底——防止 dispatch hang 住拖死 Promise.allSettled
             const NODE_DISPATCH_TIMEOUT_MS = Math.min(config.reactLoopTimeoutMs, 120_000);
+            let tid: ReturnType<typeof setTimeout>;
             const timeoutPromise = new Promise<NodeResult>((resolve) => {
-              setTimeout(() => {
+              tid = setTimeout(() => {
                 try { board.failNode(nodeId); } catch (fe) {
                   if (observer) {
                     try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "dispatch-timeout-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { console.error(`[scheduler] dispatch-timeout observer.emit failed: ${String(fe)}`); }
@@ -353,7 +354,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               }, NODE_DISPATCH_TIMEOUT_MS);
             });
 
-            return Promise.race([dispatchPromise, timeoutPromise]).then((result) => {
+            return Promise.race([dispatchPromise.then((r) => { clearTimeout(tid!); return r; }), timeoutPromise]).then((result) => {
               if (!result.success) {
                 const reason = result.output ?? result.error ?? "unknown";
                 replanManager.enqueue(node, reason);
@@ -370,7 +371,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
                 const compensations = computeCompensation(nodeId, board);
                 for (const action of compensations) {
                   if (action.event === "abort_children") {
-                    try { board.failNode(action.nodeId); } catch { /* 子节点可能已终态 */ }
+                    try { board.failNode(action.nodeId); } catch (fe) { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "compensation-abort_children-failNode", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); }
                     observer.emit({
                       type: PipelineEventType.NodeFailed,
                       priority: PipelinePriority.CRITICAL,
@@ -549,13 +550,14 @@ export class SequentialDriver implements ILoopDriver {
         };
 
         // 逐节点超时兜底——防止 dispatch hang 住拖死顺序执行
-        const NODE_DISPATCH_TIMEOUT_MS = Math.min(ctx.config.reactLoopTimeoutMs, 120_000);
+        const NODE_DISPATCH_TIMEOUT_MS2 = Math.min(ctx.config.reactLoopTimeoutMs, 120_000);
         const dispatchPromise = node.needsMultiPerspective
           ? executionModel.dispatchMulti(execCtx)
           : executionModel.dispatchSingle(execCtx);
 
+        let tid2: ReturnType<typeof setTimeout>;
         const timeoutPromise = new Promise<NodeResult>((resolve) => {
-          setTimeout(() => {
+          tid2 = setTimeout(() => {
             try { board.failNode(node.id); } catch (fe) {
               if (observer) {
                 try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "seq-timeout-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { console.error(`[scheduler] best-effort failed: ${fe}`); }
@@ -564,16 +566,16 @@ export class SequentialDriver implements ILoopDriver {
             observer.emit({
               type: PipelineEventType.NodeFailed,
               priority: PipelinePriority.CRITICAL,
-              payload: { nodeId: node.id, error: `Node dispatch timeout after ${NODE_DISPATCH_TIMEOUT_MS}ms` },
+              payload: { nodeId: node.id, error: `Node dispatch timeout after ${NODE_DISPATCH_TIMEOUT_MS2}ms` },
               timestamp: Date.now(),
               notificationType: "WARNING",
             });
             resolve({ nodeId: node.id, success: false, error: "Node dispatch timeout" });
-          }, NODE_DISPATCH_TIMEOUT_MS);
+          }, NODE_DISPATCH_TIMEOUT_MS2);
         });
 
         try {
-          const result = await Promise.race([dispatchPromise, timeoutPromise]);
+          const result = await Promise.race([dispatchPromise.then((r) => { clearTimeout(tid2!); return r; }), timeoutPromise]);
 
           allResults.push(result);
           if (result.success) completed++;
@@ -906,20 +908,28 @@ export class WaveDriver implements ILoopDriver {
 // IExecutionModel 实现
 // ══════════════════════════════════════════════
 
-/** 执行 IDispatchStep 管线 */
+/** 执行 IDispatchStep 管线。异常安全：任何 step throw 时保障 CleanupStep 执行 */
 async function runDispatchPipeline(ctx: DispatchCtx, steps: IDispatchStep[]): Promise<NodeResult> {
-  for (const step of steps) {
-    ctx = await step.run(ctx);
-    if (ctx.result && !ctx.result.success && step.name !== "Cleanup") {
-      const result = ctx.result;
-      const lastStep = steps[steps.length - 1]!;
-      if (lastStep.name === "Cleanup") {
-        await lastStep.run(ctx);
+  const lastStep = steps[steps.length - 1];
+  try {
+    for (const step of steps) {
+      ctx = await step.run(ctx);
+      if (ctx.result && !ctx.result.success && step.name !== "Cleanup") {
+        const result = ctx.result;
+        if (lastStep?.name === "Cleanup") {
+          await lastStep.run(ctx);
+        }
+        return result;
       }
-      return result;
     }
+    return ctx.result ?? { nodeId: ctx.node.id, success: false, error: "Dispatch completed without result" };
+  } catch (err) {
+    // 异常路径：确保 CleanupStep 执行以释放 claimedBy/ManifoldGate/Pool
+    if (lastStep?.name === "Cleanup") {
+      try { await lastStep.run(ctx); } catch { /* Cleanup 自身异常不传播 */ }
+    }
+    throw err;
   }
-  return ctx.result ?? { nodeId: ctx.node.id, success: false, error: "Dispatch completed without result" };
 }
 
 /**
@@ -960,26 +970,41 @@ export class PipelineModel implements IExecutionModel {
     }
 
     const promises = agentTypes.map(async (at) => {
-      const agent = agents.get(at);
-      if (!agent) return null;
-      if (agent.status !== AgentStatus.Awake && agent.status !== AgentStatus.Active) return null;
+      try {
+        const agent = agents.get(at);
+        if (!agent) return null;
+        if (agent.status !== AgentStatus.Awake && agent.status !== AgentStatus.Active) return null;
 
-      if (!board.claim(node.id, at as AgentType)) return null;
+        if (!board.claim(node.id, at as AgentType)) return null;
 
-      const dispatchCtx: DispatchCtx = {
-        agents, models, board, pool, observer,
-        isTestEnv: _isTestEnv,
-        node,
-        agentType: at,
-        agent,
-        model: models.get(at) ?? "mock",
-      };
+        const dispatchCtx: DispatchCtx = {
+          agents, models, board, pool, observer,
+          isTestEnv: _isTestEnv,
+          node,
+          agentType: at,
+          agent,
+          model: models.get(at) ?? "mock",
+        };
 
-      const steps: IDispatchStep[] = [new SpawnStep(), new ExecuteStep(), new BoundaryGuardStep(), new CleanupStep()];
-      return await runDispatchPipeline(dispatchCtx, steps);
+        const steps: IDispatchStep[] = [new SpawnStep(), new ExecuteStep(), new BoundaryGuardStep(), new CleanupStep()];
+        return await runDispatchPipeline(dispatchCtx, steps);
+      } catch (err) {
+        // 单 agent 异常不影响其他 agent——CleanupStep 已在 runDispatchPipeline 的 finally 中执行
+        observer.emit({
+          type: PipelineEventType.InfraComponentDegraded,
+          priority: PipelinePriority.HIGH,
+          payload: { operation: "dispatch-multi-agent-crash", detail: String(err) },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+        return null;
+      }
     });
 
-    const results = (await Promise.all(promises)).filter((r): r is NonNullable<typeof r> => r !== null);
+    const rawResults = await Promise.allSettled(promises);
+    const results = rawResults
+      .map((r) => r.status === "fulfilled" ? r.value : null)
+      .filter((r): r is NonNullable<typeof r> => r !== null);
 
     if (results.length === 0) {
       board.failNode(node.id);
@@ -1104,8 +1129,9 @@ export class SemanticModelRouter implements IModelRouter {
   /** Agent 模型注册表——懒获取（Scheduler 构造时 models 尚未填充） */
   private readonly _modelsGetter: () => Map<string, string>;
 
-  /** 分类器缓存：payload 哈希 → { tier, at } */
+  /** 分类器缓存：payload 哈希 → { tier, at }。LRU 淘汰，防止无界增长 */
   private readonly _cache = new Map<number, { tier: ModelTier; at: number }>();
+  private static readonly CACHE_MAX = 500;
 
   /** 分类器超时（ms） */
   private readonly _classifierTimeoutMs: number;
@@ -1217,6 +1243,11 @@ export class SemanticModelRouter implements IModelRouter {
             this._classifierTimeoutMs,
           );
           if (VALID_TIERS.has(tier)) {
+            // LRU 淘汰：超过上限时删除最旧的条目
+            if (this._cache.size >= SemanticModelRouter.CACHE_MAX) {
+              const oldest = [...this._cache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+              if (oldest) this._cache.delete(oldest[0]);
+            }
             this._cache.set(hash, { tier, at: Date.now() });
             return { tier, source: "classifier" };
           }
@@ -1281,13 +1312,15 @@ function _hashStr(s: string): number {
   return h;
 }
 
-/** 为 Promise 加超时——超时时 reject */
+/** 为 Promise 加超时——超时时 reject。timer 在 p 完成时即清理 */
 function _withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   if (ms <= 0) return p;
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
+  });
   return Promise.race([
-    p,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms),
-    ),
+    p.then((v) => { clearTimeout(timer!); return v; }),
+    timeoutPromise,
   ]);
 }

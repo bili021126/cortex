@@ -62,7 +62,8 @@ export type { Formatter } from "./formatters/index.js";
 export { parseGlobalFormat, createDefaultContext, outputResult, stripGlobalOptions, isDirectRun } from "./utils.js";
 
 // ── Plan 工具函数 ────────────────────────────────
-export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "@cortex/tui";
+// Core-2.5: tui 已合并入 cli，直接从内部子路径导出
+export * from "./tui/index.js";
 
 // ── Platform ───────────────────────────────────────
 export { getPlatformBridge, closePlatformBridge } from "./platform.js";

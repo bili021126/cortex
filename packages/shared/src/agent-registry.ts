@@ -263,11 +263,48 @@ export const CHAT_AGENT_ALIASES: Record<string, AgentType> = _buildChatAgentAlia
 /** 不匹配时的回退展示 */
 export const AGENT_DISPLAY_FALLBACK: AgentDisplayInfo = { emoji: "🤖", name: "Agent", signature: "" };
 
+/** Agent type → 提示词目录名（prompts/<dir>/system.md） */
+export const AGENT_TYPE_TO_DIR: Record<string, string> = {
+  analysis: "nahida",
+  code: "albedo",
+  ops: "beidou",
+  butler: "cyrene",
+  review: "keqing",
+  loop: "mona",
+  "doc-govern": "ningguang",
+  inspector: "amber",
+  browser: "yoimiya",
+  fix: "sigewinne",
+  meta: "ganyu",
+  api: "kuki",
+  data: "alhaitham",
+  strategist: "zhongli",
+};
+
+/** 用户输入名 → Agent type（别名反向映射，用于 TUI 角色切换） */
+export const AGENT_ALIAS_TO_TYPE: Record<string, string> = {
+  cyrene: "butler",
+  nahida: "analysis",
+  ganyu: "meta",
+  keqing: "review",
+  mona: "loop",
+  ningguang: "doc-govern",
+  amber: "inspector",
+  yoimiya: "browser",
+  sigewinne: "fix",
+  kuki: "api",
+  beidou: "ops",
+  albedo: "code",
+  alhaitham: "data",
+  zhongli: "strategist",
+};
+
 /**
  * Agent 类型 → 展示信息（string-key 原始数据）。
  * 供 JSON 序列化/动态覆盖——从 AGENT_DEFS 派生。
  */
 export const AGENT_DISPLAY: Record<string, AgentDisplayInfo> = _buildStringKeyDisplay();
+
 
 // ─── 派生工具函数 ──────────────────────────────
 

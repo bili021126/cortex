@@ -9,8 +9,7 @@
 
 import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
-import type { ICortexApi, TaskNode, Tag } from "@cortex/shared";
-import type { ITaskBoard, IScheduler } from "@cortex/scheduler";
+import type { ICortexApi, TaskNode, Tag, ITaskBoard, IScheduler } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -70,8 +69,8 @@ export function createTaskHandler(bridge: ICortexApi): CommandHandler {
 
     const subcommand = args[0];
     try {
-      const board = await bridge.getTaskBoard() as ITaskBoard;
-      const scheduler = await bridge.getScheduler() as IScheduler;
+      const board = await bridge.getTaskBoard();
+      const scheduler = await bridge.getScheduler();
       const svc: TaskServices = { board, scheduler };
 
       switch (subcommand) {

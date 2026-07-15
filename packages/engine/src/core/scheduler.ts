@@ -372,10 +372,9 @@ export class Scheduler implements IScheduler {
 
     const results = (await Promise.all(promises)).filter((r): r is NonNullable<typeof r> => r !== null);
 
-    // 清理节点锁——执行完毕，释放互斥锁
-    this.claimingLocks.delete(node.id);
-
-    if (results.length > 0) {
+    // 清理节点锁——无论成功失败都释放，防止永久卡住
+    try {
+      if (results.length > 0) {
       const currentNode = this.board.getNode(node.id);
       if (currentNode && currentNode.status !== "failed") {
         const resultTypes = new Set(results.map((r) => r.agentType).filter((t): t is AgentType => t != null));
@@ -434,5 +433,8 @@ export class Scheduler implements IScheduler {
       success: isDone || allSuccess,
       output: combined,
     };
+    } finally {
+      this.claimingLocks.delete(node.id);
+    }
   }
 }

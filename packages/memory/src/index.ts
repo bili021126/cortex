@@ -51,3 +51,11 @@ export type { StoreRegistration } from "./registry/MemoryStoreRegistry.js";
 // ─── 世界书 ────────────────────────────────────────
 export { WorldbookEngine } from "./worldbook.js";
 export type { WorldbookEntry, EntryState, DmaeState, DmaeParams } from "./worldbook.js";
+
+// ─── Cyrene 记忆子系统（L0/L1/L2 画像记忆） ────────
+// re-export 核心类型——完整子路径请用 @cortex/memory/cyrene
+export { MemoryManager, MemoryStoreManager, memoryStore } from "./cyrene/index.js";
+export type { MemoryManagerDeps } from "./cyrene/index.js";
+
+// ─── Cyrene RAG 桥接 ──────────────────────────────
+export { initRAG, addMemory as ragAddMemory, searchMemoryEntries as ragSearchMemoryEntries, searchMemory as ragSearchMemory, setRagDataDir, setRagModelsDir } from "./cyrene/index.js";

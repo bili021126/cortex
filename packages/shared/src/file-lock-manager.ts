@@ -11,8 +11,9 @@ export enum LockType {
 }
 
 export interface IFileLockManager {
-  acquire(filePath: string, lockType: LockType, ownerId: string): boolean;
+  acquire(filePath: string, ownerId: string, lockType?: LockType): boolean;
   release(filePath: string, ownerId: string): void;
+  dispose?(): void;
 }
 
 // ─── LockEntry ──────────────────────────────────────

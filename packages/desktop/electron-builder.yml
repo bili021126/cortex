@@ -1,0 +1,19 @@
+appId: com.cortex.cyrene
+productName: Cyrene
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/**/*
+  - resources/**/*
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+extraResources:
+  - from: resources/
+    to: resources/
+    filter:
+      - "**/*"

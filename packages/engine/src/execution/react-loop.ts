@@ -8,6 +8,7 @@ import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_L
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
+import { resilienceFactory } from "./resilience-integration.js";
 
 /**
  * ReAct 循环上下文——解耦 BaseAgent 继承链。
@@ -79,6 +80,7 @@ export async function runReActLoop(
 
   let loops = 0;
   let finalOutput: string | undefined;
+  let bestEffortOutput: string | undefined;
   const startTime = Date.now();
   /** 本轮 ReAct 所有工具调用记录，用于检测 write_file 是否被调用 */
   const toolCallHistory: Array<{name: string}> = [];
@@ -145,7 +147,7 @@ export async function runReActLoop(
       // reasoning_effort 和 tool_choice 均不发送——DeepSeek Flash 不支持，Pro 需 extra_body 配套
       // FIX-02: forceWrite 仅对 Pro/Reasoner 发送——Flash 返回 400 on tool_choice
       const shouldForce = forceWrite && (model.includes("pro") || model.includes("reasoner"));
-      const res = await llm.chat(model, messages, toolDefs, undefined, shouldForce ? forceWrite : undefined);
+      const res = await resilienceFactory.execute("llm-call", async () => llm.chat(model, messages, toolDefs, undefined, shouldForce ? forceWrite : undefined));
       const callElapsed = Date.now() - callStart;
 
       // ── 遥测：Token 消耗记录 ──
@@ -207,6 +209,7 @@ export async function runReActLoop(
         }
 
         finalOutput = res.content ?? undefined;
+        bestEffortOutput = finalOutput; // 保存最后一次成功输出，用于异常恢复
         diagnostic(`🛑 无工具调用，本轮结束——output=${(finalOutput ?? "(空)").slice(0, 100)}`);
         break;
       }
@@ -232,9 +235,11 @@ export async function runReActLoop(
               console.error(`[TRACE write_file] agent=${agentType} calling tool=${tc.name} params=${JSON.stringify(tc.arguments)}`);
             }
             const toolStart = Date.now();
-            const result = await toolkit.execute(
-              { toolName: tc.name, params: tc.arguments },
-              agentType,
+            const result = await resilienceFactory.execute("tool-exec", async () =>
+              toolkit.execute(
+                { toolName: tc.name, params: tc.arguments },
+                agentType,
+              ),
             );
             const toolElapsed = Date.now() - toolStart;
             const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
@@ -271,9 +276,11 @@ export async function runReActLoop(
         }
         diagnostic(`🔧 执行工具 ${tc.name}`);
         const toolStart = Date.now();
-        const result = await toolkit.execute(
-          { toolName: tc.name, params: tc.arguments },
-          agentType,
+        const result = await resilienceFactory.execute("tool-exec", async () =>
+          toolkit.execute(
+            { toolName: tc.name, params: tc.arguments },
+            agentType,
+          ),
         );
         const toolElapsed = Date.now() - toolStart;
         const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
@@ -294,7 +301,7 @@ export async function runReActLoop(
         nodeId: node.id,
         agentType: agentType,
         success: false,
-        output: `[partial output before crash at iteration ${loops}/${maxLoops}]`,
+        output: bestEffortOutput ?? `[partial output before crash at iteration ${loops}/${maxLoops}]`,
         error: `[ReAct loop crashed at iteration ${loops}/${maxLoops}: ${String(e)}]`,
       };
     }

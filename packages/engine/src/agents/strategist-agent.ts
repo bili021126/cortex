@@ -2,6 +2,7 @@ import { AgentType as AT, AgentStatus as AS, PipelineEventType, type AgentType, 
 import type { LlmAdapter } from "@cortex/llm";
 import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "../execution/pool-aware.js";
+import { resilienceFactory } from "../execution/resilience-integration.js";
 
 /**
  * StrategistAgent（钟离）—— 岩王帝君，战略 MetaAgent。
@@ -89,7 +90,9 @@ export class StrategistAgent {
         { role: "user" as const, content: node.payload },
       ];
 
-      const res = await this.llm.chat(model, messages, undefined, node.reasoningEffort);
+      const res = await resilienceFactory.execute("llm-call", async () =>
+        this.llm.chat(model, messages, undefined, node.reasoningEffort),
+      );
       const output = res.content ?? undefined;
 
       return {

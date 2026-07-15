@@ -17,8 +17,8 @@ import {
   queryLoop,
   extractHistory,
   agentTalkPersona,
-} from "@cortex/tui";
-import type { TuiEvent, TuiHooks, ReplMode, LlmStreamBridge } from "@cortex/tui";
+} from "@cortex/cli";
+import type { TuiEvent, TuiHooks, ReplMode, LlmStreamBridge } from "@cortex/cli";
 import type { AgentType, LlmMessage, ICortexApi } from "@cortex/shared";
 
 // ── 类型辅助 ──────────────────────────────────────────────

@@ -107,6 +107,10 @@ export { resolveByScope, tagSkillScope, type SkillScope } from "./planning/skill
 // ── 记忆子系统（仅引擎胶水层） ──────────────────
 export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE, registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "./memory-bridge/index.js";
 
+// ── Cyrene 记忆层（L0/L1/L2 画像记忆扩展） ─────
+export { initCyreneMemory, initMemoryStore, initConsistencyLayer } from "./bootstrap/init-memory.js";
+export type { CyreneMemoryInitResult, ConsistencyLayerResult } from "./bootstrap/init-memory.js";
+
 // ── Bootstrap 集成入口 ──────────────────────────
 export { bootstrapEngine, resolveLlm } from "./bootstrap/bootstrap-engine.js";
 export type { BootstrapEngineOptions, BootstrapEngineResult } from "./bootstrap/bootstrap-engine.js";

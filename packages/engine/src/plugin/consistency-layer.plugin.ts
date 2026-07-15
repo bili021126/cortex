@@ -11,7 +11,7 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import type { MemoryEntry, MemoryWriteInput, ReadMode } from "@cortex/shared";
-import { ConsistencyLayer } from "@cortex/consistency";
+import { ConsistencyLayer } from "@cortex/governance";
 
  
 

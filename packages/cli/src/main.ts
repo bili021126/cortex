@@ -39,8 +39,9 @@ import { bootstrapMcp } from "./bootstrap/mcp.js";
 
 // ── 命令 ─────────────────────────────────────────
 import { CommandRegistry } from "./commands/index.js";
+import type { ICommandContext } from "@cortex/shared";
 import { registerCommands } from "./commands/command-list.js";
-import { tuiReplHandler } from "@cortex/tui";
+import { tuiReplHandler } from "./tui/index.js";
 import { createVersionHandler } from "./commands/version.js";
 import { createHelpHandler } from "./commands/help.js";
 
@@ -159,9 +160,9 @@ export async function main(): Promise<number> {
     if (!hasAnyLlmKey()) {
       console.error("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
       console.error("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。");
-      console.error("   command 模式无需 Key——输入 .mode command 切换。\n");
+      console.error("   直接输入命令名即可（如 ls、git status），无需切换模式。\n");
     }
-    return await tuiReplHandler(registry, engineBridge, createDefaultContext(PROJECT_ROOT));
+    return await tuiReplHandler(registry, engineBridge, createDefaultContext(PROJECT_ROOT) as unknown as ICommandContext);
   }
 
   // --help / -h
@@ -197,9 +198,13 @@ export async function main(): Promise<number> {
   }
 
   try {
-    const r = await registry.dispatch(cleanArgs, context);
-    if (!globalQuiet) outputResult(r, globalFormat);
-    return r.exitCode;
+    const r = await registry.dispatch(cleanArgs, context as unknown as ICommandContext);
+    if (!globalQuiet) outputResult({
+      success: r.code === 0,
+      output: r.output,
+      exitCode: r.code,
+    }, globalFormat);
+    return r.code;
   } catch (err) {
     console.error(`✗ 未预期错误: ${err instanceof Error ? err.message : String(err)}`);
     return CLI_EXIT_INTERNAL_ERROR;

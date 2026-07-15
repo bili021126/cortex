@@ -9,6 +9,8 @@ import type { AgentType } from "./agent.js";
 import type { TaskNode, ExecutionReport } from "./task.js";
 import type { MemoryQuery, MemoryEntry, MemoryWriteInput, IMemoryStore } from "./memory.js";
 import type { IConfirmGate } from "./toolkit.js";
+import type { ITaskBoard, IAgentPool, IScheduler, IStrategistAgent } from "./scheduler-contracts.js";
+import type { IMetaAgent } from "./tui-bridge.js";
 
 // ─── PipelineObserver ──────────────────────────────────────
 
@@ -391,15 +393,16 @@ export interface ICortexMemory {
 }
 
 /** 引擎组件访问
- * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。 */
+ * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。
+ * @since Core-2.5 — unknown 收敛为具名契约（ITaskBoard/IAgentPool/IScheduler/IStrategistAgent/IMetaAgent） */
 export interface ICortexComponents {
-  getMetaAgent(): Promise<{ plan(intent: string, context?: Record<string, unknown>): Promise<unknown> } | undefined>;
-  getStrategists(): Map<string, unknown> | undefined;
+  getMetaAgent(): Promise<IMetaAgent | undefined>;
+  getStrategists(): Map<string, IStrategistAgent> | undefined;
   getConfirmGate(): Promise<IConfirmGate>;
   getMemoryStore(): Promise<IMemoryStore>;
-  getTaskBoard(): Promise<{ getNode(id: string): unknown; getAllNodes(): unknown[]; addNode(node: unknown): void }>;
-  getScheduler(): Promise<{ executeAll(): Promise<unknown>; register(type: string, agent: unknown, model: string): void }>;
-  getAgentPool(): unknown;
+  getTaskBoard(): Promise<ITaskBoard>;
+  getScheduler(): Promise<IScheduler>;
+  getAgentPool(): IAgentPool | undefined;
 }
 
 /**
@@ -422,10 +425,10 @@ export interface Disposable {
   shutdown?: () => void;
   destroyAll?: () => void;
   clear?: () => void;
+  dispose?: () => void;
 }
 
 /** 返回类型声明——插件式注入类型 */
-export type Unknown = unknown;
 
 export type StrictNonEmptyArray<T> = T extends readonly [infer F, ...infer R] ? (F extends undefined ? never : readonly [F, ...R]) : never;
 
