@@ -71,9 +71,10 @@ describe("AgentPool", () => {
 
       const violations = emitted.filter((e) => e.type === "agent_pool.invariant_violation");
       expect(violations.length).toBe(1);
-      // D6: _observer 优先于 onInvariant，payload 包含 source + message + detail（JSON 字符串）
+      // D6: _observer 优先于 onInvariant，payload 契约为 { source, detail }（@cortex/shared EventPayloadMap）
+      // message 文本已合并进 detail（`${message} | ${JSON.stringify(details)}`），契约无独立 message 字段
       expect(violations[0].payload.source).toBe("AgentPool.setStatus");
-      expect(violations[0].payload.message).toContain("非法流转");
+      expect(violations[0].payload.detail).toContain("非法流转");
     });
 
     it("无 observer 也无 onInvariant 时 console.error 兜底", () => {
