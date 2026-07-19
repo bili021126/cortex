@@ -197,6 +197,7 @@ export class LlmAdapter {
     tools?: ToolDef[],
     reasoningEffort?: "high" | "max" | null,
     toolChoice?: "auto" | "required" | "none" | string,
+    _degradeAttempted = false,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       return await this._mockRespond(messages, tools);
@@ -412,14 +413,15 @@ export class LlmAdapter {
         total_tokens: 0,
         error: (e as Error).message.slice(0, 200),
       });
-      // FIX-09: Flash→Pro 降级——429/503 时自动切换
+      // FIX-09: Flash→Pro 降级——429/503 时自动切换。
+      // _degradeAttempted 显式守卫：最多降级一次，不依赖字符串替换的副作用终止递归。
       const _err = e as Error;
       const statusMatch = _err.message.match(/(\d{3})/);
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
-      if ((extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
+      if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
         const fallbackModel = model.replace("flash", "pro");
         console.log(`[telemetry] model.degraded from=${model} to=${fallbackModel}`);
-        return await this.chat(fallbackModel, messages, tools, reasoningEffort, toolChoice);
+        return await this.chat(fallbackModel, messages, tools, reasoningEffort, toolChoice, true);
       }
       throw e;
     }
@@ -432,6 +434,7 @@ export class LlmAdapter {
     onChunk: (content: string, reasoning?: string) => void,
     reasoningEffort?: "high" | "max" | null,
     _toolChoice?: string,
+    _degradeAttempted = false,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       const resp = await this._mockRespond(messages, tools);
@@ -555,14 +558,15 @@ export class LlmAdapter {
         stream: true,
         error: (e as Error).message.slice(0, 200),
       });
-      // FIX-09: Flash→Pro 降级——429/503 时自动切换
+      // FIX-09: Flash→Pro 降级——429/503 时自动切换。
+      // _degradeAttempted 显式守卫：最多降级一次，不依赖字符串替换的副作用终止递归。
       const _err = e as Error;
       const statusMatch = _err.message.match(/(\d{3})/);
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
-      if ((extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
+      if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
         const fallbackModel = model.replace("flash", "pro");
         console.log(`[telemetry] model.degraded from=${model} to=${fallbackModel}`);
-        return await this.chatStream(fallbackModel, messages, tools, onChunk, reasoningEffort, _toolChoice);
+        return await this.chatStream(fallbackModel, messages, tools, onChunk, reasoningEffort, _toolChoice, true);
       }
       throw e;
     }
