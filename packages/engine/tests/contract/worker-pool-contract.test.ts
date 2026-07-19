@@ -200,4 +200,28 @@ describe("WorkerPool contract", () => {
     expect(results).toEqual([1, 2, 3]);
     pool.shutdown();
   });
+
+  // ═══════════════════════════════════════════════
+  // 7. 超时与污染隔离（C2 回归）
+  // ═══════════════════════════════════════════════
+  // 大 payload + timeout:1ms：JSON.parse + 两趟 IPC 往返几乎必然 >1ms，
+  // 稳定触发超时路径。验证超时后 worker 被终止替换、迟到 message 不污染后续任务。
+  const bigPayload = JSON.stringify({ arr: Array.from({ length: 100_000 }, (_, i) => i) });
+
+  it("should reject on timeout without hanging", async () => {
+    const pool = new WorkerPool({ maxWorkers: 1 });
+    await expect(pool.parseJson(bigPayload, 1)).rejects.toThrow(/timeout/i);
+    pool.shutdown();
+  });
+
+  it("should replace tainted worker after timeout — pool stays usable", async () => {
+    // maxWorkers:1 — 若超时后不补充新 worker，池将空置，后续任务永久挂起。
+    // 该测试能通过即证明 _replaceWorker 在超时后补足了容量。
+    const pool = new WorkerPool({ maxWorkers: 1 });
+    await expect(pool.parseJson(bigPayload, 1)).rejects.toThrow(/timeout/i);
+    // 后续任务必须拿到自己的正确结果，而非超时任务迟到的 message
+    const result = await pool.parseJson<{ ok: boolean }>('{"ok":true}');
+    expect(result).toEqual({ ok: true });
+    pool.shutdown();
+  });
 });

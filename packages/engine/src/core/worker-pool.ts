@@ -36,6 +36,7 @@ export class WorkerPool {
   private workers: Worker[] = [];
   private queue: QueuedTask[] = [];
   private busy = new Set<Worker>();
+  private _shutdown = false;
 
   /** 队列最大长度上限——超出时新任务被立即拒绝，提供背压。 */
   private static readonly MAX_QUEUE_LENGTH = 100;
@@ -67,6 +68,7 @@ export class WorkerPool {
   }
 
   shutdown(): void {
+    this._shutdown = true;
     // 拒绝所有排队任务，防止 promise 悬空
     for (const q of this.queue) {
       q.reject(new Error("WorkerPool shutdown: queued task discarded"));
@@ -86,28 +88,60 @@ export class WorkerPool {
 
   private _dispatch(worker: Worker, task: WorkerTask, resolve: (result: WorkerResult) => void, reject: (err: Error) => void): void {
     this.busy.add(worker);
-    const timeout = setTimeout(() => {
-      this.busy.delete(worker);
-      this._drainQueue();
-      reject(new Error(`Worker task ${task.type} timeout`));
-    }, task.timeout ?? 30_000);
+    // settled 守卫：message / error / timeout 三条路径互斥，杜绝双重 settle
+    let settled = false;
 
-    worker.once("message", (result: WorkerResult) => {
+    const onMessage = (result: WorkerResult): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
+      worker.removeListener("error", onError);
       this.busy.delete(worker);
       this._drainQueue();
       if (result.success) resolve(result);
       else reject(new Error(result.error ?? "worker failed"));
-    });
+    };
 
-    worker.once("error", (err) => {
+    const onError = (err: Error): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
-      this.busy.delete(worker);
+      worker.removeListener("message", onMessage);
+      // error 事件意味着 worker 已抛未捕获异常、状态未知——替换而非复用
+      this._replaceWorker(worker);
       this._drainQueue();
       reject(err);
-    });
+    };
 
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      // 关键修复：移除监听器，避免超时任务的迟到 message 命中下一个任务的 once 处理器
+      worker.removeListener("message", onMessage);
+      worker.removeListener("error", onError);
+      // 超时的 worker 仍在处理旧任务、状态未知——终止并替换，绝不放回池复用
+      this._replaceWorker(worker);
+      this._drainQueue();
+      reject(new Error(`Worker task ${task.type} timeout`));
+    }, task.timeout ?? 30_000);
+
+    worker.once("message", onMessage);
+    worker.once("error", onError);
     worker.postMessage(task);
+  }
+
+  /**
+   * 终止一个已污染（超时/出错）的 worker 并补充新 worker 维持池容量。
+   * shutdown 后不再补充，避免泄漏。
+   */
+  private _replaceWorker(tainted: Worker): void {
+    this.busy.delete(tainted);
+    const idx = this.workers.indexOf(tainted);
+    if (idx !== -1) this.workers.splice(idx, 1);
+    void tainted.terminate();
+    if (!this._shutdown && idx !== -1) {
+      this.workers.push(new Worker(WORKER_SCRIPT));
+    }
   }
 
   private _drainQueue(): void {
