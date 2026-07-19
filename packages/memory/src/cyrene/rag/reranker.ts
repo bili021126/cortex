@@ -8,6 +8,7 @@
 
 import * as path from "path"
 import * as os from "os"
+import { existsSync } from "node:fs"
 
 // ── Types ──
 export interface RerankerProvider {
@@ -15,9 +16,12 @@ export interface RerankerProvider {
   readonly name: string
 }
 
+ 
 const importEsm = new Function("moduleName", "return import(moduleName)") as (moduleName: string) => Promise<any>
 
+ 
 let lightPipeline: any = null
+ 
 let standardPipeline: any = null
 
 let modelsDir = ""
@@ -30,6 +34,7 @@ function getModelsDir(): string {
   return modelsDir || path.join(process.cwd(), "models")
 }
 
+ 
 async function loadRerankerPipeline(modelDir: string): Promise<any> {
   const { pipeline, env } = await importEsm("@xenova/transformers")
   const originalPath = env.localModelPath
@@ -42,6 +47,7 @@ async function loadRerankerPipeline(modelDir: string): Promise<any> {
       quantized: true,
       cache_dir: path.join(os.homedir(), ".cache", "huggingface"),
     })
+    // eslint-disable-next-line no-console
     console.log(`[Reranker] pipeline "${modelDir}" loaded OK`)
     return pipe
   } finally {
@@ -60,6 +66,7 @@ export async function createLightReranker(): Promise<RerankerProvider> {
       const outputs = await lightPipeline(inputs)
       const results = documents.map((text, i) => ({ text, score: outputs[i]?.score ?? 0 }))
       results.sort((a, b) => b.score - a.score)
+      // eslint-disable-next-line no-console
       console.log(`[Reranker] light: ${documents.length} docs reranked in ${Date.now() - start}ms`)
       return results
     },
@@ -77,6 +84,7 @@ export async function createStandardReranker(): Promise<RerankerProvider> {
       const outputs = await standardPipeline(inputs)
       const results = documents.map((text, i) => ({ text, score: outputs[i]?.score ?? 0 }))
       results.sort((a, b) => b.score - a.score)
+      // eslint-disable-next-line no-console
       console.log(`[Reranker] standard: ${documents.length} docs reranked in ${Date.now() - start}ms`)
       return results
     },
@@ -90,8 +98,7 @@ function checkRerankerModelInstalled(mode: "light" | "standard"): boolean {
   const modelDir = mode === "light" ? "ms-marco-MiniLM-L-6-v2" : "bge-reranker-base"
   const onnxPath = path.join(getModelsDir(), modelDir, "onnx", "model_quantized.onnx")
   try {
-    const fs = require("fs")
-    return fs.existsSync(onnxPath)
+    return existsSync(onnxPath)
   } catch { return false }
 }
 
@@ -104,6 +111,7 @@ export function getRerankerInstallStatus(): { light: boolean; standard: boolean 
 
 export async function initReranker(mode: "light" | "standard" | "none"): Promise<void> {
   currentRerankerMode = mode
+  // eslint-disable-next-line no-console
   if (mode === "none") { currentReranker = null; console.log("[Reranker] disabled"); return }
 
   if (!checkRerankerModelInstalled(mode)) {
@@ -114,9 +122,11 @@ export async function initReranker(mode: "light" | "standard" | "none"): Promise
     return
   }
 
+  // eslint-disable-next-line no-console
   console.log(`[Reranker] initializing ${mode} mode...`)
   if (mode === "light") currentReranker = await createLightReranker()
   else currentReranker = await createStandardReranker()
+  // eslint-disable-next-line no-console
   console.log(`[Reranker] ${mode} mode ready: ${currentReranker.name}`)
 }
 

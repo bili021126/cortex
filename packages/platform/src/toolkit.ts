@@ -2,6 +2,7 @@ import { ToolCategory, ReversibilityLevel as RL, getAgentToolPermissions, resolv
 import type { ToolInvocation, ToolResult, ToolDefinition, Tool, ReversibilityLevel, AgentType, IFileSystemAdapter, AgentContext, IPipelineObserver } from "@cortex/shared";
 import type { ConfirmGate } from "@cortex/scheduler";
 import type { IFileLockManager } from "@cortex/shared";
+import { realpathSync } from "node:fs";
 import { NodeFileSystemAdapter } from "./node-fs-adapter.js";
 import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
@@ -184,6 +185,7 @@ export class Toolkit {
     for (const name of this.tools.keys()) {
       if (name.startsWith("mcp:")) {
         const parts = name.slice(4).split(":");
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         if (parts.length >= 2) ids.add(parts[0]!);
       }
     }
@@ -237,6 +239,7 @@ export class Toolkit {
     // ── ConfirmGate 拦截 ──
     const level = this.reversibilityOf(inv.toolName);
     // 填充信任分记录——needsConfirmation 依赖此数据做自动放行
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (this.gate as any)?.check?.(level, { agentType: callerType, toolName: inv.toolName });
     if (this.gate?.needsConfirmation(level, { agentType: callerType, toolName: inv.toolName })) {
       const reqId = this.gate.request({
@@ -269,12 +272,6 @@ export class Toolkit {
         return { success: false, error: `File locked: ${filePath}` };
       }
       try {
-        if (inv.toolName === "write_file") {
-          const fp = inv.params.file_path as string;
-          let resolvedPath: string;
-          try { resolvedPath = this._resolvePath(fp); } catch { resolvedPath = "(resolve failed)"; }
-          console.log(`[TRACE write_file] toolkit.execute: workspaceRoot=${this.workspaceRoot} resolvedPath=${resolvedPath}`);
-        }
         const result = await tool.execute(inv.params);
         this.lockManager.release(filePath, "toolkit");
         return result;
@@ -282,13 +279,6 @@ export class Toolkit {
         this.lockManager.release(filePath, "toolkit");
         return { success: false, error: String(e) };
       }
-    }
-
-    if (inv.toolName === "write_file") {
-      const fp = inv.params.file_path as string;
-      let resolvedPath: string;
-      try { resolvedPath = this._resolvePath(fp); } catch { resolvedPath = "(resolve failed)"; }
-      console.log(`[TRACE write_file] toolkit.execute: workspaceRoot=${this.workspaceRoot} resolvedPath=${resolvedPath}`);
     }
 
     try {
@@ -349,8 +339,7 @@ export class Toolkit {
     // 解析符号链接的真实路径（防符号链接沙箱绕过）
     let realResolved: string;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      realResolved = require("fs").realpathSync.native(resolved);
+      realResolved = realpathSync.native(resolved);
     } catch { realResolved = resolved; }
     const root = this.workspaceRoot;
     if ((realResolved === root || realResolved.startsWith(root + this.fs.sep)) &&

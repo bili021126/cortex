@@ -96,8 +96,7 @@ class FileBackend implements MemoryStoreBackend {
     } catch (_e) {
       // 检查索引文件是否存在以区分首次使用和文件损坏
       try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        require("fs").accessSync(this._indexPath);
+        await fs.access(this._indexPath);
         console.warn(`[memory] 索引文件损坏，从空存储启动: ${this._indexPath}`);
       } catch { /* empty */ }
       // 索引不存在 = 首次使用，静默
@@ -135,7 +134,7 @@ class FileBackend implements MemoryStoreBackend {
   }
 
   async flushIndex(entries: Map<string, MemoryEntry>): Promise<void> {
-    return this._serializedFlush(async () => {
+    return await this._serializedFlush(async () => {
       const index: IndexFile = {
         version: STORAGE_VERSION,
         updatedAt: Date.now(),
@@ -151,7 +150,7 @@ class FileBackend implements MemoryStoreBackend {
   }
 
   async flushLinks(links: Map<string, MemoryLink[]>): Promise<void> {
-    return this._serializedFlush(async () => {
+    return await this._serializedFlush(async () => {
       const linksFile: LinksFile = { version: STORAGE_VERSION, updatedAt: Date.now(), links: {} };
       for (const [sourceId, linkList] of links) {
         linksFile.links[sourceId] = linkList.map(l => ({ ...l, linkType: l.linkType }));
