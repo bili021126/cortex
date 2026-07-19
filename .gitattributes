@@ -1,0 +1,53 @@
+# ============================================================
+# Cortex 仓库统一 EOL 方案
+# 目标：仓库内所有文本文件以 LF 存储，消除 CRLF/LF 混合导致的
+#       git 二进制误判（w/-text）与全文 EOL churn。
+# 说明：显式声明 text 覆盖 text=auto 自动探测，避免混合换行文件
+#       被误判为二进制而跳过归一。
+# ============================================================
+
+# 默认：自动探测文本、以 LF 存储
+* text=auto eol=lf
+
+# 源码与配置：强制文本 + LF（不依赖自动探测）
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.jsx   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.mdx   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.sh    text eol=lf
+*.txt   text eol=lf
+
+# Windows 脚本保留 CRLF（PowerShell/批处理惯例）
+*.ps1   text eol=crlf
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# 二进制：跳过任何 EOL/文本处理
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.mp4   binary
+*.m4a   binary
+*.mp3   binary
+*.wav   binary
+*.xlsx  binary
+*.xls   binary
+*.docx  binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.db    binary
+*.enc   binary
+*.wasm  binary
