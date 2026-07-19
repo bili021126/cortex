@@ -1,3 +1,0 @@
-# Ignore large model binary files
-**/onnx/*.onnx
-**/onnx/*.onnx_data

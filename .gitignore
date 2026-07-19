@@ -23,6 +23,15 @@ packages/scheduler/src/**/*.d.ts
 .vscode/
 .idea/
 
+# 外部工具目录（Claude/Continue/Junie）
+.claude/
+.continue/
+.junie/
+
+# 封存/外部项目 dump（非 Cortex 源码）
+.archived/
+_extraneous/
+
 # OS
 .DS_Store
 Thumbs.db
