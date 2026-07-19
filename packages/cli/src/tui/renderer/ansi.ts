@@ -207,8 +207,10 @@ export class Box {
   /** 在指定位置写入文本（超出截断） */
   write(x: number, y: number, text: string): void {
     if (y < 0 || y >= this.height) return;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const row = this.buffer[y]!;
     for (let i = 0; i < text.length && x + i < this.width; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       row[x + i] = text[i]!;
     }
   }
@@ -216,8 +218,10 @@ export class Box {
   /** 用预格式化行填充 */
   writeRow(y: number, text: string): void {
     if (y < 0 || y >= this.height) return;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const row = this.buffer[y]!;
     for (let i = 0; i < Math.min(text.length, this.width); i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       row[i] = text[i]!;
     }
   }
@@ -225,6 +229,7 @@ export class Box {
   /** 清空缓冲区 */
   clear(): void {
     for (let y = 0; y < this.height; y++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       this.buffer[y]!.fill(" ");
     }
   }
@@ -232,6 +237,7 @@ export class Box {
   /** 获取当前行内容（不含 ANSI escape 的纯文本视图） */
   getRow(y: number): string {
     if (y < 0 || y >= this.height) return "";
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return this.buffer[y]!.join("").trimEnd();
   }
 
@@ -245,6 +251,7 @@ export class Box {
     const out: string[] = [];
 
     for (let y = 0; y < this.height; y++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const curRow = this.buffer[y]!.join("");
       const prevRow = this.prev?.[y]?.join("") ?? "";
 
@@ -266,6 +273,7 @@ export class Box {
   renderFull(): string {
     const out: string[] = [];
     for (let y = 0; y < this.height; y++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const curRow = this.buffer[y]!.join("");
       out.push(`${CSI}${this.topRow + y + 1};1H${eraseLine}${curRow}`);
     }

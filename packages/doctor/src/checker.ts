@@ -209,6 +209,7 @@ function checkTestHeaders(pkgPath: string): string[] {
     const filePath = path.join(testsDir, file);
     try {
       const content = fs.readFileSync(filePath, "utf-8");
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const firstLine = content.split("\n")[0]!.trim();
 
       if (!CI_TAG_REGEX.test(firstLine)) {

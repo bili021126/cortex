@@ -241,8 +241,11 @@ function evaluateFilter(obj: unknown, expr: string): boolean {
   const match = expr.trim().match(/^@\.(\w+)\s*(==|!=|<=|>=|<|>|=~)\s*(.+)$/);
   if (!match) return true; // 无法解析 → 通过
 
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const key = match[1]!;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const op = match[2]!;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const valStr = match[3]!;
   if (!obj || typeof obj !== "object") return false;
 

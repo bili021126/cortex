@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/governance - E2E integration tests
  * Covers: proposal -> judge -> apply -> timeout -> memory sync

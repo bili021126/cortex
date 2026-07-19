@@ -8,8 +8,8 @@ import {
   saveSession,
   loadSession,
   clearSession,
-} from "../src/session-store.js";
-import type { SessionSnapshot } from "../src/session-store.js";
+} from "../src/tui/session-store.js";
+import type { SessionSnapshot } from "../src/tui/session-store.js";
 
 describe("SessionStore", () => {
   let tmpDir: string;

@@ -10,10 +10,12 @@
 
 /** 终端文本净化——过滤二进制/控制字符，保护 URL/CJK/路径 */
 export function sanitizeRenderableText(text: string): string {
-  let result = text
+  const result = text
     // 剥 ANSI escape（除 SGR）
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
     // 控制字符（保留 \n \r \t）
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
 
   // 检测二进制行：含大量替换字符(≥12个)→截断

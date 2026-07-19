@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.src.json",
-    "typecheck": "tsc -p tsconfig.src.json",
+    "typecheck": "tsc -p tsconfig.src.json --noEmit",
     "lint": "eslint src/",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -23,7 +23,8 @@
     "@cortex/fsm-compiler": "workspace:*",
     "@cortex/llm": "workspace:*",
     "@cortex/memory": "workspace:*",
-    "@cortex/shared": "workspace:*"
+    "@cortex/shared": "workspace:*",
+    "@cortex/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

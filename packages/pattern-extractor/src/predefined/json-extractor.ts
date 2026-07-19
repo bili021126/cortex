@@ -432,11 +432,13 @@ function analyzeJsonValue(
 
     // 检查数组元素类型同质性
     if (value.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const firstType = value.length > 0 ? detectPropertyType(value[0]!) : null;
       let isHomogeneous = true;
 
       if (firstType !== null) {
         for (let i = 1; i < value.length; i++) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const elementType = detectPropertyType(value[i]!);
           if (elementType !== firstType) {
             isHomogeneous = false;
@@ -478,7 +480,9 @@ function analyzeJsonValue(
       stats.namingCounts[style]++;
 
       // 递归分析属性值
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const propValue = value[key]!;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       analyzeJsonValue(propValue!, stats, depth + 1, seen);
     }
 
@@ -606,6 +610,7 @@ function buildNamingPattern(
     {
       code: JSON.stringify(
          
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         { [positiveExample!]: "..." },
         null,
         2,
@@ -836,6 +841,7 @@ function buildTypeDistributionPattern(
     Object.entries(stats.typeCounts) as [PropertyType, number][]
   ).sort((a, b) => b[1] - a[1]);
 
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const dominantType = typeDistribution[0]!;
 
   // 计算占比

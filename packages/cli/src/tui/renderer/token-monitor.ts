@@ -14,7 +14,9 @@
  */
 
 import type { TuiEvent } from "../types.js";
-import { StatusLine, style, terminalWidth, StyleCode, ColorCode } from "./ansi.js";
+import { StatusLine, terminalWidth } from "./ansi.js";
+import { ansiTheme, fg24, RESET } from "../theme/adapter-ansi.js";
+import { tokenHeatColor } from "../theme/palette.js";
 
 // ═══════════════════════════════════════════════════════════
 // §1 格式化工具
@@ -26,16 +28,14 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-/** 进度条（Unicode block） */
+/** 进度条（Unicode block，消费 token 热力色） */
 function progressBar(ratio: number, width: number = 12): string {
   const filled = Math.round(ratio * width);
   const empty = width - filled;
-  let color: number;
-  if (ratio < 0.5) color = ColorCode.green;
-  else if (ratio < 0.8) color = ColorCode.yellow;
-  else color = ColorCode.red;
+  const pct = Math.round(ratio * 100);
+  const color = tokenHeatColor(pct);
   const bar = "█".repeat(filled) + "░".repeat(empty);
-  return style(bar, color);
+  return `${fg24(color)}${bar}${RESET}`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -69,7 +69,7 @@ export class TokenMonitor {
     this.renderStatusLine();
   }
 
-  /** 渲染底部状态行 */
+  /** 渲染底部状态行（消费 Design Token） */
   private renderStatusLine(): void {
     if (!this.visible) return;
     const w = Math.min(terminalWidth(), 120);
@@ -77,12 +77,13 @@ export class TokenMonitor {
     const contextPct = Math.round(contextRatio * 100);
     const bar = progressBar(contextRatio);
     const total = this.sessionPromptTokens + this.sessionCompletionTokens;
+    const contextColor = contextRatio > 0.8 ? ansiTheme.error : ansiTheme.textMuted;
     const text = [
       "📊 Token:",
-      `输入 ${style(formatTokens(this.sessionPromptTokens), ColorCode.cyan)}`,
-      `| 输出 ${style(formatTokens(this.sessionCompletionTokens), ColorCode.cyan)}`,
-      `| 上下文 ${style(`${contextPct}%`, contextRatio > 0.8 ? ColorCode.red : StyleCode.dim)} ${bar}`,
-      `| 本次会话 ${style(formatTokens(total), StyleCode.bold)}`,
+      ansiTheme.info(`输入 ${formatTokens(this.sessionPromptTokens)}`),
+      `| ${ansiTheme.info(`输出 ${formatTokens(this.sessionCompletionTokens)}`)}`,
+      `| 上下文 ${contextColor(`${contextPct}%`)} ${bar}`,
+      `| 本次会话 ${ansiTheme.bold(formatTokens(total))}`,
     ].join(" ");
     this.statusLine.update(text.slice(0, w));
   }

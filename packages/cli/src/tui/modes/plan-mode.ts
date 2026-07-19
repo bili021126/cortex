@@ -126,6 +126,7 @@ export async function* planMode(
   agent: AgentType,
   planState: PlanModeState,
   history?: LlmMessage[],
+  externalHooks?: Partial<TuiHooks>,
 ): AsyncGenerator<TuiEvent, string, void> {
   const hooks: TuiHooks = {
     onPreToolUse: async (_event) => {
@@ -138,6 +139,7 @@ export async function* planMode(
     onNodeFailed: (_event) => {
       // 节点失败记录
     },
+    ...externalHooks,
   };
 
   // 如果已有批准的计划，执行
@@ -156,17 +158,34 @@ export async function* planMode(
     // 同步更新 planState，让后续展示和持久化反映过滤后的节点
     planState.nodes = pendingNodes;
 
-    // 收集执行事件——executeWithStream 通过回调推送，planMode 是 async generator
-    // 需桥接：先收集全部事件，再逐条 yield
-    const collectedEvents: TuiEvent[] = [];
-    const report = await bridge.executeWithStream(pendingNodes, (event) => {
-      collectedEvents.push(event as TuiEvent);
-    });
+    // 桥接 executeWithStream 回调 → async generator 实时 yield
+    const eventQueue: TuiEvent[] = [];
+    let resolveWait: (() => void) | null = null;
+    let executionDone = false;
+    let executionError: unknown = null;
 
-    // 逐条发射收集的事件
-    for (const event of collectedEvents) {
-      yield event;
+    const reportPromise = bridge.executeWithStream(pendingNodes, (event) => {
+      eventQueue.push(event as TuiEvent);
+      resolveWait?.();
+    }).then(
+      (report) => { executionDone = true; resolveWait?.(); return report; },
+      (err) => { executionDone = true; executionError = err; resolveWait?.(); },
+    );
+
+    // 实时 yield 到达的事件
+    while (!executionDone || eventQueue.length > 0) {
+      if (eventQueue.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        yield eventQueue.shift()!;
+      } else if (!executionDone) {
+        await new Promise<void>((resolve) => { resolveWait = resolve; });
+      }
     }
+
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    if (executionError) throw executionError;
+    const report = await reportPromise;
+    if (!report) return "计划执行完成";
 
     if (report.failed > 0) {
       return `计划执行完成：${report.completed}/${report.totalNodes} 成功，${report.failed} 失败`;
@@ -192,7 +211,11 @@ export async function* planMode(
         return "\n" + formatPlanTree(metaNodes) + "\n\n📋 请输入 .review 启动三省审议，或 .approve 直接执行";
       }
     }
-  } catch {
+  } catch (e) {
+    if (!(e instanceof TypeError)) {
+      // 非 TypeError 的异常（如 LLM 网络错误）——非降级场景，记录并传播
+      console.warn("[DEGRADED:tui-plan] MetaAgent failed:", String(e));
+    }
     // MetaAgent 不可用时降级为 queryLoop 解析
   }
 
@@ -202,6 +225,7 @@ export async function* planMode(
     planState.nodes = parsed;
     planState.intent = input;
     planState.reviewStatus = "reviewing";
+    yield { type: "plan_generated", nodes: parsed } as const;
     return "\n" + formatPlanTree(parsed) + "\n\n📋 请输入 .review 启动三省审议，或 .approve 直接执行";
   }
 
@@ -217,9 +241,12 @@ export async function* planMode(
  *   3. 文本中嵌入的 JSON 数组片段
  */
 function _extractPlanNodes(text: string): TaskNode[] | null {
+  // 去除 BOM（UTF-8 EF BB BF → \uFEFF）
+  const cleanText = text.replace(/^\uFEFF/, "");
+
   // 尝试 1：整个文本就是 JSON 数组
   try {
-    const direct = JSON.parse(text);
+    const direct = JSON.parse(cleanText);
     if (Array.isArray(direct)) return _normalizeNodes(direct);
   } catch { /* 继续 */ }
 
@@ -232,8 +259,8 @@ function _extractPlanNodes(text: string): TaskNode[] | null {
     } catch (err) { console.warn('[DEGRADED:tui-plan]', String(err)) }
   }
 
-  // 尝试 3：文本中嵌入的 JSON 数组
-  const arrayMatch = text.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  // 尝试 3：文本中嵌入的 JSON 数组（非贪婪匹配，防跨块捕获）
+  const arrayMatch = cleanText.match(/\[\s*\{[\s\S]*?\}\s*\]/);
   if (arrayMatch) {
     try {
       const parsed = JSON.parse(arrayMatch[0]);
@@ -246,10 +273,10 @@ function _extractPlanNodes(text: string): TaskNode[] | null {
 
 /** 规范化原始 JSON 对象为 TaskNode（补全缺失字段） */
 function _normalizeNodes(raw: unknown[]): TaskNode[] {
-  return raw.map((item: unknown, i: number): TaskNode => {
+  return raw.map((item: unknown, _i: number): TaskNode => {
     const node = item as Record<string, unknown>;
     return {
-      id: (node.id as string) ?? `plan-node-${i}-${Date.now()}`,
+      id: (node.id as string) ?? `plan-node-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
       type: (node.type as string) ?? "implementation",
       tags: (node.tags as string[]) ?? [],
       needsMultiPerspective: (node.needsMultiPerspective as boolean) ?? false,
@@ -261,4 +288,4 @@ function _normalizeNodes(raw: unknown[]): TaskNode[] {
       parentId: (node.parentId as string | undefined) ?? undefined,
     };
   });
-}
+}

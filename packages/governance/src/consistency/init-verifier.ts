@@ -143,7 +143,7 @@ export class InitVerifier {
     // 获取全部 Active 记忆（limit=0 不限量，trackAccess=false 避免校验扫描污染访问统计）
     const activeMemories = await this._memory.read({
       limit: 0,
-    } as unknown as MemoryQuery);
+    });
 
     const totalMemories = activeMemories.length;
     const fileChecks: VerificationEntry[] = [];
@@ -282,7 +282,7 @@ export class InitVerifier {
     // 获取全部 Active 记忆
     const activeMemories = await this._memory.read({
       limit: 0,
-    } as unknown as MemoryQuery);
+    });
 
     // 构建 文件路径 → 记忆 ID 集合 的索引
     const fileToMemories = new Map<string, Set<string>>();

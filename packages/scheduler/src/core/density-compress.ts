@@ -22,6 +22,7 @@ const DENSITY_TAG_RE = /\[DENSITY:\s*(light|medium|heavy)\s*\]/i;
  */
 export function parseDensityTag(output: string): DensityLevel {
   const m = output.match(DENSITY_TAG_RE);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   if (m) return m[1]!.toLowerCase() as DensityLevel;
   return "medium";
 }

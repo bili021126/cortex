@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { FileTransport, DefaultFormatter } from "@cortex/logging";
 import * as fs from "node:fs";

@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 /**
  * tui/modes/plan-utils.ts — Plan 模式工具函数
  *
@@ -41,18 +41,18 @@ export function displayClarification(cl: IntentClarification): void {
     refactor: "重构", generation: "生成", inquiry: "询问",
   };
   console.error(`\n┌─ 意图确认 ─────────────────────────────`);
-/* eslint-disable-next-line no-console */
+ 
   console.error(`│ 🎯 目标: ${cl.goal}`);
-/* eslint-disable-next-line no-console */
+ 
   console.error(`│ ${actionIcon[cl.actionType] ?? "❓"} 类型: ${actionLabel[cl.actionType] ?? cl.actionType}`);
-/* eslint-disable-next-line no-console */
+ 
   console.error(`│ 📂 范围: ${cl.scope}`);
-/* eslint-disable-next-line no-console */
+ 
   console.error(`│ ⚠️ 约束: ${cl.constraints}`);
   if (cl.unclear) {
     console.error(`│ ❓ 不明确: ${cl.unclear}`);
   }
-/* eslint-disable-next-line no-console */
+ 
   console.error(`└─────────────────────────────────────────`);
 }
 
@@ -108,7 +108,7 @@ export async function clarifyAndConfirm(
   }
 
   // 三次确认仍未通过，最后一次机会
-/* eslint-disable-next-line no-console */
+ 
   console.error("⚠️ 多次修正未确认，直接使用最后意图进入规划。");
   return currentIntent;
 }
@@ -120,20 +120,28 @@ export async function clarifyAndConfirm(
  */
 function _matchChineseConfirm(raw: string): string | null {
   const patterns: Array<{ re: RegExp; extract: (m: RegExpMatchArray) => string }> = [
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^是的[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^是的[！!。]*$/u, extract: () => "" },
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^对[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^对的?[！!。]*$/u, extract: () => "" },
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^嗯[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^嗯[！!。]*$/u, extract: () => "" },
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^好[的的]?[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^好[的的]?[！!。]*$/u, extract: () => "" },
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^是[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^可以[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^可以[！!。]*$/u, extract: () => "" },
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^没错[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^没错[！!。]*$/u, extract: () => "" },
     { re: /^嗯嗯[！!。]*$/u, extract: () => "" },
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     { re: /^确认[，,、。\s]+(.+)$/u, extract: (m) => m[1]! },
     { re: /^确认[！!。]*$/u, extract: () => "" },
   ];
@@ -187,6 +195,7 @@ export function formatPlanTree(nodes: TaskNode[]): string {
     if (children && children.length > 0) {
       for (let i = 0; i < children.length; i++) {
         const childPrefix = depth === 0 ? "" : isLast ? "    " : "  │ ";
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         render(children[i]!, depth + 1, i === children.length - 1, prefix + childPrefix);
       }
     }
@@ -197,10 +206,11 @@ export function formatPlanTree(nodes: TaskNode[]): string {
   lines.push("═══════════════════════════════════════");
 
   for (let i = 0; i < roots.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     render(roots[i]!, 0, i === roots.length - 1, "");
   }
 
   return lines.join("\n");
 }
 
-/* eslint-enable no-console */
+ 

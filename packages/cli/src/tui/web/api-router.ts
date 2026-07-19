@@ -11,7 +11,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { HealthCollector, HealthSnapshot } from "@cortex/telemetry";
 import type { ITuiEngineBridge, AgentType, ITaskBoard, IAgentPool } from "@cortex/shared";
 import { AgentType as AgentTypeEnum } from "@cortex/shared";
-import type { StateAggregator, WebUIState } from "./state-aggregator.js";
+import type { StateAggregator } from "./state-aggregator.js";
 
 // ─── 最近事件缓存 ────────────────────────────────
 

@@ -14,7 +14,7 @@
  */
 
 import type { ILifecycle } from "@cortex/shared";
-import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IPipelineObserver } from "@cortex/shared";
 
 /** 最小 AgentTracker 接口——避免直接依赖 @cortex/scheduler */
 export interface AgentTrackerLike {
@@ -112,7 +112,7 @@ export class ShutdownOrchestrator {
   /** 发射组件关闭失败事件到 PipelineObserver */
   private _emitComponentError(name: string, err: unknown): void {
     if (!this._observer) return;
-    const event: ObservableEvent = {
+    const event = {
       type: PipelineEventType.ExecLifecyclePhaseChanged,
       priority: PipelinePriority.HIGH,
       payload: {
@@ -124,7 +124,7 @@ export class ShutdownOrchestrator {
       },
       timestamp: Date.now(),
       notificationType: "WARNING",
-    };
+    } as const;
     this._observer.emit(event);
   }
 }

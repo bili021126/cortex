@@ -100,7 +100,7 @@ export function extractAndPersistSkills(
       priority: PipelinePriority.NORMAL,
       payload: {
         nodeId,
-        agentType: agentType as string,
+        agentType,
         success: true,
         output: `[skill-extractor] ${diag}`,
       },
@@ -136,7 +136,7 @@ export function extractAndPersistSkills(
       priority: PipelinePriority.NORMAL,
       payload: {
         nodeId,
-        agentType: agentType as string,
+        agentType,
         success: true,
         output: `[skill-extractor] 成功注册 ${registered.length}/${skills.length} 个技能模板: ${registered.map((s) => `${s.name}(${s.id})`).join(", ")}`,
       },

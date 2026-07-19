@@ -6,7 +6,7 @@
 // ============================================================
 
 import type { AgentType } from "./agent.js";
-import type { TaskNode, ExecutionReport } from "./task.js";
+import type { TaskNode, ExecutionReport, DensityLevel } from "./task.js";
 import type { MemoryQuery, MemoryEntry, MemoryWriteInput, IMemoryStore } from "./memory.js";
 import type { IConfirmGate } from "./toolkit.js";
 import type { ITaskBoard, IAgentPool, IScheduler, IStrategistAgent } from "./scheduler-contracts.js";
@@ -152,6 +152,20 @@ export type EventPayloadMap = {
   [PipelineEventType.GovernanceAuditReport]: GovernanceEventPayload & { auditType: "plan_review" | "doc_audit" | "constitution_check" };
   [PipelineEventType.GovernanceComplianceViolation]: GovernanceEventPayload & { violationLevel: "P0" | "P1" | "P2" | "P3" };
   [PipelineEventType.GovernanceRoundtableConsensus]: GovernanceEventPayload & { participants: string[] };
+  // ── RLM（递归分层执行）──
+  [PipelineEventType.RlmDecompose]: { nodeId: string; subTaskCount: number; depth: number; confidence: number; rationale: string };
+  [PipelineEventType.RlmContextCompress]: { nodeId: string; density: DensityLevel; originalLength: number; compressedLength: number };
+  // ── ManifoldGate（流控）──
+  [PipelineEventType.ManifoldGateWaitStart]: { agentType: string; queuePosition: number; active: number; max: number; requestId: string };
+  [PipelineEventType.ManifoldGateWaitEnd]: { agentType: string; remainingWaiters: number; requestId: string };
+  [PipelineEventType.ManifoldGateAcquireTimeout]: { agentType: string; timeoutMs: number; requestId: string };
+  [PipelineEventType.ManifoldGateReleased]: { agentType: string; active: number; waiting: number; requestId: string };
+  [PipelineEventType.ManifoldGateInvariantViolation]: { agentType: string; message: string };
+  [PipelineEventType.ManifoldGateReleaseOrphan]: { agentType: string; message: string };
+  [PipelineEventType.ManifoldGateMaxUpdated]: { agentType: string; newMax: number; woken: number; remainingWaiters: number };
+  // ── Infra（基础设施）──
+  [PipelineEventType.InfraFileLockExpiredReclaimed]: { count: number; path: string; holders: string; detail: string };
+  [PipelineEventType.InfraComponentDegraded]: { operation?: string; detail?: string; nodeId?: string; component?: string; source?: string; message?: string; level?: string };
   // ── Interact（配置交互流）──
   [PipelineEventType.InteractConfigOverrideApplied]: { timestamp: number; key: string; source: 'env' | 'user' | 'project'; oldValue: unknown; newValue: unknown };
   [PipelineEventType.InteractConfigReloaded]: { timestamp: number; watchPath: string; changedKeys: string[] };
@@ -176,7 +190,7 @@ export interface GovernanceEventPayload {
   /** 事件严重性 */
   severity: "FYI" | "WARNING" | "DECISION_REQUIRED";
   /** 发射源 */
-  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop";
+  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop" | "rule-denied";
   /** 摘要 */
   summary: string;
   /** 详情（可选） */
@@ -219,6 +233,16 @@ export interface ObservableEvent<T extends PipelineEventType = PipelineEventType
 export type PipelineHandler = (event: ObservableEvent) => void;
 
 /**
+ * 可辨识联合形态的 ObservableEvent——对每个 PipelineEventType 实例化。
+ * 与 ObservableEvent<T>（宽泛型标注）不同：EmittableEvent 是「联合」，
+ * 用 type 字段做辨识收窄，使 emit() 的字面量入参在编译期锁定 payload 形状。
+ * 这是根治「payload 与 type 不匹配」漂移的类型闸门。
+ */
+export type EmittableEvent = {
+  [K in PipelineEventType]: ObservableEvent<K>;
+}[PipelineEventType];
+
+/**
  * 因果链元数据——作为 emit() 的第三个可选参数传入。
  * causalChain 不在 EventPayloadMap 的 payload 中，
  * 它是 emit() 的运行时附加元数据。
@@ -237,7 +261,7 @@ export interface EmitMeta {
  * @since v2.8 核心组件接口化与组合式重构
  */
 export interface IPipelineObserver {
-  emit(event: ObservableEvent, meta?: EmitMeta): void;
+  emit(event: EmittableEvent, meta?: EmitMeta): void;
   on(priority: PipelinePriority, handler: PipelineHandler): void;
   off(priority: PipelinePriority, handler?: PipelineHandler): void;
 }

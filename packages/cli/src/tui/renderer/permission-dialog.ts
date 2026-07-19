@@ -8,7 +8,8 @@
  * @since v3 — CLI TUI 全栈重构
  */
 
-import { write, style, StyleCode, ColorCode, eraseLine } from "./ansi.js";
+import { write, eraseLine } from "./ansi.js";
+import { ansiTheme } from "../theme/adapter-ansi.js";
 import * as readline from "node:readline";
 
 // ═══════════════════════════════════════════════════════════
@@ -64,13 +65,13 @@ export function reversibilityLevel(tool: string): 1 | 2 | 3 {
 export function renderInlinePermission(tool: string, input: string, level: 1 | 2 | 3): void {
 
   const levelLabel = level === 3
-    ? style("L3不可逆", ColorCode.red)
+    ? ansiTheme.riskHigh("L3不可逆")
     : level === 2
-      ? style("L2需确认", ColorCode.yellow)
-      : style("L1", ColorCode.green);
+      ? ansiTheme.riskMedium("L2需确认")
+      : ansiTheme.riskLow("L1");
 
   const truncatedInput = input.length > 40 ? input.slice(0, 40) + "..." : input;
-  write(` ${style("⚡", ColorCode.yellow)} ${style(tool, StyleCode.bold)}(${levelLabel}): ${style(truncatedInput, StyleCode.dim)} [y/n/a/s]? `);
+  write(` ${ansiTheme.warning("⚡")} ${ansiTheme.bold(tool)}(${levelLabel}): ${ansiTheme.dim(truncatedInput)} [y/n/a/s]? `);
 }
 
 /**

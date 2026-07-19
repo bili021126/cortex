@@ -44,12 +44,12 @@ function openChatWindow(): void {
       sandbox: true,
     },
   });
-  chatWindow.loadFile(path.join(rendererDir, "chat/index.html"));
+  void chatWindow.loadFile(path.join(rendererDir, "chat/index.html"));
   chatWindow.once("ready-to-show", () => chatWindow?.show());
   chatWindow.on("closed", () => { chatWindow = null; });
 }
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   // 初始化 CortexBridge（LLM 连接）
   // dist/main → ../../../.. = 项目根 d:\cortex
   const projectRoot = path.resolve(__dirname, "../../../..");
@@ -73,7 +73,7 @@ app.whenReady().then(async () => {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  void mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
 
   // 注册 IPC 处理器
   registerIpcHandlers(ipcMain, cortex);

@@ -10,20 +10,26 @@
 
 import * as readline from "node:readline";
 import { createWriteStream } from "node:fs";
-import { AgentType, AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK, CHINESE_NAME_TO_TYPE, AGENT_ALIAS_TO_TYPE, type LlmMessage, type ITuiEngineBridge, type TaskNode, type ICommandDispatcher, type ICommandContext } from "@cortex/shared";
+import { AgentType, AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK, CHINESE_NAME_TO_TYPE, AGENT_ALIAS_TO_TYPE, type LlmMessage, type ITuiEngineBridge, type ICommandDispatcher, type ICommandContext } from "@cortex/shared";
 import type { TuiToolStartEvent, TuiToolResultEvent, TuiTokenUsageEvent, TuiNodeStartEvent, TuiNodeCompleteEvent, TuiNodeFailedEvent, TuiEvent } from "./types.js";
 import { tuiEventBus } from "./event-bus.js";
-import { chatMode } from "./modes/chat-mode.js";
 import { planMode, loadPlanState, savePlanState, clearPlanState } from "./modes/plan-mode.js";
 import type { PlanModeState } from "./modes/plan-mode.js";
 import { commandMode } from "./modes/command-mode.js";
 import { classifyIntent, parseAgentFromInput } from "./intent-router.js";
+import type { UserIntent } from "./intent-router.js";
+import { queryLoop } from "./query-loop.js";
+import type { ReplMode } from "./types.js";
 import { saveSession, loadSession } from "./session-store.js";
 import type { SessionSnapshot } from "./session-store.js";
 import { chatLog } from "./renderer/chat-log.js";
 import { groupChat } from "./group-chat.js";
 import { personaHeader, renderAgentTransition } from "./renderer/persona-header.js";
-import { bold, dim, writeln } from "./renderer/ansi.js";
+import { writeln, cursorUp, eraseLine, eraseScreen } from "./renderer/ansi.js";
+import { ansiTheme } from "./theme/adapter-ansi.js";
+import { renderAnsiPanel } from "./layout/adapter-ansi.js";
+import { KeyRegistry } from "./interaction/key-registry.js";
+import { AnsiTypewriter, renderAnsiProgressBar } from "./animation/ansi-animation.js";
 import { setTuiQuietMode } from "@cortex/telemetry";
 import { withAutoConfirm } from "@cortex/config";
 
@@ -31,6 +37,10 @@ import { withAutoConfirm } from "@cortex/config";
 let _stdinLocked = false;
 let _lastReasoning = "";
 let _contextWarned = false;
+let _currentProjectRoot: string | null = null;
+
+/** 全局快捷键注册表 */
+const keyRegistry = new KeyRegistry();
 
 interface TuiSession {
   agent: AgentType;
@@ -68,9 +78,15 @@ const INTERNAL_CMDS: InternalCmdDef[] = [
     description: "查看上次思维链",
     handler: (_args, ctx) => {
       if (!_lastReasoning) { ctx.writeln("\u2717 \u6CA1\u6709\u4E0A\u6B21\u601D\u8003\u94FE\u8BB0\u5F55"); return true; }
-      ctx.writeln(`\u250C\u2500 \uD83E\uDDE0 \u601D\u8003\u94FE ${"\u2500".repeat(20)}`);
-      process.stdout.write("\x1b[90m" + _lastReasoning + "\x1b[0m\n");
-      ctx.writeln(`\u2514${"\u2500".repeat(25)}`);
+      const estTokens = Math.ceil(_lastReasoning.length / 4);
+      const lines = _lastReasoning.split("\n");
+      const content = lines.map(l => ansiTheme.statusThinking(l));
+      const panel = renderAnsiPanel(content, {
+        title: `🧠 思考链 ${estTokens} tokens (DeepSeek V4)`,
+        border: "rounded",
+        padding: "sm",
+      }, 80);
+      for (const line of panel) ctx.writeln(line);
       return true;
     },
   },
@@ -93,13 +109,24 @@ const INTERNAL_CMDS: InternalCmdDef[] = [
     },
   },
   {
+    name: ".stop",
+    aliases: [".cancel", ".abort"],
+    description: "停止当前任务/计划",
+    handler: (_args, ctx) => {
+      clearPlanState(ctx.projectRoot);
+      ctx.writeln("\u2713 \u5DF2\u505C\u6B62\u5F53\u524D\u4EFB\u52A1");
+      return true;
+    },
+  },
+  {
     name: ".help",
     description: "显示帮助",
     handler: (_args, ctx) => {
       ctx.writeln("");
-      ctx.writeln(`  ${bold("Cortex TUI \u5185\u90E8\u547D\u4EE4")}`);
-      ctx.writeln(`  ${dim("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")}`);
+      ctx.writeln(`  ${ansiTheme.bold("Cortex TUI \u5185\u90E8\u547D\u4EE4")}`);
+      ctx.writeln(`  ${ansiTheme.dim("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")}`);
       for (const c of INTERNAL_CMDS) {
+         
         ctx.writeln(`  ${c.name}${(c.aliases?.length ?? 0) > 0 ? ` (${c.aliases!.join("/")})` : ""}${c.description ? "\t" + c.description : ""}`);
       }
       ctx.writeln("");
@@ -224,6 +251,11 @@ const INTERNAL_CMDS: InternalCmdDef[] = [
   },
 ];
 
+// ── 全局快捷键注册（KeyRegistry）──
+keyRegistry.register({ id: "think", key: "Ctrl+r", label: "查看思维链", category: "navigation", priority: 10, handler: () => { if (_lastReasoning) { const panel = renderAnsiPanel(_lastReasoning.split("\n").map(l => ansiTheme.statusThinking(l)), { title: "\uD83E\uDDE0 \u601D\u8003\u94FE", border: "rounded", padding: "sm" }, 80); for (const line of panel) process.stdout.write(line + "\n"); } else { process.stdout.write("\uD83E\uDDE0 \u65E0\u4E0A\u6B21\u601D\u8003\u94FE\u8BB0\u5F55\n"); } } });
+keyRegistry.register({ id: "help", key: "Ctrl+h", label: "显示帮助", category: "system", priority: 5, handler: () => { process.stdout.write("\n"); for (const c of INTERNAL_CMDS) { process.stdout.write(`  ${c.name}${c.description ? "\t" + c.description : ""}\n`); } process.stdout.write("\n"); } });
+keyRegistry.register({ id: "stop", key: "Ctrl+x", label: "停止任务", category: "action", priority: 5, handler: () => { try { clearPlanState(_currentProjectRoot || process.cwd()); } catch (e) { console.warn("[DEGRADED:tui-keybind] clearPlanState failed:", String(e)); } process.stdout.write("\u2713 \u5DF2\u505C\u6B62\u5F53\u524D\u4EFB\u52A1\n"); } });
+
 // ═══════════════════════════════════════════════════
 // 辅助函数
 // ═══════════════════════════════════════════════════
@@ -236,11 +268,16 @@ async function consumeGenerator<T>(
   gen: AsyncGenerator<TuiEvent, T, void>,
   bus: typeof tuiEventBus,
 ): Promise<T | null> {
-  let result: IteratorResult<TuiEvent, T>;
-  while (!(result = await gen.next()).done) {
-    bus.emit(result.value);
+  try {
+    let result: IteratorResult<TuiEvent, T>;
+    while (!(result = await gen.next()).done) {
+      bus.emit(result.value);
+    }
+    return result.value;
+  } catch (err) {
+    bus.emit({ type: "error", error: err instanceof Error ? err.message : String(err) } as unknown as TuiEvent);
+    return null;
   }
-  return result.value;
 }
 
 /**
@@ -289,12 +326,16 @@ function _createReadline(): readline.Interface {
   }
   type RlWithInternal = readline.Interface & ReadlineInternal;
 
-  const origWrite = (rl as unknown as RlWithInternal)._writeToOutput.bind(rl);
-  (rl as unknown as RlWithInternal)._writeToOutput = function (s: string) {
-    if (s === rl.getPrompt() || s.startsWith("\x1b") || s === "\r\n") {
-      origWrite(s);
-    }
-  };
+  try {
+    const origWrite = (rl as unknown as RlWithInternal)._writeToOutput.bind(rl);
+    (rl as unknown as RlWithInternal)._writeToOutput = function (s: string) {
+      if (s === rl.getPrompt() || s.startsWith("\x1b") || s === "\r\n") {
+        origWrite(s);
+      }
+    };
+  } catch {
+    // Node.js readline 内部 API 变更——回退到无拦截标准实例
+  }
   return rl;
 }
 
@@ -333,105 +374,8 @@ function _restoreSession(projectRoot: string): TuiSession | null {
 }
 
 // ═══════════════════════════════════════════════════
-// dispatch 函数
+// 统一 dispatch（定义在下面，此段已删除旧 dispatchChat/dispatchTask/dispatchCmd）
 // ═══════════════════════════════════════════════════
-
-async function dispatchChat(
-  input: string,
-  bridge: ITuiEngineBridge,
-  agent: AgentType,
-  history: LlmMessage[],
-): Promise<void> {
-  if (!groupChat.activeGroupId) chatLog.addUser(input);
-  const d = getDisplay(agent);
-  process.stdout.write(`${d.emoji} ${d.name}: `);
-  let full = "", reasoning = "";
-  for await (const ev of chatMode(input, bridge, agent, history)) {
-    if (ev.type === "llm_chunk") {
-      if (ev.content?.startsWith("[telemetry]")) continue;
-      if (ev.reasoning) reasoning += ev.reasoning;
-      if (ev.content) { process.stdout.write(ev.content); full += ev.content; }
-    }
-  }
-  process.stdout.write("\n\n");
-  if (reasoning) {
-    _lastReasoning = reasoning;
-    process.stdout.write(`\x1b[90m\uD83E\uDDE0 \u601D\u8003\u94FE\u5DF2\u8BB0\u5F55 (${Math.ceil(reasoning.length / 4)} tokens, \u8F93\u5165 .think \u67E5\u770B)\x1b[0m\n`);
-  }
-  if (full) history.push({ role: "user", content: input }, { role: "assistant", content: full, reasoning_content: reasoning || undefined });
-
-  // 群聊：如果有活跃群，将聊天响应写入
-  if (groupChat.activeGroupId && full) {
-    const truncated = full.length > 200 ? full.slice(0, 200) + "..." : full;
-    groupChat.addMessage(groupChat.activeGroupId, { agent, type: "chat", content: truncated });
-  }
-}
-
-async function dispatchTask(
-  input: string,
-  bridge: ITuiEngineBridge,
-  agent: AgentType,
-  ps: PlanModeState,
-  history: LlmMessage[],
-  rl: readline.Interface,
-  projectRoot: string,
-): Promise<void> {
-  // 待审批 + 审批词 → 执行
-  if (ps.nodes.length > 0 && /^(好的|执行|确认|可以|行|开始|跑|go|yes|ok|approve|run|start)/i.test(input)) {
-    ps.approved = true;
-    process.stdout.write("\n⚡ 执行中...\n");
-    await withLock(rl, async () => {
-      await withAutoConfirm(() => consumeGenerator(planMode("execute", bridge, agent, ps, history), tuiEventBus));
-      if (ps.nodes.every(n => n.status === "done" || n.status === "failed")) {
-        process.stdout.write("\n✅ 执行完成\n");
-        if (groupChat.activeGroupId) {
-          const successCount = ps.nodes.filter(n => n.status === "done").length;
-          const failCount = ps.nodes.filter(n => n.status === "failed").length;
-          groupChat.dissolveGroup(groupChat.activeGroupId, `群完成 — ${successCount}成功, ${failCount}失败`);
-        }
-        ps.nodes = [];
-        ps.approved = false;
-        savePlanState(projectRoot, ps);
-      }
-    });
-    return;
-  }
-
-  // 新计划
-  const result = await withLock(rl, async () => {
-    process.stdout.write("\n📋 计划生成中...\n");
-    return consumeGenerator(planMode(input, bridge, agent, ps, history), tuiEventBus);
-  });
-
-  if (ps.nodes.length > 0) {
-    // 创建任务群——从节点提取参与 Agent
-    const groupAgents = [agent, ...ps.nodes.map(n => n.claimedBy[0]).filter((a): a is AgentType => !!a)];
-    const gid = groupChat.createGroup(input, [...new Set(groupAgents)]);
-    groupChat.addMessage(gid, { agent, type: "plan", content: `${ps.nodes.length}节点: ${input.slice(0, 60)}` });
-
-    process.stdout.write(`\n📋 任务计划 (${ps.nodes.length} 节点)\n${"\u2500".repeat(50)}\n`);
-    for (const n of ps.nodes) process.stdout.write(`  \u25C9 ${n.type}: ${n.payload?.slice(0, 80) ?? ""}\n`);
-    process.stdout.write(`${"\u2500".repeat(50)}\n💬 要执行吗？说"好的"就行\n`);
-    savePlanState(projectRoot, ps);
-
-  } else {
-    // 空计划 → 回退 chat
-    await dispatchChat(input, bridge, agent, history);
-    return;
-  }
-}
-
-async function dispatchCmd(
-  input: string,
-  registry: ICommandDispatcher,
-  ctx?: ICommandContext,
-): Promise<void> {
-  const result = await commandMode(
-    (args: string[]) => registry.dispatch(args, ctx),
-    input.split(/\s+/),
-  );
-  writeln(result);
-}
 
 // ═══════════════════════════════════════════════════
 // 内部命令
@@ -466,6 +410,137 @@ async function handleInternalCmd(
 }
 
 // ═══════════════════════════════════════════════════
+// 统一 dispatch——所有模式走 queryLoop
+// ═══════════════════════════════════════════════════
+
+async function dispatchInput(
+  intent: UserIntent,
+  input: string,
+  bridge: ITuiEngineBridge,
+  agent: AgentType,
+  history: LlmMessage[],
+  ps: PlanModeState,
+  projectRoot: string,
+  registry: ICommandDispatcher,
+  ctx?: ICommandContext,
+): Promise<void> {
+  if (intent === "command") {
+    if (/^(停止|停下|取消)\s*(任务)?$/.test(input)) {
+      clearPlanState(projectRoot);
+      writeln("\u2713 \u5DF2\u505C\u6B62\u5F53\u524D\u4EFB\u52A1");
+      return;
+    }
+    const result = await commandMode(
+      (args: string[]) => registry.dispatch(args, ctx),
+      input.split(/\s+/),
+    );
+    writeln(result);
+    return;
+  }
+
+  // chat + task 统一走 queryLoop
+  const mode: ReplMode = intent === "task" ? "plan" : "chat";
+
+  // ── Plan 审批/执行流 ──
+  if (intent === "task") {
+    // 待审批 + 审批词 → 执行
+    if (ps.nodes.length > 0 && /^(好的|执行|确认|可以|行|开始|跑|go|yes|ok|approve|run|start)/i.test(input)) {
+      ps.approved = true;
+      // 实时进度条：轮询节点完成情况（非群聊模式下节点事件无 stdout 输出，此处填补进度反馈空白）
+      const totalNodes = ps.nodes.length;
+      const progressTimer = setInterval(() => {
+        const finished = ps.nodes.filter(n => n.status === "done" || n.status === "failed").length;
+        const pct = totalNodes > 0 ? Math.round((finished / totalNodes) * 100) : 0;
+        process.stdout.write(`\r\x1b[2K⚡ 执行中 ${renderAnsiProgressBar(pct, 16, "#7DCFFF")} ${finished}/${totalNodes}`);
+      }, 200);
+      try {
+        await withAutoConfirm(() => consumeGenerator(planMode("execute", bridge, agent, ps, history), tuiEventBus));
+      } finally {
+        clearInterval(progressTimer);
+        process.stdout.write("\r\x1b[2K"); // 清除进度行
+      }
+      if (ps.nodes.every(n => n.status === "done" || n.status === "failed")) {
+        process.stdout.write("\n✅ 执行完成\n");
+        if (groupChat.activeGroupId) {
+          const successCount = ps.nodes.filter(n => n.status === "done").length;
+          const failCount = ps.nodes.filter(n => n.status === "failed").length;
+          groupChat.dissolveGroup(groupChat.activeGroupId, `群完成 — ${successCount}成功, ${failCount}失败`);
+        }
+        ps.nodes = [];
+        ps.approved = false;
+        savePlanState(projectRoot, ps);
+      }
+      return;
+    }
+
+    // 新计划——通过 queryLoop (plan mode) 生成
+    process.stdout.write("\n📋 计划生成中...\n");
+    for await (const ev of queryLoop({ input, bridge, mode, agent, history, hooks: {} })) {
+      // plan mode 事件通过 tuiEventBus 自行处理
+      tuiEventBus.emit(ev);
+    }
+
+    if (ps.nodes.length > 0) {
+      const groupAgents = [agent, ...ps.nodes.map(n => n.claimedBy[0]).filter((a): a is AgentType => !!a)];
+      const gid = groupChat.createGroup(input, [...new Set(groupAgents)]);
+      groupChat.addMessage(gid, { agent, type: "plan", content: `${ps.nodes.length}节点: ${input.slice(0, 60)}` });
+      process.stdout.write(`\n📋 任务计划 (${ps.nodes.length} 节点)\n${"\u2500".repeat(50)}\n`);
+      for (const n of ps.nodes) process.stdout.write(`  \u25C9 ${n.type}: ${n.payload?.slice(0, 80) ?? ""}\n`);
+      process.stdout.write(`${"\u2500".repeat(50)}\n💬 要执行吗？说"好的"就行\n`);
+      savePlanState(projectRoot, ps);
+    } else {
+      // 空计划 → 回退 chat
+      const d2 = getDisplay(agent);
+      process.stdout.write(`${d2.emoji} ${d2.name}: `);
+      let full2 = "", reasoning2 = "";
+      for await (const ev of queryLoop({ input, bridge, mode: "chat", agent, history, hooks: {} })) {
+        if (ev.type === "llm_chunk") {
+          if (ev.content?.startsWith("[telemetry]")) continue;
+          if (ev.reasoning) reasoning2 += ev.reasoning;
+          if (ev.content) { process.stdout.write(ev.content); full2 += ev.content; }
+        }
+      }
+      process.stdout.write("\n\n");
+      if (reasoning2) _lastReasoning = reasoning2;
+      if (full2) history.push({ role: "user", content: input }, { role: "assistant", content: full2, reasoning_content: reasoning2 || undefined });
+    }
+    return;
+  }
+
+  // ── chat 模式 ──
+  if (!groupChat.activeGroupId) chatLog.addUser(input);
+  const d = getDisplay(agent);
+  process.stdout.write(`${d.emoji} ${d.name}: `);
+  let full = "", reasoning = "";
+  let streaming = true;
+  const tw = new AnsiTypewriter("fast");
+  tw.start(() => full, () => streaming, (text, done) => {
+    if (done) return;
+    process.stdout.write(`\r${d.emoji} ${d.name}: ${text}`);
+  });
+  for await (const ev of queryLoop({ input, bridge, mode, agent, history, hooks: {} })) {
+    if (ev.type === "llm_chunk") {
+      if (ev.content?.startsWith("[telemetry]")) continue;
+      if (ev.reasoning) reasoning += ev.reasoning;
+      if (ev.content) { full += ev.content; }
+    }
+  }
+  streaming = false;
+  tw.stop();
+  process.stdout.write(`\r${d.emoji} ${d.name}: ${full}\n\n`);
+  if (reasoning) {
+    _lastReasoning = reasoning;
+    const estTokens = Math.ceil(reasoning.length / 4);
+    process.stdout.write(ansiTheme.textMuted(`🧠 思考链 ${estTokens} tokens (DeepSeek V4, 输入 .think 查看)`));
+    process.stdout.write("\n");
+  }
+  if (full) history.push({ role: "user", content: input }, { role: "assistant", content: full, reasoning_content: reasoning || undefined });
+  if (groupChat.activeGroupId && full) {
+    groupChat.addMessage(groupChat.activeGroupId, { agent, type: "chat", content: full.length > 200 ? full.slice(0, 200) + "..." : full });
+  }
+}
+
+// ═══════════════════════════════════════════════════
 // 主入口
 // ═══════════════════════════════════════════════════
 
@@ -475,11 +550,12 @@ export async function tuiReplHandler(
   context?: ICommandContext,
 ): Promise<number> {
   const projectRoot = (context?.projectRoot as string) ?? process.cwd();
+  _currentProjectRoot = projectRoot;
 
   // 引擎日志隔离
   const engineLog = createWriteStream(`${projectRoot}/.cortex/logs/engine.log`, { flags: "a" });
   const origStderr = process.stderr.write.bind(process.stderr);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- process.stderr.write 猴子补丁，参数类型需匹配 Node.js 重载签名
+   
   process.stderr.write = (chunk: Uint8Array | string, ...args: any[]) => {
     const s = String(chunk);
     if (s.includes("[ConfirmGate]") || s.includes("Approve?")) {
@@ -500,7 +576,7 @@ export async function tuiReplHandler(
   };
 
   // 清屏
-  process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
+  process.stdout.write(eraseScreen + "\x1b[3J\x1b[H");
 
   // 恢复会话
   const session: TuiSession = _restoreSession(projectRoot) ?? {
@@ -519,10 +595,22 @@ export async function tuiReplHandler(
 
   // 启动标语 — Claude Code 风格：极简一行
   const display = AGENT_DISPLAY_BY_TYPE[session.agent] ?? AGENT_DISPLAY_FALLBACK;
-  writeln(`${display.emoji} ${display.name} ${dim("\u2014 \u8F93\u5165 .help \u67E5\u770B\u547D\u4EE4")}`);
+  writeln(`${display.emoji} ${display.name} ${ansiTheme.dim("\u2014 \u8F93\u5165 .help \u67E5\u770B\u547D\u4EE4")}`);
 
   const rl = _createReadline();
   _showPrompt(rl, session);
+
+  // ── KeyRegistry 全局键盘监听 ──
+  readline.emitKeypressEvents(process.stdin);
+  if (process.stdin.isTTY) process.stdin.setRawMode?.(true);
+  process.stdin.on("keypress", (_str, key) => {
+    if (key.ctrl) {
+      const combo = "Ctrl+" + (key.name ?? "");
+      if (keyRegistry.handleKeyPress(combo, "global")) {
+        _showPrompt(rl, session);
+      }
+    }
+  });
 
   // 事件订阅
   const unsubs = [
@@ -542,7 +630,7 @@ export async function tuiReplHandler(
         groupChat.addMessage(groupChat.activeGroupId, params);
       } else {
         const icon = ev.success ? "\u2705" : "\u274C";
-        process.stdout.write(`\x1b[1A\x1b[2K  ${icon} ${ev.tool} \u00B7 ${ev.durationMs}ms\n`);
+        process.stdout.write(`${cursorUp(1)}${eraseLine}  ${icon} ${ev.tool} \u00B7 ${ev.durationMs}ms\n`);
       }
     }),
     tuiEventBus.on("node_start", (e) => {
@@ -627,7 +715,7 @@ export async function tuiReplHandler(
           }
           // 否则委托给甘雨（meta agent）重新规划
           groupChat.addMessage(g.id, { agent: "user", type: "chat", content: input });
-          await dispatchChat(input, bridge, AgentType.Meta, h);
+          await dispatchInput("chat", input, bridge, AgentType.Meta, h, ps, projectRoot, registry, context);
           _showPrompt(rl, session);
           return;
         }
@@ -653,19 +741,18 @@ export async function tuiReplHandler(
         });
       }
 
-      // 意图路由
-      const intent = classifyIntent(cleanedInput);
-      switch (intent) {
-        case "command":
-          await dispatchCmd(cleanedInput, registry, context);
-          break;
-        case "task":
-          await dispatchTask(cleanedInput, bridge, dispatchAgent, ps, h, rl, projectRoot);
-          break;
-        case "chat":
-          await dispatchChat(cleanedInput, bridge, dispatchAgent, h);
-          break;
-      }
+      // 意图路由——统一入口
+      await dispatchInput(
+        classifyIntent(cleanedInput),
+        cleanedInput,
+        bridge,
+        dispatchAgent,
+        h,
+        ps,
+        projectRoot,
+        registry,
+        context,
+      );
     } catch (err) {
       writeln(`\u2717 \u9519\u8BEF: ${err instanceof Error ? err.message : String(err)}`);
     }

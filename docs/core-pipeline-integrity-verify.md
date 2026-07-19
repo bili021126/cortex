@@ -31,7 +31,7 @@
 | **记忆管线** | `export { executeWithMemoryPipeline, defaultMemoryQuery, ... }` | `./memory/index.js` | ✅ 已导出 |
 | **Bootstrap 集成** | `export { bootstrapEngine, resolveLlm }` | `./bootstrap/bootstrap-engine.js` | ✅ 已导出 |
 | **引擎核心** | `export { BaseAgent, Scheduler, MetaAgentReplanAdapter }` | 分散 | ✅ 已导出 |
-| **生命周期管理** | `export { LifecycleManager, ShutdownWarden, ShutdownOrchestrator }` | 分散 | ✅ 已导出 |
+| **生命周期管理** | `export { LifecycleManager, ShutdownOrchestrator }` | 分散 | ✅ 已导出 |
 | **文件锁管理器** | `export { FileLockManager }` | `./core/file-lock-manager.js` | ✅ 已导出 |
 | **CapabilityRegistry** | `export { CapabilityRegistry, capabilityRegistry }` | `./core/capability-registry.js` | ✅ 已导出 |
 | **Agent 工厂注册** | `export { registerAgentFactory, getAgentFactory, hasAgentFactory, getRegisteredAgentTypes }` | `./plugin/register-all.js` | ✅ 已导出 |

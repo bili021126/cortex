@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect, vi } from "vitest";
-import { SigintHandler } from "../../src/renderer/sigint-handler.js";
+import { SigintHandler } from "../../src/tui/renderer/sigint-handler.js";
 
 describe("SigintHandler", () => {
   it("第一次按返回提示", () => {

@@ -19,7 +19,7 @@ import { e2eBootstrap, log } from "./e2e-utils.js";
 
 // ─── 常量 ────────────────────────────────────────
 
-const TARGET = "packages/engine/src/core/_write_baseline_test.ts";
+const TARGET = "test-output/write-file-baseline.ts";
 const TARGET_CONTENT = "// write-file-baseline auto-generated\nexport const baseline = true;\n";
 const RUN_COUNT = 10;
 

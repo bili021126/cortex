@@ -303,6 +303,7 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
     const lines = output.trim().split("\n");
     let jsonLine: string | undefined;
     for (let i = lines.length - 1; i >= 0; i--) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       if (lines[i]!.startsWith("{")) { jsonLine = lines[i]; break; }
     }
 

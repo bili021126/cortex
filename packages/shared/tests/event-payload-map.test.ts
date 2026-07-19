@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { PipelineEventType } from "../src/infra.js";
 

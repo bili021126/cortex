@@ -1,4 +1,4 @@
-import { PipelineEventType, PipelinePriority, type EmitMeta, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type ObservableEvent, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter, type Disposable } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type EmitMeta, type EmittableEvent, type HandlerErrorContext, type HandlerErrorReporter, type IPipelineObserver, type PipelineHandler, type SafeErrorContext, type SafeErrorReporter, } from "@cortex/shared";
 
 /** 保存原始 console.error 引用，规避 console-bridge 拦截导致的二次递归 */
 const _origConsoleError = console.error;
@@ -57,13 +57,18 @@ export class PipelineObserver implements IPipelineObserver {
     this._onHandlerError = reporter;
   }
 
-  /** 注册回调。同优先级按注册顺序执行。 */
+  /** 注册回调。同优先级按注册顺序执行。超过上限时 warn 但不停。 */
   on(priority: PipelinePriority, handler: PipelineHandler): void {
     if (!this.handlers.has(priority)) {
       this.handlers.set(priority, []);
     }
     const handlers = this.handlers.get(priority);
-    if (handlers) handlers.push(handler);
+    if (handlers) {
+      if (handlers.length >= 50) {
+        console.warn(`[PipelineObserver] handler count at ${handlers.length} for priority ${priority} — possible leak`);
+      }
+      handlers.push(handler);
+    }
   }
 
   /**
@@ -76,7 +81,7 @@ export class PipelineObserver implements IPipelineObserver {
    *
    * 单 handler 异常不阻断后续 handler（隔离设计）。
    */
-  emit(event: ObservableEvent, meta?: EmitMeta): void {
+  emit(event: EmittableEvent, meta?: EmitMeta): void {
     // 遥测：事件吞吐计数
     this._eventCount++;
     if (this._eventCount % 100 === 0) {
@@ -107,6 +112,7 @@ export class PipelineObserver implements IPipelineObserver {
     if (handlers) {
       for (let i = 0; i < handlers.length; i++) {
         try {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           handlers[i]!(event);
         } catch (e) {
           const ctx: HandlerErrorContext = {

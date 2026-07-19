@@ -73,6 +73,7 @@ export function computeCompensation(
   const actionNodeIds = new Set(actions.map(a => a.nodeId));
   const queue = [failedNodeId];
   while (queue.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const currentId = queue.shift()!;
     for (const node of allNodes) {
       if (node.parentId === currentId && !visitedBfs.has(node.id)) {

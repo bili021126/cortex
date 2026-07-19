@@ -1,6 +1,6 @@
-# Cortex 概念顶层设计 v3.4
+# Cortex 概念顶层设计 v3.5
 
-**版本**：v3.4（包结构收敛 / 运行时防护增强 / 重复实现统一 / 40 项缺陷闭合）
+**版本**：v3.5（逻辑地图对齐 / 原则五合规强化 / 记忆层优化 / ShutdownWarden 完全移除）
 
 **状态**：Core-2 深度治理推进中。五轮审查 ~110 发现，七轮修复闭合 40 项（含 TOCTOU 防控、role 交替修复、claimedBy 终态清理、inflight 去重、maintain 标记删除、dispatchMulti 容错）。6 项设计决策排入 Core-3。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
 
@@ -388,6 +388,7 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 | v3.1→v3.2 | 2026-06-28 | §二七原则三层重排 / §二十 WebUI入宪 / §二十二 自审视入宪 / §二十三 平台边界 / §十四 门禁刷新 | 昔涟裁决，curious 审计，executor 施工 |
 | v3.2→v3.3 | AM-2026-0706-001 | 2026-07-06 | Core-2 推进——类型分级（§2.8）、ConfirmGate Agent化（§十四）、Tag运行时注册（§2.8）、对称攻防自审视（§二十二）、E2E治理体系（§二十四）、链路管理体系（§二十五）。15 Agent / 86 文件 1069 用例 engine / 全仓 3716 用例 / 25 包 tsc 零错误。 | 昔涟裁决，curious 审计，executor 施工 |
 | v3.3→v3.4 | AM-2026-0716-001 | 2026-07-16 | 包结构收敛（27→25）：tui 并入 cli、consistency 并入 governance。运行时防护增强：Context compactor role 交替修复（§二十六）、Memory write inflight 去重（§二十六）、maintain 标记删除（§二十六）、claimedBy 终态清理（§二十六）、dispatchMulti 容错（§二十六）。重复实现统一（§二十七）：PipelineEventType/config event-types.ts 删除（238行）、AGENT_DEFS config版删除（117行）、file-lock-manager platform版删除（285行）。Disposable 接口补 dispose。ShutdownWarden @deprecated 标注。ICortexComponents 零 unknown。core-smoke 修复——根 tsconfig.json 清理 tui/consistency 残留引用。 | 昔涟裁决，五轮审查+七轮修复闭合 40 项缺陷 |
+| v3.4→v3.5 | — | 2026-06-20 | 逻辑地图对齐 + 正规化二。**原则五合规强化**：memory-store/scheduler 热路径裸遥测（search_time_ms/write_duration_ms/maintain_failed/sim_check/replan）5 处收敛至 recordTelemetry 正式通道，消除裸 console（T1）。**记忆层优化**：read() 双重老化 + hybrid 分污染持久权重真实缺陷修复（T3）、write() 去重冗余消除（T2）、跨后端包 content_hash→id O(1) 去重索引（T4：AbstractMemoryStore._hashIndex + findByContentHash）。**死代码清理 D1-D5**（ShutdownWarden 残留注释、恒真 sim 分支、TRACE 调试日志、dead binding）。ShutdownWarden 由 v3.4 @deprecated 推进至完全移除，生命周期由 LifecycleManager + ShutdownOrchestrator 接管。**附录订正**：架构映射 §五记忆 7 组件族→适配器委托 @cortex/memory 后端；core-pipeline-integrity-verify 移除 ShutdownWarden 导出陈述。memory-store 109 tests 全过，typecheck 全绿。 | 开拓者裁决（直接修订·事实为依据），昔涟施工 |
 
 ---
 

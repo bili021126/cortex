@@ -368,6 +368,7 @@ export class GroupChatManager {
     for (let i = 0; i < maxLines; i++) {
       output.push(eraseLine);
       if (i < lineCount) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         output.push(lines[i]!);
       }
       if (i < maxLines - 1) {

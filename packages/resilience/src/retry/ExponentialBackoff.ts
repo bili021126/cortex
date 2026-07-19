@@ -32,7 +32,7 @@ export interface RetryOptions {
    * 可重试的异常类/类型列表。
    * 空数组 = 所有异常均可重试（默认）。
    */
-  retryableErrors?: Array<{ new (...args: unknown[]): Error }>;
+  retryableErrors?: Array<{ new (...args: never[]): Error }>;
 
   /**
    * 自定义 shouldRetry 钩子。
@@ -107,7 +107,7 @@ export class ExponentialBackoff implements IRetryPolicy {
   private readonly _jitterFactor: number;
 
   /** 可重试的异常类列表（使用 unknown[] 替代 any[]，与 FixedRetry 保持一致） */
-  private readonly _retryableErrors: Array<{ new (...args: unknown[]): Error }>;
+  private readonly _retryableErrors: Array<{ new (...args: never[]): Error }>;
 
   /** 自定义 shouldRetry 钩子 */
   private readonly _shouldRetryHook?: (attempt: number, error: unknown) => boolean;

@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/scheduler — dispatchMulti() Agent fan-out 契约测试
  *

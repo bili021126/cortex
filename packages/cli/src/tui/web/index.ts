@@ -1,7 +1,7 @@
 /**
  * tui/web/index.ts — 统一入口
  *
- * 导出 startWebUI / stopWebUI 供 @cortex/tui 或外部调用者使用。
+ * 导出 startWebUI / stopWebUI 供 @cortex/cli 或外部调用者使用。
  *
  * @module tui/web
  */
@@ -9,8 +9,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { IPipelineObserver, ITuiEngineBridge, AgentType, ITaskBoard, IAgentPool } from "@cortex/shared";
-import { AgentType as AgentTypeEnum, PipelinePriority } from "@cortex/shared";
+import type { IPipelineObserver, ITuiEngineBridge, ITaskBoard, IAgentPool } from "@cortex/shared";
+import { PipelinePriority } from "@cortex/shared";
 import type { TuiEventBus } from "../event-bus.js";
 import type { ObservableEvent } from "@cortex/shared";
 import type { PanoramaTracker, HealthCollector } from "@cortex/telemetry";
@@ -28,9 +28,11 @@ function getStaticDir(): string {
 
 // ─── 创建静态文件服务 ─────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
 function createStaticHandler(): (url: URL, res: import("http").ServerResponse) => boolean {
   const staticDir = getStaticDir();
 
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   return (url: URL, res: import("http").ServerResponse): boolean => {
     // 只处理根路径和 /static/* 路径
     let filePath: string;
@@ -170,6 +172,7 @@ export async function startWebUI(options: StartWebUIOptions): Promise<StartWebUI
   //
   // 方案：start 后补一个 request listener（通过 server.on("request", ...)）
   if (gateway.server) {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
     gateway.server.on("request", (req: import("http").IncomingMessage, res: import("http").ServerResponse) => {
       const method = req.method ?? "GET";
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
@@ -213,4 +216,4 @@ export async function startWebUI(options: StartWebUIOptions): Promise<StartWebUI
   };
 
   return { gateway, stop };
-}
+}

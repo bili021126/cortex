@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { sanitizeRenderableText } from "../../src/renderer/sanitize.js";
+import { sanitizeRenderableText } from "../../src/tui/renderer/sanitize.js";
 
 describe("sanitizeRenderableText", () => {
   it("正常文本不变", () => { expect(sanitizeRenderableText("hello")).toBe("hello"); });

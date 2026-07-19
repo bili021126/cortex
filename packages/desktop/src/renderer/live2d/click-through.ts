@@ -123,7 +123,6 @@ export class ClickThroughController {
     const buf = new Uint8Array(4);
     gl.readPixels(x, flippedY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     // buf[3] is always defined after readPixels fills the 4-byte buffer
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     return (buf[3] ?? 0) >= this.alphaThreshold;
   }
 

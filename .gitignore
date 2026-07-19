@@ -134,3 +134,16 @@ scripts/**/*.js
 scripts/**/*.d.ts
 scripts/**/*.js.map
 scripts/**/*.d.ts.map
+
+# 正规化2：运行时/测试/编译产物防回归
+# openclaw 插件运行时解包产物
+dist-runtime/
+# 测试生成的临时数据（任意层级的 .test-data/）
+**/.test-data/
+# vitest.workspace 源为 .ts，编译输出不跟踪
+vitest.workspace.js
+vitest.workspace.js.map
+vitest.workspace.d.ts
+vitest.workspace.d.ts.map
+# 运行时 trace 日志
+memory-trace.log

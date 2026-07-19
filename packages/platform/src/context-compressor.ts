@@ -281,6 +281,7 @@ function _compressSummary(lines: string[], maxChars: number): string {
   let inEvidenceBlock = false;
 
   for (let i = 0; i < lines.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const line = lines[i]!;
     const trimmed = line.trim();
 

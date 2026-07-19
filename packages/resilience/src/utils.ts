@@ -135,6 +135,7 @@ export function combineSignals(signals: AbortSignal[]): AbortSignal {
   }
 
   if (signals.length === 1) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return signals[0]!;
   }
 

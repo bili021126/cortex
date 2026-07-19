@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 
 describe("Skill template engine — prototype safety", () => {

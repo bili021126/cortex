@@ -1,5 +1,6 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
-import { TuiEventBus, tuiEventBus } from "../src/event-bus.js";
+import { TuiEventBus, tuiEventBus } from "../src/tui/event-bus.js";
 
 describe("TuiEventBus", () => {
   function emit(bus: TuiEventBus, overrides: Record<string, any> = {}) {

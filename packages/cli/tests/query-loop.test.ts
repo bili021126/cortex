@@ -584,10 +584,10 @@ describe("queryLoop — 模式 system prompt", () => {
     return messages[0].content;
   }
 
-  it("chat 模式包含 BASE_SYSTEM_PROMPT 和对话说明", async () => {
+  it("chat 模式包含 BASE_SYSTEM_PROMPT 和智能模式说明", async () => {
     const sysPrompt = await getSystemPrompt("chat", "code" as AgentType);
     expect(sysPrompt).toContain("Cortex 工程助手");
-    expect(sysPrompt).toContain("对话模式");
+    expect(sysPrompt).toContain("[智能模式]");
     expect(sysPrompt).toContain("[格式]");
   });
 
@@ -614,9 +614,9 @@ describe("queryLoop — 模式 system prompt", () => {
     expect(sysPrompt).toContain("[格式]");
   });
 
-  it("command 模式包含命令说明且不包含 agent 角色", async () => {
+  it("command 模式包含基础系统指令且不包含 agent 角色", async () => {
     const sysPrompt = await getSystemPrompt("command", "code" as AgentType);
-    expect(sysPrompt).toContain("命令模式");
+    expect(sysPrompt).toContain("[系统指令]");
     // command 模式不注入 agent 角色描述
     expect(sysPrompt).not.toContain("你现在是");
     expect(sysPrompt).toContain("[格式]");

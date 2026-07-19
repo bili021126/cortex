@@ -24,6 +24,7 @@ export class FileTransport implements Transport {
       }
       await this._openPromise;
     }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     await this._fd!.write(this._formatter.format(entry) + "\n");
   }
   async flush(): Promise<void> { if (this._fd) await this._fd.sync(); }

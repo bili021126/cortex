@@ -139,10 +139,10 @@ export class ChatLog {
       msg = [...this.messages].reverse().find(m => m.role === "assistant");
     }
 
-    if (msg && msg.segments) {
+    if (msg?.segments) {
       for (let i = msg.segments.length - 1; i >= 0; i--) {
         const seg = msg.segments[i];
-        if (seg && seg.type === "tool" && seg.tool === tool) {
+        if (seg?.type === "tool" && seg.tool === tool) {
           seg.toolStatus = status;
           seg.toolDuration = durationMs;
           break;

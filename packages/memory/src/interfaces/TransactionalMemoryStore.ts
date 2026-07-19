@@ -176,6 +176,14 @@ export interface TransactionalMemoryStore extends IMemoryStore {
    */
   delete(id: string): Promise<boolean>;
 
+  /**
+   * 按内容哈希 O(1) 查找记忆 ID（Core-3 T4：内容去重索引，替代适配层 O(n) 全表扫描）。
+   *
+   * @param contentHash - SHA256 内容哈希
+   * @returns 匹配的记忆 ID，未命中返回 undefined
+   */
+  findByContentHash(contentHash: string): string | undefined;
+
   // ══════════════════════════════════════════════
   // 批量写入（非事务）
   // ══════════════════════════════════════════════

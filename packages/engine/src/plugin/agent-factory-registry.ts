@@ -7,16 +7,16 @@
 // @since v3.1 — 配置驱动装配
 // ============================================================
 
-import type { AgentDefinition } from "../bootstrap/factory/index.js";
+import type { AgentManifest } from "../bootstrap/factory/index.js";
 import type { Agent } from "@cortex/shared";
 import type { PluginContext } from "./types.js";
 
 /**
- * AgentFactory —— 接收 AgentDefinition + PluginContext，产出 Agent 实例。
+ * AgentFactory —— 接收 AgentManifest + PluginContext，产出 Agent 实例。
  * 返回 undefined 表示该类型不产生可调度 Agent（如 butler 旁听管线）。
  */
 export type AgentFactory = (
-  def: AgentDefinition,
+  def: AgentManifest,
   ctx: PluginContext,
 ) => Promise<Agent | undefined>;
 

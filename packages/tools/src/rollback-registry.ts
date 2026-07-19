@@ -34,6 +34,7 @@ export class ToolRollbackRegistry {
     if (!this._createdFiles.has(taskId)) {
       this._createdFiles.set(taskId, []);
     }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const files = this._createdFiles.get(taskId)!;
     // 去重保护——同一文件被重复 write 不重复记录
     if (!files.includes(filePath)) {
@@ -50,6 +51,7 @@ export class ToolRollbackRegistry {
     if (!this._sideEffects.has(taskId)) {
       this._sideEffects.set(taskId, []);
     }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     this._sideEffects.get(taskId)!.push(sideEffect);
   }
 
@@ -67,6 +69,7 @@ export class ToolRollbackRegistry {
     const deleted: string[] = [];
     // FILO: 后创建的先删
     for (let i = files.length - 1; i >= 0; i--) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const fp = files[i]!;
       try {
         if (fs.existsSync(fp)) {

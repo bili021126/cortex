@@ -192,7 +192,7 @@ describe("formatPlanTree — 任务树格式化", () => {
 
 describe("displayClarification — 意图确认展示", () => {
   it("展示完整意图解析结果", () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const cl: IntentClarification = {
       goal: "分析数据层架构",
       actionType: "analysis",
@@ -213,7 +213,7 @@ describe("displayClarification — 意图确认展示", () => {
   });
 
   it("unclear 为 null 时不展示不明确行", () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const cl: IntentClarification = {
       goal: "test",
       actionType: "inquiry",
@@ -232,7 +232,7 @@ describe("displayClarification — 意图确认展示", () => {
   });
 
   it("有 unclear 时展示不明确提示", () => {
-    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const cl: IntentClarification = {
       goal: "修改代码",
       actionType: "modification",

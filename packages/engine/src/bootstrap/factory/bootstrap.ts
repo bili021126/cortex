@@ -13,7 +13,7 @@ import { loadAgentsConfig } from "./loaders/agents.loader.js";
 import { loadCognitionConfig } from "./loaders/cognition.loader.js";
 import { loadDocsConfig } from "./loaders/docs.loader.js";
 import { validateCrossField } from "./schemas/cross-field.validator.js";
-import type { BootstrapResult, AgentDefinition } from "./types.js";
+import type { BootstrapResult, AgentManifest } from "./types.js";
 
 /**
  * Bootstrap —— 从配置文件到运行时对象的完整流水线。
@@ -70,7 +70,7 @@ export function bootstrap(projectRoot: string, dataDirOverride?: string): Bootst
 
   // ── 第三阶段：assembleAll ───────────────────────
 
-  const agentDefs: AgentDefinition[] = Object.values(agentsConfig.agents);
+  const agentDefs: AgentManifest[] = Object.values(agentsConfig.agents);
 
   // ── 第四阶段：返回结果（start 由调用方执行） ──
 

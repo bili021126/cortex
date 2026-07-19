@@ -492,6 +492,7 @@ export class MarkdownPatternExtractor
 
     let match: RegExpExecArray | null;
     while ((match = MarkdownPatternExtractor.JSON_BLOCK_RE.exec(input)) !== null) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const jsonText = match[1]!;
 
       // ── JSON 解析 ──
@@ -566,6 +567,7 @@ export class MarkdownPatternExtractor
           triggerText,
           steps,
           expectedOutput,
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           rawText: jsonText!.slice(0, 500),
           strategy: "json-block",
           baseConfidence,
@@ -741,6 +743,7 @@ export class MarkdownPatternExtractor
       /(?:triggerTags|trigger_tags|tags?)[\s:：]+(.+)/i,
     );
     if (lineMatch) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const raw = lineMatch[1]!.trim();
       // 去掉方括号
       const cleaned = raw.replace(/^\[|\]$/g, "");
@@ -755,6 +758,7 @@ export class MarkdownPatternExtractor
       /^[\t ]*[-*+]\s*(?:triggerTags|trigger_tags|tags?)[\s:：]+(.+)/im,
     );
     if (listMatch) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const raw = listMatch[1]!.trim();
       const cleaned = raw.replace(/^\[|\]$/g, "");
       return cleaned
@@ -772,12 +776,14 @@ export class MarkdownPatternExtractor
   private _extractTriggerFromPNSection(body: string): string {
     // 格式 1: "Trigger: xxx"
     const lineMatch = body.match(/Trigger[\s:：]+(.+)/im);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (lineMatch) return lineMatch[1]!.trim();
 
     // 格式 2: "- trigger: xxx" 列表项
     const listMatch = body.match(
       /^[\t ]*[-*+]\s*trigger[\s:：]+(.+)/im,
     );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (listMatch) return listMatch[1]!.trim();
 
     return "";
@@ -793,6 +799,7 @@ export class MarkdownPatternExtractor
       /(?:Recipe|Steps?|\u6b65\u9aa4|\u6d41\u7a0b)[\s:\u3000-\u303f\uff00-\uffef]+(?:\r?\n)?([\s\S]*?)(?:\r?\n(?:#{1,3}\s|\r?\n)|$)/i,
     );
     if (recipeMatch) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const recipeContent = recipeMatch[1]!;
       // 提取编号列表项
       const numberedItems = recipeContent.match(
@@ -843,12 +850,14 @@ export class MarkdownPatternExtractor
     const lineMatch = body.match(
       /(?:expectedOutput|expected_output|Expected[\s]*Output)[\s:：]+(.+)/i,
     );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (lineMatch) return lineMatch[1]!.trim();
 
     // 格式 2: "- expectedOutput: xxx" 列表项
     const listMatch = body.match(
       /^[\t ]*[-*+]\s*(?:expectedOutput|expected_output)[\s:：]+(.+)/im,
     );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (listMatch) return listMatch[1]!.trim();
 
     // 格式 3: "Condition:" 节（旧版约定）
@@ -856,6 +865,7 @@ export class MarkdownPatternExtractor
       /Condition[\s:\u3000-\u303f\uff00-\uffef]+(?:\r?\n)?([\s\S]*?)(?:\r?\n(?:#{1,3}\s|\r?\n)|$)/i,
     );
     if (conditionMatch) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const conditions = conditionMatch[1]!
         .split("\n")
         .map((c) => c.trim())
@@ -1016,6 +1026,7 @@ export class MarkdownPatternExtractor
       /(?:tags?|triggerTags|trigger_tags)[\s:：]+(.+)/i,
     );
     if (!match) return [];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const raw = match[1]!.trim().replace(/^\[|\]$/g, "");
     return raw
       .split(/[,，、\s]+/)
@@ -1028,6 +1039,7 @@ export class MarkdownPatternExtractor
    */
   private _extractTriggerFromPatternParagraph(body: string): string {
     const match = body.match(/trigger[\s:：]+(.+)/im);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return match ? match[1]!.trim() : "";
   }
 
@@ -1069,6 +1081,7 @@ export class MarkdownPatternExtractor
     // 少于 5 行的文件放弃
     if (lines.length < 5) return null;
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const firstLine = lines[0]!.replace(/^#+\s*/, "").slice(0, 120);
 
     return {
@@ -1115,6 +1128,7 @@ export class MarkdownPatternExtractor
     let currentStartLine = 1;
 
     for (let i = 0; i < lines.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const m = headingRe.exec(lines[i]!);
       if (m) {
         // 遇到新标题 → 保存前一段
@@ -1126,6 +1140,7 @@ export class MarkdownPatternExtractor
             endLine: i,
           });
         }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         currentHeading = m[2]!; // 标题文本（不含 # 前缀）
         currentBody = "";
         currentStartLine = i + 1;
@@ -1185,6 +1200,7 @@ export class MarkdownPatternExtractor
         "full-file": 1,
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       if (priority[c.strategy!]! > priority[existing.strategy!]!) {
         // 新候选策略优先级更高 → 替换，但合并 tags 和 steps
         existing.tags = [...new Set([...existing.tags, ...c.tags])];

@@ -191,6 +191,7 @@ export class SkillTemplateEngine {
 
       if (elseMatch) {
         trueBody = body.substring(0, body.indexOf(this.openTag + "else" + this.closeTag));
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         falseBody = elseMatch[1]!;
       } else {
         trueBody = body;

@@ -55,7 +55,7 @@ export default function App() {
       },
     });
 
-    manager.init();
+    void manager.init();
     managerRef.current = manager;
 
     const handleResize = () => manager.resize(window.innerWidth, window.innerHeight);
@@ -92,7 +92,7 @@ export default function App() {
       pendingPos = null;
       void window.cyrene.setInteractive(true);
       window.cyrene.setDragging(true);
-      try { (e.target as Element).setPointerCapture(e.pointerId); } catch {}
+      try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* setPointerCapture 可能抛错，忽略 */ }
     };
 
     const handleMove = (e: PointerEvent) => {
@@ -108,7 +108,7 @@ export default function App() {
       flushMove();
       isDragging = false;
       window.cyrene.setDragging(false);
-      try { (e.target as Element).releasePointerCapture(e.pointerId); } catch {}
+      try { (e.target as Element).releasePointerCapture(e.pointerId); } catch { /* releasePointerCapture 可能抛错，忽略 */ }
       void window.cyrene.setInteractive(false);
     };
 

@@ -24,7 +24,7 @@
 // ============================================================
 
 // ── 工厂组件 ─────────────────────────────────────
-export { createAgent, runReActLoop, extractSkillsFromOutput, scanOutputFilesForSkills, persistSkillsToMemory, loadSkillsFromMemory, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence, validateExternalSkillJson, externalJsonToSkillTemplate, importExternalSkill, SkillTemplateEngine } from "./components/index.js";
+export { createAgent, runReActLoop, extractSkillsFromOutput, persistSkillsToMemory, loadSkillsFromMemory, crystallizeSkillToKnowledge, verifySkillKnowledge, searchExternalEvidence, validateExternalSkillJson, externalJsonToSkillTemplate, importExternalSkill, SkillTemplateEngine } from "./components/index.js";
 export type { AgentFactoryConfig, ReActContext, SkillExtractResult, CrystallizeOptions, CrystallizeResult, KnowledgeMetadata, ExternalSearcher, VerifyOptions, VerifyResult, SkillJsonValidationResult, SkillJsonValidationError, SkillJsonValidationWarning, SkillJsonValidationInfo, SkillJsonValidator, SkillStatus, TemplateEngineOptions, TemplateContext } from "./components/index.js";
 
 // ── Agent（registry 统一导出 + 特殊／实验性 Agent） ──
@@ -55,61 +55,40 @@ export type { PlanningPromptBlocks } from "./core/prompt-manager.js";
 // ── Core-2: 循环策略注册表 ─────────────────────
 // @experimental 可插拔循环策略（react/direct/decompose/jury）
 export { LoopStrategyRegistry, loopStrategyRegistry } from "./core/loop-strategy-registry.js";
-export type { LoopStrategy } from "./core/loop-strategy-registry.js";
 
-// ── Core-2: 任务路由器 ─────────────────────────
-// @experimental 统一策略+模型路由决策
 export { TaskRouter } from "./execution/task-router.js";
 export type { RouteDecision } from "./execution/task-router.js";
 
 // ── Core-2: 世界模型仿真层 ───────────────────────
 // @experimental 计划执行因果推演（Phase 1 stub）
 export { SimulationRunner, simulationRunner } from "./planning/simulation-runner.js";
-export type { SimulationInput, SimulationResult, SimulationConfig } from "./planning/simulation-runner.js";
 
-// ── Core-2: 环境感知路由器 ─────────────────────
-// @experimental 运行时环境约束（模型可用性/配额/延迟）
 export { EnvironmentAwareRouter } from "./execution/environment-aware-router.js";
-export type { ModelHealth, EnvironmentRouterOptions } from "./execution/environment-aware-router.js";
+export type { ModelHealth } from "./execution/environment-aware-router.js";
 
 // ── Core-2: 哨兵信号分层过滤器 ─────────────────
 // @experimental L1/L2/L3 信号分层 + 去噪 + 采样
 export { SentinelSignalFilter } from "./planning/sentinel-signal-filter.js";
 export { ZeroTokenValidator } from "./execution/zero-token-validator.js";
-export type { ZeroTokenRule, RuleResult, RuleContext } from "./execution/zero-token-validator.js";
-export type { SignalLevel, FilteredSignal, SignalFilterOptions } from "./planning/sentinel-signal-filter.js";
-export { getRejections } from "./planning/hard-verification-gate.js";
+export type { SignalLevel, FilteredSignal } from "./planning/sentinel-signal-filter.js";
 
 // ── Core-2: 治理事件发射器 ─────────────────────
 // @experimental DocGovernAgent 治理事件（修宪/审计/合规/圆桌）
 export { GovernanceEventEmitter } from "./planning/governance-events.js";
-export type { GovernanceEventType, GovernanceEventPayload } from "./planning/governance-events.js";
 
-// ── Core-2: 决策门桥接器 ───────────────────────
-// @experimental DECISION_REQUIRED → ConfirmGate 桥接
 export { DecisionGateBridge } from "./execution/decision-gate-bridge.js";
-export type { DecisionRequest, DecisionResult } from "./execution/decision-gate-bridge.js";
 
-// ── Core-2: 韧性策略集成 ───────────────────────
-// @experimental retry/circuit-breaker/timeout 引擎集成
 export { ResiliencePolicyFactory, resilienceFactory } from "./execution/resilience-integration.js";
-export type { ResilienceOptions } from "./execution/resilience-integration.js";
 
-// ── Core-2: 通知运行时接入 ─────────────────────
-// @experimental PipelineObserver → NotificationPipe 桥接
 export { NotificationRuntime } from "./planning/notification-runtime.js";
-export type { NotificationRuntimeOptions } from "./planning/notification-runtime.js";
 
-// ── Core-2: 技能作用域 ─────────────────────────
-// @experimental 四级作用域技能解析（跨域/项目/包级/Agent）
-export { resolveByScope, tagSkillScope, type SkillScope } from "./planning/skill-scope.js";
+export { resolveByScope, type SkillScope } from "./planning/skill-scope.js";
 
 // ── 记忆子系统（仅引擎胶水层） ──────────────────
 export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE, registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "./memory-bridge/index.js";
 
 // ── Cyrene 记忆层（L0/L1/L2 画像记忆扩展） ─────
-export { initCyreneMemory, initMemoryStore, initConsistencyLayer } from "./bootstrap/init-memory.js";
-export type { CyreneMemoryInitResult, ConsistencyLayerResult } from "./bootstrap/init-memory.js";
+export { initCyreneMemory } from "./bootstrap/init-memory.js";
 
 // ── Bootstrap 集成入口 ──────────────────────────
 export { bootstrapEngine, resolveLlm } from "./bootstrap/bootstrap-engine.js";
@@ -123,10 +102,9 @@ export { MetaAgentReplanAdapter } from "./core/meta-agent-adapter.js";
 // ── Core-2: 降级边界 ────────────────────────
 // @experimental 标准化空 catch 替代方案
 export { DegradationBoundary } from "./core/degradation-boundary.js";
-export type { DegradationLevel } from "./core/degradation-boundary.js";
 
 // ── 一致性层（六层防御） ─────────────────────────
-// @note v2.6.7 兼容层已砍，直接导入 @cortex/consistency
+// @note v2.6.7 兼容层已砍，直接导入 @cortex/governance
 
 // ── 引擎组件 ────────────────────────────────────
 export { PoolAwareState } from "./execution/pool-aware.js";
@@ -143,8 +121,6 @@ export { PoolAwareState } from "./execution/pool-aware.js";
 
 // ── v3.1 生命周期 & 优雅关闭 ─────────────────
 export { LifecycleManager } from "./lifecycle/lifecycle-manager.js";
-export { ShutdownWarden } from "./core/shutdown-warden.js";
-export type { ShutdownReport } from "./core/shutdown-warden.js";
 export { ShutdownOrchestrator } from "./core/shutdown-orchestrator.js";
 
 // ── v3.1 文件锁管理器 ────────────────────────
@@ -176,7 +152,7 @@ export type { AgentRegistration } from "./registry/agent-registry.js";
 
 // ── 插件体系（v3.2 迁入 @cortex/plugin-runner）────
 // PluginLoader → 从 @cortex/plugin-runner 直接导入
-export { registerAgentFactory, getAgentFactory, hasAgentFactory, getRegisteredAgentTypes } from "./plugin/register-all.js";
+export { registerAgentFactory, getAgentFactory } from "./plugin/register-all.js";
 export type { AgentFactory } from "./plugin/agent-factory-registry.js";
 
 // ── 插件实例（v3.2 engine 内部使用，不再对外暴露类名）──

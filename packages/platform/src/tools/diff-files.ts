@@ -144,8 +144,10 @@ function computeEdits(linesA: string[], linesB: string[]): Edit[] {
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       if (linesA[i - 1] === linesB[j - 1]) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         dp[i]![j] = dp[i - 1]![j - 1]! + 1;
       } else {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         dp[i]![j] = Math.max(dp[i - 1]![j]!, dp[i]![j - 1]!);
       }
     }
@@ -161,6 +163,7 @@ function computeEdits(linesA: string[], linesB: string[]): Edit[] {
       edits.unshift({ type: "equal", aLine: i - 1, bLine: j - 1 });
       i--;
       j--;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     } else if (j > 0 && (i === 0 || dp[i]![j - 1]! >= dp[i - 1]![j]!)) {
       edits.unshift({ type: "insert", bLine: j - 1 });
       j--;
@@ -181,6 +184,7 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     // 跳过前面的相等部分（留 context 行）
     let equalBefore = 0;
     let scan = i;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     while (scan < edits.length && edits[scan]!.type === "equal" && equalBefore < context) {
       equalBefore++;
       scan++;
@@ -194,12 +198,14 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     const hunkStart = Math.max(0, i - context);
     let changeEnd = scan;
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     while (changeEnd < edits.length && edits[changeEnd]!.type !== "equal") {
       changeEnd++;
     }
 
     // 扩展 equal 上下文（后面）
     let equalAfter = 0;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     while (changeEnd + equalAfter < edits.length && edits[changeEnd + equalAfter]!.type === "equal" && equalAfter < context) {
       equalAfter++;
     }
@@ -212,6 +218,7 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     let bLine = 0;
 
     for (let k = hunkStart; k < hunkEnd; k++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const edit = edits[k]!;
       switch (edit.type) {
         case "equal":
@@ -239,6 +246,7 @@ function buildHunks(edits: Edit[], context: number, linesA: string[], linesB: st
     let endB = -1;
 
     for (let k = hunkStart; k < hunkEnd; k++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const e = edits[k]!;
       if (e.aLine !== undefined) {
         if (startA === -1) startA = e.aLine;

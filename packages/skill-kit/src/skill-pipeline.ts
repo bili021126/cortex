@@ -70,6 +70,7 @@ export function extractSkillUsageFromOutput(output: string): Array<{
     const used = match[2] ? match[2].split(",").map(Number).filter((n) => !isNaN(n)) : undefined;
     const skipped = match[3] ? match[3].split(",").map(Number).filter((n) => !isNaN(n)) : undefined;
     results.push({
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       skillName: match[1]!.trim(),
       stepsUsed: used && used.length > 0 ? used : undefined,
       stepsSkipped: skipped && skipped.length > 0 ? skipped : undefined,
@@ -100,7 +101,7 @@ export function extractAndPersistSkills(
       priority: PipelinePriority.NORMAL,
       payload: {
         nodeId,
-        agentType: agentType as string,
+        agentType,
         success: true,
         output: `[skill-extractor] ${diag}`,
       },
@@ -136,7 +137,7 @@ export function extractAndPersistSkills(
       priority: PipelinePriority.NORMAL,
       payload: {
         nodeId,
-        agentType: agentType as string,
+        agentType,
         success: true,
         output: `[skill-extractor] 成功注册 ${registered.length}/${skills.length} 个技能模板: ${registered.map((s) => `${s.name}(${s.id})`).join(", ")}`,
       },

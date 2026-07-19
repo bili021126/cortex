@@ -103,7 +103,9 @@ async function grepFallback(ctx: ToolContext, rootDir: string, query: string): P
           const content = await ctx.fs.readFile(fullPath);
           const lines = content.split("\n");
           for (let i = 0; i < lines.length && results.length < 30; i++) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             if (lines[i]!.toLowerCase().includes(lowerQuery)) {
+              // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
               results.push(`${fullPath}:${i + 1}: ${lines[i]!.trim().slice(0, 200)}`);
             }
           }

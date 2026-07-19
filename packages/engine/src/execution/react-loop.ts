@@ -142,12 +142,12 @@ export async function runReActLoop(
       // 🎯 硬核：code/fix/ops 类 Agent 首次 LLM 调用必须选工具（不指定具体工具名，兼容 DeepSeek）
       const forceWrite = (loops === REACT_FORCE_WRITE_LOOP && [AgentType.Code, AgentType.Fix, AgentType.Ops].includes(agentType as AgentType) && toolDefs.some(t => t.name === "write_file"))
         ? "required" : undefined;
-      if (forceWrite)
+      if (forceWrite && REACT_DEBUG)
         console.error(`[TRACE write_file] react-loop: forceTool=required (loops=${loops})`);
       // reasoning_effort 和 tool_choice 均不发送——DeepSeek Flash 不支持，Pro 需 extra_body 配套
       // FIX-02: forceWrite 仅对 Pro/Reasoner 发送——Flash 返回 400 on tool_choice
       const shouldForce = forceWrite && (model.includes("pro") || model.includes("reasoner"));
-      const res = await resilienceFactory.execute("llm-call", async () => llm.chat(model, messages, toolDefs, undefined, shouldForce ? forceWrite : undefined));
+      const res = await resilienceFactory.execute("llm-call", async () => await llm.chat(model, messages, toolDefs, undefined, shouldForce ? forceWrite : undefined));
       const callElapsed = Date.now() - callStart;
 
       // ── 遥测：Token 消耗记录 ──
@@ -187,7 +187,7 @@ export async function runReActLoop(
       }
 
       if (toolCallCount === 0) {
-        console.error(`[TRACE write_file] react-loop: 零工具调用 (loops=${loops}, agentType=${agentType}, hasWriteFile=${toolCallHistory.some(tc => tc.name === 'write_file')})`);
+        if (REACT_DEBUG) console.error(`[TRACE write_file] react-loop: 零工具调用 (loops=${loops}, agentType=${agentType}, hasWriteFile=${toolCallHistory.some(tc => tc.name === 'write_file')})`);
         // ── 硬检测：代码类任务必须调用 write_file ──
         const hasWriteFile = toolCallHistory.some(tc => tc.name === 'write_file');
         const payload = (node.payload ?? '').toLowerCase();
@@ -198,7 +198,7 @@ export async function runReActLoop(
         const hasWriteTool = toolDefs.some(t => t.name === 'write_file');
 
         if (isCodeTask && !hasWriteFile && hasWriteTool && loops < maxLoops) {
-          console.error(`[TRACE write_file] react-loop: 强制追加 write_file 提醒 (loops=${loops}, agentType=${agentType})`);
+          if (REACT_DEBUG) console.error(`[TRACE write_file] react-loop: 强制追加 write_file 提醒 (loops=${loops}, agentType=${agentType})`);
           diagnostic('⚠️ 代码任务但未调用 write_file，强制追加提醒');
           messages.push({
             role: 'user',
@@ -231,12 +231,12 @@ export async function runReActLoop(
         diagnostic(`🚀 L0 工具并行执行 ${l0Calls.length} 个`);
         const l0Results = await Promise.allSettled(
           l0Calls.map(async (tc) => {
-            if (tc.name === "write_file") {
+            if (tc.name === "write_file" && REACT_DEBUG) {
               console.error(`[TRACE write_file] agent=${agentType} calling tool=${tc.name} params=${JSON.stringify(tc.arguments)}`);
             }
             const toolStart = Date.now();
             const result = await resilienceFactory.execute("tool-exec", async () =>
-              toolkit.execute(
+              await toolkit.execute(
                 { toolName: tc.name, params: tc.arguments },
                 agentType,
               ),
@@ -271,13 +271,13 @@ export async function runReActLoop(
 
       // L2/L3 串行执行
       for (const tc of writeCalls) {
-        if (tc.name === "write_file") {
+        if (tc.name === "write_file" && REACT_DEBUG) {
           console.error(`[TRACE write_file] agent=${agentType} calling tool=${tc.name} params=${JSON.stringify(tc.arguments)}`);
         }
         diagnostic(`🔧 执行工具 ${tc.name}`);
         const toolStart = Date.now();
         const result = await resilienceFactory.execute("tool-exec", async () =>
-          toolkit.execute(
+          await toolkit.execute(
             { toolName: tc.name, params: tc.arguments },
             agentType,
           ),

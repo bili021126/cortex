@@ -3,7 +3,7 @@
 // @role 交互边界——管道通知路由 + 用户交互面
 
  
-import { AgentType as AT, AgentStatus as AS, PipelinePriority, type AgentStatus, type ObservableEvent, type SafeErrorReporter, type IPipelineObserver, type PlatformBridge } from "@cortex/shared";
+import { AgentType as AT, AgentStatus as AS, PipelinePriority, type AgentStatus, type ObservableEvent, type SafeErrorReporter, type IPipelineObserver, type PlatformBridge, type Agent } from "@cortex/shared";
 import type { AgentPool } from "@cortex/scheduler";
 import { PoolAwareState } from "../execution/pool-aware.js";
 
@@ -31,7 +31,7 @@ import { PoolAwareState } from "../execution/pool-aware.js";
  * @fix N-06 — execute() 返回字符串使用角色名"昔涟"而非第一人称"我"，
  *   与测试断言 expect(result.output).toContain("昔涟不执行任务") 一致。
  */
-export class ButlerAgent {
+export class ButlerAgent implements Agent {
   readonly type = AT.Butler;
 
   private readonly _state = new PoolAwareState(() => this.type);

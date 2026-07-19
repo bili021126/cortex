@@ -3,6 +3,7 @@
 // @role 事轴起点——意图拆解为粗粒度 TaskNode 树
 
 import { extractJsonBlock, PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type SkillTemplate, type Tag, type TaskNode, type IntentClarification } from "@cortex/shared";
+import { createLogger } from "@cortex/logging";
 import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { ContextManager } from "@cortex/context-manager";
@@ -68,6 +69,8 @@ export class MetaAgent {
   private _loopStrategyRegistry?: LoopStrategyRegistry;
   /** Phase 3: 上下文管理器（可选注入——保留 fallback 逻辑） */
   private _contextManager?: ContextManager;
+
+  private readonly _logger = createLogger("MetaAgent");
 
   constructor(
     private readonly llm: LlmAdapter,
@@ -234,7 +237,7 @@ export class MetaAgent {
     ].join("\n");
 
     const res = await resilienceFactory.execute("llm-call", async () =>
-      this.llm.chat(this.llm.reasonerModel, [
+      await this.llm.chat(this.llm.reasonerModel, [
         { role: "system", content: this._replanSystem },
         { role: "user", content: prompt },
       ]),
@@ -292,7 +295,7 @@ export class MetaAgent {
     ].join("\n");
 
     const res = await resilienceFactory.execute("llm-call", async () =>
-      this.llm.chat(this.llm.reasonerModel, [
+      await this.llm.chat(this.llm.reasonerModel, [
         { role: "system", content: this._replanSystem },
         { role: "user", content: prompt },
       ]),
@@ -315,7 +318,7 @@ export class MetaAgent {
     ].join("\n");
 
     const res = await resilienceFactory.execute("llm-call", async () =>
-      this.llm.chat(this.llm.reasonerModel, [
+      await this.llm.chat(this.llm.reasonerModel, [
         { role: "system", content: "You are a precise intent parser. Extract structured intent from user input. Respond only with the JSON object, no other text." },
         { role: "user", content: prompt },
       ]),
@@ -373,7 +376,7 @@ export class MetaAgent {
       const t0 = Date.now();
       const nodes = await this._generatePlan(intent, context);
       // ── 遥测：MetaAgent 规划耗时 ──
-      console.error(`[telemetry] meta.plan_time_ms value=${Date.now() - t0} nodesCount=${nodes.length}`);
+      this._logger.info(`meta.plan_time_ms value=${Date.now() - t0} nodesCount=${nodes.length}`);
 
       // ── 仿真层因果推演 ──
       // 对已规划的节点做轻量风险评估，若建议重规划则触发遥测
@@ -384,7 +387,7 @@ export class MetaAgent {
           constraints: [],
         });
         if (simResult.suggestedReplan || simResult.riskLevel === "high") {
-          console.error(`[telemetry] meta.replan_from_simulation risk=${simResult.riskLevel}`);
+          this._logger.info(`meta.replan_from_simulation risk=${simResult.riskLevel}`);
           // 重规划：重新生成计划
           const replanResult = await this._generatePlan(intent, context);
           if (replanResult.length > 0) {
@@ -410,7 +413,7 @@ export class MetaAgent {
       ? buildPlanningSystem(this._workspaceRoot)
       : this._planningSystem;
     const res = await resilienceFactory.execute("llm-call", async () =>
-      this.llm.chat(this.llm.reasonerModel, [
+      await this.llm.chat(this.llm.reasonerModel, [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
       ]),

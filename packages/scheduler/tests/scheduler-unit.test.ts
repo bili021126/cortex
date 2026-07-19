@@ -15,6 +15,7 @@ describe("ConfirmGate", () => {
   let gate: ConfirmGate;
 
   beforeEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", { value: true, writable: true, configurable: true });
     gate = new ConfirmGate();
   });
 

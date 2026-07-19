@@ -50,6 +50,7 @@ interface Subscription {
 
 /** 内部 WS 连接 */
 interface WSConnection {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   socket: import("node:net").Socket;
   readyState: WS_READY_STATE;
   subscription: Subscription;
@@ -77,12 +78,13 @@ export class WSGateway {
    * 启动 HTTP 服务器并等待 WS 升级请求。
    */
   async start(): Promise<void> {
-    return new Promise<void>((resolve) => {
+    return await new Promise<void>((resolve) => {
       // 使用 new http.Server() 而非 createServer(cb)，避免重复的 'request' 监听器冲突
       this._server = new http.Server();
 
       // 通过 'upgrade' 事件处理 WebSocket 升级请求（标准 Node.js 模式）
       // HTTP 请求由 index.ts 中的 'request' 监听器处理（API 路由 + 静态文件）
+      // eslint-disable-next-line @typescript-eslint/consistent-type-imports
       this._server.on("upgrade", (req: IncomingMessage, socket: import("node:net").Socket, head: Buffer) => {
         this._handleUpgradeV2(req, socket, head);
       });
@@ -114,7 +116,7 @@ export class WSGateway {
     this.connections.clear();
 
     // 关闭 HTTP 服务器
-    return new Promise<void>((resolve) => {
+    return await new Promise<void>((resolve) => {
       if (this._server) {
         this._server.close(() => resolve());
         this._server = null;
@@ -179,7 +181,8 @@ export class WSGateway {
   // ── 私有方法 ────────────────────────────────────
 
   /** 处理 HTTP → WebSocket 升级请求（通过 'upgrade' 事件） */
-  private _handleUpgradeV2(req: IncomingMessage, socket: import("node:net").Socket, head: Buffer): void {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  private _handleUpgradeV2(req: IncomingMessage, socket: import("node:net").Socket, _head: Buffer): void {
     const key = req.headers["sec-websocket-key"];
     if (!key || Array.isArray(key)) {
       socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -250,7 +253,8 @@ export class WSGateway {
     });
 
     // TypeScript 类型体操：socket 在 writeHead 后可用
-    const socket = res.socket!;
+    const socket = res.socket;
+    if (!socket) return;
     socket.setTimeout(0);
     socket.setNoDelay(true);
 
@@ -283,9 +287,12 @@ export class WSGateway {
   private _handleFrame(conn: WSConnection, data: Buffer): void {
     if (data.length < 2) return;
 
-    const opcode = data[0]! & 0x0f;
-    const masked = (data[1]! & 0x80) !== 0;
-    let payloadLength = data[1]! & 0x7f;
+    // data[0]/data[1] 在上面长度守卫后必存在，?? 0 仅为满足 lint
+    const byte0 = data[0] ?? 0;
+    const byte1 = data[1] ?? 0;
+    const opcode = byte0 & 0x0f;
+    const masked = (byte1 & 0x80) !== 0;
+    let payloadLength = byte1 & 0x7f;
     let offset = 2;
 
     if (payloadLength === 126) {
@@ -319,11 +326,15 @@ export class WSGateway {
     if (maskKey) {
       const len = payload.length;
       const buf = Buffer.allocUnsafe(len);
+      const m0 = maskKey[0] ?? 0;
+      const m1 = maskKey[1] ?? 0;
+      const m2 = maskKey[2] ?? 0;
+      const m3 = maskKey[3] ?? 0;
       for (let i = 0; i < len; i += 4) {
-        buf[i] = payload[i]! ^ maskKey[0]!;
-        if (i + 1 < len) buf[i + 1] = payload[i + 1]! ^ maskKey[1]!;
-        if (i + 2 < len) buf[i + 2] = payload[i + 2]! ^ maskKey[2]!;
-        if (i + 3 < len) buf[i + 3] = payload[i + 3]! ^ maskKey[3]!;
+        buf[i] = (payload[i] ?? 0) ^ m0;
+        if (i + 1 < len) buf[i + 1] = (payload[i + 1] ?? 0) ^ m1;
+        if (i + 2 < len) buf[i + 2] = (payload[i + 2] ?? 0) ^ m2;
+        if (i + 3 < len) buf[i + 3] = (payload[i + 3] ?? 0) ^ m3;
       }
       payload = buf;
     }
@@ -446,4 +457,4 @@ export class WSGateway {
     conn.readyState = WS_READY_STATE.CLOSED;
     this.connections.delete(conn);
   }
-}
+}

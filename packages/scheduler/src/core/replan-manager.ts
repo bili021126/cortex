@@ -125,7 +125,6 @@ export class ReplanManager {
           totalReplans: this.totalReplans,
           maxReplans: SCHEDULER_MAX_TOTAL_REPLANS,
           deferred: this.replanQueue.length,
-          degraded: true,
         },
         timestamp: Date.now(),
         notificationType: "WARNING",
@@ -211,6 +210,7 @@ export class ReplanManager {
       if (origIdx < 0) continue;
 
       if (this._isChainSuccessful(newIds, allResults)) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         if (allResults[origIdx]!.success === false) {
           failed--;
           completed++;
@@ -326,6 +326,7 @@ export class ReplanManager {
     const results = await Promise.allSettled(promises);
 
     for (let i = 0; i < results.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const r = results[i]!;
       if (r.status === "rejected") {
         this.totalReplans -= 1; // 回退预扣配额
@@ -345,6 +346,7 @@ export class ReplanManager {
     const visited = new Set<string>();
     const stack = [...nodeIds];
     while (stack.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const id = stack.pop()!;
       if (visited.has(id)) continue;
       visited.add(id);
@@ -355,6 +357,7 @@ export class ReplanManager {
       const childIds = this.replanMap.get(id);
       if (childIds && childIds.length > 0) {
         for (let i = childIds.length - 1; i >= 0; i--) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           stack.push(childIds[i]!);
         }
       }

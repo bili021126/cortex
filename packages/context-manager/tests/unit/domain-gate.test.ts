@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/context-manager — DomainGateController 单元测试
  *

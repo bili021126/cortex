@@ -60,6 +60,20 @@ function cyrenePersona(): string {
   return _cyrenePersona;
 }
 
+/** 缓存所有 agent persona 文件，避免每次对话都读磁盘 */
+const _personaCache = new Map<string, string>();
+function cachedPersona(filePath: string): string | undefined {
+  if (_personaCache.has(filePath)) return _personaCache.get(filePath);
+  try {
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, "utf-8");
+      _personaCache.set(filePath, content);
+      return content;
+    }
+  } catch { /* fall through */ }
+  return undefined;
+}
+
 /**
  * 多策略解析 agent 输入 → 加载 talk persona 文件。
  *
@@ -103,14 +117,14 @@ export function agentTalkPersona(agent: string): string {
 
     try {
       const personaPath = path.join(process.cwd(), `${dir}-persona.txt`);
-      if (fs.existsSync(personaPath)) {
-        return fs.readFileSync(personaPath, "utf-8");
-      }
-    } catch (err) { console.warn('[DEGRADED:tui-query-fallback]', String(err)) }
+      const cached = cachedPersona(personaPath);
+      if (cached) return cached;
+    } catch { /* fall through */ }
     try {
       const promptPath = path.join(process.cwd(), "prompts", dir, "system.md");
-      return fs.readFileSync(promptPath, "utf-8");
-    } catch (err) { console.warn('[DEGRADED:tui-query]', String(err)) }
+      const cached = cachedPersona(promptPath);
+      if (cached) return cached;
+    } catch { /* fall through */ }
   }
 
   return cyrenePersona();
@@ -152,8 +166,13 @@ function modeSystemPrompt(mode: ReplMode, agent: AgentType): string {
   }
 }
 
-/** 组装完整 system prompt */
+/** 组装完整 system prompt——结果按 (mode, agent) 缓存，避免每轮重建 */
+const _promptCache = new Map<string, string>();
 function assembleSystemPrompt(mode: ReplMode, agent: AgentType): string {
+  const key = `${mode}:${agent}`;
+  const cached = _promptCache.get(key);
+  if (cached) return cached;
+
   const parts: string[] = [];
 
   // butler/analysis: persona 文件自包含身份+格式——不叠加通用前缀
@@ -168,7 +187,9 @@ function assembleSystemPrompt(mode: ReplMode, agent: AgentType): string {
     parts.push("[格式] 直接说话/做事，不要用（）写旁白或动作描述。");
   }
 
-  return parts.join("\n");
+  const result = parts.join("\n");
+  _promptCache.set(key, result);
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -218,7 +239,7 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
   const configMax = envLimit ? Number(envLimit) : DEFAULT_MAX_TOOL_ROUNDS;
   // plan/talk/party 模式：零工具 + 极低轮次上限——纯文本对话，不调用工具
   const MAX_TOOL_ROUNDS = mode === "plan" ? Math.min(configMax, 5) : configMax;
-  const CONTEXT_LIMIT = 128000;
+  const CONTEXT_LIMIT = parseInt(process.env.CORTEX_CONTEXT_LIMIT || "500000", 10);
   let toolRound = 0;
   let finalOutput = "";
   let sessionTokens = 0;
@@ -253,8 +274,8 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
         chunkQueue.push({ type: "llm_chunk", agent, content, reasoning } as TuiEvent);
         signal();
       },
-      // chat/talk: 不传 reasoningEffort — llm-adapter 默认不启用 thinking
-      undefined,
+      // DeepSeek V4: chat不启用thinking, plan用high
+      (mode === "plan") ? { reasoningEffort: "high" as const } : undefined,
     ).then(r => { streamResult = r; streamDone = true; signal(); return r; })
      .catch(e => { streamError = e as Error; streamDone = true; signal(); });
 
@@ -299,15 +320,9 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
         sessionTotalTokens: sessionTokens,
         contextWindowSize: CONTEXT_LIMIT,
       };
-      // 超 50% 警告，超 80% 严重警告（嵌入到输出流中）
+      // 超 50% 警告——仅通过 hook 通知，不注入 llm_chunk（避免污染 assistant 消息）
       if (usagePercent > 50) {
-        // Hook: onCompactionWarning
         hooks.onCompactionWarning?.(usagePercent);
-        const warnIcon = usagePercent > 80 ? "⚠️" : "📊";
-        const warnMsg = usagePercent > 80
-          ? `上下文用量 ${usagePercent}% (${sessionTokens}/${CONTEXT_LIMIT})——95% 时将自动压缩旧消息`
-          : `上下文用量 ${usagePercent}%`;
-        yield { type: "llm_chunk", agent, content: `\n${warnIcon} ${warnMsg}\n` } as TuiEvent;
       }
     }
 
@@ -320,7 +335,8 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
         const compactResult = await compactMessages(messages, {
           contextLimit: CONTEXT_LIMIT,
           currentTokens: sessionTokens,
-          triggerThreshold: 0.95,
+          triggerThreshold: 0.75,
+          toolOutputMaxChars: 1000,
           keepRecentTurns: 3,
           summarize: bridge.chat
             ? async (msgs: LlmMessage[]) => {
@@ -335,10 +351,12 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
           messages.length = 0;
           messages.push(...compactResult.messages);
 
-          // 通知用户压缩发生
+          // Bug 10 fix: 更新 sessionTokens 以反映压缩后的实际 token 数
+          sessionTokens = compactResult.estimatedTokens;
+
           // Hook: onPostCompact
           hooks.onPostCompact?.(compactResult);
-          yield { type: "llm_chunk", agent, content: `\n🧹 ${compactResult.summary}\n` } as TuiEvent;
+          // 不再 yield llm_chunk — compaction 事件本身会在 reducer 中创建 system 消息
           yield {
             type: "compaction",
             compactedCount: compactResult.compactedCount,

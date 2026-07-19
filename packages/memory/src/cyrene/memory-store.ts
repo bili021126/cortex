@@ -257,7 +257,7 @@ export class MemoryStoreManager {
   }
 
   async addL2(input: L2Input): Promise<L2Memory> {
-    return this.addL2Memory(input)
+    return await this.addL2Memory(input)
   }
 
   async updateL2RecallStats(id: string, delta = 1): Promise<void> {
@@ -494,6 +494,7 @@ export class MemoryStoreManager {
     const shouldCreateResolved = resolution.actions.createResolvedMemory && Boolean(resolution.resolvedSummary?.trim())
     if (shouldCreateResolved) {
       const resolved: L2Memory = {
+         
         content: resolution.resolvedSummary!.trim(),
         triggerText: resolution.reason,
         sourceConversationId: newMemory.sourceConversationId || oldMemory.sourceConversationId,

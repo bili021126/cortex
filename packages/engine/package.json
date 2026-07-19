@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -b tsconfig.src.json --force && node -e \"const fs=require('fs');fs.cpSync('src/core/worker-script.mjs','dist/core/worker-script.mjs');const b='node_modules/better-sqlite3/build/Release/better_sqlite3.node';if(fs.existsSync(b))fs.cpSync(b,'dist/better_sqlite3.node')\"",
     "dev": "tsc -p tsconfig.src.json --watch",
-    "typecheck": "tsc -p tsconfig.src.json",
+    "typecheck": "tsc -p tsconfig.src.json --noEmit",
     "lint": "eslint src/",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -30,7 +30,6 @@
     "@cortex/memory": "workspace:*",
     "@cortex/memory-store": "workspace:*",
     "@cortex/notification": "workspace:*",
-    "@cortex/pattern-extractor": "workspace:*",
     "@cortex/platform": "workspace:*",
     "@cortex/plugin-runner": "workspace:*",
     "@cortex/prompt-kit": "workspace:*",

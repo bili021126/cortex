@@ -10,6 +10,8 @@ import { ReplanManager, findAllMatchingAgents, ClaimStep, SpawnStep, RlmExecuteS
 import { isTestEnv } from "@cortex/config";
 import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
+// 原则五（统一可观测）：指标走正式遥测通道，禁止裸 console
+import { recordTelemetry } from "@cortex/telemetry";
 
 /** MemoryStore 维护接口——替代 as any 类型守卫 */
 interface Maintainable { maintain(): unknown }
@@ -184,7 +186,7 @@ export class Scheduler implements IScheduler {
 
     // FIX-06: 定期维护记忆存储
     if (this._memoryStore && typeof (this._memoryStore as Maintainable).maintain === "function") {
-      try { await (this._memoryStore as Maintainable).maintain(); } catch { console.error(`[telemetry] scheduler.maintain_failed`); }
+      try { await (this._memoryStore as Maintainable).maintain(); } catch { void recordTelemetry("scheduler.maintain_failed", 1); }
     }
 
     // 仿真层检查：高风险计划建议重规划
@@ -194,13 +196,14 @@ export class Scheduler implements IScheduler {
         currentState: {},
         constraints: [],
       };
-      console.error(`[telemetry] scheduler.sim_check nodes=${simInput.planNodes.length}`);
+      void recordTelemetry("scheduler.sim_check", simInput.planNodes.length);
     }
 
     // 执行结束——清零 AgentTracker
     agentTracker.reset();
 
-    // MemoryStore endSession 已迁移至 ShutdownWarden（统一管理 shutdown 生命周期）
+    // MemoryStore endSession 由 LifecycleManager + ShutdownOrchestrator 统一管理
+    //（原 ShutdownWarden 已移除）
 
     const durationMs = Date.now() - startTime;
     const allNodes = this.board.getAllNodes();
@@ -229,8 +232,6 @@ export class Scheduler implements IScheduler {
       notificationType: "FYI",
     });
 
-    console.error(`[TRACE write_file] dispatch node: ${nodeId} type=${node.type} agent=${(node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type}`);
-
     let result: NodeResult;
     try {
       if (node.needsMultiPerspective) {
@@ -249,7 +250,11 @@ export class Scheduler implements IScheduler {
     if (!result.success) {
       const reason = result.output ?? result.error ?? "unknown";
       const agentType = (node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type;
-      console.error(`[telemetry] scheduler.replan agent=${agentType} nodeType=${node.type} reason=${reason.slice(0, 80)} attempt=${this.replanManager.getReplanCount(node.id) + 1}`);
+      void recordTelemetry("scheduler.replan", this.replanManager.getReplanCount(node.id) + 1, [
+        { key: "agent", value: String(agentType) },
+        { key: "nodeType", value: node.type },
+        { key: "reason", value: reason.slice(0, 80) },
+      ]);
       this.replanManager.enqueue(node, reason);
     }
 

@@ -64,6 +64,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
   const len = Math.min(a.length, b.length);
   for (let i = 0; i < len; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     dot += a[i]! * b[i]!;
   }
   return dot; // 假设已归一化，dot ∈ [-1, 1]
@@ -135,10 +136,14 @@ export class HybridRetriever {
     const { alpha, beta } = this.config;
     const results: HybridScoreResult[] = [];
     for (let i = 0; i < candidates.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const hybrid = alpha * bm25Norm[i]! + beta * cosNorm[i]!;
       results.push({
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         entry: candidates[i]!,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         bm25Score: rawBm25[i]!,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         vectorScore: cosScores[i]!,
         hybridScore: hybrid,
       });
@@ -173,6 +178,7 @@ export class HybridRetriever {
 
       // 如果裁切后为空，至少保留 top-1（避免空结果）
       if (filtered.length === 0 && fine.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         return [fine[0]!];
       }
 
@@ -213,6 +219,7 @@ export class HybridRetriever {
     if (results.length === 0) return;
 
     // 取被保留条目中的最低分作为观察值
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const observedMin = results[results.length - 1]!.hybridScore;
 
     // 精排结果少于 3 条时，向更宽松方向调整

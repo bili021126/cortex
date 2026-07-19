@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/scheduler — 烟雾测试
  * 验证核心调度接口导出完整性。

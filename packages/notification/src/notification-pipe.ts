@@ -263,6 +263,7 @@ export class NotificationPipe {
       // 检查时间窗口
       const rule = this.mergeRules.find((r) => r.groupBy === "mergeKey");
       const windowMs = rule?.windowMs ?? 300_000;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const firstTimestamp = events[0]!.timestamp;
 
       // @fix N-04 — 移除 `events.length > 0` 恒真条件，仅依赖时间窗口 flush
@@ -287,8 +288,11 @@ export class NotificationPipe {
     const merged: MergedNotification = {
       mergeKey: key,
       events: [...events],
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       primary: events[0]!,
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       windowStart: events[0]!.timestamp,
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       windowEnd: events[events.length - 1]!.timestamp,
     };
 

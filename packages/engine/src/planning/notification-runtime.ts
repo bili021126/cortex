@@ -147,7 +147,7 @@ export class NotificationRuntime {
       this.observer.emit({
         type: PipelineEventType.ErrorReported,
         priority: PipelinePriority.NORMAL,
-        payload: { message: `[NotificationRuntime] 发送通知失败: ${String(e).slice(0, 200)}` },
+        payload: { source: "NotificationRuntime", severity: "warn", error: `发送通知失败: ${String(e).slice(0, 200)}` },
         timestamp: Date.now(),
         notificationType: "WARNING",
       });

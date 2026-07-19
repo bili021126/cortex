@@ -15,7 +15,7 @@
  * @since v3 — Claude Code 对标：Inline Diff
  */
 
-import { style, StyleCode, ColorCode } from "./ansi.js";
+import { ansiTheme } from "../theme/adapter-ansi.js";
 
 // ═══════════════════════════════════════════════════════════
 // §1 类型定义
@@ -66,22 +66,22 @@ function parseDiff(diffText: string): DiffLine[] {
 // §3 渲染
 // ═══════════════════════════════════════════════════════════
 
-/** 单行着色 */
+/** 单行着色（消费 Design Token） */
 function colorizeLine(line: DiffLine, maxWidth: number): string {
   const text = line.text.slice(0, maxWidth);
   switch (line.type) {
     case "add":
-      return style(text, ColorCode.green);
+      return ansiTheme.success(text);
     case "remove":
-      return style(text, ColorCode.red);
+      return ansiTheme.error(text);
     case "header":
-      return style(text, StyleCode.bold);
+      return ansiTheme.bold(text);
     case "file_header":
-      return style(text, StyleCode.bold + ColorCode.yellow);
+      return ansiTheme.warning(text);
     case "hunk":
-      return style(text, ColorCode.cyan);
+      return ansiTheme.info(text);
     default:
-      return style(text, StyleCode.dim);
+      return ansiTheme.textMuted(text);
   }
 }
 

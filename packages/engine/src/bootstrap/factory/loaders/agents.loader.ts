@@ -8,7 +8,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveConfigDataDir, loadConfigDomain, type ConfigFileReader } from "@cortex/config";
-import type { CortexAgentsConfig, AgentDefinition } from "../types.js";
+import type { CortexAgentsConfig, AgentManifest } from "../types.js";
 
 /** 基于 Node fs 的文件读取器 */
 const readFileNode: ConfigFileReader = (fp: string) => fs.readFileSync(fp, "utf-8");
@@ -26,9 +26,9 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
   // ── 加载各配置域 ──────────────────────────────
 
   // 1. Agent 定义（必需）
-  let agentsRaw: Record<string, AgentDefinition>;
+  let agentsRaw: Record<string, AgentManifest>;
   try {
-    const loaded = loadConfigDomain<Record<string, AgentDefinition>>(
+    const loaded = loadConfigDomain<Record<string, AgentManifest>>(
       "agents",
       readFileNode,
       dataDir,
@@ -202,7 +202,7 @@ function _validateStructure(config: CortexAgentsConfig): CortexAgentsConfig {
 
   // 校验每个 Agent 定义
   for (const [id, agent] of Object.entries(config.agents)) {
-    _validateAgent(id, agent as AgentDefinition);
+    _validateAgent(id, agent as AgentManifest);
   }
 
   // 校验 eventRouting
@@ -214,7 +214,7 @@ function _validateStructure(config: CortexAgentsConfig): CortexAgentsConfig {
 }
 
 /** 校验单个 Agent 定义 */
-function _validateAgent(id: string, agent: AgentDefinition): void {
+function _validateAgent(id: string, agent: AgentManifest): void {
   const prefix = `agents.json → agents.${id}`;
 
   if (!agent.type) {
@@ -251,7 +251,7 @@ function _validateAgent(id: string, agent: AgentDefinition): void {
 /** 解析 prompt 文件引用，将文件内容注入到内联字段 */
 function _resolvePromptFiles(config: CortexAgentsConfig, projectRoot: string): void {
   for (const [_id, agent] of Object.entries(config.agents)) {
-    const a = agent as AgentDefinition;
+    const a = agent as AgentManifest;
 
     // systemPrompt
     if (a.systemPromptFile) {
@@ -311,7 +311,7 @@ import type { PromptManager } from "../../../core/prompt-manager.js";
  * - 渲染后 PromptValidator 至少检查 system prompt 非空
  */
 export async function enhancePrompts(
-  definitions: AgentDefinition[],
+  definitions: AgentManifest[],
   promptManager: PromptManager,
 ): Promise<void> {
   for (const a of definitions) {

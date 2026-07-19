@@ -13,7 +13,7 @@
  */
 
 import type { ILifecycle } from "@cortex/shared";
-import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type IPipelineObserver } from "@cortex/shared";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 
 /** 生命周期 phase 映射 */
@@ -57,7 +57,7 @@ export class LifecycleManager {
     // 通过 PipelineObserver 发射（L1 管道）
     const transition = this._toTransition(event, detail);
     if (transition) {
-      const obsEvent: ObservableEvent = {
+      const obsEvent = {
         type: PipelineEventType.ExecLifecyclePhaseChanged,
         priority: transition.phase === "component_error"
           ? PipelinePriority.HIGH
@@ -65,7 +65,7 @@ export class LifecycleManager {
         payload: transition,
         timestamp: Date.now(),
         notificationType: transition.phase === "component_error" ? "WARNING" : "FYI",
-      };
+      } as const;
       if (this._observer) {
         this._observer.emit(obsEvent);
       }
@@ -179,7 +179,13 @@ export class LifecycleManager {
     }
 
     for (const entry of reversed) {
-      try { entry.component.dispose(); } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); /* dispose 不抛错 */ }
+      // dispose 带 5s 超时保护。注意：仅对 async dispose 有效，同步死循环仍阻塞事件循环。
+      try {
+        await Promise.race([
+          Promise.resolve().then(() => entry.component.dispose()),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('dispose timeout')), 5_000)),
+        ]);
+      } catch (err) { DegradationBoundary.handle(err, 'lifecycle-manager', 'trace'); }
     }
 
     this._phase = "shutdown";

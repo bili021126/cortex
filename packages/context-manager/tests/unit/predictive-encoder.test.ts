@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/context-manager — PredictiveEncoder 单元测试
  *

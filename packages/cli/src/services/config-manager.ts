@@ -96,13 +96,17 @@ export class ConfigManager {
     let current: unknown = this.config;
     for (let i = 0; i < parts.length - 1; i++) {
       if (current == null || typeof current !== "object") return;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const next = (current as Record<string, unknown>)[parts[i]!];
       if (next == null || typeof next !== "object") {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         (current as Record<string, unknown>)[parts[i]!] = {};
       }
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       current = (current as Record<string, unknown>)[parts[i]!];
     }
     if (current != null && typeof current === "object") {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       (current as Record<string, unknown>)[parts[parts.length - 1]!] = value;
     }
   }

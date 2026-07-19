@@ -2,7 +2,7 @@
  * export-cyrene-memories.ts —— 将 cyrene-memory.db 全量导出为 Markdown
  * 用法: npx tsx scripts/export-cyrene-memories.ts [输出路径]
  */
-import { MemoryStore } from "../packages/engine/dist/memory/memory-store.js";
+import { MemoryStore } from "@cortex/memory-store";
 import * as path from "node:path";
 import * as fs from "node:fs";
 

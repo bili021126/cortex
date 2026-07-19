@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { ChatLog } from "../../src/renderer/chat-log.js";
+import { ChatLog } from "../../src/tui/renderer/chat-log.js";
 
 describe("ChatLog（纯追加模式）", () => {
   it("空 ChatLog 消息列表为空", () => {

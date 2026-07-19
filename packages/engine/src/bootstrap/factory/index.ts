@@ -8,7 +8,7 @@
 export { bootstrap } from "./bootstrap.js";
 
 export type {
-  AgentDefinition,
+  AgentManifest,
   EventRoutingConfig,
   CommitteeRule,
   RoundtableTemplate,

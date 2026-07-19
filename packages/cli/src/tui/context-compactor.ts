@@ -95,6 +95,7 @@ function keepBoundary(messages: LlmMessage[], keepTurns: number): number {
   // 从末尾向前数 keepTurns 轮 user 消息
   let userCount = 0;
   for (let i = messages.length - 1; i >= 1; i--) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (messages[i]!.role === "user") {
       userCount++;
       if (userCount >= keepTurns) return i;
@@ -179,11 +180,13 @@ function compactL3(
   while (i < messages.length) {
     // system prompt 或保留区之后的消息不压缩
     if (i === 0 || i >= keepIdx) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       result.push(messages[i]!);
       i++;
       continue;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const m = messages[i]!;
     // 查找 assistant(tool_calls) → tool 对
     if (
@@ -197,9 +200,12 @@ function compactL3(
       // 收集紧随其后的 tool 结果消息
       const toolResults: string[] = [];
       let j = i + 1;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       while (j < messages.length && messages[j]!.role === "tool") {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const toolCallId = messages[j]!.tool_call_id;
         if (toolCallId && callIds.has(toolCallId)) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const summary = (messages[j]!.content ?? "").slice(0, 100);
           toolResults.push(summary);
           j++;
@@ -220,6 +226,7 @@ function compactL3(
       continue;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     result.push(messages[i]!);
     i++;
   }
@@ -250,6 +257,7 @@ async function compactL4(
     const compressed = keepIdx - 1;
     return {
       messages: [
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         messages[0]!, // system prompt
         { role: "assistant" as const, content: `[对话摘要] ${summary}` },
         ...messages.slice(keepIdx), // 保留区
@@ -313,6 +321,7 @@ export async function compactMessages(
   const summaryParts: string[] = [];
 
   // 无 system prompt 或消息太少，不压缩
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   if (messages.length < 2 || messages[0]!.role !== "system") {
     return {
       messages,
@@ -404,9 +413,12 @@ export async function compactMessages(
 /** 修复压缩后可能破坏的 user/assistant 交替规则 */
 function _fixRoleAlternation(messages: LlmMessage[]): LlmMessage[] {
   if (messages.length < 3) return messages;
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const result: LlmMessage[] = [messages[0]!];
   for (let i = 1; i < messages.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const prev = result[result.length - 1]!;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const curr = messages[i]!;
     if (curr.role === "tool") { result.push(curr); continue; }
     if (prev.role === curr.role) {

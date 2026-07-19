@@ -38,6 +38,7 @@ export function syntheticTaskTree(nodeCount: number, parentId?: string): TaskNod
   ];
 
   for (let i = 0; i < nodeCount; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const t = templates[i % templates.length]!;
     const node = syntheticTaskNode({
       parentId: prevId,
@@ -99,7 +100,9 @@ export function generateSyntheticMemories(
   for (let i = 0; i < count; i++) {
     entries.push({
       kind,
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       summary: templates[i % templates.length]!,
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       agentType: AGENT_TYPES[i % AGENT_TYPES.length]!,
     });
   }

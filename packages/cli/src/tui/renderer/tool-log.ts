@@ -64,6 +64,7 @@ export class ToolLogRenderer {
     if (nodeId) {
       const pc = this.pending.get(nodeId);
       if (!pc) return;
+      // eslint-disable-next-line no-useless-assignment
       duration = duration ?? (Date.now() - pc.startTime);
       this.pending.delete(nodeId);
     }

@@ -155,6 +155,7 @@ export class WorldbookManager {
       if (e.enabled && !e.permanent) this.state.set(e.id, { activation: 0, userSilence: 0, modelSilence: 0 });
     }
 
+    // eslint-disable-next-line no-console
     console.log(`[Worldbook] loaded ${allEntries.length} entries from ${files.length} files`);
   }
 
@@ -172,6 +173,7 @@ export class WorldbookManager {
     let i = 0;
 
     while (i < lines.length) {
+       
       const line = lines[i]!.trim();
       if (!line.startsWith("## ")) { i++; continue }
 
@@ -185,6 +187,7 @@ export class WorldbookManager {
       let linkTriggers: string[] = [];
 
       while (i < lines.length) {
+         
         const metaLine = lines[i]!.trim();
 
         if (metaLine.startsWith("- 触发词:") || metaLine.startsWith("- 触发词：")) {
@@ -226,6 +229,7 @@ export class WorldbookManager {
       const contentLines: string[] = [];
       while (i < lines.length) {
         const cl = lines[i];
+         
         if (cl!.trim().startsWith("## ") || cl!.trim() === "---") break;
         contentLines.push(cl ?? "");
         i++;
@@ -320,8 +324,10 @@ export class WorldbookManager {
     }
 
     if (this.debug && changed.length > 0) {
+      // eslint-disable-next-line no-console
       console.log(`[Worldbook/DMAE] update: ${changed.length} entries changed`);
       for (const c of changed.slice(0, 12)) {
+        // eslint-disable-next-line no-console
         console.log(`  ${c.id}: ${c.aOld.toFixed(1)} → ${c.aNew.toFixed(1)}  (${c.reason})`);
       }
     }

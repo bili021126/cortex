@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/scheduler - E2E integration tests
  * Covers: TaskBoard -> topologicalSort -> AgentPool -> PipelineObserver

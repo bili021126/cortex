@@ -10,41 +10,40 @@
 
 import { AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK, AgentType, type AgentType as AgentTypeEnum } from "@cortex/shared";
 import type { ReplMode } from "../types.js";
-import { style, terminalWidth, StyleCode } from "./ansi.js";
+import { terminalWidth } from "./ansi.js";
+import { ansiTheme, BOLD, DIM, fg24, RESET } from "../theme/adapter-ansi.js";
+import { defaultTokens } from "../theme/tokens.js";
+import { getCharacterColor } from "../theme/character-theme.js";
 
-/** 模式标签 */
-const MODE_LABELS: Record<ReplMode, string> = {
-  chat: "✨ 智能",
-  talk: "🗣 闲聊",
-  party: "👥 群聊",
-  plan: "📋 规划",
-  command: "⌨ 命令",
-};
-
-/** 多人头部标签映射 */
+/** 多人模式标签映射（token 层不覆盖的额外标签） */
 const MULTI_MODE_LABELS: Record<string, string> = {
   "talk-trio": "👥 三人",
   "party": "👥 群聊",
 };
 
-/** 渲染单角色头的行 */
+/** 渲染单角色头的行（消费 Design Token） */
 function renderSingleLine(agent: AgentTypeEnum, mode: ReplMode, width: number): string[] {
   const w = Math.min(width, 80);
   const display = AGENT_DISPLAY_BY_TYPE[agent] ?? AGENT_DISPLAY_FALLBACK;
-  const leftPart = `${display.emoji} ${style(display.name, StyleCode.bold)} ${style(`[${agent}]`, StyleCode.dim)} — ${style(display.signature, StyleCode.dim)}`;
-  const rightPart = MODE_LABELS[mode];
+  const charColor = getCharacterColor(agent);
+  const nameStyled = `${BOLD}${fg24(charColor.primary)}${display.name}${RESET}`;
+  const tagStyled = ansiTheme.dim(`[${agent}]`);
+  const sigStyled = ansiTheme.dimSecondary(display.signature);
+  const leftPart = `${display.emoji} ${nameStyled} ${tagStyled} — ${sigStyled}`;
+  const rightPart = defaultTokens.typography.modeLabels[mode] ?? mode;
   const spacer = " ".repeat(Math.max(1, w - leftPart.length - rightPart.length));
   return [leftPart + spacer + rightPart];
 }
 
-/** 渲染多人角色头的行 */
+/** 渲染多人角色头的行（消费 Design Token） */
 function renderMultiLine(agents: AgentTypeEnum[], modeLabel: string, width: number): string[] {
   const w = Math.min(width, 80);
   const parts = agents.map(a => {
     const d = AGENT_DISPLAY_BY_TYPE[a] ?? AGENT_DISPLAY_FALLBACK;
-    return `${d.emoji} ${style(d.name, StyleCode.bold)}`;
+    const cc = getCharacterColor(a);
+    return `${d.emoji} ${BOLD}${fg24(cc.primary)}${d.name}${RESET}`;
   });
-  const leftPart = parts.join(` ${style("+", StyleCode.dim)} `);
+  const leftPart = parts.join(` ${ansiTheme.dim("+")} `);
   const rightPart = MULTI_MODE_LABELS[modeLabel] ?? modeLabel;
   const spacer = " ".repeat(Math.max(1, w - leftPart.length - rightPart.length));
   return [leftPart + spacer + rightPart];
@@ -94,11 +93,13 @@ export const personaHeader = new PersonaHeader();
 export function renderAgentTransition(from: AgentTypeEnum, to: AgentTypeEnum): void {
   const fromDisplay = AGENT_DISPLAY_BY_TYPE[from] ?? AGENT_DISPLAY_FALLBACK;
   const toDisplay = AGENT_DISPLAY_BY_TYPE[to] ?? AGENT_DISPLAY_FALLBACK;
+  const fromColor = getCharacterColor(from);
+  const toColor = getCharacterColor(to);
 
   process.stdout.write(
-    style(`${fromDisplay.emoji} ${fromDisplay.name}`, StyleCode.dim) +
+    `${DIM}${fg24(fromColor.dim)}${fromDisplay.emoji} ${fromDisplay.name}${RESET}` +
     " → " +
-    style(`${toDisplay.emoji} ${toDisplay.name}`, StyleCode.bold) +
-    " " + style("角色切换", StyleCode.dim) + "\n",
+    `${BOLD}${fg24(toColor.primary)}${toDisplay.emoji} ${toDisplay.name}${RESET}` +
+    " " + ansiTheme.dim("角色切换") + "\n",
   );
 }

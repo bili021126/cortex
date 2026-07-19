@@ -13,13 +13,12 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@cortex/shared": "workspace:*",
     "@cortex/tools": "workspace:*"
   },
   "devDependencies": {

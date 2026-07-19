@@ -70,7 +70,7 @@ export interface FixedRetryOptions {
    * retryableErrors: [RateLimitError, ServiceUnavailableError]
    * ```
    */
-  retryableErrors?: Array<{ new (...args: unknown[]): Error }>;
+  retryableErrors?: Array<{ new (...args: never[]): Error }>;
 
   /**
    * 自定义 shouldRetry 钩子。
@@ -133,7 +133,7 @@ export class FixedRetry implements IRetryPolicy {
   readonly maxDelayMs?: number;
 
   /** 可重试的异常类白名单 */
-  private readonly _retryableErrors: Array<{ new (...args: unknown[]): Error }>;
+  private readonly _retryableErrors: Array<{ new (...args: never[]): Error }>;
 
   /** 自定义 shouldRetry 钩子 */
   private readonly _shouldRetryHook?: (

@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { createLogger, LogLevel, configureRootLogger, Logger, DefaultFormatter } from "../src/index.js";
 import type { LogEntry } from "../src/types.js";

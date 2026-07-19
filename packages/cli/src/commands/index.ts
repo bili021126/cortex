@@ -58,6 +58,7 @@ export class CommandRegistry implements ICommandDispatcher {
       return { code: 1, output: "未指定命令。输入 'cortex help' 查看可用命令。" };
     }
 
+     
     const cmdName = args[0]!;
     const cmd = this.find(cmdName);
 
@@ -68,6 +69,7 @@ export class CommandRegistry implements ICommandDispatcher {
     // 解析子命令
     const subArgs = args.slice(1);
     if (cmd.subcommands && subArgs.length > 0) {
+       
       const subName = subArgs[0]!;
       const sub = cmd.subcommands[subName];
       if (sub) {
@@ -90,6 +92,7 @@ export class CommandRegistry implements ICommandDispatcher {
     const remaining: string[] = [];
 
     for (let i = 0; i < args.length; i++) {
+       
       const arg = args[i]!;
 
       if (arg.startsWith("--")) {

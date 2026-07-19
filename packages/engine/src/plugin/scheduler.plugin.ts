@@ -167,7 +167,7 @@ export class SchedulerPlugin implements EnginePlugin {
         observer.emit({
           type: PipelineEventType.ErrorReported,
           priority: PipelinePriority.NORMAL,
-          payload: { message: `[Scheduler] ${agentType} Agent wakeup 失败（将跳过注册）: ${e instanceof Error ? e.message : String(e)}` },
+          payload: { source: "scheduler.plugin", severity: "warn", error: `${agentType} Agent wake up 失败（跳过注册）: ${e instanceof Error ? e.message : String(e)}` },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });

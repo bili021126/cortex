@@ -8,8 +8,10 @@
 
 import * as fs from "fs"
 import * as path from "path"
-import { callLLM, loadModelSettingsFromFile, extractJsonArray, LLMConfig } from "./llm-adapter.js"
-import { MemoryCandidate, L0_FIELD_DESCRIPTIONS, MemoryJudgeTurn } from "./memory-types.js"
+import type { LLMConfig } from "./llm-adapter.js";
+import { callLLM, loadModelSettingsFromFile, extractJsonArray } from "./llm-adapter.js"
+import type { MemoryCandidate, MemoryJudgeTurn } from "./memory-types.js";
+import { L0_FIELD_DESCRIPTIONS } from "./memory-types.js"
 
 const DEFAULT_MODEL_SETTINGS: LLMConfig = {
   provider: "DeepSeek（深度求索）",
@@ -96,6 +98,7 @@ export class MemoryJudge {
     turns: MemoryJudgeTurn[],
     conversationId: string,
   ): Promise<MemoryCandidate[]> {
+    // eslint-disable-next-line no-console
     console.log(`[MemoryJudge] 分析最近 ${turns.length} 轮对话...`)
     try {
       const settings = loadSettings()
@@ -200,10 +203,12 @@ export class MemoryJudge {
         .filter((item) => item.layer !== "L0" || (item.certainty === "explicit" && item.attribution === "user_explicit"))
 
       if (candidates.length === 0) {
+        // eslint-disable-next-line no-console
         console.log("[MemoryJudge] 本轮无值得记录的信息")
         return []
       }
 
+      // eslint-disable-next-line no-console
       console.log(`[MemoryJudge] 提取候选: ${candidates.length} 条（过滤后）`)
       return candidates
     } catch (error) {
@@ -217,7 +222,7 @@ export class MemoryJudge {
     assistantMessage: string,
     conversationId: string,
   ): Promise<MemoryCandidate[]> {
-    return this.judgeRecentTurns([{ userInput: userMessage, assistantReply: assistantMessage }], conversationId)
+    return await this.judgeRecentTurns([{ userInput: userMessage, assistantReply: assistantMessage }], conversationId)
   }
 }
 

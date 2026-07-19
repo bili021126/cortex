@@ -55,7 +55,7 @@ export class SpawnStep implements IDispatchStep {
           priority: PipelinePriority.HIGH,
           payload: {
             nodeId: node.id,
-            agentType,
+            agentType: agentType as AgentType,
             reason: `流控槽位等待超时 (${this._acquireTimeoutMs}ms)——同类型 Agent 全部阻塞`,
           },
           timestamp: Date.now(),
@@ -83,7 +83,7 @@ export class SpawnStep implements IDispatchStep {
       observer.emit({
         type: PipelineEventType.NodeSpawnFailed,
         priority: PipelinePriority.HIGH,
-        payload: { nodeId: node.id, agentType, reason: "pool_exhausted" },
+        payload: { nodeId: node.id, agentType: agentType as AgentType, reason: "pool_exhausted" },
         timestamp: Date.now(),
       });
       return {

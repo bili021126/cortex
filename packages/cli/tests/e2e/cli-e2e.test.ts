@@ -22,6 +22,7 @@ import { createInspectHandler } from "../../src/commands/inspect.js";
 import { ConfigManager } from "../../src/services/config-manager.js";
 import { getFormatter, detectDefaultFormat } from "../../src/formatters/index.js";
 import type { CommandContext, CommandResult } from "../../src/types.js";
+import type { ICommandContext } from "@cortex/shared";
 import {
   AgentType, AgentStatus,
   getAgentTags, getAgentToolPermissions,
@@ -30,7 +31,7 @@ import {
 
 // ── 辅助 ────────────────────────────────────────────
 
-function defaultCtx(overrides: Partial<CommandContext> = {}): CommandContext {
+function defaultCtx(overrides: Partial<CommandContext> = {}): CommandContext & Record<string, unknown> {
   return { format: "text", quiet: false, verbose: false, rawOptions: {}, ...overrides };
 }
 
@@ -116,7 +117,7 @@ describe("cortex help (CommandRegistry)", () => {
     });
     const result = await r.dispatch(["a", "list"], defaultCtx({ format: "json" }));
     expect(called).toBe(true);
-    expect(result.success).toBe(true);
+    expect(result.code).toBe(0);
   });
 });
 
@@ -307,16 +308,15 @@ describe("命令注册表边界", () => {
   it("dispatch 未知命令返回失败", async () => {
     const r = new CommandRegistry();
     const result = await r.dispatch(["no-such-command"], defaultCtx());
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("未知");
+    expect(result.code).toBe(1);
+    expect(result.output).toContain("未知");
   });
 
   it("dispatch 空命令返回失败并要求 help", async () => {
     const r = new CommandRegistry();
     const result = await r.dispatch([], defaultCtx());
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("未指定命令");
-    expect(result.exitCode).toBe(1);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain("未指定命令");
   });
 
   it("getCommandNames 返回已注册名称列表", () => {

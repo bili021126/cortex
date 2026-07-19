@@ -50,6 +50,7 @@ export class ColorFormatter implements Formatter {
 
     // 彩色表头
     const headerLine = headers
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       .map((h, i) => `${Colors.bold}${Colors.white}${h.padEnd(colWidths[i]!)}${Colors.reset}`)
       .join("  ");
 
@@ -59,6 +60,7 @@ export class ColorFormatter implements Formatter {
 
     const dataLines = rows.map((r) =>
       r.map((cell, i) => {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const val = (cell ?? "").padEnd(colWidths[i]!);
         // 根据语义染色
         if (i === 0) return `${Colors.cyan}${val}${Colors.reset}`;

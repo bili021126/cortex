@@ -47,5 +47,5 @@ export type {
 // ── 治理→记忆适配器 ─────────────────────────────
 export { syncGovernanceToMemory } from "./governance-memory.js";
 
-// ── 记忆-现实一致性校验层（从 @cortex/consistency 迁入）──
+// ── 记忆-现实一致性校验层（原 @cortex/consistency，v3.4 迁入 governance）──
 export * from "./consistency/index.js";

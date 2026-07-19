@@ -62,7 +62,6 @@ export type {
   AgentCapability,
 } from "./agent-protocols.js";
 
-export { SHARED_IDENTITY_ANCHOR } from "./agent.js";
 
 // ── Task 域 ──
 export type {
@@ -125,16 +124,12 @@ export type {
 export {
   PipelineEventType,
   PipelinePriority,
-  SPAN_PREFIX_TASK,
-  SPAN_PREFIX_CFG,
-  SPAN_PREFIX_SCENE,
-  SPAN_PREFIX_BOOT,
-  SPAN_PREFIX_SYS,
 } from "./infra.js";
 export type {
   EventPayloadMap,
   GovernanceEventPayload,
   ObservableEvent,
+  EmittableEvent,
   PipelineHandler,
   EmitMeta,
   IPipelineObserver,
@@ -199,9 +194,6 @@ export type {
 } from "./lifecycle.js";
 
 // ── Governance 域 ──
-export {
-  NAHIDA_DOC_TYPES,
-} from "./doc-registry.js";
 export type {
   DocType,
   DocStatus,
@@ -263,12 +255,6 @@ export {
   extractJsonBlock,
 } from "./json-utils.js";
 
-/** @internal — 零消费方，Core-3 移除 */
-export type {
-  KvStoreEntry,
-  KvStore,
-} from "./kv-store.js";
-
 export {
   IndexedRegistry,
 } from "./indexed-registry.js";
@@ -276,10 +262,6 @@ export type {
   IndexDefinition,
 } from "./indexed-registry.js";
 
-export {
-  ModificationType,
-  ReversibilityClass,
-} from "./modification-record.js";
 export type {
   FactAnchor,
   ModificationRecordItem,
@@ -326,23 +308,4 @@ export type { IntentClarification } from "./intent-clarification.js";
 // @governance 久岐忍 P1-3：外部端点缺少统一契约文档 → 已闭合
 // ============================================================
 
-// @backward-compat Core-2: 通配符 re-export 保留向下兼容性。Core-3 移除，消费方改用具名导入。
-export * from "./agent.js";
-export * from "./task.js";
-export * from "./memory.js";
-export * from "./toolkit.js";
-export * from "./cli-adapter.js";
-export * from "./infra.js";
-export * from "./skill-registry.js";
-export * from "./fs-adapter.js";
-export * from "./modification-record.js";
-export * from "./lifecycle.js";
-export * from "./doc-registry.js";
-export * from "./amendment.js";
-export * from "./tui-bridge.js";
-export * from "./indexed-registry.js";
-export * from "./id-utils.js";
-export * from "./context-policy.js";
-export * from "./file-lock-manager.js";
-export * from "./json-utils.js";
-export * from "./panorama-types.js";
+// @backward-compat Core-2: 通配符 re-export 已在 Core-3 移除。消费方已全部改用具名导入。

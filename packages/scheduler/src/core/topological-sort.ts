@@ -69,6 +69,7 @@ export function topologicalSort(nodes: TaskNode[], observer?: IPipelineObserver)
         type: PipelineEventType.SchedulerInvariantViolation,
         priority: PipelinePriority.CRITICAL,
         payload: {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           nodeId: nodes[0]!.id,
           message: msg,
         },

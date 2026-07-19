@@ -149,13 +149,11 @@ describe("黄金路径 7跳: Memory→Skill→Agent→Plan→Scheduler→Tool→
   });
 
   it("验证 PipelineObserver 事件链完整", { timeout: 120000 }, () => {
-    // 前序测试已收集 events，验证关键事件存在
-    const eventTypes = [
-      "scheduler.loop_start",
-      "node.start",
-    ];
+    // 前序测试已收集 events，验证节点生命周期关键事件存在。
+    // engine Scheduler 在 HIGH 优先级发 node.start / node.complete（本 observer 订阅 HIGH+NORMAL）。
+    const eventTypes = ["node.start", "node.complete"];
     for (const t of eventTypes) {
-      expect(events.some((e) => e.includes(t.replace("node.", "")) || e.includes(t))).toBe(true);
+      expect(events.some((e) => e === t)).toBe(true);
     }
   });
 });

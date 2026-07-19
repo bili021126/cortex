@@ -48,6 +48,8 @@ import { BM25Index } from "./bm25-index.js";
 import { DedupService } from "./dedup-service.js";
 import { WeightAger } from "./weight-ager.js";
 import { HybridRetriever, type HybridRetrievalConfig } from "./hybrid-retrieval.js";
+// 原则五（统一可观测）：热路径指标走正式遥测通道，禁止裸 console
+import { recordTelemetry } from "@cortex/telemetry";
 
 /**
  * MemoryStore —— 适配器（委托 @cortex/memory TransactionalMemoryStore 后端）。
@@ -251,7 +253,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       .update(input.summary + JSON.stringify(input.content_blob))
       .digest("hex");
 
-    const dup = await this._tryDedup(contentHash);
+    const dup = this._tryDedup(contentHash);
     if (dup) return dup;
 
     input.content_hash = contentHash;
@@ -338,8 +340,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     // ── 遥测：Memory 检索耗时 ──
     const t0 = Date.now();
     let results = await this._backend.read(backendQuery, mode);
-    // eslint-disable-next-line no-console
-    console.log(`[telemetry] memory.search_time_ms value=${Date.now() - t0} mode=${mode}`);
+    void recordTelemetry("memory.search_time_ms", Date.now() - t0, [{ key: "mode", value: mode }]).catch(() => {});
 
     // ── 适配器层过滤：30 天 TTL + 标记删除 ──
     const now = Date.now();
@@ -369,6 +370,11 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       });
     }
 
+    // ── 捕获后端原始 weight：混合检索会把 weight 覆写为 relevance 分，
+    //     而权重老化的持久化回写必须基于原始存储值，不能基于易失的 relevance 分（T3）──
+    const originalWeights = new Map<string, number>(results.map((m) => [m.id, m.weight]));
+    let hybridApplied = false;
+    
     // ── 混合检索增强（BM25 + 向量融合 + 贪心精排）──
     if (this._hybridEnabled && query.queryEmbedding && results.length > 0) {
       try {
@@ -385,23 +391,27 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
         // ④ 将 hybridScore 注入 weight 字段（类似分值语义）
         results = fineRanked.map((r) => ({ ...r.entry, weight: r.hybridScore * 10 }));
+        hybridApplied = true;
       } catch {
         this._emitDegraded("hybrid-retrieval", "混合检索失败，降级使用原始结果");
       }
     }
 
-    // ── 权重自然老化：每 7 天未访问衰减 5% ──
-    results = results.map((m: MemoryEntry) => {
-      // 如果是混合检索已赋值的高分，跳过老化
-      const daysSinceAccess = (now - m.lastAccessedAt) / 24 / 60 / 60 / 1000;
-      if (daysSinceAccess > 0) {
-        const aged = m.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
-        if (Math.abs(aged - m.weight) > 0.0001) {
-          return { ...m, weight: aged };
+    // ── 权重自然老化（排序用）：每 7 天未访问衰减 5% ──
+    //     混合检索已赋 relevance 分（hybridScore*10），排序不参与老化；
+    //     持久化回写在截取后单独进行（基于原始 weight，避免二次老化）(T3)
+    if (!hybridApplied) {
+      results = results.map((m: MemoryEntry) => {
+        const daysSinceAccess = (now - m.lastAccessedAt) / 24 / 60 / 60 / 1000;
+        if (daysSinceAccess > 0) {
+          const aged = m.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
+          if (Math.abs(aged - m.weight) > 0.0001) {
+            return { ...m, weight: aged };
+          }
         }
-      }
-      return m;
-    });
+        return m;
+      });
+    }
 
     // 按 weight 降序排列
     results.sort((a: MemoryEntry, b: MemoryEntry) => b.weight - a.weight);
@@ -411,12 +421,14 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       results = results.slice(0, resolvedLimit);
     }
 
-    // ── 异步回写老化 weight——不影响返回值 ──
+    // ── 异步回写老化 weight——基于后端原始 weight 派生（不使用排序/relevance 覆写值），
+    //     仅对截取后返回的条目回写，避免二次老化与 relevance 分污染持久层 (T3)──
     for (const entry of results) {
+      const origWeight = originalWeights.get(entry.id) ?? entry.weight;
       const daysSinceAccess = (now - entry.lastAccessedAt) / 24 / 60 / 60 / 1000;
       if (daysSinceAccess > 0) {
-        const agedWeight = entry.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
-        if (Math.abs(agedWeight - entry.weight) > 0.1) {
+        const agedWeight = origWeight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
+        if (Math.abs(agedWeight - origWeight) > 0.1) {
           try {
             // 读-改-写：set() 是整体替换语义，必须传完整条目、仅更新 weight，
             // 否则会把其他字段（content/embedding/时间戳）抹掉造成数据丢失。
@@ -603,8 +615,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           notificationType: "WARNING",
         });
       }).finally(() => {
-        // eslint-disable-next-line no-console
-        console.log(`[telemetry] memory.write_duration_ms value=${Date.now() - t0} operation=commit`);
+        void recordTelemetry("memory.write_duration_ms", Date.now() - t0, [{ key: "operation", value: "commit" }]).catch(() => {});
       });
     }
     return ok;
@@ -771,41 +782,21 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   private readonly _vectorCache = new Map<string, number[]>();
   private static readonly MAX_VECTOR_CACHE = 5_000;
 
-  /** SHA256 去重——优先查缓存，miss 时全表扫描（Core-3：统一使用 DedupService.exactMatch 替代内联实现） */
-  private async _tryDedup(contentHash: string): Promise<string | null> {
-    // 缓存命中
+  /** 内容去重——L1 适配层热缓存 → L2 后端 content_hash→id O(1) 索引（Core-3 T4：替代 O(n) 全表扫描） */
+  private _tryDedup(contentHash: string): string | null {
+    // L1: 适配层热缓存命中
     const cached = this._dedupCache.get(contentHash);
     if (cached) return cached;
-  
+    // L2: 后端 content_hash→id O(1) 索引
     try {
-      // Core-3: 增量去重索引——当前 O(n) 全量扫描在 10K+ 条目时有性能压力
-      // 优化方向：维护 content_hash → id 的持久化 B-tree 索引，写入 O(log n)
-      const all = await this._backend.read({}, "HCA");
-      const dupId = this._dedupService.exactMatch(contentHash, all);
+      const dupId = this._backend.findByContentHash(contentHash);
       if (dupId) {
         this._dedupCache.set(contentHash, dupId);
         return dupId;
       }
-      // 缓存未命中：预热缓存（O(n) 一次，后续 O(1)），超限时 LRU 淘汰
-      for (const e of all) {
-        if (e.content_hash) {
-          if (this._dedupCache.size >= MemoryStore.MAX_DEDUP_CACHE) {
-            const first = this._dedupCache.keys().next().value;
-            if (first !== undefined) this._dedupCache.delete(first);
-          }
-          this._dedupCache.set(e.content_hash, e.id);
-        }
-        if (e.embedding) {
-          if (this._vectorCache.size >= MemoryStore.MAX_VECTOR_CACHE) {
-            const first = this._vectorCache.keys().next().value;
-            if (first !== undefined) this._vectorCache.delete(first);
-          }
-          this._vectorCache.set(e.id, e.embedding);
-        }
-      }
       return null;
     } catch {
-      this._emitDegraded("dedup-content-hash", "SHA256去重扫描失败");
+      this._emitDegraded("dedup-content-hash", "内容哈希去重查询失败");
       return null;
     }
   }
@@ -813,7 +804,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   /** 向量相似去重——每次查询前刷新缓存，避免过期数据（Core-3：统一使用 DedupService.vectorDedup 替代内联实现） */
   private async _tryVectorDedup(newId: string, embedding: number[]): Promise<void> {
     try {
-      // M-06 修复：每次查询前从后端刷新 _vectorCache，避免过期缓存漏去重
+      // M-06 修复：每次查询前从后端刷新 _vectorCache，避免过期缓存漏去重（向量相似本属 O(n) 扫描，T4 不涉及）
       const all = await this._backend.read({}, "HCA");
       for (const e of all) {
         if (e.embedding) {

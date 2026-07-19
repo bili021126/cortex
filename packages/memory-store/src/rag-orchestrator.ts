@@ -11,8 +11,9 @@
 // ============================================================
 
 import type { IMemoryStore, MemoryEntry, MemoryQuery } from "@cortex/shared";
-import { LlmAdapter } from "@cortex/llm";
-import { ContextBuilder, type ContextBuildResult } from "./context-builder.js";
+import type { LlmAdapter } from "@cortex/llm";
+import type { ContextBuilder} from "./context-builder.js";
+import {   } from "./context-builder.js";
 
 // ─── 类型 ──────────────────────────────────────────────
 
@@ -145,4 +146,4 @@ export class RagOrchestrator {
       .filter((w) => w.length > 0);
     return words.slice(0, 20); // 最多 20 个关键词
   }
-}
+}

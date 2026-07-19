@@ -109,7 +109,9 @@ function recommendVersion(entries: DepEntry[]): { version: string; reason: strin
     return compareVersions(b[0], a[0]);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const bestVersion = sorted[0]![0];
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const bestCount = sorted[0]![1];
   const total = versions.length;
 
@@ -123,6 +125,7 @@ function compareVersions(a: string, b: string): number {
   const extractNum = (v: string): number => {
     const match = v.match(/(\d+)\.(\d+)\.(\d+)/);
     if (!match) return 0;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     return parseInt(match[1]!) * 10000 + parseInt(match[2]!) * 100 + parseInt(match[3]!);
   };
   return extractNum(b) - extractNum(a);
@@ -132,6 +135,7 @@ function getPkgId(filePath: string, projectRoot: string = cwd()): string {
   const rel = relative(projectRoot, filePath);
   if (rel === 'package.json') return 'root';
   const match = rel.match(/packages[\\/]([^\\/]+)/);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return match ? match[1]! : rel;
 }
 
@@ -242,6 +246,7 @@ function printHumanReport(groups: DepGroup[], filesScanned: number, totalDeps: n
   } else {
     console.log(`❌ 发现 ${drifts.length} 处版本漂移:\n`);
     for (let i = 0; i < drifts.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const drift = drifts[i]!;
       const rec = recommendVersion(drift.entries);
       const openMark = drift.hasOpenVersion ? ' [含开放版本 * / latest]' : '';
@@ -267,6 +272,7 @@ function printHumanReport(groups: DepGroup[], filesScanned: number, totalDeps: n
   for (const group of groups) {
     const depName = group.depName.padEnd(nameWidth);
     const count = String(group.entries.length).padEnd(countWidth);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const version = group.uniqueVersions.length === 1 ? group.uniqueVersions[0]! : '(多个版本)';
     const versionDisplay = version.padEnd(versionWidth);
     const pkgs = group.entries.map((e) => e.pkg).join(', ');

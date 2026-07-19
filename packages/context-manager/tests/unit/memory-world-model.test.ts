@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/context-manager — MemoryWorldModel 单元测试
  *

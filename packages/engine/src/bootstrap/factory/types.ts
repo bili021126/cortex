@@ -11,7 +11,7 @@ import type { RouteTableMap, MergeRule } from "@cortex/notification";
 // ─── cortex-agents.json 类型 ─────────────────────────
 
 /** 单个 Agent 定义 */
-export interface AgentDefinition {
+export interface AgentManifest {
   /** Agent 标识（如 "ganyu", "albedo"） */
   id: string;
   /** Agent 类型 */
@@ -108,7 +108,7 @@ export interface RoundtableTemplate {
 
 /** cortex-agents.json 顶层结构 */
 export interface CortexAgentsConfig {
-  agents: Record<string, AgentDefinition>;
+  agents: Record<string, AgentManifest>;
   eventRouting: EventRoutingConfig;
   /** 圆桌会议模板 */
   roundtableTemplates?: RoundtableTemplate[];
@@ -270,7 +270,7 @@ export interface CortexDocsConfig {
 /** Bootstrap 完整结果——所有组装好的运行时对象 */
 export interface BootstrapResult {
   /** Agent 定义列表（供 Scheduler 注册） */
-  agentDefinitions: AgentDefinition[];
+  agentDefinitions: AgentManifest[];
   /** 事件路由配置（供 NotificationPipe 加载） */
   eventRouting: EventRoutingConfig;
   /** 认知配置（供激活矩阵加载） */

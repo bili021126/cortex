@@ -45,7 +45,7 @@ export class PanoramaTracker {
     const rec: PhaseRecord = {
       phase, label, startTime: now, endTime: 0, durationMs: 0, detail,
     };
-    if (prev && prev.endTime === 0) {
+    if (prev?.endTime === 0) {
       prev.endTime = now;
       prev.durationMs = now - prev.startTime;
     }
@@ -71,6 +71,7 @@ export class PanoramaTracker {
         success: false, output: "", error: "", toolCalls: [], replanCount: 0,
       });
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const t = this.traces.get(nodeId)!;
       t.status = "claimed"; t.claimedAt = now;
     }

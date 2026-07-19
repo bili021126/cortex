@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/context-manager — ContextManager 行为契约测试
  *

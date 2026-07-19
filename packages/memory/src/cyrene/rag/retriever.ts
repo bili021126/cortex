@@ -6,7 +6,7 @@
 // ============================================================
 
 import type { RagMemoryEntry, SearchResult } from "./vectorstore.js"
-import { JsonVectorStore } from "./vectorstore.js"
+import type { JsonVectorStore } from "./vectorstore.js"
 import type { EmbeddingProvider } from "./embedding.js"
 
 interface TokenInfo {
@@ -138,8 +138,10 @@ export class HybridRetriever {
     }
     const scored = docs.map((doc, i) => {
       const queryWordsSet = new Set(queryTokenInfo.map((t) => t.word))
+       
       const relevantDocTokens = docTokensList[i]!.filter((t) => queryWordsSet.has(t.word))
       if (relevantDocTokens.length === 0) return { entry: doc, score: 0 }
+       
       return { entry: doc, score: bm25Score(queryTokenInfo, docTokensList[i]!, docFreq, totalDocs, avgDocLen) }
     })
     scored.sort((a, b) => b.score - a.score)

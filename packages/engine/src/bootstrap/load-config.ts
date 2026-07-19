@@ -2,7 +2,7 @@
 // @cortex/engine/bootstrap/load-config —— 配置加载 & 工具函数
 // ============================================================
 
-import { bootstrap, type AgentDefinition, type BootstrapResult } from "./factory/index.js";
+import { bootstrap, type AgentManifest, type BootstrapResult } from "./factory/index.js";
 import { setAgentRegistry, type MemoryQuery, type TaskNode } from "@cortex/shared";
 import { readFileSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -80,7 +80,7 @@ export const MEMORY_QUERY_REGISTRY: Map<string, MemoryQueryFn> = new Map([
 
 // ─── 注册表注入 ────────────────────────────────────
 
-export function injectRegistryFromConfig(definitions: AgentDefinition[]): void {
+export function injectRegistryFromConfig(definitions: AgentManifest[]): void {
   const tags: Record<string, readonly string[]> = {};
   const toolPermissions: Record<string, readonly string[]> = {};
   const allTags: string[] = [];

@@ -6,7 +6,7 @@
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bootstrapEngine } from "@cortex/engine";
-import { startWebUI } from "@cortex/tui";
+import { startWebUI } from "@cortex/cli";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "@cortex/platform";
 import { PipelinePriority } from "@cortex/shared";

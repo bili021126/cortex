@@ -181,6 +181,7 @@ export class FilePromptSource implements PromptSource {
       name: templateId,
       version: "1.0.0",
       blocks: [block],
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       tags: [agentName!],
       source: filePath,
     };

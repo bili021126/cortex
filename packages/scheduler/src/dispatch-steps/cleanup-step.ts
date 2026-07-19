@@ -43,7 +43,7 @@ export class CleanupStep implements IDispatchStep {
       observer.emit({
         type: PipelineEventType.PoolDestroyFailed,
         priority: PipelinePriority.HIGH,
-        payload: { agentType, instanceId, error: String(e).slice(0, 200) },
+        payload: { agentType: agentType as AgentType, instanceId, error: String(e).slice(0, 200) },
         timestamp: Date.now(),
       });
     }
@@ -56,7 +56,7 @@ export class CleanupStep implements IDispatchStep {
       observer.emit({
         type: PipelineEventType.NodeComplete,
         priority: PipelinePriority.HIGH,
-        payload: { nodeId: node.id, agentType, success: true as const, output: result.output },
+        payload: { nodeId: node.id, agentType: agentType as AgentType, success: true as const, output: result.output },
         timestamp: Date.now(),
       });
     }

@@ -37,15 +37,13 @@ export type {
 export { queryLoop, extractHistory, agentTalkPersona } from "./query-loop.js";
 
 // ─── 模式 ──────────────────────────────────────────
-export { chatMode } from "./modes/chat-mode.js";
 export { planMode } from "./modes/plan-mode.js";
 export type { PlanModeState } from "./modes/plan-mode.js";
 export { loadPlanState, savePlanState, clearPlanState, canTransition, reviewStatusToFsmState } from "./modes/plan-mode.js";
 export { extractWorkspacePath, formatPlanTree, displayClarification, clarifyAndConfirm } from "./modes/plan-utils.js";
 
 export { streamExecuteTools } from "./streaming-tool-executor.js";
-export { summarizeSubAgents, summarizeOne } from "./sub-agent-summarizer.js";
-export { processMultimodalInput, hasImagePaths } from "./multimodal-input.js";
+
 export { commandMode } from "./modes/command-mode.js";
 export { classifyIntent, parseAgentFromInput } from "./intent-router.js";
 export type { UserIntent } from "./intent-router.js";
@@ -116,3 +114,32 @@ export { WSGateway } from "./web/gateway.js";
 export { StateAggregator } from "./web/state-aggregator.js";
 export type { WebUIState, TaskNodeSnapshot, AgentStatusSnapshot, PipelineSnapshot } from "./web/state-aggregator.js";
 export { APIRouter } from "./web/api-router.js";
+
+// ─── Ink TUI (Phase 1) ─────────────────────────────
+export { startInkTui } from "./ink/ink-entry.js";
+export type { InkTuiOptions } from "./ink/ink-entry.js";
+export { App } from "./ink/app.js";
+export type { AppProps } from "./ink/app.js";
+export { StatusBar } from "./ink/status-bar.js";
+export type { StatusBarProps } from "./ink/status-bar.js";
+export { InputBar } from "./ink/input-bar.js";
+export type { InputBarProps } from "./ink/input-bar.js";
+export { AppContext, useAppContext, useSessionDispatch } from "./ink/app-context.js";
+export type { AppContextValue } from "./ink/app-context.js";
+export { sessionReducer, initialSessionState } from "./ink/session-reducer.js";
+export type { SessionState, SessionAction, SessionMessage, AppMode, TokenSnapshot } from "./ink/session-reducer.js";
+export { useEventBridge } from "./ink/hooks/use-event-bridge.js";
+export { ChatView } from "./ink/chat-view.js";
+export type { ChatViewProps } from "./ink/chat-view.js";
+export { TaskTree } from "./ink/task-tree.js";
+export type { TaskTreeProps } from "./ink/task-tree.js";
+export { SplashScreen } from "./ink/splash-screen.js";
+export type { SplashScreenProps } from "./ink/splash-screen.js";
+export { loadInkSession, saveInkSession, createAutoSaver, stateToHistory, historyToMessages } from "./ink/session-persistence.js";
+export { handleCommand } from "./ink/commands.js";
+export type { CommandResult } from "./ink/commands.js";
+export type { PlanState, TaskNodeView } from "./ink/session-reducer.js";
+export { PermissionPrompt } from "./ink/permission-prompt.js";
+export type { PermissionRequest, PermissionResult } from "./ink/permission-prompt.js";
+export { GroupView } from "./ink/group-view.js";
+export type { GroupViewProps } from "./ink/group-view.js";

@@ -76,6 +76,7 @@ function parseArgs(argv: string[]): CliOptions | null {
       return null;
     } else {
       if (!options.input) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         options.input = arg!;
       } else {
         console.error(`✗ 错误: 多余参数 "${arg}"`);

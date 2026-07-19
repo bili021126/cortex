@@ -15,7 +15,7 @@
 //   - 圆桌共识 (roundtable_consensus)
 // ============================================================
 
-import { PipelineEventType, PipelinePriority, type GovernanceEventPayload as SharedGovernanceEventPayload, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, type EmittableEvent, type GovernanceEventPayload as SharedGovernanceEventPayload, type IPipelineObserver } from "@cortex/shared";
 import { GOVERNANCE_EVENT_ROUTING } from "@cortex/config";
 import type { LoopStrategyRegistry } from "../core/loop-strategy-registry.js";
 import { HardVerificationGate, emitGateRejection } from "./hard-verification-gate.js";
@@ -114,7 +114,7 @@ export class GovernanceEventEmitter {
     const enrichedPayload = this._strategyRegistry
       ? { ...payload, strategyContext: this._strategyRegistry.getAdvisorContext() }
       : payload;
-    const event: ObservableEvent = {
+    const event = {
       type,
       priority: routing?.notificationType === "DECISION_REQUIRED"
         ? PipelinePriority.HIGH
@@ -123,6 +123,6 @@ export class GovernanceEventEmitter {
       timestamp: Date.now(),
       notificationType: routing?.notificationType ?? "FYI",
     };
-    this.observer.emit(event);
+    this.observer.emit(event as unknown as EmittableEvent);
   }
 }

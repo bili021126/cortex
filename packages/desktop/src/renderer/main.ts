@@ -35,7 +35,6 @@ function resolveAsset(assetPath: string): string {
   return new URL(clean, document.baseURI).href;
 }
 
-let interaction: InteractionController | null = null;
 let focus: MouseFocusController | null = null;
 let clickThrough: ClickThroughController | null = null;
 
@@ -53,10 +52,9 @@ const manager = new Live2DManager({
     new MouthSyncController(model);
     new SpeakingMotionController(model);
 
-    interaction = new InteractionController(canvas, model, manager.getHitAreaDefs(), {
+    new InteractionController(canvas, model, manager.getHitAreaDefs(), {
       onTrigger: (area) => console.log("[Cyrene] hit", area.name),
     });
-
     focus = new MouseFocusController(canvas, model);
     focus.focusCenter(true);
 
@@ -67,7 +65,7 @@ const manager = new Live2DManager({
   onError: (err) => console.error("[Cyrene] Failed to load model:", err),
 });
 
-manager.init();
+void manager.init();
 
 window.addEventListener("resize", () => {
   manager.resize(window.innerWidth, window.innerHeight);
@@ -100,7 +98,7 @@ canvas.addEventListener("pointerdown", (e) => {
   manager.pause();
   void window.cyrene.setInteractive(true);
   window.cyrene.setDragging(true);
-  try { (e.target as Element).setPointerCapture(e.pointerId); } catch {}
+  try { (e.target as Element).setPointerCapture(e.pointerId); } catch { /* 拖拽频繁时 setPointerCapture 可能抛错，忽略 */ }
 });
 
 canvas.addEventListener("pointermove", (e) => {
@@ -121,7 +119,7 @@ function finishDrag(e?: PointerEvent) {
   focus?.resume();
   window.cyrene.setDragging(false);
   clickThrough?.resume();
-  try { e && (e.target as Element).releasePointerCapture(e.pointerId); } catch {}
+  if (e) { try { (e.target as Element).releasePointerCapture(e.pointerId); } catch { /* 指针已释放时 releasePointerCapture 可能抛错，忽略 */ } }
 }
 
 canvas.addEventListener("pointerup", (e) => finishDrag(e));

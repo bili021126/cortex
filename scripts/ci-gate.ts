@@ -21,6 +21,8 @@
  *   // @ci: e2e          端到端测试，CI 跳过
  *   // @ci: manual       人工触发，永远不自动跑
  *   // @ci: contract     跨包接口契约验证，CI 必跑（与 unit 同级）
+ *   // @ci: stress       压力测试，重内存/长耗时，CI 跳过（单 worker 合跑会 OOM，需独立进程）
+ *   // @ci: benchmark    性能基准，CI 跳过（结果非断言，不做门禁）
  */
 
 import { execSync } from "node:child_process";
@@ -29,7 +31,7 @@ import { join, relative, resolve, dirname } from "node:path";
 
 // ─── 类型 ────────────────────────────────────────────────
 
-type CiTag = "unit" | "verify" | "contract" | "llm" | "integration" | "e2e" | "manual";
+type CiTag = "unit" | "verify" | "contract" | "llm" | "integration" | "e2e" | "manual" | "stress" | "benchmark";
 
 interface TestFile {
   path: string;
@@ -39,7 +41,7 @@ interface TestFile {
 // ─── 常量 ────────────────────────────────────────────────
 
 const ROOT = resolve(import.meta.dirname, "..");
-const CI_TAG_RE = /@ci\s*:\s*(unit|verify|contract|llm|integration|e2e|manual)/;
+const CI_TAG_RE = /@ci\s*:\s*(unit|verify|contract|llm|integration|e2e|manual|stress|benchmark)/;
 const TEST_FILE_RE = /\.test\.ts$/;
 
 // ─── 工具 ────────────────────────────────────────────────
@@ -154,11 +156,11 @@ async function main() {
 
   // ── 门禁栈：类型检查 → Lint → 修复验证 → 契约验证 → 单元测试 ──
   if (!dryRun) {
-    console.log("\n🔒 [门禁 1/4] tsc --noEmit 全量类型检查...");
+    console.log("\n🔒 [门禁 1/4] tsc -b 全量增量编译检查...");
     try {
-      const tscResult = run("npx", ["tsc", "--noEmit", "-p", "tsconfig.json"], ROOT);
+      const tscResult = run("npx", ["tsc", "-b", "tsconfig.json"], ROOT);
       if (!tscResult.ok) {
-        console.error("❌ tsc --noEmit 失败，阻断");
+        console.error("❌ tsc -b 失败，阻断");
         process.exit(1);
       }
       console.log("   ✅ 类型检查通过\n");
@@ -168,9 +170,9 @@ async function main() {
     }
 
     // ── 门禁 2/4：ESLint ──
-    console.log("\n🔒 [门禁 2/4] eslint packages/engine/src...");
+    console.log("\n🔒 [门禁 2/4] eslint packages/**/src — 全包检查...");
     try {
-      const eslintResult = run("npx", ["eslint", "packages/engine/src", "--max-warnings", "999"], ROOT);
+      const eslintResult = run("npx", ["eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
       if (!eslintResult.ok) {
         const problems = eslintResult.stdout.match(/✖ \d+ problems?/);
         console.error(`❌ eslint 失败${problems ? " — " + problems[0] : ""}`);
@@ -192,12 +194,14 @@ async function main() {
   // @ci 标签审计
   const untagged = all.filter((t) => !hasCiTag(t.path));
   if (untagged.length > 0) {
-    console.warn(
-      `\n⚠️  @ci 标签缺失 (${untagged.length} 个文件) — 默认视为 unit（渐进式推行，暂不断路）:`,
+    console.error(
+      `\n❌ @ci 标签缺失 (${untagged.length} 个文件) — 所有测试文件必须标注 @ci 标签:`,
     );
     for (const f of untagged) {
-      console.warn(`   📄 ${relative(ROOT, f.path)}`);
+      console.error(`   📄 ${relative(ROOT, f.path)}`);
     }
+    console.error("   修复: 在文件第一行添加 // @ci: unit | verify | contract | llm | integration | e2e | manual\n");
+    process.exit(1);
   }
 
   if (dryRun) {

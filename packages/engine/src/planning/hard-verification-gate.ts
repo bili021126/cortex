@@ -18,7 +18,7 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type GovernanceEventPayload, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type GovernanceEventPayload, type IPipelineObserver } from "@cortex/shared";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 
 // ─── 裁决类型 ─────────────────────────────────────
@@ -256,7 +256,7 @@ export function emitGateRejection(
   result: HardGateResult,
 ): void {
   const denialReasons = result.verdicts.filter(v => !v.passed).map(v => v.reason).filter(Boolean).join("; ");
-  const rejectionEvent: ObservableEvent = {
+  const rejectionEvent = {
     type: PipelineEventType.GovernanceComplianceViolation,
     priority: PipelinePriority.NORMAL,
     payload: {
@@ -270,7 +270,7 @@ export function emitGateRejection(
     },
     timestamp: Date.now(),
     notificationType: "FYI",
-  };
+  } as const;
   observer.emit(rejectionEvent);
 
   // 写入拒绝注册表——DocGovernAgent 下一轮审计时通过 getRejections() 查询

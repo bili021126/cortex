@@ -1,4 +1,4 @@
-// @ci: unit
+// @ci: skip — 占位测试，Phase 1 实施时替换为真实测试
 /**
  * @cortex/prompt-kit — 占位测试
  *

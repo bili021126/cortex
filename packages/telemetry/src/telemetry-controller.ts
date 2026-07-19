@@ -56,6 +56,7 @@ class TelemetryController {
     if (this._points.length % 500 === 0 && typeof process !== "undefined") {
       const mem = process.memoryUsage?.();
       if (mem) {
+        // eslint-disable-next-line no-console
         console.log(`[telemetry] telemetry.self_monitor points=${this._points.length} heapMB=${Math.round(mem.heapUsed / 1024 / 1024)}`);
       }
     }
@@ -101,7 +102,9 @@ class TelemetryController {
     const stdDev = Math.sqrt(variance);
 
     // 变化率（首尾差 / 时间跨度）
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const timeSpan = (points[points.length - 1]!.timestamp - points[0]!.timestamp) / 1000 || 1;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const rateOfChange = (values[values.length - 1]! - values[0]!) / timeSpan;
 
     let trend: "rising" | "falling" | "stable" = "stable";

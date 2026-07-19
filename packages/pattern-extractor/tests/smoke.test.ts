@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/pattern-extractor — 烟雾测试
  * 验证模式提取器核心接口的导出完整性和基本行为。

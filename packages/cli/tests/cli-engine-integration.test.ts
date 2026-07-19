@@ -36,7 +36,7 @@ import * as os from "node:os";
 // 辅助
 // ════════════════════════════════════════════════════════════
 
-const ctx: CommandContext = {
+const ctx: CommandContext & Record<string, unknown> = {
   format: "text",
   quiet: false,
   verbose: false,
@@ -285,25 +285,24 @@ describe("B. CommandRegistry 全量命令路由", () => {
   it("B4. 空参数返回错误", async () => {
     const registry = buildFullRegistry();
     const result = await registry.dispatch([], ctx);
-    expect(result.success).toBe(false);
-    expect(result.exitCode).toBe(1);
-    expect(result.error).toContain("未指定命令");
+    expect(result.code).toBe(1);
+    expect(result.output).toContain("未指定命令");
   });
 
   it("B5. 未知命令返回错误", async () => {
     const registry = buildFullRegistry();
     const result = await registry.dispatch(["nonexistent-command"], ctx);
-    expect(result.success).toBe(false);
-    expect(result.exitCode).toBe(1);
-    expect(result.error).toContain("未知命令");
+    expect(result.code).toBe(1);
+    expect(result.output).toContain("未知命令");
   });
 
   it("B6. 所有 15 个命令可通过 dispatch 成功调用", async () => {
     const registry = buildFullRegistry();
     for (const name of registry.getCommandNames()) {
       const result = await registry.dispatch([name], ctx);
-      assertValidResult(result);
-      expect(result.success).toBe(true);
+      expect(result).toBeDefined();
+      expect(typeof result.code).toBe("number");
+      expect(result.code).toBe(0);
     }
   });
 });

@@ -19,6 +19,7 @@ function extractPrinciples(constitution: string): string[] {
   const re = /\*\*(原则[一二三四五六七八九十]+)\*\*\s*\|[^|]+\|\s*不可变/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(constitution)) !== null) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     principles.push(m[1]!);
   }
   return principles;
@@ -27,6 +28,7 @@ function extractPrinciples(constitution: string): string[] {
 /** 从宪法头部提取当前版本号 */
 function extractCurrentVersion(constitution: string): string {
   const m = constitution.match(/\*\*版本\*\*[：:]\s*(v[\d.]+)/);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return m ? m[1]! : "unknown";
 }
 
@@ -391,7 +393,9 @@ export function evaluateAmendment(
   let totalWeightedScore = 0;
   let totalWeight = 0;
   for (let i = 0; i < checks.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const w = registrations[i]!.weight;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     totalWeightedScore += checks[i]!.score * w;
     totalWeight += w;
   }

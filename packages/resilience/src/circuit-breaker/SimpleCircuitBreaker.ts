@@ -293,7 +293,7 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
    */
   onStateChange(handler: (state: CircuitState, previous: CircuitState) => void): () => void {
     this._handlers.push(handler);
-    return () => { this._handlers = this._handlers.filter(h => h !== handler); };
+    return () => { const i = this._handlers.indexOf(handler); if (i >= 0) this._handlers.splice(i, 1); };
   }
 
   // ────────────────────────────────────────

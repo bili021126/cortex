@@ -194,7 +194,7 @@ export async function* streamExecuteTools(
       continue;
     }
 
-    yield { type: "tool_start", agent, tool: tc.name, input: JSON.stringify(tc.arguments) } as TuiEvent;
+    yield { type: "tool_start", id: tc.id, agent, tool: tc.name, input: JSON.stringify(tc.arguments) } as TuiEvent;
 
     const { success, output, durationMs } = await _executeOneCall(tc, bridge, hooks);
 

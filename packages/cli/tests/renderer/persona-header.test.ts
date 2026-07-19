@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { PersonaHeader, personaHeader } from "../../src/renderer/persona-header.js";
+import { PersonaHeader, personaHeader } from "../../src/tui/renderer/persona-header.js";
 import { AgentType } from "@cortex/shared";
 
 describe("PersonaHeader（直接输出）", () => {

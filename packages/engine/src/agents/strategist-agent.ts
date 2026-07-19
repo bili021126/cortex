@@ -91,7 +91,7 @@ export class StrategistAgent {
       ];
 
       const res = await resilienceFactory.execute("llm-call", async () =>
-        this.llm.chat(model, messages, undefined, node.reasoningEffort),
+        await this.llm.chat(model, messages, undefined, node.reasoningEffort),
       );
       const output = res.content ?? undefined;
 

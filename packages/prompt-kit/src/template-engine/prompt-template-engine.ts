@@ -243,10 +243,12 @@ export class PromptTemplateEngine {
       const [fullMatch, directiveName, params] = match;
 
       // 只处理自闭合指令
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       if (!SELF_CLOSING_DIRECTIVES.has(directiveName!)) {
         continue;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const handler = this.directives.get(directiveName!);
       if (!handler) continue;
 
@@ -281,13 +283,16 @@ export class PromptTemplateEngine {
       }
 
       // 自闭合指令由 renderSelfClosingDirectives 处理，这里跳过
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       if (SELF_CLOSING_DIRECTIVES.has(directiveName!)) {
         continue;
       }
       
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const handler = this.directives.get(directiveName!);
       if (!handler) continue;
       
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const replacement = handler(params?.trim() ?? "", body!, context, this, depth);
       result = result.replace(fullMatch, replacement);
       regex.lastIndex = 0;

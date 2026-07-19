@@ -5,10 +5,7 @@
 // 适配：移除 Electron/IPC 依赖。依赖通过构造注入。
 // ============================================================
 
-import { entityGraph } from "./entity-graph.js"
-import { memoryJudge } from "./memory-judge.js"
 import type { MemoryManager } from "./memory-manager.js"
-import { memoryStore } from "./memory-store.js"
 import type { L1Profile, MemoryCandidate, MemoryJudgeTurn } from "./memory-types.js"
 
 const MEMORY_JUDGE_INTERVAL = 6
@@ -83,8 +80,9 @@ export class MemoryScheduler {
     }
 
     if (newCount % 20 === 0) {
+      // eslint-disable-next-line no-console
       console.log("[Memory] 达到 20 轮，触发 Reflection + 记忆压缩")
       await this.deps.runReflectionAndCompression()
     }
   }
-}
+}

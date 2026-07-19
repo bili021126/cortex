@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { HybridRetriever, DEFAULT_HYBRID_CONFIG } from "../src/hybrid-retrieval.js";
 

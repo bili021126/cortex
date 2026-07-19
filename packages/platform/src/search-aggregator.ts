@@ -140,8 +140,10 @@ export class SearchAggregator {
     const buckets = [...sourceBuckets.values()];
     let bucketIdx = 0;
     while (deduped.length < maxResults && buckets.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const bucket = buckets[bucketIdx % buckets.length]!;
       if (bucket.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const item = bucket!.shift();
         if (item) deduped.push(item);
       }

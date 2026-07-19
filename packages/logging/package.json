@@ -13,8 +13,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc",
-    "lint": "eslint src/"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {},
   "devDependencies": {

@@ -7,8 +7,8 @@
  * @module tui/web/state-aggregator
  */
 
-import type { IPipelineObserver, ObservableEvent, ITaskBoard, IAgentPool } from "@cortex/shared";
-import { AgentType, AgentStatus, PipelinePriority, PipelineEventType } from "@cortex/shared";
+import type { ObservableEvent, ITaskBoard, IAgentPool } from "@cortex/shared";
+import { AgentType, AgentStatus, PipelineEventType } from "@cortex/shared";
 import type { PanoramaTracker } from "@cortex/telemetry";
 import type { HealthCollector, HealthSnapshot } from "@cortex/telemetry";
 
@@ -149,7 +149,8 @@ export class StateAggregator {
       if (statuses.length === 0) continue;
       // 映射后端状态枚举 → 前端友好状态
       for (let i = 0; i < statuses.length; i++) {
-        const s = statuses[i]!;
+        const s = statuses[i];
+        if (s === undefined) continue;
         let frontendStatus: string;
         switch (s) {
           case AgentStatus.Active:
@@ -285,7 +286,7 @@ export class StateAggregator {
   /**
    * 更新 Agent 快照列表（由外部传入，因 AgentType 枚举变化频繁）。
    */
-  updateAgentSnapshots(snapshots: AgentStatusSnapshot[]): void {
+  updateAgentSnapshots(_snapshots: AgentStatusSnapshot[]): void {
     // 在每次 getSnapshot 中动态构造
     // 这个方法留给外部注入 AgentType 枚举值
   }
@@ -298,4 +299,4 @@ export class StateAggregator {
       this.tickTimer = null;
     }
   }
-}
+}

@@ -459,18 +459,22 @@ CLI/TUI 输入
     │
     └── 子 Agent 输出 → 压缩为结构化摘要 → 协调者只读摘要
 
-  ── 生命周期：MemoryStore 委托模式 ──
-  MemoryStore (Facade)
+  ── 生命周期：MemoryStore 适配器委托模式（v3.0.0 起）──
+  MemoryStore (适配器)
     packages/memory-store/src/memory-store.ts
+    │  @layer 适配器 — 委托 @cortex/memory 后端，引擎层仅挂载 embedding + 权重老化 + 混合检索 + maintain
     │
-    └── 7 组件族：
-        ├── MemoryReader    — 检索
-        ├── MemoryWriter    — 写入
-        ├── MemoryIndexer   — BM25 索引
-        ├── MemoryLinker    — 图谱链接
-        ├── MemoryStateMachine — 四态流转（C-07 已修复）
-        ├── MemoryEmbedder  — 向量嵌入（C-03 已修复）
-        └── MemoryMonitor   — 健康监控
+    ├── 后端（存储核心）：@cortex/memory
+    │    ├── InMemoryMemoryStore / FileBasedMemoryStore（TransactionalMemoryStore）
+    │    ├── AbstractMemoryStore._entries: Map<id, MemoryEntry>（全条目内存态）
+    │    └── content_hash → id O(1) 去重索引（Core-3 T4：_hashIndex + findByContentHash）
+    │
+    └── 适配层增强组件：
+        ├── embedding      — 384d ONNX 向量嵌入（C-03 已修复）
+        ├── BM25Index      — 词频索引（混合检索）
+        ├── HybridRetriever— BM25 + 向量融合 + 贪心精排
+        ├── DedupService   — content_hash 精确 + 向量相似去重
+        └── WeightAger     — 权重自然老化
 
   ── 四态 CAS 状态机 ──
   MemoryState

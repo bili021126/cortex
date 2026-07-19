@@ -1,6 +1,6 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
-import { canTransition, reviewStatusToFsmState } from "../../src/modes/plan-mode.js";
+import { canTransition, reviewStatusToFsmState } from "../../src/tui/modes/plan-mode.js";
 
 describe("PlanModeState FSM", () => {
   it("idle → planning 合法", () => {

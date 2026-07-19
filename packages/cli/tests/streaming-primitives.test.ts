@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, vi } from "vitest";
 
 describe("StreamingToolExecutor primitives", () => {

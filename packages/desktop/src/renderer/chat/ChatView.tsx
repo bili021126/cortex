@@ -63,13 +63,13 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   );
 
   const copyMessage = useCallback(async (content: string, _msgId: string) => {
-    try { await navigator.clipboard.writeText(content); } catch {}
+    try { await navigator.clipboard.writeText(content); } catch { /* 剪贴板写入可能被拒，忽略 */ }
   }, []);
 
   const speakMessage = useCallback(async (content: string, msgId: string) => {
     if (speakingMsgId === msgId) { setSpeakingMsgId(null); return; }
     setSpeakingMsgId(msgId);
-    try { await window.cortexDesktop.speak(content); } catch {}
+    try { await window.cortexDesktop.speak(content); } catch { /* TTS 播放可能失败，忽略 */ }
     setSpeakingMsgId(null);
   }, [speakingMsgId]);
 

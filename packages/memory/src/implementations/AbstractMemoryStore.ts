@@ -121,6 +121,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   /** 所有记忆条目的主索引（id → MemoryEntry） */
   protected readonly _entries = new Map<string, MemoryEntry>();
 
+  /** content_hash → id 二级索引（Core-3 T4：内容去重 O(1) 查询）。
+   *  与 _entries 同步维护——所有条目增删必须经 _indexPut/_indexDel；空 content_hash 不入索引。 */
+  private readonly _hashIndex = new Map<string, string>();
+
   /** 所有关联链路的索引（sourceId → MemoryLink[]） */
   protected readonly _links = new Map<string, MemoryLink[]>();
 
@@ -162,7 +166,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    * @param e - 反序列化后的记忆条目
    */
   _loadEntry(id: string, e: MemoryEntry) {
-    this._entries.set(id, e);
+    this._indexPut(id, e);
   }
 
   /**
@@ -173,6 +177,49 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   _loadLinks(sid: string, l: MemoryLink[]) {
     this._links.set(sid, l);
+  }
+
+  // ══════════════════════════════
+  // Content-Hash Index (Core-3 T4)
+  // ══════════════════════════════
+
+  /**
+   * 写入/覆盖条目——同步维护 _entries 与 _hashIndex。
+   * content_hash 变更时清除指向本 id 的旧映射；空 content_hash 不入索引（避免空串碰撞）。
+   */
+  protected _indexPut(id: string, entry: MemoryEntry): void {
+    const prev = this._entries.get(id);
+    if (prev?.content_hash && prev.content_hash !== entry.content_hash
+        && this._hashIndex.get(prev.content_hash) === id) {
+      this._hashIndex.delete(prev.content_hash);
+    }
+    this._entries.set(id, entry);
+    if (entry.content_hash) {
+      this._hashIndex.set(entry.content_hash, id);
+    }
+  }
+
+  /** 删除条目——同步移除内容哈希索引（仅当索引确实指向本 id）。 */
+  protected _indexDel(id: string): void {
+    const prev = this._entries.get(id);
+    if (prev?.content_hash && this._hashIndex.get(prev.content_hash) === id) {
+      this._hashIndex.delete(prev.content_hash);
+    }
+    this._entries.delete(id);
+  }
+
+  /**
+   * 按内容哈希 O(1) 查找记忆 ID（Core-3 T4）。
+   * 带防御性一致性校验：命中后确认条目仍在且哈希一致，漂移则清理并按未命中处理。
+   */
+  findByContentHash(contentHash: string): string | undefined {
+    if (!contentHash) return undefined;
+    const id = this._hashIndex.get(contentHash);
+    if (id === undefined) return undefined;
+    const entry = this._entries.get(id);
+    if (entry?.content_hash === contentHash) return id;
+    this._hashIndex.delete(contentHash);
+    return undefined;
   }
 
   // ══════════════════════════════════════════════
@@ -447,6 +494,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       await this._be.flushAll(this._entries, this._links);
 
     this._entries.clear();
+    this._hashIndex.clear();
     this._links.clear();
     this._pendingEntries.clear();
     this._transactions.clear();
@@ -493,7 +541,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       expires_at: f.expires_at,
     };
 
-    this._entries.set(id, e);
+    this._indexPut(id, e);
     try {
       await this._be.persist(e);
     } catch (err) {
@@ -511,7 +559,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   async set(id: string, e: MemoryEntry) {
     this._ei();
-    this._entries.set(id, { ...e });
+    this._indexPut(id, { ...e });
     try {
       await this._be.persist(e);
     } catch (err) {
@@ -532,7 +580,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     if (!this._entries.has(id))
       return false;
 
-    this._entries.delete(id);
+    this._indexDel(id);
     this._links.delete(id);
 
     for (const [, ls] of this._links) {
@@ -642,7 +690,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     // 允许其他状态 → Obliterated（FSM 白名单校验由 cas 内部执行）
     const ok = this.cas(id, e.semantic_state as SemanticState, "Obliterated");
     if (ok) {
-      this._entries.delete(id);
+      this._indexDel(id);
       this._links.delete(id);
     }
     return ok;
@@ -716,7 +764,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       expires_at: p.input.expires_at,
     };
 
-    this._entries.set(mid, e);
+    this._indexPut(mid, e);
     this._pendingEntries.delete("pending_" + mid);
 
     // 持久化到后端（防止进程崩溃丢数据，best-effort 不阻塞返回）
@@ -1020,7 +1068,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     } catch (err) {
       // 补偿回滚：撤销已写入的条目和关联链路，防止部分提交
       for (const cid of committedIds) {
-        try { await this._be.remove(cid); this._entries.delete(cid); } catch { /* ignore */ }
+        try { await this._be.remove(cid); this._indexDel(cid); } catch { /* ignore */ }
       }
       for (const cl of committedLinks) {
         const ls = this._links.get(cl.sourceId);

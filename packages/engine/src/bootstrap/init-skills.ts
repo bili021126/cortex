@@ -33,7 +33,7 @@ export async function initSkillSystem(
         observer.emit({
           type: PipelineEventType.ErrorReported,
           priority: PipelinePriority.NORMAL,
-          payload: { message: `[bootstrapEngine] 技能状态变更持久化失败 (MemoryStore): ${skill.id}: ${e instanceof Error ? e.message : String(e)}` },
+          payload: { source: "init-skills", severity: "warn", error: `技能状态变更持久化失败 (MemoryStore): ${skill.id}: ${e instanceof Error ? e.message : String(e)}` },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
@@ -63,7 +63,7 @@ export async function initSkillSystem(
           observer.emit({
             type: PipelineEventType.ErrorReported,
             priority: PipelinePriority.NORMAL,
-            payload: { message: `[bootstrapEngine] 技能结晶为知识失败: ${skill.id}: ${e instanceof Error ? e.message : String(e)}` },
+            payload: { source: "init-skills", severity: "warn", error: `技能结晶为知识失败: ${skill.id}: ${e instanceof Error ? e.message : String(e)}` },
             timestamp: Date.now(),
             notificationType: "WARNING",
           });
@@ -96,7 +96,7 @@ export async function initSkillSystem(
       observer.emit({
         type: PipelineEventType.ErrorReported,
         priority: PipelinePriority.NORMAL,
-        payload: { message: `[bootstrapEngine] 从记忆库加载技能失败（非致命）: ${e}` },
+        payload: { source: "init-skills", severity: "warn", error: `从记忆库加载技能失败（非致命）: ${e}` },
         timestamp: Date.now(),
         notificationType: "WARNING",
       });
@@ -139,7 +139,7 @@ export async function initSkillSystem(
       observer.emit({
         type: PipelineEventType.ErrorReported,
         priority: PipelinePriority.NORMAL,
-        payload: { message: `[bootstrapEngine] 从 skills/ 目录加载技能失败（非致命）: ${e}` },
+        payload: { source: "init-skills", severity: "warn", error: `从 skills/ 目录加载技能失败（非致命）: ${e}` },
         timestamp: Date.now(),
         notificationType: "WARNING",
       });

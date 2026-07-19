@@ -1,7 +1,8 @@
 // alert-engine.ts — 简单规则告警引擎
 // 基于 TelemetryController 数据，按预置规则触发告警
 
-import { TelemetryController, TelemetryLevel, type TelemetryPoint } from "./telemetry-controller.js";
+import type { TelemetryController, TelemetryLevel} from "./telemetry-controller.js";
+import { type TelemetryPoint } from "./telemetry-controller.js";
 
 interface AlertRule {
   metric: string;

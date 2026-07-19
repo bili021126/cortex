@@ -59,6 +59,7 @@ export function stripGlobalOptions(argv: string[]): string[] {
   const cleanArgs: string[] = [];
   let skipNext = false;
   for (let i = 0; i < argv.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const a = argv[i]!;
     if (skipNext) { skipNext = false; continue; }
     if (["--quiet", "-q", "--verbose", "-v", "--no-color"].includes(a)) continue;

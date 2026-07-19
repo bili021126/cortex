@@ -31,9 +31,11 @@ const LOCAL_MODELS: Record<string, ModelConfig> = {
 
 const DEFAULT_MODEL_KEY = "minilm"
 
+ 
 const localPipelines: Map<string, any> = new Map()
 let currentModelKey: string = DEFAULT_MODEL_KEY
 
+ 
 const importEsm = new Function("moduleName", "return import(moduleName)") as (moduleName: string) => Promise<any>
 
 let localModelPath = ""
@@ -43,6 +45,7 @@ export function setLocalModelPath(modelPath: string): void {
   localModelPath = modelPath
 }
 
+ 
 async function getLocalPipeline(modelKey?: string): Promise<any> {
   const key = modelKey || currentModelKey
   const config = LOCAL_MODELS[key]
@@ -74,6 +77,7 @@ export function createLocalEmbeddingProvider(modelKey?: string): EmbeddingProvid
 
     async embed(text: string): Promise<number[]> {
       const pipe = await getLocalPipeline(key)
+       
       const result: any = await pipe(text, { pooling: "mean", normalize: true })
       return Array.from(result.data as Float32Array)
     },
@@ -82,6 +86,7 @@ export function createLocalEmbeddingProvider(modelKey?: string): EmbeddingProvid
       const pipe = await getLocalPipeline(key)
       const results: number[][] = []
       for (const text of texts) {
+         
         const result: any = await pipe(text, { pooling: "mean", normalize: true })
         results.push(Array.from(result.data as Float32Array))
       }

@@ -288,10 +288,6 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     if (!toolkit) {
       return { success: false, output: "Toolkit 未初始化——请通过 setBootstrapConfig() 注入 Toolkit" };
     }
-    if (name === "write_file") {
-      const wsRoot = (toolkit as unknown as { workspaceRoot?: string | null }).workspaceRoot;
-      console.log(`[TRACE write_file] engine-bridge.executeToolCall: tool=${name} workspaceRoot=${wsRoot}`);
-    }
     const result = await toolkit.execute({ toolName: name, params: args }, AgentType.Code);
 
     // ── Rollback 跟踪：write_file 成功后记录文件路径 ──

@@ -21,7 +21,7 @@ export type {
   FilePathsConfig,
   SkillSystemConfig,
   // Agent
-  AgentDefinition,
+  AgentManifest,
   AgentDisplay,
   AgentRoundtable,
   AgentsConfig,

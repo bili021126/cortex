@@ -19,7 +19,7 @@ export type {
 
 // ── Agent ──
 export type {
-  AgentDefinition,
+  AgentManifest,
   AgentDisplay,
   AgentRoundtable,
   AgentsConfig,

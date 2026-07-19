@@ -30,7 +30,7 @@ import {
   IndexedRegistry,
   type IndexDefinition,
 } from "@cortex/shared";
-import { SKILL_TRIAL_TO_ACTIVE_THRESHOLD, SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD, SKILL_FEEDBACK_POSITIVE_WEIGHT, SKILL_FEEDBACK_NEGATIVE_WEIGHT } from "@cortex/config";
+import { SKILL_TRIAL_TO_ACTIVE_THRESHOLD, SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD, SKILL_FEEDBACK_POSITIVE_WEIGHT } from "@cortex/config";
 
 // ─── 纯函数：状态推导 ───────────────────────────────────────
 
@@ -51,6 +51,7 @@ export function deriveStatus(
   // 连续有害判定
   let consecutiveNegative = 0;
   for (let i = history.length - 1; i >= 0; i--) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (history[i]!.rating === -1) {
       consecutiveNegative++;
     } else {
@@ -102,6 +103,7 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
     if (opts?.offset) results = results.slice(opts.offset);
     if (opts?.limit) results = results.slice(0, opts.limit);
     // ── 遥测：Skill 命中率 ──
+    // eslint-disable-next-line no-console
     console.log(`[telemetry] skill.query_by_tags tags=${queryTags.join(",")} hitCount=${matched.size} returned=${results.length}`);
     return results;
   }
@@ -149,6 +151,7 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
 
     // 遥测：状态转换记录
     if (oldStatus && oldStatus !== tmpl.status) {
+      // eslint-disable-next-line no-console
       console.log(`[telemetry] skill.status_changed skill=${id} from=${oldStatus} to=${tmpl.status}`);
     }
 
@@ -197,4 +200,4 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
     return JSON.stringify(this.toJSON(), null, 2);
   }
 }
-
+

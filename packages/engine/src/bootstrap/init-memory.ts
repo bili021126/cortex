@@ -116,7 +116,7 @@ export async function initCyreneMemory(
 
   // MemoryManager 接入 RAG 桥接
   const manager = new MemoryManager({
-    addMemory: ragReady ? ragAddMemory : async (text: string, source: string, _metadata?: Record<string, unknown>) => {
+    addMemory: ragReady ? ragAddMemory : async (_text: string, _source: string, _metadata?: Record<string, unknown>) => {
       const id = `cyrene_rag_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       return id;
     },
@@ -126,4 +126,4 @@ export async function initCyreneMemory(
   });
 
   return { manager, store };
-}
+}

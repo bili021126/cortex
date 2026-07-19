@@ -27,9 +27,11 @@ interface CharSpan {
 
 function findNextSentenceBoundary(text: string, pos: number): number {
   for (let i = pos; i < text.length; i++) {
+     
     const c = text[i]!
     if (c === "\u3002" || c === "\uff01" || c === "\uff1f" || c === "\n" || c === "." || c === "!" || c === "?") {
       let j = i + 1
+       
       while (j < text.length && "\u3002\uff01\uff1f\n.!?".includes(text[j]!)) j++
       return j
     }
@@ -38,7 +40,7 @@ function findNextSentenceBoundary(text: string, pos: number): number {
 }
 
 function slidingWindowChars(text: string, chunkSize: number, overlap: number): CharSpan[] {
-  if (!text || !text.trim()) return []
+  if (!text?.trim()) return []
   const totalChars = text.length
   if (estimateTokens(text) <= chunkSize) return [{ start: 0, end: totalChars, text }]
 
@@ -56,6 +58,7 @@ function slidingWindowChars(text: string, chunkSize: number, overlap: number): C
     let posEndChar = Math.min(totalChars, Math.round(endToken / tokensPerChar))
 
     if (chunkIndex > 0 && (totalChars - posStart) < chunkSize * tokensPerChar * 0.33) {
+       
       const lastSpan = spans[spans.length - 1]!
       lastSpan.text = text.slice(lastSpan.start)
       lastSpan.end = totalChars
@@ -86,6 +89,7 @@ function extractTitles(text: string): TitleRecord[] {
   let tokenPos = 0
   for (const line of lines) {
     const match = line.match(/^(#{1,6})\s+(.+)$/)
+     
     if (match) titles.push({ level: match[1]!.length, title: match[2]!.trim(), tokenPos })
     tokenPos += estimateTokens(line + "\n")
   }
@@ -96,6 +100,7 @@ function getTitlePrefix(tokenPos: number, titles: TitleRecord[]): string {
   const active: TitleRecord[] = []
   for (const t of titles) {
     if (t.tokenPos > tokenPos) break
+     
     while (active.length > 0 && active[active.length - 1]!.level >= t.level) active.pop()
     active.push(t)
   }
@@ -110,6 +115,7 @@ export function chunkText(text: string, source: string, chunkSize = 512, overlap
   const result: Chunk[] = []
 
   for (let i = 0; i < spans.length; i++) {
+     
     const span = spans[i]!
     let chunkTextContent = span.text.trim()
     if (!chunkTextContent) continue

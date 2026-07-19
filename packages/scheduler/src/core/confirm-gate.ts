@@ -1,5 +1,5 @@
 import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3 } from "@cortex/config";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3 } from "@cortex/config";
 
 // ─── 信任分模型（内联实现——镜像 @cortex/engine/agents/confirm-gate-agent）───
 // 因 scheduler → engine 系反向引用（环形依赖），纯函数内联于此。
@@ -14,10 +14,10 @@ interface TrustRecord {
 }
 
 function computeTrustScore(records: TrustRecord[]): number {
-  if (records.length === 0) return 50;
-  let score = 50;
+  if (records.length === 0) return TRUST_BASE_SCORE;
+  let score = TRUST_BASE_SCORE;
   for (const r of records.slice(-20)) {
-    if (r.success) score += 0.5;
+    if (r.success) score += TRUST_L0_L1_BONUS;
     else score -= r.riskLevel === "L3" ? 15 : r.riskLevel === "L2" ? 8 : 3;
   }
   return Math.max(0, Math.min(100, score));
@@ -52,7 +52,7 @@ class ConfirmGateDisposedError extends Error {
  * 用户交互通道由 PlatformBridge 提供（CLIAdapter / ElectronAdapter）。
  * @since Core-2 — 接口固化，后续新增字段需向下兼容
  */
-export class ConfirmGate {
+export class ConfirmGate implements Disposable {
   private pending = new Map<string, ConfirmationRequest>();
   private resolvers = new Map<string, (approved: boolean) => void>();
   private rejecters = new Map<string, (reason: Error) => void>();
@@ -178,7 +178,7 @@ export class ConfirmGate {
     if (this.trustModel && trustContext && level !== RL.L1) {
       const records = this._trustRecordsByAgent.get(trustContext.agentType ?? "unknown") ?? [];
       const score = computeTrustScore(records);
-      if ((level === "L2" && score >= TRUST_AUTO_APPROVE_L2) || (level === "L3" && score >= TRUST_AUTO_APPROVE_L3)) {
+      if (shouldAutoApprove(score, level)) {
         console.error(`[telemetry] gate.trust_auto_approve agent=${trustContext.agentType} score=${score} level=${level}`);
         return false;
       }
@@ -250,7 +250,6 @@ export class ConfirmGate {
     // 非交互环境自动判定：L0/L1 放行，L2/L3 拒绝（安全优先）
     // 环境变量 CORTEX_AUTO_CONFIRM=true 时无条件放行
     if (process.env[ENV_AUTO_CONFIRM] === 'true') {
-      const req = this.pending.get(requestId);
       this.pending.delete(requestId);
       this.resolvers.delete(requestId);
       this.rejecters.delete(requestId);

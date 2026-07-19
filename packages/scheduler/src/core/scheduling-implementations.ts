@@ -133,6 +133,7 @@ export class RoundRobinStrategy implements IScheduleStrategy {
     const available = this._availableAgents(agents);
     if (available.length === 0) return null;
     if (available.length === 0) return null;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const chosen = available[this._rrIndex % available.length]!;
     this._rrIndex++;
     return chosen;
@@ -265,6 +266,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
           observer.emit({
             type: PipelineEventType.SchedulerInvariantViolation,
             priority: PipelinePriority.CRITICAL,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             payload: { nodeId: pendingNodes[0]!.id, message: `Circular dependency detected among ${pendingNodes.length} pending nodes` },
             timestamp: Date.now(),
             notificationType: "WARNING",
@@ -282,6 +284,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
         }
 
         for (let li = 0; li < layers.length; li++) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const layer = layers[li]!;
           observer.emit({
             type: PipelineEventType.SchedulerLayerStart,
@@ -354,6 +357,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               }, NODE_DISPATCH_TIMEOUT_MS);
             });
 
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             return Promise.race([dispatchPromise.then((r) => { clearTimeout(tid!); return r; }), timeoutPromise]).then((result) => {
               if (!result.success) {
                 const reason = result.output ?? result.error ?? "unknown";
@@ -575,6 +579,7 @@ export class SequentialDriver implements ILoopDriver {
         });
 
         try {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const result = await Promise.race([dispatchPromise.then((r) => { clearTimeout(tid2!); return r; }), timeoutPromise]);
 
           allResults.push(result);
@@ -1320,6 +1325,7 @@ function _withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
     timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
   });
   return Promise.race([
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     p.then((v) => { clearTimeout(timer!); return v; }),
     timeoutPromise,
   ]);

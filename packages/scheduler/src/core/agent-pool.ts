@@ -1,4 +1,4 @@
-import { AgentStatus, PipelineEventType, PipelinePriority, type AgentConfig, type AgentType, type IPipelineObserver, type InvariantReporter, type ISchedulerAgentPool, type IAgentPool, type Disposable } from "@cortex/shared";
+import { AgentStatus, PipelineEventType, PipelinePriority, type AgentConfig, type AgentType, type IPipelineObserver, type InvariantReporter, type ISchedulerAgentPool, type IAgentPool } from "@cortex/shared";
 import { isTestEnv } from "@cortex/config";
 import { ManifoldGate } from "../dispatch-steps/manifold-gate.js";
 
@@ -15,7 +15,8 @@ export type { ISchedulerAgentPool, IAgentPool };
  * 状态流转：Created → Awake → Active → Awake → ... → Draining → Destroyed
  *
  * 方案B：AgentPool 为 Agent 状态的唯一权威源。
- * Agent.status 改为只读 getter，委托到 Pool；写路径仅通过 Pool.setStatus()。
+ * Agent.status 改为只读 getter，委托到 Pool。
+ * 常规写路径通过 setStatus()（含合法性校验），spawn/destroy 在边界条件下直接写入（Created/Destroyed）。
  */
 export class AgentPool implements IAgentPool {
   private configs = new Map<AgentType, AgentConfig>();
@@ -72,10 +73,12 @@ export class AgentPool implements IAgentPool {
     ManifoldGate.updateMax(agentType, newMax);
   }
 
-  /** 启动一个 Agent 实例。超限返回 false。新实例初始状态为 Created。 */
+  /** 启动一个 Agent 实例。超限或 instanceId 重复返回 false。新实例初始状态为 Created。 */
   spawn(agentType: AgentType, instanceId: string): boolean {
     const config = this.configs.get(agentType);
     if (!config) return false;
+    // 防重复 spawn：instanceId 已存在时拒绝，防止重置已运行 agent 状态
+    if (this.statuses.has(instanceId)) return false;
     const instances = this.active.get(agentType);
     if (!instances) return false;
     if (instances.size >= (config.maxInstances ?? 1)) return false;
@@ -147,7 +150,7 @@ export class AgentPool implements IAgentPool {
         message: `destroy 绕过状态机: ${current} → Destroyed`,
         details: { instanceId, agentType },
       };
-      this.statuses.set(instanceId, AgentStatus.Destroyed);
+      this.statuses.set(instanceId, AgentStatus.Destroyed); // 核选项：绕过状态机强制终结（Active→Destroyed 不在合法流转表中）
       this._reportInvariant("AgentPool.destroy", violation.message, violation.details);
     }
     this.active.get(agentType)?.delete(instanceId);
@@ -178,7 +181,7 @@ export class AgentPool implements IAgentPool {
       this._observer.emit({
         type: PipelineEventType.AgentPoolInvariantViolation,
         priority: PipelinePriority.CRITICAL,
-        payload: { source, message, detail: JSON.stringify(details ?? {}) },
+        payload: { source, detail: details !== undefined ? `${message} | ${JSON.stringify(details)}` : message },
         timestamp: Date.now(),
         notificationType: "WARNING",
       });
@@ -204,6 +207,14 @@ export class AgentPool implements IAgentPool {
       if (instances.has(agentId)) return true;
     }
     return false;
+  }
+
+  /** 检测心跳超时，返回超时秒数（-1 表示正常或无心跳记录） */
+  staleSeconds(agentId: string, maxStaleMs: number): number {
+    const lastHb = this.heartbeats.get(agentId);
+    if (!lastHb) return -1;
+    const elapsed = Date.now() - lastHb;
+    return elapsed > maxStaleMs ? elapsed / 1000 : -1;
   }
 
   /** 池统计——用于遥测和监控

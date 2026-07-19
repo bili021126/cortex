@@ -32,7 +32,7 @@ export class IngestPipeline {
    */
   async ingestFile(filePath: string, opts: IngestOptions): Promise<number> {
     const content = await fs.readFile(filePath, "utf-8");
-    return this.ingestText(content, opts);
+    return await this.ingestText(content, opts);
   }
 
   /**
@@ -50,11 +50,13 @@ export class IngestPipeline {
     const chunks = this.chunkText(text, chunkSize, overlap);
     for (let i = 0; i < chunks.length; i++) {
       const input: MemoryWriteInput = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         source: { agentType: "code" as any, taskId: "ingest-pipeline" },
         domain,
         kind: "Skill",
         isFact: true,
         summary: `[${source}] chunk ${i + 1}/${chunks.length}`,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         semantic_gist: chunks[i]!.slice(0, 200),
         content_blob: {
           source,

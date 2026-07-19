@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, beforeEach } from "vitest";
 import { SkillRegistry, deriveStatus } from "@cortex/skill-kit";
 import type { SkillTemplate } from "@cortex/shared";

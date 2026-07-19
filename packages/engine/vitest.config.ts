@@ -6,9 +6,15 @@ import { dirname, resolve } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
-  resolve: { alias: resolveAlias(__dirname) },
+  resolve: {
+    alias: {
+      ...resolveAlias(__dirname),
+      "@cortex/engine": resolve(__dirname, "src/index.ts"),
+    },
+  },
   test: {
     include: ["tests/**/*.test.ts"],
+    setupFiles: ["./tests/setup-resilience.ts"],
     exclude: [
       "tests/e2e/solo-flight-mock.test.ts",
       "tests/e2e/multi-agent-collab-mock.test.ts",

@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, vi } from "vitest";
 import { Toolkit } from "@cortex/platform";
 import { AgentType } from "@cortex/shared";

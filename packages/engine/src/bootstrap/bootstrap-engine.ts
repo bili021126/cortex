@@ -11,7 +11,7 @@
 // @refactor v3.0 — 引擎插件化解耦
 // ============================================================
 
-import type { AgentDefinition } from "./factory/index.js";
+import type { AgentManifest } from "./factory/index.js";
 import { loadConfig, resolveCodingStandards, resolveLlm, injectRegistryFromConfig } from "./load-config.js";
 import { enhancePrompts } from "./factory/loaders/agents.loader.js";
 import { PromptManager } from "../core/prompt-manager.js";
@@ -205,7 +205,7 @@ export async function bootstrapEngine(
     emit: (event: string) => observer.emit({
       type: PipelineEventType.ErrorReported,
       priority: PipelinePriority.NORMAL,
-      payload: { message: event },
+      payload: { source: "logging-bridge", severity: "warn", error: event },
       timestamp: Date.now(),
       notificationType: "FYI",
     }),
@@ -244,7 +244,9 @@ export async function bootstrapEngine(
     },
   );
 
-  // §6.0.1 LifecycleManager —— 管理非插件 ILifecycle 组件的生命周期
+  const logger = createLogger("bootstrapEngine");
+
+  // §6.0.1 LifecycleManager —— 拓扑排序关闭（管理 memory/workerPool/container）
   const lifecycleManager = new LifecycleManager(observer);
 
   // §6.0.2 ShutdownOrchestrator —— 统一关闭编排
@@ -352,7 +354,7 @@ export async function bootstrapEngine(
   );
 
   // §7 创建 StrategistAgent（钟离 + 霜凝——Core-2 预留）
-  const strategistDefs = config.agentDefinitions.filter((d: AgentDefinition) => d.type === "strategist");
+  const strategistDefs = config.agentDefinitions.filter((d: AgentManifest) => d.type === "strategist");
   const strategists = new Map<string, StrategistAgent>();
   for (const def of strategistDefs) {
     const agent = new StrategistAgent(
@@ -364,7 +366,7 @@ export async function bootstrapEngine(
   }
 
   // §7.2 创建 ConfirmGate Agent（烟绯）
-  const confirmGateDefs = config.agentDefinitions.filter((d: AgentDefinition) => d.type === "confirm-gate");
+  const confirmGateDefs = config.agentDefinitions.filter((d: AgentManifest) => d.type === "confirm-gate");
   const confirmGateAgents = new Map<string, AgentFactoryConfig>();
   for (const def of confirmGateDefs) {
     confirmGateAgents.set(def.id, createConfirmGateAgent(def.systemPrompt));
@@ -399,18 +401,19 @@ export async function bootstrapEngine(
   const workerPool = new WorkerPool({ maxWorkers: Math.max(1, os.cpus().length - 1) });
   LlmAdapterValue.setWorkerPool(workerPool);
 
-  // §9.5.1 注册 ILifecycle 组件到 ShutdownOrchestrator
-  //     memory（MemoryStore）实现 ILifecycle，参与统一关闭编排
+  // §9.5.1 注册 ILifecycle 组件
   if (memory && typeof (memory as unknown as ILifecycle).stop === 'function') {
     orchestrator.register("memory", memory as unknown as ILifecycle);
+    lifecycleManager.register("memory", memory as unknown as ILifecycle);
   }
+  // LifecycleManager 只管理实现了 ILifecycle 的真正组件
+  // container / workerPool 不实现 ILifecycle，在 shutdown 中手动关闭
+  await lifecycleManager.bootstrap();
 
   // §9.5.2 等待 Cyrene 记忆层初始化（fire-and-forget 的 await）
-  const cyreneMemory = await cyreneMemoryPromise;
-  if (cyreneMemory) {
-    const { manager, store } = cyreneMemory;
-    // RAG 桥接已在 initCyreneMemory() 内完成——manager.deps 指向 ragAddMemory / ragSearchMemoryEntries
-  }
+  //   RAG 桥接已在 initCyreneMemory() 内完成——manager.deps 指向 ragAddMemory / ragSearchMemoryEntries，
+  //   此处仅需 await 确保初始化完成，无需再取用返回的 manager/store。
+  await cyreneMemoryPromise;
 
   // §9.6 发射启动完成事件
   observer.emit({
@@ -475,18 +478,17 @@ export async function bootstrapEngine(
       auditTrail.flush();
       // MemoryStore 归档——在 shutdown orchestrator close 存储之前先 endSession
       if (memory) {
-        try { await memory.endSession(); } catch (err) { console.error(`[bootstrapEngine] memory.endSession failed:`, err); }
+        try { await memory.endSession(); } catch (err) { logger.error("memory.endSession failed", {}, err instanceof Error ? err : undefined); }
       }
-      // ShutdownOrchestrator —— 统一关闭注册的 ILifecycle 组件（含 memory.stop/dispose）
+      // ShutdownOrchestrator + LifecycleManager —— 统一关闭
       await orchestrator.shutdown();
       if (memory) {
-        try { await memory.close(); } catch (err) { console.error(`[bootstrapEngine] memory.close failed:`, err); }
+        try { await memory.close(); } catch (err) { logger.error("memory.close failed", {}, err instanceof Error ? err : undefined); }
       }
-      // 先优雅关闭 ILifecycle 组件（兼容 LifecycleManager 管理项）
       await lifecycleManager.shutdown();
       // WorkerPool —— 终止所有 worker 线程
       workerPool.shutdown();
-      // 再关闭插件容器（反向顺序 stop 各插件）
+      // 插件容器关闭（反向顺序 stop 各插件）
       await container.shutdown();
       // 最后卸载 ConsoleBridge，恢复原始 console
       uninstallConsoleBridge();

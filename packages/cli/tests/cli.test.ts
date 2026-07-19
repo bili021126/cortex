@@ -98,8 +98,8 @@ describe('@cortex/cli — 命令注册表', () => {
       rawOptions: {},
     });
 
-    expect(result.success).toBe(false);
-    expect(result.exitCode).toBe(1);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain("未知命令");
   });
 });
 

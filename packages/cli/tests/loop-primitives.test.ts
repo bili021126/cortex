@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect, vi } from "vitest";
 
 // Mock minimal bridge for testing

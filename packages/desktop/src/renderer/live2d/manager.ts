@@ -1,5 +1,6 @@
 import * as PIXI from "pixi.js";
 // Dynamic import 强制 Vite 打包 pixi-live2d-display（ES 模块构建，不依赖 Node events）
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- 第三方 cubism4 动态导入构造器无干净 ESM 类型
 let Live2DModel: any = null;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Live2DModelInstance = any;
@@ -128,10 +129,12 @@ export class Live2DManager {
     }
 
     const { modelPath } = this.options;
+    const app = this.app;
+    if (!app) return;
     // Kick off the Live2D load and the raw JSON fetch in parallel so the
     // hit-area / motion index map is ready the moment the model is.
     const modelPromise = Live2DModel.from(modelPath, {
-      ticker: this.app!.ticker,
+      ticker: app.ticker,
       autoHitTest: false,
       autoFocus: false,
     });

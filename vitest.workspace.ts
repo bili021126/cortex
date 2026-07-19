@@ -13,6 +13,12 @@ export default defineWorkspace([
   // ── 共享配置——覆盖层（传递给所有项目） ──────────────
   {
     test: {
+      // ⚠️ vitest 2.x 中 defineWorkspace 每一项都是独立 test project：
+      // 若不限定 include，本项会用默认 glob 捕获全部 *.test.ts，
+      // 导致所有测试被重复执行且缺失各包 setupFiles（resilience policy 未注册等）。
+      // 故显式置 include: [] ——仅作为 coverage 配置载体，不收集任何测试。
+      name: "__coverage_config__",
+      include: [],
       coverage: {
         provider: "v8",
         reporter: ["text-summary"],

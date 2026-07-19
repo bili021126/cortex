@@ -48,12 +48,12 @@ describe("engine-defaults — 常量值", () => {
     expect(SCHEDULER_MAX_ROUNDS).toBe(25);
   });
 
-  it("SCHEDULER_ROUND_TIMEOUT_MS = 120s", () => {
-    expect(SCHEDULER_ROUND_TIMEOUT_MS).toBe(120_000);
+  it("SCHEDULER_ROUND_TIMEOUT_MS = 300s", () => {
+    expect(SCHEDULER_ROUND_TIMEOUT_MS).toBe(300_000);
   });
 
-  it("REACT_MAX_LOOPS = 20", () => {
-    expect(REACT_MAX_LOOPS).toBe(20);
+  it("REACT_MAX_LOOPS = 64", () => {
+    expect(REACT_MAX_LOOPS).toBe(64);
   });
 
   it("EMBEDDING_DIM = 384", () => {

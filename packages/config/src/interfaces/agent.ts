@@ -10,7 +10,7 @@
  */
 
 /** 单个 Agent 定义 */
-export interface AgentDefinition {
+export interface AgentManifest {
   /** Agent 标识（如 "ganyu", "albedo"） */
   id: string;
   /** Agent 类型 */
@@ -65,5 +65,5 @@ export interface AgentRoundtable {
 
 /** agents.json 顶层结构 */
 export interface AgentsConfig {
-  agents: Record<string, AgentDefinition>;
+  agents: Record<string, AgentManifest>;
 }

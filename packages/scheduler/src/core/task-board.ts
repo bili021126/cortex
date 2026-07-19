@@ -175,7 +175,9 @@ export class TaskBoard implements ITaskBoard {
       return;
     }
 
-    // ── Multi-perspective 节点：先写入结果 ──
+    // ── Multi-perspective 节点：去重在先 ──
+    if (node.results.some((r) => r.agentType === agentType)) return;
+
     node.results.push({
       nodeId,
       agentType,
@@ -189,6 +191,10 @@ export class TaskBoard implements ITaskBoard {
       const orphanTypes = node.results.filter((r) => r.agentType && !node.claimedBy.includes(r.agentType)).map((r) => r.agentType);
       const msg = `results 包含未在 claimedBy 中的 agentType: ${orphanTypes} — claimedBy=[${node.claimedBy}]`;
       this._reportInvariant("TaskBoard.complete", msg, { nodeId, orphanTypes, claimedBy: node.claimedBy });
+      // 阻断：移除孤儿结果（splice mutation，兼容 Object.freeze/Proxy）
+      const valid = node.results.filter((r) => r.agentType && node.claimedBy.includes(r.agentType));
+      node.results.length = 0;
+      node.results.push(...valid);
     }
 
     // 用 claimedBy 而非 _expectedAgentTypes：只有实际认领的 Agent 才参与等齐判断
@@ -197,18 +203,6 @@ export class TaskBoard implements ITaskBoard {
     if (claimed.size === done.size && [...claimed].every((t) => done.has(t))) {
       node.status = "done";
       node.claimedBy = []; // 终态清理
-    }
-
-    // 等齐判断之后执行去重：移除重复结果
-    const seen = new Set<AgentType>();
-    for (let i = node.results.length - 1; i >= 0; i--) {
-      const at = node.results[i]!.agentType;
-      if (at === undefined) continue;
-      if (seen.has(at)) {
-        node.results.splice(i, 1);
-      } else {
-        seen.add(at);
-      }
     }
   }
 
@@ -229,6 +223,9 @@ export class TaskBoard implements ITaskBoard {
   allPerspectivesComplete(nodeId: string): boolean {
     const node = this.nodes.get(nodeId);
     if (!node?.needsMultiPerspective) return false;
+    // 终态 done：complete() 等齐后已清空 claimedBy 做终态清理，
+    // 此处直接返回 true——多视角节点能到 done 必然是等齐所致。
+    if (node.status === "done") return true;
     const claimed = new Set(node.claimedBy);
     const done = new Set(node.results.map((r) => r.agentType));
     return claimed.size === done.size && [...claimed].every((t) => done.has(t));

@@ -18,8 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { AgentType, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ExecutionReport } from "@cortex/shared";
 import type { ITuiEngineBridge } from "@cortex/shared";
-import { chatMode } from "@cortex/cli";
-import { talkMode } from "@cortex/cli";
+import { queryLoop } from "@cortex/cli";
 import { planMode } from "@cortex/cli";
 import type { PlanModeState } from "@cortex/cli";
 import { LlmAdapter } from "@cortex/llm";
@@ -116,7 +115,7 @@ describe("TUI 完整链路: bootstrap→chat→talk→plan→approve→execute",
   });
 
   it("chatMode 应产生流式输出", { timeout: 120000 }, async () => {
-    const gen = chatMode("写个 add 函数", bridge, AgentType.Code);
+    const gen = queryLoop({ input: "写个 add 函数", bridge, mode: "chat", agent: AgentType.Code, hooks: {} });
     const chunks: string[] = [];
     let finalResult = "";
 
@@ -135,7 +134,7 @@ describe("TUI 完整链路: bootstrap→chat→talk→plan→approve→execute",
   });
 
   it("talkMode 应加载 persona 并回复", { timeout: 120000 }, async () => {
-    const gen = talkMode("你好", bridge, AgentType.Butler);
+    const gen = queryLoop({ input: "你好", bridge, mode: "chat", agent: AgentType.Butler, hooks: {} });
     const events: string[] = [];
 
     for await (const event of gen) {
