@@ -14,6 +14,7 @@ import {
   buildEdges,
   detectCycles,
   detectDrifts,
+  detectLayerViolations,
   computeLayers,
   generateDot,
   generateMermaid,
@@ -492,5 +493,68 @@ describe("generateMermaid — Mermaid 输出", () => {
     ];
     const mm = generateMermaid(pkgsWithRoot, edges, []);
     expect(mm).not.toContain('"root"');
+  });
+});
+
+// ============================================================
+// detectLayerViolations
+// ============================================================
+
+describe("detectLayerViolations — 分层违规检测", () => {
+  const layerOf: Record<string, number> = {
+    shared: 0,
+    llm: 1,
+    engine: 2,
+  };
+
+  it("高层依赖低层——合规，无违规", () => {
+    const edges: Edge[] = [
+      { from: "engine", to: "shared", type: "dependencies" },
+      { from: "engine", to: "llm", type: "dependencies" },
+      { from: "llm", to: "shared", type: "dependencies" },
+    ];
+    expect(detectLayerViolations(edges, layerOf)).toEqual([]);
+  });
+
+  it("同层依赖——合规，无违规", () => {
+    const edges: Edge[] = [
+      { from: "llm", to: "llm", type: "dependencies" },
+    ];
+    expect(detectLayerViolations(edges, layerOf)).toEqual([]);
+  });
+
+  it("低层反向依赖高层——报违规并携带双方层号", () => {
+    const edges: Edge[] = [
+      { from: "shared", to: "engine", type: "dependencies" },
+    ];
+    expect(detectLayerViolations(edges, layerOf)).toEqual([
+      { from: "shared", to: "engine", fromLayer: 0, toLayer: 2 },
+    ]);
+  });
+
+  it("多条违规全部收集", () => {
+    const edges: Edge[] = [
+      { from: "shared", to: "llm", type: "dependencies" },
+      { from: "llm", to: "engine", type: "dependencies" },
+      { from: "engine", to: "shared", type: "dependencies" },
+    ];
+    const violations = detectLayerViolations(edges, layerOf);
+    expect(violations).toHaveLength(2);
+    expect(violations.map((v) => `${v.from}->${v.to}`)).toEqual([
+      "shared->llm",
+      "llm->engine",
+    ]);
+  });
+
+  it("未登记的包被跳过（不报违规）", () => {
+    const edges: Edge[] = [
+      { from: "unknown", to: "engine", type: "dependencies" },
+      { from: "shared", to: "mystery", type: "dependencies" },
+    ];
+    expect(detectLayerViolations(edges, layerOf)).toEqual([]);
+  });
+
+  it("空边集——无违规", () => {
+    expect(detectLayerViolations([], layerOf)).toEqual([]);
   });
 });

@@ -433,7 +433,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     try {
       await this._be.flushAll(this._entries, this._links);
     } catch (err) {
-      this._observer?.emit({ type: PipelineEventType.MemoryFlushSkipped, priority: PipelinePriority.HIGH, payload: { error: String(err).slice(0, 200) }, timestamp: Date.now() });
+      this._observer?.emit({ type: PipelineEventType.MemoryFlushSkipped, priority: PipelinePriority.HIGH, payload: { source: "flushAll", detail: String(err).slice(0, 200) }, timestamp: Date.now() });
       throw err;
     }
   }
@@ -497,7 +497,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     try {
       await this._be.persist(e);
     } catch (err) {
-      this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { error: String(err).slice(0, 200), entryId: id }, timestamp: Date.now() });
+      this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { operation: "persist", error: String(err).slice(0, 200) }, timestamp: Date.now() });
       throw err;
     }
     return id;
@@ -515,7 +515,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     try {
       await this._be.persist(e);
     } catch (err) {
-      this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { error: String(err).slice(0, 200), entryId: id }, timestamp: Date.now() });
+      this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { operation: "set", error: String(err).slice(0, 200) }, timestamp: Date.now() });
       throw err;
     }
   }
@@ -558,6 +558,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     const failed: { index: number; error: string }[] = [];
     for (let idx = 0; idx < is.length; idx++) {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const id = await this.write(is[idx]!);
         succeeded.push(id);
       } catch (err) {

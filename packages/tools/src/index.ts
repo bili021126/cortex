@@ -33,6 +33,7 @@ export {
   buildEdges,
   detectCycles,
   detectDrifts,
+  detectLayerViolations,
   generateDot,
   generateMermaid,
   computeLayers,
@@ -41,6 +42,10 @@ export type {
   PkgInfo,
   Edge,
   CycleInfo,
+  LayerViolation,
   AnalyzerOutput,
   AnalyzerMeta,
 } from './monorepo-analyzer.js';
+
+// ── 依赖分层契约（Cortex 专用真相源） ──
+export { CORTEX_LAYER_CONTRACT, LAYER_NAMES } from './layer-contract.js';

@@ -85,6 +85,13 @@ export interface CycleInfo {
   packages: string[];
 }
 
+export interface LayerViolation {
+  from: string;
+  to: string;
+  fromLayer: number;
+  toLayer: number;
+}
+
 export interface AnalyzerMeta {
   scannedAt: string;
   filesScanned: number;
@@ -116,6 +123,7 @@ export interface AnalyzerOutput {
 function semverScore(v: string): number {
   const cleaned = v.replace(/^[\^~>=<]/, '');
   const parts = cleaned.split('.').map((s) => parseInt(s, 10) || 0);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return parts[0]! * 10000 + (parts[1] || 0) * 100 + (parts[2] || 0);
 }
 
@@ -138,6 +146,7 @@ function isCortexInternal(name: string): boolean {
 
 function nameToId(name: string): string {
   const m = name.match(/@[^/]+\/(.+)/);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return m ? m[1]! : name;
 }
 
@@ -302,6 +311,7 @@ export function detectCycles(edges: Edge[]): CycleInfo[] {
   for (const edge of edges) {
     if (!adj[edge.from]) adj[edge.from] = [];
     if (!adj[edge.to]) adj[edge.to] = [];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (!adj[edge.from]!.includes(edge.to)) adj[edge.from]!.push(edge.to);
   }
 
@@ -311,12 +321,15 @@ export function detectCycles(edges: Edge[]): CycleInfo[] {
   const path: string[] = [];
 
   function normalizePath(p: string[]): string[] {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     if (p.length <= 1) return [...p, p[0]!];
     let minIdx = 0;
     for (let i = 1; i < p.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       if (p[i]! < p[minIdx]!) minIdx = i;
     }
     const rotated = [...p.slice(minIdx), ...p.slice(0, minIdx)];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     rotated.push(rotated[0]!);
     return rotated;
   }
@@ -371,9 +384,11 @@ export function detectDrifts(deps: DepEntry[], ignoreList: string[], verbose: bo
     if (dep.isWorkspaceStar && isCortexInternal(dep.depName)) continue;
 
     if (!groups[dep.depName]) groups[dep.depName] = [];
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     groups[dep.depName]!.push(dep);
 
     if (!allDeps[dep.depName]) allDeps[dep.depName] = {};
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     allDeps[dep.depName]![dep.pkgId] = dep.version;
   }
 
@@ -431,7 +446,9 @@ function recommendVersion(entries: DepEntry[]): { version: string; reason: strin
     return semverScore(b[0]) - semverScore(a[0]);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const bestVersion = sorted[0]![0];
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const bestCount = sorted[0]![1];
   const total = versions.length;
 
@@ -558,10 +575,40 @@ export function computeLayers(
   const layers: string[][] = Array.from({ length: maxLayer + 1 }, () => []);
   for (const pkg of packages) {
     if (pkg.isRoot) continue;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     layers[pkgLayers.get(pkg.id) ?? 0]!.push(pkg.id);
   }
 
   return { layers, pkgLayers };
+}
+
+/**
+ * 依赖分层违规检测。
+ *
+ * 规则：包只能依赖同层或更低层的包（低层 ← 高层，严格单向）。
+ * 违规 = 某条边 from → to，但 from 的声明层级 **低于** to 的层级
+ * （低层包反向依赖了高层包，破坏单向分层）。
+ *
+ * 未在 layerOf 中声明的包会被跳过（契约完整性由调用方单独校验）。
+ *
+ * @param edges    依赖边（from 依赖 to）
+ * @param layerOf  各包的声明层级映射（包 id → 层号）
+ * @returns 违规边列表（含双方层号），空数组表示合规
+ */
+export function detectLayerViolations(
+  edges: Edge[],
+  layerOf: Record<string, number>,
+): LayerViolation[] {
+  const violations: LayerViolation[] = [];
+  for (const edge of edges) {
+    const fromLayer = layerOf[edge.from];
+    const toLayer = layerOf[edge.to];
+    if (fromLayer === undefined || toLayer === undefined) continue;
+    if (fromLayer < toLayer) {
+      violations.push({ from: edge.from, to: edge.to, fromLayer, toLayer });
+    }
+  }
+  return violations;
 }
 
 /** 生成 Mermaid flowchart（适合 GitHub/GitLab Markdown 渲染） */
@@ -629,6 +676,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
     const fromGroups: Record<string, Edge[]> = {};
     for (const edge of edges) {
       if (!fromGroups[edge.from]) fromGroups[edge.from] = [];
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       fromGroups[edge.from]!.push(edge);
     }
 
@@ -640,6 +688,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
     });
 
     for (const from of sortedFrom) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const edgeList = fromGroups[from]!;
       const targets = edgeList.map((e) => {
         const suffix = e.type === 'devDependencies' ? '[dev]' : '';
@@ -657,6 +706,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
     lines.push('  ✅ 未发现循环依赖');
   } else {
     for (let i = 0; i < output.cycles.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const cycle = output.cycles[i]!;
       lines.push(`  ❌ 循环 #${i + 1}: ${cycle.path.join(' → ')}`);
       lines.push(`     涉及包: ${cycle.packages.join(', ')}`);
@@ -670,6 +720,7 @@ function formatText(output: AnalyzerOutput, _verbose: boolean): string {
   } else {
     lines.push(`  ❌ 发现 ${output.drifts.length} 处版本漂移:\n`);
     for (let i = 0; i < output.drifts.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const d = output.drifts[i]!;
       lines.push(`  ${i + 1}. ${d.dependency}（出现 ${d.occurrences} 次）`);
       for (const [pkgId, ver] of Object.entries(d.versions)) {
@@ -730,7 +781,9 @@ function main(): number {
   const ignoreList: string[] = [];
   if (ignoreIdx !== -1) {
     for (let i = ignoreIdx + 1; i < args.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       if (args[i]!.startsWith('-')) break;
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       ignoreList.push(args[i]!);
     }
   }
@@ -800,6 +853,7 @@ function main(): number {
     for (const edge of edges) {
       if (!adj[edge.from]) adj[edge.from] = [];
       if (!adj[edge.to]) adj[edge.to] = [];
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       if (!adj[edge.from]!.includes(edge.to)) adj[edge.from]!.push(edge.to);
     }
 
