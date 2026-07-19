@@ -289,16 +289,15 @@ export class InMemoryFileLockManager extends FileLockManager {
   }
 
   /**
-   * 释放所有锁并重置状态。
-   * 先清理过期锁（触发 onStaleLockReclaimed 回调），
-   * 再清空所有持有者。
+   * 释放所有锁并重置状态——重置后实例仍可继续使用（区别于 dispose()）。
+   * 先清理过期锁（触发 onStaleLockReclaimed 回调），再清空所有持有者。
+   * 生命周期级销毁请用 dispose()。
    */
   clear(): void {
     // 清理过期锁（触发回调）
     this.cleanStaleLocks();
-    // 清空所有剩余锁
+    // 清空所有剩余锁——不置 _disposed，实例保持可用（重置语义）
     this._locks.clear();
-    this._disposed = true;
   }
 
   /**

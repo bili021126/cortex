@@ -65,7 +65,8 @@ export class FileLockManagerPlugin implements EnginePlugin {
   async start(): Promise<void> {}
 
   async stop(): Promise<void> {
-    this.instance.clear();
+    // 生命周期级 teardown：dispose() 释放锁并标记已销毁（use-after-stop 守卫）
+    this.instance.dispose();
   }
 
   health(): PluginHealth {

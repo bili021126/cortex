@@ -1,6 +1,7 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { FileLockManager } from "@cortex/engine";
+import { InMemoryFileLockManager } from "../src/core/file-lock-manager.js";
 import { LockType, PipelineEventType } from "@cortex/shared";
 import type { IPipelineObserver } from "@cortex/shared";
 
@@ -15,41 +16,41 @@ function mockObserver(): { observer: IPipelineObserver; events: any[] } {
 describe("FileLockManager 基本锁操作", () => {
   it("首次获取读锁成功", () => {
     const flm = new FileLockManager();
-    expect(flm.acquire("/test.ts", LockType.Read, "agent-1")).toBe(true);
+    expect(flm.acquire("/test.ts", "agent-1", LockType.Read)).toBe(true);
     expect(flm.isLocked("/test.ts")).toBe(true);
   });
 
   it("读锁共存——两个 holder 可同时持有读锁", () => {
     const flm = new FileLockManager();
-    expect(flm.acquire("/test.ts", LockType.Read, "agent-1")).toBe(true);
-    expect(flm.acquire("/test.ts", LockType.Read, "agent-2")).toBe(true);
+    expect(flm.acquire("/test.ts", "agent-1", LockType.Read)).toBe(true);
+    expect(flm.acquire("/test.ts", "agent-2", LockType.Read)).toBe(true);
     expect(flm.holds("/test.ts", "agent-1")).toBe(true);
     expect(flm.holds("/test.ts", "agent-2")).toBe(true);
   });
 
   it("写锁排斥读锁", () => {
     const flm = new FileLockManager();
-    flm.acquire("/test.ts", LockType.Write, "agent-1");
-    expect(flm.acquire("/test.ts", LockType.Read, "agent-2")).toBe(false);
+    flm.acquire("/test.ts", "agent-1", LockType.Write);
+    expect(flm.acquire("/test.ts", "agent-2", LockType.Read)).toBe(false);
   });
 
   it("读锁排斥写锁", () => {
     const flm = new FileLockManager();
-    flm.acquire("/test.ts", LockType.Read, "agent-1");
-    expect(flm.acquire("/test.ts", LockType.Write, "agent-2")).toBe(false);
+    flm.acquire("/test.ts", "agent-1", LockType.Read);
+    expect(flm.acquire("/test.ts", "agent-2", LockType.Write)).toBe(false);
   });
 
   it("释放锁后其他 holder 可获取", () => {
     const flm = new FileLockManager();
-    flm.acquire("/test.ts", LockType.Write, "agent-1");
+    flm.acquire("/test.ts", "agent-1", LockType.Write);
     flm.release("/test.ts", "agent-1");
-    expect(flm.acquire("/test.ts", LockType.Read, "agent-2")).toBe(true);
+    expect(flm.acquire("/test.ts", "agent-2", LockType.Read)).toBe(true);
   });
 
   it("全释放后 isLocked 返回 false", () => {
     const flm = new FileLockManager();
-    flm.acquire("/test.ts", LockType.Read, "agent-1");
-    flm.acquire("/test.ts", LockType.Read, "agent-2");
+    flm.acquire("/test.ts", "agent-1", LockType.Read);
+    flm.acquire("/test.ts", "agent-2", LockType.Read);
     flm.release("/test.ts", "agent-1");
     flm.release("/test.ts", "agent-2");
     expect(flm.isLocked("/test.ts")).toBe(false);
@@ -57,7 +58,7 @@ describe("FileLockManager 基本锁操作", () => {
 
   it("touch 刷新锁活跃时间——防止误回收", () => {
     const flm = new FileLockManager(100); // 100ms 超时
-    flm.acquire("/test.ts", LockType.Read, "agent-1");
+    flm.acquire("/test.ts", "agent-1", LockType.Read);
     // 等待超时前 touch 续期
     flm.touch("/test.ts", "agent-1");
     expect(flm.isLocked("/test.ts")).toBe(true);
@@ -71,7 +72,7 @@ describe("FileLockManager observer 集成", () => {
     const flm = new FileLockManager(1, observer); // 1ms 立即过期
 
     // 获取锁
-    flm.acquire("/test.ts", LockType.Read, "holder-1");
+    flm.acquire("/test.ts", "holder-1", LockType.Read);
 
     // 等待锁过期（>1ms）
     const start = Date.now();
@@ -92,7 +93,7 @@ describe("FileLockManager observer 集成", () => {
     const { observer, events } = mockObserver();
     const flm = new FileLockManager(1, observer);
 
-    flm.acquire("/a/b/c.ts", LockType.Write, "agent-x");
+    flm.acquire("/a/b/c.ts", "agent-x", LockType.Write);
 
     // 等待锁过期
     const start = Date.now();
@@ -114,7 +115,7 @@ describe("FileLockManager 生命周期", () => {
     await flm.init();
 
     // 锁操作应正常
-    expect(flm.acquire("/test.ts", LockType.Read, "agent-1")).toBe(true);
+    expect(flm.acquire("/test.ts", "agent-1", LockType.Read)).toBe(true);
     expect(flm.isLocked("/test.ts")).toBe(true);
 
     // 清理
@@ -124,11 +125,11 @@ describe("FileLockManager 生命周期", () => {
   it("dispose() 后拒绝所有锁操作", async () => {
     const flm = new FileLockManager();
     await flm.init();
-    flm.acquire("/test.ts", LockType.Read, "agent-1");
+    flm.acquire("/test.ts", "agent-1", LockType.Read);
 
     flm.dispose();
 
-    expect(() => flm.acquire("/test2.ts", LockType.Read, "agent-2")).toThrow(/已释放.*acquire/);
+    expect(() => flm.acquire("/test2.ts", "agent-2", LockType.Read)).toThrow(/已释放.*acquire/);
     expect(() => flm.release("/test.ts", "agent-1")).toThrow(/已释放.*release/);
     expect(() => flm.isLocked("/test.ts")).toThrow(/已释放.*isLocked/);
     expect(() => flm.touch("/test.ts", "agent-1")).toThrow(/已释放.*touch/);
@@ -148,7 +149,7 @@ describe("FileLockManager 生命周期", () => {
     await flm.init();
     await flm.start();
 
-    expect(flm.acquire("/test.ts", LockType.Write, "agent-1")).toBe(true);
+    expect(flm.acquire("/test.ts", "agent-1", LockType.Write)).toBe(true);
 
     await flm.stop();
     flm.dispose();
@@ -156,7 +157,7 @@ describe("FileLockManager 生命周期", () => {
 
   it("无 observer 时锁超时回收不抛异常", () => {
     const flm = new FileLockManager(1); // 1ms 超时，无 observer
-    flm.acquire("/test.ts", LockType.Read, "holder-1");
+    flm.acquire("/test.ts", "holder-1", LockType.Read);
 
     // 等待锁过期
     const start = Date.now();
@@ -169,10 +170,39 @@ describe("FileLockManager 生命周期", () => {
   it("cleanStaleLocks 仅回收过期锁，活跃锁不受影响", () => {
     const flm = new FileLockManager(60_000); // 60s 超时
 
-    flm.acquire("/active.ts", LockType.Read, "agent-1");
+    flm.acquire("/active.ts", "agent-1", LockType.Read);
 
     const cleaned = flm.cleanStaleLocks();
     expect(cleaned).toBe(0);
     expect(flm.isLocked("/active.ts")).toBe(true);
+  });
+});
+
+describe("InMemoryFileLockManager.clear() 重置语义", () => {
+  it("clear() 释放所有锁但实例仍可用（重置≠销毁）", () => {
+    const flm = new InMemoryFileLockManager({});
+    expect(flm.acquire("/a.ts", "agent-1", LockType.Write)).toBe(true);
+    expect(flm.isLocked("/a.ts")).toBe(true);
+
+    flm.clear();
+
+    // 锁已释放
+    expect(flm.isLocked("/a.ts")).toBe(false);
+    // 关键：clear() 后实例仍可继续使用（不抛“已释放”）
+    expect(() => flm.acquire("/b.ts", "agent-2", LockType.Write)).not.toThrow();
+    expect(flm.isLocked("/b.ts")).toBe(true);
+  });
+
+  it("dispose() 才真正销毁实例（clear() 不销毁）", () => {
+    const flm = new InMemoryFileLockManager({});
+    flm.acquire("/a.ts", "agent-1", LockType.Read);
+
+    flm.clear();
+    // clear 后仍可用
+    expect(() => flm.isLocked("/a.ts")).not.toThrow();
+
+    flm.dispose();
+    // dispose 后拒绝操作
+    expect(() => flm.acquire("/c.ts", "agent-3", LockType.Read)).toThrow(/已释放/);
   });
 });
