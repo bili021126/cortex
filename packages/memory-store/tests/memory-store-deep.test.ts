@@ -1,3 +1,4 @@
+// @ci: unit
 // ============================================================
 // @cortex/memory-store — 深度测试
 //
@@ -198,5 +199,41 @@ describe("@cortex/memory-store — 深度测试", () => {
     const found2 = results.find((m) => m.id === id2);
     expect(found1).toBeUndefined();
     expect(found2).toBeDefined();
+  });
+
+  // ── 6. 权重老化回写：完整条目保留（C1 数据丢失回归）──
+  it("权重老化回写：老化仅更新 weight，不抹掉条目其他字段", async () => {
+    const backend = new InMemoryMemoryStore();
+    const localStore = new MemoryStore(backend);
+    await localStore.init(":memory:");
+
+    // 写一条真实条目拿到合法 shape
+    const id = localStore.writePending({
+      source: { agentType: "test", taskId: "aging-writeback" },
+      kind: "TaskLog",
+      summary: "preserve me through aging",
+      semantic_gist: "aging writeback",
+      content_blob: { keep: true, payload: "important" },
+      content_hash: "aging-hash-1",
+      weight: 1,
+    });
+    localStore.commitMemory(id);
+
+    // 取回完整条目，用 backend.set 将 lastAccessedAt 回拨 30 天以触发老化
+    const seed = (await localStore.read({ kind: "TaskLog", limit: 10 })).find((m) => m.id === id);
+    expect(seed).toBeDefined();
+    await backend.set(id, { ...seed!, lastAccessedAt: Date.now() - 30 * 86400000, weight: 1 });
+
+    // maintain() 走 getAllEntries 老化路径（不重置访问时间），触发回写
+    // （若回写只传 { weight } 会把整条抹掉 → 旧 bug）
+    localStore.maintain();
+
+    // 直接从 backend 读原始条目（getAllEntries 不改访问时间）：必须完整保留，仅 weight 降低
+    const after = backend.getAllEntries().find((m) => m.id === id);
+    expect(after).toBeDefined();
+    expect(after!.summary).toBe("preserve me through aging");
+    expect(after!.content_blob).toEqual({ keep: true, payload: "important" });
+    expect(after!.kind).toBe("TaskLog");
+    expect(after!.weight).toBeLessThan(1);
   });
 });

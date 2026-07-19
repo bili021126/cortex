@@ -92,7 +92,11 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       this._observer.emit({
         type: PipelineEventType.ErrorReported,
         priority: PipelinePriority.NORMAL,
-        payload: { message: msg },
+        payload: {
+          source: `memory-store.weightAging.${phase}`,
+          severity: "degraded",
+          error: msg,
+        },
         timestamp: Date.now(),
         notificationType: "WARNING",
       });
@@ -131,7 +135,8 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       this._phase = LifecyclePhase.Running;
       return;
     }
-    // ILifecycle 路径
+    // ILifecycle 路径——idempotent，已 Running 则跳过
+    if (this._phase === LifecyclePhase.Running) return;
     if (this._phase !== LifecyclePhase.Created) {
       throw new Error(`[MemoryStore] 无法 init: 当前 phase=${this._phase}，期望 Created`);
     }
@@ -257,7 +262,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
     // ── inflight 去重（防 TOCTOU 竞态）──
     const inflight = this._inflightWrites.get(contentHash);
-    if (inflight) return inflight;
+    if (inflight) return await inflight;
 
     // ── 后端写入 + inflight 注册 ──
     const writePromise = (async (): Promise<string> => {
@@ -333,6 +338,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     // ── 遥测：Memory 检索耗时 ──
     const t0 = Date.now();
     let results = await this._backend.read(backendQuery, mode);
+    // eslint-disable-next-line no-console
     console.log(`[telemetry] memory.search_time_ms value=${Date.now() - t0} mode=${mode}`);
 
     // ── 适配器层过滤：30 天 TTL + 标记删除 ──
@@ -412,14 +418,14 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         const agedWeight = entry.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
         if (Math.abs(agedWeight - entry.weight) > 0.1) {
           try {
-            const setPromise = this._backend.set(entry.id, { weight: agedWeight } as any);
-            // Core-3: as any 因 backend.set() 泛型签名不完整——待 SQLite 后端接口升级
+            // 读-改-写：set() 是整体替换语义，必须传完整条目、仅更新 weight，
+            // 否则会把其他字段（content/embedding/时间戳）抹掉造成数据丢失。
+            const updated: MemoryEntry = { ...entry, weight: agedWeight };
+            const setPromise = this._backend.set(entry.id, updated);
             if (setPromise) setPromise.catch((e) => this._safeAgingError(e, entry.id, "set"));
-          } catch (e) {
-            // best-effort: set 不可用时用 write（keepExisting 语义——不覆盖其他字段）
-            // Core-3: as any 因 backend.write() 泛型签名不完整——待 SQLite 后端接口升级
-            this._backend.write({ id: entry.id, weight: agedWeight } as any)
-              .catch((err) => this._safeAgingError(err, entry.id, "write"));
+          } catch (_e) {
+            // best-effort：老化回写属非关键路径，失败仅记录（write 会新建条目而非更新，不适用）
+            this._safeAgingError(_e, entry.id, "set");
           }
         }
       }
@@ -532,7 +538,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         const text = entry.semantic_gist || JSON.stringify(entry.content_blob).slice(0, 2000);
         try {
           const emb = await this._embedder.embedText(text);
-          if (emb && emb.length === EMBEDDING_DIM) {
+          if (emb?.length === EMBEDDING_DIM) {
             this._vectorCache.set(entry.id, emb);
           }
         } catch {
@@ -591,12 +597,13 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           priority: PipelinePriority.HIGH,
           payload: {
             operation: "commitMemory-enrichment",
-            detail: String(err),
+            error: String(err),
           },
           timestamp: Date.now(),
           notificationType: "WARNING",
         });
       }).finally(() => {
+        // eslint-disable-next-line no-console
         console.log(`[telemetry] memory.write_duration_ms value=${Date.now() - t0} operation=commit`);
       });
     }
@@ -660,8 +667,8 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           const aged = e.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
           if (aged < e.weight * 0.9) {
             try {
-              const p = this._backend.set(e.id, { weight: aged } as any);
-              // Core-3: as any 因 backend.set() 泛型签名不完整——待 SQLite 后端接口升级
+              // 读-改-写：传完整条目仅更新 weight，避免整体替换抹掉其他字段。
+              const p = this._backend.set(e.id, { ...e, weight: aged });
               if (p) p.catch((err) => this._safeAgingError(err, e.id, "set"));
             } catch (e) {
               // best-effort: 非关键降级路径
@@ -757,10 +764,12 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     });
   }
 
-  /** SHA256 去重缓存：content_hash → id */
+  /** SHA256 去重缓存：content_hash → id。LRU 淘汰，上限 10000 */
   private readonly _dedupCache = new Map<string, string>();
-  /** 向量索引缓存：id → embedding，用于快速向量去重 */
+  private static readonly MAX_DEDUP_CACHE = 10_000;
+  /** 向量索引缓存：id → embedding。LRU 淘汰，上限 5000（每条约 3KB，总量 ~15MB） */
   private readonly _vectorCache = new Map<string, number[]>();
+  private static readonly MAX_VECTOR_CACHE = 5_000;
 
   /** SHA256 去重——优先查缓存，miss 时全表扫描（Core-3：统一使用 DedupService.exactMatch 替代内联实现） */
   private async _tryDedup(contentHash: string): Promise<string | null> {
@@ -777,10 +786,22 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         this._dedupCache.set(contentHash, dupId);
         return dupId;
       }
-      // 缓存未命中：预热缓存（O(n) 一次，后续 O(1)）
+      // 缓存未命中：预热缓存（O(n) 一次，后续 O(1)），超限时 LRU 淘汰
       for (const e of all) {
-        if (e.content_hash) this._dedupCache.set(e.content_hash, e.id);
-        if (e.embedding) this._vectorCache.set(e.id, e.embedding);
+        if (e.content_hash) {
+          if (this._dedupCache.size >= MemoryStore.MAX_DEDUP_CACHE) {
+            const first = this._dedupCache.keys().next().value;
+            if (first !== undefined) this._dedupCache.delete(first);
+          }
+          this._dedupCache.set(e.content_hash, e.id);
+        }
+        if (e.embedding) {
+          if (this._vectorCache.size >= MemoryStore.MAX_VECTOR_CACHE) {
+            const first = this._vectorCache.keys().next().value;
+            if (first !== undefined) this._vectorCache.delete(first);
+          }
+          this._vectorCache.set(e.id, e.embedding);
+        }
       }
       return null;
     } catch {
@@ -795,7 +816,13 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       // M-06 修复：每次查询前从后端刷新 _vectorCache，避免过期缓存漏去重
       const all = await this._backend.read({}, "HCA");
       for (const e of all) {
-        if (e.embedding) this._vectorCache.set(e.id, e.embedding);
+        if (e.embedding) {
+          if (this._vectorCache.size >= MemoryStore.MAX_VECTOR_CACHE) {
+            const first = this._vectorCache.keys().next().value;
+            if (first !== undefined) this._vectorCache.delete(first);
+          }
+          this._vectorCache.set(e.id, e.embedding);
+        }
       }
       const matches = this._dedupService.vectorDedup(embedding, all);
       const bestMatch = matches.find((m) => m.existingId !== newId);
