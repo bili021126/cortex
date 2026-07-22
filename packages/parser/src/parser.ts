@@ -173,12 +173,14 @@ function sanitizeAttrs(html: string): string {
   return html.replace(/\s(on\w+)\s*=/gi, ' data-x-$1=');
 }
 
-/** HTML 实体转义 */
+/** HTML 实体转义——防 XSS 注入（R4 fix：补引号转义） */
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 /** HTML 属性值转义 */
@@ -398,8 +400,15 @@ export function convert(markdown: string): string {
  * @param title - 可选文档标题，默认 "Document"
  * @returns 完整的 HTML 文档字符串
  */
+/**
+ * 包装 convert() 的输出，添加 DOCTYPE、head、title、基础样式和 body。
+ *
+ * @param markdown - 原始 Markdown 文本
+ * @param title - 可选文档标题，默认 "Document"
+ * @returns 完整的 HTML 文档字符串
+ */
 export function convertToDocument(markdown: string, title?: string): string {
-  const docTitle = title || 'Document';
+  const docTitle = escapeHtml(title || 'Document');
   const body = convert(markdown);
   return [
     '<!DOCTYPE html>',

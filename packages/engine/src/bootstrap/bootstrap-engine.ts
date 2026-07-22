@@ -265,11 +265,16 @@ export async function bootstrapEngine(
     : undefined;
 
   // §6.2.2 EnvironmentAwareRouter —— 环境感知模型降级
+  const envModelPriority = [
+    process.env["DEEPSEEK_REASONER_MODEL"] ?? "",
+    process.env["DEEPSEEK_CHAT_MODEL"] ?? "",
+  ].filter(Boolean);
+  // C3 fix: 当所有环境变量为空时回退到硬编码默认模型，避免空优先级列表导致全路由不可用
+  if (envModelPriority.length === 0) {
+    envModelPriority.push("deepseek-v4-chat");
+  }
   const envRouter = new EnvironmentAwareRouter({
-    modelPriority: [
-      process.env["DEEPSEEK_REASONER_MODEL"] ?? "",
-      process.env["DEEPSEEK_CHAT_MODEL"] ?? "",
-    ].filter(Boolean),
+    modelPriority: envModelPriority,
     fallbackStrategy: "next-in-priority",
   });
 
@@ -329,7 +334,9 @@ export async function bootstrapEngine(
     timeout: { timeoutMs: 120000 },
   });
   resilienceFactory.registerPolicies("tool-exec", {
-    retry: { maxAttempts: 2, baseDelayMs: 500, maxDelayMs: 5000 },
+    // R4-C2 fix: maxAttempts=1 防非幂等写操作被重试（write_file/bash 执行两次）
+    // 只读操作（L0）失败直接报错，不依赖本层重试
+    retry: { maxAttempts: 1, baseDelayMs: 500, maxDelayMs: 5000 },
     circuitBreaker: { threshold: 3, halfOpenAfterMs: 30000 },
     timeout: { timeoutMs: 30000 },
   });

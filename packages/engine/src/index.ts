@@ -66,6 +66,9 @@ export { SimulationRunner, simulationRunner } from "./planning/simulation-runner
 export { EnvironmentAwareRouter } from "./execution/environment-aware-router.js";
 export type { ModelHealth } from "./execution/environment-aware-router.js";
 
+export { streamChat } from "./execution/chat-loop.js";
+export type { ChatLoopOptions, ChatLoopResult } from "./execution/chat-loop.js";
+
 // ── Core-2: 哨兵信号分层过滤器 ─────────────────
 // @experimental L1/L2/L3 信号分层 + 去噪 + 采样
 export { SentinelSignalFilter } from "./planning/sentinel-signal-filter.js";

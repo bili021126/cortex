@@ -127,6 +127,7 @@ export async function* planMode(
   planState: PlanModeState,
   history?: LlmMessage[],
   externalHooks?: Partial<TuiHooks>,
+  signal?: AbortSignal,
 ): AsyncGenerator<TuiEvent, string, void> {
   const hooks: TuiHooks = {
     onPreToolUse: async (_event) => {
@@ -195,7 +196,7 @@ export async function* planMode(
   }
 
   // 否则：生成计划
-  const planText = yield* queryLoop({ input, bridge, mode: "plan", agent, hooks, history });
+  const planText = yield* queryLoop({ input, bridge, mode: "plan", agent, hooks, history, signal });
 
   // —— 通过 MetaAgent 标准化节点（补上被绕过的规划层） ——
   try {

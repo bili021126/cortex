@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../config" },
+    { "path": "../engine/tsconfig.src.json" },
+    { "path": "../llm" },
+    { "path": "../memory-store/tsconfig.src.json" },
+    { "path": "../platform/tsconfig.src.json" },
+    { "path": "../protocol" },
+    { "path": "../scheduler/tsconfig.src.json" },
+    { "path": "../shared" },
+    { "path": "../telemetry" },
+    { "path": "../tools" }
+  ]
+}

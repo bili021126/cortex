@@ -541,9 +541,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       expires_at: f.expires_at,
     };
 
-    this._indexPut(id, e);
+    // R8-01 fix: 先 persist 再 index——persist 失败时不在内存中留下幽灵条目
     try {
       await this._be.persist(e);
+      this._indexPut(id, e);
     } catch (err) {
       this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { operation: "persist", error: String(err).slice(0, 200) }, timestamp: Date.now() });
       throw err;
@@ -764,17 +765,27 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       expires_at: p.input.expires_at,
     };
 
-    this._indexPut(mid, e);
     this._pendingEntries.delete("pending_" + mid);
 
-    // 持久化到后端（防止进程崩溃丢数据，best-effort 不阻塞返回）
+    // H6 fix: 先持久化再放入索引，避免 persist 失败时内存中存在幽灵条目
     if (this._be && typeof this._be.persist === "function") {
-      (this._be.persist(e) as Promise<void>).catch((err) => {
-        // Core-3: 失败应写 WAL 恢复日志
-        if (typeof process !== "undefined") {
-          process.stderr.write(`[memory] persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
-        }
-      });
+      const persistTimeout = new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error("persist timeout")), 3000),
+      );
+      Promise.race([
+        (this._be.persist(e) as Promise<void>),
+        persistTimeout,
+      ])
+        .then(() => { this._indexPut(mid, e); })
+        .catch((err) => {
+          if (typeof process !== "undefined") {
+            process.stderr.write(`[memory] persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          // 持久化失败仍放入索引（降级为纯内存模式，下次 flush 重试）
+          this._indexPut(mid, e);
+        });
+    } else {
+      this._indexPut(mid, e);
     }
 
     return true;

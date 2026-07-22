@@ -10,6 +10,9 @@ import * as path from "path";
 import { fileURLToPath } from "url";
 import { CortexBridge } from "./cortex-bridge.js";
 import { registerIpcHandlers } from "./ipc-handlers.js";
+import { PresenceBridge } from "./presence-bridge.js";
+import { createTray } from "./tray.js";
+import type { Tray } from "electron";
 
 // ESM 下 __dirname 不可用，手动构造
 const __filename = fileURLToPath(import.meta.url);
@@ -18,6 +21,8 @@ const rendererDir = path.join(__dirname, "../renderer");
 
 let mainWindow: BrowserWindow | null = null;
 let chatWindow: BrowserWindow | null = null;
+let presenceBridge: PresenceBridge | null = null;
+let tray: Tray | null = null;
 const cortex = new CortexBridge();
 
 function openChatWindow(): void {
@@ -50,11 +55,8 @@ function openChatWindow(): void {
 }
 
 void app.whenReady().then(async () => {
-  // 初始化 CortexBridge（LLM 连接）
-  // dist/main → ../../../.. = 项目根 d:\cortex
-  const projectRoot = path.resolve(__dirname, "../../../..");
-  console.log("[main] projectRoot:", projectRoot);
-  await cortex.init(projectRoot).catch((err) => {
+  // 初始化 CortexBridge（连接 cortex daemon）
+  await cortex.init().catch((err) => {
     console.error("[main] CortexBridge init failed:", err);
   });
 
@@ -77,6 +79,12 @@ void app.whenReady().then(async () => {
 
   // 注册 IPC 处理器
   registerIpcHandlers(ipcMain, cortex);
+
+  // Presence 层：订阅 WS 事件 → IPC 转发到桌宠窗口
+  if (cortex.isInitialized) {
+    presenceBridge = new PresenceBridge(mainWindow, cortex.connection);
+    presenceBridge.start();
+  }
 
   // ── 窗口拖拽 IPC ────────────────────────────────
   ipcMain.on("window:move", (_e, dx: number, dy: number) => {
@@ -109,13 +117,27 @@ void app.whenReady().then(async () => {
   // ── 聊天窗口 ────────────────────────────────────
   ipcMain.on("chat:open", () => openChatWindow());
 
+  // ── 系统托盘：应用生命周期入口（桌宠 skipTaskbar，无托盘则无法退出）──
+  tray = createTray({
+    iconPath: path.join(rendererDir, "avatars/cyrene-avatar.png"),
+    onOpenChat: () => openChatWindow(),
+    getMainWindow: () => mainWindow,
+  });
+
   mainWindow.on("closed", () => {
+    presenceBridge?.dispose();
+    presenceBridge = null;
     mainWindow = null;
   });
 });
 
 app.on("window-all-closed", () => {
   app.quit();
+});
+
+app.on("before-quit", () => {
+  tray?.destroy();
+  tray = null;
 });
 
 app.on("activate", () => {

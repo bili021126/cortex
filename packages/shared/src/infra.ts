@@ -345,11 +345,17 @@ export interface LlmResponse {
   tool_calls?: LlmToolCall[];
   usage?: LlmUsage;
   reasoning_content?: string; // V4-Flash 思考模式
+  /** R6-H2 fix: SSE 流中断标记——调用方据此决定是否重试 */
+  degraded?: boolean;
 }
 
 export interface LlmUsage {
   prompt_tokens: number;
   completion_tokens: number;
+  /** DeepSeek V4 上下文缓存命中的 prompt token 数（成本约为 miss 的 1/10） */
+  prompt_cache_hit_tokens?: number;
+  /** DeepSeek V4 未命中缓存、按全价计费的 prompt token 数 */
+  prompt_cache_miss_tokens?: number;
 }
 
 /** LLM function calling 工具定义（OpenAI 兼容格式） */
@@ -359,17 +365,51 @@ export interface ToolDef {
   parameters?: Record<string, unknown>;
 }
 
-/** LLM 适配器配置 */
+/**
+ * DeepSeek V4 reasoning_effort 七级梯度。
+ * 对齐 DeepSeek V4 API 2026H1 规格：off → minimal → low → medium → high → xhigh → max
+ */
+export type ReasoningEffort = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+/**
+ * 模型能力声明——替代脆弱的 model.includes("pro") 字符串匹配。
+ * 由 models.json 注册表驱动，运行时通过 resolveModelCapabilities() 查询。
+ */
+export interface ModelCapabilities {
+  /** 是否支持 thinking/reasoning 模式 */
+  thinking: boolean;
+  /** 是否支持 function calling */
+  functionCalling: boolean;
+  /** 是否支持流式输出 */
+  streaming: boolean;
+  /** 最大输出 token 数（DeepSeek V4 Pro: 384K, Flash: 64K） */
+  maxOutputTokens: number;
+  /** 上下文窗口大小（DeepSeek V4: 1M tokens） */
+  contextWindow: number;
+}
+
+/** LLM 适配器配置——DeepSeek V4 全面对齐 */
 export interface LlmAdapterConfig {
   baseUrl: string;
   apiKey: string;
   chatModel?: string;
   reasonerModel?: string;
-  reasoningEffort?: "high" | "max";
+  /** DeepSeek V4 七级 reasoning_effort（替代旧版仅 high/max 二选一） */
+  reasoningEffort?: ReasoningEffort;
   /** 权限控制标识（用于限流/配额匹配，如 "cyrene" / "chat" / "reasoner"） */
   label?: string;
   /** 供应商扩展参数（如 DeepSeek 的 thinking 模式等）。调用方显式设置，无默认值。 */
   extraBody?: Record<string, unknown>;
+  /** 最大输出 token 数。默认 65536，DeepSeek V4 Pro 支持 384K (393216) */
+  maxTokens?: number;
+  /** 采样温度。DeepSeek V4 推荐 0.0-1.0，默认 0.0（确定性输出） */
+  temperature?: number;
+  /** 频率惩罚 -2.0 ~ 2.0。降低重复 token 概率 */
+  frequencyPenalty?: number;
+  /** 存在惩罚 -2.0 ~ 2.0。鼓励话题多样性 */
+  presencePenalty?: number;
+  /** 模型能力声明——由注册表注入，替代字符串匹配推断 */
+  capabilities?: ModelCapabilities;
 }
 
 // ─── 运行时类型约束 ──────────────────────────────────────────
@@ -379,7 +419,8 @@ export interface LlmAdapterConfig {
 /** 对话选项 */
 export interface ChatOptions {
   model?: string;
-  reasoningEffort?: "high" | "max";
+  /** DeepSeek V4 七级 reasoning_effort */
+  reasoningEffort?: ReasoningEffort;
 }
 
 /** 生命周期管理

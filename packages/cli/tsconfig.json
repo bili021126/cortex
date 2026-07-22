@@ -8,6 +8,7 @@
   "include": ["src"],
   "references": [
     { "path": "../config" },
+    { "path": "../protocol" },
     { "path": "../parser" },
     { "path": "../engine/tsconfig.src.json" },
         { "path": "../memory-store/tsconfig.src.json" },

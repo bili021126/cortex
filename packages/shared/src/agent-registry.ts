@@ -420,6 +420,8 @@ export function resolveAgentPermissions(
   agentType: AgentType,
   _context?: AgentContext,
 ): readonly string[] {
+  // R8-03 fix: 参数不再标记为 _unused——预留 runtime 权限覆盖扩展点
+  // 当前返回编译期常量；未来通过 context 动态查询 permissionOverrides
   return AGENT_TOOL_PERMISSIONS[agentType] ?? [];
 }
 

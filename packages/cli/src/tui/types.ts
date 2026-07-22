@@ -37,7 +37,8 @@ export type TuiEvent =
   | TuiTokenUsageEvent
   | TuiCompactionEvent
   | TuiLifecycleEvent
-  | TuiPlanGeneratedEvent;
+  | TuiPlanGeneratedEvent
+  | TuiInterruptedEvent;
 
 /** 工具调用开始 */
 export interface TuiToolStartEvent {
@@ -125,6 +126,10 @@ export interface TuiTokenUsageEvent {
   completionTokens: number;
   sessionTotalTokens: number;
   contextWindowSize: number;
+  /** DeepSeek V4 本轮上下文缓存命中的 prompt token 数 */
+  cacheHitTokens?: number;
+  /** 本轮未命中缓存的 prompt token 数 */
+  cacheMissTokens?: number;
 }
 
 /** 上下文压缩事件 */
@@ -144,6 +149,14 @@ export interface TuiCompactionEvent {
 export interface TuiPlanGeneratedEvent {
   type: "plan_generated";
   nodes: TaskNode[];
+}
+
+/** 回合被用户中断（Esc）——非错误，干净收尾 */
+export interface TuiInterruptedEvent {
+  type: "interrupted";
+  agent: AgentType;
+  /** 中断前已产出的部分文本（若有） */
+  partial?: string;
 }
 
 /** 生命周期事件 */

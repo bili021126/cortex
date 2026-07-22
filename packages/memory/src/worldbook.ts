@@ -1,17 +1,15 @@
 // ============================================================
-// @cortex/memory — DMAE Worldbook 激活引擎
+// @cortex/memory — DMAE Worldbook → 世界知识图谱
 //
-// Cortex 没有世界书概念——此为新建。以 prompts/ 下的 persona 文件
-// 作为 worldbook entries，通过 DMAE 状态机管理激活周期。
+// 层进化：世界模型仿真层（v2）→ 世界知识图谱（v3）。
+// 原 Worldbook 仅管理条目的激活/休眠/归档——是被动仿真。
+// 知识图谱在此基础上引入：
+//   - 实体（Entity）：带类型的知识节点，不只是 persona 片段
+//   - 关系（Relation）：实体间有向边，支持图遍历
+//   - 图查询：通过 MemoryStore BFS 在图谱中推理关联
 //
-// DMAE 状态:
-//   Active   — activation >= promptThreshold，进 Prompt
-//   Dormant  — activation < promptThreshold，休眠
-//   Archived — 用户/模型沉默过长，进入归档
-//
-// 激活公式（用户命中关键词时触发）:
-//   Ru = Bu × (1 + γ · ln(1 + U_old))
-//   其中 Bu=20, γ=0.5, U_old=userSilence 回合数
+// DMAE 状态机保留——管理实体在 Prompt 中的可见性。
+// 图结构由 MemoryStore 的 link/bfs 能力承载。
 // ============================================================
 
 // ─── 世界书条目 ──────────────────────────────────────
@@ -24,6 +22,52 @@ export interface WorldbookEntry {
   intrinsicValue: number;
   linkTriggers: string[];
   permanent: boolean;
+}
+
+// ─── 世界知识图谱 v3 ────────────────────────────
+
+/** 知识实体类型——图谱中的节点分类 */
+export type KnowledgeEntityType =
+  | "persona"         // 角色/人格片段
+  | "concept"         // 抽象概念
+  | "event"           // 事件节点
+  | "location"        // 地点
+  | "artifact"         // 人造物/项目/代码库
+  | "rule"             // 规则/约束
+  | "memory"           // 记忆条目（关联 MemoryEntry）
+  | "agent";           // Agent 实例
+
+/** 知识图谱节点——Worldbook 的实体化扩展 */
+export interface KnowledgeEntity {
+  id: string;
+  type: KnowledgeEntityType;
+  labels: string[];          // 多标签
+  properties: Record<string, unknown>; // 自由属性
+  entry?: WorldbookEntry;    // 向后兼容——原 Worldbook 条目
+  memoryId?: string;         // 关联的 MemoryEntry.id
+}
+
+/** 关系类型——实体间的有向边 */
+export type RelationType =
+  | "contains"        // A 包含 B
+  | "references"      // A 引用 B
+  | "depends_on"      // A 依赖 B
+  | "causes"          // A 导致 B
+  | "contradicts"     // A 与 B 矛盾
+  | "evolves_from"    // A 从 B 演化
+  | "same_as"         // A 等价于 B（owl:sameAs）
+  | "instance_of";    // A 是 B 的实例
+
+/** 知识图谱边 */
+export interface KnowledgeRelation {
+  id: string;
+  type: RelationType;
+  sourceId: string;          // 源实体 ID
+  targetId: string;          // 目标实体 ID
+  weight: number;            // 0..1 关系强度
+  confidence: number;        // 0..1 置信度
+  provenance?: string;       // 来源（LLM推断/人工/代码分析）
+  createdAt: number;
 }
 
 // ─── 条目激活状态 ────────────────────────────────────
@@ -65,6 +109,9 @@ export const DEFAULT_DMAE_PARAMS: DmaeParams = {
 // ─── WorldbookEngine ──────────────────────────────────
 
 export class WorldbookEngine {
+  // @deprecated 2026-07 — 全量图景审计确认：WorldbookManager 从未实例化，
+  // initRAG 传入 worldbookDir="none"，所有 accessor 零调用。
+  // 知识图谱类型（KnowledgeEntity/KnowledgeRelation）保留供未来集成。
   private entries = new Map<string, WorldbookEntry>();
   private states = new Map<string, EntryState>();
   private params: DmaeParams;
@@ -171,5 +218,48 @@ export class WorldbookEngine {
   /** 获取当前参数 */
   getParams(): Readonly<DmaeParams> {
     return this.params;
+  }
+
+  // ─── 知识图谱桥接（v3 新增）──────────────────
+
+  /** 将全部已注册条目转为知识实体集合 */
+  toKnowledgeEntities(): KnowledgeEntity[] {
+    const entities: KnowledgeEntity[] = [];
+    for (const [id, entry] of this.entries) {
+      const state = this.states.get(id);
+      entities.push({
+        id,
+        type: entry.permanent ? "persona" : "concept",
+        labels: entry.keywords,
+        properties: {
+          activation: state?.activation ?? 0,
+          dmaeState: this.getDmaeState(id),
+          priority: entry.priority,
+          permanent: entry.permanent,
+        },
+        entry,
+      });
+    }
+    return entities;
+  }
+
+  /** 为两个已注册实体建立关系 */
+  createRelation(
+    sourceId: string,
+    targetId: string,
+    type: RelationType,
+    options?: { weight?: number; confidence?: number; provenance?: string },
+  ): KnowledgeRelation | null {
+    if (!this.entries.has(sourceId) || !this.entries.has(targetId)) return null;
+    return {
+      id: `rel-${sourceId}-${targetId}-${type}`,
+      type,
+      sourceId,
+      targetId,
+      weight: options?.weight ?? 0.5,
+      confidence: options?.confidence ?? 0.5,
+      provenance: options?.provenance,
+      createdAt: Date.now(),
+    };
   }
 }

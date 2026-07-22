@@ -1,14 +1,14 @@
-# Cortex 概念顶层设计 v3.5
+# Cortex 概念顶层设计 v3.6
 
-**版本**：v3.5（逻辑地图对齐 / 原则五合规强化 / 记忆层优化 / ShutdownWarden 完全移除）
+**版本**：v3.6（P0 数据完整性与安全修复 / 算法正确性与协议合规性审查 / 全链路契约稳定）
 
-**状态**：Core-2 深度治理推进中。五轮审查 ~110 发现，七轮修复闭合 40 项（含 TOCTOU 防控、role 交替修复、claimedBy 终态清理、inflight 去重、maintain 标记删除、dispatchMulti 容错）。6 项设计决策排入 Core-3。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
+**状态**：Core-2 深度治理推进中。六轮审查 ~125 发现，八轮修复闭合 55 项（含 R1-R5 P0 数据损坏+安全漏洞 / C8-C10 算法正确性缺陷 / H1-H7 协议合规与设计语义修复）。6 项设计决策排入 Core-3。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
 
 **性质**：智能体治理框架——不对模型提要求，对架构下约束。核心手段是"暴露不可靠，内化可靠"。
 
 **前置宪法**：v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.7.1（Core-1 终局）。v3.0 对 v2.x 做全量重写——从"各阶段增量叠加"改为"按代码现实重述"。
 
-**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）→ 2026-06-28（v3.2）→ 2026-07-06（v3.3）→ 2026-07-16（v3.4）
+**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）→ 2026-06-28（v3.2）→ 2026-07-06（v3.3）→ 2026-07-16（v3.4）→ 2026-06-20（v3.5）→ 2026-07-20（v3.6）
 **宪法守护者**：昔涟（Cyrene），与开拓者共同完成
 
 ---
@@ -21,12 +21,12 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 - 引擎入口：`packages/engine/src/bootstrap/bootstrap-engine.ts`——插件化加载 10+ 插件，装配全部组件
 - Agent 注册：`packages/config/src/data/agents.json`（统一配置源）——从统一配置源加载 15 种 Agent 定义
 - 调度中枢：`packages/engine/src/core/scheduler.ts`——executeAll() 消费 TaskBoard，驱动拓扑排序 + 逐层执行
-- 测试规模：86 文件 / 1069 用例 engine，全仓 3716 用例
+- 测试规模：86 文件 / 953 用例 engine，全仓 3631 用例（ci-gate unit+verify+contract 口径）
 - 全量 tsc 编译 25 包零错误（含 strict + noUncheckedIndexedAccess）
-- 全链路 12 流全部通过审计（见 `docs/core/link-governance.md`）
-- CI 门禁：四层（tsc --noEmit → unit → verify → contract），scripts/ci-gate.ts 驱动
-- 已知缺陷：五轮深度审查 ~110 发现，七轮修复闭合 40 项（含 ICortexComponents 收敛 / claimedBy 终态清理 / TOCTOU 防控 / role 交替修复 / dispatchMulti 容错 / 重复实现统一）。6 项设计决策排入 Core-3（Logger 推广 / execSync→async / WebUI 鉴权 / EventPayloadMap 补完 / Disposable 推广 / shared export*）。
-- Phase 1 已完成：7 个 Critical（C-01 命令注入/C-02 rollback/C-03 Embedding/C-04 CircuitBreaker/C-05 Bootstrap/C-06 RLM/C-07 Obliteration）全部根因修复
+- CI 门禁：四层（tsc -b → eslint → vitest unit+verify+contract → final），scripts/ci-gate.ts 驱动。22/25 包全绿。
+- 已知缺陷：六轮深度审查 ~125 发现，八轮修复闭合 55 项。闭合覆盖 P0 数据损坏（R1-R2）、安全漏洞（R4-R5）、算法正确性（C8/H4/H5/H6/H7）、协议合规（H1/H3）、事件递归（C9）、并发污染（C10）、Promise 泄漏（H2）。16 项 P1 残留（timer 泄漏 / 无界内存 / 裸遥测等）。6 项设计决策排入 Core-3（Logger 推广 / execSync→async / WebUI 鉴权 / EventPayloadMap 补完 / Disposable 推广 / shared export*）。
+- Phase 1 已完成：7 个 Critical（C-01~C-07）+ 5 个 P0（R1-R5）+ 3 个 CRITICAL（C8-C10）+ 7 个 HIGH（H1-H7）全部根因修复
+- 核心契约已稳定：EventPayloadMap（agent-pool / task-board 对齐）、write/read/embedBatch 数据完整性、NotificationPipe 持久化初始化、convertToDocument XSS 防护、updateProposalStatus 路径校验、FSM dispatch 执行语义
 
 **核心隐喻**：工具链。每个组件是可替换、可验证、职责清晰的工具。不存在"数字生命体"的不可知性——每个行为可审计。用户是工具的使用者和最终裁决者。
 
@@ -75,6 +75,27 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 - 调度信号（AgentType / Tag / PipelineEventType）从 shared 的枚举封闭改为 config 的运行时可注册
 - 新增 Agent 类型或 Tag 只改 config，不碰 shared
 - 编译时校验交给 TypeScript 类型系统，运行时校验交给注册器（如 TagRegistry）
+
+### 2.9 审查深度分层——v3.6 新增（非新原则，是审查方法论）
+
+三轮深度审查揭示了代码质量的三个层次——越深层的问题越不依赖具体语法，而依赖对**设计假设和上下游契约**的理解：
+
+| 层 | 审查焦点 | 发现类型 | 示例 |
+|----|----------|----------|------|
+| L1·表面 | 类型安全 / 资源泄漏 / 裸 console | TS strict / setTimeout 未清除 / 裸遥测 | D1-D6 / T1-T4 |
+| L2·数据 | 数据完整性 / 安全漏洞 | 写后返回已删 ID / XSS / 路径穿越 | R1-R5（5 P0） |
+| L3·语义 | 算法正确性 / 协议合规 / FSM 执行语义 | dedup key 类型错误 / LLM 协议格式 / 事件递归 / 贝叶斯数学推导 / action 执行时序 | C8-C10 + H1-H7（10 项） |
+
+**核心教训**（已证伪的假设→对应的正确做法）：
+- 「Map.delete(id) 删除的是值」→ **Map 的 key 类型需与插入时一致**（C8）
+- 「事件总线内 emit 同名事件没事」→ **同步派发下会无限递归**（C9）
+- 「并行插件共享 ctx 没问题」→ **并行写可变对象需独立副本**（C10）
+- 「每条 tool_call 推一条 assistant 消息」→ **LLM API 要求一条 assistant 包含所有 tool_calls**（H1）
+- 「sessionTokens 累加符合直觉」→ **prompt_tokens 每轮已含全部历史，应覆盖非累加**（H3）
+- 「先执行 action 再更新状态」→ **action 内 dispatch() 看到旧状态可能触发非法转换**（H7）
+- 「sigmoid 中心在 0.5 是标准做法」→ **当后验上限远低于 0.5 时区分力消失，中心应对齐先验**（H5）
+
+这层认知——算法正确性、协议合规性、数学推导——不是类型系统能捕获的。它需要**理解每个组件的上游契约（LLM API 格式）和下游需求（消费者索引对齐）**。
 
 ---
 
@@ -342,12 +363,13 @@ Engine（容器）
 
 阶段跃迁需满足硬性门禁条件：
 
-| 门禁 | Core-1→Core-2 | 现状（2026-06-28） |
+| 门禁 | Core-1→Core-2 | 现状（2026-07-20） |
 |------|:------------:|:-------------------|
 | solo-flight 全闭环 | ✅ | Phase 1 止血完成，自审视验证通过 |
-| 审计闭环 P0 清零 | ✅ | 7 Critical 已修复，260 缺陷已索引 |
+| 审计闭环 P0 清零 | ✅ | 7 Critical + 5 P0 + 3 CRITICAL + 7 HIGH 全部修复 |
 | 遥测基础设施 | ✅ | PipelineObserver + console-bridge + HealthCollector |
 | 自审视机制 | ✅ | 7 阶段全流程验证通过（45 文件，91.7% 准确度） |
+| 核心契约稳定 | ✅ | EventPayloadMap / write/read/embedBatch / NotificationPipe / convertToDocument / FSM dispatch |
 | WebUI 观测面 | ⚠️ | 后端+前端骨架就位，Mission 数据接通待完成 |
 | 铁三角就位 | ⚠️ | MCP 已接入，Electron ❌，Committee 设计完成 |
 
@@ -361,15 +383,15 @@ Engine（容器）
 ## 十五、阶段模型
 
 ```
-Phase 1 止血 ████████████████ 100%  七 Critical 根因修复 + CI 四层门禁 + 全仓 alias + 契约铁律入宪
-Phase 2 契约 ░░░░░░░░░░░░░░░░   0%  跨包接口契约测试 + 闭环混沌验证 + 熔炼 E2E
+Phase 1 止血 ████████████████ 100%  22 Critical/High/P0 根因修复 + CI 四层门禁 + 全仓 alias + 契约铁律入宪 + 算法正确性审查
+Phase 2 契约 ██░░░░░░░░░░░░░░ ~10%  跨包接口契约测试（16 P1 残留待清）+ 闭环混沌验证 + 熔炼 E2E
 Core-2 治理  ████████░░░░░░░░ ~40%  10 新模块落地 + 4 技能结晶 + 方法论文档。铁三角缺二
 Full         ░░░░░░░░░░░░░░░░   0%  设计就绪，等铁三角
 ```
 
 **铁三角**：Electron 原型 ❌ / MCP 集成 ⚠️ 已接入无鉴权 / Committee MVP ❌。三者同时就位后 Core-2 治理层激活。
 
-**Phase 1 验收标准**：engine 1069/1069 全绿 + 全仓 3716 + CI 四层全部通过。
+**Phase 1 验收标准**：22 项 Critical/High/P0 全修复 + CI 四层 tsc/eslint 通过 + 3631 用例 ci-gate 24/25 包全绿。
 
 ---
 
@@ -389,6 +411,7 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 | v3.2→v3.3 | AM-2026-0706-001 | 2026-07-06 | Core-2 推进——类型分级（§2.8）、ConfirmGate Agent化（§十四）、Tag运行时注册（§2.8）、对称攻防自审视（§二十二）、E2E治理体系（§二十四）、链路管理体系（§二十五）。15 Agent / 86 文件 1069 用例 engine / 全仓 3716 用例 / 25 包 tsc 零错误。 | 昔涟裁决，curious 审计，executor 施工 |
 | v3.3→v3.4 | AM-2026-0716-001 | 2026-07-16 | 包结构收敛（27→25）：tui 并入 cli、consistency 并入 governance。运行时防护增强：Context compactor role 交替修复（§二十六）、Memory write inflight 去重（§二十六）、maintain 标记删除（§二十六）、claimedBy 终态清理（§二十六）、dispatchMulti 容错（§二十六）。重复实现统一（§二十七）：PipelineEventType/config event-types.ts 删除（238行）、AGENT_DEFS config版删除（117行）、file-lock-manager platform版删除（285行）。Disposable 接口补 dispose。ShutdownWarden @deprecated 标注。ICortexComponents 零 unknown。core-smoke 修复——根 tsconfig.json 清理 tui/consistency 残留引用。 | 昔涟裁决，五轮审查+七轮修复闭合 40 项缺陷 |
 | v3.4→v3.5 | — | 2026-06-20 | 逻辑地图对齐 + 正规化二。**原则五合规强化**：memory-store/scheduler 热路径裸遥测（search_time_ms/write_duration_ms/maintain_failed/sim_check/replan）5 处收敛至 recordTelemetry 正式通道，消除裸 console（T1）。**记忆层优化**：read() 双重老化 + hybrid 分污染持久权重真实缺陷修复（T3）、write() 去重冗余消除（T2）、跨后端包 content_hash→id O(1) 去重索引（T4：AbstractMemoryStore._hashIndex + findByContentHash）。**死代码清理 D1-D5**（ShutdownWarden 残留注释、恒真 sim 分支、TRACE 调试日志、dead binding）。ShutdownWarden 由 v3.4 @deprecated 推进至完全移除，生命周期由 LifecycleManager + ShutdownOrchestrator 接管。**附录订正**：架构映射 §五记忆 7 组件族→适配器委托 @cortex/memory 后端；core-pipeline-integrity-verify 移除 ShutdownWarden 导出陈述。memory-store 109 tests 全过，typecheck 全绿。 | 开拓者裁决（直接修订·事实为依据），昔涟施工 |
+| v3.5→v3.6 | AM-2026-0720-001 | 2026-07-20 | **P0 数据完整性与安全修复（R1-R5）**：R1 write() 返回已被向量去重删除的条目 ID——`_tryVectorDedup` 改为返回匹配条目 ID。R2 embedBatch 维度不匹配索引错位——零向量占位保持数组长度一致。R3 notification 持久化异步初始化竞态——`_restoreFromDisk` 改为等 `ready()` 后执行。R4 parser convertToDocument XSS——`escapeHtml` 补引号转义。R5 governance 路径穿越——`updateProposalStatus` 对齐 `saveProposal` 的 proposalId 校验。**算法正确性与协议合规性审查（C8-C10 + H1-H7）**：C8 `_dedupCache.delete(newId)` key 类型错误（entryId→contentHash）；C9 skill-pipeline `NodeComplete` 内部 emit → 无限事件递归；C10 plugin-runner `executeAll` 共享可变 ctx→并行污染；H1 streaming-tool-executor LLM 协议违规（每条 tool_call 单独 assistant 消息→合为一条）；H2 SWITCH_AGENT 孤立 permission Promise→UI 挂死；H3 sessionTokens 双重计数（累加→覆盖）；H4 observer emit 在去重之前→下游持有悬空 ID；H5 cognitive-engine 贝叶斯评分 sigmoid 压制在 [0.007,0.12]→中心改为 prior；H6 task-board 多视角 invariant 删合法结果→claimedBy 非空前置守卫；H7 FSM action 在状态更新前执行→状态更新移至 action 之前。**包整理**：`.gitignore` 屏蔽 `.claude/` `.continue/` `.junie/` 死链接 + `_extraneous/` 第三方 dump + `.archived/` 封存脚本。总闭合数 55 项。 | 开拓者裁决（第三轮审查·算法正确性），昔涟施工 |
 
 ---
 

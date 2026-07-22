@@ -16,6 +16,7 @@ const IPC_CHANNELS = {
   LIVE2D_EXPRESSION: "live2d:expression",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  PRESENCE_EVENT: "presence:event",
 } as const;
 
 export interface CortexDesktopAPI {
@@ -34,6 +35,8 @@ export interface CortexDesktopAPI {
     get: (key?: string) => Promise<{ ok: boolean; data?: unknown }>;
     set: (key: string, value: unknown) => Promise<{ ok: boolean }>;
   };
+  /** 订阅 Presence 事件（WS → main → IPC → renderer）。返回取消订阅函数。 */
+  onPresenceEvent: (cb: (event: { type: string; chunkLength?: number; success?: boolean; toolName?: string }) => void) => () => void;
 }
 
 contextBridge.exposeInMainWorld("cyrene", {
@@ -96,5 +99,11 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
       ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET, key),
     set: (key: string, value: unknown) =>
       ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, key, value),
+  },
+
+  onPresenceEvent: (cb: (event: { type: string; chunkLength?: number; success?: boolean; toolName?: string }) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, event: { type: string; chunkLength?: number; success?: boolean; toolName?: string }) => cb(event);
+    ipcRenderer.on(IPC_CHANNELS.PRESENCE_EVENT, handler);
+    return () => { ipcRenderer.removeListener(IPC_CHANNELS.PRESENCE_EVENT, handler); };
   },
 } satisfies CortexDesktopAPI);

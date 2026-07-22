@@ -30,12 +30,13 @@ export function createTool(ctx: ToolContext): Tool {
         try {
           dirPath = ctx.resolvePath(given);
         } catch {
-          // 沙箱拦截——回退到 workspaceRoot 相对路径
+          // H1 fix: 沙箱解析失败时不应直接使用未验证的路径
           if (ctx.workspaceRoot) {
             const relative = given.replace(/^[/]+/, "").replace(/^[A-Z]:[/\\]/, "");
             dirPath = ctx.resolvePath(relative);
           } else {
-            dirPath = given;
+            // 无 workspaceRoot 时尝试 fs.resolve 做基础规范化，仍可能越界但不直接裸用输入
+            dirPath = ctx.fs.resolve(given);
           }
         }
         // 如果路径不存在但 workspaceRoot 已知，尝试相对解析

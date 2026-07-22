@@ -58,45 +58,22 @@ export class GovernanceEventEmitter {
     private readonly _strategyRegistry?: LoopStrategyRegistry,
   ) {}
 
-  /**
-   * 发射修宪提案事件。
-   */
-  emitAmendmentProposed(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit(PipelineEventType.GovernanceAmendmentProposed, {
-      ...payload,
-      type: PipelineEventType.GovernanceAmendmentProposed,
-    });
+  // M20 fix: 四方法仅事件类型不同——合并为单方法 + 便捷别名保持 API 兼容
+  private emitByType(type: GovernanceEventType, payload: Omit<GovernanceEventPayload, "type">): void {
+    this._emit(type, { ...payload, type });
   }
 
-  /**
-   * 发射审计报告事件。
-   */
-  emitAuditReport(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit(PipelineEventType.GovernanceAuditReport, {
-      ...payload,
-      type: PipelineEventType.GovernanceAuditReport,
-    });
-  }
+  emitAmendmentProposed = (payload: Omit<GovernanceEventPayload, "type">): void =>
+    this.emitByType(PipelineEventType.GovernanceAmendmentProposed, payload);
 
-  /**
-   * 发射合规违规事件。
-   */
-  emitComplianceViolation(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit(PipelineEventType.GovernanceComplianceViolation, {
-      ...payload,
-      type: PipelineEventType.GovernanceComplianceViolation,
-    });
-  }
+  emitAuditReport = (payload: Omit<GovernanceEventPayload, "type">): void =>
+    this.emitByType(PipelineEventType.GovernanceAuditReport, payload);
 
-  /**
-   * 发射圆桌共识事件。
-   */
-  emitRoundtableConsensus(payload: Omit<GovernanceEventPayload, "type">): void {
-    this._emit(PipelineEventType.GovernanceRoundtableConsensus, {
-      ...payload,
-      type: PipelineEventType.GovernanceRoundtableConsensus,
-    });
-  }
+  emitComplianceViolation = (payload: Omit<GovernanceEventPayload, "type">): void =>
+    this.emitByType(PipelineEventType.GovernanceComplianceViolation, payload);
+
+  emitRoundtableConsensus = (payload: Omit<GovernanceEventPayload, "type">): void =>
+    this.emitByType(PipelineEventType.GovernanceRoundtableConsensus, payload);
 
   /**
    * 通用发射——直接发射原始事件。
@@ -123,6 +100,8 @@ export class GovernanceEventEmitter {
       timestamp: Date.now(),
       notificationType: routing?.notificationType ?? "FYI",
     };
+    // 治理事件 payload 为动态扩展域——emit 的 discriminator union 在编译期无法穷举所有运行时组合
+    // 双 as 无法避免（单 as 会因结构不重叠报 TS2352）
     this.observer.emit(event as unknown as EmittableEvent);
   }
 }

@@ -22,6 +22,7 @@ export type { BatchJudgment, GovernanceSummary } from "./governance-loop.js";
 // ── 治理管线 ───────────────────────────────────
 export {
   runPipeline, previewPipeline, registerStage, unregisterStage, getRegisteredStages,
+  emitConstitutionUpdated,
 } from "./governance-pipeline.js";
 export type {
   PipelineStageId, StageResult, StageFn, PipelineContext,

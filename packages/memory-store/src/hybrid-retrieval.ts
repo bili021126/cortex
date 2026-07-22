@@ -15,6 +15,7 @@
 // ============================================================
 
 import type { IEmbeddingService } from "./embedding.js";
+import { EMBEDDING_DIM } from "./schema.js";
 import type { MemoryEntry } from "@cortex/shared";
 import { RETRIEVAL_ALPHA, RETRIEVAL_BETA } from "@cortex/config";
 
@@ -120,9 +121,26 @@ export class HybridRetriever {
   ): Promise<HybridScoreResult[]> {
     if (candidates.length === 0) return [];
 
-    // ── 提取候选记忆的 semantic_gist 或 summary 用于向量比较 ──
-    const texts = candidates.map((m) => m.semantic_gist || m.summary || "");
-    const candidateVectors = await embedder.embedBatch(texts);
+    // ── 提取候选记忆向量 ──
+    // R6-C2 fix: 优先使用已存储的 embedding（写入时生成），仅在缺失时重新 ONNX 推理
+    const storedVectors: (number[] | undefined)[] = candidates.map((m) => m.embedding);
+    const missingIndices: number[] = [];
+    const missingTexts: string[] = [];
+    for (let i = 0; i < candidates.length; i++) {
+      if (!storedVectors[i]) {
+        missingIndices.push(i);
+        missingTexts.push(candidates[i]?.semantic_gist || candidates[i]?.summary || "");
+      }
+    }
+    if (missingTexts.length > 0) {
+      const missingVectors = await embedder.embedBatch(missingTexts);
+      for (let j = 0; j < missingIndices.length; j++) {
+        const idx = missingIndices[j];
+        if (idx === undefined) continue;
+        storedVectors[idx] = missingVectors[j];
+      }
+    }
+    const candidateVectors = storedVectors.map((v) => v ?? new Array<number>(EMBEDDING_DIM).fill(0));
 
     // ── 计算余弦相似度 ──
     const cosScores = batchCosineSimilarity(queryEmbedding, candidateVectors);

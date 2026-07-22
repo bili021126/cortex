@@ -245,6 +245,8 @@ async function stageApply(ctx: PipelineContext): Promise<StageResult> {
     const result = applyApproved(d.proposal, ctx.rootDir);
     if (result.success) {
       results.push(`✅ ${d.proposal.id}: 宪法已更新至 ${result.appliedVersion}`);
+      // R7-C2 fix: 修宪成功后通知 engine 重载宪法
+      emitConstitutionUpdated(ctx, result.appliedVersion);
     } else {
       results.push(`❌ ${d.proposal.id}: ${result.error}`);
       allSuccess = false;
@@ -258,6 +260,20 @@ async function stageApply(ctx: PipelineContext): Promise<StageResult> {
     data: results,
     blocking: !allSuccess,
   };
+}
+
+/** R7-C2 fix: 修宪成功后通知 engine 层重载宪法约束（PromptManager 缓存失效、agent 约束更新） */
+export function emitConstitutionUpdated(ctx: PipelineContext, version: string): void {
+  ctx.observer?.emit({
+    type: PipelineEventType.Analysis,
+    priority: PipelinePriority.HIGH,
+    payload: {
+      source: "constitution-updated",
+      detail: `宪法已更新至版本 ${version}——所有 agent 约束缓存需重新加载`,
+    },
+    timestamp: Date.now(),
+    notificationType: "WARNING",
+  });
 }
 
 /** 阶段：CI 门禁验证——修宪写入后触发 build + typecheck + test + lint，结果回写 artifacts */

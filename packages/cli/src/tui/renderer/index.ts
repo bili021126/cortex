@@ -7,7 +7,5 @@
  * @since v3 — Core-3 差分渲染
  */
 
-export { ChatLog, chatLog } from "./chat-log.js";
 export { SigintHandler } from "./sigint-handler.js";
 export { sanitizeRenderableText } from "./sanitize.js";
-export { PersonaHeader, personaHeader } from "./persona-header.js";

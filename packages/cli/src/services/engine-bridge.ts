@@ -27,7 +27,7 @@ import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { CLIAdapter, type Toolkit } from "@cortex/platform";
 import type { EngineConfig } from "@cortex/config";
 import { MemoryStore } from "@cortex/memory-store";
-import { AgentType, PlatformKind, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type ITuiEngineBridge, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type TaskNode, type ToolDef } from "@cortex/shared";
+import { AgentType, PlatformKind, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type ITuiEngineBridge, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type ReasoningEffort, type TaskNode, type ToolDef } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
@@ -321,12 +321,12 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     messages: LlmMessage[],
     tools: { name: string; description: string; parameters?: Record<string, unknown> }[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
-    opts?: { reasoningEffort?: "high" | "max" | null },
-  ): Promise<{ content: string | null; tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[]; usage?: { prompt_tokens: number; completion_tokens: number }; reasoning_content?: string }> {
+    opts?: { reasoningEffort?: ReasoningEffort | null; signal?: AbortSignal },
+  ): Promise<{ content: string | null; tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[]; usage?: { prompt_tokens: number; completion_tokens: number; prompt_cache_hit_tokens?: number; prompt_cache_miss_tokens?: number }; reasoning_content?: string }> {
     const l = this.llm;
     if (!l) throw new Error("LLM 未配置——请设置 DEEPSEEK_API_KEY 环境变量");
 
-    return await l.chatStream(model, messages, tools as ToolDef[] | undefined, onChunk, opts?.reasoningEffort);
+    return await l.chatStream(model, messages, tools as ToolDef[] | undefined, onChunk, opts?.reasoningEffort, undefined, false, opts?.signal);
   }
 
   /** 提交任务节点到 TaskBoard（ICortexApi） */
@@ -477,7 +477,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   async directChat(
     systemPrompt: string,
     messages: LlmMessage[],
-    opts?: { model?: string; reasoningEffort?: "high" | "max" },
+    opts?: ChatOptions,
   ): Promise<string> {
     const l = this.llm;
     if (!l) throw new Error("LLM 未配置——请设置 DEEPSEEK_API_KEY 环境变量");

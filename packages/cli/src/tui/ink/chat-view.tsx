@@ -19,6 +19,7 @@ import { defaultTokens } from "../theme/tokens.js";
 import { getCharacterColor } from "../theme/character-theme.js";
 import { Typewriter } from "../animation/components/Typewriter.js";
 import { Spinner } from "../animation/components/Spinner.js";
+import { DiffSummary, looksLikeDiff } from "./diff-block.js";
 
 export interface ChatViewProps {
   messages: SessionMessage[];
@@ -54,18 +55,28 @@ function ToolCallInline({ record }: { record: ToolCallRecord }) {
   const duration = record.durationMs != null ? ` · ${record.durationMs}ms` : "";
   const error = record.error ? ` · ${record.error}` : "";
 
+  // 工具 output 若为 unified diff，成功后附一行增删摘要
+  const showDiff = record.success === true && !!record.output && looksLikeDiff(record.output);
+
   return (
-    <Box marginLeft={tokens.spacing.md}>
-      {record.success === undefined ? (
-        <Spinner style="dots" color={statusColor} />
-      ) : (
-        <Text color={statusColor}>{statusIcon}</Text>
+    <Box flexDirection="column" marginLeft={tokens.spacing.md}>
+      <Box>
+        {record.success === undefined ? (
+          <Spinner style="dots" color={statusColor} />
+        ) : (
+          <Text color={statusColor}>{statusIcon}</Text>
+        )}
+        <Text color={t.textMuted.color}>
+          {" "}{record.tool}
+          {duration}
+          {error}
+        </Text>
+      </Box>
+      {showDiff && record.output && (
+        <Box marginLeft={tokens.spacing.sm}>
+          <DiffSummary diff={record.output} />
+        </Box>
       )}
-      <Text color={t.textMuted.color}>
-        {" "}{record.tool}
-        {duration}
-        {error}
-      </Text>
     </Box>
   );
 }

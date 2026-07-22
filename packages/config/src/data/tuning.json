@@ -1,0 +1,59 @@
+{
+  "_description": "L4·环境变量+调参层。所有可调的运行时参数，按域分组。",
+  "env": {
+    "DEEPSEEK_BASE_URL": { "default": "https://api.deepseek.com", "desc": "API 端点" },
+    "DEEPSEEK_API_KEY": { "default": null, "desc": "兜底 API 密钥" },
+    "DEEPSEEK_CHAT_MODEL": { "default": "deepseek-v4-flash", "desc": "默认 Chat 模型" },
+    "DEEPSEEK_REASONER_MODEL": { "default": "deepseek-v4-pro", "desc": "默认 Reasoner 模型" },
+    "DEEPSEEK_REASONING_EFFORT": { "default": "high", "desc": "推理深度 high|max" },
+    "CORTEX_DEBUG": { "default": "0", "desc": "调试模式 0|1" },
+    "CORTEX_AUTO_CONFIRM": { "default": "false", "desc": "自动确认所有工具调用" },
+    "CORTEX_ENABLE_CLI": { "default": "0", "desc": "启用已废弃 CLI" },
+    "CORTEX_API_AUDIT": { "default": "1", "desc": "API 审计日志" }
+  },
+  "tuning": {
+    "execution": {
+      "reactMaxLoops": 10,
+      "reactContextHardLimit": 128000,
+      "maxToolRounds": 20,
+      "toolTimeoutMs": 30000,
+      "commandTimeoutSec": 120,
+      "taskTimeoutSec": 600,
+      "nodeDispatchTimeoutMs": 120000,
+      "executeAllTimeoutMs": 300000
+    },
+    "scheduling": {
+      "workerPoolMaxQueue": 100,
+      "claimLeaseMs": 120000,
+      "maxReplanPerNode": 3,
+      "maxTotalReplans": 10
+    },
+    "trust": {
+      "baseScore": 50,
+      "autoApproveL2": 70,
+      "autoApproveL3": 85,
+      "l0l1Bonus": 0.5,
+      "l2Penalty": 8,
+      "l3Penalty": 15,
+      "bypassTtlMs": 300000
+    },
+    "verification": {
+      "cacheTtlMs": 60000,
+      "barrelMaxSize": 10485760,
+      "tsFileMaxSize": 10485760
+    },
+    "memory": {
+      "bm25K1": 1.2,
+      "bm25B": 0.75,
+      "vectorDedupThreshold": 0.95,
+      "staleFreezeDays": 30,
+      "frozenObliterateDays": 7,
+      "maintenanceWeightThreshold": 0.05
+    },
+    "rlm": {
+      "maxDepth": 3,
+      "minComplexityChars": 500,
+      "minConfidence": 0.6
+    }
+  }
+}

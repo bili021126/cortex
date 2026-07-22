@@ -55,9 +55,9 @@ describe("依赖分层契约 — 完整性", () => {
     ).toEqual([]);
   });
 
-  it("契约恰好覆盖 25 个包", () => {
-    expect(workspacePkgs.length).toBe(25);
-    expect(Object.keys(CORTEX_LAYER_CONTRACT).length).toBe(25);
+  it("契约恰好覆盖 29 个包", () => {
+    expect(workspacePkgs.length).toBe(29);
+    expect(Object.keys(CORTEX_LAYER_CONTRACT).length).toBe(29);
   });
 });
 

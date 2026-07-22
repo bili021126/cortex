@@ -57,11 +57,13 @@ export class NotificationPersistence {
   private db: SqliteDb | null = null;
   private available = false;
   private dbPath: string;
+  /** 初始化完成 Promise——消费方可 await ready() 确保异步 init 完成后再操作 */
+  private _ready: Promise<void>;
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
     // _init 异步执行——构造函数不阻塞，持久化可用性异步确定
-    this._init().catch((err) => {
+    this._ready = this._init().catch((err) => {
       this.available = false;
       // @fix P0-3 — init 失败不再静默丢弃：上报 degraded 事件供可观测管道追踪
       // NotificationPersistence 不在 engine 包内，不持有 PipelineObserver 引用，
@@ -143,6 +145,11 @@ export class NotificationPersistence {
   /** 持久化层是否可用 */
   isAvailable(): boolean {
     return this.available;
+  }
+
+  /** 等待异步初始化完成——调用方在操作前应 await ready() */
+  async ready(): Promise<void> {
+    await this._ready;
   }
 
   // ── 私有 ──────────────────────────────────────────

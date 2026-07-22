@@ -1,5 +1,5 @@
 import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3 } from "@cortex/config";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3, CONFIRM_GATE_BYPASS_TTL_MS } from "@cortex/config";
 
 // ─── 信任分模型（内联实现——镜像 @cortex/engine/agents/confirm-gate-agent）───
 // 因 scheduler → engine 系反向引用（环形依赖），纯函数内联于此。
@@ -60,7 +60,7 @@ export class ConfirmGate implements Disposable {
   private _bypass = false;
   private _explicitBypass = false;
   private _bypassExpiresAt = 0;
-  private static readonly BYPASS_TTL_MS = 300_000; // 5 分钟
+  private static readonly BYPASS_TTL_MS = CONFIRM_GATE_BYPASS_TTL_MS; // 5 分钟
   private trustModel?: ITrustModel;
   private defaultTimeoutMs: number;
   private _observer?: IPipelineObserver;
@@ -108,8 +108,6 @@ export class ConfirmGate implements Disposable {
     }
     const score = computeTrustScore(records);
     if (shouldAutoApprove(score, level)) {
-      // Core-3: 信任记录应在工具执行后更新（当前为执行前乐观预估）
-      // 短期风险可控：失败工具下次会被 gate 拦住
       records.push({
         agentType: trustContext?.agentType ?? "unknown",
         toolName: trustContext?.toolName ?? "unknown",
@@ -120,19 +118,10 @@ export class ConfirmGate implements Disposable {
       console.error(`[telemetry] gate.trust_auto tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level} score=${score}`);
       return { approved: true, reason: "trust auto", score };
     }
-    // 回退到现有 needsConfirmation 逻辑
+    // C1 fix: 非 auto-approve 路径不在此记录信任——由外层 recordDecision() 统一记录最终结果，
+    // 避免 check() 乐观记录 + recordDecision() 实际记录导致双重计数扭曲信任模型。
     const needsConfirm = this.needsConfirmation(level, trustContext);
-    const approved = !needsConfirm;
-    // Core-3: 信任记录应在工具执行后更新（当前为执行前乐观预估）
-    // 短期风险可控：失败工具下次会被 gate 拦住
-    records.push({
-      agentType: trustContext?.agentType ?? "unknown",
-      toolName: trustContext?.toolName ?? "unknown",
-      success: approved,
-      riskLevel: level,
-      timestamp: Date.now(),
-    });
-    return { approved, reason: needsConfirm ? "manual confirm" : "low risk", score };
+    return { approved: !needsConfirm, reason: needsConfirm ? "manual confirm" : "low risk", score };
   }
 
   /** 是否处于显式 bypass 模式（仅由 bypassAll 设置，不接受环境变量） */
@@ -248,12 +237,17 @@ export class ConfirmGate implements Disposable {
     if (!this.pending.has(requestId)) return false;
 
     // 非交互环境自动判定：L0/L1 放行，L2/L3 拒绝（安全优先）
-    // 环境变量 CORTEX_AUTO_CONFIRM=true 时无条件放行
+    // 环境变量 CORTEX_AUTO_CONFIRM=true 时 L0/L1 放行
     if (process.env[ENV_AUTO_CONFIRM] === 'true') {
-      this.pending.delete(requestId);
-      this.resolvers.delete(requestId);
-      this.rejecters.delete(requestId);
-      return true;
+      const req = this.pending.get(requestId);
+      if (req) {
+        // R5-S2 fix: AUTO_CONFIRM 不对 L3（不可逆）放行——即使设置了也必须交互确认
+        const approved = req.level !== RL.L3;
+        this.pending.delete(requestId);
+        this.resolvers.delete(requestId);
+        this.rejecters.delete(requestId);
+        return approved;
+      }
     }
     if (!process.stdin.isTTY) {
       const req = this.pending.get(requestId);
@@ -281,13 +275,23 @@ export class ConfirmGate implements Disposable {
     }
 
     // 无 bridge 时：创建 Promise，等待 resolve() 或超时
+    // H14 fix: 无 bridge 时大幅缩短超时（120s→5s），避免 TTY 环境下静默挂死
+    const noBridgeTimeout = Math.min(effectiveTimeout, 5_000);
+    if (this._observer && effectiveTimeout > noBridgeTimeout) {
+      this._observer.emit({
+        type: PipelineEventType.ErrorReported,
+        priority: PipelinePriority.NORMAL,
+        payload: { source: "ConfirmGate.waitFor", severity: "degraded", error: "无 PlatformBridge——超时从 120s 缩短至 5s 防挂死" },
+        timestamp: Date.now(),
+      });
+    }
     return await new Promise<boolean>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
         this.resolvers.delete(requestId);
         this.rejecters.delete(requestId);
         resolve(false);
-      }, effectiveTimeout);
+      }, noBridgeTimeout);
 
       this.resolvers.set(requestId, (approved: boolean) => {
         clearTimeout(timer);

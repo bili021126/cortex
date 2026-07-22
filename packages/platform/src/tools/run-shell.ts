@@ -37,6 +37,14 @@ export function createTool(ctx: ToolContext): Tool {
         // 第二道防线：解析命令为可执行文件 + 参数数组，避免 shell 解释注入
         const parts = command.trim().split(/\s+/);
         const cmd = parts[0] ?? '';
+        // R5-S3 fix: 二进制白名单——仅允许开发工具链中的命令
+        const ALLOWED_BINARIES = new Set([
+          "git", "npm", "npx", "node", "pnpm", "tsc", "eslint",
+          "vitest", "prettier", "python3", "python", "make", "cmake",
+        ]);
+        if (!ALLOWED_BINARIES.has(cmd)) {
+          return { success: false, error: `run_shell 拒绝不可信命令: "${cmd}"。仅允许: ${[...ALLOWED_BINARIES].join(", ")}` };
+        }
         const args = parts.slice(1);
 
         const cwd = ctx.workspaceRoot ?? ctx.fs.cwd();

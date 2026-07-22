@@ -95,18 +95,10 @@ async function _executeOneCall(
   }
 }
 
-/** 写入 assistant + tool 两段消息——读写共用 */
-function _pushToolMessages(
-  messages: LlmMessage[],
-  tc: ToolCallInput,
-  output: string,
-  reasoningContent?: string,
-): void {
-  const rcExt = reasoningContent ? { reasoning_content: reasoningContent } : {};
-  messages.push(
-    { role: "assistant", content: "", tool_calls: [tc], ...rcExt },
-    { role: "tool", content: output, tool_call_id: tc.id },
-  );
+/** 写入 assistant + tool 两段消息——读写共用
+ *  H1 fix: 不再每个 tc 单独推 assistant，改为调用方批量推一条 assistant 后逐条推 tool */
+function _pushToolResult(messages: LlmMessage[], tc: ToolCallInput, output: string): void {
+  messages.push({ role: "tool", content: output, tool_call_id: tc.id });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -130,26 +122,31 @@ export async function* streamExecuteTools(
   messages: LlmMessage[],
   hooks: TuiHooks,
   reasoningContent?: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<TuiEvent, ToolCallResult[], void> {
   if (toolCalls.length === 0) return [];
 
   const batch = classifyCalls(toolCalls);
   const results: ToolCallResult[] = [];
 
-  // 阶段 1: 并行执行所有 L1 读操作
-  if (batch.reads.length > 0) {
+  // H1 fix: LLM 协议要求一条 assistant 包含所有 tool_calls（而非每个 tc 一条）
+  const rcExt = reasoningContent ? { reasoning_content: reasoningContent } : {};
+  messages.push({ role: "assistant", content: "", tool_calls: toolCalls, ...rcExt });
+
+  // 阶段 1: 并行执行所有 L1 读操作（中断后不再发起新读，已启动的允许自然完成）
+  if (batch.reads.length > 0 && !signal?.aborted) {
     const readPromises: Promise<ToolCallResult>[] = [];
 
     for (const tc of batch.reads) {
       const permission = await _checkPermission(tc, agent, hooks);
 
       if (permission === "deny") {
-        _pushToolMessages(messages, tc, "denied by hook", reasoningContent);
+        _pushToolResult(messages, tc, "denied by hook");
         results.push({ id: tc.id, name: tc.name, success: false, output: "denied by hook", durationMs: 0, level: 1 });
         continue;
       }
       if (permission === "skip") {
-        _pushToolMessages(messages, tc, "[skipped by user]", reasoningContent);
+        _pushToolResult(messages, tc, "[skipped by user]");
         results.push({ id: tc.id, name: tc.name, success: true, output: "[skipped by user]", durationMs: 0, level: 1 });
         continue;
       }
@@ -172,7 +169,7 @@ export async function* streamExecuteTools(
       yield resultEv;
 
       const matchingTc = batch.reads.find(tc => tc.id === res.id);
-      if (matchingTc) _pushToolMessages(messages, matchingTc, res.output, reasoningContent);
+      if (matchingTc) _pushToolResult(messages, matchingTc, res.output);
       await hooks.onPostToolUse?.(resultEv);
       results.push(res);
     }
@@ -180,16 +177,18 @@ export async function* streamExecuteTools(
 
   // 阶段 2: 串行执行所有 L2/L3 写操作
   for (const tc of batch.writes) {
+    // 中断后不再发起新的写操作（L2/L3 不可逆，必须止于边界）
+    if (signal?.aborted) break;
     const permission = await _checkPermission(tc, agent, hooks);
     const level = reversibilityLevel(tc.name);
 
     if (permission === "deny") {
-      _pushToolMessages(messages, tc, "denied by hook", reasoningContent);
+      _pushToolResult(messages, tc, "denied by hook");
       results.push({ id: tc.id, name: tc.name, success: false, output: "denied by hook", durationMs: 0, level });
       continue;
     }
     if (permission === "skip") {
-      _pushToolMessages(messages, tc, "[skipped by user]", reasoningContent);
+      _pushToolResult(messages, tc, "[skipped by user]");
       results.push({ id: tc.id, name: tc.name, success: true, output: "[skipped by user]", durationMs: 0, level });
       continue;
     }
@@ -204,7 +203,7 @@ export async function* streamExecuteTools(
     };
     yield resultEv;
 
-    _pushToolMessages(messages, tc, output, reasoningContent);
+    _pushToolResult(messages, tc, output);
     await hooks.onPostToolUse?.(resultEv);
     results.push({ id: tc.id, name: tc.name, success, output, durationMs, level });
   }

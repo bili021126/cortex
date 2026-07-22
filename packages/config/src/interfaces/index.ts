@@ -25,6 +25,39 @@ export type {
   AgentsConfig,
 } from "./agent.js";
 
+// ── Agent Manifest ──
+export type {
+  AgentProfile,
+  AgentManifestConfig,
+} from "./agent-manifest.js";
+
+// ── 模型 ──
+export type {
+  ModelCapability,
+  ModelEntry,
+  ModelsConfig,
+} from "./model.js";
+
+// ── 密钥+上下文 ──
+export type {
+  KeyEntry,
+  ContextLimitEntry,
+  KeysContextConfig,
+} from "./key-context.js";
+
+// ── 调参 ──
+export type {
+  EnvVarEntry,
+  ExecutionTuning,
+  SchedulingTuning,
+  TrustTuning,
+  VerificationTuning,
+  MemoryTuning,
+  RlmTuning,
+  TuningParams,
+  TuningConfig,
+} from "./tuning.js";
+
 // ── 事件路由 ──
 export type {
   RouteTableEntry,

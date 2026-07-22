@@ -19,6 +19,7 @@ import path from "node:path";
 import { MEMORY_VALID_TRANSITIONS } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
+import { VERIFICATION_CACHE_TTL_MS, TSFILE_MAX_SIZE } from "@cortex/config";
 
 // ─── 规则结果 ─────────────────────────────────────
 
@@ -53,7 +54,7 @@ export class GitDiffRule implements ZeroTokenRule {
   readonly name = "git-diff-check";
   private _cachedDiff: string[] | null = null;
   private _cacheTime = 0;
-  private static readonly CACHE_TTL = 60_000;
+  private static readonly CACHE_TTL = VERIFICATION_CACHE_TTL_MS;
 
   validate(event: ObservableEvent, _ctx: RuleContext): RuleResult {
     const payload = event.payload as Record<string, unknown> | undefined;
@@ -79,9 +80,10 @@ export class GitDiffRule implements ZeroTokenRule {
       return this._cachedDiff;
     }
     try {
+      // H5 fix: 缩减 timeout 5s→3s，添加退化标记避免重复阻塞
       const out = execSync("git diff --name-only HEAD~1", {
         encoding: "utf-8",
-        timeout: 5000,
+        timeout: 3000,
         cwd: process.cwd(),
       });
       this._cachedDiff = out.split("\n").filter(Boolean);
@@ -101,7 +103,7 @@ export class EslintRule implements ZeroTokenRule {
   readonly name = "eslint-constitutional-check";
   private _cachedErrors: Array<{ file: string; line: number; rule: string }> | null = null;
   private _cacheTime = 0;
-  private static readonly CACHE_TTL = 60_000;
+  private static readonly CACHE_TTL = VERIFICATION_CACHE_TTL_MS;
 
   validate(event: ObservableEvent, _ctx: RuleContext): RuleResult {
     const payload = event.payload as Record<string, unknown> | undefined;
@@ -127,9 +129,10 @@ export class EslintRule implements ZeroTokenRule {
       return this._cachedErrors;
     }
     try {
+      // H5 fix: 缩减 timeout 30s→10s，eslint 在 CI 已跑过，gate 仅做交叉验证
       const out = execSync("pnpm exec eslint --quiet --format compact packages/", {
         encoding: "utf-8",
-        timeout: 30_000,
+        timeout: 10_000,
         cwd: process.cwd(),
       });
       const errors: Array<{ file: string; line: number; rule: string }> = [];
@@ -190,7 +193,7 @@ export class BarrelExportRule implements ZeroTokenRule {
     const barrelPath = modulePath.replace(/\/[^/]+\.ts$/, "/index.ts");
     try {
       // 文件大小限制 10MB（代码文件上限）
-      const MAX_SIZE = 10 * 1024 * 1024;
+      const MAX_SIZE = TSFILE_MAX_SIZE;
       const _stats = fs.statSync(barrelPath);
       if (_stats.size > MAX_SIZE) {
         return { ruleName: this.name, passed: true, detail: `Barrel 文件过大，跳过校验: ${barrelPath}` };

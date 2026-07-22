@@ -97,7 +97,7 @@ export function extractAndPersistSkills(
 
   for (const diag of diagnostics) {
     observer.emit({
-      type: PipelineEventType.NodeComplete,
+      type: PipelineEventType.Analysis, // C9 fix: 不用 NodeComplete，避免 handler 重入→无限递归
       priority: PipelinePriority.NORMAL,
       payload: {
         nodeId,
@@ -133,7 +133,7 @@ export function extractAndPersistSkills(
 
   if (registered.length > 0) {
     observer.emit({
-      type: PipelineEventType.NodeComplete,
+      type: PipelineEventType.Analysis, // C9 fix: 不用 NodeComplete，避免 handler 重入→无限递归
       priority: PipelinePriority.NORMAL,
       payload: {
         nodeId,

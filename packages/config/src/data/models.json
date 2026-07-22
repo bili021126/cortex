@@ -1,0 +1,23 @@
+{
+  "_description": "L1·模型层——Cortex DeepSeek V4 双模型。agent key 决定路由到哪个模型。",
+  "_api_spec": "DeepSeek V4 API 2026H1 — OpenAI 兼容 /chat/completions",
+  "models": {
+    "deepseek-v4-flash": {
+      "label": "Flash",
+      "capabilities": ["chat", "function-calling", "streaming"],
+      "thinking": false,
+      "maxOutputTokens": 65536,
+      "contextWindow": 1048576,
+      "defaultFor": ["fix", "review", "inspector", "ops", "browser", "api", "data", "doc-govern", "loop", "butler"]
+    },
+    "deepseek-v4-pro": {
+      "label": "Pro",
+      "capabilities": ["chat", "function-calling", "streaming", "thinking", "reasoning"],
+      "thinking": true,
+      "maxOutputTokens": 393216,
+      "contextWindow": 1048576,
+      "reasoningEffortLevels": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
+      "defaultFor": ["code", "analysis", "meta"]
+    }
+  }
+}

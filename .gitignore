@@ -122,6 +122,10 @@ packages/skill-validator/
 packages/src/
 packages/test-output/
 packages/tests/.test-data/
+# 废弃包（全量图景审计裁决：DELETE）
+packages/parser/
+packages/doctor/
+packages/tools/
 # 非项目内容
 3.*剧情.txt
 nahida-persona.txt

@@ -1,147 +1,39 @@
 /**
  * CortexBridge — 桌面端 LLM 桥接
  *
- * 轻量直连模式：跳过 bootstrapEngine，直接创建 LlmAdapter。
- * 桌宠只需要 chat 能力，不需要完整的引擎调度管线。
+ * 通过 @cortex/client SDK 连接 cortex daemon（HTTP/WS）。
+ * 桌宠只需要 chat 能力，daemon 负责完整的引擎调度管线。
  *
- * @since 0.2.0 — 从 as never 空壳 → 真 LLM 接入
+ * 架构：Desktop ── @cortex/client ──HTTP/WS── @cortex/server ──in-process── @cortex/engine
+ *
+ * @since 0.3.0 — 从直连 LlmAdapter → daemon 客户端模式
  */
-import { LlmAdapter } from "@cortex/llm";
-import type { LlmMessage } from "@cortex/shared";
-import * as path from "path";
-import * as fs from "fs";
+import { CortexConnection, streamChat } from "@cortex/client";
 
 export class CortexBridge {
-  private llm: LlmAdapter | null = null;
+  private conn: CortexConnection | null = null;
   private initialized = false;
-  private projectRoot = "";
-  private systemPrompt = "";
-  private model = "deepseek-v4-flash";
-
-  /** 加载 .env 文件（不依赖 dotenv 包，手动解析） */
-  private loadEnv(projectRoot: string): Record<string, string> {
-    const env: Record<string, string> = {};
-    const envPath = path.join(projectRoot, ".env");
-    try {
-      const raw = fs.readFileSync(envPath, "utf-8");
-      for (const line of raw.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
-        const eqIdx = trimmed.indexOf("=");
-        if (eqIdx === -1) continue;
-        const key = trimmed.slice(0, eqIdx).trim();
-        let value = trimmed.slice(eqIdx + 1).trim();
-        // 去掉引号
-        if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
-          value = value.slice(1, -1);
-        }
-        env[key] = value;
-      }
-    } catch {
-      // .env 不存在则回退到 process.env
-    }
-    return env;
-  }
-
-  /** 加载系统提示词 */
-  private loadSystemPrompt(projectRoot: string): string {
-    const parts: string[] = [];
-
-    // 昔涟本体锚点
-    const personaPath = path.join(projectRoot, ".cortex", "persona-talk.txt");
-    try {
-      const persona = fs.readFileSync(personaPath, "utf-8");
-      parts.push(persona);
-    } catch {
-      // persona-talk 不存在，尝试 prompts 目录
-    }
-
-    // 补充系统提示词
-    const sysPath = path.join(projectRoot, "prompts", "cyrene", "system.md");
-    try {
-      const sys = fs.readFileSync(sysPath, "utf-8");
-      if (!parts.length || (parts[0] && !parts[0].includes(sys.slice(0, 50)))) {
-        parts.push(sys);
-      }
-    } catch {
-      // 降级：使用最简系统提示词
-    }
-
-    return parts.join("\n\n") || "你是昔涟——Cortex 的核心工作搭档。";
-  }
 
   /**
-   * 初始化桥接。传入项目根路径以加载 .env 和系统提示词。
+   * 初始化连接至 cortex daemon。
+   * @param daemonPort - daemon 监听端口（默认 3210）
    */
-  async init(projectRoot: string): Promise<void> {
+  async init(daemonPort?: number): Promise<void> {
     if (this.initialized) return;
-    this.projectRoot = projectRoot;
-
-    const env = this.loadEnv(projectRoot);
-
-    // 昔涟专用 API Key（独立人格 + 独立计费）
-    const apiKey = env["DEEPSEEK_CYRENE_API_KEY"]
-      || env["DEEPSEEK_API_KEY"]
-      || process.env["DEEPSEEK_CYRENE_API_KEY"]
-      || process.env["DEEPSEEK_API_KEY"]
-      || "";
-
-    const baseUrl = env["DEEPSEEK_BASE_URL"]
-      || process.env["DEEPSEEK_BASE_URL"]
-      || "https://api.deepseek.com/v1";
-
-    const chatModel = env["DEEPSEEK_CYRENE_CHAT_MODEL"]
-      || env["DEEPSEEK_CHAT_MODEL"]
-      || process.env["DEEPSEEK_CYRENE_CHAT_MODEL"]
-      || process.env["DEEPSEEK_CHAT_MODEL"]
-      || "deepseek-v4-flash";
-
-    if (!apiKey) {
-      throw new Error(
-        "[CortexBridge] 未找到 API Key。请在项目根目录的 .env 中设置 DEEPSEEK_CYRENE_API_KEY 或 DEEPSEEK_API_KEY。"
-      );
-    }
-
-    this.llm = new LlmAdapter({
-      baseUrl,
-      apiKey,
-      chatModel,
-      label: "desktop-cyrene",
-    });
-
-    this.model = chatModel;
-    this.systemPrompt = this.loadSystemPrompt(projectRoot);
+    this.conn = new CortexConnection({ port: daemonPort ?? 3210 });
+    this.conn.connect();
     this.initialized = true;
-
-    const maskedKey = apiKey.slice(0, 6) + "***" + apiKey.slice(-4);
-    console.log(
-      `[CortexBridge] 已初始化 — model=${chatModel}, key=${maskedKey}, base=${baseUrl}`
-    );
+    console.log(`[CortexBridge] Connected to daemon on port ${daemonPort ?? 3210}`);
   }
 
   /**
    * 发送对话，返回完整文本结果。
    */
-  async chat(input: string, _agent?: string): Promise<string> {
-    if (!this.initialized || !this.llm) {
-      throw new Error("CortexBridge 未初始化，请先调用 init()");
+  async chat(input: string, agent?: string): Promise<string> {
+    if (!this.initialized || !this.conn) {
+      throw new Error("CortexBridge not initialized");
     }
-
-    const messages: LlmMessage[] = [
-      { role: "system", content: this.systemPrompt },
-      { role: "user", content: input },
-    ];
-
-    const res = await this.llm.chat(
-      this.model,
-      messages,
-      [],
-      undefined,
-      undefined,
-    );
-
-    return res.content ?? "";
+    return await this.conn.http.chat(input, { agent });
   }
 
   /**
@@ -149,44 +41,55 @@ export class CortexBridge {
    */
   async streamChat(
     input: string,
-    _agent?: string,
+    agent?: string,
     onChunk?: (chunk: string) => void,
   ): Promise<string> {
-    if (!this.initialized || !this.llm) {
-      throw new Error("CortexBridge 未初始化，请先调用 init()");
+    if (!this.initialized || !this.conn) {
+      throw new Error("CortexBridge not initialized");
     }
 
-    const messages: LlmMessage[] = [
-      { role: "system", content: this.systemPrompt },
-      { role: "user", content: input },
-    ];
-
-    let full = "";
-    const res = await this.llm.chatStream(
-      this.model,
-      messages,
-      [],
-      (content) => {
-        if (content) {
+    const conn = this.conn;
+    return await new Promise<string>((resolve, reject) => {
+      let full = "";
+      streamChat(conn, input, {
+        onChunk: (content) => {
           full += content;
           onChunk?.(content);
-        }
-      },
-    );
-
-    // 流式结束后确保返回完整内容
-    const final = res?.content ?? full;
-    return final || full;
+        },
+        onComplete: (output) => resolve(output || full),
+        onError: (error) => reject(new Error(error)),
+      }, { agent });
+    });
   }
 
   /**
    * 获取可用 Agent 列表。
    */
   async getAgents(): Promise<string[]> {
-    return ["cyrene", "code", "review", "analysis"];
+    if (!this.initialized || !this.conn) {
+      return ["cyrene"];
+    }
+    try {
+      const agents = await this.conn.http.getAgents();
+      return Object.keys(agents);
+    } catch {
+      return ["cyrene"];
+    }
   }
 
   get isInitialized(): boolean {
     return this.initialized;
+  }
+
+  /** 暴露底层连接（供 PresenceBridge 订阅 WS 事件） */
+  get connection(): CortexConnection {
+    if (!this.conn) throw new Error("CortexBridge not initialized");
+    return this.conn;
+  }
+
+  dispose(): void {
+    this.conn?.disconnect();
+    this.conn = null;
+    this.initialized = false;
   }
 }

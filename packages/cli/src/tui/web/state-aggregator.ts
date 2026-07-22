@@ -127,7 +127,7 @@ export class StateAggregator {
   getSnapshot(): WebUIState {
     const now = Date.now();
 
-    // 从 TaskBoard 获取节点
+    // 从 TaskBoard 获取节点（单次调用，复用结果避免状态不一致）
     const allNodes = this.taskBoard ? this.taskBoard.getAllNodes() : [];
     const nodeSnapshots: TaskNodeSnapshot[] = allNodes.map((node) => ({
       id: node.id,
@@ -169,13 +169,12 @@ export class StateAggregator {
       }
     }
 
-    // 使用内部追踪的节点统计
-    const allNodesList = this.taskBoard ? this.taskBoard.getAllNodes() : [];
+    // 使用同一份 allNodes 计算 pipeline 统计（避免二次调用导致不一致）
     let runningCount = 0;
     let failedCount = 0;
     let completedCount = 0;
     let pendingCount = 0;
-    for (const n of allNodesList) {
+    for (const n of allNodes) {
       switch (n.status) {
         case "running": runningCount++; break;
         case "failed": failedCount++; break;
@@ -186,7 +185,7 @@ export class StateAggregator {
     }
 
     const pipeline: PipelineSnapshot = {
-      nodeCount: allNodesList.length,
+      nodeCount: allNodes.length,
       runningCount,
       failedCount,
       completedCount,

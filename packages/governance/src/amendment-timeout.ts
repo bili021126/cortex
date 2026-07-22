@@ -151,14 +151,24 @@ export function updateStaleCount(
   amendmentsDir: string,
 ): void {
   const counterPath = path.join(amendmentsDir, ".timeout-counters.json");
-  let counters: Record<string, number> = {};
-  try {
-    const raw = fs.readFileSync(counterPath, "utf-8");
-    counters = JSON.parse(raw) as Record<string, number>;
-  } catch {
-    // 文件不存在，从头开始
+  // H17 fix: 读-改-写三步非原子，加 retry 循环防并发漂移
+  for (let retry = 0; retry < 3; retry++) {
+    let counters: Record<string, number> = {};
+    try {
+      const raw = fs.readFileSync(counterPath, "utf-8");
+      counters = JSON.parse(raw) as Record<string, number>;
+    } catch {
+      // 文件不存在，从头开始
+    }
+    const expected = (counters[proposalId] ?? 0) + 1;
+    counters[proposalId] = expected;
+    const tmpPath = counterPath + ".tmp";
+    fs.writeFileSync(tmpPath, JSON.stringify(counters, null, 2), "utf-8");
+    fs.renameSync(tmpPath, counterPath);
+    // 验证写入：重读确认计数正确
+    try {
+      const verify = JSON.parse(fs.readFileSync(counterPath, "utf-8")) as Record<string, number>;
+      if ((verify[proposalId] ?? 0) >= expected) return; // 写入成功
+    } catch { /* 验证失败，重试 */ }
   }
-  counters[proposalId] = (counters[proposalId] ?? 0) + 1;
-  fs.writeFileSync(counterPath + ".tmp", JSON.stringify(counters, null, 2), "utf-8");
-  fs.renameSync(counterPath + ".tmp", counterPath);
 }

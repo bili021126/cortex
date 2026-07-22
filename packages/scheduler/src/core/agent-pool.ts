@@ -23,6 +23,8 @@ export class AgentPool implements IAgentPool {
   private active = new Map<AgentType, Set<string>>();
   private statuses = new Map<string, AgentStatus>(); // instanceId → status
   private heartbeats = new Map<string, number>(); // instanceId → lastHeartbeat
+  /** M6 fix: 反向索引 instanceId → type，使 ping() 从 O(n·m) 降为 O(1) */
+  private readonly _activeByInstance = new Map<string, AgentType>();
   private _observer?: IPipelineObserver;
 
   /**
@@ -83,6 +85,7 @@ export class AgentPool implements IAgentPool {
     if (!instances) return false;
     if (instances.size >= (config.maxInstances ?? 1)) return false;
     instances.add(instanceId);
+    this._activeByInstance.set(instanceId, agentType);
     this.statuses.set(instanceId, AgentStatus.Created);
     return true;
   }
@@ -140,6 +143,7 @@ export class AgentPool implements IAgentPool {
     const current = this.statuses.get(instanceId);
     if (current === undefined || current === AgentStatus.Destroyed) {
       this.active.get(agentType)?.delete(instanceId);
+      this._activeByInstance.delete(instanceId);
       return;
     }
 
@@ -154,6 +158,7 @@ export class AgentPool implements IAgentPool {
       this._reportInvariant("AgentPool.destroy", violation.message, violation.details);
     }
     this.active.get(agentType)?.delete(instanceId);
+    this._activeByInstance.delete(instanceId);
     this.statuses.delete(instanceId);
   }
 
@@ -202,11 +207,8 @@ export class AgentPool implements IAgentPool {
    * 检查 agent 实例是否仍在 pool 的活跃列表中。
    */
   async ping(agentId: string): Promise<boolean> {
-    // 遍历所有活跃集合查找该 instanceId
-    for (const [, instances] of this.active) {
-      if (instances.has(agentId)) return true;
-    }
-    return false;
+    // M6 fix: O(1) 反向索引查找，替代 O(n·m) 遍历所有活跃集合
+    return this._activeByInstance.has(agentId);
   }
 
   /** 检测心跳超时，返回超时秒数（-1 表示正常或无心跳记录） */

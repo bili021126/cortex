@@ -11,6 +11,9 @@ import { ExpressionResetController } from "./live2d/expression-reset";
 import { MouthSyncController } from "./live2d/mouth-sync";
 import { SpeakingMotionController } from "./live2d/speaking-motion";
 import { ClickThroughController } from "./live2d/click-through";
+import { ParamDriver } from "./live2d/param-driver";
+import { PresenceEngine } from "./presence/index";
+import type { PresenceEvent } from "./presence/index";
 
 const canvas = document.getElementById("live2d-canvas") as HTMLCanvasElement;
 if (!canvas) throw new Error("Canvas #live2d-canvas not found");
@@ -48,9 +51,10 @@ const manager = new Live2DManager({
     const model = manager.getModel();
     if (!model) return;
 
-    new ExpressionResetController(model);
-    new MouthSyncController(model);
+    const expressionReset = new ExpressionResetController(model);
+    const mouth = new MouthSyncController(model);
     new SpeakingMotionController(model);
+    const paramDriver = new ParamDriver(model);
 
     new InteractionController(canvas, model, manager.getHitAreaDefs(), {
       onTrigger: (area) => console.log("[Cyrene] hit", area.name),
@@ -61,6 +65,17 @@ const manager = new Live2DManager({
     clickThrough = new ClickThroughController(canvas, manager, {
       onInteractive: (interactive) => void window.cyrene.setInteractive(interactive),
     });
+
+    // ── Presence 层：WS 事件 → 表情驱动 ──────────────
+    const presence = new PresenceEngine(model, { mouth, focus, expressionReset, paramDriver });
+    presence.start();
+
+    // 订阅 main 进程转发的 WS presence 事件
+    window.cortexDesktop.onPresenceEvent((e) => {
+      presence.handleEvent(e as PresenceEvent);
+    });
+
+    console.log("[Cyrene] Presence engine started");
   },
   onError: (err) => console.error("[Cyrene] Failed to load model:", err),
 });

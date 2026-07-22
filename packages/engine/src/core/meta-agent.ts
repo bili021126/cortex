@@ -566,6 +566,12 @@ export class MetaAgent {
         // 空数组是合法结果：工作区边界拒绝 / 无操作必要
         // 直接返回 [] 让调用方处理，不生成垃圾兜底节点
         if (items.length === 0) return [];
+        // R8-05 fix: 节点数硬限制——防止 LLM 幻觉/恶意输出构造资源耗尽攻击
+        if (items.length > 50) {
+          const msg = `Plan 节点数超限: ${items.length} > 50（截断）`;
+          this._safeReporter?.({ source: "MetaAgent._parsePlan", error: msg, severity: "degraded" });
+          return items.slice(0, 50).flatMap((item, i) => this._toTaskNode(item, parentId, i));
+        }
         return items.flatMap((item, i) => this._toTaskNode(item, parentId, i));
       }
     }
@@ -627,7 +633,10 @@ export class MetaAgent {
       parentId,
       type: item.type ?? "analysis",
       tags: (item.tags ?? ["code"]) as Tag[],
-      needsMultiPerspective: item.needsMultiPerspective ?? false,
+      needsMultiPerspective: 
+        typeof item.needsMultiPerspective === 'boolean'
+          ? item.needsMultiPerspective
+          : item.needsMultiPerspective === 'true', // R8-07 fix: LLM 字符串 "false" → false
       status: "pending",
       claimedBy: [],
       payload: item.task,

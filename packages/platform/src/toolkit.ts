@@ -3,6 +3,7 @@ import type { ToolInvocation, ToolResult, ToolDefinition, Tool, ReversibilityLev
 import type { ConfirmGate } from "@cortex/scheduler";
 import type { IFileLockManager } from "@cortex/shared";
 import { realpathSync } from "node:fs";
+import * as path from "node:path";
 import { NodeFileSystemAdapter } from "./node-fs-adapter.js";
 import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
@@ -167,8 +168,9 @@ export class Toolkit {
    * 每个 MCP 工具以 mcp:<serverId>:<toolName> 命名，通过统一的 Tool 接口执行。
    */
   registerMcpClient(client: McpClient): void {
+    const trustLevel = client.getTrustLevel();
     for (const toolDef of client.listTools()) {
-      const adapter = new McpToolAdapter(client, toolDef, client.id);
+      const adapter = new McpToolAdapter(client, toolDef, client.id, trustLevel);
       this.tools.set(adapter.name, adapter);
     }
   }
@@ -238,30 +240,38 @@ export class Toolkit {
 
     // ── ConfirmGate 拦截 ──
     const level = this.reversibilityOf(inv.toolName);
-    // 填充信任分记录——needsConfirmation 依赖此数据做自动放行
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this.gate as any)?.check?.(level, { agentType: callerType, toolName: inv.toolName });
-    if (this.gate?.needsConfirmation(level, { agentType: callerType, toolName: inv.toolName })) {
-      const reqId = this.gate.request({
-        id: `confirm-${inv.toolName}-${Date.now()}`,
-        level,
-        toolName: inv.toolName,
-        summary: `Tool "${inv.toolName}" requires confirmation (${level})`,
-        detail: JSON.stringify(inv.params),
-      });
-
-      // L2/L3 阻塞等待用户确认（默认 5 分钟超时，防永久挂死）
-      // §确认门raceResult强制断言：waitFor 始终返回 boolean（true=放行/false=拒绝/超时），never null/undefined
-      const approved = await this.gate.waitFor(reqId, this.config.toolTimeouts.confirmWait);
-      if (typeof approved !== "boolean") {
-        return { success: false, error: `ConfirmGate returned non-boolean for ${inv.toolName}: ${String(approved)}` };
+    // R5-S4 fix: gate 未注入时 L2/L3 操作 fail-closed（拒绝），防止安全门静默跳过
+    if (!this.gate) {
+      if (level === RL.L2 || level === RL.L3) {
+        return { success: false, error: `ConfirmGate 未注入——拒绝 L${level} 操作: ${inv.toolName}` };
       }
+      // L0/L1 无 gate 时直接执行
+    }
+    const gate = this.gate;
+    if (gate) {
+      // C1 fix: check() 内部已调用 needsConfirmation() 并记录信任，不需要外层再重复调用
+      const trustResult = gate.check(level, { agentType: callerType, toolName: inv.toolName });
+      if (trustResult && !trustResult.approved) {
+        const reqId = gate.request({
+          id: `confirm-${inv.toolName}-${Date.now()}`,
+          level,
+          toolName: inv.toolName,
+          summary: `Tool "${inv.toolName}" requires confirmation (${level})`,
+          detail: JSON.stringify(inv.params),
+        });
 
-      // 将确认结果反馈给信任模型（含拒绝和批准）
-      this.gate.recordDecision(callerType, inv.toolName, approved);
+        // L2/L3 阻塞等待用户确认（默认 5 分钟超时，防永久挂死）
+        const approved = await gate.waitFor(reqId, this.config.toolTimeouts.confirmWait);
+        if (typeof approved !== "boolean") {
+          return { success: false, error: `ConfirmGate returned non-boolean for ${inv.toolName}: ${String(approved)}` };
+        }
 
-      if (!approved) {
-        return { success: false, error: `Rejected by ConfirmGate: ${inv.toolName}` };
+        // 将确认结果反馈给信任模型（含拒绝和批准）
+        gate.recordDecision(callerType, inv.toolName, approved);
+
+        if (!approved) {
+          return { success: false, error: `Rejected by ConfirmGate: ${inv.toolName}` };
+        }
       }
     }
 
@@ -340,10 +350,25 @@ export class Toolkit {
     let realResolved: string;
     try {
       realResolved = realpathSync.native(resolved);
-    } catch { realResolved = resolved; }
+    } catch {
+      // R7-H6 fix: 新文件 realpath 失败时，对父目录做 realpath 验证
+      // 防止 workspace 内 symlink→外部 绕过双通道检查
+      const dir = path.dirname(resolved);
+      try {
+        const realDir = realpathSync.native(dir);
+        realResolved = path.join(realDir, path.basename(resolved));
+      } catch { realResolved = resolved; }
+    }
     const root = this.workspaceRoot;
-    if ((realResolved === root || realResolved.startsWith(root + this.fs.sep)) &&
-        (resolved === root || resolved.startsWith(root + this.fs.sep))) {
+    // H2 fix: Windows NTFS 不区分大小写，startsWith 是大小写敏感的。
+    // 统一小写比较，同时校验原始路径和真实路径双通道。
+    const isWin = process.platform === "win32";
+    const normReal = isWin ? realResolved.toLowerCase() : realResolved;
+    const normRoot = isWin ? root.toLowerCase() : root;
+    const normResolved = isWin ? resolved.toLowerCase() : resolved;
+    const sep = this.fs.sep;
+    if ((normReal === normRoot || normReal.startsWith(normRoot + sep)) &&
+        (normResolved === normRoot || normResolved.startsWith(normRoot + sep))) {
       return resolved;
     }
     throw new Error(`路径越界: "${filePath}" 不在工作区 "${root}" 内`);

@@ -56,6 +56,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@cortex/client':
+        specifier: workspace:*
+        version: link:../client
       '@cortex/config':
         specifier: workspace:*
         version: link:../config
@@ -80,6 +83,9 @@ importers:
       '@cortex/platform':
         specifier: workspace:*
         version: link:../platform
+      '@cortex/protocol':
+        specifier: workspace:*
+        version: link:../protocol
       '@cortex/scheduler':
         specifier: workspace:*
         version: link:../scheduler
@@ -124,6 +130,19 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
+  packages/client:
+    dependencies:
+      '@cortex/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@24.13.3)
+
   packages/config:
     dependencies:
       '@cortex/shared':
@@ -149,12 +168,9 @@ importers:
 
   packages/desktop:
     dependencies:
-      '@cortex/engine':
+      '@cortex/client':
         specifier: workspace:*
-        version: link:../engine
-      '@cortex/llm':
-        specifier: workspace:*
-        version: link:../llm
+        version: link:../client
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
@@ -272,9 +288,6 @@ importers:
       '@cortex/testing':
         specifier: workspace:*
         version: link:../testing
-      '@cortex/tools':
-        specifier: workspace:*
-        version: link:../tools
       '@types/better-sqlite3':
         specifier: ^7.6.0
         version: 7.6.13
@@ -529,6 +542,15 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
 
+  packages/protocol:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@24.13.3)
+
   packages/resilience:
     devDependencies:
       '@types/node':
@@ -571,6 +593,46 @@ importers:
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.17)
+
+  packages/server:
+    dependencies:
+      '@cortex/config':
+        specifier: workspace:*
+        version: link:../config
+      '@cortex/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@cortex/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@cortex/memory-store':
+        specifier: workspace:*
+        version: link:../memory-store
+      '@cortex/platform':
+        specifier: workspace:*
+        version: link:../platform
+      '@cortex/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@cortex/scheduler':
+        specifier: workspace:*
+        version: link:../scheduler
+      '@cortex/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@cortex/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
+      '@cortex/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@24.13.3)
 
   packages/shared:
     devDependencies:

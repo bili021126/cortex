@@ -58,7 +58,8 @@ export async function startInkTui(options: InkTuiOptions): Promise<number> {
       commandPalette={commandPalette}
     />,
     {
-      exitOnCtrlC: true,
+      // Ctrl+C 交由 App 内 SigintHandler 两连退出处理，禁用 Ink 默认单击退出
+      exitOnCtrlC: false,
     },
   );
 

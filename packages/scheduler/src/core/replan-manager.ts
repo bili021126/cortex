@@ -169,28 +169,8 @@ export class ReplanManager {
     if (batch.length === 0) return;
 
     const promises = batch.map(async (item) => {
-      const count = item.count + 1;
-      this.replanCount.set(item.node.id, count);
-
-      // 降级：maxReplanPerNode=1，只做 local 范围修复
-      const result = item.disposition === "boundary_violation"
-        ? await provider.requestBoundaryReplan(item.node, item.reason, count, undefined, 1)
-        : await provider.requestReplan(item.node, item.reason, count, undefined, 1);
-
-      const newIds: string[] = [];
-      for (const n of result.nodes) {
-        n.isRlmSubtask = true;
-        this.board.addNode(n);
-        this.replanCount.set(n.id, 0);
-        newIds.push(n.id);
-      }
-      this.replanMap.set(item.node.id, newIds);
-
-      if (result.impactScope === "subtree") {
-        this.board.removeSubtree(item.node.id);
-      } else {
-        this.board.removeNode(item.node.id);
-      }
+      // M9 fix: 委托共享 helper，maxPerNode=1（降级模式）
+      await this._processReplanItem(item, provider, 1);
     });
 
     await Promise.allSettled(promises);
@@ -262,6 +242,35 @@ export class ReplanManager {
 
   // ── 内部实现 ─────────────────────────────────
 
+  /** M9 fix: 提取 _drain 和 _drainDegraded 的共享逻辑（两方法 90% 重复） */
+  private async _processReplanItem(
+    item: ReplanItem,
+    provider: NonNullable<typeof this.replanProvider>,
+    maxPerNode: number,
+  ): Promise<void> {
+    const count = item.count + 1;
+    this.replanCount.set(item.node.id, count);
+
+    const result = item.disposition === "boundary_violation"
+      ? await provider.requestBoundaryReplan(item.node, item.reason, count, undefined, maxPerNode)
+      : await provider.requestReplan(item.node, item.reason, count, undefined, maxPerNode);
+
+    const newIds: string[] = [];
+    for (const n of result.nodes) {
+      n.isRlmSubtask = true;
+      this.board.addNode(n);
+      this.replanCount.set(n.id, 0);
+      newIds.push(n.id);
+    }
+    this.replanMap.set(item.node.id, newIds);
+
+    if (result.impactScope === "subtree") {
+      this.board.removeSubtree(item.node.id);
+    } else {
+      this.board.removeNode(item.node.id);
+    }
+  }
+
   private async _drain(): Promise<void> {
     const provider = this.replanProvider;
     if (!provider) {
@@ -298,29 +307,8 @@ export class ReplanManager {
         notificationType: "WARNING",
       });
 
-      const result = item.disposition === "boundary_violation"
-        ? await provider.requestBoundaryReplan(
-            item.node, item.reason, count, undefined, SCHEDULER_MAX_REPLAN_PER_NODE,
-          )
-        : await provider.requestReplan(
-            item.node, item.reason, count, undefined, SCHEDULER_MAX_REPLAN_PER_NODE,
-          );
-
-      const newIds: string[] = [];
-      for (const n of result.nodes) {
-        // 标记为 RLM 子任务——走 pool.spawnSubtask() 独立配额
-        n.isRlmSubtask = true;
-        this.board.addNode(n);
-        this.replanCount.set(n.id, 0);
-        newIds.push(n.id);
-      }
-      this.replanMap.set(item.node.id, newIds);
-
-      if (result.impactScope === "subtree") {
-        this.board.removeSubtree(item.node.id);
-      } else {
-        this.board.removeNode(item.node.id);
-      }
+      // M9 fix: 委托共享 helper
+      await this._processReplanItem(item, provider, SCHEDULER_MAX_REPLAN_PER_NODE);
     });
 
     const results = await Promise.allSettled(promises);

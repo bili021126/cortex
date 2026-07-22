@@ -22,6 +22,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@cortex/client": "workspace:*",
     "@cortex/config": "workspace:*",
     "@cortex/doctor": "workspace:*",
     "@cortex/engine": "workspace:*",
@@ -30,6 +31,7 @@
     "@cortex/memory-store": "workspace:*",
     "@cortex/parser": "workspace:*",
     "@cortex/platform": "workspace:*",
+    "@cortex/protocol": "workspace:*",
     "@cortex/scheduler": "workspace:*",
     "@cortex/shared": "workspace:*",
     "@cortex/skill-kit": "workspace:*",

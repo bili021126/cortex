@@ -62,6 +62,10 @@ export function useEventBridge(dispatch: React.Dispatch<SessionAction>): void {
       tuiEventBus.on("node_failed", (e) =>
         dispatch({ type: "NODE_FAILED", payload: e as TuiNodeFailedEvent }),
       ),
+      // 回合中断（Esc）——query-loop yield 的 interrupted 事件→复位处理态
+      tuiEventBus.on("interrupted", () =>
+        dispatch({ type: "TURN_INTERRUPTED" }),
+      ),
     ];
     return () => {
       for (const unsub of unsubs) unsub();

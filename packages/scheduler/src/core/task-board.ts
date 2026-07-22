@@ -1,4 +1,5 @@
 import { PipelineEventType, PipelinePriority, getAgentTags, type AgentType, type IPipelineObserver, type InvariantReporter, type InvariantViolation, type TaskNode, type ITaskBoard } from "@cortex/shared";
+import { CLAIM_LEASE_MS } from "@cortex/config";
 
 /**
  * ITaskBoard —— TaskBoard 抽象接口（契约已上迁至 @cortex/shared）。
@@ -88,9 +89,20 @@ export class TaskBoard implements ITaskBoard {
     }
 
     // 普通节点：仅 pending 可认领，单 Agent
+    // R5-T1 fix: claimed 节点超时自动回收为 pending（lease 120s）
+    if (node.status === "claimed" && node.claimedAt) {
+      if (Date.now() - node.claimedAt > CLAIM_LEASE_MS) {
+        node.status = "pending";
+        node.claimedBy = [];
+        node.claimedAt = undefined;
+      } else {
+        return null;
+      }
+    }
     if (node.status !== "pending") return null;
     node.status = "claimed";
     node.claimedBy = [agentType];
+    node.claimedAt = Date.now();
     return node;
   }
 
@@ -186,8 +198,10 @@ export class TaskBoard implements ITaskBoard {
       error,
     });
 
-    // invariant：results 中每个 agentType 必须存在于 claimedBy 中 (对称性保障)
-    if (!node.results.every((r) => r.agentType && node.claimedBy.includes(r.agentType))) {
+    // H6 fix: 多视角节点 complete() 的不变量检查只在 claimedBy 完全清理前执行。
+    // 原逻辑在等齐 done 后清空 claimedBy，但后续视角调用 complete() 时 claimedBy 为空，
+    // 导致合法结果被误判为 orphan 删除。修改：仅在 claimedBy 非空时检查不变量。
+    if (node.claimedBy.length > 0 && !node.results.every((r) => r.agentType && node.claimedBy.includes(r.agentType))) {
       const orphanTypes = node.results.filter((r) => r.agentType && !node.claimedBy.includes(r.agentType)).map((r) => r.agentType);
       const msg = `results 包含未在 claimedBy 中的 agentType: ${orphanTypes} — claimedBy=[${node.claimedBy}]`;
       this._reportInvariant("TaskBoard.complete", msg, { nodeId, orphanTypes, claimedBy: node.claimedBy });

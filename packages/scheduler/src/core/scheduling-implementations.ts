@@ -24,7 +24,7 @@ import { findMatchingAgent, findAllMatchingAgents } from "./agent-matcher.js";
 import { ClaimStep } from "../dispatch-steps/claim-step.js";
 import { SpawnStep } from "../dispatch-steps/spawn-step.js";
 import { ExecuteStep } from "../dispatch-steps/execute-step.js";
-import { VALID_TIERS } from "@cortex/config";
+import { VALID_TIERS, NODE_DISPATCH_TIMEOUT_MS as CFG_NODE_DISPATCH_TIMEOUT, EXECUTE_ALL_TIMEOUT_MS } from "@cortex/config";
 import { CleanupStep } from "../dispatch-steps/cleanup-step.js";
 import { BoundaryGuardStep } from "../dispatch-steps/boundary-guard-step.js";
 import type { DispatchCtx, IDispatchStep } from "../dispatch-steps/types.js";
@@ -131,7 +131,6 @@ export class RoundRobinStrategy implements IScheduleStrategy {
 
     // 回退：轮转
     const available = this._availableAgents(agents);
-    if (available.length === 0) return null;
     if (available.length === 0) return null;
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const chosen = available[this._rrIndex % available.length]!;
@@ -337,7 +336,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               : executionModel.dispatchSingle(execCtx);
 
             // 单个节点超时兜底——防止 dispatch hang 住拖死 Promise.allSettled
-            const NODE_DISPATCH_TIMEOUT_MS = Math.min(config.reactLoopTimeoutMs, 120_000);
+            const NODE_DISPATCH_TIMEOUT_MS = Math.min(config.reactLoopTimeoutMs, CFG_NODE_DISPATCH_TIMEOUT);
             let tid: ReturnType<typeof setTimeout>;
             const timeoutPromise = new Promise<NodeResult>((resolve) => {
               tid = setTimeout(() => {
@@ -516,7 +515,7 @@ export class SequentialDriver implements ILoopDriver {
     let failed = 0;
 
     const startTime = Date.now();
-    const MAX_DURATION = ctx.config?.executeAllTimeoutMs ?? 300_000; // 默认 5 分钟全局超时
+    const MAX_DURATION = ctx.config?.executeAllTimeoutMs ?? EXECUTE_ALL_TIMEOUT_MS;
     let replanFlight: Promise<void> | null = null;
 
     while (true) {
@@ -554,7 +553,7 @@ export class SequentialDriver implements ILoopDriver {
         };
 
         // 逐节点超时兜底——防止 dispatch hang 住拖死顺序执行
-        const NODE_DISPATCH_TIMEOUT_MS2 = Math.min(ctx.config.reactLoopTimeoutMs, 120_000);
+        const NODE_DISPATCH_TIMEOUT_MS2 = Math.min(ctx.config.reactLoopTimeoutMs, CFG_NODE_DISPATCH_TIMEOUT);
         const dispatchPromise = node.needsMultiPerspective
           ? executionModel.dispatchMulti(execCtx)
           : executionModel.dispatchSingle(execCtx);

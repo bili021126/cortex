@@ -355,7 +355,8 @@ export class Scheduler implements IScheduler {
 
       // 互斥锁：同一节点上多个 claim 串行化，防止竞态
       const prevLock = this.claimingLocks.get(node.id) ?? Promise.resolve();
-      const thisLock = prevLock.then(() => {
+      // R4-H8 fix: prevLock reject 不毒化后续 agent 的 claim
+      const thisLock = prevLock.catch(() => {}).then(() => {
         return this.board.claim(node.id, at as AgentType);
       });
       this.claimingLocks.set(node.id, thisLock.then(() => {}));
@@ -375,10 +376,11 @@ export class Scheduler implements IScheduler {
       return await this._runDispatchPipeline(innerCtx, steps);
     });
 
-    const results = (await Promise.all(promises)).filter((r): r is NonNullable<typeof r> => r !== null);
-
-    // 清理节点锁——无论成功失败都释放，防止永久卡住
+    // R4-C1 fix: Promise.all 必须在 try 块内，否则 reject 时跳过 finally，claimingLocks 永久泄漏
     try {
+      const results = (await Promise.all(promises)).filter((r): r is NonNullable<typeof r> => r !== null);
+
+      // 清理节点锁——无论成功失败都释放，防止永久卡住
       if (results.length > 0) {
       const currentNode = this.board.getNode(node.id);
       if (currentNode && currentNode.status !== "failed") {

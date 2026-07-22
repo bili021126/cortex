@@ -47,12 +47,12 @@ const BASE_SYSTEM_PROMPT = `[系统指令] 你是 Cortex 工程助手。`;
 /** agent id（如 nahida/beidou）→ 自身——用于用户直接输入 id 时自解析 */
 const AGENT_ID_SELF: Set<string> = new Set(Object.values(AGENT_TYPE_TO_DIR));
 
-/** 懒加载昔涟 persona——从 .cortex/persona-talk.txt 读取（仅 butler talk 使用） */
+/** 懒加载昔涟 persona——从 .cortex/lore/cyrene/persona-talk.txt 读取（仅 butler talk 使用） */
 let _cyrenePersona: string | null = null;
 function cyrenePersona(): string {
   if (_cyrenePersona !== null) return _cyrenePersona;
   try {
-    const personaPath = path.join(process.cwd(), ".cortex", "persona-talk.txt");
+    const personaPath = path.join(process.cwd(), ".cortex", "lore", "cyrene", "persona-talk.txt");
     _cyrenePersona = fs.readFileSync(personaPath, "utf-8");
   } catch (err) { console.warn('[DEGRADED:tui-query-loop]', String(err));
     _cyrenePersona = "你是昔涟，用轻松自然的语气和用户聊天。";
@@ -109,14 +109,13 @@ export function agentTalkPersona(agent: string): string {
     } catch (err) { console.warn('[DEGRADED:tui-query-loop]', String(err)) }
   }
 
-  // 5. 加载文件——优先 agent persona 本体（nahida-persona.txt 同构惯例），
-  //    昔涟特例：从 .cortex/persona-talk.txt 加载（历史兼容）
+  // 5. 加载 persona 本体——从 .cortex/lore/{agent}/persona-talk.txt 加载
   if (dir) {
-    // 昔涟历史路径兼容
+    // 昔涟：lore/cyrene/persona-talk.txt
     if (dir === "cyrene") return cyrenePersona();
 
     try {
-      const personaPath = path.join(process.cwd(), `${dir}-persona.txt`);
+      const personaPath = path.join(process.cwd(), ".cortex", "lore", dir, "persona-talk.txt");
       const cached = cachedPersona(personaPath);
       if (cached) return cached;
     } catch { /* fall through */ }
@@ -204,13 +203,15 @@ interface QueryLoopParams {
   agent: AgentType;
   hooks: TuiHooks;
   history?: LlmMessage[];
+  /** 中断信号——Esc 触发，端到端停流（回合边界 + fetch 两层） */
+  signal?: AbortSignal;
 }
 
 /**
  * 统一查询循环——所有模式共用。
  */
 export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, string, void> {
-  const { mode, agent, history, input, hooks, bridge } = p;
+  const { mode, agent, history, input, hooks, bridge, signal } = p;
   const systemPrompt = assembleSystemPrompt(mode, agent);
   const messages: LlmMessage[] = [];
 
@@ -225,8 +226,12 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
   // 注入用户输入
   messages.push({ role: "user", content: input });
 
-  // 对话模型选择
-  const chatModel = bridge.getChatModelName() || "deepseek-v4-flash";
+  // 模型路由：plan（推理密集）优先走 reasoner/pro——thinking + reasoning_effort 才能生效；
+  // 其余模式用 chat（flash）。未配置 reasoner 时回退 chat。
+  const reasonerModel = bridge.getReasonerModelName();
+  const chatModel = (mode === "plan" && reasonerModel)
+    ? reasonerModel
+    : (bridge.getChatModelName() || "deepseek-v4-flash");
 
   // 获取工具定义——plan/talk/party 模式零工具
   const rawTools = bridge.getToolDefs(agent);
@@ -245,6 +250,8 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
   let sessionTokens = 0;
 
   while (toolRound < MAX_TOOL_ROUNDS) {
+    // 回合边界中断检查——Esc 后不再发起新一轮
+    if (signal?.aborted) { yield { type: "interrupted", agent } as TuiEvent; return finalOutput; }
     // ═══ 真流式：Promise.race 即时 yield 每个 chunk ═══
     let resolveNextChunk: ((v: void) => void) | null = null;
     const chunkQueue: TuiEvent[] = [];
@@ -252,9 +259,12 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
     let streamResult: Awaited<ReturnType<typeof bridge.streamChat>> | null = null;
     let streamError: Error | null = null;
     
-    const signal = () => {
+    const wake = () => {
       if (resolveNextChunk) { const r = resolveNextChunk; resolveNextChunk = null; r(); }
     };
+    // 中断信号到达时立即唤醒发射循环（不必等下一个 chunk）
+    const onAbortWake = (): void => wake();
+    if (signal && !signal.aborted) signal.addEventListener("abort", onAbortWake, { once: true });
     
     // Hook: onPreModelRequest（可在发送前修改 messages）
     const boundMessages = await (hooks.onPreModelRequest?.(messages) ?? Promise.resolve(messages));
@@ -272,15 +282,16 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
       tools.length > 0 ? tools : undefined,
       (content, reasoning) => {
         chunkQueue.push({ type: "llm_chunk", agent, content, reasoning } as TuiEvent);
-        signal();
+        wake();
       },
-      // DeepSeek V4: chat不启用thinking, plan用high
-      (mode === "plan") ? { reasoningEffort: "high" as const } : undefined,
-    ).then(r => { streamResult = r; streamDone = true; signal(); return r; })
-     .catch(e => { streamError = e as Error; streamDone = true; signal(); });
+      // DeepSeek V4: chat不启用thinking, plan用high；signal 端到端透传以中断 fetch
+      (mode === "plan") ? { reasoningEffort: "high" as const, signal } : { signal },
+    ).then(r => { streamResult = r; streamDone = true; wake(); return r; })
+     .catch(e => { streamError = e as Error; streamDone = true; wake(); });
 
     // 流式发射——每个 chunk 到达即时 yield
     while (!streamDone) {
+      if (signal?.aborted) break;
       while (chunkQueue.length > 0) {
         const ev = chunkQueue.shift();
         if (!ev) break;
@@ -297,6 +308,13 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
       yield ev;
       hooks.onChunk?.(ev as TuiEvent & { type: "llm_chunk" });
     }
+    if (signal) signal.removeEventListener("abort", onAbortWake);
+    // 中断优先于错误——fetch abort 会以 AbortError 形式落入 streamError，视为中断而非报错
+    // eslint-disable-next-line @typescript-eslint/prefer-optional-chain -- streamError 在 .catch 闭包内赋值，TS 同步流误判类型，?. 形式会报 never
+    if (signal?.aborted || (streamError && streamError.name === "AbortError")) {
+      yield { type: "interrupted", agent } as TuiEvent;
+      return finalOutput;
+    }
     if (streamError) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- Error instance, assigned in closure
       throw streamError;
@@ -310,8 +328,10 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
     hooks.onPostModelRequest?.({ content: resp.content, tool_calls: resp.tool_calls, usage: resp.usage });
 
     // Token 用量 + 上下文窗口感知
+    // H3 fix: prompt_tokens 包含全部历史，改为直接使用 API 返回的 usage 作为 session 总量
+    // （每次 LLM 调用返回的 prompt_tokens 即当前上下文的 token 总数）
     if (resp.usage) {
-      sessionTokens += resp.usage.prompt_tokens + resp.usage.completion_tokens;
+      sessionTokens = resp.usage.prompt_tokens + resp.usage.completion_tokens;
       const usagePercent = Math.round((sessionTokens / CONTEXT_LIMIT) * 100);
       yield {
         type: "token_usage",
@@ -319,6 +339,8 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
         completionTokens: resp.usage.completion_tokens,
         sessionTotalTokens: sessionTokens,
         contextWindowSize: CONTEXT_LIMIT,
+        cacheHitTokens: resp.usage.prompt_cache_hit_tokens,
+        cacheMissTokens: resp.usage.prompt_cache_miss_tokens,
       };
       // 超 50% 警告——仅通过 hook 通知，不注入 llm_chunk（避免污染 assistant 消息）
       if (usagePercent > 50) {
@@ -380,6 +402,7 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
         messages,
         hooks,
         resp.reasoning_content,
+        signal,
       )) {
         yield ev;
       }

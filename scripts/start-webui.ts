@@ -19,7 +19,7 @@ async function main() {
 
   const apiKey = process.env.DEEPSEEK_API_KEY ?? "sk-placeholder";
   const llms = new Map<string, LlmAdapter>();
-  llms.set("DEEPSEEK_CHAT", new LlmAdapter({ apiKey, chatModel: "deepseek-chat" }));
+  llms.set("DEEPSEEK_CHAT", new LlmAdapter({ apiKey, chatModel: "deepseek-v4-flash" }));
   const toolkit = new Toolkit();
 
   const engine = await bootstrapEngine(ROOT, { llms, toolkit });

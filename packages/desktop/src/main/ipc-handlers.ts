@@ -23,9 +23,9 @@ export const IPC_CHANNELS = {
 } as const;
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
-  // cortex:init — 初始化引擎
-  ipcMain.handle(IPC_CHANNELS.CORTEX_INIT, async (_event, projectRoot: string) => {
-    await cortex.init(projectRoot);
+  // cortex:init — 连接 daemon
+  ipcMain.handle(IPC_CHANNELS.CORTEX_INIT, async (_event, daemonPort?: number) => {
+    await cortex.init(daemonPort);
     return { ok: true };
   });
 

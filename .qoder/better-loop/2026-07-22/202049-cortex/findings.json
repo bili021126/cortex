@@ -1,0 +1,184 @@
+{
+  "summary": {
+    "projectName": "cortex",
+    "locale": "zh-CN",
+    "modelId": "agent-work-loop-v4",
+    "reportContractVersion": 24,
+    "overview": "Cortex 是一个大型 TypeScript pnpm 单仓，静态证据显示它在校验能力上很强——四层门禁、逐包 vitest、严格类型与 lint、丰富的技能与代理指引都到位。真正的薄弱环节集中在「让改动可靠落地」与「让任意 Agent 找到路」：主入口以人格设定为主、缺少包级导航；本地门禁靠人工触发、无提交钩子；CI 工作流带诊断脚手架且看不到分支保护。本轮无可用会话证据（1/5 源根存在、0 条可分析会话），因此运行期行为与学习复用有效性只能作为覆盖边界，不作行为结论。",
+    "aiAgentPractice": {
+      "inspectedSurfaces": [
+        "Rules",
+        "Skills",
+        "Custom Agents",
+        "Workflows"
+      ],
+      "coverageRows": [
+        {
+          "surface": "Rules",
+          "scopes": [
+            "Project"
+          ],
+          "count": 1,
+          "paths": [
+            "DESIGN.md"
+          ]
+        },
+        {
+          "surface": "Skills",
+          "scopes": [
+            "Project"
+          ],
+          "count": 12,
+          "paths": [
+            ".qoder/skills/cortex-critical-fix/SKILL.md",
+            ".qoder/skills/cortex-plan-review/SKILL.md",
+            ".qoder/skills/cortex-package-gap-scan/SKILL.md"
+          ]
+        },
+        {
+          "surface": "Custom Agents",
+          "scopes": [
+            "Project"
+          ],
+          "count": 6,
+          "paths": [
+            ".qoder/agents/cyrene.md",
+            ".qoder/agents/cyrene-gatekeeper.md",
+            ".qoder/agents/cyrene-executor.md"
+          ]
+        },
+        {
+          "surface": "Workflows",
+          "scopes": [
+            "Project"
+          ],
+          "count": 2,
+          "paths": [
+            ".github/workflows/ci.yml"
+          ]
+        }
+      ]
+    },
+    "suggestions": [],
+    "assignmentSummaries": [],
+    "dimensions": [
+      {
+        "id": "task-understanding",
+        "label": "任务理解",
+        "score": 60,
+        "summary": "技能、代理与架构文档丰富，但主入口以人格设定为主、缺少面向任意 Agent 的包级导航路由。",
+        "findingRefs": [
+          "context-persona-first-entry-no-package-route"
+        ]
+      },
+      {
+        "id": "controlled-execution",
+        "label": "可控执行",
+        "score": 64,
+        "summary": "构建/测试/校验脚本清晰，运行时与包管理器已锁定，但缺少 doctor/reset 类自诊断命令。",
+        "findingRefs": [
+          "env-no-doctor-reset-surface"
+        ]
+      },
+      {
+        "id": "change-validation",
+        "label": "改动验证",
+        "score": 68,
+        "summary": "四层门禁 + 逐包 vitest + 严格 lint 覆盖主改动路径，但本地门禁靠人工触发、无提交钩子。",
+        "findingRefs": [
+          "validation-local-gate-convention-only"
+        ]
+      },
+      {
+        "id": "reliable-delivery",
+        "label": "可靠交付",
+        "score": 44,
+        "summary": "CI 工作流存在但带诊断脚手架、看不到分支保护，验收前是否强制阻断无法证实。",
+        "findingRefs": [
+          "delivery-acceptance-gate-unproven"
+        ]
+      },
+      {
+        "id": "learning-capture",
+        "label": "经验沉淀",
+        "score": 38,
+        "summary": "技能与回归用例资产可复用，但无学习捕获记录、本轮会话证据缺失，改进有效性无法验证。",
+        "findingRefs": [
+          "learning-capture-unvalidated-boundary"
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "context-persona-first-entry-no-package-route",
+      "title": "主入口以人格设定为主，缺少面向任意 Agent 的包级导航",
+      "severity": "Medium",
+      "reason": "唯一的项目级 Agent 入口约 98 行，绝大部分是人物设定，工程路由被压缩到约 20 行，且没有 30+ 包的职责表、依赖拓扑或「何时读哪份文档」的规则；DESIGN.md 是单包（scheduler）范围、也没有项目级 spec 目录。一个不叫 Cyrene 的 Agent 或新贡献者拿到任务后，无法从入口路由到正确的包与上下文，只能全仓遍历推断结构。",
+      "expectedOutput": [
+        "在 Agent 入口新增包职责表与任务→上下文路由，且保持在导航长度阈值内。"
+      ],
+      "expectedArtifact": "Agent guidance doc",
+      "aiFixPrompt": "/better-loop fix this issue\n\n在项目级 Agent 入口（.github/copilot-instructions.md 或新增一份导航优先的 AGENTS 等价文档）中补一段「导航优先」区块：给出 packages/ 下主要包的职责表、跨包依赖/边界速览、以及按任务类型「何时读哪份 docs/ 文档或 .qoder/skills」的路由规则。保持人格内容不变，只新增结构化路由，避免超过 150 行。\n\n## Validation\n\n- 确认新增区块列出主要包职责与至少一条「任务类型 → 应读文档/技能」的路由\n- 让一个未加载 Cyrene 人格的 Agent 依据入口能定位到正确的包目录",
+      "dimensionRefs": [
+        "task-understanding"
+      ]
+    },
+    {
+      "id": "env-no-doctor-reset-surface",
+      "title": "缺少 doctor/reset 类环境自诊断命令",
+      "severity": "Low",
+      "reason": "根 package.json 的脚本覆盖了 build/test/lint/typecheck/ci，但没有 doctor、clean、reset 或健康检查入口。.env.example 文档化良好，但初始化仍是手工步骤（复制模板、填密钥、pnpm install）。Agent 遇到环境异常（如 workspace 链接、dist 产物缺失，正是 CI 里出现过的问题）时，没有一条可程序化运行的诊断命令来定位或复位。",
+      "expectedOutput": [
+        "新增 doctor 与 clean/reset 命令，doctor 能给出可执行的修复方向。"
+      ],
+      "expectedArtifact": "npm script",
+      "aiFixPrompt": "/better-loop fix this issue\n\n在根 package.json 新增一个最小的 doctor 脚本（如 scripts/doctor.ts），检查 Node/pnpm 版本、@cortex/* workspace 软链是否解析、关键包 dist 产物是否存在，并输出可执行的修复提示；再补一个 clean/reset 脚本清理 dist 与增量缓存。\n\n## Validation\n\n- 运行 doctor 在健康环境下返回 0、在缺失 dist 时给出具体修复指引\n- 运行 clean 后可通过一次标准构建恢复到可工作状态",
+      "dimensionRefs": [
+        "controlled-execution"
+      ]
+    },
+    {
+      "id": "validation-local-gate-convention-only",
+      "title": "本地门禁靠人工触发，缺少提交期机械拦截",
+      "severity": "Medium",
+      "reason": "四层门禁脚本（tsc → eslint → @ci 标签审计 → 逐包 vitest）设计扎实，但仓库根未发现 husky/lint-staged/pre-commit 等配置，门禁只能靠人手运行 pnpm ci 或 Agent 自律触发。门禁官（gatekeeper）是提示词层面的审查角色、非机械钩子。因此一次未跑门禁的提交可以直接产生，类型漂移或契约破坏要等到远端 CI 才暴露。",
+      "expectedOutput": [
+        "新增提交期钩子运行快门禁，违规时阻断并输出可定位的修复信息。"
+      ],
+      "expectedArtifact": "Git hook",
+      "aiFixPrompt": "/better-loop fix this issue\n\n增加一个提交期的机械门禁：配置 pre-commit（或 pre-push）钩子，对暂存改动运行最小快门禁——tsc -b 增量、eslint 变更文件、以及 @ci 标签审计；失败即阻断并打印修复方向。保留现有 scripts/ci-gate.ts 作为全量入口，钩子只跑快路径以控制耗时。\n\n## Validation\n\n- 制造一个类型错误提交，确认钩子阻断并给出文件/规则\n- 确认正常提交在快门禁下的耗时可接受（如 2 分钟内）",
+      "dimensionRefs": [
+        "change-validation"
+      ]
+    },
+    {
+      "id": "delivery-acceptance-gate-unproven",
+      "title": "验收门禁未证实：无可见分支保护，CI 带诊断脚手架",
+      "severity": "Medium",
+      "reason": "CI 工作流在 push/PR 到 main/master 时触发并运行同一门禁脚本，但仓库内没有分支保护或必需状态检查的证据，无法证实门禁在合入前会强制阻断；且 ci.yml 里保留了多步诊断脚手架（echo/ls/readlink、tsc traceResolution），提示流水线曾不稳定、被临时排障而非稳定收敛。验收路径与失败后的恢复责任人都不明确。",
+      "expectedOutput": [
+        "清理 CI 诊断脚手架并固化验收要求与恢复责任路径。"
+      ],
+      "expectedArtifact": "CI/branch policy",
+      "aiFixPrompt": "/better-loop fix this issue\n\n收敛交付验收路径：清理 ci.yml 中的临时诊断步骤，只保留稳定的门禁步骤；并在仓库内以可核查的方式固化验收要求（如在 CI 文档/CONTRIBUTING 中写明 main 需要门禁作为必需状态检查，并记录一条失败后的恢复/回滚责任路径）。若托管平台已开启分支保护，补一份指向该设置的说明作为证据锚点。\n\n## Validation\n\n- ci.yml 去除诊断脚手架后仍能跑通门禁步骤\n- 文档明确「合入 main 前必须通过门禁」与失败后的恢复责任人",
+      "dimensionRefs": [
+        "reliable-delivery"
+      ]
+    },
+    {
+      "id": "learning-capture-unvalidated-boundary",
+      "title": "经验沉淀有效性无法验证（会话证据缺失 + 无学习捕获记录）",
+      "severity": "Low",
+      "reason": "项目拥有可复用的沉淀资产（12 个技能、6 个代理、以及 20 处源码/测试同改的回归用例），但本轮 1/5 源根存在、0 条可分析会话，且分析器报告无学习捕获记录、上一份学习捕获报告无效。因此「重复失败是否被沉淀为技能、改进是否真正生效」这一跨窗口判断当前无法在证据上闭合，属于覆盖边界而非已证实的缺陷。",
+      "expectedOutput": [
+        "建立一条含触发、沉淀产物与后续验证结果的学习捕获记录闭环。"
+      ],
+      "expectedArtifact": "Report",
+      "aiFixPrompt": "/better-loop fix this issue\n\n为经验沉淀建立最小可核查的记录：在一次真实的重复性修复后，记录一条「触发 → 归纳的技能/规则 → 后续可比窗口的验证结果」条目，使改进有效性可以在两个可比窗口间被复核。先不扩大扫描范围，仅补齐记录闭环。\n\n## Validation\n\n- 存在至少一条包含触发、沉淀产物与后续验证结果的记录\n- 该记录能在下一轮 better-loop 中被作为可比证据读取",
+      "dimensionRefs": [
+        "learning-capture"
+      ]
+    }
+  ]
+}

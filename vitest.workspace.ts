@@ -30,6 +30,8 @@ export default defineWorkspace([
   // ── 基础 / 核心包 ───────────────────────────────────
   "./packages/config/vitest.config.ts",
   "./packages/shared/vitest.config.ts",
+  "./packages/protocol/vitest.config.ts",
+  "./packages/client/vitest.config.ts",
   "./packages/memory/vitest.config.ts",
   "./packages/memory-store/vitest.config.ts",
   "./packages/governance/vitest.config.ts",
@@ -37,6 +39,7 @@ export default defineWorkspace([
   "./packages/scheduler/vitest.config.ts",
 
   // ── 叶包（无内部依赖，全部并行） ─────────────────────
+  "./packages/design-tokens/vitest.config.ts",
   "./packages/doctor/vitest.config.ts",
   "./packages/logging/vitest.config.ts",
   "./packages/fsm-compiler/vitest.config.ts",
@@ -55,5 +58,6 @@ export default defineWorkspace([
   // ── 引擎 & CLI（较重，独立项目以便单独 --project 筛选） ──
   "./packages/context-manager/vitest.config.ts",
   "./packages/engine/vitest.config.ts",
+  "./packages/server/vitest.config.ts",
   "./packages/cli/vitest.config.ts",
 ]);

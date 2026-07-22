@@ -9,7 +9,7 @@
 // ============================================================
 
 import type { AgentType } from "./agent.js";
-import type { LlmMessage } from "./infra.js";
+import type { LlmMessage, ReasoningEffort } from "./infra.js";
 import type { MemoryEntry, MemoryQuery, MemoryWriteInput } from "./memory.js";
 import type { TaskNode, ExecutionReport } from "./task.js";
 
@@ -26,17 +26,17 @@ export interface ITuiEngineBridge {
     messages: LlmMessage[],
     tools: { name: string; description: string; parameters?: Record<string, unknown> }[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
-    opts?: { reasoningEffort?: "high" | "max" | null },
+    opts?: { reasoningEffort?: ReasoningEffort | null; signal?: AbortSignal },
   ): Promise<{
     content: string | null;
     tool_calls?: { id: string; name: string; arguments: Record<string, unknown> }[];
-    usage?: { prompt_tokens: number; completion_tokens: number };
+    usage?: { prompt_tokens: number; completion_tokens: number; prompt_cache_hit_tokens?: number; prompt_cache_miss_tokens?: number };
     reasoning_content?: string;
   }>;
   /** 执行工具调用 */
   executeToolCall(name: string, args: Record<string, unknown>): Promise<{ success: boolean; output: string }>;
   /** 非流式 LLM 对话（摘要/压缩） */
-  chat(systemPrompt: string, messages: LlmMessage[], opts?: { model?: string; reasoningEffort?: "high" | "max" }): Promise<string>;
+  chat(systemPrompt: string, messages: LlmMessage[], opts?: { model?: string; reasoningEffort?: ReasoningEffort }): Promise<string>;
   /** 初始化昔涟独立记忆 */
   ensureTalkMemory(): Promise<void>;
   /** 读取昔涟记忆 */

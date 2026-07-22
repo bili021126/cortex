@@ -1,0 +1,70 @@
+{
+  "_description": "L3·Agent 层。每 agent 仅声明差异——type 决定 profile、key 决定模型，其余字段全可选覆写。",
+  "_tags": ["code", "implementation", "fix", "repair", "diagnose", "heal", "plan_review", "oa", "workflow", "scheduling"],
+  "_profiles": {
+    "code-writer": {
+      "model": "deepseek-v4-pro",
+      "key": "DEEPSEEK_REASONER",
+      "tags": ["code", "implementation"],
+      "toolPermissions": ["read_file","write_file","edit_file","search_code","list_files","parse_ast","search_symbol","grep_files","glob_find","file_info","diff_files","format_code","run_test","delete_file"],
+      "memoryQueryStrategy": "code"
+    },
+    "code-fixer": {
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "tags": ["fix", "repair", "diagnose", "heal"],
+      "toolPermissions": ["read_file","write_file","edit_file","search_code","list_files","parse_ast","search_symbol","grep_files","glob_find","file_info","diff_files","format_code","run_test","delete_file"],
+      "memoryQueryStrategy": "fix"
+    },
+    "read-only": {
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "toolPermissions": ["read_file","search_code","list_files","parse_ast","search_symbol","grep_files","glob_find","file_info","resolve_import","json_query","web_search","read_many_files"],
+      "memoryQueryStrategy": "analysis"
+    },
+    "read-write-gov": {
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "toolPermissions": ["read_file","write_file","search_code","web_search","list_files","delete_file","parse_ast","search_symbol","read_many_files","grep_files","file_info","glob_find","resolve_import","json_query","diff_files","edit_file","format_code","run_test"],
+      "memoryQueryStrategy": "doc-govern"
+    },
+    "read-only-inspect": {
+      "model": "deepseek-v4-flash",
+      "key": "DEEPSEEK_CHAT",
+      "toolPermissions": ["read_file","search_code","list_files","parse_ast","search_symbol","grep_files","glob_find","file_info","resolve_import","json_query"],
+      "memoryQueryStrategy": "analysis"
+    }
+  },
+  "agents": {
+    "ganyu": {
+      "type": "meta",
+      "profile": null,
+      "key": "DEEPSEEK_GANYU",
+      "model": "deepseek-v4-pro",
+      "maxInstances": 1,
+      "tags": ["plan_review"],
+      "toolPermissions": ["read_file","search_code","web_search","list_files","parse_ast","search_symbol","read_many_files","grep_files","file_info","glob_find","resolve_import","json_query","diff_files","edit_file","format_code","run_test"],
+      "produces": ["plan_generated", "replan_executed"],
+      "role": "甘雨 — 战术调度中枢",
+      "emoji": "📋",
+      "systemPrompt": "prompts/ganyu/system.md",
+      "planningPrompt": "prompts/ganyu/planning.md",
+      "replanPrompt": "prompts/ganyu/replan.md",
+      "roundtable": { "title": "全局上下文提供者", "persona": "prompts/ganyu/roundtable.md" }
+    },
+    "albedo":     { "type": "code",     "profile": "code-writer",   "role": "阿贝多 — 炼金术士",       "emoji": "⚗️", "produces": ["code_generated","feature_complete"], "systemPrompt": "prompts/albedo/system.md", "roundtable": { "title": "实验记录与风险声明", "persona": "prompts/albedo/roundtable.md" } },
+    "sigewinne":  { "type": "fix",      "profile": "code-fixer",    "role": "希格雯 — 诊断修复",       "emoji": "💉", "produces": ["bug_fixed","diagnosis_complete","test_passing"], "systemPrompt": "prompts/sigewinne/system.md", "roundtable": { "title": "病理评估", "persona": "prompts/sigewinne/roundtable.md" } },
+    "keqing":    { "type": "review",   "profile": "read-only",     "role": "刻晴 — 代码审查",         "emoji": "⚡", "produces": ["review_completed","audit_passed"], "systemPrompt": "prompts/keqing/system.md", "roundtable": { "title": "审查报告与改进建议", "persona": "prompts/keqing/roundtable.md" } },
+    "nahida":    { "type": "analysis", "profile": "read-only",     "role": "纳西妲 — 智慧化身",       "emoji": "🌿", "produces": ["analysis_completed","research_done"], "model": "deepseek-v4-pro", "key": "DEEPSEEK_REASONER", "systemPrompt": "prompts/nahida/system.md", "roundtable": { "title": "调研结论", "persona": "prompts/nahida/roundtable.md" } },
+    "ningguang": { "type": "doc-govern","profile": "read-write-gov","role": "凝光 — OA行政中枢",       "emoji": "💎", "produces": ["doc_audited","amendment_proposed","constitution_reviewed","compliance_check_complete","workflow_approved","meeting_minutes","schedule_managed"], "tags": ["oa","workflow","scheduling"], "systemPrompt": "prompts/ningguang/system.md", "roundtable": { "title": "治理收束与清单签署", "persona": "prompts/ningguang/roundtable.md" } },
+    "amber":     { "type": "inspector","profile": "read-only-inspect","role": "安柏 — 纯事实采集",     "emoji": "🏹", "produces": ["inspection_complete","fact_collected"], "systemPrompt": "prompts/amber/system.md" },
+    "mona":      { "type": "loop",     "profile": "read-only",     "role": "莫娜 — 模式提炼",         "emoji": "🔮", "produces": ["pattern_extracted","skill_crystallized"], "systemPrompt": "prompts/mona/system.md", "roundtable": { "title": "星象预测与模式提炼", "persona": "prompts/mona/roundtable.md" } },
+    "beidou":    { "type": "ops",      "profile": "read-only",     "role": "北斗 — 运维诊断",         "emoji": "⚓", "produces": ["ops_diagnosed","env_checked"], "toolPermissions+": ["run_shell"], "systemPrompt": "prompts/beidou/system.md", "roundtable": { "title": "航海日志与运维报告", "persona": "prompts/beidou/roundtable.md" } },
+    "yoimiya":   { "type": "browser",  "profile": "read-only",     "role": "宵宫 — 浏览器UI验证",    "emoji": "🎆", "produces": ["browser_verified","ui_checked"], "systemPrompt": "prompts/yoimiya/system.md" },
+    "cyrene":    { "type": "butler",   "profile": null,           "role": "昔涟 — 管道路由+用户交互面","emoji": "🌸","key": "DEEPSEEK_CYRENE", "model": "deepseek-v4-flash", "maxInstances": 1, "produces": ["memory_queried","task_dispatched"], "systemPrompt": "prompts/cyrene/system.md" },
+    "api":       { "type": "api",      "profile": "read-only",     "role": "API 设计",                 "emoji": "🔌", "produces": ["api_designed"], "memoryQueryStrategy": "api" },
+    "data":      { "type": "data",     "profile": "read-only",     "role": "数据模型",                 "emoji": "🗄️", "produces": ["data_modeled"], "memoryQueryStrategy": "data" },
+    "zhongli":   { "type": "strategist","profile": null,          "role": "钟离 — 战略把关(Core-2预留)","emoji":"🪨","status":"awake","key":"DEEPSEEK_CHAT","model":"deepseek-v4-flash","produces":["strategy_assessed"],"toolPermissions":["read_file","search_code","web_search","list_files"] },
+    "yanfei":    { "type": "confirmGate","profile": null,         "role": "烟绯 — 确认门决策(Core-2预留)","emoji":"⚖️","key":"DEEPSEEK_CHAT","model":"deepseek-v4-flash","produces":["confirmation_decision"] }
+  }
+}

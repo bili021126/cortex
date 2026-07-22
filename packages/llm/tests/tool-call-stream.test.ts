@@ -131,14 +131,15 @@ describe("finalizeToolCalls", () => {
     ]);
   });
 
-  it("不完整 JSON arguments → {} 不抛异常", () => {
+  it("不完整 JSON arguments → __parse_error__ 标记（R6-C1 fix）", () => {
     const acc = [
       { id: "c2b", function: { name: "read", arguments: '{"file_path":"/foo' } },
     ];
     const result = finalizeToolCalls(acc);
     expect(result).toHaveLength(1);
-    expect(result[0]!.name).toBe("read");
-    expect(result[0]!.arguments).toEqual({});
+    // R6-C1: 不再静默返回 {}，而是标记为 parse_error 防止引擎执行错误参数
+    expect(result[0]!.name).toBe("__parse_error__");
+    expect(result[0]!.arguments).toHaveProperty("_error");
   });
 
   it("空名称的槽位被过滤", () => {

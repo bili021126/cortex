@@ -92,13 +92,10 @@ const KEY_LABELS: Record<string, string> = {
 
 // ── 定价（元/百万 tokens，缓存未命中）─────────────────
 // 参考: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
-// deepseek-chat/deepseek-reasoner 已弃用，均为 v4-flash 别名
 
 const PRICING: Record<string, { input: number; output: number }> = {
   "deepseek-v4-flash":   { input: 1, output: 2 },
-  "deepseek-chat":       { input: 1, output: 2 },   // 弃用别名
-  "deepseek-reasoner":   { input: 1, output: 2 },   // 弃用别名（v4-flash 思考模式）
-  "deepseek-v4-pro":     { input: 3, output: 6 },   // 原价 1/4 后
+  "deepseek-v4-pro":     { input: 3, output: 6 },
 };
 const DEFAULT_PRICING = { input: 1, output: 2 };
 

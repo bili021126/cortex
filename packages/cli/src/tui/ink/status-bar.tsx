@@ -9,6 +9,7 @@
  */
 
 import { Box, Text } from "ink";
+import { useState, useEffect, useRef } from "react";
 import { AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK } from "@cortex/shared";
 import type { AgentType } from "@cortex/shared";
 import type { AppMode, TokenSnapshot } from "./session-reducer.js";
@@ -19,6 +20,28 @@ export interface StatusBarProps {
   agent: AgentType;
   mode: AppMode;
   tokenUsage: TokenSnapshot;
+  /** 是否有回合在进行中——驱动经过时间计时与中断提示 */
+  isProcessing?: boolean;
+}
+
+/** 回合进行中的经过秒数——active 为 true 时每秒自增，结束归零 */
+function useElapsedSeconds(active: boolean): number {
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!active) {
+      startRef.current = null;
+      setElapsed(0);
+      return;
+    }
+    startRef.current = Date.now();
+    setElapsed(0);
+    const id = setInterval(() => {
+      if (startRef.current != null) setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return elapsed;
 }
 
 /** 渲染 Token 使用进度条（▰▱ 风格） */
@@ -33,10 +56,11 @@ function TokenBar({ pct, color }: { pct: number; color: string }) {
   );
 }
 
-export function StatusBar({ agent, mode, tokenUsage }: StatusBarProps) {
+export function StatusBar({ agent, mode, tokenUsage, isProcessing = false }: StatusBarProps) {
   const display = AGENT_DISPLAY_BY_TYPE[agent] ?? AGENT_DISPLAY_FALLBACK;
   const t = inkTheme;
   const tokens = defaultTokens;
+  const elapsed = useElapsedSeconds(isProcessing);
 
   const pct = tokenUsage.contextWindowSize > 0
     ? Math.round((tokenUsage.sessionTotalTokens / tokenUsage.contextWindowSize) * 100)
@@ -56,6 +80,10 @@ export function StatusBar({ agent, mode, tokenUsage }: StatusBarProps) {
     ? `${(tokenUsage.contextWindowSize / 1000).toFixed(0)}k`
     : String(tokenUsage.contextWindowSize);
 
+  // DeepSeek V4 上下文缓存命中率——hit / (hit + miss)
+  const cacheTotal = tokenUsage.cacheHitTokens + tokenUsage.cacheMissTokens;
+  const cacheHitRate = cacheTotal > 0 ? Math.round((tokenUsage.cacheHitTokens / cacheTotal) * 100) : null;
+
   // 模式标签从 token 读取
   const modeLabel = tokens.typography.modeLabels[mode] ?? mode;
 
@@ -74,6 +102,19 @@ export function StatusBar({ agent, mode, tokenUsage }: StatusBarProps) {
       <Text color={t.separator.color}> │ </Text>
       <TokenBar pct={pct} color={tokenColor} />
       <Text color={t.textMuted.color}> {tokenStr}/{windowStr}</Text>
+      {cacheHitRate !== null && (
+        <>
+          <Text color={t.separator.color}> │ </Text>
+          <Text color={t.textMuted.color}>⚡{cacheHitRate}%</Text>
+        </>
+      )}
+      {isProcessing && (
+        <>
+          <Text color={t.separator.color}> │ </Text>
+          <Text color={tokens.color.status.thinking}>⏱ {elapsed}s</Text>
+          <Text color={t.textMuted.color}> · Esc 中断</Text>
+        </>
+      )}
     </Box>
   );
 }

@@ -1,6 +1,10 @@
 // ============================================================
 // cognitive-engine.ts —— 认知行为引擎
 //
+// @frozen 2026-07 — 全量图景审计确认：已实例化但 sort.mode==="cognitive"
+// 路径不可达（ContextManager 未注入，planning 策略无法触发）。
+// 代码保留供未来激活，当前不维护不评审。
+//
 // 让记忆系统具备类人认知模式：
 //   (a) 贝叶斯相关性评分 —— P(relevant | query, context, task)
 //   (b) 傅里叶启发式时间衰减 —— 周期性回忆强化
@@ -163,8 +167,10 @@ export function bayesianRelevanceScore(
   // ── 后验 ∝ prior * likelihood ──
   const posterior = prior * likelihood;
 
-  // sigmoid 映射到 (0, 1) 并拉伸
-  return clamp(sigmoid((posterior - 0.5) * 10), 0, 1);
+  // H5 fix: sigmoid 中心从 0.5 改为 prior，拉伸因子加大。
+  // 原公式 posterior≤0.3 时 sigmoid((x-0.5)*10) 被永久压制在 [0.007,0.12]，无区分力。
+  // 新公式：posterior=prior → 0.5（基线），posterior→1 → 接近 1（强信号）。
+  return clamp(sigmoid((posterior - prior) * 20), 0, 1);
 }
 
 /** 关键词匹配似然 */

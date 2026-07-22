@@ -399,6 +399,16 @@ export class McpClient {
     return this._tools;
   }
 
+  /** H13 fix: 获取该 MCP 服务器的信任等级——默认 L2（需确认），除非 config.trust.level 指定 */
+  getTrustLevel(): ReversibilityLevel {
+    const raw = this.config.trust?.level;
+    if (raw === "L0") return ReversibilityLevel.L0;
+    if (raw === "L1") return ReversibilityLevel.L1;
+    if (raw === "L3") return ReversibilityLevel.L3;
+    // 默认 L2：MCP 工具涉及外部系统，默认需要确认
+    return ReversibilityLevel.L2;
+  }
+
   /** 查找 tool (按名称模糊匹配, 用于 "search" / "brave_web_search" 等) */
   findSearchTool(): McpToolDef | undefined {
     return this._tools.find((t) =>
@@ -496,7 +506,7 @@ export class McpToolAdapter implements Tool {
   readonly category = ToolCategory.Search;
   readonly description: string;
   readonly parameters: Record<string, unknown>;
-  readonly level = ReversibilityLevel.L0;
+  readonly level: ReversibilityLevel;
   readonly needsLock = false;
 
   private _rawName: string;
@@ -505,11 +515,14 @@ export class McpToolAdapter implements Tool {
     private _client: { callTool(name: string, args: Record<string, unknown>): Promise<string> },
     toolDef: { name: string; description: string; inputSchema: Record<string, unknown> },
     serverId: string,
+    trustLevel?: ReversibilityLevel,
   ) {
     this.name = `${MCP_PREFIX}${serverId}:${toolDef.name}`;
     this._rawName = toolDef.name;
     this.description = `[MCP:${serverId}] ${toolDef.description || toolDef.name}`;
     this.parameters = (toolDef.inputSchema || {}) as Record<string, unknown>;
+    // H13 fix: 使用 McpTrustConfig.level，默认 L2（需要确认），不再硬编码 L0
+    this.level = trustLevel ?? ReversibilityLevel.L2;
   }
 
   async execute(params: Record<string, unknown>): Promise<ToolResult> {

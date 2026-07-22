@@ -134,14 +134,13 @@ export class EmbeddingService implements IEmbeddingService {
       if (vec.length === EMBEDDING_DIM) {
         results.push(vec);
       } else {
-        // @justification 原则五豁免——embedBatch 为实例方法，不持有 PipelineObserver 引用。
-        //   维度不匹配是模型配置错误，仅在开发期触发。
-        //   有 observer 时 emit 诊断事件，否则 fallback 到 console.warn。
+        // R2 fix: 维度不匹配时用零向量占位，保持返回数组长度与输入一致，防止消费方索引错位
+        results.push(new Array<number>(EMBEDDING_DIM).fill(0));
         if (this._observer) {
           this._observer.emit({
             type: PipelineEventType.MemorySqlDegraded,
             priority: PipelinePriority.NORMAL,
-            payload: { operation: "embedBatch", detail: `维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${vec.length}` },
+            payload: { operation: "embedBatch", detail: `维度不匹配: 期望 ${EMBEDDING_DIM}，实际 ${vec.length}，零向量占位` },
             timestamp: Date.now(),
             notificationType: "FYI",
           });

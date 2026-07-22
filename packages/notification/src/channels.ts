@@ -101,9 +101,9 @@ export class UrgentChannel extends BaseChannel {
       if (dropIndex >= 0) {
         this.queue.splice(dropIndex, 1);
       } else {
-        // 队列中全是 ackRequired 事件，拒绝新事件入队
-        process.stderr.write(`[notification] WARNING: UrgentChannel 队列已满且所有事件均为 ackRequired，拒绝新事件: ${event.type}\n`);
-        return;
+        // R7-H11 fix: 所有事件均为 ackRequired（永远成立）→ 驱逐最旧事件而非拒绝
+        // 原逻辑永远找不到 !ackRequired 事件，导致队列满后所有新通知被静默拒绝
+        this.queue.pop();
       }
     }
     this.queue.unshift(event);
@@ -137,11 +137,22 @@ export class UrgentChannel extends BaseChannel {
   }
 
   private _restoreFromDisk(): void {
-    if (!this.persistence?.isAvailable()) return;
-    const pending = this.persistence.loadPending(NotificationChannel.Urgent);
-    for (const event of pending) {
-      this.queue.push(event);
-      this.notify(event);
+    const p = this.persistence;
+    if (!p) return;
+    // R3 fix: 等待异步初始化完成后再恢复，消除同步 isAvailable() 永远返回 false 的竞态
+    const doRestore = () => {
+      if (!p.isAvailable()) return;
+      const pending = p.loadPending(NotificationChannel.Urgent);
+      for (const event of pending) {
+        this.queue.push(event);
+        this.notify(event);
+      }
+    };
+    // 兼容：真实 persistence 有 ready()（异步 init），mock 无 ready()（同步可用）
+    if (typeof p.ready === 'function') {
+      void p.ready().then(doRestore);
+    } else {
+      doRestore();
     }
   }
 }
@@ -163,6 +174,7 @@ export class ImportantChannel extends BaseChannel {
       { ...DEFAULT_CHANNEL_CONFIGS[NotificationChannel.Important] },
       persistence,
     );
+    // R7-H12 fix: 与 UrgentChannel R3 fix 一致——等待异步 init 完成后再恢复
     this._restoreFromDisk();
   }
 
@@ -193,10 +205,20 @@ export class ImportantChannel extends BaseChannel {
   }
 
   private _restoreFromDisk(): void {
-    if (!this.persistence?.isAvailable()) return;
-    const pending = this.persistence.loadPending(NotificationChannel.Important);
-    for (const event of pending) {
-      this.queue.push(event);
+    const p = this.persistence;
+    if (!p) return;
+    // R7-H12 fix: 等待异步 init 完成后再恢复（与 UrgentChannel R3 fix 一致）
+    const doRestore = () => {
+      if (!p.isAvailable()) return;
+      const pending = p.loadPending(NotificationChannel.Important);
+      for (const event of pending) {
+        this.queue.push(event);
+      }
+    };
+    if (typeof p.ready === 'function') {
+      void p.ready().then(doRestore);
+    } else {
+      doRestore();
     }
   }
 }

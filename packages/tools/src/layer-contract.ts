@@ -1,7 +1,7 @@
 /**
  * layer-contract.ts — Cortex 依赖分层契约（机器可读单一真相源）
  *
- * 声明 25 个 workspace 包的架构层级（L0–L4），供依赖分层门禁校验。
+ * 声明 29 个 workspace 包的架构层级（L0–L4），供依赖分层门禁校验。
  *
  * 分层规则（PACKAGE_POSITIONING.md 边界原则 §1、§4）:
  *   - 包只能依赖 **同层或更低层** 的包（低层 ← 高层，严格单向）
@@ -29,7 +29,7 @@ export const LAYER_NAMES = [
 ] as const;
 
 /**
- * 25 包 → 层号映射（单一真相源）。
+ * 29 包 → 层号映射（单一真相源）。
  *
  * 键为包 id（packages/<id> 目录名，非 @cortex/ 全名）。
  * 新增包时必须在此登记，否则分层门禁的完整性校验会失败。
@@ -47,6 +47,8 @@ export const CORTEX_LAYER_CONTRACT: Record<string, number> = {
   "fsm-compiler": 0,
   testing: 0,
   "pattern-extractor": 0,
+  protocol: 0,
+  "design-tokens": 0,
 
   // ── L1 核心服务：单一职责，仅依赖 L0 ──
   llm: 1,
@@ -56,6 +58,7 @@ export const CORTEX_LAYER_CONTRACT: Record<string, number> = {
   "plugin-runner": 1,
   "prompt-kit": 1,
   "context-manager": 1,
+  client: 1,
 
   // ── L2 复合服务：组合 L1/L0 ──
   "memory-store": 2,
@@ -69,4 +72,5 @@ export const CORTEX_LAYER_CONTRACT: Record<string, number> = {
   engine: 4,
   cli: 4,
   desktop: 4,
+  server: 4,
 };

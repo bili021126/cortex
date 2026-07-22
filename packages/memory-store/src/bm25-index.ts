@@ -34,9 +34,12 @@ export interface FieldWeights {
 }
 
 // ── 常量 ──────────────────────────────────────
+// 权威源：@cortex/config BM25_DEFAULT_K1 / BM25_DEFAULT_B
+// 本地镜像避免跨包依赖（bm25-index 本身在 memory-store 内）
+import { BM25_DEFAULT_K1, BM25_DEFAULT_B } from "@cortex/config";
 
-const DEFAULT_K1 = 1.2;
-const DEFAULT_B = 0.75;
+const DEFAULT_K1 = BM25_DEFAULT_K1;
+const DEFAULT_B = BM25_DEFAULT_B;
 
 /** 停用词集合——中文高频虚词 + 英文 stopwords */
 const STOP_WORDS = new Set([
@@ -78,6 +81,8 @@ interface DocMeta {
   id: string;
   fields: Map<string, string>; // fieldName → raw text
   fieldTokens: Map<string, string[]>; // fieldName → tokenized
+  /** M3 fix: 预计算每字段 TF——避免每次搜索重新计算 */
+  fieldTf: Map<string, Map<string, number>>; // fieldName → (token → tf)
   totalTokens: number;
 }
 
@@ -132,12 +137,20 @@ export class BM25Index {
 
     const fieldMap = new Map(Object.entries(fields));
     const fieldTokens = new Map<string, string[]>();
+    const fieldTf = new Map<string, Map<string, number>>();
     let totalTokens = 0;
 
     for (const [fieldName, text] of fieldMap) {
       const tokens = tokenize(text);
       fieldTokens.set(fieldName, tokens);
       totalTokens += tokens.length;
+
+      // M3 fix: 在索引时预计算 TF，避免搜索时重复计算
+      const tfMap = new Map<string, number>();
+      for (const t of tokens) {
+        tfMap.set(t, (tfMap.get(t) ?? 0) + 1);
+      }
+      fieldTf.set(fieldName, tfMap);
 
       // 更新倒排索引——同一文档内重复 token 只计一次 DF
       const seenTokens = new Set<string>();
@@ -149,7 +162,7 @@ export class BM25Index {
       }
     }
 
-    this._docs.set(id, { id, fields: fieldMap, fieldTokens, totalTokens });
+    this._docs.set(id, { id, fields: fieldMap, fieldTokens, fieldTf, totalTokens });
     this._totalTokens += totalTokens;
     this._docCount++;
   }
@@ -214,7 +227,9 @@ export class BM25Index {
 
       for (const [fieldName, tokens] of doc.fieldTokens) {
         const fieldWeight = this.fieldWeights.get(fieldName) ?? 1;
-        const tfMap = this._computeTF(tokens);
+        // M3 fix: 直接读取预计算的 TF，替代每次搜索动态计算
+        const tfMap = doc.fieldTf.get(fieldName) ?? this._computeTF(tokens);
+        if (!tfMap) continue;
 
         for (const qt of queryTokens) {
           const tf = tfMap.get(qt) ?? 0;

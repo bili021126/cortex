@@ -20,12 +20,15 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type GovernanceEventPayload, type IPipelineObserver } from "@cortex/shared";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
+import { VERIFICATION_CACHE_TTL_MS, BARREL_MAX_SIZE, TSFILE_MAX_SIZE } from "@cortex/config";
 
 // ─── 裁决类型 ─────────────────────────────────────
 
 export interface RuleVerdict {
   ruleName: string;
   passed: boolean;
+  /** H18 fix: 规则因缺少输入数据而跳过（不计入 gate 总结果） */
+  skipped?: boolean;
   reason?: string;
 }
 
@@ -51,7 +54,7 @@ export class HardVerificationGate {
   private _gitDiffTime = 0;
   private _eslintCache: Array<{ file: string; rule: string }> | null = null;
   private _eslintTime = 0;
-  private static readonly CACHE_TTL = 60_000;
+  private static readonly CACHE_TTL = VERIFICATION_CACHE_TTL_MS;
 
   /** 治理事件类型常量 */
   static readonly GOVERNANCE_EVENT_TYPES = [
@@ -75,7 +78,8 @@ export class HardVerificationGate {
       this._ruleCrossPackage(event),
     ];
     return {
-      passed: verdicts.every(v => v.passed),
+      // H18 fix: 排除 skipped 规则——缺失数据的不影响总判决
+      passed: verdicts.filter(v => !v.skipped).every(v => v.passed),
       verdicts,
     };
   }
@@ -84,7 +88,7 @@ export class HardVerificationGate {
   private _ruleGitDiff(payload: GovernanceEventPayload): RuleVerdict {
     const p = payload as unknown as Record<string, unknown>;
     const filePath = (typeof p.filePath === "string" ? p.filePath : (typeof p.nodeId === "string" ? p.nodeId : undefined)) as string | undefined;
-    if (!filePath) return { ruleName: "git-diff", passed: true };
+    if (!filePath) return { ruleName: "git-diff", passed: true, skipped: true, reason: "缺少 filePath/nodeId 字段" };
 
     const changed = this._getChangedFiles();
     const found = changed.some(f => f.includes(filePath));
@@ -99,7 +103,7 @@ export class HardVerificationGate {
   private _ruleEslint(payload: GovernanceEventPayload): RuleVerdict {
     const p = payload as unknown as Record<string, unknown>;
     const violation = typeof p.violation === "string" ? p.violation : undefined;
-    if (!violation) return { ruleName: "eslint", passed: true };
+    if (!violation) return { ruleName: "eslint", passed: true, skipped: true, reason: "缺少 violation 字段" };
 
     const errors = this._getEslintErrors();
     const matched = errors.some(e => e.rule === violation);
@@ -115,7 +119,7 @@ export class HardVerificationGate {
     const p = payload as unknown as Record<string, unknown>;
     const from = typeof p.fromState === "string" ? p.fromState : undefined;
     const to = typeof p.toState === "string" ? p.toState : undefined;
-    if (!from || !to) return { ruleName: "fsm-transition", passed: true };
+    if (!from || !to) return { ruleName: "fsm-transition", passed: true, skipped: true, reason: "缺少 fromState/toState 字段" };
 
     const valid = MEMORY_VALID_TRANSITIONS[from]?.has(to);
     return {
@@ -129,12 +133,12 @@ export class HardVerificationGate {
   private _ruleBarrelExport(payload: GovernanceEventPayload): RuleVerdict {
     const p = payload as unknown as Record<string, unknown>;
     const modulePath = typeof p.modulePath === "string" ? p.modulePath : undefined;
-    if (!modulePath) return { ruleName: "barrel-export", passed: true };
+    if (!modulePath) return { ruleName: "barrel-export", passed: true, skipped: true, reason: "缺少 modulePath 字段" };
 
     try {
       const barrelPath = modulePath.replace(/\/[^/]+\.ts$/, "/index.ts");
       // 文件大小限制 10MB（代码文件上限）
-      const _MAX_SIZE = 10 * 1024 * 1024;
+      const _MAX_SIZE = BARREL_MAX_SIZE;
       const _stats = fs.statSync(barrelPath);
       if (_stats.size > _MAX_SIZE) {
         return { ruleName: "barrel-export", passed: false, reason: `Barrel 文件过大: ${barrelPath} (${_stats.size} bytes)` };
@@ -158,7 +162,7 @@ export class HardVerificationGate {
     const srcPkg = typeof p.sourcePkg === "string" ? p.sourcePkg : undefined;
     const tgtPkg = typeof p.targetPkg === "string" ? p.targetPkg : undefined;
     const iface = typeof p.interfaceName === "string" ? p.interfaceName : undefined;
-    if (!srcPkg || !tgtPkg || !iface) return { ruleName: "cross-package", passed: true };
+    if (!srcPkg || !tgtPkg || !iface) return { ruleName: "cross-package", passed: true, skipped: true, reason: "缺少 sourcePkg/targetPkg/interfaceName 字段" };
 
     // 防注入：校验接口名仅含合法标识符字符
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(iface) || !/^[a-z][a-z0-9-]*$/.test(srcPkg) || !/^[a-z][a-z0-9-]*$/.test(tgtPkg)) {
@@ -184,7 +188,7 @@ export class HardVerificationGate {
           } else if (entry.isFile() && entry.name.endsWith('.ts')) {
             try {
               // 文件大小限制 10MB（代码文件上限）
-              const _MAX_TS_SIZE = 10 * 1024 * 1024;
+              const _MAX_TS_SIZE = TSFILE_MAX_SIZE;
               const _st = fs.statSync(full);
               if (_st.size > _MAX_TS_SIZE) continue;
               const content = fs.readFileSync(full, 'utf-8');

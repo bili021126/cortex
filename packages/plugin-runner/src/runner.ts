@@ -230,9 +230,9 @@ export class PluginRunner {
     const batches = this._registry.resolveDependencies();
 
     for (const batch of batches) {
-      // 同批次内插件并行执行
+      // 同批次内插件并行执行——每个插件独立 ctx 副本，防止 output 互相污染（C10 fix）
       const batchResults = await Promise.allSettled(
-        batch.map((plugin) => this.execute(plugin.name, ctx)),
+        batch.map((plugin) => this.execute(plugin.name, { ...ctx })),
       );
 
       // 收集结果

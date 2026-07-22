@@ -1,6 +1,9 @@
 // ============================================================
 // @cortex/context-manager — ContextEngine 可插拔接口
 //
+// @frozen 2026-07 — 全量图景审计确认：仅 import type 引用，
+// setContextManager() 从未在生产代码中被调用。冻结不维护不评审。
+//
 // 适配 Cortex:
 //   - ContextEngine 接口定义在 @cortex/context-manager
 //   - ReactLoop 通过 DI 注入 _contextEngine?: ContextEngine

@@ -1,0 +1,184 @@
+{
+  "summary": {
+    "projectName": "cortex",
+    "locale": "zh-CN",
+    "modelId": "agent-work-loop-v4",
+    "reportContractVersion": 24,
+    "overview": "Cortex 是一个 20+ 包的 pnpm monorepo，拥有厚实的验证底盘（1221 个跟踪测试文件、四层 CI 门禁 tsc→unit→verify→contract、路径相关的回归测试共变）。但代理导航入口偏人设、缺少 monorepo 包边界地图；构建/类型检查链有已记录的不稳定性并依赖串行单线程绕过；反馈未按受影响范围路由；本地无生命周期门禁。本报告仅基于静态仓库证据——无可用会话样本（5 个会话源根仅 1 个启用），故交付、恢复与学习环节均未被观测。",
+    "aiAgentPractice": {
+      "inspectedSurfaces": [
+        "Rules",
+        "Skills",
+        "Custom Agents",
+        "Workflows"
+      ],
+      "coverageRows": [
+        {
+          "surface": "Rules",
+          "scopes": [
+            "Project"
+          ],
+          "count": 1,
+          "paths": [
+            "DESIGN.md"
+          ]
+        },
+        {
+          "surface": "Skills",
+          "scopes": [
+            "Project"
+          ],
+          "count": 12,
+          "paths": [
+            ".qoder/skills/cortex-critical-fix/SKILL.md",
+            ".qoder/skills/cortex-package-gap-scan/SKILL.md",
+            ".qoder/skills/cortex-plan-review/SKILL.md"
+          ]
+        },
+        {
+          "surface": "Custom Agents",
+          "scopes": [
+            "Project"
+          ],
+          "count": 6,
+          "paths": [
+            ".qoder/agents/cyrene.md",
+            ".qoder/agents/cyrene-executor.md",
+            ".qoder/agents/cyrene-gatekeeper.md"
+          ]
+        },
+        {
+          "surface": "Workflows",
+          "scopes": [
+            "Project"
+          ],
+          "count": 2,
+          "paths": [
+            ".github/workflows/ci.yml",
+            ".github/workflows/ci-review-report.md"
+          ]
+        }
+      ]
+    },
+    "suggestions": [],
+    "assignmentSummaries": [],
+    "dimensions": [
+      {
+        "id": "task-understanding",
+        "label": "任务理解",
+        "score": 55,
+        "summary": "存在入口文档与 20 份架构/README 及 DESIGN.md，但唯一的自有代理入口以人设内容为主，未提供 20+ 包的职责与导航地图。",
+        "findingRefs": [
+          "context-no-monorepo-route-map"
+        ]
+      },
+      {
+        "id": "controlled-execution",
+        "label": "可控执行",
+        "score": 56,
+        "summary": "工具链已固定（pnpm 锁定、node 版本约束）且有运行/构建脚本，但缺少 setup/doctor/reset 命令面，且构建链存在已记录的不稳定性。",
+        "findingRefs": [
+          "env-no-setup-doctor-surface",
+          "env-toolchain-instability-workarounds"
+        ]
+      },
+      {
+        "id": "change-validation",
+        "label": "改动验证",
+        "score": 68,
+        "summary": "测试与门禁底盘扎实（分层 @ci 标签、失败可定位），但无受影响范围的验证路由，全仓串行反馈偏慢。",
+        "findingRefs": [
+          "feedback-no-affected-routing"
+        ]
+      },
+      {
+        "id": "reliable-delivery",
+        "label": "可靠交付",
+        "score": 50,
+        "summary": "有基于 PR 的 CI 接受路径，但无本地生命周期门禁，跨包契约规则仅靠约定，且 required-status/分支保护无法从仓库内证实。",
+        "findingRefs": [
+          "delivery-no-local-gate-convention-only"
+        ]
+      },
+      {
+        "id": "learning-capture",
+        "label": "经验沉淀",
+        "score": 32,
+        "summary": "有 12 个项目 Skill，但多数缺少触发/输出/校验要素；无可用会话证据，未观测到任何经验沉淀或改进对比。",
+        "findingRefs": []
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "context-no-monorepo-route-map",
+      "title": "代理入口偏人设，缺少 monorepo 包边界与导航地图",
+      "severity": "Medium",
+      "reason": "唯一的项目自有代理入口以人设/角色内容为主，未提供 20+ 包（cli、engine、memory 等）的目录职责与任务路由；静态证据显示未跟踪独立的 AGENTS.md，仅有的 AGENTS.md/CLAUDE.md 位于 vendored 的 _extraneous/openclaw 树中。代理需遍历整个仓库才能定位正确的上下文、风险区与下一步。",
+      "expectedOutput": [
+        "一份简短的导航式入口，列出主要包职责、常见任务起点、高风险区与深入文档链接。"
+      ],
+      "expectedArtifact": "代理导航入口 / 包边界地图",
+      "aiFixPrompt": "/better-loop fix this issue\n\n为该 monorepo 增补一个简短的、导航式的代理入口（例如根 AGENTS.md 或在现有入口内新增一节），列出主要包（cli/engine/memory/scheduler/governance 等）的职责、常见任务应从哪里开始、高风险区，并链接更深的架构文档。保持简洁（80-150 行），不要混入人设内容。\n\n## Validation\n\n- 确认新入口能让代理在不遍历全仓的情况下定位任一主要包的职责\n- 确认高风险区与常见任务路由被明确列出并链接到相应检查",
+      "dimensionRefs": [
+        "task-understanding"
+      ]
+    },
+    {
+      "id": "env-no-setup-doctor-surface",
+      "title": "缺少统一的 setup/doctor/reset 命令面",
+      "severity": "Low",
+      "reason": "根 package.json 未提供 intent 命名的 setup/doctor/reset/clean 脚本；代理必须自行推断安装步骤（pnpm install → pnpm -r build），且无预检或自诊断命令来验证运行时、依赖或工作区状态。",
+      "expectedOutput": [
+        "在 package.json 中新增 setup/doctor/reset 脚本，并有 help/说明。"
+      ],
+      "expectedArtifact": "根命令面脚本",
+      "aiFixPrompt": "/better-loop fix this issue\n\n在根 package.json 增补 intent 命名的命令面：至少 setup（安装+构建）、doctor（检查 node 版本/工作区链接/tsc 解析）、clean/reset。命令应能在受支持平台运行，并输出可定位的下一步。\n\n## Validation\n\n- 从干净检出运行 setup 能到达可工作状态\n- doctor 能检测出常见环境问题（如 node 版本、workspace 符号链接）并给出修复方向",
+      "dimensionRefs": [
+        "controlled-execution"
+      ]
+    },
+    {
+      "id": "env-toolchain-instability-workarounds",
+      "title": "构建/类型检查链存在已记录的不稳定性，依赖串行单线程绕过",
+      "severity": "High",
+      "reason": "ci-gate 脚本头部记录：vitest workspace 模式存在启动错误、根聚合配置在 Node 24 下 OOM，迫使按包串行单线程运行；CI 工作流内嵌多个诊断步骤探测 workspace 符号链接与 tsc 解析。这表明构建/类型检查链（一个命名风险）在没有这些绕过手段时无法干净复现，代理很难可靠地建立本地绿色基线。",
+      "expectedOutput": [
+        "一次不依赖临时绕过、可复现的全仓验证运行，或将绕过固化为受支持命令并注明边界。"
+      ],
+      "expectedArtifact": "构建/测试工具链修复或受支持的运行命令",
+      "aiFixPrompt": "/better-loop fix this issue\n\n定位并修复根聚合测试配置在 Node 24 下 OOM 与 vitest workspace 启动错误的根因（内存/引用/符号链接解析），使全仓可在不强制单线程串行、不依赖临时诊断步骤的情况下复现验证。若暂不能根治，则将当前绕过手段固化为受支持的命令并写清适用边界。\n\n## Validation\n\n- 在受支持的 node 版本上运行一次完整验证不再 OOM 或 workspace 启动失败\n- 移除或合法化 CI 中的临时诊断步骤，且门禁仍通过",
+      "dimensionRefs": [
+        "controlled-execution"
+      ]
+    },
+    {
+      "id": "feedback-no-affected-routing",
+      "title": "monorepo 缺少受影响范围的验证路由，全仓串行门禁",
+      "severity": "Medium",
+      "reason": "ci-gate 每次遍历所有包，CI 工作流无 path 过滤，也无 nx/turbo 等 affected 机制；叠加强制的串行单线程执行，20+ 包的全仓反馈缺乏范围化能力，代理无法为一个小改动获得快速、聚焦的反馈。（此处未实测具体耗时。）",
+      "expectedOutput": [
+        "一条按改动计算受影响包并仅运行相关检查的路由，保留全仓兜底。"
+      ],
+      "expectedArtifact": "受影响范围验证路由",
+      "aiFixPrompt": "/better-loop fix this issue\n\n为该 monorepo 引入受影响范围的验证路由：按改动文件/包只运行相关包的 typecheck/lint/test（可用 pnpm --filter ...[origin/HEAD]、nx/turbo affected，或在 ci-gate 中按 git diff 计算受影响包）。保留全仓门禁作为兜底。\n\n## Validation\n\n- 修改单个包后，验证只运行该包及其依赖者的检查\n- 全仓门禁仍作为最终兜底可运行并通过",
+      "dimensionRefs": [
+        "change-validation"
+      ]
+    },
+    {
+      "id": "delivery-no-local-gate-convention-only",
+      "title": "缺少本地生命周期门禁，跨包契约规则仅靠约定",
+      "severity": "Medium",
+      "reason": "未发现本地 pre-commit/pre-push（无 .husky 或 git hooks），门禁仅在 CI 或手动运行，本地代理可无阻提交；跨包契约规则（如禁 as unknown as / any 桥接）在入口文档中仅为约定，未在通用 ESLint 之外机械强制；且 CI 是否为 required status、base 分支是否受保护无法从仓库内证实。",
+      "expectedOutput": [
+        "可拦截提交并给出修复方向的本地 pre-commit/pre-push，以及机械化的跨包契约 ESLint 规则。"
+      ],
+      "expectedArtifact": "本地生命周期门禁与契约 lint 规则",
+      "aiFixPrompt": "/better-loop fix this issue\n\n为代理编辑/提交生命周期增加最小的本地门禁：接入 pre-commit/pre-push（如 husky + lint-staged 或等价 git hook），在提交前运行受影响范围的 typecheck+lint。同时将入口中约定式的跨包契约规则（禁 as unknown as / any 桥接）落成机械 ESLint 规则。\n\n## Validation\n\n- 制造一次违反契约规则的改动，确认本地钩子在提交前拦截并给出修复方向\n- 确认 CI 门禁与本地钩子行为一致",
+      "dimensionRefs": [
+        "reliable-delivery"
+      ]
+    }
+  ]
+}

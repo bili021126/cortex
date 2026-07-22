@@ -22,11 +22,3 @@ export { FadeIn, type FadeInProps } from "./components/FadeIn.js";
 export { SlideIn, type SlideInProps } from "./components/SlideIn.js";
 export { ProgressBar, type ProgressBarProps } from "./components/ProgressBar.js";
 export { Spinner, type SpinnerProps } from "./components/Spinner.js";
-
-// ─── v4 ANSI 动画 ────────────────────────
-export {
-  AnsiFrameRenderer,
-  AnsiTypewriter,
-  renderAnsiProgressBar,
-  renderAnsiIndeterminate,
-} from "./ansi-animation.js";

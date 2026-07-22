@@ -26,6 +26,7 @@ import { commandMode } from "../modes/command-mode.js";
 import { COMMAND_DEFS } from "../../commands/command-list.js";
 import { loadInkSession, createAutoSaver } from "./session-persistence.js";
 import { reversibilityLevel } from "../renderer/permission-dialog.js";
+import { SigintHandler } from "../renderer/sigint-handler.js";
 import { useInputHandler } from "./hooks/use-input-handler.js";
 import type { TuiHooks } from "../types.js";
 import type { ITuiEngineBridge, ICommandDispatcher, ICommandContext } from "@cortex/shared";
@@ -83,6 +84,8 @@ export function App({
   const [showSidebar, setShowSidebar] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  // type-ahead 队列：回合进行中用户预输入的条目，回合结束后依次自动提交
+  const [pendingInputs, setPendingInputs] = useState<string[]>([]);
 
   // ── 交互系统实例 ────────────────────────────
   const keyRegistry = useMemo(() => externalKeyRegistry ?? new KeyRegistry(), [externalKeyRegistry]);
@@ -292,6 +295,20 @@ export function App({
   const permissionResolverRef = useRef<((result: PermissionResult) => void) | null>(null);
   const approveAllRef = useRef(false);
 
+  // ── Ctrl+C 两连退出（复用 SigintHandler：一次提示、一秒内再按退出）──
+  const sigintRef = useRef<SigintHandler | null>(null);
+  if (!sigintRef.current) sigintRef.current = new SigintHandler(() => setExitRequested(true));
+
+  // H2 fix: SWITCH_AGENT 等操作会清除 pendingPermission 但不 resolve Promise，
+  // 导致 queryLoop 永久挂起。监听 pendingPermission 变为 null 时释放 resolver。
+  useEffect(() => {
+    if (!state.pendingPermission && permissionResolverRef.current) {
+      const resolve = permissionResolverRef.current;
+      permissionResolverRef.current = null;
+      resolve("deny");
+    }
+  }, [state.pendingPermission]);
+
   /** 创建注入 chatMode/planMode 的 hooks（权限确认） */
   const createExternalHooks = useCallback((): Partial<TuiHooks> => {
     return {
@@ -328,25 +345,8 @@ export function App({
     }
   }, [state.pendingPermission, focusManager, showCommandPalette, showHelp]);
 
-  // ── Escape 全局处理 ────────────────────────────
-  useInput((_input, key) => {
-    if (key.escape) {
-      if (showHelp) {
-        setShowHelp(false);
-        focusManager.popOverlay();
-        return;
-      }
-      if (showCommandPalette) {
-        commandPalette.close();
-        return;
-      }
-      // 默认：聚焦输入框
-      focusManager.focus("input");
-    }
-  });
-
-  // ── 输入处理（抽离至 useInputHandler，与 ansi dispatchInput 行为对称）──
-  const handleInput = useInputHandler({
+  // ── Escape / Ctrl+C 全局处理 ────────────────────────────
+  const { handleInput, interrupt } = useInputHandler({
     stateRef,
     dispatch,
     projectRoot,
@@ -357,8 +357,53 @@ export function App({
     createExternalHooks,
   });
 
+  useInput((_input, key) => {
+    if (key.ctrl && _input === "c") {
+      const msg = sigintRef.current?.handle();
+      if (msg) dispatch({ type: "ADD_MESSAGE", payload: { role: "system", content: msg } });
+      return;
+    }
+    if (key.escape) {
+      if (showHelp) {
+        setShowHelp(false);
+        focusManager.popOverlay();
+        return;
+      }
+      if (showCommandPalette) {
+        commandPalette.close();
+        return;
+      }
+      if (stateRef.current.isProcessing) {
+        // 旗舰：Esc 秒断当前回合并回收输入
+        interrupt();
+        dispatch({ type: "TURN_INTERRUPTED" });
+        return;
+      }
+      // 默认：聚焦输入框
+      focusManager.focus("input");
+    }
+  });
+
   // ── 快捷键绑定桥接 ─────────────────────────────
   useKeybinding(keyRegistry, focusManager);
+
+  // ── type-ahead：处理中提交入队，回合结束后自动发送队首 ──
+  const submitOrQueue = useCallback((value: string) => {
+    if (!value.trim()) return;
+    if (stateRef.current.isProcessing) {
+      setPendingInputs((q) => [...q, value]);
+    } else {
+      void handleInput(value);
+    }
+  }, [handleInput]);
+
+  useEffect(() => {
+    if (!state.isProcessing && pendingInputs.length > 0) {
+      const [next, ...rest] = pendingInputs;
+      setPendingInputs(rest);
+      if (next) void handleInput(next);
+    }
+  }, [state.isProcessing, pendingInputs, handleInput]);
 
   // ─── 渲染 ──────────────────────────────────────
   if (showSplash) {
@@ -380,7 +425,7 @@ export function App({
     <AppContext.Provider value={{ dispatch, bridge, registry, registryCtx, projectRoot }}>
       <Box flexDirection="column" height={rows}>
         {/* 顶部状态栏 */}
-        <StatusBar agent={state.agent} mode={state.mode} tokenUsage={state.tokenUsage} />
+        <StatusBar agent={state.agent} mode={state.mode} tokenUsage={state.tokenUsage} isProcessing={state.isProcessing} />
 
         {/* 主内容区 */}
         <Box flexDirection="row" flexGrow={1}>
@@ -449,10 +494,11 @@ export function App({
         ) : (
           <InputBar
             agent={state.agent}
-            onSubmit={handleInput}
-            disabled={state.isProcessing}
+            onSubmit={submitOrQueue}
+            processing={state.isProcessing}
             hint={planHint}
             focused={currentFocus === "input"}
+            queuedCount={pendingInputs.length}
           />
         )}
       </Box>
@@ -489,7 +535,8 @@ function HelpOverlay() {
         <Text color={t.textSecondary.color}><Text color={t.accent.color} bold>Ctrl+D</Text>  向下翻页</Text>
         <Text color={t.textSecondary.color}><Text color={t.accent.color} bold>i</Text>       聚焦输入框</Text>
         <Text color={t.textSecondary.color}><Text color={t.accent.color} bold>?</Text>       显示此帮助</Text>
-        <Text color={t.textSecondary.color}><Text color={t.accent.color} bold>Esc</Text>     关闭浮层 / 返回输入</Text>
+        <Text color={t.textSecondary.color}><Text color={t.accent.color} bold>Esc</Text>     中断当前回合 / 关闭浮层 / 返回输入</Text>
+        <Text color={t.textSecondary.color}><Text color={t.accent.color} bold>Ctrl+C</Text>  连按两次退出</Text>
       </Box>
       <Box marginTop={1}>
         <Text color={t.textMuted.color}>按 Esc 关闭</Text>

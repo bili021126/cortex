@@ -95,6 +95,10 @@ export function updateProposalStatus(
   status: AmendmentProposal["status"],
   rootDir: string,
 ): void {
+  // R5 fix: 路径穿越校验——对齐 saveProposal 的输入校验
+  if (proposalId.includes('..') || proposalId.includes('/') || proposalId.includes('\\')) {
+    throw new Error(`Invalid proposal ID: ${proposalId}`);
+  }
   const dir = path.resolve(rootDir, AMENDMENTS_DIR);
   const filePath = path.join(dir, `${proposalId}.json`);
   if (!fs.existsSync(filePath)) return;

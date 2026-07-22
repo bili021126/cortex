@@ -4,10 +4,12 @@
  
 import type { TaskNode, NodeResult, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import { AgentType, ReversibilityLevel as RL } from "@cortex/shared";
-import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_LOOP } from "@cortex/config";
+import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_LOOP, ENV_CORTEX_DEBUG, ENV_REACT_DEBUG } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
+// 原则五（统一可观测）：遥测走 recordTelemetry，禁止裸 console
+import { recordTelemetry } from "@cortex/telemetry";
 import { resilienceFactory } from "./resilience-integration.js";
 
 /**
@@ -63,7 +65,8 @@ export async function runReActLoop(
     : "";
 
   const messages: LlmMessage[] = [
-    { role: "system", content: "你是一个代码执行引擎。你不是游戏角色，不要扮演任何人。你的唯一职责是调用工具完成任务。" },
+    // DeepSeek V4 行为前置——指令越短越精确，越早注入 attention 权重越高
+    { role: "system", content: "你是 Cortex 代码执行引擎。使用 DeepSeek V4 API。遵循以下规则：1) 每次 tool_call 必须使用正确的 JSON Schema 参数 2) tool_call_id 必须与上一条 assistant 消息中的 id 完全一致 3) 当 thinking 模式启用时，reasoning_content 已预填入思考链——请直接引用而非重复推理 4) 上下文预算充裕——不需要过度压缩输出" },
     { role: "system", content: systemPrompt },
     { role: "system", content: TOOL_DISCIPLINE },
     { role: "user", content: `Task: ${node.payload}` },
@@ -88,7 +91,7 @@ export async function runReActLoop(
   const usageLog: Array<{prompt_tokens?: number; completion_tokens?: number}> = [];
   const deadline = startTime + ctx.reactLoopTimeoutMs;
 
-  const REACT_DEBUG = process.env["CORTEX_DEBUG"] === "1" || process.env["REACT_DEBUG"] === "1";
+  const REACT_DEBUG = process.env[ENV_CORTEX_DEBUG] === "1" || process.env[ENV_REACT_DEBUG] === "1";
   const diagnostic = (msg: string): void => {
     if (REACT_DEBUG) console.error(`  🔁 [ReAct-${agentType}#${loops}] ${msg}`);
   };
@@ -132,7 +135,13 @@ export async function runReActLoop(
       // ── 遥测：Context 膨胀 ──
       const totalChars = messages.reduce((sum, m) => sum + (m.content?.length ?? 0), 0);
       const avgPerMsg = messages.length > 0 ? Math.round(totalChars / messages.length) : 0;
-      console.error(`[telemetry] context.inflate agent=${agentType} loops=${loops} totalChars=${totalChars} msgs=${messages.length} avgPerMsg=${avgPerMsg}`);
+      // H10 fix: 遥测走 recordTelemetry 正式通道
+      void recordTelemetry("react_loop.context_inflate", totalChars, [
+        { key: "agent", value: agentType },
+        { key: "loops", value: String(loops) },
+        { key: "msgs", value: String(messages.length) },
+        { key: "avgPerMsg", value: String(avgPerMsg) },
+      ]).catch(() => {});
       diagnostic(`🛰️  调用 LLM (${model})——上下文 ${msgCount} 条消息，工具 ${toolDefs.length} 个...`);
       if (REACT_DEBUG) {
         console.error(`  📋 [ReAct-${agentType}#${loops}] 系统消息: ${(messages[0]?.content ?? "(空)").slice(0, 100)}`);
@@ -244,10 +253,16 @@ export async function runReActLoop(
             const toolElapsed = Date.now() - toolStart;
             const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
             diagnostic(`🔧 ${tc.name} → ${outcome}`);
-            console.error(`[telemetry] agent.tool_called agent=${agentType} tool=${tc.name}`);
+            // H10 fix: 遥测走 recordTelemetry 正式通道
+            void recordTelemetry("react_loop.tool_called", 1, [
+              { key: "agent", value: agentType },
+              { key: "tool", value: tc.name },
+              { key: "level", value: "L0" },
+            ]).catch(() => {});
             return { tc, result, toolElapsed };
           })
         );
+
         for (const settled of l0Results) {
           if (settled.status === "fulfilled") {
             const { tc, result } = settled.value;
@@ -258,12 +273,14 @@ export async function runReActLoop(
             });
           } else {
             // rejected Promise——仍然推入 tool role 消息，防止 LLM 对话状态缺失
-            diagnostic(`⚠️ L0 工具被拒绝: ${(settled.reason as {tc?:{name?:string}})?.tc?.name ?? "unknown"}`);
-            const tc = (settled.reason as {tc?:{id?:string}})?.tc;
+            // R6-H1 fix: 用索引从 l0Calls 取 tc（而非从 reason 读 undefined）
+            const idx = l0Results.indexOf(settled);
+            const callTc = l0Calls[idx];
+            diagnostic(`⚠️ L0 工具被拒绝: ${callTc?.name ?? "unknown"}`);
             messages.push({
               role: "tool",
               content: `ERROR: ${String(settled.reason)}`,
-              tool_call_id: tc?.id ?? "unknown",
+              tool_call_id: callTc?.id ?? "unknown",
             });
           }
         }
@@ -285,7 +302,12 @@ export async function runReActLoop(
         const toolElapsed = Date.now() - toolStart;
         const outcome = result.success ? `✅ 成功 (${toolElapsed}ms)` : `❌ 失败: ${(result.error ?? "未知").slice(0, 100)}`;
         diagnostic(`🔧 ${tc.name} → ${outcome}`);
-        console.error(`[telemetry] agent.tool_called agent=${agentType} tool=${tc.name}`);
+        // H10 fix: 遥测走 recordTelemetry 正式通道
+        void recordTelemetry("react_loop.tool_called", 1, [
+          { key: "agent", value: agentType },
+          { key: "tool", value: tc.name },
+          { key: "level", value: "L2" },
+        ]).catch(() => {});
 
         messages.push({
           role: "tool",
@@ -310,7 +332,12 @@ export async function runReActLoop(
   // ── 遥测：Token 消耗汇总 ──
   const totalPromptTokens = usageLog.reduce((s,u) => s + (u.prompt_tokens??0), 0);
   const totalCompTokens = usageLog.reduce((s,u) => s + (u.completion_tokens??0), 0);
-  console.error(`[telemetry] agent.token_used agent=${agentType} promptTokens=${totalPromptTokens} compTokens=${totalCompTokens}`);
+  // H10 fix: 遥测走 recordTelemetry 正式通道
+  void recordTelemetry("react_loop.token_used", totalPromptTokens + totalCompTokens, [
+    { key: "agent", value: agentType },
+    { key: "promptTokens", value: String(totalPromptTokens) },
+    { key: "compTokens", value: String(totalCompTokens) },
+  ]).catch(() => {});
 
   const totalElapsed = Date.now() - startTime;
   diagnostic(`🏁 循环结束——耗时 ${totalElapsed}ms, loops=${loops}/${maxLoops}, success=${finalOutput !== undefined}`);

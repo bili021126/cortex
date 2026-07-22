@@ -82,11 +82,6 @@ export {
   ConfirmGateState,
   reversibilityLevel,
 } from "./renderer/permission-dialog.js";
-export {
-  renderAgentTransition,
-  PersonaHeader,
-  personaHeader,
-} from "./renderer/persona-header.js";
 export { renderDiff, renderDiffText } from "./renderer/diff-viewer.js";
 
 // ─── 钩子 ──────────────────────────────────────────
@@ -99,9 +94,6 @@ export type { SessionSnapshot } from "./session-store.js";
 // ─── 上下文压缩 ────────────────────────────────────
 export { compactMessages, estimateTokens } from "./context-compactor.js";
 export type { CompactionOptions, CompactionResult } from "./context-compactor.js";
-
-// ─── REPL 主入口 ──────────────────────────────────
-export { tuiReplHandler } from "./tui-repl.js";
 
 // ─── 群聊 ──────────────────────────────────────────
 export { GroupChatManager, groupChat } from "./group-chat.js";

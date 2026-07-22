@@ -106,5 +106,19 @@ export function topologicalSort(nodes: TaskNode[], observer?: IPipelineObserver)
     current = next;
   }
 
+  // R8-06 fix: BFS 结束后检查未访问节点（部分环导致无法到达）
+  const visited = new Set(layers.flat());
+  if (visited.size < nodes.length && observer) {
+    const unvisited = nodes.filter(n => !visited.has(n.id));
+    const cycleIds = unvisited.slice(0, 10).map(n => n.id).join(", ");
+    observer.emit({
+      type: PipelineEventType.SchedulerInvariantViolation,
+      priority: PipelinePriority.CRITICAL,
+      payload: { nodeId: unvisited[0]?.id ?? "unknown", message: `拓扑排序部分环: ${unvisited.length}/${nodes.length} 节点不可达 (${cycleIds}...)` },
+      timestamp: Date.now(),
+      notificationType: "WARNING",
+    });
+  }
+
   return layers;
 }

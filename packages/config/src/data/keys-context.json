@@ -1,0 +1,37 @@
+{
+  "_description": "L2·密钥+上下文层。key 决定 API 鉴权和模型路由，context 决定每 agent 的窗口上限。",
+  "keys": {
+    "DEEPSEEK_GANYU": {
+      "label": "甘雨独立密钥",
+      "envVar": "DEEPSEEK_GANYU_API_KEY",
+      "modelFallback": "DEEPSEEK_REASONER",
+      "agents": ["ganyu"]
+    },
+    "DEEPSEEK_CYRENE": {
+      "label": "昔涟独立密钥",
+      "envVar": "DEEPSEEK_CYRENE_API_KEY",
+      "modelFallback": "DEEPSEEK_CHAT",
+      "agents": ["cyrene"]
+    },
+    "DEEPSEEK_CHAT": {
+      "label": "通用 Chat 密钥",
+      "envVar": "DEEPSEEK_CHAT_API_KEY",
+      "modelFallback": "DEEPSEEK_API_KEY",
+      "agents": ["sigewinne", "keqing", "ningguang", "amber", "mona", "beidou", "yoimiya", "api", "data", "yanfei"]
+    },
+    "DEEPSEEK_REASONER": {
+      "label": "通用 Reasoner 密钥",
+      "envVar": "DEEPSEEK_REASONER_API_KEY",
+      "modelFallback": "DEEPSEEK_API_KEY",
+      "agents": ["albedo", "nahida"]
+    }
+  },
+  "contextLimits": {
+    "meta":    { "maxTokens": 128000, "description": "甘雨——规划拆解，需要完整上下文（DeepSeek V4 支持 1M）" },
+    "code":    { "maxTokens": 64000, "description": "代码生成/重构" },
+    "analysis":{ "maxTokens": 96000, "description": "架构分析，需要大范围阅读" },
+    "fix":     { "maxTokens": 48000, "description": "Bug 诊断，聚焦相关代码" },
+    "review":  { "maxTokens": 64000, "description": "代码审查，逐文件进行" },
+    "default": { "maxTokens": 48000, "description": "默认上下文窗口" }
+  }
+}

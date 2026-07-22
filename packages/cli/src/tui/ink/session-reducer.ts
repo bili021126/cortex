@@ -42,6 +42,10 @@ export interface SessionMessage {
 export interface TokenSnapshot {
   sessionTotalTokens: number;
   contextWindowSize: number;
+  /** 累计缓存命中 prompt token（DeepSeek V4 上下文缓存） */
+  cacheHitTokens: number;
+  /** 累计缓存未命中 prompt token */
+  cacheMissTokens: number;
 }
 
 // ─── 工具调用记录 ──────────────────────────────
@@ -53,6 +57,8 @@ export interface ToolCallRecord {
   success?: boolean;
   durationMs?: number;
   error?: string;
+  /** 工具输出原文——若为 unified diff，ChatView 会渲染为 diff 摘要 */
+  output?: string;
 }
 
 // ─── 节点渲染状态 ──────────────────────────────
@@ -103,6 +109,7 @@ export interface SessionState {
 
 export type SessionAction =
   | { type: "SWITCH_AGENT"; payload: AgentType }
+  | { type: "CLEAR_MESSAGES" }
   | { type: "ADD_MESSAGE"; payload: SessionMessage }
   | { type: "STREAM_CHUNK"; payload: string }
   | { type: "STREAM_END" }
@@ -113,6 +120,7 @@ export type SessionAction =
   | { type: "COMPACTION"; payload: TuiCompactionEvent }
   | { type: "RESTORE_SESSION"; payload: { agent: AgentType; messages: SessionMessage[] } }
   | { type: "SET_PROCESSING"; payload: boolean }
+  | { type: "TURN_INTERRUPTED" }
   // Plan 相关
   | { type: "PLAN_GENERATED"; payload: TuiPlanGeneratedEvent }
   | { type: "PLAN_APPROVED" }
@@ -137,7 +145,7 @@ export const initialSessionState: SessionState = {
   agent: "butler" as AgentType,
   messages: [],
   taskNodes: [],
-  tokenUsage: { sessionTotalTokens: 0, contextWindowSize: 128_000 },
+  tokenUsage: { sessionTotalTokens: 0, contextWindowSize: 128_000, cacheHitTokens: 0, cacheMissTokens: 0 },
   mode: "chat",
   streamingContent: "",
   recentTools: [],
@@ -179,10 +187,20 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         pendingPermission: null,
       };
 
+    case "CLEAR_MESSAGES":
+      return {
+        ...state,
+        messages: [],
+        streamingContent: "",
+      };
+
     case "ADD_MESSAGE": {
       const pending = state.streamingContent;
       const isUser = action.payload.role === "user";
-      const msgs = pending
+      // 去重：如果 pending 内容已作为最后一条 assistant 消息存在，只追加新消息
+      const lastMsg = state.messages[state.messages.length - 1];
+      const shouldEmitPending = pending && !(lastMsg?.role === "assistant" && lastMsg.content === pending);
+      const msgs = shouldEmitPending
         ? [...state.messages, { role: "assistant" as const, content: pending, agent: state.agent }, action.payload]
         : [...state.messages, action.payload];
       return {
@@ -197,18 +215,23 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "STREAM_CHUNK":
       return { ...state, streamingContent: state.streamingContent + action.payload, visibleOffset: 0 };
 
-    case "STREAM_END":
-      return state.streamingContent
-        ? {
-            ...state,
-            messages: [
-              ...state.messages,
-              { role: "assistant" as const, content: state.streamingContent, agent: state.agent },
-            ],
-            streamingContent: "",
-            visibleOffset: 0,
-          }
-        : state;
+    case "STREAM_END": {
+      if (!state.streamingContent) return state;
+      // 去重：如果最后一条消息内容相同，跳过（防止 STREAM_END 被多次 dispatch）
+      const lastMsg = state.messages[state.messages.length - 1];
+      if (lastMsg?.role === "assistant" && lastMsg.content === state.streamingContent) {
+        return { ...state, streamingContent: "" };
+      }
+      return {
+        ...state,
+        messages: [
+          ...state.messages,
+          { role: "assistant" as const, content: state.streamingContent, agent: state.agent },
+        ],
+        streamingContent: "",
+        visibleOffset: 0,
+      };
+    }
 
     case "TOOL_START": {
       const entry: ToolCallRecord = {
@@ -224,7 +247,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         ...state,
         recentTools: state.recentTools.map((t) =>
           t.id === action.payload.id
-            ? { ...t, success: action.payload.success, durationMs: action.payload.durationMs, error: action.payload.error }
+            ? { ...t, success: action.payload.success, durationMs: action.payload.durationMs, error: action.payload.error, output: action.payload.output }
             : t,
         ),
         visibleOffset: 0,
@@ -237,6 +260,8 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         tokenUsage: {
           sessionTotalTokens: state.tokenUsage.sessionTotalTokens + delta,
           contextWindowSize: action.payload.contextWindowSize,
+          cacheHitTokens: state.tokenUsage.cacheHitTokens + (action.payload.cacheHitTokens ?? 0),
+          cacheMissTokens: state.tokenUsage.cacheMissTokens + (action.payload.cacheMissTokens ?? 0),
         },
       };
     }
@@ -248,6 +273,8 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         tokenUsage: {
           sessionTotalTokens: action.payload.estimatedTokens,
           contextWindowSize: state.tokenUsage.contextWindowSize,
+          cacheHitTokens: state.tokenUsage.cacheHitTokens,
+          cacheMissTokens: state.tokenUsage.cacheMissTokens,
         },
         messages: [
           ...state.messages,
@@ -273,6 +300,33 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
 
     case "SET_PROCESSING":
       return { ...state, isProcessing: action.payload };
+
+    case "TURN_INTERRUPTED": {
+      const lastMsg = state.messages[state.messages.length - 1];
+      // 幂等：已有中断标记且无流式残留——仅复位处理态（app 即时 dispatch 与 bus 事件可能各触发一次）
+      if (!state.streamingContent && lastMsg?.content?.endsWith("⎇ 已中断")) {
+        return { ...state, isProcessing: false, pendingPermission: null };
+      }
+      const alreadyFinalized = lastMsg?.role === "assistant" && lastMsg.content === state.streamingContent;
+      const msgs = alreadyFinalized
+        ? state.messages.map((m, i) => (i === state.messages.length - 1 ? { ...m, content: `${m.content}\n\n⎇ 已中断` } : m))
+        : [
+            ...state.messages,
+            {
+              role: "assistant" as const,
+              content: state.streamingContent ? `${state.streamingContent}\n\n⎇ 已中断` : "⎇ 已中断",
+              agent: state.agent,
+            },
+          ];
+      return {
+        ...state,
+        messages: msgs,
+        streamingContent: "",
+        isProcessing: false,
+        pendingPermission: null,
+        visibleOffset: 0,
+      };
+    }
 
     // ── Plan 相关 ─────────────────────────────
 

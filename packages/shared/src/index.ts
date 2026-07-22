@@ -149,6 +149,8 @@ export type {
   LlmUsage,
   ToolDef,
   LlmAdapterConfig,
+  ReasoningEffort,
+  ModelCapabilities,
   ChatOptions,
   ICortexLifecycle,
   ICortexChat,
@@ -182,6 +184,7 @@ export type {
 
 export type {
   ITuiEngineBridge,
+  IMetaAgent,
 } from "./tui-bridge.js";
 
 // ── Lifecycle 域 ──

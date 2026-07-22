@@ -279,13 +279,27 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     } finally {
       this._inflightWrites.delete(contentHash);
     }
+
+    // ── 向量相似去重（后验：写入后扫描）──
+    // C8/H4 fix: 必须在 observer emit / BM25 索引之前执行，
+    // 避免去重删除条目后下游持有悬空 ID 引用。
+    let finalId = id;
+    if (input.embedding) {
+      const vectorDupId = await this._tryVectorDedup(id, input.embedding, contentHash);
+      if (vectorDupId !== null) {
+        finalId = vectorDupId; // R1 fix: 返回已存在的相似条目 ID
+      }
+    }
+
+    // ── 总量上限：超出时归档最久未访问的记忆（在去重之后）──
+    await this._autoArchiveIfOverflow();
     if (this._observer) {
       const blobStr = typeof input.content_blob === "string" ? input.content_blob : JSON.stringify(input.content_blob);
       this._observer.emit({
         type: PipelineEventType.MemMemoryWritten,
         priority: PipelinePriority.NORMAL,
         payload: {
-          entryId: id,
+          entryId: finalId,
           domain: input.domain,
           scene: input.kind,
           byteSize: new TextEncoder().encode(blobStr).length,
@@ -297,22 +311,14 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
     // ── BM25 索引更新 ──
     if (this._hybridEnabled) {
-      this._bm25Index.addDocument(id, {
+      this._bm25Index.addDocument(finalId, {
         summary: input.summary ?? "",
         semantic_gist: input.semantic_gist ?? "",
         payload: typeof input.content_blob === "string" ? input.content_blob : JSON.stringify(input.content_blob),
       });
     }
 
-    // ── 向量相似去重（后验：写入后扫描）──
-    if (input.embedding) {
-      await this._tryVectorDedup(id, input.embedding);
-    }
-
-    // ── 总量上限：超出时归档最久未访问的记忆 ──
-    await this._autoArchiveIfOverflow();
-
-    return id;
+    return finalId;
   }
 
   // ══════════════════════════════════════════════
@@ -561,8 +567,15 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       }
 
       // content_hash 去重缓存
+      // R4-H1 fix: 两阶段提交路径 content_hash 可能为空——在此补算
       if (entry.content_hash) {
         this._dedupCache.set(entry.content_hash, entry.id);
+      } else {
+        const ch = crypto
+          .createHash(CONTENT_HASH_ALGO)
+          .update(entry.summary + JSON.stringify(entry.content_blob))
+          .digest("hex");
+        this._dedupCache.set(ch, entry.id);
       }
 
       // 向量索引缓存
@@ -596,6 +609,13 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
   writePending(input: MemoryWriteInput): string {
     input = this._validateWrite(input);
+    // R4-H3 fix: 两阶段提交路径提前计算 content_hash，确保 enrich 时去重缓存可命中
+    if (!input.content_hash) {
+      input.content_hash = crypto
+        .createHash(CONTENT_HASH_ALGO)
+        .update(input.summary + JSON.stringify(input.content_blob))
+        .digest("hex");
+    }
     return this._backend.writePending(input);
   }
 
@@ -766,13 +786,17 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
   }
 
   private _emitDegraded(operation: string, detail: string): void {
-    if (!this._observer) return;
-    this._observer.emit({
-      type: PipelineEventType.MemorySqlDegraded,
-      priority: PipelinePriority.NORMAL,
-      payload: { operation, detail },
-      timestamp: Date.now(),
-    });
+    if (this._observer) {
+      this._observer.emit({
+        type: PipelineEventType.MemorySqlDegraded,
+        priority: PipelinePriority.NORMAL,
+        payload: { operation, detail },
+        timestamp: Date.now(),
+      });
+    } else {
+      // R6-M7 fix: 无 observer 时 stderr fallback，防止降级事件完全静默
+      process.stderr.write(`[MemoryStore:DEGRADED] ${operation}: ${detail}\n`);
+    }
   }
 
   /** SHA256 去重缓存：content_hash → id。LRU 淘汰，上限 10000 */
@@ -791,7 +815,17 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     try {
       const dupId = this._backend.findByContentHash(contentHash);
       if (dupId) {
+        // H7 fix: LRU 淘汰——超限时删除最早插入的条目
+        if (this._dedupCache.size >= MemoryStore.MAX_DEDUP_CACHE) {
+          const first = this._dedupCache.keys().next().value;
+          if (first !== undefined) this._dedupCache.delete(first);
+        }
         this._dedupCache.set(contentHash, dupId);
+        // R6-H9 fix: 去重审计——记录被去重的条目
+        void recordTelemetry("memory.dedup_hit", 1, [
+          { key: "matchType", value: "content_hash" },
+          { key: "dupId", value: dupId },
+        ]).catch(() => {});
         return dupId;
       }
       return null;
@@ -801,31 +835,49 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     }
   }
 
-  /** 向量相似去重——每次查询前刷新缓存，避免过期数据（Core-3：统一使用 DedupService.vectorDedup 替代内联实现） */
-  private async _tryVectorDedup(newId: string, embedding: number[]): Promise<void> {
+  /** 向量相似去重——每次查询前刷新缓存，避免过期数据（Core-3：统一使用 DedupService.vectorDedup 替代内联实现）
+   * @param contentHash 条目的 SHA256 内容哈希——用于正确清理 _dedupCache（Map<contentHash, id>）
+   * @returns 匹配到的已有条目 ID，null 表示无命中 */
+  private async _tryVectorDedup(newId: string, embedding: number[], contentHash: string): Promise<string | null> {
     try {
-      // M-06 修复：每次查询前从后端刷新 _vectorCache，避免过期缓存漏去重（向量相似本属 O(n) 扫描，T4 不涉及）
-      const all = await this._backend.read({}, "HCA");
-      for (const e of all) {
-        if (e.embedding) {
-          if (this._vectorCache.size >= MemoryStore.MAX_VECTOR_CACHE) {
-            const first = this._vectorCache.keys().next().value;
-            if (first !== undefined) this._vectorCache.delete(first);
+      // R6-C3 fix: 使用 _vectorCache 替代全库读——消除 O(n) 深克隆开销
+      // 仅在冷启动（缓存为空）时从后端加载一次
+      if (this._vectorCache.size === 0) {
+        const all = await this._backend.read({}, "HCA");
+        for (const e of all) {
+          if (e.embedding) {
+            if (this._vectorCache.size >= MemoryStore.MAX_VECTOR_CACHE) {
+              const first = this._vectorCache.keys().next().value;
+              if (first !== undefined) this._vectorCache.delete(first);
+            }
+            this._vectorCache.set(e.id, e.embedding);
           }
-          this._vectorCache.set(e.id, e.embedding);
         }
       }
-      const matches = this._dedupService.vectorDedup(embedding, all);
-      const bestMatch = matches.find((m) => m.existingId !== newId);
+      // 从缓存构造最小化 MemoryEntry（仅 id + embedding，无需深克隆 payload）
+      const cachedEntries: MemoryEntry[] = [];
+      for (const [id, emb] of this._vectorCache) {
+        if (id !== newId) cachedEntries.push({ id, embedding: emb } as MemoryEntry);
+      }
+      const matches = this._dedupService.vectorDedup(embedding, cachedEntries);
+      const bestMatch = matches[0];
       if (bestMatch) {
         await this._backend.delete(newId);
         this._bm25Index?.removeDocument(newId);
-        this._dedupCache.delete(newId);
+        this._dedupCache.delete(contentHash); // C8 fix: key 是 contentHash，非 entryId
         this._vectorCache.delete(newId);
-        return;
+        // R6-H9 fix: 向量去重审计
+        void recordTelemetry("memory.dedup_hit", 1, [
+          { key: "matchType", value: "vector" },
+          { key: "newId", value: newId },
+          { key: "existingId", value: bestMatch.existingId },
+        ]).catch(() => {});
+        return bestMatch.existingId; // R1 fix: 返回已有条目 ID 供 write() 返回
       }
+      return null;
     } catch {
       this._emitDegraded("vector-dedup", "向量去重扫描失败，静默降级");
+      return null;
     }
   }
 

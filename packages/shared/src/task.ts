@@ -98,6 +98,8 @@ export interface TaskNode {
   needsMultiPerspective: boolean;
   status: "pending" | "claimed" | "running" | "done" | "failed";
   claimedBy: AgentType[]; // 已认领的 Agent 类型列表（multi-perspective 允许多个）
+  /** R5-T1 fix: claim 时间戳——用于 lease 超时回收 */
+  claimedAt?: number;
   payload: string; // MetaAgent 的任务描述
   results: NodeResult[]; // 每个 Agent 类型一个结果（multi-perspective 多个）
   createdAt: number;

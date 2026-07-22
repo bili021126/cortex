@@ -221,7 +221,22 @@ export class StateMachine<TState extends string, TEvent extends string, TContext
       }
     }
 
-    // Execute action
+    // H7 fix: 先更新状态再执行 action，避免 action 内部同步 dispatch() 看到旧状态触发非法转换
+    // Record transition
+    const record: TransitionRecord<TState, TEvent, TContext> = {
+      timestamp: Date.now(),
+      from: this._current,
+      to: entry.target,
+      event,
+      context,
+      id: `${this._machineId}-${++this._transitionIdCounter}-${Date.now()}`,
+    };
+    this._history.push(record);
+
+    // Update state BEFORE executing action
+    this._current = entry.target;
+
+    // Execute action (after state update)
     if (entry.action && this._actions) {
       try {
         const result = this._actions.execute(entry.action, context);
@@ -241,19 +256,6 @@ export class StateMachine<TState extends string, TEvent extends string, TContext
       }
     }
 
-    // Record transition
-    const record: TransitionRecord<TState, TEvent, TContext> = {
-      timestamp: Date.now(),
-      from: this._current,
-      to: entry.target,
-      event,
-      context,
-      id: `${this._machineId}-${++this._transitionIdCounter}-${Date.now()}`,
-    };
-    this._history.push(record);
-
-    // Update state
-    this._current = entry.target;
     return this._current;
   }
 

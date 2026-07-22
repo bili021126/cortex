@@ -120,7 +120,8 @@ function applyTextChanges(content: string, proposal: AmendmentProposal): string 
       const afterLines = proposal.after.split("\n");
       lines.splice(i, windowSize, ...afterLines);
       replaced = true;
-      break; // 仅替换第一处匹配
+      // M37 fix: 移除 break，替换所有匹配处（而非仅第一处）
+      i += afterLines.length - 1; // 跳过已替换内容，避免 after 中再次匹配
     }
   }
 

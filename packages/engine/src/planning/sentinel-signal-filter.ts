@@ -124,6 +124,12 @@ export class SentinelSignalFilter {
     let level: SignalLevel;
     if (this.config.l1EventTypes.includes(event.type)) {
       level = "L1";
+      // M19 fix: ErrorReported 有 severity 子分类——degraded→L2, silent→L3, fatal 保持 L1
+      if (event.type === PipelineEventType.ErrorReported) {
+        const sev = (event.payload as { severity?: string }).severity;
+        if (sev === "degraded") level = "L2";
+        else if (sev === "silent") level = "L3";
+      }
     } else if (this.config.l2EventTypes.includes(event.type)) {
       level = "L2";
     } else {

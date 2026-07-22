@@ -1,4 +1,5 @@
 import type { Live2DModel } from "pixi-live2d-display/cubism4";
+import { clamp } from "@cortex/shared";
 
 export interface FocusOptions {
   pollIntervalMs?: number;
@@ -46,6 +47,31 @@ export class MouseFocusController {
   focusCenter(instant = false): void {
     const rect = this.canvas.getBoundingClientRect();
     this.model.focus(rect.width / 2, rect.height / 2, instant);
+  }
+
+  /**
+   * 定向注视——看向相对画布中心的归一化偏移点 (nx, ny)，范围 [-1,1]，(0,0)=正中。
+   *
+   * 即使处于 paused（idle 冻结）状态也生效，且不经过光标跟随管线，
+   * 因此可供 idle-behavior / presence-engine 手动调度"瞥向别处"，
+   * 不会被 pollGlobalCursor 覆盖。
+   */
+  lookAtOffset(nx: number, ny: number, instant = false): void {
+    if (this.disposed) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const cx = clamp(nx, -1, 1);
+    const cy = clamp(ny, -1, 1);
+    this.model.focus((rect.width / 2) * (1 + cx), (rect.height / 2) * (1 + cy), instant);
+  }
+
+  /**
+   * 随机"看向别处"——水平为主、轻微上下的一次性定向注视。
+   * 供 idle 循环瞥视与 gaze:"away" 语义复用。
+   */
+  lookAtRandomAway(instant = false): void {
+    const nx = Math.random() * 1.4 - 0.7;   // [-0.7, 0.7] 水平为主
+    const ny = Math.random() * 0.8 - 0.5;   // [-0.5, 0.3] 轻微上下
+    this.lookAtOffset(nx, ny, instant);
   }
 
   dispose(): void {

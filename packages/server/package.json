@@ -1,0 +1,32 @@
+{
+  "name": "@cortex/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": { "cortex-daemon": "./dist/main.js" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@cortex/config": "workspace:*",
+    "@cortex/engine": "workspace:*",
+    "@cortex/llm": "workspace:*",
+    "@cortex/memory-store": "workspace:*",
+    "@cortex/platform": "workspace:*",
+    "@cortex/protocol": "workspace:*",
+    "@cortex/scheduler": "workspace:*",
+    "@cortex/shared": "workspace:*",
+    "@cortex/telemetry": "workspace:*",
+    "@cortex/tools": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}

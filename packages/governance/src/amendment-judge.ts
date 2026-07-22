@@ -237,8 +237,8 @@ function checkFormatConsistency(
   proposal: AmendmentProposal,
   _constitution: string,
 ): JudgmentCheck {
-  // 基本检查：after 非空
-  if (!proposal.after.trim()) {
+  // H16 fix: remove 型提案的 after 语义上为空，不应要求非空
+  if (proposal.category !== "remove" && !proposal.after.trim()) {
     return {
       id: "format-consistency",
       name: "格式一致性",

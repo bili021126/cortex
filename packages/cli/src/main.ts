@@ -31,23 +31,26 @@ import {
   FILE_CORTEX_AGENTS_JSON,
   CLI_EXIT_INTERNAL_ERROR,
   WINDOWS_CHCP_UTF8,
+  ENV_CORTEX_ENABLE_CLI,
 } from "@cortex/config";
 
 // ── 引导模块 ─────────────────────────────────────
 import { bootstrapLlm, hasAnyLlmKey, enableLlmAudit } from "./bootstrap/llm.js";
 import { bootstrapMcp } from "./bootstrap/mcp.js";
+import { bootstrapConfigStores } from "./bootstrap/config.js";
 
 // ── 命令 ─────────────────────────────────────────
 import { CommandRegistry } from "./commands/index.js";
 import type { ICommandContext } from "@cortex/shared";
 import { registerCommands } from "./commands/command-list.js";
-import { tuiReplHandler, startInkTui } from "./tui/index.js";
+import { startInkTui } from "./tui/index.js";
 import { createVersionHandler } from "./commands/version.js";
 import { createHelpHandler } from "./commands/help.js";
 
 // ── 基础设施 ─────────────────────────────────────
 import { ConfigManager } from "./services/config-manager.js";
 import { EngineBridge } from "./services/engine-bridge.js";
+import { RemoteEngineBridge } from "./services/remote-engine-bridge.js";
 import { detectDefaultFormat } from "./formatters/index.js";
 import {
   parseGlobalFormat,
@@ -103,9 +106,13 @@ function loadEnv(projectRoot: string): void {
 loadEnv(CONFIG_ROOT);
 enableLlmAudit();
 
+// 初始化 ConfigStores——所有配置域的 CRUD 入口 + TagRegistry 持久化闭环
+const configStores = bootstrapConfigStores();
+
 // ── Ink 模式：提前重定向 stdout/stderr ────────────
 // bootstrap 日志会破坏 Ink 终端布局，需在引导前拦截
-const INK_MODE = process.argv.includes("--ink");
+// Ink 是唯一交互模式：裸 cortex（无子命令/参数）即进入 TUI，此时才需重定向
+const INK_MODE = process.argv.slice(2).length === 0;
 // eslint-disable-next-line @typescript-eslint/consistent-type-imports
 let _inkLogStream: import("node:fs").WriteStream | undefined;
 let _origStdout: typeof process.stdout.write | undefined;
@@ -146,29 +153,33 @@ if (INK_MODE) {
 let engineBridge: EngineBridge;
 let registry: CommandRegistry;
 
+const CORTEX_DAEMON_PORT = Number(process.env.CORTEX_DAEMON_PORT ?? "3210");
+
+// daemon 检测前置——若 daemon 已运行，跳过本地 engine 初始化避免浪费
+const daemonAvailable = await detectDaemon(CORTEX_DAEMON_PORT);
+
 try {
   const configManager = new ConfigManager();
   engineBridge = new EngineBridge(configManager);
 
-  const llms = await bootstrapLlm();
-  let toolkit: Toolkit | undefined;
+  if (!daemonAvailable) {
+    const llms = await bootstrapLlm(configStores.keyStore, configStores.modelStore);
+    let toolkit: Toolkit | undefined;
 
-  if (llms.size > 0) {
-    toolkit = new Toolkit();
+    if (llms.size > 0) {
+      toolkit = new Toolkit();
 
-    // MCP 后端
-    try {
-      await bootstrapMcp(toolkit, CONFIG_ROOT);
-    } catch (e) {
-      if (!process.env["VITEST"]) console.warn(`[bootstrap] MCP 后端配置加载失败: ${String(e)}`);
+      try { await bootstrapMcp(toolkit, CONFIG_ROOT); } catch (e) {
+        if (!process.env["VITEST"]) console.warn(`[bootstrap] MCP 后端配置加载失败: ${String(e)}`);
+      }
+
+      engineBridge.setBootstrapConfig({
+        llms,
+        toolkit,
+        projectRoot: CONFIG_ROOT,
+        workspaceRoot: PROJECT_ROOT,
+      });
     }
-
-    engineBridge.setBootstrapConfig({
-      llms,
-      toolkit,
-      projectRoot: CONFIG_ROOT,
-      workspaceRoot: PROJECT_ROOT,
-    });
   }
 
   const fs = new NodeFileSystemAdapter();
@@ -183,6 +194,27 @@ try {
   restoreInkStreams();
   console.error(`✗ 引导失败: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
   process.exit(CLI_EXIT_INTERNAL_ERROR);
+}
+
+// ═══════════════════════════════════════════════════
+// Daemon 检测
+// ═══════════════════════════════════════════════════
+
+/**
+ * 检测 daemon 是否正在运行。
+ * 通过 GET /api/v1/daemon/health 探测，1s 超时。
+ * 设置 CORTEX_DAEMON_MODE=off 可强制跳过检测（使用 in-process 模式）。
+ */
+async function detectDaemon(port: number): Promise<boolean> {
+  if (process.env.CORTEX_DAEMON_MODE === "off") return false;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/daemon/health`, {
+      signal: AbortSignal.timeout(1000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════════════════
@@ -201,19 +233,31 @@ export async function main(): Promise<number> {
     return r.exitCode;
   }
 
-  // bare cortex → TUI（v5 Ink 或 v3 readline）
-  if (argv.length === 0 || (argv.length === 1 && argv[0] === "--ink")) {
-    const useInk = argv.includes("--ink");
-    if (!hasAnyLlmKey()) {
+  // bare cortex → Ink TUI（唯一交互路径）
+  if (argv.length === 0) {
+    // ── Daemon 模式检测 ──
+    // 若 daemon 正在运行，使用 RemoteEngineBridge 连接远端引擎；
+    // 否则回退到 in-process EngineBridge（需要本地 LLM key）。
+    const daemonAvailable = await detectDaemon(CORTEX_DAEMON_PORT);
+    let activeBridge: EngineBridge | RemoteEngineBridge = engineBridge;
+    let remoteBridge: RemoteEngineBridge | undefined;
+
+    if (daemonAvailable) {
+      remoteBridge = new RemoteEngineBridge({ port: CORTEX_DAEMON_PORT });
+      await remoteBridge.connect();
+      activeBridge = remoteBridge;
+    } else if (!hasAnyLlmKey()) {
       console.error("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
       console.error("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。");
+      console.error("   或启动 cortex daemon（cortex serve）后重试。");
       console.error("   直接输入命令名即可（如 ls、git status），无需切换模式。\n");
     }
-    if (useInk) {
+
+    try {
       try {
         return await startInkTui({
           registry,
-          bridge: engineBridge,
+          bridge: activeBridge,
           context: createDefaultContext(PROJECT_ROOT) as unknown as ICommandContext,
           origStdout: _origStdout,
         });
@@ -222,8 +266,10 @@ export async function main(): Promise<number> {
         // 日志文件、终端静默退出（C5）。restoreInkStreams 幂等，stdout 亦一并恢复。
         restoreInkStreams();
       }
+    } finally {
+      // 断开远程连接（幂等）
+      remoteBridge?.disconnect();
     }
-    return await tuiReplHandler(registry, engineBridge, createDefaultContext(PROJECT_ROOT) as unknown as ICommandContext);
   }
 
   // --help / -h
@@ -279,8 +325,15 @@ export async function main(): Promise<number> {
 // ═══════════════════════════════════════════════════
 
 if (isDirectRun()) {
-  main().then((code) => process.exit(code)).catch((err) => {
-    console.error(`✗ 致命错误: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(CLI_EXIT_INTERNAL_ERROR);
-  });
+  console.error("⚠️  CLI/TUI 已废弃（2026-07）——Cortex 当前仅作为引擎库使用。");
+  console.error("    直接通过 @cortex/engine API 调用。CLI/TUI 入口保留用于未来重建。");
+  console.error("    如需临时启用：设置 CORTEX_ENABLE_CLI=1 环境变量。");
+  if (process.env[ENV_CORTEX_ENABLE_CLI] === "1") {
+    main().then((code) => process.exit(code)).catch((err) => {
+      console.error(`✗ 致命错误: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(CLI_EXIT_INTERNAL_ERROR);
+    });
+  } else {
+    process.exit(0);
+  }
 }

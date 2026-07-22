@@ -2,7 +2,7 @@
 // G1-4: LLM adapter 的 console.log 已通过 telemetry console-bridge 间接收敛到遥测
 // 无需改为 observer.emit——bootstrap 阶段 installConsoleBridge(observer) 后所有 console.log
 // 自动桥接到 PipelineObserver，实现全量收敛。保留裸 console.log 以便无 bridge 场景兜底。
-import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter } from "@cortex/shared";
+import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter, ReasoningEffort } from "@cortex/shared";
 import { SimpleCircuitBreaker } from "@cortex/resilience";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
@@ -47,6 +47,8 @@ export class LlmAdapter {
   private static _auditLogPath: string | null = null;
   private static _auditQueue: string[] = [];
   private static _auditDraining = false;
+  /** R5-G3 fix: 审计队列上限——I/O 停滞时防止无界内存增长 */
+  private static readonly MAX_AUDIT_QUEUE = 1000;
 
   /** WorkerPool —— CPU 密集型 JSON 解析走独立线程，不阻塞主事件循环 */
   private static _workerPool: { parseJson<T = unknown>(text: string, timeout?: number): Promise<T> } | null = null;
@@ -72,6 +74,10 @@ export class LlmAdapter {
   private _auditLog(entry: Record<string, unknown>): void {
     if (!LlmAdapter._auditEnabled || !LlmAdapter._auditLogPath) return;
     const line = JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n";
+    // R5-G3 fix: 超限时丢弃最旧条目，防止无界增长
+    while (LlmAdapter._auditQueue.length >= LlmAdapter.MAX_AUDIT_QUEUE) {
+      LlmAdapter._auditQueue.shift();
+    }
     LlmAdapter._auditQueue.push(line);
     if (!LlmAdapter._auditDraining) {
       LlmAdapter._auditDraining = true;
@@ -195,7 +201,7 @@ export class LlmAdapter {
     model: string,
     messages: LlmMessage[],
     tools?: ToolDef[],
-    reasoningEffort?: "high" | "max" | null,
+    reasoningEffort?: ReasoningEffort | null,
     toolChoice?: "auto" | "required" | "none" | string,
     _degradeAttempted = false,
   ): Promise<LlmResponse> {
@@ -223,13 +229,17 @@ export class LlmAdapter {
     const body: Record<string, unknown> = {
       model,
       messages: messages.map((m) => _serializeMessage(m)),
-      temperature: 0.0,
-      max_tokens: 32768,
+      temperature: this.config.temperature ?? 0.0,
+      max_tokens: this.config.maxTokens ?? 65536, // DeepSeek V4 Pro 支持 384K (393216)
     };
 
-    // 全部模式启用 thinking——chat攒着不展示, plan直出
-    if (model.includes("pro") || model.includes("reasoner")) {
-      body.reasoning_effort = reasoningEffort ?? "high";
+    // DeepSeek V4 参数：frequency_penalty / presence_penalty
+    if (this.config.frequencyPenalty !== undefined) body.frequency_penalty = this.config.frequencyPenalty;
+    if (this.config.presencePenalty !== undefined) body.presence_penalty = this.config.presencePenalty;
+
+    // DeepSeek V4 thinking 模式——基于能力声明而非字符串匹配
+    if (this._shouldEnableThinking(model)) {
+      body.reasoning_effort = reasoningEffort ?? this.config.reasoningEffort ?? "high";
       body.thinking = { type: "enabled" };
     }
 
@@ -314,6 +324,8 @@ export class LlmAdapter {
               prompt_tokens: number;
               completion_tokens: number;
               total_tokens: number;
+              prompt_cache_hit_tokens?: number;
+              prompt_cache_miss_tokens?: number;
             };
           };
           const pool = LlmAdapter._workerPool;
@@ -329,20 +341,21 @@ export class LlmAdapter {
           if (!msg) throw new Error("LLM returned no choices");
 
           const toolCalls: LlmToolCall[] = (msg.tool_calls ?? []).map((tc) => {
-            let toolArgs: Record<string, unknown> = {};
             try {
-              toolArgs = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+              const toolArgs = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+              return { id: tc.id, name: tc.function.name, arguments: toolArgs };
             } catch {
               process.stderr.write(`[llm-adapter] 工具参数 JSON 解析失败: ${tc.function.name}\n`);
+              // R6-C1 fix: parse 失败标记为 parse_error 而非静默执行 {}
+              return { id: tc.id, name: "__parse_error__", arguments: { _error: `JSON 解析失败 (${tc.function.name})` } };
             }
-            return { id: tc.id, name: tc.function.name, arguments: toolArgs };
           });
 
           response = {
             content: msg.content,
             tool_calls: toolCalls,
             reasoning_content: msg.reasoning_content ?? undefined,
-            usage: json.usage ? { prompt_tokens: json.usage.prompt_tokens, completion_tokens: json.usage.completion_tokens } : undefined,
+            usage: json.usage ? { prompt_tokens: json.usage.prompt_tokens, completion_tokens: json.usage.completion_tokens, prompt_cache_hit_tokens: json.usage.prompt_cache_hit_tokens, prompt_cache_miss_tokens: json.usage.prompt_cache_miss_tokens } : undefined,
           };
 
           if (this._cacheEnabled) {
@@ -432,9 +445,10 @@ export class LlmAdapter {
     messages: LlmMessage[],
     tools: ToolDef[] | undefined,
     onChunk: (content: string, reasoning?: string) => void,
-    reasoningEffort?: "high" | "max" | null,
+    reasoningEffort?: ReasoningEffort | null,
     _toolChoice?: string,
     _degradeAttempted = false,
+    signal?: AbortSignal,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       const resp = await this._mockRespond(messages, tools);
@@ -445,15 +459,19 @@ export class LlmAdapter {
     const body: Record<string, unknown> = {
       model,
       messages: messages.map((m) => _serializeMessage(m)),
-      temperature: 0.0,
-      max_tokens: 32768,
+      temperature: this.config.temperature ?? 0.0,
+      max_tokens: this.config.maxTokens ?? 65536, // DeepSeek V4 Pro 支持 384K (393216)
       stream: true,
       stream_options: { include_usage: true },
     };
 
-    // 全部模式启用 thinking——chat攒着不展示, plan直出
-    if (model.includes("pro") || model.includes("reasoner")) {
-      body.reasoning_effort = reasoningEffort ?? "high";
+    // DeepSeek V4 参数：frequency_penalty / presence_penalty
+    if (this.config.frequencyPenalty !== undefined) body.frequency_penalty = this.config.frequencyPenalty;
+    if (this.config.presencePenalty !== undefined) body.presence_penalty = this.config.presencePenalty;
+
+    // DeepSeek V4 thinking 模式——基于能力声明而非字符串匹配
+    if (this._shouldEnableThinking(model)) {
+      body.reasoning_effort = reasoningEffort ?? this.config.reasoningEffort ?? "high";
       body.thinking = { type: "enabled" };
     }
 
@@ -498,7 +516,7 @@ export class LlmAdapter {
             Authorization: `Bearer ${this.config.apiKey}`,
           },
           body: JSON.stringify(body),
-        }),
+        }, 1, signal),
       );
       status = res.status;
 
@@ -524,6 +542,8 @@ export class LlmAdapter {
         tool_calls: toolCalls,
         reasoning_content: sse.fullReasoning || undefined,
         usage: sse.streamUsage,
+        // R6-H2 fix: 透传 SSE 流中断标记供调用方判断重试
+        degraded: sse.degraded,
       };
 
       this._auditLog({
@@ -566,7 +586,7 @@ export class LlmAdapter {
       if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
         const fallbackModel = model.replace("flash", "pro");
         console.log(`[telemetry] model.degraded from=${model} to=${fallbackModel}`);
-        return await this.chatStream(fallbackModel, messages, tools, onChunk, reasoningEffort, _toolChoice, true);
+        return await this.chatStream(fallbackModel, messages, tools, onChunk, reasoningEffort, _toolChoice, true, signal);
       }
       throw e;
     }
@@ -576,7 +596,7 @@ export class LlmAdapter {
     model: string,
     messages: LlmMessage[],
     tools?: ToolDef[],
-    reasoningEffort?: "high" | "max" | null,
+    reasoningEffort?: ReasoningEffort | null,
   ): string {
     if (this._cacheMode === "fingerprint") {
       const parts = messages.map((m) => {
@@ -600,11 +620,38 @@ export class LlmAdapter {
       .digest("hex");
   }
 
-  private async _fetchWithRetry(url: string, options: RequestInit, attempt = 1): Promise<Response> {
+  /**
+   * DeepSeek V4 thinking 模式判定——基于能力声明优先，回退模型名匹配。
+   *
+   * 判定逻辑：
+   *   1. 若 config.capabilities 已注入 → 直接读取 capabilities.thinking
+   *   2. 若 config.extraBody 已显式设置 thinking → 视为已启用（避免双重注入）
+   *   3. 回退：模型名包含 "pro" 或 "reasoner" → 启用（向后兼容）
+   */
+  private _shouldEnableThinking(model: string): boolean {
+    // 优先级 1：capabilities 声明（由 models.json 注册表驱动）
+    if (this.config.capabilities) {
+      return this.config.capabilities.thinking;
+    }
+    // 优先级 2：extraBody 已显式注入 thinking → 不再重复注入
+    if (this.config.extraBody && "thinking" in this.config.extraBody) {
+      return false; // 已由 extraBody 承载，chat() 不再重复设置
+    }
+    // 优先级 3：回退——模型名匹配（向后兼容未注入 capabilities 的场景）
+    return model.includes("pro") || model.includes("reasoner");
+  }
+
+  private async _fetchWithRetry(url: string, options: RequestInit, attempt = 1, externalSignal?: AbortSignal): Promise<Response> {
     const controller = new AbortController();
     // 双保险——AbortController.signal（标准通道）+ Promise.race（硬兜底）
     // Windows Node.js 下 AbortController.signal 在 TCP 层面可能不生效，
     // Promise.race 确保无论如何超时后都会抛出。
+    // 外部中断信号（TUI Esc）——链接到内部 controller，用户中断即 abort fetch。
+    const onExternalAbort = (): void => controller.abort();
+    if (externalSignal) {
+      if (externalSignal.aborted) controller.abort();
+      else externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+    }
     const id = attempt === 1 ? "" : ` (重试#${attempt - 1})`;
     console.error(`  🌐 [LLM] 请求${id}...`); // TUI静默: 受 _tuiQuiet 控制
 
@@ -631,7 +678,7 @@ export class LlmAdapter {
         const delay = Math.max(LlmAdapter.RETRY_BASE_MS * Math.pow(2, attempt - 1), serverDelay);
         console.log(`  🔄 [LLM] ${res.status} 错误——${delay}ms 后重试 (${attempt}/${LlmAdapter.MAX_RETRIES})`);
         await new Promise((r) => setTimeout(r, delay));
-        return await this._fetchWithRetry(url, options, attempt + 1);
+        return await this._fetchWithRetry(url, options, attempt + 1, externalSignal);
       }
       return res;
     } catch (err) {
@@ -641,12 +688,13 @@ export class LlmAdapter {
         const delay = LlmAdapter.RETRY_BASE_MS * Math.pow(2, attempt - 1);
         console.log(`  🔄 [LLM] 网络异常——${delay}ms 后重试 (${attempt}/${LlmAdapter.MAX_RETRIES})`);
         await new Promise((r) => setTimeout(r, delay));
-        return await this._fetchWithRetry(url, options, attempt + 1);
+        return await this._fetchWithRetry(url, options, attempt + 1, externalSignal);
       }
       throw err;
     } finally {
       clearTimeout(timeout);
       if (hardTimeout) clearTimeout(hardTimeout);
+      if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
     }
   }
 }
@@ -657,7 +705,7 @@ interface SseStreamState {
   fullContent: string;
   fullReasoning: string;
   collectedToolCalls: ReadonlyArray<StreamToolCallAccumulator>;
-  streamUsage?: { prompt_tokens: number; completion_tokens: number };
+  streamUsage?: { prompt_tokens: number; completion_tokens: number; prompt_cache_hit_tokens?: number; prompt_cache_miss_tokens?: number };
   /** 流中断降级（有部分内容可返回）时为 true */
   degraded: boolean;
 }
@@ -672,7 +720,7 @@ async function _readSseStream(
   let fullContent = "";
   let fullReasoning = "";
   let collectedToolCalls: ReadonlyArray<StreamToolCallAccumulator> = [];
-  let streamUsage: { prompt_tokens: number; completion_tokens: number } | undefined;
+  let streamUsage: { prompt_tokens: number; completion_tokens: number; prompt_cache_hit_tokens?: number; prompt_cache_miss_tokens?: number } | undefined;
 
   let skippedChunks = 0;
 
@@ -698,6 +746,8 @@ async function _readSseStream(
             streamUsage = {
               prompt_tokens: chunk.usage.prompt_tokens,
               completion_tokens: chunk.usage.completion_tokens,
+              prompt_cache_hit_tokens: chunk.usage.prompt_cache_hit_tokens,
+              prompt_cache_miss_tokens: chunk.usage.prompt_cache_miss_tokens,
             };
           }
 
@@ -743,8 +793,9 @@ function _serializeMessage(m: LlmMessage): Record<string, unknown> {
   const base: Record<string, unknown> = { role: m.role, content: m.content };
   if (m.tool_call_id) base.tool_call_id = m.tool_call_id;
   if (m.tool_calls && m.tool_calls.length > 0) {
-    base.tool_calls = m.tool_calls.map((tc) => ({
-      id: tc.id || `tc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    base.tool_calls = m.tool_calls.map((tc, idx) => ({
+      // 确定性 ID 回退：基于 tool name + index 生成，避免 Date.now()/Math.random() 破坏缓存键稳定性
+      id: tc.id || `tc_${tc.name}_${idx}`,
       type: "function",
       function: {
         name: tc.name,

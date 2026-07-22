@@ -128,7 +128,8 @@ export function finalizeToolCalls(
         try {
           args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
         } catch {
-          // 流中断导致 arguments JSON 不完整，降级为空对象
+          // R6-C1 fix: 流中断导致 JSON 不完整——标记为 parse_error 而非静默执行 {}
+          return { id: tc.id, name: "__parse_error__", arguments: { _error: `tool_call arguments JSON 解析失败 (${tc.function.name})`, _raw: tc.function.arguments.slice(0, 200) } };
         }
       }
       return { id: tc.id, name: tc.function.name, arguments: args };

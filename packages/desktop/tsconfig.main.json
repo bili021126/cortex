@@ -10,7 +10,7 @@
   "include": ["src/main", "src/preload"],
   "exclude": ["node_modules", "dist", "src/renderer"],
   "references": [
-    { "path": "../llm" },
+    { "path": "../client" },
     { "path": "../shared" }
   ]
 }

@@ -8,8 +8,17 @@
 /** Agent 配置文件名 */
 export const FILE_CORTEX_AGENTS_JSON = "cortex-agents.json";
 
-/** 昔涟闲聊 persona 文件（.cortex 目录下） */
+/** Persona 人设文件目录（.cortex/lore/{character}/ 下） */
+export const DIR_LORE = "lore";
+
+/** 昔涟闲聊 persona 文件（.cortex/lore/cyrene/ 下） */
 export const FILE_PERSONA_TALK_TXT = "persona-talk.txt";
+
+/** Persona 档案文件名 */
+export const FILE_PERSONA_PROFILE = "profile.md";
+
+/** Persona 性格文件名 */
+export const FILE_PERSONA_PERSONALITY = "personality.md";
 
 /** 宪法文件所在目录 */
 export const DIR_CONSTITUTION = "docs/constitution";

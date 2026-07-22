@@ -1,0 +1,221 @@
+{
+  "summary": {
+    "projectName": "cortex",
+    "locale": "zh-CN",
+    "modelId": "agent-work-loop-v4",
+    "reportContractVersion": 24,
+    "overview": "Cortex 拥有完善的静态工程基础设施（TypeScript monorepo、分层 CI 门禁、丰富的 Agent 实践配置），但 0 个可分析会话导致所有运行时行为无法观测——五维评分受限于静态证据天花板，Learning Capture 完全不可评估。核心诊断覆盖和伴随文件漂移是当前可确认的两个待修复缺口。",
+    "aiAgentPractice": {
+      "inspectedSurfaces": [
+        "Rules",
+        "Skills",
+        "Custom Agents",
+        "Workflows",
+        "Plugins"
+      ],
+      "coverageRows": [
+        {
+          "surface": "Rules",
+          "scopes": [
+            "Project"
+          ],
+          "count": 1,
+          "paths": [
+            ".github/copilot-instructions.md"
+          ]
+        },
+        {
+          "surface": "Skills",
+          "scopes": [
+            "Project"
+          ],
+          "count": 12,
+          "paths": [
+            ".qoder/skills/cortex-critical-fix/SKILL.md",
+            ".qoder/skills/cortex-design-spec/SKILL.md",
+            ".qoder/skills/cortex-engine-core-module/SKILL.md",
+            ".qoder/skills/cortex-package-gap-scan/SKILL.md",
+            ".qoder/skills/cortex-plan-review/SKILL.md"
+          ]
+        },
+        {
+          "surface": "Custom Agents",
+          "scopes": [
+            "Project"
+          ],
+          "count": 6,
+          "paths": [
+            ".qoder/agents/cyrene.md",
+            ".qoder/agents/cyrene-advisor.md",
+            ".qoder/agents/cyrene-curious.md",
+            ".qoder/agents/cyrene-executor.md",
+            ".qoder/agents/cyrene-gatekeeper.md",
+            ".qoder/agents/cyrene-warm.md"
+          ]
+        },
+        {
+          "surface": "Workflows",
+          "scopes": [
+            "Project"
+          ],
+          "count": 2,
+          "paths": [
+            ".github/workflows/ci.yml",
+            ".github/workflows/ci-review-report.md"
+          ]
+        }
+      ]
+    },
+    "suggestions": [
+      {
+        "id": "enable-session-recording",
+        "kind": "try-existing",
+        "title": "启用会话记录以解锁运行时行为观测",
+        "reason": "当前 0 个可分析会话导致所有 Agent Work Loop 维度停留在静态配置层面。启用会话记录后，后续 /better-loop 可观测实际的编辑-验证-修复-交付行为。",
+        "confidence": "High",
+        "owner": "平台管理员",
+        "nextStep": "确认 Qoder 平台的会话记录功能已启用，并验证 source roots 配置（当前仅 1/5 启用）。",
+        "validation": "下次 /better-loop 运行时 eligibleCount > 0 且至少一个 Task Episode 包含编辑和验证行为。"
+      },
+      {
+        "id": "address-core-diagnostics",
+        "kind": "try-existing",
+        "title": "为核心路径补充可验证的诊断路由",
+        "reason": "core-change-watch 识别出 59 个受影响核心文件（覆盖 CLI/TUI/engine/scheduler/governance/memory-store 等关键包），但无可验证的诊断路由用于故障定位。",
+        "confidence": "Medium",
+        "owner": "引擎团队",
+        "nextStep": "为核心路径（scheduler.ts、react-loop.ts、meta-agent.ts 等）补充 logger/observer 诊断输出，确保故障时可追溯 trigger → decision → failure → recovery 链路。",
+        "validation": "在任一核心路径注入模拟故障，确认诊断输出可定位到具体文件和决策点。"
+      },
+      {
+        "id": "fix-companion-drift",
+        "kind": "try-existing",
+        "title": "修复四类伴随文件漂移",
+        "reason": "core-change-watch 检测到 public-api-docs、ui-story-snapshot、config-setup-docs、cli-help-docs 四类伴随文件漂移，表明文档与代码实现可能不一致。",
+        "confidence": "Medium",
+        "owner": "各包维护者",
+        "nextStep": "逐一检查漂移项，更新伴随文件或记录不需要更新的理由。",
+        "validation": "再次运行 core-change-watch evidence-pack，确认 findingCount 降为 0。"
+      }
+    ],
+    "assignmentSummaries": [],
+    "dimensions": [
+      {
+        "id": "task-understanding",
+        "label": "任务理解",
+        "score": 70,
+        "summary": "项目通过 copilot-instructions.md 提供详细的 Agent 人格与工程指导，DESIGN.md 定义核心子系统契约，Skills/Agents/Workflows 配置完整，但缺少项目级任务路由入口文件。",
+        "findingRefs": [
+          "session-evidence-unavailable",
+          "companion-drift-unresolved"
+        ]
+      },
+      {
+        "id": "controlled-execution",
+        "label": "可控执行",
+        "score": 62,
+        "summary": "构建/测试/类型检查命令清晰可执行，CI 门禁脚本完善，但权限边界和高风险操作分类未显式文档化，sandbox 配置不可见。",
+        "findingRefs": [
+          "session-evidence-unavailable",
+          "permission-boundary-implicit"
+        ]
+      },
+      {
+        "id": "change-validation",
+        "label": "改动验证",
+        "score": 65,
+        "summary": "CI 四层门禁（tsc → eslint → vitest unit → verify/contract）设计良好，@ci 标签系统实现测试分层，但缺少可验证的核心路径诊断路由，会话证据缺失无法确认编辑后验证行为。",
+        "findingRefs": [
+          "session-evidence-unavailable",
+          "core-diagnostic-coverage-gap"
+        ]
+      },
+      {
+        "id": "reliable-delivery",
+        "label": "可靠交付",
+        "score": 50,
+        "summary": "GitHub Actions CI 和 PR 模板已配置，但无可观测的交付接受证据，回滚/恢复机制和高风险审批路径未显式定义。",
+        "findingRefs": [
+          "session-evidence-unavailable",
+          "permission-boundary-implicit"
+        ]
+      },
+      {
+        "id": "learning-capture",
+        "label": "经验沉淀",
+        "score": 35,
+        "summary": "无可分析会话——生命周期机会检测、循环工程和纵向验证均无法评估。项目配置了 27 个候选 Skill 和 6 个自定义 Agent，但其使用效果不可观测。",
+        "findingRefs": [
+          "session-evidence-unavailable"
+        ]
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "session-evidence-unavailable",
+      "title": "无可分析会话导致运行时行为完全不可观测",
+      "severity": "High",
+      "reason": "平台报告 0 个 eligible 会话（1/5 source roots 启用），Task Understanding、Controlled Execution、Change Validation、Reliable Delivery 四维均停留在静态配置证据层（Present/Wired），无法超过 74 分天花板。Learning Capture 维度完全不可评估。项目的 12 个 Skill、6 个自定义 Agent、2 个 Workflow 的实际使用效果均无法验证。",
+      "expectedOutput": [
+        "source roots 配置从 1/5 提升至 5/5",
+        "下次 /better-loop 可捕获至少 3 个 Task Episode"
+      ],
+      "expectedArtifact": "平台配置变更",
+      "aiFixPrompt": "/better-loop fix this issue\n\n启用 Qoder 平台的会话记录功能，确保 source roots 配置完整（至少 5 个全部启用），使后续 /better-loop 可捕获实际的编辑、验证、修复和交付行为。\n\n## 验证\n\n- 下次 /better-loop 运行时 eligibleCount > 0\n- 至少一个 Task Episode 包含 change + validation 行为",
+      "dimensionRefs": [
+        "task-understanding",
+        "controlled-execution",
+        "change-validation",
+        "reliable-delivery",
+        "learning-capture"
+      ]
+    },
+    {
+      "id": "core-diagnostic-coverage-gap",
+      "title": "核心路径缺少可验证的故障诊断路由",
+      "severity": "Medium",
+      "reason": "core-change-watch evidence-pack 标记 diffStatus 为 attention-required（severity critical），识别出 59 个受影响核心文件，覆盖 CLI/TUI/engine/scheduler/governance/memory-store/llm 等关键包。但目前缺少可验证的诊断路由，故障发生时无法沿 trigger → decision → failure/recovery → result 链路定位根因。",
+      "expectedOutput": [
+        "核心路径的 PipelineObserver.emit() 覆盖关键状态变更",
+        "故障诊断链路至少覆盖 scheduler、react-loop、dispatch pipeline 三条路径"
+      ],
+      "expectedArtifact": "代码变更",
+      "aiFixPrompt": "/better-loop fix this issue\n\n为核心路径补充诊断路由：\n1. 在 scheduler.ts、react-loop.ts、meta-agent.ts、governance-loop.ts 等关键文件中确保关键状态变更通过 PipelineObserver.emit() 输出\n2. 为 dispatch pipeline 的每个 Step（Claim/Spawn/Execute/Cleanup）增加可关联的 correlation id\n3. 确保故障输出可读、可关联、可验证\n\n## 验证\n\n- 选择一条核心路径（如 scheduler → dispatch → execute），注入模拟故障\n- 确认诊断输出包含：触发点、决策边界、失败原因、恢复路径\n- 运行 tsc -b --force --noEmit 确认类型安全",
+      "dimensionRefs": [
+        "change-validation"
+      ]
+    },
+    {
+      "id": "companion-drift-unresolved",
+      "title": "四类伴随文件与代码实现存在漂移",
+      "severity": "Low",
+      "reason": "core-change-watch 检测到 4 类伴随漂移：public-api-docs、ui-story-snapshot、config-setup-docs、cli-help-docs。这些伴随文件（文档/快照/配置说明）与对应代码变更后未同步更新，可能导致后续开发者依赖过时信息。",
+      "expectedOutput": [
+        "四类伴随文件与当前代码实现一致",
+        "core-change-watch findingCount = 0"
+      ],
+      "expectedArtifact": "文档/快照更新",
+      "aiFixPrompt": "/better-loop fix this issue\n\n逐一检查四类伴随文件漂移：\n1. public-api-docs：确认公开 API 文档与当前导出一致\n2. ui-story-snapshot：确认 UI 快照与当前实现一致\n3. config-setup-docs：确认配置/搭建文档与当前 setup 流程一致\n4. cli-help-docs：确认 CLI 帮助文档与当前 --help 输出一致\n\n对每项：更新文件或记录不需要更新的理由。\n\n## 验证\n\n- 再次运行 core-change-watch evidence-pack，确认 findingCount 降为 0",
+      "dimensionRefs": [
+        "task-understanding"
+      ]
+    },
+    {
+      "id": "permission-boundary-implicit",
+      "title": "权限边界与高风险操作审批路径未显式定义",
+      "severity": "Medium",
+      "reason": "项目虽在 copilot-instructions.md 中提及 ConfirmGate 可逆性分级（L0-L3）和 TrustModel 信任晋升机制，但缺少面向 Agent 的显式权限边界文档——哪些操作需要审批、审批流程如何、默认 deny 策略覆盖哪些范围均不可见。core-change-watch 的 diffSeverity 标记为 critical，进一步表明高风险变更的审批路径未就绪。",
+      "expectedOutput": [
+        "高风险操作清单与审批路径文档",
+        "ConfirmGate 与 TrustModel 的集成说明"
+      ],
+      "expectedArtifact": "文档",
+      "aiFixPrompt": "/better-loop fix this issue\n\n在 copilot-instructions.md 或独立文档中显式定义：\n1. 高风险操作清单（如 force push、生产发布、schema 迁移、删除数据）\n2. 每类操作的审批路径（ConfirmGate 拦截 → 用户确认 → TrustModel 判定）\n3. 默认 deny 策略覆盖范围\n4. 绕过审批的升级路径\n\n## 验证\n\n- 文档列出至少 5 类高风险操作及其审批路径\n- 选择一个高风险场景（如跨包类型变更），确认审批流程可追踪",
+      "dimensionRefs": [
+        "controlled-execution",
+        "reliable-delivery"
+      ]
+    }
+  ]
+}

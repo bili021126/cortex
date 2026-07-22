@@ -168,6 +168,30 @@
     "coherence_validated": {
       "channel": "important",
       "ackRequired": false
+    },
+    "workflow_approved": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "meeting_minutes": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "schedule_managed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "administrative_decision": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "trust_assessed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "decision_made": {
+      "channel": "routine",
+      "ackRequired": false
     }
   },
   "committeeRules": [

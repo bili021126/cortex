@@ -26,3 +26,9 @@ export const MAINTENANCE_WEIGHT_THRESHOLD = 0.05;
 
 /** 记忆模式版本号 */
 export const SCHEMA_VERSION = 5;
+
+/** BM25 默认 k1 参数——词频饱和度 */
+export const BM25_DEFAULT_K1 = 1.2;
+
+/** BM25 默认 b 参数——文档长度归一化 */
+export const BM25_DEFAULT_B = 0.75;

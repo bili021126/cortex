@@ -11,7 +11,7 @@
  * @since v6 — 从 app.tsx 抽离（降函数复杂度 + 纳入 lint）
  */
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Dispatch } from "react";
 import type {
   LlmMessage,
@@ -48,7 +48,7 @@ export interface UseInputHandlerParams {
  */
 export function useInputHandler(
   params: UseInputHandlerParams,
-): (input: string) => Promise<void> {
+): { handleInput: (input: string) => Promise<void>; interrupt: () => void } {
   const {
     stateRef,
     dispatch,
@@ -60,15 +60,23 @@ export function useInputHandler(
     createExternalHooks,
   } = params;
 
-  return useCallback(
+  /** 同步守卫：在 React dispatch→re-render 窗口期内防止重复提交 */
+  const _processingGuard = useRef(false);
+  /** 当前回合的中断控制器——Esc 时 abort，端到端停流 */
+  const abortRef = useRef<AbortController | null>(null);
+
+  const handleInput = useCallback(
     async (input: string) => {
       if (!input.trim()) return;
+      // 同步守卫：防止 Ink TextInput 在 React re-render 前重复触发 onSubmit
+      if (stateRef.current.isProcessing || _processingGuard.current) return;
+      _processingGuard.current = true;
+
       const currentState = stateRef.current;
-      if (currentState.isProcessing) return;
 
       // 0. 内部命令（. 前缀 UI 命令）
       const cmdResult = handleCommand(input, currentState, dispatch, projectRoot, requestExit);
-      if (cmdResult.handled) return;
+      if (cmdResult.handled) { _processingGuard.current = false; return; }
 
       // 0.5 命令意图 → registry.dispatch（与 ansi dispatchInput 对称，15 个 CLI 命令全通）
       if (classifyIntent(input) === "command") {
@@ -78,6 +86,7 @@ export function useInputHandler(
           input.trim().split(/\s+/),
         );
         dispatch({ type: "ADD_MESSAGE", payload: { role: "system", content: output } });
+        _processingGuard.current = false;
         return;
       }
 
@@ -89,6 +98,8 @@ export function useInputHandler(
           dispatch({ type: "ADD_MESSAGE", payload: { role: "user", content: input } });
           dispatch({ type: "SET_PROCESSING", payload: true });
 
+          const controller = new AbortController();
+          abortRef.current = controller;
           try {
             const planState = {
               nodes: currentState.planNodes.map((n) => ({ ...n })),
@@ -96,7 +107,7 @@ export function useInputHandler(
               approved: true,
               reviewStatus: "reviewed" as const,
             };
-            const gen = planMode("execute", bridge, currentState.agent, planState, undefined, createExternalHooks());
+            const gen = planMode("execute", bridge, currentState.agent, planState, undefined, createExternalHooks(), controller.signal);
             let result: IteratorResult<TuiEvent, string>;
             while (!(result = await gen.next()).done) {
               tuiEventBus.emit(result.value);
@@ -115,7 +126,9 @@ export function useInputHandler(
             });
           } finally {
             dispatch({ type: "SET_PROCESSING", payload: false });
+            abortRef.current = null;
           }
+          _processingGuard.current = false;
           return;
         }
       }
@@ -127,6 +140,8 @@ export function useInputHandler(
       // 3. 添加用户消息
       dispatch({ type: "ADD_MESSAGE", payload: { role: "user", content: input } });
       if (targetAgent !== currentState.agent) {
+        // 人格分离：@路由切换 Agent 时清空历史（与 .agent 命令行为一致）
+        dispatch({ type: "CLEAR_MESSAGES" });
         dispatch({ type: "SWITCH_AGENT", payload: targetAgent });
       }
 
@@ -140,6 +155,8 @@ export function useInputHandler(
 
       // 6. 路由：task → planMode, chat → chatMode
       const externalHooks = createExternalHooks();
+      const controller = new AbortController();
+      abortRef.current = controller;
       try {
         if (intent === "task") {
           const planState = {
@@ -148,14 +165,14 @@ export function useInputHandler(
             approved: false,
             reviewStatus: "pending" as const,
           };
-          const gen = planMode(input, bridge, targetAgent, planState, history, externalHooks);
+          const gen = planMode(input, bridge, targetAgent, planState, history, externalHooks, controller.signal);
           let result: IteratorResult<TuiEvent, string>;
           while (!(result = await gen.next()).done) {
             tuiEventBus.emit(result.value);
           }
           dispatch({ type: "STREAM_END" });
         } else {
-          const gen = queryLoop({ input, bridge, mode: "chat", agent: targetAgent, history, hooks: externalHooks });
+          const gen = queryLoop({ input, bridge, mode: "chat", agent: targetAgent, history, hooks: externalHooks, signal: controller.signal });
           let result: IteratorResult<TuiEvent, string>;
           while (!(result = await gen.next()).done) {
             tuiEventBus.emit(result.value);
@@ -172,8 +189,16 @@ export function useInputHandler(
         });
       } finally {
         dispatch({ type: "SET_PROCESSING", payload: false });
+        _processingGuard.current = false;
+        abortRef.current = null;
       }
     },
     [bridge, projectRoot, requestExit, createExternalHooks, registry, registryCtx, dispatch, stateRef],
   );
+
+  const interrupt = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  return { handleInput, interrupt };
 }

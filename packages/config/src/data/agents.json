@@ -1,13 +1,5 @@
 {
-  "description": "Agent 定义集合。每个 Agent 的完整声明——类型、模型、权限、标签、提示词等。",
-  "trustScore": {
-    "autoApproveL2": 70,
-    "autoApproveL3": 85,
-    "baseScore": 50,
-    "l0l1Bonus": 0.5,
-    "l2Penalty": 8,
-    "l3Penalty": 15
-  },
+  "_comment": "@deprecated 2026-07 — 新 Agent 定义请使用 agent-manifests.json。agents.json 仅保留向后兼容的旧版定义，不再新增。信任分已迁移至 tuning.json。",
   "agents": {
     "albedo": {
       "id": "albedo",
@@ -264,12 +256,16 @@
     "ningguang": {
       "id": "ningguang",
       "type": "doc-govern",
-      "role": "凝光 — 璃月七星之天权",
+      "role": "凝光 — 璃月七星之天权 / OA 行政中枢",
       "produces": [
         "doc_audited",
         "amendment_proposed",
         "constitution_reviewed",
-        "compliance_check_complete"
+        "compliance_check_complete",
+        "workflow_approved",
+        "meeting_minutes",
+        "schedule_managed",
+        "administrative_decision"
       ],
       "model": "deepseek-v4-flash",
       "key": "DEEPSEEK_CHAT",
@@ -281,7 +277,11 @@
         "plan_review",
         "doc_audit",
         "constitution_check",
-        "constitution_propose"
+        "constitution_propose",
+        "oa",
+        "workflow",
+        "scheduling",
+        "administrative"
       ],
       "toolPermissions": [
         "read_file",
@@ -612,7 +612,7 @@
         "replan_executed"
       ],
       "model": "deepseek-v4-pro",
-      "key": "DEEPSEEK_REASONER",
+      "key": "DEEPSEEK_GANYU",
       "maxInstances": 1,
       "tags": [
         "plan_review"

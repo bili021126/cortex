@@ -1,6 +1,7 @@
 import type { IFileSystemAdapter, DirectoryEntry } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ENV_CORTEX_DEBUG } from "@cortex/config";
 import { execFileSync } from "node:child_process";
 
 /**
@@ -20,7 +21,7 @@ export class NodeFileSystemAdapter implements IFileSystemAdapter {
   }
 
   async writeFile(filePath: string, content: string): Promise<void> {
-    if (process.env["CORTEX_DEBUG"] === "1") {
+    if (process.env[ENV_CORTEX_DEBUG] === "1") {
       // eslint-disable-next-line no-console
       console.log(`[TRACE write_file] adapter.writeFile: path=${filePath} contentLength=${content.length}`);
     }

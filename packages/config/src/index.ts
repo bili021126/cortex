@@ -25,6 +25,27 @@ export type {
   AgentDisplay,
   AgentRoundtable,
   AgentsConfig,
+  // Agent Manifest
+  AgentProfile,
+  AgentManifestConfig,
+  // 模型
+  ModelCapability,
+  ModelEntry,
+  ModelsConfig,
+  // 密钥+上下文
+  KeyEntry,
+  ContextLimitEntry,
+  KeysContextConfig,
+  // 调参
+  EnvVarEntry,
+  ExecutionTuning,
+  SchedulingTuning,
+  TrustTuning,
+  VerificationTuning,
+  MemoryTuning,
+  RlmTuning,
+  TuningParams,
+  TuningConfig,
   // 事件路由
   RouteTableEntry,
   RouteTableMap,
@@ -83,12 +104,14 @@ export {
   DEFAULT_CLI_CHAT_MODEL,
   DEFAULT_LLM_FALLBACK_MODEL,
   ENV_DEEPSEEK_CYRENE_API_KEY,
+  ENV_DEEPSEEK_GANYU_API_KEY,
   ENV_DEEPSEEK_CHAT_API_KEY,
   ENV_DEEPSEEK_REASONER_API_KEY,
   ENV_DEEPSEEK_API_KEY,
   ENV_DEEPSEEK_BASE_URL,
   ENV_DEEPSEEK_CHAT_MODEL,
   ENV_DEEPSEEK_CYRENE_CHAT_MODEL,
+  ENV_DEEPSEEK_GANYU_CHAT_MODEL,
   ENV_DEEPSEEK_REASONER_MODEL,
   ENV_DEEPSEEK_REASONING_EFFORT,
   ENV_CORTEX_API_AUDIT,
@@ -99,6 +122,10 @@ export {
   ENV_NODE_ENV,
   ENV_AUTO_CONFIRM,
   ENV_MAX_TOOL_ROUNDS,
+  ENV_CORTEX_DEBUG,
+  ENV_REACT_DEBUG,
+  ENV_CORTEX_ROOT,
+  ENV_CORTEX_ENABLE_CLI,
   withAutoConfirm,
   FILE_CORTEX_AGENTS_JSON,
   FILE_PERSONA_TALK_TXT,
@@ -165,6 +192,19 @@ export {
   // ── Scheduler ──
   SCHEDULER_MAX_REPLAN_PER_NODE,
   SCHEDULER_MAX_TOTAL_REPLANS,
+  WORKER_POOL_MAX_QUEUE,
+  CLAIM_LEASE_MS,
+  NODE_DISPATCH_TIMEOUT_MS,
+  EXECUTE_ALL_TIMEOUT_MS,
+  // ── ConfirmGate ──
+  CONFIRM_GATE_BYPASS_TTL_MS,
+  // ── 记忆 ──
+  BM25_DEFAULT_K1,
+  BM25_DEFAULT_B,
+  // ── 治理验证 ──
+  VERIFICATION_CACHE_TTL_MS,
+  BARREL_MAX_SIZE,
+  TSFILE_MAX_SIZE,
   // ── Skill 结晶 ──
   SKILL_TRIAL_TO_ACTIVE_THRESHOLD,
   SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD,
@@ -198,7 +238,47 @@ export type {
   ConfigDomain,
   ConfigFileReader,
   CortexConfig,
+  JsonSchema,
+  SchemaValidationError,
 } from "./loader.js";
+
+export { validateJsonSchema, validateDomainWithSchema, validateSafe, validateOrThrow } from "./loader.js";
+
+// ── 域级独立校验器 ───────────────────────────────
+export {
+  validates_models,
+  safeValidates_models,
+  validates_keysContext,
+  safeValidates_keysContext,
+  validates_agentManifests,
+  safeValidates_agentManifests,
+  validates_tuning,
+  safeValidates_tuning,
+  validates_tools,
+  safeValidates_tools,
+  validates_eventRouting,
+  safeValidates_eventRouting,
+} from "./schemas/validators.js";
+
+// ── models.json → ModelCapabilities 解析 ─────────
+export { resolveModelCapabilities } from "./models-capability.js";
+
+// ── ConfigStore 持久层 ─────────────────────────────
+export {
+  ConfigStore,
+  ModelStore,
+  KeyStore,
+  AgentManifestStore,
+  TuningStore,
+  createModelStore,
+  createKeyStore,
+  createAgentManifestStore,
+  createTuningStore,
+} from "./store.js";
+
+export type {
+  ConfigFileWriter,
+} from "./store.js";
 
 // ── Engine 层默认常量 ──────────────────────────────
 export {
@@ -251,9 +331,11 @@ export {
   TAG_VOCABULARY,
   tagRegistry,
   TagRegistry,
+  resolveTagVocabulary,
 } from "./vocabularies/tags.js";
 export type {
   Tag,
+  TagPersistenceStore,
 } from "./vocabularies/tags.js";
 export {
   ToolCategory,

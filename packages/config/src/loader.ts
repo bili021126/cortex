@@ -26,6 +26,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AgentsConfig } from "./interfaces/agent.js";
+import type { AgentManifestConfig } from "./interfaces/agent-manifest.js";
 import type { EngineConfig } from "./interfaces/engine.js";
 import type { EventRoutingConfig } from "./interfaces/event-routing.js";
 import type { RoundtableTemplate } from "./interfaces/roundtable.js";
@@ -37,8 +38,42 @@ import type { GovernancePipelineConfig } from "./interfaces/governance.js";
 import type { CognitionConfig } from "./interfaces/cognition.js";
 import type { DocsConfig } from "./interfaces/docs.js";
 import type { ToolRegistry } from "./interfaces/tool.js";
+import type { ModelEntry } from "./interfaces/model.js";
+import type { KeysContextConfig } from "./interfaces/key-context.js";
+import type { TuningConfig } from "./interfaces/tuning.js";
+import {
+  MODELS_SCHEMA,
+  KEYS_CONTEXT_SCHEMA,
+  AGENT_MANIFEST_SCHEMA,
+  TUNING_SCHEMA,
+  TOOLS_SCHEMA,
+  EVENT_ROUTING_SCHEMA,
+} from "./schemas/index.js";
 
 // ─── 域注册 ───────────────────────────────────────────
+
+/** JSON Schema 类型——轻量级无依赖实现（Draft-07 子集） */
+export interface JsonSchema {
+  type?: "object" | "array" | "string" | "number" | "boolean" | "null" | "integer";
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema;
+  additionalProperties?: boolean | JsonSchema;
+  enum?: (string | number | boolean)[];
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  description?: string;
+  $ref?: string;
+  oneOf?: JsonSchema[];
+  anyOf?: JsonSchema[];
+  /** 自定义消息——schema 校验失败时使用 */
+  _message?: string;
+  /** 嵌套 property path→schema 引用 */
+  _properties?: Record<string, JsonSchema>;
+}
 
 /**
  * 配置域描述符——注册一个配置域所需的元信息。
@@ -53,6 +88,8 @@ export interface ConfigDomain {
   required: boolean;
   /** JSON 中承载数据的顶层 key（如 "agents"），undefined 表示整个 JSON 即为数据 */
   dataKey?: string;
+  /** JSON Schema 校验——若提供，加载后和数据写入前均强制执行 */
+  schema?: JsonSchema;
   /** 域描述（人类可读） */
   description: string;
 }
@@ -67,7 +104,7 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "agents.json",
     required: true,
     dataKey: "agents",
-    description: "Agent 定义集合——每个 Agent 的完整声明",
+    description: "@deprecated Agent 定义集合——使用 agentManifests 域替代。保留仅用于向后兼容。",
   },
   {
     name: "engine",
@@ -80,12 +117,14 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "tools.json",
     required: false,
     dataKey: "tools",
+    schema: TOOLS_SCHEMA,
     description: "工具元数据定义——每把工具的声明式描述",
   },
   {
     name: "eventRouting",
     fileName: "event-routing.json",
     required: true,
+    schema: EVENT_ROUTING_SCHEMA,
     description: "事件路由配置——四通道物理分层与委员会召集规则",
   },
   {
@@ -145,6 +184,36 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "docs.json",
     required: false,
     description: "文档配置——宪法路径与文档注册表",
+  },
+  {
+    name: "models",
+    fileName: "models.json",
+    required: true,
+    dataKey: "models",
+    schema: MODELS_SCHEMA,
+    description: "L1·模型层——Cortex 唯一两模型，agent key 决定路由",
+  },
+  {
+    name: "keysContext",
+    fileName: "keys-context.json",
+    required: true,
+    schema: KEYS_CONTEXT_SCHEMA,
+    description: "L2·密钥+上下文层——API 鉴权、模型路由、窗口上限",
+  },
+  {
+    name: "agentManifests",
+    fileName: "agent-manifests.json",
+    required: true,
+    dataKey: "agents",
+    schema: AGENT_MANIFEST_SCHEMA,
+    description: "L3·Agent 层——声明差异，type→profile→key→model",
+  },
+  {
+    name: "tuning",
+    fileName: "tuning.json",
+    required: false,
+    schema: TUNING_SCHEMA,
+    description: "L4·调参层——环境变量 + 运行时调参，按域分组",
   },
 ];
 
@@ -274,6 +343,7 @@ export function loadConfigDomain<T = unknown>(
   const data = parsed as Record<string, unknown>;
 
   // 如果有 dataKey，提取键值；否则返回整个对象
+  let result: unknown;
   if (domain.dataKey) {
     if (!(domain.dataKey in data)) {
       throw new ConfigValidationError(
@@ -281,10 +351,15 @@ export function loadConfigDomain<T = unknown>(
         domainName,
       );
     }
-    return data[domain.dataKey] as T;
+    result = data[domain.dataKey];
+  } else {
+    result = data;
   }
 
-  return data as T;
+  // 如果域注册了 JSON Schema，执行结构校验（硬阻断）
+  validateDomainWithSchema(domainName, result);
+
+  return result as T;
 }
 
 /**
@@ -376,10 +451,156 @@ export function validateAllConfigs(config: CortexConfig): void {
   }
 }
 
+// ─── JSON Schema 校验 ─────────────────────────────────
+
+/** 单个 schema 校验错误 */
+export interface SchemaValidationError {
+  path: string;
+  message: string;
+}
+
+/**
+ * 按 JSON Schema 校验数据——Draft-07 子集实现。
+ * 零外部依赖，仅支持 Cortex config 所需的核心关键字。
+ */
+export function validateJsonSchema(
+  data: unknown,
+  schema: JsonSchema,
+  path: string = "$",
+): SchemaValidationError[] {
+  const errors: SchemaValidationError[] = [];
+
+  // null 同构 null / 缺失 undefined 跳过
+  if (data === undefined || data === null) {
+    if (schema.type && schema.type !== "null") {
+      errors.push({ path, message: schema._message ?? `期望 ${schema.type}，实际 null` });
+    }
+    return errors;
+  }
+
+  // type 校验
+  if (schema.type === "object") {
+    if (typeof data !== "object" || Array.isArray(data)) {
+      errors.push({ path, message: schema._message ?? `期望 object，实际 ${typeof data}` });
+      return errors;
+    }
+    const obj = data as Record<string, unknown>;
+    // required
+    if (schema.required) {
+      for (const key of schema.required) {
+        if (!(key in obj)) {
+          errors.push({ path: `${path}.${key}`, message: `缺少必填字段: ${key}` });
+        }
+      }
+    }
+    // properties
+    if (schema.properties) {
+      for (const [key, propSchema] of Object.entries(schema.properties)) {
+        if (key in obj) {
+          errors.push(...validateJsonSchema(obj[key], propSchema, `${path}.${key}`));
+        }
+      }
+    }
+  } else if (schema.type === "array") {
+    if (!Array.isArray(data)) {
+      errors.push({ path, message: schema._message ?? `期望 array，实际 ${typeof data}` });
+      return errors;
+    }
+    if (schema.items) {
+      for (let i = 0; i < data.length; i++) {
+        errors.push(...validateJsonSchema(data[i], schema.items, `${path}[${i}]`));
+      }
+    }
+  } else if (schema.type === "string") {
+    if (typeof data !== "string") {
+      errors.push({ path, message: schema._message ?? `期望 string，实际 ${typeof data}` });
+    } else {
+      if (schema.pattern && !new RegExp(schema.pattern).test(data)) {
+        errors.push({ path, message: `不匹配模式: ${schema.pattern}` });
+      }
+      if (schema.minLength !== undefined && data.length < schema.minLength) {
+        errors.push({ path, message: `最小长度 ${schema.minLength}，实际 ${data.length}` });
+      }
+      if (schema.enum && !schema.enum.includes(data)) {
+        errors.push({ path, message: `不在枚举值中: ${schema.enum.join(", ")}` });
+      }
+    }
+  } else if (schema.type === "number" || schema.type === "integer") {
+    if (typeof data !== "number") {
+      errors.push({ path, message: schema._message ?? `期望 ${schema.type}，实际 ${typeof data}` });
+    } else {
+      if (schema.type === "integer" && !Number.isInteger(data)) {
+        errors.push({ path, message: `期望 integer，实际 ${data}` });
+      }
+      if (schema.minimum !== undefined && data < schema.minimum) {
+        errors.push({ path, message: `最小值 ${schema.minimum}，实际 ${data}` });
+      }
+      if (schema.maximum !== undefined && data > schema.maximum) {
+        errors.push({ path, message: `最大值 ${schema.maximum}，实际 ${data}` });
+      }
+    }
+  } else if (schema.type === "boolean") {
+    if (typeof data !== "boolean") {
+      errors.push({ path, message: schema._message ?? `期望 boolean，实际 ${typeof data}` });
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * 对已加载的域数据执行 JSON Schema 校验。
+ * 校验失败抛 ConfigValidationError。
+ */
+export function validateDomainWithSchema(
+  domainName: string,
+  data: unknown,
+): void {
+  const domain = CONFIG_DOMAINS.find((d) => d.name === domainName);
+  if (!domain?.schema) return;
+  const errors = validateJsonSchema(data, domain.schema);
+  if (errors.length > 0) {
+    const detail = errors.slice(0, 10).map((e) => `  ${e.path}: ${e.message}`).join("\n");
+    throw new ConfigValidationError(
+      `Schema 校验失败 (${errors.length} 处):\n${detail}${errors.length > 10 ? `\n  ... 还有 ${errors.length - 10} 处` : ""}`,
+      domainName,
+    );
+  }
+}
+
+/** 安全校验——返回 { ok, errors } 而非抛异常 */
+export function validateSafe(
+  domainName: string,
+  data: unknown,
+): { ok: boolean; errors: SchemaValidationError[] } {
+  const domain = CONFIG_DOMAINS.find((d) => d.name === domainName);
+  if (!domain?.schema) return { ok: true, errors: [] };
+  const errors = validateJsonSchema(data, domain.schema);
+  return { ok: errors.length === 0, errors };
+}
+
+/** 按给定 JSON Schema 校验任意数据并抛异常 */
+export function validateOrThrow(
+  data: unknown,
+  schema: JsonSchema,
+  label?: string,
+): void {
+  const errors = validateJsonSchema(data, schema);
+  if (errors.length > 0) {
+    const name = label ?? "data";
+    const detail = errors.slice(0, 10).map((e) => `  ${e.path}: ${e.message}`).join("\n");
+    throw new ConfigValidationError(
+      `${name} Schema 校验失败 (${errors.length} 处):\n${detail}${errors.length > 10 ? `\n  ... 还有 ${errors.length - 10} 处` : ""}`,
+      name,
+    );
+  }
+}
+
 // ─── 全量配置类型 ──────────────────────────────────────
 
 /** 全量 Cortex 配置——按域索引 */
 export interface CortexConfig {
+  /** @deprecated 使用 agentManifests 替代 */
   agents?: AgentsConfig;
   engine?: EngineConfig;
   tools?: ToolRegistry;
@@ -396,6 +617,10 @@ export interface CortexConfig {
   governancePipeline?: GovernancePipelineConfig;
   cognition?: CognitionConfig;
   docs?: DocsConfig;
+  models?: Record<string, ModelEntry>;
+  keysContext?: KeysContextConfig;
+  agentManifests?: AgentManifestConfig;
+  tuning?: TuningConfig;
   /** 动态域索引——由 loadConfigDomain 按 CONFIG_DOMAINS 动态填入。外部消费者不应使用此签名。 */
   [key: string]: unknown;
 }

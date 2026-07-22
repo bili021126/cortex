@@ -17,8 +17,9 @@
     "self-exam": "npx tsx scripts/self-exam-soft.ts",
     "roundtable": "npx tsx packages/engine/tests/manual/scripts/conversation-11.ts",
     "build:config": "npx tsx scripts/build-config.ts",
-    "cli": "node cortex-cli.mjs",
-    "cortex": "node packages/cli/dist/main.js"
+    "cortex": "node packages/cli/dist/main.js",
+    "daemon": "node packages/server/dist/main.js",
+    "daemon:dev": "npx tsx packages/server/src/main.ts"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0",

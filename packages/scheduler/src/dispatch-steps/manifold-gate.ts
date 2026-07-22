@@ -57,6 +57,8 @@ interface GateState {
   waiters: WaiterEntry[];
   /** drain 模式下拒绝新 acquire */
   draining?: boolean;
+  /** H12 fix: drain 完成回调——release 在 active→0 时调用，替代忙等待轮询 */
+  drainDone?: () => void;
 }
 
 /**
@@ -228,6 +230,12 @@ export class ManifoldGate {
 
     if (gate.active > 0) {
       gate.active--;
+      // H12 fix: draining 且 active→0 时通知 drain 完成，替代忙等待轮询
+      if (gate.active === 0 && gate.draining && gate.drainDone) {
+        const done = gate.drainDone;
+        gate.drainDone = undefined;
+        done();
+      }
     } else {
       scheduleMicrotask(() => {
         ManifoldGate._emitInvariant(agentType, "release called with active=0 (possible double-release)");
@@ -278,11 +286,18 @@ export class ManifoldGate {
     }
     gate.waiters.length = 0;
 
-    const maxWaitMs = 30_000;
-    const pollIntervalMs = 200;
-    const start = Date.now();
-    while (gate.active > 0 && Date.now() - start < maxWaitMs) {
-      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    // H12 fix: 事件驱动等待 active→0，替代 setTimeout(200ms) 忙轮询
+    if (gate.active > 0) {
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          gate.drainDone = undefined;
+          resolve();
+        }, 30_000);
+        gate.drainDone = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+      });
     }
   }
 
