@@ -767,7 +767,11 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
     this._pendingEntries.delete("pending_" + mid);
 
-    // H6 fix: 先持久化再放入索引，避免 persist 失败时内存中存在幽灵条目
+    // 内存索引同步放入——commitMemory 是同步 API，commit→read 必须立即一致（内存即真相源）。
+    // 持久化作为耐久性备份异步进行；失败不影响内存可读性，下次 flush 重试。
+    // （原 H6 "先持久化再索引" 会把 _indexPut 推迟到 Promise.then，导致同步 commit 后
+    //   紧接 read 读不到刚提交的条目；且 catch 分支本就会无条件 _indexPut，此处统一前置。）
+    this._indexPut(mid, e);
     if (this._be && typeof this._be.persist === "function") {
       const persistTimeout = new Promise<void>((_, reject) =>
         setTimeout(() => reject(new Error("persist timeout")), 3000),
@@ -775,17 +779,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       Promise.race([
         (this._be.persist(e) as Promise<void>),
         persistTimeout,
-      ])
-        .then(() => { this._indexPut(mid, e); })
-        .catch((err) => {
-          if (typeof process !== "undefined") {
-            process.stderr.write(`[memory] persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
-          }
-          // 持久化失败仍放入索引（降级为纯内存模式，下次 flush 重试）
-          this._indexPut(mid, e);
-        });
-    } else {
-      this._indexPut(mid, e);
+      ]).catch((err) => {
+        if (typeof process !== "undefined") {
+          process.stderr.write(`[memory] persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
+        }
+        // 条目已在内存索引中，下次 flush 重试持久化
+      });
     }
 
     return true;
