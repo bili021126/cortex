@@ -211,6 +211,7 @@ export class LlmAdapter {
     reasoningEffort?: ReasoningEffort | null,
     toolChoice?: "auto" | "required" | "none" | string,
     _degradeAttempted = false,
+    maxTokensOverride?: number,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       return await this._mockRespond(messages, tools);
@@ -237,7 +238,7 @@ export class LlmAdapter {
       model,
       messages: messages.map((m) => _serializeMessage(m)),
       temperature: this.config.temperature ?? 0.0,
-      max_tokens: this.config.maxTokens ?? 65536, // DeepSeek V4 Pro 支持 384K (393216)
+      max_tokens: maxTokensOverride ?? this.config.maxTokens ?? 65536, // DeepSeek V4 Pro 支持 384K (393216)
     };
 
     // DeepSeek V4 参数：frequency_penalty / presence_penalty
@@ -259,7 +260,7 @@ export class LlmAdapter {
           parameters: t.parameters,
         },
       }));
-      if (toolChoice) {
+      if (toolChoice && this.config.capabilities?.supportsToolChoice === true) {
         body.tool_choice = (typeof toolChoice === "string" && toolChoice !== "auto" && toolChoice !== "required" && toolChoice !== "none")
           ? { type: "function", function: { name: toolChoice } }
           : toolChoice;
@@ -442,7 +443,7 @@ export class LlmAdapter {
       const degradeTarget = this.config.capabilities?.degradesTo;
       if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
         void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]);
-        return await this.chat(degradeTarget, messages, tools, reasoningEffort, toolChoice, true);
+        return await this.chat(degradeTarget, messages, tools, reasoningEffort, toolChoice, true, maxTokensOverride);
       }
       throw e;
     }
@@ -731,7 +732,7 @@ export class LlmAdapter {
         const model = options?.model ?? self.config.chatModel
         if (!model) throw new Error("LlmAdapter: chatModel is required for ILlmService.chat")
         const maxTokens = options?.maxTokens ?? self.config.maxTokens ?? 65536
-        const res = await self.chat(model, llmMessages, [], null, undefined, false)
+        const res = await self.chat(model, llmMessages, [], null, undefined, false, maxTokens)
         return {
           text: res.content ?? "",
           usage: res.usage

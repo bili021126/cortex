@@ -218,4 +218,28 @@ describe("LlmAdapter", () => {
 
     fetchSpy.mockRestore();
   });
+
+  // ── maxTokens 透传 ──
+
+  it("toLlmService().chat 将 maxTokens 透传到请求体 body.max_tokens", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockJsonResponse({
+        choices: [{ message: { content: "ok" } }],
+        usage: { prompt_tokens: 5, completion_tokens: 5, total_tokens: 10 },
+      }),
+    );
+
+    const adapterNoMock = new LlmAdapter({ ...MOCK_CONFIG, label: "test" });
+    const svc = adapterNoMock.toLlmService();
+    await svc.chat(
+      [{ role: "user", content: "hello" }],
+      { maxTokens: 123 },
+    );
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const sentBody = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string) as Record<string, unknown>;
+    expect(sentBody.max_tokens).toBe(123);
+
+    fetchSpy.mockRestore();
+  });
 });
