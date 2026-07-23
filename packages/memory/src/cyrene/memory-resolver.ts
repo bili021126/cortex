@@ -5,6 +5,7 @@
 // 适配：移除 Electron/IPC/orchestrator 依赖。
 // ============================================================
 
+import type { ILlmService, ILlmServiceMessage } from "@cortex/shared";
 import { memoryStore } from "./memory-store.js"
 import { appendMemoryTrace } from "./memory-trace.js"
 import { callLLM, loadModelSettingsFromFile, extractJsonObject } from "./llm-adapter.js"
@@ -73,6 +74,17 @@ let modelSettingsPath = ""
 
 export function setResolverModelPath(filePath: string): void {
   modelSettingsPath = filePath
+}
+
+/** LLM Service 注入——来自主 LLM 栈（熔断/限流/遥测已内置） */
+let _resolverLlmService: ILlmService | null = null
+
+/**
+ * 注入 ILlmService 实例，使 Resolver 走主 LLM 栈而非直调 callLLM。
+ * 传入 null 恢复默认行为（走 callLLM）。
+ */
+export function setResolverLlmService(svc: ILlmService | null): void {
+  _resolverLlmService = svc
 }
 
 function loadResolverModelSettings(): LLMConfig {
@@ -184,6 +196,10 @@ export async function callResolverLLM(
   messages: Array<{ role: "system" | "user"; content: string }>,
   maxTokens = 700,
 ): Promise<string> {
+  if (_resolverLlmService) {
+    const svcRes = await _resolverLlmService.chat(messages as ILlmServiceMessage[], { maxTokens, model: settings.model })
+    return svcRes.text
+  }
   if (!settings.apiKey) throw new Error("missing api key")
   const response = await callLLM(messages, settings, maxTokens)
   return response.text

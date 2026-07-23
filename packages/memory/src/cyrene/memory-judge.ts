@@ -8,6 +8,7 @@
 
 import * as fs from "fs"
 import * as path from "path"
+import type { ILlmService, ILlmServiceMessage } from "@cortex/shared";
 import type { LLMConfig } from "./llm-adapter.js";
 import { callLLM, loadModelSettingsFromFile, extractJsonArray } from "./llm-adapter.js"
 import type { MemoryCandidate, MemoryJudgeTurn } from "./memory-types.js";
@@ -24,6 +25,17 @@ let modelSettingsPath = ""
 
 export function setModelSettingsPath(filePath: string): void {
   modelSettingsPath = filePath
+}
+
+/** LLM Service 注入——来自主 LLM 栈（熔断/限流/遥测已内置） */
+let _judgeLlmService: ILlmService | null = null
+
+/**
+ * 注入 ILlmService 实例，使 Judge 走主 LLM 栈而非直调 callLLM。
+ * 传入 null 恢复默认行为（走 callLLM）。
+ */
+export function setJudgeLlmService(svc: ILlmService | null): void {
+  _judgeLlmService = svc
 }
 
 function loadSettings(): LLMConfig {
@@ -179,15 +191,18 @@ export class MemoryJudge {
         transcript,
       ].join("\n")
 
-      const response = await callLLM(
-        [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        settings,
-        800,
-        30000,
-      )
+      const messages: ILlmServiceMessage[] = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ]
+
+      let response: { text: string }
+      if (_judgeLlmService) {
+        const svcRes = await _judgeLlmService.chat(messages, { maxTokens: 800, model: settings.model })
+        response = { text: svcRes.text }
+      } else {
+        response = await callLLM(messages, settings, 800, 30000)
+      }
 
       const raw = response.text
       const parsed = extractJsonArray(raw)

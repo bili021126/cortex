@@ -3,7 +3,7 @@
 // 多数 [telemetry] 前缀的 console.log 已转为 recordTelemetry 直报（见 chat/chatStream）。
 // 保留裸 console.log 的通用的 [TRACE] 调试日志和 REACT_DEBUG 下日志，不受影响。
 // llm.thinking_fallback 仍使用 recordTelemetry 直报，不依赖桥接。
-import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter, ReasoningEffort } from "@cortex/shared";
+import type { ILlmService, ILlmServiceMessage, ILlmServiceResponse, LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter, ReasoningEffort } from "@cortex/shared";
 import { SimpleCircuitBreaker } from "@cortex/resilience";
 import { recordTelemetry } from "@cortex/telemetry";
 import * as crypto from "node:crypto";
@@ -705,6 +705,40 @@ export class LlmAdapter {
       clearTimeout(timeout);
       if (hardTimeout) clearTimeout(hardTimeout);
       if (externalSignal) externalSignal.removeEventListener("abort", onExternalAbort);
+    }
+  }
+
+  /**
+   * 将本适配器包装为 ILlmService 实例——使记忆等 L1 子系统能经主 LLM 栈调用。
+   *
+   * 适配映射：
+   * - chat(msgs, opts) → this.chat(opts?.model ?? chatModel, msgs 映射为 LlmMessage, [], ...)
+   * - 返回 { text, usage } 结构
+   *
+   * 调用方获得熔断/限流/路由/遥测等全部基础设施保护。
+   */
+  toLlmService(): ILlmService {
+    const self = this
+    return {
+      async chat(
+        messages: ILlmServiceMessage[],
+        options?: { maxTokens?: number; model?: string },
+      ): Promise<ILlmServiceResponse> {
+        const llmMessages: LlmMessage[] = messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
+        const model = options?.model ?? self.config.chatModel
+        if (!model) throw new Error("LlmAdapter: chatModel is required for ILlmService.chat")
+        const maxTokens = options?.maxTokens ?? self.config.maxTokens ?? 65536
+        const res = await self.chat(model, llmMessages, [], null, undefined, false)
+        return {
+          text: res.content ?? "",
+          usage: res.usage
+            ? { input: res.usage.prompt_tokens, output: res.usage.completion_tokens }
+            : undefined,
+        }
+      },
     }
   }
 }

@@ -292,6 +292,13 @@ export type {
   IStrategistAgent,
 } from "./scheduler-contracts.js";
 
+// ── LLM Service 契约 ──
+export type {
+  ILlmServiceMessage,
+  ILlmServiceResponse,
+  ILlmService,
+} from "./llm-service.js";
+
 // ── Intent 契约 ──
 export type { IntentClarification } from "./intent-clarification.js";
 // ============================================================

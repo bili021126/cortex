@@ -54,7 +54,7 @@ export type { WorldbookEntry, EntryState, DmaeState, DmaeParams, KnowledgeEntity
 
 // ─── Cyrene 记忆子系统（L0/L1/L2 画像记忆） ────────
 // re-export 核心类型——完整子路径请用 @cortex/memory/cyrene
-export { MemoryManager, MemoryStoreManager, memoryStore } from "./cyrene/index.js";
+export { MemoryManager, MemoryStoreManager, memoryStore, setJudgeLlmService, setCompressorLlmService, setResolverLlmService } from "./cyrene/index.js";
 export type { MemoryManagerDeps } from "./cyrene/index.js";
 
 // ─── Cyrene RAG 桥接 ──────────────────────────────

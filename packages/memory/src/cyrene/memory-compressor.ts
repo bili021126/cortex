@@ -5,6 +5,7 @@
 // 适配：移除 Electron/IPC/orchestrator 依赖。
 // ============================================================
 
+import type { ILlmService, ILlmServiceMessage } from "@cortex/shared";
 import { memoryStore } from "./memory-store.js"
 import type { L0WritableField } from "./memory-store.js"
 import { L0_FIELD_DESCRIPTIONS } from "./memory-types.js"
@@ -27,12 +28,27 @@ export function setCompressorModelPath(filePath: string): void {
   modelSettingsPath = filePath
 }
 
+/** LLM Service 注入——来自主 LLM 栈（熔断/限流/遥测已内置） */
+let _compressorLlmService: ILlmService | null = null
+
+/**
+ * 注入 ILlmService 实例，使 Compressor 走主 LLM 栈而非直调 callLLM。
+ * 传入 null 恢复默认行为（走 callLLM）。
+ */
+export function setCompressorLlmService(svc: ILlmService | null): void {
+  _compressorLlmService = svc
+}
+
 function loadSettings(): LLMConfig {
   const fpath = modelSettingsPath || path.join(process.cwd(), "data", "model-settings.json")
   return loadModelSettingsFromFile(fpath, { existsSync: (p: string) => fs.existsSync(p), readFileSync: (p: string, enc: BufferEncoding) => fs.readFileSync(p, enc) as string }, DEFAULT_MODEL_SETTINGS)
 }
 
 async function callLLMWrapper(messages: Array<{ role: "system" | "user"; content: string }>, maxTokens = 500): Promise<string> {
+  if (_compressorLlmService) {
+    const svcRes = await _compressorLlmService.chat(messages as ILlmServiceMessage[], { maxTokens, model: loadSettings().model })
+    return svcRes.text
+  }
   const settings = loadSettings()
   if (!settings.apiKey) throw new Error("missing api key")
   const response = await callLLM(messages, settings, maxTokens)

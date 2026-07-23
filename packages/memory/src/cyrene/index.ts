@@ -33,13 +33,13 @@ export { scoreMemoryConflict } from "./memory-conflict-score.js"
 export type { ConflictScoreInput, ConflictScoreResult, ConflictCandidateSource, ConflictEvidenceLevel } from "./memory-conflict-score.js"
 
 // ── Judge ──
-export { MemoryJudge, memoryJudge, setModelSettingsPath as setJudgeModelPath } from "./memory-judge.js"
+export { MemoryJudge, memoryJudge, setModelSettingsPath as setJudgeModelPath, setJudgeLlmService } from "./memory-judge.js"
 
 // ── Compressor ──
-export { runReflectionAndCompression, setCompressorModelPath } from "./memory-compressor.js"
+export { runReflectionAndCompression, setCompressorModelPath, setCompressorLlmService } from "./memory-compressor.js"
 
 // ── Resolver ──
-export { buildResolverPayload, buildResolverMessages, resolvePayload, callResolverLLM, runResolverQueueOnce, setResolverModelPath } from "./memory-resolver.js"
+export { buildResolverPayload, buildResolverMessages, resolvePayload, callResolverLLM, runResolverQueueOnce, setResolverModelPath, setResolverLlmService } from "./memory-resolver.js"
 export type { ResolverPayload, ResolverDeps, ResolverRunResult, ResolverRunOptions } from "./memory-resolver.js"
 
 // ── Manager ──

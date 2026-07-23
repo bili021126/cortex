@@ -47,6 +47,7 @@ import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import { initCyreneMemory } from "./init-memory.js";
+import { setJudgeLlmService, setCompressorLlmService, setResolverLlmService } from "@cortex/memory";
 import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
@@ -421,6 +422,20 @@ export async function bootstrapEngine(
   //   RAG 桥接已在 initCyreneMemory() 内完成——manager.deps 指向 ragAddMemory / ragSearchMemoryEntries，
   //   此处仅需 await 确保初始化完成，无需再取用返回的 manager/store。
   await cyreneMemoryPromise;
+
+  // §9.5.3 将主 LLM 适配器注入 Cyrene 三模块（记忆栈 LLM 可插拔化）
+  //   resolveLlm(options.llms) 返回第一个适配器（主聊天 LLM），通过 toLlmService()
+  //   包装为 ILlmService 契约后注入。注入后 Judge/Compressor/Resolver 走主 LLM 栈，
+  //   自动获得熔断/限流/路由/遥测保护。未注入时回退到原 callLLM 行为。
+  try {
+    const primaryLlm = resolveLlm(options.llms)
+    const llmService = primaryLlm.toLlmService()
+    setJudgeLlmService(llmService)
+    setCompressorLlmService(llmService)
+    setResolverLlmService(llmService)
+  } catch (e) {
+    console.warn(`[bootstrap] Cyrene LLM 服务注入失败（非致命，回退 callLLM）: ${e instanceof Error ? e.message : String(e)}`)
+  }
 
   // §9.6 发射启动完成事件
   observer.emit({
