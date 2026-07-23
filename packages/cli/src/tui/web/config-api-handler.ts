@@ -19,6 +19,7 @@ import type {
   KeyStore,
   AgentManifestStore,
   TuningStore,
+  AgentManifest,
 } from "@cortex/config";
 import { validateSafe, CONFIG_DOMAINS } from "@cortex/config";
 import type {
@@ -165,15 +166,14 @@ export class ConfigAPIHandler {
   // ─── Agents ────────────────────────────────────────
 
   private _listAgents(res: ServerResponse): boolean {
-    const agents = this.agentStore.read();
+    const agents = this.agentStore.listAgents();
     return this._sendJson(res, 200, { data: agents });
   }
 
   private _patchAgent(id: string, body: unknown, res: ServerResponse): boolean {
     try {
-      // AgentManifestStore 使用 update() 做浅合并
-      this.agentStore.update({ [id]: body } as never);
-      return this._sendJson(res, 200, { data: this.agentStore.read() });
+      this.agentStore.updateAgent(id, body as Partial<AgentManifest>);
+      return this._sendJson(res, 200, { data: this.agentStore.getAgent(id) });
     } catch (err) {
       return this._notFoundOrConflict(res, err);
     }

@@ -204,7 +204,6 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     name: "agentManifests",
     fileName: "agent-manifests.json",
     required: true,
-    dataKey: "agents",
     schema: AGENT_MANIFEST_SCHEMA,
     description: "L3·Agent 层——声明差异，type→profile→key→model",
   },
