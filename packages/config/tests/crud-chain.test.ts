@@ -26,6 +26,10 @@ describe("ConfigStore CRUD 链路", () => {
 
   // ── ModelStore ──
   describe("ModelStore", () => {
+    beforeEach(() => {
+      seedFile("models.json", JSON.stringify({ models: {} }));
+    });
+
     it("addModel → getModel → removeModel 全链路", () => {
       const store = new ModelStore(readFile, writeFile, TEST_DIR);
 

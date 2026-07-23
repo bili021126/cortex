@@ -494,7 +494,7 @@ export class LlmAdapter {
         },
       }));
       // _toolChoice 仅测试/integration 使用——DeepSeek 不支持强制 tool_choice
-      if (_toolChoice) body.tool_choice = _toolChoice;
+      if (_toolChoice && this.config.capabilities?.supportsToolChoice === true) body.tool_choice = _toolChoice;
     }
 
     // FIX-07: 流式场景对称注入 extraBody（与 chat() 保持一致）

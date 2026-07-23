@@ -222,9 +222,9 @@ describe("开会 needsMultiPerspective 并行", () => {
 
     // 两个 Agent 都认领了这个节点
     const finalNode = board.getNode("multi-1")!;
-    expect(finalNode.claimedBy).toContain(AgentType.Review);
-    expect(finalNode.claimedBy).toContain(AgentType.Analysis);
-    expect(finalNode.claimedBy).toHaveLength(2);
+    expect(finalNode.results.map(r => r.agentType)).toContain(AgentType.Review);
+    expect(finalNode.results.map(r => r.agentType)).toContain(AgentType.Analysis);
+    expect(finalNode.results.map(r => r.agentType)).toHaveLength(2);
 
     // 多视角聚合结果包含两个 agent 的输出
     expect(claimedTypes).toContain(AgentType.Review);
@@ -257,8 +257,8 @@ describe("开会 needsMultiPerspective 并行", () => {
     expect(report.completed).toBe(1);
 
     const finalNode = board.getNode("single-1")!;
-    expect(finalNode.claimedBy).toHaveLength(1);
-    expect(finalNode.claimedBy[0]).toBe(AgentType.Code);
+    expect(finalNode.results.map(r => r.agentType)).toHaveLength(1);
+    expect(finalNode.results.map(r => r.agentType)).toContain(AgentType.Code);
   }, 30000);
 
   it("needsMultiPerspective 无匹配 Agent → 全部失败", async () => {
@@ -507,8 +507,8 @@ describe("InspectorAgent 认领 inspect 节点", () => {
     expect(report.failed).toBe(0);
 
     const finalNode = board.getNode("inspect-1")!;
-    expect(finalNode.claimedBy).toContain(AgentType.Inspector);
-    expect(finalNode.claimedBy).toHaveLength(1);
+    expect(finalNode.results.map(r => r.agentType)).toContain(AgentType.Inspector);
+    expect(finalNode.results.map(r => r.agentType)).toHaveLength(1);
     expect(finalNode.results[0].success).toBe(true);
     expect(finalNode.results[0].output).toContain("事实报告");
   }, 30000);
