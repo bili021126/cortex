@@ -16,6 +16,11 @@ class MockGate {
   public requests: Array<{ id: string; level: RL; toolName: string; summary: string }> = [];
   public _bypass = false;
 
+  check(level: RL, _ctx?: { agentType: string; toolName: string }): { approved: boolean; reason: string; score?: number } {
+    const needsConfirm = this.needsConfirmation(level, _ctx);
+    return { approved: !needsConfirm, reason: needsConfirm ? "manual confirm" : "low risk" };
+  }
+
   needsConfirmation(level: RL, _ctx?: { agentType: string; toolName: string }): boolean {
     return !this._bypass && (level === RL.L2 || level === RL.L3);
   }
