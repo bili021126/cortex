@@ -6,7 +6,8 @@ import type { MemoryStore } from "@cortex/memory-store";
 import type { AgentPool } from "@cortex/scheduler";
 import { createAgent } from "../execution/agent-factory.js";
 import type { AgentFactoryConfig } from "../execution/agent-factory.js";
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 import { resolveConfig, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
 
@@ -19,27 +20,28 @@ const SAFE_EXEC_TIMEOUT = 60_000;
  * 用 child_process 采集编译/测试事实，不依赖 LLM。
  * 返回事实字符串数组，每一条对应一个命令执行结果。
  */
-function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, timeouts?: Required<EngineConfig>["inspector"]): string[] {
+const asyncExec = promisify(exec);
+
+async function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, timeouts?: Required<EngineConfig>["inspector"]): Promise<string[]> {
   const facts: string[] = [];
   const root = workspaceRoot;
   const T = timeouts ?? { tscTimeout: 30_000, testTimeout: 30_000, vitestTimeout: 60_000 };
 
   try {
     try {
-      const tscOut = execSync("npx tsc --noEmit --pretty false", {
+      const { stdout: tscOut } = await asyncExec("npx tsc --noEmit --pretty false", {
         cwd: root,
         timeout: Math.min(T.tscTimeout ?? SAFE_EXEC_TIMEOUT, SAFE_EXEC_TIMEOUT),
         encoding: "utf-8",
         maxBuffer: 256 * 1024,
-        stdio: ["ignore", "pipe", "pipe"],
       });
       facts.push(`[tsc --noEmit] ✅ 编译通过。`);
       if (tscOut.trim()) facts.push(`[tsc 输出] ${tscOut.trim().slice(0, 500)}`);
     } catch (e) {
-      const err = e as { stdout?: unknown; stderr?: unknown; status?: number | string };
+      const err = e as { stdout?: string; stderr?: string; code?: number | string };
       const stdout = err.stdout?.toString() ?? "";
       const stderr = err.stderr?.toString() ?? "";
-      facts.push(`[tsc --noEmit] ❌ 编译失败 (exit ${err.status ?? "?"})`);
+      facts.push(`[tsc --noEmit] ❌ 编译失败 (exit ${err.code ?? "?"})`);
       if (stdout.trim()) facts.push(`[tsc stdout]\n${stdout.trim().slice(0, 800)}`);
       if (stderr.trim()) facts.push(`[tsc stderr]\n${stderr.trim().slice(0, 800)}`);
     }
@@ -52,24 +54,33 @@ function collectFacts(workspaceRoot: string, safeReporter?: SafeErrorReporter, t
 
   try {
     try {
-      // execSync 同步阻塞事件循环，多 Agent 并发场景下其他任务等待。未来优化方向：异步 Promise.allSettled + AbortSignal。
-      const testOut = execSync("npx vitest run --reporter verbose 2>&1 || npx jest --verbose 2>&1 || echo NO_TEST_RUNNER", {
+      const { stdout: testOut } = await asyncExec("npx vitest run --reporter verbose 2>&1", {
         cwd: root,
         timeout: Math.min(T.vitestTimeout ?? SAFE_EXEC_TIMEOUT, SAFE_EXEC_TIMEOUT),
         encoding: "utf-8",
         maxBuffer: 512 * 1024,
-        stdio: ["ignore", "pipe", "pipe"],
         shell: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
       });
       const trimmed = testOut.trim();
-      if (trimmed && !trimmed.includes("NO_TEST_RUNNER")) {
+      if (trimmed) {
         const passed = /(\d+)\s+passed/.test(trimmed);
         const failed = /(\d+)\s+failed/.test(trimmed);
         facts.push(`[vitest] ${passed ? "✅ 测试通过" : ""}${failed ? "❌ 测试失败" : ""}${!passed && !failed ? "⚠️ 未检测到测试结果" : ""}`);
         facts.push(`[vitest 输出]\n${trimmed.slice(0, 1000)}`);
       }
-    } catch {
-      safeReporter?.({ source: "InspectorAgent.collectFacts.vitest_inner", error: "test runner not available", severity: "silent" });
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; code?: number | string };
+      const stdout = err.stdout?.toString() ?? "";
+      if (stdout.trim()) {
+        // 测试失败但有输出——如实报告失败事实（inspector 的职责）
+        const passed = /(\d+)\s+passed/.test(stdout);
+        const failed = /(\d+)\s+failed/.test(stdout);
+        facts.push(`[vitest] ${passed ? "✅ 测试通过" : ""}${failed ? "❌ 测试失败" : ""}${!passed && !failed ? "⚠️ 未检测到测试结果" : ""}`);
+        facts.push(`[vitest 输出]\n${stdout.trim().slice(0, 1000)}`);
+      } else {
+        // 真·runner 缺失（ENOENT/无输出）
+        safeReporter?.({ source: "InspectorAgent.collectFacts.vitest_inner", error: "test runner not available", severity: "silent" });
+      }
     }
   } catch {
     safeReporter?.({ source: "InspectorAgent.collectFacts.vitest", error: "vitest not available", severity: "silent" });
@@ -104,9 +115,9 @@ export function createInspectorAgent(
     maxLoops: DEFAULT_ENGINE_CONFIG.inspectorMaxLoops,
     memoryEnabled: true,
     filterRead,
-    preExecuteHook: (node: TaskNode): TaskNode => {
+    preExecuteHook: async (node: TaskNode): Promise<TaskNode> => {
       if (!workspaceRoot) return node;
-      const facts = collectFacts(workspaceRoot, safeReporterRef ?? undefined, resolved.inspector);
+      const facts = await collectFacts(workspaceRoot, safeReporterRef ?? undefined, resolved.inspector);
       if (facts.length === 0) return node;
       return {
         ...node,

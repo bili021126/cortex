@@ -26,6 +26,8 @@ import {
 
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 import type { IPipelineObserver } from "@cortex/shared";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 
 // ─── 类型 ────────────────────────────────────────
 
@@ -295,7 +297,7 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
 
   try {
     // 调用 CI 门禁脚本（npx tsx scripts/ci-gate.ts）
-    const { execSync } = await import("node:child_process");
+    const asyncExec = promisify(exec);
     const ciScript = path.resolve(ctx.rootDir, "scripts", "ci-gate.ts");
 
     if (!fs.existsSync(ciScript)) {
@@ -308,11 +310,10 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
     }
 
     // --json 模式输出结构化结果，从混合输出中提取 JSON
-    const output = execSync(`npx tsx "${ciScript}" --json`, {
+    const { stdout: output } = await asyncExec(`npx tsx "${ciScript}" --json`, {
       cwd: ctx.rootDir,
       encoding: "utf-8",
       timeout: 600_000, // 10 分钟超时（包含构建+测试）
-      stdio: ["ignore", "pipe", "pipe"],
     });
 
     // 从混合输出中提取 JSON 行（ci-gate --json 最后一行非空输出为 JSON）
