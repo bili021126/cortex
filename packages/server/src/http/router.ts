@@ -49,7 +49,9 @@ export class HttpRouter {
 
     // POST /api/v1/chat
     if (method === "POST" && path === "/api/v1/chat") {
-      void handleChat(req, res, this.chatExecutor, this.sessionManager);
+      void handleChat(req, res, this.chatExecutor, this.sessionManager).catch(err =>
+        sendProblem(res, 500, "Chat Error", err instanceof Error ? err.message : String(err))
+      );
       return true;
     }
 
@@ -73,20 +75,26 @@ export class HttpRouter {
 
     // GET /api/v1/memory
     if (method === "GET" && path === "/api/v1/memory") {
-      void handleMemoryGet(req, res, this.engine);
+      void handleMemoryGet(req, res, this.engine).catch(err =>
+        sendProblem(res, 500, "Memory Error", err instanceof Error ? err.message : String(err))
+      );
       return true;
     }
 
     // POST /api/v1/memory
     if (method === "POST" && path === "/api/v1/memory") {
-      void handleMemoryPost(req, res, this.engine);
+      void handleMemoryPost(req, res, this.engine).catch(err =>
+        sendProblem(res, 500, "Memory Error", err instanceof Error ? err.message : String(err))
+      );
       return true;
     }
 
     // DELETE /api/v1/memory/:id
     if (method === "DELETE" && path.startsWith("/api/v1/memory/")) {
       const id = path.slice("/api/v1/memory/".length);
-      void handleMemoryDelete(res, this.engine, id);
+      void handleMemoryDelete(res, this.engine, id).catch(err =>
+        sendProblem(res, 500, "Memory Error", err instanceof Error ? err.message : String(err))
+      );
       return true;
     }
 
@@ -98,7 +106,9 @@ export class HttpRouter {
 
     // POST /api/v1/sessions
     if (method === "POST" && path === "/api/v1/sessions") {
-      void handleSessionPost(req, res, this.sessionManager);
+      void handleSessionPost(req, res, this.sessionManager).catch(err =>
+        sendProblem(res, 500, "Session Error", err instanceof Error ? err.message : String(err))
+      );
       return true;
     }
 
@@ -198,6 +208,7 @@ export class HttpRouter {
 // ── Helpers ──────────────────────────────────────────
 
 export function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  if (res.headersSent) return;
   const json = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -207,6 +218,7 @@ export function sendJson(res: ServerResponse, status: number, body: unknown): vo
 }
 
 export function sendProblem(res: ServerResponse, status: number, title: string, detail?: string): void {
+  if (res.headersSent) return;
   const body = problem(status, title, detail);
   const json = JSON.stringify(body);
   res.writeHead(status, {

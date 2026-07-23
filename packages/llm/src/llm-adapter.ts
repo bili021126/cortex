@@ -1,8 +1,8 @@
 /* eslint-disable no-console */
-// G1-4: LLM adapter 的 console.log 已通过 telemetry console-bridge 间接收敛到遥测
-// 无需改为 observer.emit——bootstrap 阶段 installConsoleBridge(observer) 后所有 console.log
-// 自动桥接到 PipelineObserver，实现全量收敛。保留裸 console.log 以便无 bridge 场景兜底。
-// 例外：llm.thinking_fallback 使用 recordTelemetry 直报，不依赖桥接。
+// G1-4: LLM adapter 遥测收敛策略
+// 多数 [telemetry] 前缀的 console.log 已转为 recordTelemetry 直报（见 chat/chatStream）。
+// 保留裸 console.log 的通用的 [TRACE] 调试日志和 REACT_DEBUG 下日志，不受影响。
+// llm.thinking_fallback 仍使用 recordTelemetry 直报，不依赖桥接。
 import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter, ReasoningEffort } from "@cortex/shared";
 import { SimpleCircuitBreaker } from "@cortex/resilience";
 import { recordTelemetry } from "@cortex/telemetry";
@@ -286,7 +286,7 @@ export class LlmAdapter {
 
     // ── 遥测：请求体大小 ──
     const bodySize = JSON.stringify(body).length;
-    console.log(`[telemetry] llm.request_body_size model=${model} size=${bodySize} tools_count=${tools?.length ?? 0} stream=false`);
+    void recordTelemetry("llm.request_body_size", bodySize, [{ key: "model", value: model }, { key: "stream", value: "false" }, { key: "tools_count", value: String(tools?.length ?? 0) }]);
 
     try {
       // ── 请求 + 读取响应体（含一次 body-read 重试）──
@@ -392,7 +392,7 @@ export class LlmAdapter {
 
           // ── 遥测：LLM 响应延迟 ──
           const callElapsed = Date.now() - t0;
-          console.log(`[telemetry] llm.response_time_ms value=${callElapsed} model=${model} stream=false`);
+          void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "false" }]);
 
           return response;
         } catch (bodyReadErr) {
@@ -441,7 +441,7 @@ export class LlmAdapter {
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
       const degradeTarget = this.config.capabilities?.degradesTo;
       if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
-        console.log(`[telemetry] model.degraded from=${model} to=${degradeTarget}`);
+        void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]);
         return await this.chat(degradeTarget, messages, tools, reasoningEffort, toolChoice, true);
       }
       throw e;
@@ -513,7 +513,7 @@ export class LlmAdapter {
 
     // ── 遥测：请求体大小 ──
     const bodySize = JSON.stringify(body).length;
-    console.log(`[telemetry] llm.request_body_size model=${model} size=${bodySize} tools_count=${tools?.length ?? 0} stream=true`);
+    void recordTelemetry("llm.request_body_size", bodySize, [{ key: "model", value: model }, { key: "stream", value: "true" }, { key: "tools_count", value: String(tools?.length ?? 0) }]);
 
     try {
       const res = await this._circuitBreaker.call(
@@ -572,7 +572,7 @@ export class LlmAdapter {
 
       // ── 遥测：LLM 响应延迟 ──
       const callElapsed = Date.now() - t0;
-      console.log(`[telemetry] llm.response_time_ms value=${callElapsed} model=${model} stream=true`);
+      void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "true" }]);
 
       return response;
     } catch (e) {
@@ -594,7 +594,7 @@ export class LlmAdapter {
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
       const degradeTarget = this.config.capabilities?.degradesTo;
       if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
-        console.log(`[telemetry] model.degraded from=${model} to=${degradeTarget}`);
+        void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]);
         return await this.chatStream(degradeTarget, messages, tools, onChunk, reasoningEffort, _toolChoice, true, signal);
       }
       throw e;

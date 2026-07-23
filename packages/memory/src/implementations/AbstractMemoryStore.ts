@@ -1078,7 +1078,19 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     } catch (err) {
       // 补偿回滚：撤销已写入的条目和关联链路，防止部分提交
       for (const cid of committedIds) {
-        try { await this._be.remove(cid); this._indexDel(cid); } catch { /* ignore */ }
+        try { await this._be.remove(cid); this._indexDel(cid); } catch (rollbackErr) {
+          this._observer?.emit({
+            type: PipelineEventType.ErrorReported,
+            priority: PipelinePriority.HIGH,
+            payload: {
+              source: "MemoryStore._commit",
+              severity: "degraded",
+              error: `回滚删除失败: ${String(rollbackErr).slice(0, 200)}`,
+              hint: `committedId=${cid}`,
+            },
+            timestamp: Date.now(),
+          });
+        }
       }
       for (const cl of committedLinks) {
         const ls = this._links.get(cl.sourceId);

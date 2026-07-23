@@ -255,7 +255,8 @@ export class WSGateway {
     try {
       msg = JSON.parse(text);
     } catch {
-      // Non-JSON message — ignore
+      // Non-JSON message — log warning for observability
+      console.warn("[WSGateway] 收到无法解析的 WS 消息（非 JSON）");
       return;
     }
 
