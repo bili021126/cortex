@@ -2,7 +2,7 @@
 // @layer 规划-执行层
 // @role 事轴起点——意图拆解为粗粒度 TaskNode 树
 
-import { extractJsonBlock, PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type SkillTemplate, type Tag, type TaskNode, type IntentClarification } from "@cortex/shared";
+import { PipelinePriority, PipelineEventType, type IPipelineObserver, type ImpactScope, type ObservableEvent, type ReplanResult, type SafeErrorReporter, type SkillTemplate, type Tag, type TaskNode, type IntentClarification } from "@cortex/shared";
 import { createLogger } from "@cortex/logging";
 import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
@@ -20,6 +20,7 @@ import {
 import type { SkillRegistry } from "@cortex/skill-kit";
 import type { PromptManager, PlanningPromptBlocks } from "./prompt-manager.js";
 import { DegradationBoundary } from "./degradation-boundary.js";
+import { extractJson, fallbackNode, tryParseItems, type PlanItem } from "./meta-agent-parsers.js";
 import { resilienceFactory } from "../execution/resilience-integration.js";
 import type { LoopStrategyRegistry } from "./loop-strategy-registry.js";
 
@@ -530,38 +531,20 @@ export class MetaAgent {
     return parts.join("\n");
   }
 
-  /** 从 LLM 输出提取 JSON（委托 @cortex/shared 统一实现，失败时回退原始字符串）。 */
-  private _extractJson(raw: string): string {
-    return extractJsonBlock(raw) ?? raw;
-  }
 
-  /** 构造兜底 TaskNode（JSON 解析失败时） */
-  private _fallbackNode(raw: string, parentId?: string): TaskNode {
-    return {
-      id: `task-${Date.now()}-0`,
-      parentId,
-      type: "analysis",
-      tags: ["analysis"] as Tag[],
-      needsMultiPerspective: false,
-      status: "pending",
-      claimedBy: [],
-      payload: raw,
-      results: [],
-      createdAt: Date.now(),
-      contextPolicyId: "diagnose",
-    };
-  }
+
+
 
   /** 从 LLM 输出解析 JSON 任务树 */
   private _parsePlan(raw: string, parentId?: string): TaskNode[] {
     // 多级容错策略：extractJson → raw直接 → 修复常见JSON问题
     const candidates = [
-      this._extractJson(raw),
+      extractJson(raw),
       raw, // LLM 可能直接输出干净 JSON
     ];
 
     for (const candidate of candidates) {
-      const items = this._tryParseItems(candidate);
+      const items = tryParseItems(candidate);
       if (items !== null) {
         // 空数组是合法结果：工作区边界拒绝 / 无操作必要
         // 直接返回 [] 让调用方处理，不生成垃圾兜底节点
@@ -588,30 +571,10 @@ export class MetaAgent {
         notificationType: "FYI",
       });
     }
-    return [this._fallbackNode(raw, parentId)];
+    return [fallbackNode(raw, parentId)];
   }
 
-  /** 尝试解析 JSON 为 PlanItem[]，自动修复常见 LLM 格式问题 */
-  private _tryParseItems(jsonStr: string): PlanItem[] | null {
-    if (!jsonStr || jsonStr.length < 2) return null;
-
-    // 策略 1: 直接解析
-    try { return JSON.parse(jsonStr); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
-    
-    // 策略 2: 去除尾部多余逗号（LLM 经典错误）
-    try { return JSON.parse(jsonStr.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
-    
-    // 策略 3: 截取首 [ 到末 ]，再做一次字符串感知提取（双保险）
-    const firstBracket = jsonStr.indexOf("[");
-    const lastBracket = jsonStr.lastIndexOf("]");
-    if (firstBracket !== -1 && lastBracket > firstBracket) {
-      const trimmed = jsonStr.slice(firstBracket, lastBracket + 1);
-      try { return JSON.parse(trimmed); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
-      try { return JSON.parse(trimmed.replace(/,\s*([\]}])/g, "$1")); } catch (err) { DegradationBoundary.handle(err, 'meta-agent', 'trace'); }
-    }
-
-    return null;
-  }
+  
 
   /** 将 PlanItem 转为 TaskNode[]（自身 + 所有子孙） */
   private _toTaskNode(item: PlanItem, parentId: string | undefined, index: number): TaskNode[] {
@@ -660,7 +623,7 @@ export class MetaAgent {
 
   /** 解析 ReplanResult：从 LLM 输出提取 tasks + impactScope */
   private _parseReplanResult(raw: string, parentId?: string): ReplanResult {
-    const jsonStr = this._extractJson(raw);
+    const jsonStr = extractJson(raw);
 
     try {
       const parsed = JSON.parse(jsonStr);
@@ -681,7 +644,7 @@ export class MetaAgent {
         timestamp: Date.now(),
         notificationType: "FYI",
       });
-      return { nodes: [this._fallbackNode(raw, parentId)], impactScope: "local" };
+      return { nodes: [fallbackNode(raw, parentId)], impactScope: "local" };
     }
   }
 
@@ -721,19 +684,7 @@ export interface SimRunner {
   simulate(input: { planNodes: Array<{ type: string; intent: string }>; currentState: Record<string, unknown>; constraints: string[] }): Promise<{ riskLevel: string; predictedFailures: string[]; suggestedReplan: boolean; confidence: number }>;
 }
 
-interface PlanItem {
-  task: string;
-  type?: string;
-  tags?: string[];
-  needsMultiPerspective?: boolean;
-  reasoningEffort?: "high" | "max";
-  recommendedTier?: "fast" | "standard" | "thinking";
-  children?: PlanItem[];
-  /** Phase 3 上下文场景 */
-  contextScene?: string;
-  /** Phase 3 上下文人物 */
-  contextPersona?: string;
-}
+
 
 interface PlanContext {
   parentId?: string;
