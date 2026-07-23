@@ -154,8 +154,8 @@ export async function runReActLoop(
       if (forceWrite && REACT_DEBUG)
         console.error(`[TRACE write_file] react-loop: forceTool=required (loops=${loops})`);
       // reasoning_effort 和 tool_choice 均不发送——DeepSeek Flash 不支持，Pro 需 extra_body 配套
-      // FIX-02: forceWrite 仅对 Pro/Reasoner 发送——Flash 返回 400 on tool_choice
-      const shouldForce = forceWrite && (model.includes("pro") || model.includes("reasoner"));
+      // FIX-02: forceWrite 仅对支持 tool_choice 的模型发送（由 capabilities.supportsToolChoice 声明）
+      const shouldForce = forceWrite && (llm.capabilities?.supportsToolChoice === true);
       const res = await resilienceFactory.execute("llm-call", async () => await llm.chat(model, messages, toolDefs, undefined, shouldForce ? forceWrite : undefined));
       const callElapsed = Date.now() - callStart;
 

@@ -175,7 +175,7 @@ function loadKeysFromConfig(keyStore: KeyStore | undefined, existingKeys: Set<st
 
 /**
  * 从 models.json 解析模型能力声明——返回 { modelName → ModelCapabilities } 映射。
- * modelStore 不可用时静默降级为空 Map，adapter 回退到字符串匹配。
+ * modelStore 不可用时静默降级为空 Map，adapter 回退到保守默认值（thinking=false / 不降级 / 不强制 tool_choice）。
  */
 function resolveModelCaps(modelStore?: ModelStore): Map<string, ModelCapabilities> {
   const result = new Map<string, ModelCapabilities>();

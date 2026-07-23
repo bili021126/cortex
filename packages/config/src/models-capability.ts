@@ -21,5 +21,7 @@ export function resolveModelCapabilities(entry: ModelEntry): ModelCapabilities {
     streaming: capabilitySet.has("streaming"),
     maxOutputTokens: entry.maxOutputTokens ?? 65536,
     contextWindow: entry.contextWindow ?? 1_048_576,
+    degradesTo: entry.degradesTo,
+    supportsToolChoice: entry.supportsToolChoice,
   };
 }

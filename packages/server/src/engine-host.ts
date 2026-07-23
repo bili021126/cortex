@@ -31,9 +31,12 @@ import {
   ENV_DEEPSEEK_REASONER_API_KEY,
   DEFAULT_LLM_BASE_URL,
   DEFAULT_LLM_CHAT_MODEL,
+  DEFAULT_LLM_REASONER_MODEL,
+  resolveModelCapabilities,
   type ConfigFileReader,
   type ConfigFileWriter,
 } from "@cortex/config";
+import type { ModelCapabilities } from "@cortex/shared";
 import { HealthCollector } from "@cortex/telemetry";
 import type { IScheduler, ConfirmGate } from "@cortex/scheduler";
 import type {
@@ -232,11 +235,17 @@ function createLlmAdapters(stores: ConfigStores): Map<string, LlmAdapter> {
 
   const fallbackKey = process.env[ENV_DEEPSEEK_API_KEY];
 
+  // 从 models.json 解析模型能力声明——驱动 _shouldEnableThinking() + maxTokens
+  const modelCaps = resolveModelCaps(stores.modelStore);
+  const chatCaps = modelCaps.get(llmChatModel) ?? modelCaps.get(DEFAULT_LLM_CHAT_MODEL);
+  const reasonerCaps = modelCaps.get(llmReasonerModel) ?? modelCaps.get(DEFAULT_LLM_REASONER_MODEL);
+
   const makeAdapter = (
     key: string,
     label: string,
     chatModelOverride?: string,
     extra?: { reasoningEffort?: "high" | "max" },
+    caps?: ModelCapabilities,
   ): LlmAdapter =>
     new LlmAdapter({
       apiKey: key,
@@ -245,31 +254,47 @@ function createLlmAdapters(stores: ConfigStores): Map<string, LlmAdapter> {
       reasonerModel: llmReasonerModel,
       reasoningEffort: extra?.reasoningEffort,
       label,
+      capabilities: caps,
+      maxTokens: caps?.maxOutputTokens,
     });
 
   // Cyrene
   const cyreneKey = process.env[ENV_DEEPSEEK_CYRENE_API_KEY] || fallbackKey;
   if (cyreneKey) {
-    llms.set(LLM_KEY_NAMES.CYRENE, makeAdapter(cyreneKey, "cyrene", llmCyreneChatModel));
+    llms.set(LLM_KEY_NAMES.CYRENE, makeAdapter(cyreneKey, "cyrene", llmCyreneChatModel, undefined, chatCaps));
   }
 
   // Ganyu
   const ganyuKey = process.env[ENV_DEEPSEEK_GANYU_API_KEY] || fallbackKey;
   if (ganyuKey) {
-    llms.set(LLM_KEY_NAMES.GANYU, makeAdapter(ganyuKey, "reasoner", llmGanyuChatModel, { reasoningEffort: llmReasoningEffort }));
+    llms.set(LLM_KEY_NAMES.GANYU, makeAdapter(ganyuKey, "reasoner", llmGanyuChatModel, { reasoningEffort: llmReasoningEffort }, reasonerCaps));
   }
 
   // Chat pool
   const chatKey = process.env[ENV_DEEPSEEK_CHAT_API_KEY] || fallbackKey;
   if (chatKey) {
-    llms.set(LLM_KEY_NAMES.CHAT, makeAdapter(chatKey, "chat"));
+    llms.set(LLM_KEY_NAMES.CHAT, makeAdapter(chatKey, "chat", undefined, undefined, chatCaps));
   }
 
   // Reasoner
   const reasonerKey = process.env[ENV_DEEPSEEK_REASONER_API_KEY] || fallbackKey;
   if (reasonerKey) {
-    llms.set(LLM_KEY_NAMES.REASONER, makeAdapter(reasonerKey, "reasoner", undefined, { reasoningEffort: llmReasoningEffort }));
+    llms.set(LLM_KEY_NAMES.REASONER, makeAdapter(reasonerKey, "reasoner", undefined, { reasoningEffort: llmReasoningEffort }, reasonerCaps));
   }
 
   return llms;
+}
+
+/** 从 ModelStore 解析模型能力声明——返回 { modelName → ModelCapabilities } 映射 */
+function resolveModelCaps(modelStore: ModelStore): Map<string, ModelCapabilities> {
+  const result = new Map<string, ModelCapabilities>();
+  try {
+    const models = modelStore.listModels();
+    for (const [modelName, entry] of Object.entries(models)) {
+      result.set(modelName, resolveModelCapabilities(entry));
+    }
+  } catch {
+    // models.json 不可用时静默降级为空 Map
+  }
+  return result;
 }

@@ -2,8 +2,10 @@
 // G1-4: LLM adapter 的 console.log 已通过 telemetry console-bridge 间接收敛到遥测
 // 无需改为 observer.emit——bootstrap 阶段 installConsoleBridge(observer) 后所有 console.log
 // 自动桥接到 PipelineObserver，实现全量收敛。保留裸 console.log 以便无 bridge 场景兜底。
+// 例外：llm.thinking_fallback 使用 recordTelemetry 直报，不依赖桥接。
 import type { LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter, ReasoningEffort } from "@cortex/shared";
 import { SimpleCircuitBreaker } from "@cortex/resilience";
+import { recordTelemetry } from "@cortex/telemetry";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -194,6 +196,11 @@ export class LlmAdapter {
   /** Get reasoner model name (MetaAgent specific). Falls back to chatModel if not set. */
   get reasonerModel(): string {
     return this.config.reasonerModel ?? this.config.chatModel ?? "deepseek-v4-flash";
+  }
+
+  /** 模型能力声明——由 models.json 注册表注入，替代字符串匹配推断 */
+  get capabilities(): import("@cortex/shared").ModelCapabilities | undefined {
+    return this.config.capabilities;
   }
 
   /** Send chat request, returns text or tool calls. Returns cached response on hit. */
@@ -427,14 +434,15 @@ export class LlmAdapter {
         error: (e as Error).message.slice(0, 200),
       });
       // FIX-09: Flash→Pro 降级——429/503 时自动切换。
-      // _degradeAttempted 显式守卫：最多降级一次，不依赖字符串替换的副作用终止递归。
+      // _degradeAttempted 显式守卫：最多降级一次。
+      // 降级目标由 capabilities.degradesTo 声明决定，不再靠字符串匹配。
       const _err = e as Error;
       const statusMatch = _err.message.match(/(\d{3})/);
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
-      if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
-        const fallbackModel = model.replace("flash", "pro");
-        console.log(`[telemetry] model.degraded from=${model} to=${fallbackModel}`);
-        return await this.chat(fallbackModel, messages, tools, reasoningEffort, toolChoice, true);
+      const degradeTarget = this.config.capabilities?.degradesTo;
+      if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
+        console.log(`[telemetry] model.degraded from=${model} to=${degradeTarget}`);
+        return await this.chat(degradeTarget, messages, tools, reasoningEffort, toolChoice, true);
       }
       throw e;
     }
@@ -579,14 +587,15 @@ export class LlmAdapter {
         error: (e as Error).message.slice(0, 200),
       });
       // FIX-09: Flash→Pro 降级——429/503 时自动切换。
-      // _degradeAttempted 显式守卫：最多降级一次，不依赖字符串替换的副作用终止递归。
+      // _degradeAttempted 显式守卫：最多降级一次。
+      // 降级目标由 capabilities.degradesTo 声明决定，不再靠字符串匹配。
       const _err = e as Error;
       const statusMatch = _err.message.match(/(\d{3})/);
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
-      if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && model.includes("flash")) {
-        const fallbackModel = model.replace("flash", "pro");
-        console.log(`[telemetry] model.degraded from=${model} to=${fallbackModel}`);
-        return await this.chatStream(fallbackModel, messages, tools, onChunk, reasoningEffort, _toolChoice, true, signal);
+      const degradeTarget = this.config.capabilities?.degradesTo;
+      if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
+        console.log(`[telemetry] model.degraded from=${model} to=${degradeTarget}`);
+        return await this.chatStream(degradeTarget, messages, tools, onChunk, reasoningEffort, _toolChoice, true, signal);
       }
       throw e;
     }
@@ -621,12 +630,12 @@ export class LlmAdapter {
   }
 
   /**
-   * DeepSeek V4 thinking 模式判定——基于能力声明优先，回退模型名匹配。
+   * DeepSeek V4 thinking 模式判定——基于能力声明，拒绝字符串猜测。
    *
    * 判定逻辑：
    *   1. 若 config.capabilities 已注入 → 直接读取 capabilities.thinking
    *   2. 若 config.extraBody 已显式设置 thinking → 视为已启用（避免双重注入）
-   *   3. 回退：模型名包含 "pro" 或 "reasoner" → 启用（向后兼容）
+   *   3. 无 capabilities 时发遥测警告后返回 false（保守，不再靠模型名猜测）
    */
   private _shouldEnableThinking(model: string): boolean {
     // 优先级 1：capabilities 声明（由 models.json 注册表驱动）
@@ -637,8 +646,9 @@ export class LlmAdapter {
     if (this.config.extraBody && "thinking" in this.config.extraBody) {
       return false; // 已由 extraBody 承载，chat() 不再重复设置
     }
-    // 优先级 3：回退——模型名匹配（向后兼容未注入 capabilities 的场景）
-    return model.includes("pro") || model.includes("reasoner");
+    // 优先级 3：无 capabilities 时发遥测警告，返回 false（拒绝字符串猜测）
+    void recordTelemetry("llm.thinking_fallback", 1, [{ key: "model", value: model }]);
+    return false;
   }
 
   private async _fetchWithRetry(url: string, options: RequestInit, attempt = 1, externalSignal?: AbortSignal): Promise<Response> {

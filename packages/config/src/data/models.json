@@ -8,6 +8,7 @@
       "thinking": false,
       "maxOutputTokens": 65536,
       "contextWindow": 1048576,
+      "degradesTo": "deepseek-v4-pro",
       "defaultFor": ["fix", "review", "inspector", "ops", "browser", "api", "data", "doc-govern", "loop", "butler"]
     },
     "deepseek-v4-pro": {
@@ -16,6 +17,7 @@
       "thinking": true,
       "maxOutputTokens": 393216,
       "contextWindow": 1048576,
+      "supportsToolChoice": true,
       "reasoningEffortLevels": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
       "defaultFor": ["code", "analysis", "meta"]
     }

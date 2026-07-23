@@ -386,6 +386,10 @@ export interface ModelCapabilities {
   maxOutputTokens: number;
   /** 上下文窗口大小（DeepSeek V4: 1M tokens） */
   contextWindow: number;
+  /** Flash→Pro 降级目标模型 ID。缺省则不降级。 */
+  degradesTo?: string;
+  /** 是否支持 tool_choice 参数（Pro 支持，Flash 不支持）。未声明时保守=false。 */
+  supportsToolChoice?: boolean;
 }
 
 /** LLM 适配器配置——DeepSeek V4 全面对齐 */

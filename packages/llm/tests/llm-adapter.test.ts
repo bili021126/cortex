@@ -191,7 +191,18 @@ describe("LlmAdapter", () => {
         }),
       );
 
-    const degradeAdapter = new LlmAdapter({ ...MOCK_CONFIG, label: "test" });
+    const degradeAdapter = new LlmAdapter({
+      ...MOCK_CONFIG,
+      label: "test",
+      capabilities: {
+        thinking: false,
+        functionCalling: true,
+        streaming: true,
+        maxOutputTokens: 65536,
+        contextWindow: 1_048_576,
+        degradesTo: "deepseek-v4-pro",
+      },
+    });
     const resp = await degradeAdapter.chat(
       "deepseek-v4-flash",
       [{ role: "user", content: "test degradation" }],

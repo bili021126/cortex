@@ -31,6 +31,10 @@ export interface ModelEntry {
   contextWindow?: number;
   /** 支持的 reasoning_effort 等级列表（仅 thinking 模型） */
   reasoningEffortLevels?: string[];
+  /** Flash→Pro 降级目标模型 ID。缺省则不降级。 */
+  degradesTo?: string;
+  /** 是否支持 tool_choice 参数。缺省则保守=false。 */
+  supportsToolChoice?: boolean;
 }
 
 /** models.json 顶层结构 */
