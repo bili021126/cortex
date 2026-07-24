@@ -6,6 +6,14 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../shared" }
+    {
+      "path": "../resilience/tsconfig.src.json"
+    },
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../telemetry"
+    }
   ]
 }

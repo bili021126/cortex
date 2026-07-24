@@ -1,7 +1,59 @@
 {
   "files": [],
   "references": [
-    { "path": "./tsconfig.src.json" },
-    { "path": "./tsconfig.test.json" }
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../context-manager"
+    },
+    {
+      "path": "../governance/tsconfig.src.json"
+    },
+    {
+      "path": "../llm"
+    },
+    {
+      "path": "../logging"
+    },
+    {
+      "path": "../memory"
+    },
+    {
+      "path": "../memory-store/tsconfig.src.json"
+    },
+    {
+      "path": "../notification"
+    },
+    {
+      "path": "../platform/tsconfig.src.json"
+    },
+    {
+      "path": "../plugin-runner"
+    },
+    {
+      "path": "../prompt-kit"
+    },
+    {
+      "path": "../resilience/tsconfig.src.json"
+    },
+    {
+      "path": "../scheduler/tsconfig.src.json"
+    },
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../skill-kit"
+    },
+    {
+      "path": "../telemetry"
+    },
+    {
+      "path": "./tsconfig.src.json"
+    },
+    {
+      "path": "./tsconfig.test.json"
+    }
   ]
 }

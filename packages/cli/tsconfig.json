@@ -7,14 +7,50 @@
   },
   "include": ["src"],
   "references": [
-    { "path": "../config" },
-    { "path": "../protocol" },
-    { "path": "../parser" },
-    { "path": "../engine/tsconfig.src.json" },
-        { "path": "../memory-store/tsconfig.src.json" },
-        { "path": "../platform/tsconfig.src.json" },
-    { "path": "../llm" },
-    { "path": "../shared" },
-    { "path": "../tools" }
+    {
+      "path": "../client"
+    },
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../doctor"
+    },
+    {
+      "path": "../engine/tsconfig.src.json"
+    },
+    {
+      "path": "../governance/tsconfig.src.json"
+    },
+    {
+      "path": "../llm"
+    },
+    {
+      "path": "../memory-store/tsconfig.src.json"
+    },
+    {
+      "path": "../parser"
+    },
+    {
+      "path": "../platform/tsconfig.src.json"
+    },
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../scheduler/tsconfig.src.json"
+    },
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../skill-kit"
+    },
+    {
+      "path": "../telemetry"
+    },
+    {
+      "path": "../tools"
+    }
   ]
 }

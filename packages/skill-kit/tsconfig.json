@@ -5,5 +5,22 @@
     "rootDir": "./src",
     "noUnusedLocals": false
   },
-  "include": ["src"]
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../memory-store/tsconfig.src.json"
+    },
+    {
+      "path": "../pattern-extractor"
+    },
+    {
+      "path": "../platform/tsconfig.src.json"
+    },
+    {
+      "path": "../shared"
+    }
+  ]
 }

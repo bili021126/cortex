@@ -2,6 +2,17 @@
   "files": [],
   "compilerOptions": { "composite": true },
   "references": [
-    { "path": "./tsconfig.src.json" }
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../memory-store/tsconfig.src.json"
+    },
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "./tsconfig.src.json"
+    }
   ]
 }

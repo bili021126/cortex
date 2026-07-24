@@ -1,6 +1,26 @@
 {
   "files": [],
   "references": [
-    { "path": "./tsconfig.src.json" }
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../fsm-compiler/tsconfig.src.json"
+    },
+    {
+      "path": "../llm"
+    },
+    {
+      "path": "../memory"
+    },
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../telemetry"
+    },
+    {
+      "path": "./tsconfig.src.json"
+    }
   ]
 }

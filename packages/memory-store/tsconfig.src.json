@@ -8,7 +8,10 @@
   "include": ["src"],
   "references": [
     { "path": "../config" },
+    { "path": "../fsm-compiler/tsconfig.src.json" },
+    { "path": "../llm" },
     { "path": "../memory" },
-    { "path": "../shared" }
+    { "path": "../shared" },
+    { "path": "../telemetry" }
   ]
 }
