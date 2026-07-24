@@ -258,10 +258,13 @@ async function main() {
     }
 
     // 构建 vitest 参数
-    // 引擎包测试文件巨多，多线程 OOM；强制单线程
-    const vitestArgs = ["vitest", "run", "--pool=threads"];
+    // pool=forks：每个测试文件独立子进程，不共享 V8 堆——
+    // 规避 Node24 + vitest2.1.9 threads pool 共享堆触发的 `node->IsInUse()` V8 致命崩溃。
+    // 门禁场景稳定性优先于速度，forks 是正确取舍。
+    const vitestArgs = ["vitest", "run", "--pool=forks"];
     if (files.length > 40) {
-      vitestArgs.push("--poolOptions.threads.maxThreads=1", "--poolOptions.threads.minThreads=1");
+      // 引擎包测试文件巨多，强制单 fork 串行，避免并发子进程 OOM
+      vitestArgs.push("--poolOptions.forks.maxForks=1", "--poolOptions.forks.minForks=1");
     }
     if (!runAll) {
       for (const s of pkgSkipped) {
