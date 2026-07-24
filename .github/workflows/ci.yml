@@ -19,32 +19,8 @@ jobs:
         with:
           node-version: 24
       - run: pnpm install --frozen-lockfile
-      - name: "诊断: workspace 链接"
-        run: |
-          echo "=== node_modules/@cortex ==="
-          ls -la node_modules/@cortex/ 2>&1 || echo "(目录不存在)"
-          echo "=== packages/config/src ==="
-          ls packages/config/src/index.ts 2>&1
-          echo "=== node_modules/@cortex/config 解析 ==="
-          readlink -f node_modules/@cortex/config 2>&1 || echo "(不是 symlink)"
-      - name: "诊断: 仅构建 config"
-        run: |
-          pnpm --filter @cortex/config build
-          echo "=== config dist 产物 ==="
-          ls -la packages/config/dist/ 2>&1 | head -20
-          echo "=== dist/index.d.ts 存在? ==="
-          test -f packages/config/dist/index.d.ts && echo "YES" || echo "NO"
-      - name: "诊断: tsc 编译范围"
-        run: |
-          cd packages/shared
-          echo "=== tsc --listFiles | grep @cortex ==="
-          pnpm exec tsc --listFiles --noEmit 2>&1 | grep "@cortex" | head -20
-          echo ""
-          echo "=== tsc --showConfig ==="
-          pnpm exec tsc --showConfig 2>&1 | head -40
-          echo ""
-          echo "=== tsc traceResolution for @cortex/config ==="
-          pnpm exec tsc --noEmit --traceResolution 2>&1 | grep -B2 -A5 "@cortex/config" | head -30
+      - name: "构建全部包（依赖拓扑序）"
+        run: pnpm -r build
       - run: pnpm tsx scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
