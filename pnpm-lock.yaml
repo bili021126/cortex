@@ -373,6 +373,9 @@ importers:
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
+      '@cortex/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
