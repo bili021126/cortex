@@ -1,3 +1,4 @@
+// @ci: unit
 // config/tests/crud-chain.test.ts — ConfigStore 写入→读取→校验全链路集成测试
 import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";

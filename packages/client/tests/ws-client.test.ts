@@ -1,3 +1,4 @@
+// @ci: unit
 // client/tests/ws-client.test.ts — WebSocket 客户端核心行为测试
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CortexWSClient } from "../src/ws-client.js";

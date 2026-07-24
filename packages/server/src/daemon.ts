@@ -19,6 +19,7 @@ import { handleGateCommand } from "./ws/gate-channel.js";
 import { HttpRouter } from "./http/router.js";
 import { StateAggregator } from "./http/state-handler.js";
 import { PROTOCOL_VERSION } from "@cortex/protocol";
+import type { Socket } from "node:net";
 import type {
   WSClientCommand,
   WSSystemShutdownEvent,
@@ -166,12 +167,16 @@ export class CortexDaemon {
 
     // WS upgrade handler
     this.httpServer.on("upgrade", (req, socket, head) => {
-      this.wsGateway?.handleUpgrade(req, socket as import("node:net").Socket, head);
+      this.wsGateway?.handleUpgrade(req, socket as Socket, head);
     });
 
     // Start listening
-    await new Promise<void>((resolve) => {
-      this.httpServer!.listen(this.options.port, this.options.host, () => resolve());
+    await new Promise<void>((resolve, reject) => {
+      if (!this.httpServer) {
+        reject(new Error("Daemon: httpServer not initialized"));
+        return;
+      }
+      this.httpServer.listen(this.options.port, this.options.host, () => resolve());
     });
 
     // Write PID file
@@ -231,8 +236,9 @@ export class CortexDaemon {
 
     // Close HTTP server
     if (this.httpServer) {
+      const server = this.httpServer;
       await new Promise<void>((resolve) => {
-        this.httpServer!.close(() => resolve());
+        server.close(() => resolve());
       });
       this.httpServer = null;
     }

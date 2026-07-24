@@ -1,3 +1,4 @@
+// @ci: contract
 // tests/cross-package/llm-contract.test.ts — protocol DTO ↔ engine/llm Type 对齐验证
 import { describe, it, expect } from "vitest";
 

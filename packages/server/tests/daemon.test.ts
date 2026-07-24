@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * @cortex/server — Daemon unit tests
  *

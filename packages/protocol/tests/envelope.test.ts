@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { createEnvelope } from "../src/envelope.js";
 import { problem, ErrorType } from "../src/problem-details.js";

@@ -3,7 +3,7 @@
 // 多数 [telemetry] 前缀的 console.log 已转为 recordTelemetry 直报（见 chat/chatStream）。
 // 保留裸 console.log 的通用的 [TRACE] 调试日志和 REACT_DEBUG 下日志，不受影响。
 // llm.thinking_fallback 仍使用 recordTelemetry 直报，不依赖桥接。
-import type { ILlmService, ILlmServiceMessage, ILlmServiceResponse, LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter, ReasoningEffort } from "@cortex/shared";
+import type { ILlmService, ILlmServiceMessage, ILlmServiceResponse, LlmMessage, LlmToolCall, LlmResponse, ToolDef, LlmAdapterConfig, SafeErrorReporter, ReasoningEffort, ModelCapabilities } from "@cortex/shared";
 import { SimpleCircuitBreaker } from "@cortex/resilience";
 import { recordTelemetry } from "@cortex/telemetry";
 import * as crypto from "node:crypto";
@@ -199,7 +199,7 @@ export class LlmAdapter {
   }
 
   /** 模型能力声明——由 models.json 注册表注入，替代字符串匹配推断 */
-  get capabilities(): import("@cortex/shared").ModelCapabilities | undefined {
+  get capabilities(): ModelCapabilities | undefined {
     return this.config.capabilities;
   }
 
@@ -719,20 +719,19 @@ export class LlmAdapter {
    * 调用方获得熔断/限流/路由/遥测等全部基础设施保护。
    */
   toLlmService(): ILlmService {
-    const self = this
     return {
-      async chat(
+      chat: async (
         messages: ILlmServiceMessage[],
         options?: { maxTokens?: number; model?: string },
-      ): Promise<ILlmServiceResponse> {
+      ): Promise<ILlmServiceResponse> => {
         const llmMessages: LlmMessage[] = messages.map((m) => ({
           role: m.role,
           content: m.content,
         }))
-        const model = options?.model ?? self.config.chatModel
+        const model = options?.model ?? this.config.chatModel
         if (!model) throw new Error("LlmAdapter: chatModel is required for ILlmService.chat")
-        const maxTokens = options?.maxTokens ?? self.config.maxTokens ?? 65536
-        const res = await self.chat(model, llmMessages, [], null, undefined, false, maxTokens)
+        const maxTokens = options?.maxTokens ?? this.config.maxTokens ?? 65536
+        const res = await this.chat(model, llmMessages, [], null, undefined, false, maxTokens)
         return {
           text: res.content ?? "",
           usage: res.usage

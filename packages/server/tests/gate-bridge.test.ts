@@ -1,3 +1,4 @@
+// @ci: unit
 // server/tests/gate-bridge.test.ts — RemoteGateBridge 核心行为测试
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { RemoteGateBridge } from "../src/gate-bridge.js";

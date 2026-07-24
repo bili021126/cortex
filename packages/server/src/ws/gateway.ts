@@ -160,7 +160,7 @@ export class WSGateway {
    */
   sendTo(connId: string, channel: string, data: unknown): void {
     const conn = this.connections.get(connId);
-    if (!conn || conn.readyState !== WS_READY_STATE.OPEN) return;
+    if (conn?.readyState !== WS_READY_STATE.OPEN) return;
     const message = JSON.stringify({ channel, data });
     this._sendFrame(conn, OPCODE.TEXT, Buffer.from(message, "utf-8"));
   }

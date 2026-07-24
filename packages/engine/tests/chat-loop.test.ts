@@ -1,3 +1,4 @@
+// @ci: unit
 // engine/tests/chat-loop.test.ts — streamChat 核心行为测试
 import { describe, it, expect, vi } from "vitest";
 import { streamChat, type ChatLoopOptions } from "../src/execution/chat-loop.js";

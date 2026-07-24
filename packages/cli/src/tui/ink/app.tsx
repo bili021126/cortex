@@ -12,6 +12,7 @@ import { useReducer, useCallback, useState, useRef, useEffect, useMemo } from "r
 import type { AgentType } from "@cortex/shared";
 import { AppContext } from "./app-context.js";
 import { sessionReducer, initialSessionState } from "./session-reducer.js";
+import type { SessionState, SessionAction } from "./session-reducer.js";
 import { useEventBridge } from "./hooks/use-event-bridge.js";
 import { StatusBar } from "./status-bar.js";
 import { InputBar } from "./input-bar.js";
@@ -49,118 +50,9 @@ import { animationEngine } from "../animation/engine.js";
 // ─── Agent 排序列表（用于 Ctrl+] / Ctrl+[ 切换）──
 const AGENT_ORDER = Object.keys(CHARACTER_THEMES);
 
-export interface AppProps {
-  initialAgent?: AgentType;
-  bridge: ITuiEngineBridge;
-  registry: ICommandDispatcher;
-  registryCtx?: ICommandContext;
-  projectRoot: string;
-  /** 外部注入的交互系统实例（由 ink-entry 创建） */
-  keyRegistry?: KeyRegistry;
-  focusManager?: FocusManager;
-  commandPalette?: CommandPaletteController;
-}
-
-export function App({
-  initialAgent,
-  bridge,
-  registry,
-  registryCtx,
-  projectRoot,
-  keyRegistry: externalKeyRegistry,
-  focusManager: externalFocusManager,
-  commandPalette: externalCommandPalette,
-}: AppProps) {
-  const { stdout } = useStdout();
-  const { exit: exitApp } = useApp();
-  const rows = stdout?.rows ?? 24;
-  const columns = stdout?.columns ?? 80;
-  const [showSplash, setShowSplash] = useState(true);
-  const [exitRequested, setExitRequested] = useState(false);
-  const t = inkTheme;
-  const tokens = defaultTokens;
-
-  // ── UI 状态 ──────────────────────────────────
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  // type-ahead 队列：回合进行中用户预输入的条目，回合结束后依次自动提交
-  const [pendingInputs, setPendingInputs] = useState<string[]>([]);
-
-  // ── 交互系统实例 ────────────────────────────
-  const keyRegistry = useMemo(() => externalKeyRegistry ?? new KeyRegistry(), [externalKeyRegistry]);
-  const focusManager = useMemo(() => externalFocusManager ?? new FocusManager(), [externalFocusManager]);
-  const commandPalette = useMemo(() => externalCommandPalette ?? new CommandPaletteController(), [externalCommandPalette]);
-
-  // ── 会话恢复 ──────────────────────────────
-  const restored = useRef(false);
-  const initialState = (() => {
-    if (restored.current) return initialAgent
-      ? { ...initialSessionState, agent: initialAgent }
-      : initialSessionState;
-    const saved = loadInkSession(projectRoot);
-    if (saved) {
-      restored.current = true;
-      return {
-        ...initialSessionState,
-        agent: saved.agent,
-        messages: saved.messages,
-        sessionRestored: true,
-      };
-    }
-    restored.current = true;
-    return initialAgent
-      ? { ...initialSessionState, agent: initialAgent }
-      : initialSessionState;
-  })();
-
-  const [state, dispatch] = useReducer(sessionReducer, initialState);
-
-  // ── 自动保存 ──────────────────────────────
-  const stateRef = useRef(state);
-  stateRef.current = state;
-  const autoSaver = useRef(createAutoSaver(projectRoot, () => stateRef.current));
-
-  useEffect(() => {
-    autoSaver.current.touch();
-  }, [state.messages.length, state.planState, state.planNodes.length, state.mode, state.agent]);
-
-  useEffect(() => {
-    return () => autoSaver.current.destroy();
-  }, []);
-
-  useEffect(() => {
-    if (exitRequested) {
-      autoSaver.current.flush();
-      exitApp();
-    }
-  }, [exitRequested, exitApp]);
-
-  // ── 事件桥接 ────────────────────────────────
-  useEventBridge(dispatch);
-
-  const requestExit = useCallback(() => setExitRequested(true), []);
-  const handleSplashComplete = useCallback(() => setShowSplash(false), []);
-
-  // ── 焦点管理：初始聚焦 input ────────────────
-  useEffect(() => {
-    focusManager.focus("input");
-  }, [focusManager]);
-
-  // ── 命令面板状态同步 ─────────────────────────
-  useEffect(() => {
-    return commandPalette.onChange(() => {
-      setShowCommandPalette(commandPalette.isOpen);
-      if (commandPalette.isOpen) {
-        focusManager.pushOverlay("overlay");
-      } else {
-        focusManager.popOverlay();
-      }
-    });
-  }, [commandPalette, focusManager]);
-
-  // ── 快捷键绑定（真实 handler 注入） ────────────
-  const callbacksRef = useRef({
+// ─── Helper: 空的回调桩 ────────────────────────
+function createEmptyCallbacks() {
+  return {
     toggleCommandPalette: () => {},
     toggleSidebar: () => {},
     toggleHelp: () => {},
@@ -172,10 +64,19 @@ export function App({
     togglePlanMode: () => {},
     panelNext: () => {},
     panelPrev: () => {},
-  });
+  };
+}
 
-  // 每次渲染更新回调引用（通过 ref 保证 handler 始终最新）
-  callbacksRef.current = {
+// ─── Helper: 构造回调对象 ──────────────────────
+function buildCallbacks(
+  commandPalette: CommandPaletteController,
+  focusManager: FocusManager,
+  dispatch: React.Dispatch<SessionAction>,
+  stateRef: { current: SessionState },
+  setShowSidebar: React.Dispatch<React.SetStateAction<boolean>>,
+  setShowHelp: React.Dispatch<React.SetStateAction<boolean>>,
+) {
+  return {
     toggleCommandPalette: () => {
       if (commandPalette.isOpen) {
         commandPalette.close();
@@ -230,6 +131,130 @@ export function App({
       if (target) focusManager.focus(target);
     },
   };
+}
+
+// ─── Helper: 计算初始状态 ──────────────────────
+function computeInitialState(
+  initialAgent: AgentType | undefined,
+  projectRoot: string,
+  restored: { current: boolean },
+): SessionState {
+  if (restored.current) {
+    return initialAgent
+      ? { ...initialSessionState, agent: initialAgent }
+      : initialSessionState;
+  }
+  const saved = loadInkSession(projectRoot);
+  if (saved) {
+    restored.current = true;
+    return {
+      ...initialSessionState,
+      agent: saved.agent,
+      messages: saved.messages,
+      sessionRestored: true,
+    };
+  }
+  restored.current = true;
+  return initialAgent
+    ? { ...initialSessionState, agent: initialAgent }
+    : initialSessionState;
+}
+
+export interface AppProps {
+  initialAgent?: AgentType;
+  bridge: ITuiEngineBridge;
+  registry: ICommandDispatcher;
+  registryCtx?: ICommandContext;
+  projectRoot: string;
+  /** 外部注入的交互系统实例（由 ink-entry 创建） */
+  keyRegistry?: KeyRegistry;
+  focusManager?: FocusManager;
+  commandPalette?: CommandPaletteController;
+}
+
+export function App({
+  initialAgent,
+  bridge,
+  registry,
+  registryCtx,
+  projectRoot,
+  keyRegistry: externalKeyRegistry,
+  focusManager: externalFocusManager,
+  commandPalette: externalCommandPalette,
+}: AppProps) {
+  const { stdout } = useStdout();
+  const { exit: exitApp } = useApp();
+  const rows = stdout?.rows ?? 24;
+  const columns = stdout?.columns ?? 80;
+  const [showSplash, setShowSplash] = useState(true);
+  const [exitRequested, setExitRequested] = useState(false);
+  const t = inkTheme;
+  const tokens = defaultTokens;
+
+  // ── UI 状态 ──────────────────────────────────
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  // type-ahead 队列：回合进行中用户预输入的条目，回合结束后依次自动提交
+  const [pendingInputs, setPendingInputs] = useState<string[]>([]);
+
+  // ── 交互系统实例 ────────────────────────────
+  const keyRegistry = useMemo(() => externalKeyRegistry ?? new KeyRegistry(), [externalKeyRegistry]);
+  const focusManager = useMemo(() => externalFocusManager ?? new FocusManager(), [externalFocusManager]);
+  const commandPalette = useMemo(() => externalCommandPalette ?? new CommandPaletteController(), [externalCommandPalette]);
+
+  // ── 会话恢复 ──────────────────────────────
+  const restored = useRef(false);
+  const initialState = computeInitialState(initialAgent, projectRoot, restored);
+
+  const [state, dispatch] = useReducer(sessionReducer, initialState);
+
+  // ── 自动保存 ──────────────────────────────
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const autoSaver = useRef(createAutoSaver(projectRoot, () => stateRef.current));
+
+  useEffect(() => {
+    autoSaver.current.touch();
+  }, [state.messages.length, state.planState, state.planNodes.length, state.mode, state.agent]);
+
+  useEffect(() => {
+    return () => autoSaver.current.destroy();
+  }, []);
+
+  useEffect(() => {
+    if (exitRequested) {
+      autoSaver.current.flush();
+      exitApp();
+    }
+  }, [exitRequested, exitApp]);
+
+  // ── 事件桥接 ────────────────────────────────
+  useEventBridge(dispatch);
+
+  const requestExit = useCallback(() => setExitRequested(true), []);
+  const handleSplashComplete = useCallback(() => setShowSplash(false), []);
+
+  // ── 焦点管理：初始聚焦 input ────────────────
+  useEffect(() => {
+    focusManager.focus("input");
+  }, [focusManager]);
+
+  // ── 命令面板状态同步 ─────────────────────────
+  useEffect(() => {
+    return commandPalette.onChange(() => {
+      setShowCommandPalette(commandPalette.isOpen);
+      if (commandPalette.isOpen) {
+        focusManager.pushOverlay("overlay");
+      } else {
+        focusManager.popOverlay();
+      }
+    });
+  }, [commandPalette, focusManager]);
+
+  // ── 快捷键绑定（真实 handler 注入） ────────────
+  const callbacksRef = useRef(createEmptyCallbacks());
+  callbacksRef.current = buildCallbacks(commandPalette, focusManager, dispatch, stateRef, setShowSidebar, setShowHelp);
 
   // 注册带真实 handler 的快捷键绑定
   useEffect(() => {

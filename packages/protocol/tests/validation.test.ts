@@ -1,3 +1,4 @@
+// @ci: unit
 import { describe, it, expect } from "vitest";
 import { isProtocolEnvelope, isProblemDetails, isWSClientCommand, isWSMessage } from "../src/validation.js";
 
