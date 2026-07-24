@@ -94,9 +94,9 @@ function validateToolAdapter(adapter: Tool, serverId: string, rawDef: McpToolDef
     issues.push(`category should be Search, got ${adapter.category}`);
   }
 
-  // 4. level 应为 L0（MCP 工具不走 ConfirmGate）
-  if (adapter.level !== ReversibilityLevel.L0) {
-    issues.push(`level should be L0, got ${adapter.level}`);
+  // 4. level 应为 L2（MCP 工具默认走 ConfirmGate 确认，H13 安全强化）
+  if (adapter.level !== ReversibilityLevel.L2) {
+    issues.push(`level should be L2, got ${adapter.level}`);
   }
 
   // 5. description 非空（原始可能缺失，适配器应兜底）

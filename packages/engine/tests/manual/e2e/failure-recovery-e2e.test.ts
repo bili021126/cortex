@@ -19,6 +19,7 @@ import { createE2eMockFactory } from "../../fixtures/mock-llm-factory.js";
 import { Scheduler } from "../../../src/core/scheduler.js";
 import { createAgent } from "../../../src/components/index.js";
 import { codeAgentConfig, fixAgentConfig } from "../../../src/agents/registry.js";
+import { DegradationBoundary } from "../../../src/core/degradation-boundary.js";
 
 describe("异常恢复路径: 失败→replan→重试→超配额→降级", () => {
   if (process.env.CI) return; // 需要真实 LLM，CI 跳过
@@ -94,7 +95,6 @@ describe("异常恢复路径: 失败→replan→重试→超配额→降级", ()
 
   it("超过配额后降级路径可达 — DegradationBoundary 不抛异常", { timeout: 120000 }, () => {
     // 模拟 DegradationBoundary 降级调用
-    const { DegradationBoundary } = require("../../../src/core/degradation-boundary.js");
     expect(() => {
       DegradationBoundary.handle(new Error("模拟超配额降级"), "scheduler", "warn");
     }).not.toThrow();

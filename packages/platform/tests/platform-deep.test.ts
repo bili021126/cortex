@@ -9,7 +9,11 @@ describe("platform deep", () => {
     toolkit.setWorkspaceRoot("/tmp");
     const gateMock = {
       needsConfirmation: vi.fn().mockReturnValue(false),
-      check: vi.fn(),
+      check: vi.fn((level: string, ctx: { agentType: string; toolName: string }) => ({
+        approved: !gateMock.needsConfirmation(level, ctx),
+        reason: "mock",
+        score: 0,
+      })),
       request: vi.fn(),
       waitFor: vi.fn(),
       recordDecision: vi.fn(),
