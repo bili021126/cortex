@@ -719,6 +719,10 @@ importers:
         version: 2.1.9(@types/node@22.19.17)
 
   packages/tools:
+    dependencies:
+      '@cortex/config':
+        specifier: workspace:*
+        version: link:../config
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
