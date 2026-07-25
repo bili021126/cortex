@@ -14,6 +14,7 @@ export default tseslint.config(
       ".cortex/",
       "projects/",
       "**/coverage/",
+      "packages/desktop/src/renderer/**",
       "packages/vitest.ci.base.ts",
       "**/vitest.config.ts",
       "**/vite.config.ts",
