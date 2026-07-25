@@ -21,7 +21,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: "构建全部包（tsc -b project refs + 非 TS 产物）"
         run: |
-          npx tsc -b tsconfig.json
+          pnpm exec tsc -b tsconfig.json
           pnpm -r build
       - run: pnpm tsx scripts/ci-gate.ts
         env:
