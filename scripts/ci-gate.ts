@@ -158,7 +158,7 @@ async function main() {
   if (!dryRun) {
     console.log("\n🔒 [门禁 1/4] tsc -b 全量增量编译检查...");
     try {
-      const tscResult = run("npx", ["tsc", "-b", "tsconfig.json"], ROOT);
+      const tscResult = run("pnpm", ["exec", "tsc", "-b", "tsconfig.json"], ROOT);
       if (!tscResult.ok) {
         console.error("❌ tsc -b 失败，阻断");
         process.exit(1);
@@ -172,7 +172,7 @@ async function main() {
     // ── 门禁 2/4：ESLint ──
     console.log("\n🔒 [门禁 2/4] eslint packages/**/src — 全包检查...");
     try {
-      const eslintResult = run("npx", ["eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
+      const eslintResult = run("pnpm", ["exec", "eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
       if (!eslintResult.ok) {
         const problems = eslintResult.stdout.match(/✖ \d+ problems?/);
         console.error(`❌ eslint 失败${problems ? " — " + problems[0] : ""}`);
