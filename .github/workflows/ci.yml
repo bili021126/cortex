@@ -19,8 +19,10 @@ jobs:
         with:
           node-version: 24
       - run: pnpm install --frozen-lockfile
-      - name: "构建全部包（依赖拓扑序）"
-        run: pnpm -r build
+      - name: "构建全部包（tsc -b project refs + 非 TS 产物）"
+        run: |
+          npx tsc -b tsconfig.json
+          pnpm -r build
       - run: pnpm tsx scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
