@@ -261,7 +261,7 @@ async function main() {
     // pool=forks：每个测试文件独立子进程，不共享 V8 堆——
     // 规避 Node24 + vitest2.1.9 threads pool 共享堆触发的 `node->IsInUse()` V8 致命崩溃。
     // 门禁场景稳定性优先于速度，forks 是正确取舍。
-    const vitestArgs = ["vitest", "run", "--pool=forks"];
+    const vitestArgs = ["vitest", "run", "--pool=forks", "--testTimeout=60000"];
     if (files.length > 40) {
       // 引擎包测试文件巨多，强制单 fork 串行，避免并发子进程 OOM
       vitestArgs.push("--poolOptions.forks.maxForks=1", "--poolOptions.forks.minForks=1");
