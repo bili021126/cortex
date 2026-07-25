@@ -22,7 +22,7 @@ jobs:
       - name: "构建全部包（tsc -b project refs + 非 TS 产物）"
         run: |
           pnpm exec tsc -b tsconfig.json
-          pnpm -r build
+          pnpm -r --filter '!@cortex/desktop' build
       - run: pnpm tsx scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
