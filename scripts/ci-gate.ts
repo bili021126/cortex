@@ -282,8 +282,13 @@ async function main() {
     if (!r.ok) allOk = false;
 
     const pkgLabel = relative(ROOT, pkgDir);
-    const status = r.ok ? "✅" : "❌";
-    console.log(`   ${status} ${pkgLabel} — ${passed}/${total} passed`);
+    const status = r.ok ? "\u2705" : "\u274C";
+    console.log(`   ${status} ${pkgLabel} \u2014 ${passed}/${total} passed`);
+    if (!r.ok) {
+      // 打印失败详情供诊断
+      const failLines = clean.split("\n").filter(l => /FAIL|AssertionError|Error:|expected|timed out/i.test(l)).slice(0, 20);
+      for (const fl of failLines) console.log(`      ${fl.trim()}`);
+    }
   }
 
   console.log("");
