@@ -1,4 +1,4 @@
-// @ci: unit
+// @ci: integration
 /**
  * read-write-consistency.test.ts — 艾尔海森 Data 读写一致性验证
  *

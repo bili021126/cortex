@@ -50,6 +50,11 @@ class FileBackend implements MemoryStoreBackend {
   private _linksPath = "";
   private _prettyPrint: boolean;
   private _flushQueue: Promise<unknown> = Promise.resolve();
+  /** per-entry persist 锁：防止同一 id 的并发 persist 产生 .tmp 竞争（Linux ext4 无强制文件锁）
+   *  commitMemory 的 fire-and-forget persist 与 close/flushAll 的同步 persist
+   *  可能对同一 entry 同时写 .tmp → rename，先完成者消费掉 tmp 后第二方 ENOENT。
+   *  key=entryId, value=进行中 persist Promise，同 id 的后续 persist 排队等待。 */
+  private _persistLocks = new Map<string, Promise<void>>();
 
   /** 串行化 flush 操作，防止并发 rename 竞争 */
   private _serializedFlush<T>(fn: () => Promise<T>): Promise<T> {
@@ -118,11 +123,22 @@ class FileBackend implements MemoryStoreBackend {
   }
 
   async persist(entry: MemoryEntry): Promise<void> {
-    const filePath = path.join(this._entriesDir, `${entry.id}.json`);
-    const tmpPath = filePath + ".tmp";
-    const json = JSON.stringify(entry, null, this._prettyPrint ? 2 : undefined);
-    await fs.writeFile(tmpPath, json, "utf-8");
-    await fs.rename(tmpPath, filePath);
+    // per-entry 串行化：同一 id 的并发 persist 排队执行，消除 .tmp rename 竞态
+    const id = entry.id;
+    const existing = this._persistLocks.get(id) ?? Promise.resolve();
+    const next = existing.then(async () => {
+      const filePath = path.join(this._entriesDir, `${id}.json`);
+      const tmpPath = filePath + ".tmp";
+      const json = JSON.stringify(entry, null, this._prettyPrint ? 2 : undefined);
+      await fs.writeFile(tmpPath, json, "utf-8");
+      await fs.rename(tmpPath, filePath);
+    });
+    this._persistLocks.set(id, next);
+    // 清理已完成锁，防止 Map 无限增长
+    void next.then(() => {
+      if (this._persistLocks.get(id) === next) this._persistLocks.delete(id);
+    });
+    return next;
   }
 
   async remove(id: string): Promise<void> {

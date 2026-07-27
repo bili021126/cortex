@@ -1,4 +1,4 @@
-// @ci: unit
+// @ci: integration
 /**
  * @cortex/memory-store — 全链路集成测试
  * 
