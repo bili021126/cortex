@@ -1,8 +1,8 @@
-// @ci: integration
+// @ci: unit
 /**
- * @cortex/memory-store �?全链路集成测�?
+ * @cortex/memory-store — 全链路集成测试
  * 
- * 覆盖记忆管线：写入→读取→四态转换→去重→BM25→认知评分→混合检�?
+ * 覆盖记忆管线：写入→读取→四态转换→去重→BM25→认知评分→混合检索
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
@@ -67,11 +67,11 @@ function makeEntry(id: string, accessCount: number, lastAccessedAt: number): Mem
   };
 }
 
-// ══════════════════════════════════════════�?
-// §1 写入与读�?
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
+// §1 写入与读取
+// ══════════════════════════════════════════
 
-describe("MemoryStore 写入→读�?, () => {
+describe("MemoryStore 写入→读取", () => {
   let store: MemoryStore;
 
   beforeEach(async () => {
@@ -92,7 +92,7 @@ describe("MemoryStore 写入→读�?, () => {
     expect(results[0].semantic_state).toBe("Active");
   });
 
-  it("�?kind 过滤读取", async () => {
+  it("按 kind 过滤读取", async () => {
     await store.write(makeInput({ kind: "TaskLog", summary: "log1" }));
     await store.write(makeInput({ kind: "Insight", summary: "insight1" }));
     expect((await store.read({ kind: "TaskLog" })).length).toBe(1);
@@ -102,11 +102,11 @@ describe("MemoryStore 写入→读�?, () => {
     for (let i = 0; i < 5; i++) await store.write(makeInput());
     const hca = await store.read({}, "HCA");
     expect(hca.length).toBe(5);
-    // HCA 不追踪热�?
+    // HCA 不追踪热度
     expect(hca[0].accessCount).toBe(0);
   });
 
-  it("建立并查询记忆关�?, async () => {
+  it("建立并查询记忆关联", async () => {
     const id1 = await store.write(makeInput());
     const id2 = await store.write(makeInput());
     const link = store.link(id1, id2, LinkType.ProducedBy);
@@ -115,11 +115,11 @@ describe("MemoryStore 写入→读�?, () => {
   });
 });
 
-// ══════════════════════════════════════════�?
-// §2 四态生命周�?
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
+// §2 四态生命周期
+// ══════════════════════════════════════════
 
-describe("MemoryStore 四态生命周�?, () => {
+describe("MemoryStore 四态生命周期", () => {
   let store: MemoryStore;
 
   beforeEach(async () => {
@@ -131,7 +131,7 @@ describe("MemoryStore 四态生命周�?, () => {
 
   afterEach(() => { store.dispose(); cleanup(); });
 
-  it("Active �?Archived �?Obliterated", async () => {
+  it("Active → Archived → Obliterated", async () => {
     const id = await store.write(makeInput());
     expect(store.has(id)).toBe(true);
 
@@ -139,12 +139,12 @@ describe("MemoryStore 四态生命周�?, () => {
     // archive 后条目仍存在
     expect(store.has(id)).toBe(true);
 
-    // obliterate 标记为湮�?
+    // obliterate 标记为湮灭
     store.obliterate(id);
-    // obliterate �?has() 取决于实�?
+    // obliterate 后 has() 取决于实现
   });
 
-  it("freeze �?obliterate", async () => {
+  it("freeze → obliterate", async () => {
     const id = await store.write(makeInput());
     store.freeze(id);
     expect(store.has(id)).toBe(true);
@@ -158,9 +158,9 @@ describe("MemoryStore 四态生命周�?, () => {
   });
 });
 
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 // §3 权重老化
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 
 describe("WeightAger 权重衰减", () => {
   it("freezeStale 对过期低权重条目执行冻结", () => {
@@ -172,7 +172,7 @@ describe("WeightAger 权重衰减", () => {
       weight: 0.01,
     };
     const frozen = ager.freezeStale([entry]);
-    // 低权�?60天未访问 �?应被冻结
+    // 低权重 60天未访问 → 应被冻结
     expect(frozen.length).toBe(1);
     expect(frozen[0].id).toBe("very-stale");
   });
@@ -186,18 +186,18 @@ describe("WeightAger 权重衰减", () => {
   });
 });
 
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 // §4 去重引擎
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 
 describe("DedupService 去重", () => {
-  it("contentHash 确定�?, () => {
+  it("contentHash 确定性", () => {
     const svc = new DedupService();
     expect(svc.contentHash("hello", { a: 1 })).toBe(svc.contentHash("hello", { a: 1 }));
     expect(svc.contentHash("hello", { a: 1 })).not.toBe(svc.contentHash("hello", { a: 2 }));
   });
 
-  it("exactMatch 重复检�?, () => {
+  it("exactMatch 重复检测", () => {
     const svc = new DedupService();
     const hash = svc.contentHash("same", { x: 1 });
     const entries: MemoryEntry[] = [makeEntry("e1", 0, 0)];
@@ -207,12 +207,12 @@ describe("DedupService 去重", () => {
   });
 });
 
-// ══════════════════════════════════════════�?
-// §5 BM25 全文检�?
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
+// §5 BM25 全文检索
+// ══════════════════════════════════════════
 
-describe("BM25Index 全文检�?, () => {
-  it("索引并搜索文�?, () => {
+describe("BM25Index 全文检索", () => {
+  it("索引并搜索文档", () => {
     const bm25 = new BM25Index();
     bm25.addDocument("d1", { text: "修复 HTTP 超时 bug" });
     bm25.addDocument("d2", { text: "优化内存分配" });
@@ -223,7 +223,7 @@ describe("BM25Index 全文检�?, () => {
     expect(results[0].id).toBe("d1");
   });
 
-  it("多字段索�?, () => {
+  it("多字段索引", () => {
     const bm25 = new BM25Index();
     bm25.addDocument("d1", { summary: "构建系统", payload: "pnpm workspaces monorepo" });
     const results = bm25.search("monorepo", 5);
@@ -237,9 +237,9 @@ describe("BM25Index 全文检�?, () => {
   });
 });
 
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 // §6 认知评分引擎
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 
 describe("CognitiveEngine 认知评分", () => {
   it("bayesianRelevanceScore 对匹配关键词加分", () => {
@@ -248,7 +248,7 @@ describe("CognitiveEngine 认知评分", () => {
     expect(typeof score).toBe("number");
   });
 
-  it("fourierTimeDecay 返回 0..1 之间的�?, () => {
+  it("fourierTimeDecay 返回 0..1 之间的值", () => {
     const recent = fourierTimeDecay(Date.now(), DEFAULT_COGNITIVE_CONFIG);
     const old = fourierTimeDecay(Date.now() - 365 * 24 * 60 * 60 * 1000, DEFAULT_COGNITIVE_CONFIG);
     expect(recent).toBeGreaterThanOrEqual(0);
@@ -267,18 +267,18 @@ describe("CognitiveEngine 认知评分", () => {
     expect(score).toBeGreaterThan(0);
   });
 
-  it("CognitiveEngine 类可实例�?, () => {
+  it("CognitiveEngine 类可实例化", () => {
     const engine = new CognitiveEngine(DEFAULT_COGNITIVE_CONFIG);
     expect(engine).toBeDefined();
   });
 });
 
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 // §7 混合检索器
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 
-describe("HybridRetriever 混合检�?, () => {
-  it("可实例化并配�?, () => {
+describe("HybridRetriever 混合检索", () => {
+  it("可实例化并配置", () => {
     const retriever = new HybridRetriever({
       alpha: 0.4,
       beta: 0.6,
@@ -295,11 +295,11 @@ describe("HybridRetriever 混合检�?, () => {
   });
 });
 
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 // §8 完整 E2E 管线
-// ══════════════════════════════════════════�?
+// ══════════════════════════════════════════
 
-describe("Memory 完整端到端管�?, () => {
+describe("Memory 完整端到端管线", () => {
   let store: MemoryStore;
 
   beforeEach(async () => {
@@ -318,7 +318,7 @@ describe("Memory 完整端到端管�?, () => {
     store.link(rootId, child1, LinkType.ProducedBy);
     store.link(rootId, child2, LinkType.ProducedBy);
 
-    // 检索全�?
+    // 检索全部
     const all = await store.read({});
     expect(all.length).toBe(3);
 
@@ -333,25 +333,25 @@ describe("Memory 完整端到端管�?, () => {
     // 权重老化
     const ager = new WeightAger();
     const frozen = ager.freezeStale(all);
-    // 新鲜记忆不应被冻�?
+    // 新鲜记忆不应被冻结
     expect(frozen.length).toBe(0);
   });
 
-  it("E2E: 批量写入→去重→第二次写入跳�?, async () => {
+  it("E2E: 批量写入→去重→第二次写入跳过", async () => {
     const svc = new DedupService();
     const input = makeInput({ summary: "unique", content_blob: { uid: "abc" } });
     const hash = svc.contentHash(input.summary, input.content_blob);
 
     await store.write({ ...input, content_hash: hash });
     
-    // 通过去重检�?
+    // 通过去重检测
     const entries = await store.read({});
     const dup = svc.exactMatch(hash, entries);
     // 应检测到重复
     expect(dup).toBeTruthy();
   });
 
-  it("E2E: 四条记忆→两�?kind→HCA 过滤→认知评�?, async () => {
+  it("E2E: 四条记忆→两种 kind→HCA 过滤→认知评分", async () => {
     await store.write(makeInput({ kind: "TaskLog", summary: "t1" }));
     await store.write(makeInput({ kind: "TaskLog", summary: "t2" }));
     await store.write(makeInput({ kind: "Insight", summary: "i1" }));

@@ -1,8 +1,16 @@
-// @ci: integration
+// @ci: unit
 /**
- * read-write-consistency.test.ts �?艾尔海森 Data 读写一致性验�? *
- * 验证 MemoryStore 数据写入→读取的完整环路�? *   - 字段级精确性：写入的每个字段在读回后保持不�? *   - 批量一致性：多条写入后全部可检�? *   - 特殊载荷：中�?JSON/长文�?特殊字符的保�? *   - 状态关联：写后读取不改变语义状�? *   - 幂等读取：多次读取返回相同结�? *
- * 使用 InMemoryMemoryStore——不影响磁盘�? */
+ * read-write-consistency.test.ts — 艾尔海森 Data 读写一致性验证
+ *
+ * 验证 MemoryStore 数据写入→读取的完整环路：
+ *   - 字段级精确性：写入的每个字段在读回后保持不变
+ *   - 批量一致性：多条写入后全部可检测
+ *   - 特殊载荷：中文/JSON/长文本/特殊字符的保真
+ *   - 状态关联：写后读取不改变语义状态
+ *   - 幂等读取：多次读取返回相同结果
+ *
+ * 使用 InMemoryMemoryStore——不影响磁盘
+ */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MemoryStore } from "@cortex/memory-store";
 import type { MemoryEntry, MemoryWriteInput, MemoryKind } from "@cortex/shared";
@@ -14,19 +22,19 @@ import * as os from "node:os";
 
 const SOURCE = { agentType: "code" as any, taskId: "test-rw" };
 
-/** 构造标�?MemoryWriteInput */
+/** 构造标准 MemoryWriteInput */
 function makeInput(overrides?: Partial<MemoryWriteInput>): MemoryWriteInput {
   return {
     source: overrides?.source ?? SOURCE,
     kind: overrides?.kind ?? "TaskLog",
-    summary: overrides?.summary ?? "测试读写一致�?,
-    semantic_gist: overrides?.semantic_gist ?? "读写一致性验证语义摘�?,
+    summary: overrides?.summary ?? "测试读写一致性",
+    semantic_gist: overrides?.semantic_gist ?? "读写一致性验证语义摘要",
     content_blob: overrides?.content_blob ?? { key: "value", nested: { a: 1 } },
     ...overrides,
   };
 }
 
-/** 提取 MemoryEntry 中用户可验证的字段子�?*/
+/** 提取 MemoryEntry 中用户可验证的字段子集 */
 interface VerifiableFields {
   kind: MemoryKind;
   summary: string;
@@ -47,8 +55,10 @@ function extractFields(entry: MemoryEntry): VerifiableFields {
   };
 }
 
-// ══════════════════════════════════════════�?// §1 基础读写一致�?// ══════════════════════════════════════════�?
-describe("基本读写一致�?, () => {
+// ══════════════════════════════════════════
+// §1 基础读写一致性
+// ══════════════════════════════════════════
+describe("基本读写一致性", () => {
   let store: MemoryStore;
   let tmpDir: string;
 
@@ -63,7 +73,7 @@ describe("基本读写一致�?, () => {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
   });
 
-  it("写入后立即读取——字段精确匹�?, async () => {
+  it("写入后立即读取——字段精确匹配", async () => {
     const input = makeInput({
       summary: "字段精确匹配测试",
       semantic_gist: "semantic gist for exact match",
@@ -75,7 +85,8 @@ describe("基本读写一致�?, () => {
     expect(typeof id).toBe("string");
     expect(id.length).toBeGreaterThan(0);
 
-    // 通过 peek 直接验证（不经过过滤逻辑�?    const entry = store.peek(id);
+    // 通过 peek 直接验证（不经过过滤逻辑）
+    const entry = store.peek(id);
     expect(entry).toBeDefined();
     expect(entry!.id).toBe(id);
 
@@ -89,18 +100,18 @@ describe("基本读写一致�?, () => {
   });
 
   it("写入→read({}) 可检索到新写条目", async () => {
-    await store.write(makeInput({ summary: "可检索条�? }));
+    await store.write(makeInput({ summary: "可检索条目" }));
 
     const results = await store.read({});
     expect(results.length).toBe(1);
-    expect(results[0].summary).toBe("可检索条�?);
+    expect(results[0].summary).toBe("可检索条目");
     expect(results[0].semantic_state).toBe("Active");
   });
 
-  it("写入→按 kind 过滤可精确召�?, async () => {
+  it("写入→按 kind 过滤可精确召回", async () => {
     await store.write(makeInput({ kind: "TaskLog", summary: "任务日志" }));
     await store.write(makeInput({ kind: "Insight", summary: "洞察记录" }));
-    await store.write(makeInput({ kind: "Skill", summary: "技能提�? }));
+    await store.write(makeInput({ kind: "Skill", summary: "技能提升" }));
 
     const taskLogs = await store.read({ kind: "TaskLog" });
     expect(taskLogs.length).toBe(1);
@@ -112,7 +123,7 @@ describe("基本读写一致�?, () => {
 
     const skills = await store.read({ kind: "Skill" });
     expect(skills.length).toBe(1);
-    expect(skills[0].summary).toBe("技能提�?);
+    expect(skills[0].summary).toBe("技能提升");
   });
 
   it("写入→按关键词过滤可精确召回", async () => {
@@ -137,8 +148,10 @@ describe("基本读写一致�?, () => {
   });
 });
 
-// ══════════════════════════════════════════�?// §2 多条目批量一致�?// ══════════════════════════════════════════�?
-describe("批量读写一致�?, () => {
+// ══════════════════════════════════════════
+// §2 多条目批量一致性
+// ══════════════════════════════════════════
+describe("批量读写一致性", () => {
   let store: MemoryStore;
   let tmpDir: string;
 
@@ -153,7 +166,7 @@ describe("批量读写一致�?, () => {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
   });
 
-  it("写入 N 条→read 应返回全�?N �?, async () => {
+  it("写入 N 条→read 应返回全部 N 条", async () => {
     const N = 10;
     const ids: string[] = [];
 
@@ -166,12 +179,13 @@ describe("批量读写一致�?, () => {
     }
 
     expect(ids.length).toBe(N);
-    // 所�?ID 必须唯一（无去重误判�?    expect(new Set(ids).size).toBe(N);
+    // 所有 ID 必须唯一（无去重误判）
+    expect(new Set(ids).size).toBe(N);
 
     const results = await store.read({ limit: 100 });
     expect(results.length).toBe(N);
 
-    // 每条都可�?id 找回
+    // 每条都可按 id 找回
     for (const id of ids) {
       const entry = store.peek(id);
       expect(entry).toBeDefined();
@@ -179,7 +193,7 @@ describe("批量读写一致�?, () => {
     }
   });
 
-  it("写入 N 条→每条字段各自独立不串�?, async () => {
+  it("写入 N 条→每条字段各自独立不串扰", async () => {
     const entries = [
       { summary: "条目A", semantic_gist: "gist A", content_blob: { data: "A" } },
       { summary: "条目B", semantic_gist: "gist B", content_blob: { data: "B" } },
@@ -199,25 +213,28 @@ describe("批量读写一致�?, () => {
     }
   });
 
-  it("重复写入相同内容→去重返回相�?ID", async () => {
+  it("重复写入相同内容→去重返回相同 ID", async () => {
     const input = makeInput({
-      summary: "可去重内�?,
+      summary: "可去重内容",
       content_blob: { uid: "dedup-001" },
     });
 
     const id1 = await store.write(input);
     const id2 = await store.write(input);
 
-    // 第二次写入应检测到内容哈希重复，返回相�?ID
+    // 第二次写入应检测到内容哈希重复，返回相同 ID
     expect(id2).toBe(id1);
 
-    // 存储中只应有 1 �?    const results = await store.read({});
+    // 存储中只应有 1 条
+    const results = await store.read({});
     expect(results.length).toBe(1);
   });
 });
 
-// ══════════════════════════════════════════�?// §3 特殊载荷保真�?// ══════════════════════════════════════════�?
-describe("特殊载荷保真�?, () => {
+// ══════════════════════════════════════════
+// §3 特殊载荷保真性
+// ══════════════════════════════════════════
+describe("特殊载荷保真性", () => {
   let store: MemoryStore;
   let tmpDir: string;
 
@@ -233,7 +250,7 @@ describe("特殊载荷保真�?, () => {
   });
 
   it("中文文本完整保真", async () => {
-    const chineseSummary = "「昔涟」今天在教令院查阅了《星空与深渊》的第三�?;
+    const chineseSummary = "「昔涟」今天在教令院查阅了《星空与深渊》的第三章";
     const chineseGist = "昔涟 reading a book about stars and abyss in the House of Daena";
 
     await store.write(makeInput({
@@ -298,31 +315,33 @@ describe("特殊载荷保真�?, () => {
     const longText = "A".repeat(2000) + "END_MARKER";
 
     await store.write(makeInput({
-      summary: "长文本测�?,
+      summary: "长文本测试",
       semantic_gist: longText,
     }));
 
-    const results = await store.read({ keywords: ["长文�?] });
+    const results = await store.read({ keywords: ["长文本"] });
     expect(results.length).toBe(1);
     expect(results[0].semantic_gist).toBe(longText);
     expect(results[0].semantic_gist.length).toBe(2000 + "END_MARKER".length);
     expect(results[0].semantic_gist.endsWith("END_MARKER")).toBe(true);
   });
 
-  it("�?content_blob {} 可写入并读出", async () => {
+  it("空 content_blob {} 可写入并读出", async () => {
     await store.write(makeInput({
-      summary: "�?blob",
+      summary: "空 blob",
       content_blob: {},
     }));
 
-    const results = await store.read({ keywords: ["�?blob"] });
+    const results = await store.read({ keywords: ["空 blob"] });
     expect(results.length).toBe(1);
     expect(results[0].content_blob).toEqual({});
   });
 });
 
-// ══════════════════════════════════════════�?// §4 读路径过滤不改变数据完整�?// ══════════════════════════════════════════�?
-describe("读路径不改变数据完整�?, () => {
+// ══════════════════════════════════════════
+// §4 读路径过滤不改变数据完整性
+// ══════════════════════════════════════════
+describe("读路径不改变数据完整性", () => {
   let store: MemoryStore;
   let tmpDir: string;
 
@@ -337,13 +356,14 @@ describe("读路径不改变数据完整�?, () => {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
   });
 
-  it("HCA 模式读取不修�?accessCount", async () => {
-    const id = await store.write(makeInput({ summary: "HCA 不追踪热�? }));
+  it("HCA 模式读取不修改 accessCount", async () => {
+    const id = await store.write(makeInput({ summary: "HCA 不追踪热度" }));
 
     // HCA 读取
     const hcaResults = await store.read({}, "HCA");
     expect(hcaResults.length).toBe(1);
-    // HCA 模式�?accessCount 不会被修�?    expect(hcaResults[0].accessCount).toBe(0);
+    // HCA 模式下 accessCount 不会被修改
+    expect(hcaResults[0].accessCount).toBe(0);
 
     // 验证 peek 看到的原始数据也未变
     const entry = store.peek(id);
@@ -362,9 +382,9 @@ describe("读路径不改变数据完整�?, () => {
     expect(results1[0].content_blob).toEqual(results2[0].content_blob);
   });
 
-  it("写入后数据不因后续操作而变�?, async () => {
+  it("写入后数据不因后续操作而变异", async () => {
     const id = await store.write(makeInput({
-      summary: "不变异数�?,
+      summary: "不变异数据",
       content_blob: { original: true, value: 100 },
     }));
 
@@ -373,18 +393,22 @@ describe("读路径不改变数据完整�?, () => {
       await store.read({});
     }
 
-    // 写入另一�?    await store.write(makeInput({ summary: "干扰数据" }));
+    // 写入另一条
+    await store.write(makeInput({ summary: "干扰数据" }));
 
-    // 原始条目应完全不�?    const entry = store.peek(id);
-    expect(entry!.summary).toBe("不变异数�?);
+    // 原始条目应完全不变
+    const entry = store.peek(id);
+    expect(entry!.summary).toBe("不变异数据");
     expect(entry!.content_blob).toEqual({ original: true, value: 100 });
     // 字段数不变（不会被额外注入字段）
     expect(Object.keys(entry!.content_blob)).toEqual(["original", "value"]);
   });
 });
 
-// ══════════════════════════════════════════�?// §5 生命周期转换不丢失字�?// ══════════════════════════════════════════�?
-describe("状态转换后字段完整�?, () => {
+// ══════════════════════════════════════════
+// §5 生命周期转换不丢失字段
+// ══════════════════════════════════════════
+describe("状态转换后字段完整性", () => {
   let store: MemoryStore;
   let tmpDir: string;
 
@@ -399,7 +423,7 @@ describe("状态转换后字段完整�?, () => {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* noop */ }
   });
 
-  it("Active→Archived 后字段不�?, async () => {
+  it("Active→Archived 后字段不变", async () => {
     const input = makeInput({
       summary: "归档测试",
       content_blob: { will: "be archived" },
@@ -412,7 +436,8 @@ describe("状态转换后字段完整�?, () => {
 
     store.archive(id);
 
-    // 归档后字段应完全一�?    const after = store.peek(id);
+    // 归档后字段应完全一致
+    const after = store.peek(id);
     expect(after).toBeDefined();
     expect(after!.summary).toBe(before!.summary);
     expect(after!.semantic_gist).toBe(before!.semantic_gist);
@@ -424,9 +449,9 @@ describe("状态转换后字段完整�?, () => {
     expect(beforeState).toBe("Active");
   });
 
-  it("rollback �?Pending 条目被删�?, async () => {
+  it("rollback 后 Pending 条目被删除", async () => {
     const id = store.writePending(makeInput({
-      summary: "待回�?,
+      summary: "待回滚",
       content_blob: { status: "pending" },
     }));
 
@@ -434,7 +459,8 @@ describe("状态转换后字段完整�?, () => {
 
     await store.rollback(id);
 
-    // rollback �?Pending 条目应从 _pendingEntries 中移�?    expect(store.hasPending()).toBe(false);
+    // rollback 后 Pending 条目应从 _pendingEntries 中移除
+    expect(store.hasPending()).toBe(false);
     expect(store.getPending().length).toBe(0);
   });
 });

@@ -1,25 +1,24 @@
-// @ci: integration
+// @ci: unit
 // ============================================================
-// @cortex/memory —�?FileBasedMemoryStore 单元测试
+// @cortex/memory — FileBasedMemoryStore 单元测试
 // ============================================================
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { promises as fs } from "node:fs";
+import { promises as fs, mkdtempSync } from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import { FileBasedMemoryStore } from "@cortex/memory";
 import type { MemoryWriteInput } from "@cortex/shared";
 import { LinkType } from "@cortex/shared";
 
 // ─── 测试夹具 ──────────────────────────────────
 
-const TEST_DIR = path.join(process.cwd(), "tests", ".test-data", `file-store-${Date.now()}`);
-
 function createSampleInput(overrides: Partial<MemoryWriteInput> = {}): MemoryWriteInput {
   return {
     source: { agentType: "Alhaitham", taskId: `task-${Date.now()}` },
     kind: "Insight",
     summary: "文件存储测试",
-    semantic_gist: "文件持久化语义精�?,
+    semantic_gist: "文件持久化语义摘要",
     content_blob: { key: "value" },
     ...overrides,
   };
@@ -29,17 +28,19 @@ function createSampleInput(overrides: Partial<MemoryWriteInput> = {}): MemoryWri
 
 describe("FileBasedMemoryStore", () => {
   let store: FileBasedMemoryStore;
+  let testDir: string;
 
   beforeEach(async () => {
+    testDir = mkdtempSync(path.join(os.tmpdir(), "cortex-fbm-"));
     store = new FileBasedMemoryStore({ autoFlush: true });
-    await store.init(TEST_DIR);
+    await store.init(testDir);
   });
 
   afterEach(async () => {
     await store.close();
     // 清理测试数据
     try {
-      await fs.rm(TEST_DIR, { recursive: true, force: true });
+      await fs.rm(testDir, { recursive: true, force: true });
     } catch {
       // 忽略清理错误
     }
@@ -77,7 +78,7 @@ describe("FileBasedMemoryStore", () => {
 
     it("should persist entry to disk", async () => {
       const id = await store.write(createSampleInput());
-      const entryPath = path.join(TEST_DIR, "entries", `${id}.json`);
+      const entryPath = path.join(testDir, "entries", `${id}.json`);
 
       const fileExists = await fs.access(entryPath).then(() => true).catch(() => false);
       expect(fileExists).toBe(true);
@@ -269,23 +270,24 @@ describe("FileBasedMemoryStore", () => {
   describe("data persistence across restarts", () => {
     it("should reload data from disk on re-init", async () => {
       // 写入数据
-      const id1 = await store.write(createSampleInput({ summary: "持久化测�?" }));
-      const id2 = await store.write(createSampleInput({ summary: "持久化测�?" }));
+      const id1 = await store.write(createSampleInput({ summary: "持久化测试" }));
+      const id2 = await store.write(createSampleInput({ summary: "持久化测试" }));
       await store.flush();
 
       // 关闭并重新初始化
       await store.close();
 
       const store2 = new FileBasedMemoryStore();
-      await store2.init(TEST_DIR);
+      await store2.init(testDir);
 
-      // 验证数据已恢�?      const entry1 = await store2.get(id1);
+      // 验证数据已恢复
+      const entry1 = await store2.get(id1);
       expect(entry1).toBeDefined();
-      expect(entry1!.summary).toBe("持久化测�?");
+      expect(entry1!.summary).toBe("持久化测试");
 
       const entry2 = await store2.get(id2);
       expect(entry2).toBeDefined();
-      expect(entry2!.summary).toBe("持久化测�?");
+      expect(entry2!.summary).toBe("持久化测试");
 
       await store2.close();
     });
@@ -391,7 +393,7 @@ describe("FileBasedMemoryStore", () => {
   describe("autoFlush option", () => {
     it("should work with autoFlush disabled", async () => {
       const storeNoFlush = new FileBasedMemoryStore({ autoFlush: false });
-      await storeNoFlush.init(path.join(TEST_DIR, "..", `noflush-${Date.now()}`));
+      await storeNoFlush.init(path.join(testDir, "..", `noflush-${Date.now()}`));
       const id = await storeNoFlush.write(createSampleInput());
       const entry = await storeNoFlush.get(id);
       expect(entry).toBeDefined();
