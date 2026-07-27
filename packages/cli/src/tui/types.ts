@@ -38,7 +38,8 @@ export type TuiEvent =
   | TuiCompactionEvent
   | TuiLifecycleEvent
   | TuiPlanGeneratedEvent
-  | TuiInterruptedEvent;
+  | TuiInterruptedEvent
+  | TuiTurnErrorEvent;
 
 /** 工具调用开始 */
 export interface TuiToolStartEvent {
@@ -149,6 +150,15 @@ export interface TuiCompactionEvent {
 export interface TuiPlanGeneratedEvent {
   type: "plan_generated";
   nodes: TaskNode[];
+}
+
+/** 回合 LLM/stream 错误——yield 后仍 throw 保持向后兼容 */
+export interface TuiTurnErrorEvent {
+  type: "turn_error";
+  /** 错误消息文本 */
+  error: string;
+  /** 错误来源上下文标识（如 "llm-stream" / "remote-query-loop"） */
+  context: string;
 }
 
 /** 回合被用户中断（Esc）——非错误，干净收尾 */

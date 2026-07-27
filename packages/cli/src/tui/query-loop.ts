@@ -316,8 +316,11 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
       return finalOutput;
     }
     if (streamError) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error -- Error instance, assigned in closure
-      throw streamError;
+      // H3 fix: 统一本地/远程语义——调 hooks.onError + yield 错误事件，再 throw
+      const err = streamError as Error;
+      hooks.onError?.(err, "llm-stream");
+      yield { type: "turn_error", error: err.message, context: "llm-stream" } as TuiEvent;
+      throw err;
     }
 
     if (streamResult === null) throw new Error("stream 未产生有效结果");

@@ -116,7 +116,8 @@ async function collectEventsSafe(
 describe("LLM 抛错", () => {
   it("streamChat reject → 错误从 generator 抛出、无未处理 rejection、generator 干净 done", async () => {
     // 验证：查询循环的 streamChat 在被 mock reject 后，错误以 throw 形式从 generator 传播
-    // 而非 yield 错误类型事件。.catch() 闭包已处理 promise rejection，无未处理 rejection。
+    // H3 fix: 同时 yield turn_error 事件 + 调 hooks.onError。(远程 remote-query-loop 已正确调 onError，
+    // 本地 query-loop 补上后两者语义一致）
     const bridge = mockBridge({
       streamChat: vi.fn().mockRejectedValue(new Error("LLM timeout")),
     });
@@ -130,13 +131,15 @@ describe("LLM 抛错", () => {
       hooks,
     });
 
-    // TODO: 缺陷——query-loop.ts L320 将 streamError throw 出 generator，
-    //       调用方需 try/catch。hooks.onError 也未在此路径被调用。
-    //       应改为 yield error 事件或至少调用 hooks.onError。
     const { events, error } = await collectEventsSafe(gen);
 
-    // 无事件被 yield（streamChat 立即 reject，无 chunk）
-    expect(events).toHaveLength(0);
+    // H3 fix: 现在 yield turn_error 事件（不再为零事件）
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "turn_error",
+      error: "LLM timeout",
+      context: "llm-stream",
+    });
 
     // generator 抛出 LLM timeout 错误
     expect(error).toBeDefined();
@@ -145,12 +148,13 @@ describe("LLM 抛错", () => {
     // streamChat 被调用一次
     expect(bridge.streamChat).toHaveBeenCalledTimes(1);
 
-    // hooks.onError 未被调用（缺陷：query-loop.ts 未在 streamChat 错误路径调用 hooks.onError）
-    expect(hooks.onError).not.toHaveBeenCalled();
+    // H3 fix: hooks.onError 现在被调用（含 context 参数）
+    expect(hooks.onError).toHaveBeenCalledTimes(1);
+    expect(hooks.onError).toHaveBeenCalledWith(expect.any(Error), "llm-stream");
   });
 
   it("generator 干净终止——无残留打开状态", async () => {
-    // 验证 generator 抛出后，再调用 gen.next() 返回 { done: true }
+    // 验证 generator yield turn_error 后抛出，再调用 gen.next() 返回 { done: true }
     const bridge = mockBridge({
       streamChat: vi.fn().mockRejectedValue(new Error("LLM timeout")),
     });
@@ -164,10 +168,15 @@ describe("LLM 抛错", () => {
       hooks,
     });
 
-    // 第一次 next 抛出
+    // H3 fix: 第一次 next → yield turn_error 事件
+    const first = await gen.next();
+    expect(first.done).toBe(false);
+    expect(first.value).toMatchObject({ type: "turn_error", error: "LLM timeout", context: "llm-stream" });
+
+    // 第二次 next → 抛出
     await expect(gen.next()).rejects.toThrow("LLM timeout");
 
-    // 第二次 next 返回 done:true（generator 已终止）
+    // 第三次 next 返回 done:true（generator 已终止）
     const final = await gen.next();
     expect(final.done).toBe(true);
   });
@@ -180,7 +189,7 @@ describe("LLM 抛错", () => {
 describe("流中途断", () => {
   it("chatStream 发 2 个 chunk 后 reject → 已发 chunk 不丢、错误被捕获、终止干净", async () => {
     // 场景：streamChat 先同步产生 2 个 chunk 再抛出
-    // 预期：2 个 chunk 被 yield，然后 generator 抛出错误
+    // 预期：2 个 chunk 被 yield，然后 turn_error 事件被 yield，最后 generator 抛出错误
     const bridge = mockBridge({
       streamChat: vi.fn().mockImplementation(
         async (
@@ -215,7 +224,16 @@ describe("流中途断", () => {
     expect(second.done).toBe(false);
     expect(second.value).toMatchObject({ type: "llm_chunk", content: " result" });
 
-    // 第三次 next → generator 抛出错误
+    // H3 fix: 第三个 next → yield turn_error 事件（不再直接 throw）
+    const third = await gen.next();
+    expect(third.done).toBe(false);
+    expect(third.value).toMatchObject({
+      type: "turn_error",
+      error: "stream interrupted",
+      context: "llm-stream",
+    });
+
+    // 第四次 next → generator 抛出错误
     await expect(gen.next()).rejects.toThrow("stream interrupted");
 
     // 后续 next 干净 done
@@ -517,11 +535,14 @@ describe("连续故障后可恢复", () => {
     // 第一回合：失败
     const gen1 = queryLoop(params);
 
-    // TODO: 缺陷——query-loop.ts L320 将 streamError throw 出 generator，
-    //       调用方必须 try/catch 每个回合。hooks.onError 也未在 streamChat
-    //       错误路径被调用。
+    // H3 fix: 第一回合 yield turn_error 事件 + throw 错误
     const { events: events1, error: error1 } = await collectEventsSafe(gen1);
-    expect(events1).toHaveLength(0);
+    expect(events1).toHaveLength(1);
+    expect(events1[0]).toMatchObject({
+      type: "turn_error",
+      error: "LLM unavailable",
+      context: "llm-stream",
+    });
     expect(error1).toBeDefined();
     expect(error1!.message).toBe("LLM unavailable");
 

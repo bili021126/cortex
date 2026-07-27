@@ -263,9 +263,11 @@ export async function* remoteQueryLoop(
   hooks.onStreamEnd?.();
 
   if (streamError) {
-    hooks.onError?.(streamError, "remote-query-loop");
-    // eslint-disable-next-line @typescript-eslint/only-throw-error
-    throw streamError;
+    const err = streamError as Error;
+    hooks.onError?.(err, "remote-query-loop");
+    // H3 fix: 对称化——yield 错误事件后仍 throw
+    yield { type: "turn_error", error: err.message, context: "remote-query-loop" } as TuiEvent;
+    throw err;
   }
 
   // Hook: onPostProcessOutput
