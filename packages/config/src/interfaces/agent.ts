@@ -58,9 +58,10 @@ export interface AgentDisplay {
 
 /** Agent 圆桌会议 Persona */
 export interface AgentRoundtable {
-  personaPrompt?: string;
-  personaPromptFile?: string;
-  roundtableTitle: string;
+  /** 圆桌标题 */
+  title: string;
+  /** 圆桌 persona 提示词文件路径（相对项目根） */
+  persona?: string;
 }
 
 /** agents.json 顶层结构 */

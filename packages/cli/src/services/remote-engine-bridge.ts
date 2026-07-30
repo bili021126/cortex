@@ -260,8 +260,13 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
   /** 读取昔涟记忆——GET /api/v1/memory */
   async readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
     try {
-      const queryStr = typeof query === "string" ? query : (query as { query?: string }).query ?? "";
-      const results = await this.conn.http.searchMemory(queryStr);
+      // MemoryQuery.keywords → 空格 join → HTTP query string
+      // daemon 侧 handleMemoryGet 会将 query 串 split(\s+) 还原为 keywords
+      const queryStr = query.keywords?.join(" ") ?? "";
+      const results = await this.conn.http.searchMemory(queryStr, {
+        kind: query.kind,
+        limit: query.limit,
+      });
       return results as unknown as MemoryEntry[];
     } catch {
       return [];

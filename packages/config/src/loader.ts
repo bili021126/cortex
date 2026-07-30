@@ -500,6 +500,15 @@ export function validateJsonSchema(
         }
       }
     }
+    // additionalProperties — 处理未被 properties 覆盖的键
+    if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
+      const knownKeys = new Set(Object.keys(schema.properties ?? {}));
+      for (const key of Object.keys(obj)) {
+        if (!knownKeys.has(key)) {
+          errors.push(...validateJsonSchema(obj[key], schema.additionalProperties, `${path}.${key}`));
+        }
+      }
+    }
   } else if (schema.type === "array") {
     if (!Array.isArray(data)) {
       errors.push({ path, message: schema._message ?? `期望 array，实际 ${typeof data}` });

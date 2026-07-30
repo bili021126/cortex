@@ -52,6 +52,14 @@ export const AGENT_MANIFEST_SCHEMA: JsonSchema = {
           produces: { type: "array", items: { type: "string" } },
           systemPrompt: { type: "string" },
           memoryQueryStrategy: { type: "string" },
+          roundtable: {
+            type: "object",
+            properties: {
+              title: { type: "string", minLength: 1 },
+              persona: { type: "string", minLength: 1 },
+            },
+            required: ["title"],
+          },
         },
       },
     },

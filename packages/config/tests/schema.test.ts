@@ -173,4 +173,159 @@ describe("models schema 回归", () => {
     );
     expect(errors).toHaveLength(0);
   });
+
+  it("缺 label 的模型条目——被 additionalProperties 拦截", () => {
+    const errors = validateJsonSchema(
+      {
+        "bad-model": {
+          thinking: true,
+        },
+      },
+      {
+        type: "object",
+        additionalProperties: {
+          type: "object",
+          required: ["label", "thinking"],
+          properties: {
+            label: { type: "string", minLength: 1 },
+            thinking: { type: "boolean" },
+          },
+        },
+      },
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => e.path.includes("bad-model") && e.message.includes("label"))).toBe(true);
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// additionalProperties
+// ═══════════════════════════════════════════════════
+
+describe("validateJsonSchema — additionalProperties", () => {
+  it("键在 properties 中——不触发 additionalProperties 校验", () => {
+    const errors = validateJsonSchema(
+      { name: "ok", age: 25 },
+      {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          age: { type: "integer" },
+        },
+        additionalProperties: { type: "string" },
+      },
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("额外键不合法——被 additionalProperties 拦截", () => {
+    const errors = validateJsonSchema(
+      { name: "ok", extra: 123 },
+      {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+        },
+        additionalProperties: { type: "string" },
+      },
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => e.path === "$.extra")).toBe(true);
+  });
+
+  it("无 properties 时所有键走 additionalProperties", () => {
+    const errors = validateJsonSchema(
+      { a: 1, b: "hello" },
+      {
+        type: "object",
+        additionalProperties: { type: "string" },
+      },
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => e.path === "$.a")).toBe(true);
+    expect(errors.some((e) => e.path === "$.b")).toBe(false);
+  });
+
+  it("无 additionalProperties——额外键不校验", () => {
+    const errors = validateJsonSchema(
+      { name: "ok", extra: "any" },
+      {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+        },
+      },
+    );
+    expect(errors).toHaveLength(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// Agent manifest 回归（P0-2 roundtable）
+// ═══════════════════════════════════════════════════
+
+describe("agent-manifest schema 回归 — roundtable", () => {
+  const AGENT_ENTRY_SCHEMA = {
+    type: "object",
+    required: ["type", "role"],
+    properties: {
+      type: { type: "string", minLength: 1 },
+      role: { type: "string", minLength: 1 },
+      emoji: { type: "string" },
+      roundtable: {
+        type: "object",
+        properties: {
+          title: { type: "string", minLength: 1 },
+          persona: { type: "string", minLength: 1 },
+        },
+        required: ["title"],
+      },
+    },
+  };
+
+  it("合法 roundtable——零错误", () => {
+    const errors = validateJsonSchema(
+      { type: "code", role: "dev", roundtable: { title: "测试标题", persona: "prompts/test.md" } },
+      AGENT_ENTRY_SCHEMA,
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("缺 roundtable——可选，不报错", () => {
+    const errors = validateJsonSchema(
+      { type: "code", role: "dev" },
+      AGENT_ENTRY_SCHEMA,
+    );
+    expect(errors).toHaveLength(0);
+  });
+
+  it("缺 title 的 roundtable——被拦截", () => {
+    const errors = validateJsonSchema(
+      { type: "code", role: "dev", roundtable: { persona: "prompts/test.md" } },
+      AGENT_ENTRY_SCHEMA,
+    );
+    // roundtable object is valid (optional field with missing title is ok since required is at object level)...
+    // actually the schema has required: ["title"] on roundtable, so absense of title should be caught
+    const hasTitleError = errors.some((e) => e.path.includes("roundtable"));
+    expect(hasTitleError).toBe(true);
+  });
+
+  it("缺 type 的 agent 条目——被拦截（P0-1 回归）", () => {
+    const errors = validateJsonSchema(
+      { "bad-agent": { role: "测试" } },
+      {
+        type: "object",
+        additionalProperties: {
+          type: "object",
+          required: ["type", "role"],
+          properties: {
+            type: { type: "string" },
+            role: { type: "string" },
+          },
+        },
+      },
+    );
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some((e) => e.path.includes("bad-agent") && e.message.includes("type"))).toBe(true);
+  });
 });
