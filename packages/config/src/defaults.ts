@@ -14,7 +14,7 @@ import type {
 
 /** 默认引擎配置——所有值精确匹配当前系统行为 */
 export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
-  defaultMaxLoops: 64,
+  defaultMaxLoops: 32,
   inspectorMaxLoops: 48,
   maxReplanPerNode: 10,
   maxTotalReplans: 50,

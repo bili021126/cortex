@@ -8,6 +8,8 @@
  * @since v2.7 — 横向解耦：从 @cortex/engine 迁入 @cortex/config
  */
 
+import * as fs from "node:fs";
+
 import {
   DEFAULT_MAX_TOTAL_MEMORIES,
   EMBEDDING_DIM,
@@ -18,6 +20,9 @@ import {
   MAINTENANCE_WEIGHT_THRESHOLD,
   SCHEMA_VERSION,
 } from "./constants/index.js";
+
+import { loadConfigDomain, resolveConfigDataDir, type ConfigFileReader } from "./loader.js";
+import type { TuningConfig } from "./interfaces/tuning.js";
 
 // ─── FileLock ──────────────────────────────────────
 
@@ -44,7 +49,7 @@ export const SCHEDULER_MAX_ROUNDS = 25;
 export const SCHEDULER_ROUND_TIMEOUT_MS = 300_000;
 
 /** ReAct 最大循环次数 */
-export const REACT_MAX_LOOPS = 64;
+export const REACT_MAX_LOOPS = 32;
 
 /** ManifoldGate 获取锁超时（毫秒） */
 export const DEFAULT_ACQUIRE_TIMEOUT_MS = 60_000;
@@ -155,11 +160,65 @@ export const ENGINE_DEFAULTS: EngineDefaults = {
 /**
  * 加载引擎默认配置，支持 overrides 和环境变量覆盖。
  *
- * 优先级：overrides 参数 > CORTEX_* 环境变量 > 默认值
+ * 优先级：overrides 参数 > CORTEX_* 环境变量 > tuning.json 调参域 > 硬编码兜底常量
  */
 export function loadEngineDefaults(overrides?: Partial<EngineDefaults>): EngineDefaults {
+  const fromTuning = _loadTuningDefaults();
   const env = _readEnvOverrides();
-  return { ...ENGINE_DEFAULTS, ...env, ...overrides };
+  return { ...ENGINE_DEFAULTS, ...fromTuning, ...env, ...overrides };
+}
+
+// ─── 从 tuning.json 读取 ───────────────────────────
+
+/** 缓存——避免重复文件 I/O */
+let _cachedTuningDefaults: Partial<EngineDefaults> | null = null;
+
+/**
+ * 从 tuning.json 读取调参域，映射为 Partial<EngineDefaults>。
+ * fail-open：文件缺失或解析失败时返回 {}。
+ */
+function _loadTuningDefaults(): Partial<EngineDefaults> {
+  if (_cachedTuningDefaults !== null) return _cachedTuningDefaults;
+
+  try {
+    const dataDir = resolveConfigDataDir();
+    const readFile: ConfigFileReader = (fp: string) => fs.readFileSync(fp, "utf-8");
+    const tuning = loadConfigDomain<TuningConfig>("tuning", readFile, dataDir);
+
+    if (!tuning?.tuning) {
+      _cachedTuningDefaults = {};
+      return {};
+    }
+
+    const t = tuning.tuning;
+    const result: Partial<EngineDefaults> = {};
+
+    // map tuning.execution.*
+    if (t.execution?.reactMaxLoops !== undefined) {
+      result.reactMaxLoops = t.execution.reactMaxLoops;
+    }
+
+    // map tuning.memory.*
+    if (t.memory?.vectorDedupThreshold !== undefined) {
+      result.vectorDedupThreshold = t.memory.vectorDedupThreshold;
+    }
+    if (t.memory?.staleFreezeDays !== undefined) {
+      result.staleFreezeDays = t.memory.staleFreezeDays;
+    }
+    if (t.memory?.frozenObliterateDays !== undefined) {
+      result.frozenObliterateDays = t.memory.frozenObliterateDays;
+    }
+    if (t.memory?.maintenanceWeightThreshold !== undefined) {
+      result.maintenanceWeightThreshold = t.memory.maintenanceWeightThreshold;
+    }
+
+    _cachedTuningDefaults = result;
+    return result;
+  } catch {
+    // fail-open：加载失败时回退到硬编码空白（不崩溃）
+    _cachedTuningDefaults = {};
+    return {};
+  }
 }
 
 /** CORTEX_ 环境变量 → EngineDefaults 字段映射 */

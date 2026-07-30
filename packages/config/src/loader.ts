@@ -102,7 +102,7 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
   {
     name: "agents",
     fileName: "agents.json",
-    required: true,
+    required: false,
     dataKey: "agents",
     description: "@deprecated Agent 定义集合——使用 agentManifests 域替代。保留仅用于向后兼容。",
   },

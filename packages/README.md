@@ -1,27 +1,9 @@
 # Cortex 包依赖拓扑
 
-## 层级结构
+Cortex 采用 29 包分层架构（L0–L4），依赖为严格单向 DAG。
 
-基础层（零依赖）
-  shared ← config
-    ↓
-核心层（依赖基础层）
-  engine ← memory ← memory-store ← scheduler
-  llm ← platform ← notification ← resilience
-    ↓
-能力层（依赖核心层）
-  skill-kit ← prompt-kit ← consistency ← governance
-  fsm-compiler ← parser ← pattern-extractor
-    ↓
-适配器层（依赖能力层）
-  plugin-runner ← telemetry ← logging ← testing
-  context-manager ← tools ← doctor
-    ↓
-接口层（依赖所有下层）
-  cli ← tui
+**架构真相源（漂移时以此为准）：**
+- [`PACKAGE_POSITIONING.md`](../PACKAGE_POSITIONING.md) — 人类可读的包定位与分层说明
+- [`packages/tools/src/layer-contract.ts`](tools/src/layer-contract.ts) — 机器可读分层契约（CI 门禁用）
 
-## 关键规则
-- shared 持有类型接口（不可变核心契约）
-- config 持有运行时词汇表与注册器（可扩展调度信号）
-- engine 持有执行引擎（Agent 调度 + 插件系统）
-- 禁止下层依赖上层
+上述两处为单一真相源，本文件不再维护包拓扑清单。

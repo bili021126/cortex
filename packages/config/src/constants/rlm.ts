@@ -14,7 +14,7 @@ export const RLM_MIN_CONFIDENCE = 0.6;
 export const RLM_MAX_DEPTH = 3;
 
 /** 复杂度阈值：payload 字符数低于此值不触发拆解 */
-export const RLM_MIN_COMPLEXITY_CHARS = 200;
+export const RLM_MIN_COMPLEXITY_CHARS = 500;
 
 /** light 密度压缩最大字符数 */
 export const DENSITY_LIGHT_MAX_CHARS = 150;

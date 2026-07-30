@@ -63,11 +63,11 @@ describe("@cortex/config — DEFAULT_ENGINE_CONFIG", () => {
 describe("@cortex/config — resolveConfig", () => {
   it("无参调用返回默认值副本", () => {
     const cfg = resolveConfig();
-    expect(cfg.defaultMaxLoops).toBe(64);
+    expect(cfg.defaultMaxLoops).toBe(32);
     expect(cfg.maxReplanPerNode).toBe(10);
     // 副本不可影响全局默认
     cfg.defaultMaxLoops = 999 as never;
-    expect(DEFAULT_ENGINE_CONFIG.defaultMaxLoops).toBe(64);
+    expect(DEFAULT_ENGINE_CONFIG.defaultMaxLoops).toBe(32);
   });
 
   it("部分覆盖——标量字段", () => {
@@ -107,7 +107,7 @@ describe("@cortex/config — resolveConfig", () => {
 
   it("传空对象应得到全默认值", () => {
     const cfg = resolveConfig({});
-    expect(cfg.defaultMaxLoops).toBe(64);
+    expect(cfg.defaultMaxLoops).toBe(32);
     expect(cfg.executeAllTimeoutMs).toBe(600_000);
   });
 
@@ -116,7 +116,7 @@ describe("@cortex/config — resolveConfig", () => {
       defaultMaxLoops: null as unknown as number,
       inspectorMaxLoops: null as unknown as number,
     });
-    expect(cfg.defaultMaxLoops).toBe(64);
+    expect(cfg.defaultMaxLoops).toBe(32);
     expect(cfg.inspectorMaxLoops).toBe(48);
   });
 
@@ -263,5 +263,43 @@ describe("@cortex/config — loadEngineDefaults", () => {
     const loaded = loadEngineDefaults();
     // Number("") = 0, 但 0 会被覆盖进去
     expect(loaded.lockTimeoutMs).toBe(0);
+  });
+
+  // ── 真配置化回归测试 ──
+
+  it("[C1] tuning.json reactMaxLoops=32 应覆盖硬编码 32", () => {
+    const loaded = loadEngineDefaults();
+    expect(loaded.reactMaxLoops).toBe(32);
+  });
+
+  it("[C1] tuning.json memory 字段生效", () => {
+    const loaded = loadEngineDefaults();
+    expect(loaded.vectorDedupThreshold).toBe(0.95);
+    expect(loaded.staleFreezeDays).toBe(30);
+    expect(loaded.frozenObliterateDays).toBe(7);
+    expect(loaded.maintenanceWeightThreshold).toBe(0.05);
+  });
+
+  it("[C1] tuning.json 缺字段回退硬编码兜底", () => {
+    const loaded = loadEngineDefaults();
+    expect(loaded.lockTimeoutMs).toBe(30_000);
+    expect(loaded.cleanupIntervalMs).toBe(60_000);
+    expect(loaded.schemaVersion).toBe(5);
+  });
+
+  it("[C1] tuning.json 加载失败不崩溃（fail-open）", () => {
+    expect(() => loadEngineDefaults()).not.toThrow();
+  });
+
+  it("[C1] env 优先级高于 tuning.json", () => {
+    process.env.CORTEX_REACT_MAX_LOOPS = "99";
+    const loaded = loadEngineDefaults();
+    expect(loaded.reactMaxLoops).toBe(99);
+  });
+
+  it("[C1] overrides 优先级高于 env + tuning.json", () => {
+    process.env.CORTEX_REACT_MAX_LOOPS = "99";
+    const loaded = loadEngineDefaults({ reactMaxLoops: 42 });
+    expect(loaded.reactMaxLoops).toBe(42);
   });
 });

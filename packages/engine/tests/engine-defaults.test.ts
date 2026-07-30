@@ -52,8 +52,8 @@ describe("engine-defaults — 常量值", () => {
     expect(SCHEDULER_ROUND_TIMEOUT_MS).toBe(300_000);
   });
 
-  it("REACT_MAX_LOOPS = 64", () => {
-    expect(REACT_MAX_LOOPS).toBe(64);
+  it("REACT_MAX_LOOPS = 32 (tuning.json 真相源)", () => {
+    expect(REACT_MAX_LOOPS).toBe(32);
   });
 
   it("EMBEDDING_DIM = 384", () => {

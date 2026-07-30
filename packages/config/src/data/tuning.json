@@ -13,7 +13,7 @@
   },
   "tuning": {
     "execution": {
-      "reactMaxLoops": 10,
+      "reactMaxLoops": 32,
       "reactContextHardLimit": 128000,
       "maxToolRounds": 20,
       "toolTimeoutMs": 30000,
