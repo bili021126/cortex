@@ -134,15 +134,8 @@ export async function handleMemoryDelete(
       return;
     }
 
-    // Attempt deletion — IMemoryStore may or may not support delete
-    let deleted = false;
-    if (typeof (memory as unknown as Record<string, unknown>).delete === "function") {
-      await (memory as unknown as { delete(id: string): Promise<boolean> }).delete(id);
-      deleted = true;
-    } else if (typeof (memory as unknown as Record<string, unknown>).remove === "function") {
-      await (memory as unknown as { remove(id: string): Promise<boolean> }).remove(id);
-      deleted = true;
-    }
+    // 永久删除——IMemoryStore.obliterate 语义匹配 HTTP DELETE
+    const deleted = memory.obliterate(id);
 
     sendJson(res, 200, { deleted });
   } catch (err) {

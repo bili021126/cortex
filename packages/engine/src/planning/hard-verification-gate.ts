@@ -22,6 +22,19 @@ import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type Gov
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { VERIFICATION_CACHE_TTL_MS, BARREL_MAX_SIZE, TSFILE_MAX_SIZE } from "@cortex/config";
 
+// ─── 治理 Payload 扩展字段（硬验证门规则依赖的约定字段，非 GovernanceEventPayload 固定字段）──
+interface GateRulePayload {
+  filePath?: string;
+  nodeId?: string;
+  violation?: string;
+  fromState?: string;
+  toState?: string;
+  modulePath?: string;
+  sourcePkg?: string;
+  targetPkg?: string;
+  interfaceName?: string;
+}
+
 // ─── 裁决类型 ─────────────────────────────────────
 
 export interface RuleVerdict {
@@ -86,7 +99,7 @@ export class HardVerificationGate {
 
   // ── 规则 1: Git Diff ──
   private _ruleGitDiff(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
+    const p = payload as GateRulePayload;
     const filePath = (typeof p.filePath === "string" ? p.filePath : (typeof p.nodeId === "string" ? p.nodeId : undefined)) as string | undefined;
     if (!filePath) return { ruleName: "git-diff", passed: true, skipped: true, reason: "缺少 filePath/nodeId 字段" };
 
@@ -101,7 +114,7 @@ export class HardVerificationGate {
 
   // ── 规则 2: ESLint 违禁确认 ──
   private _ruleEslint(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
+    const p = payload as GateRulePayload;
     const violation = typeof p.violation === "string" ? p.violation : undefined;
     if (!violation) return { ruleName: "eslint", passed: true, skipped: true, reason: "缺少 violation 字段" };
 
@@ -116,7 +129,7 @@ export class HardVerificationGate {
 
   // ── 规则 3: FSM 状态转换 ──
   private _ruleFsmTransition(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
+    const p = payload as GateRulePayload;
     const from = typeof p.fromState === "string" ? p.fromState : undefined;
     const to = typeof p.toState === "string" ? p.toState : undefined;
     if (!from || !to) return { ruleName: "fsm-transition", passed: true, skipped: true, reason: "缺少 fromState/toState 字段" };
@@ -131,7 +144,7 @@ export class HardVerificationGate {
 
   // ── 规则 4: Barrel 导出 ──
   private _ruleBarrelExport(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
+    const p = payload as GateRulePayload;
     const modulePath = typeof p.modulePath === "string" ? p.modulePath : undefined;
     if (!modulePath) return { ruleName: "barrel-export", passed: true, skipped: true, reason: "缺少 modulePath 字段" };
 
@@ -158,7 +171,7 @@ export class HardVerificationGate {
 
   // ── 规则 5: 跨包接口契约 ──
   private _ruleCrossPackage(payload: GovernanceEventPayload): RuleVerdict {
-    const p = payload as unknown as Record<string, unknown>;
+    const p = payload as GateRulePayload;
     const srcPkg = typeof p.sourcePkg === "string" ? p.sourcePkg : undefined;
     const tgtPkg = typeof p.targetPkg === "string" ? p.targetPkg : undefined;
     const iface = typeof p.interfaceName === "string" ? p.interfaceName : undefined;

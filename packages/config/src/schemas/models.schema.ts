@@ -22,6 +22,9 @@ export const MODELS_SCHEMA: JsonSchema = {
       defaultFor: { type: "array", items: { type: "string", minLength: 1 } },
       maxOutputTokens: { type: "integer", minimum: 1, maximum: 500000 },
       contextWindow: { type: "integer", minimum: 1, maximum: 2000000 },
+      degradesTo: { type: "string" },
+      supportsToolChoice: { type: "boolean" },
+      reasoningEffortLevels: { type: "array", items: { type: "string" } },
     },
   },
 };

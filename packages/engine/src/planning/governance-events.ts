@@ -77,6 +77,8 @@ export class GovernanceEventEmitter {
 
   /**
    * 通用发射——直接发射原始事件。
+   * type 拓宽为 PipelineEventType（全枚举），使每个 EmittableEvent 成员均有交叠，
+   * 单层 as 断言通过。移除 unknown 中转——TS 仍校验事件结构完备性。
    */
   private _emit(type: GovernanceEventType, payload: GovernanceEventPayload): void {
     const routing = GOVERNANCE_EVENT_ROUTING[type];
@@ -91,17 +93,15 @@ export class GovernanceEventEmitter {
     const enrichedPayload = this._strategyRegistry
       ? { ...payload, strategyContext: this._strategyRegistry.getAdvisorContext() }
       : payload;
-    const event = {
-      type,
+
+    this.observer.emit({
+      type: type as PipelineEventType,
       priority: routing?.notificationType === "DECISION_REQUIRED"
         ? PipelinePriority.HIGH
         : PipelinePriority.NORMAL,
       payload: enrichedPayload,
       timestamp: Date.now(),
       notificationType: routing?.notificationType ?? "FYI",
-    };
-    // 治理事件 payload 为动态扩展域——emit 的 discriminator union 在编译期无法穷举所有运行时组合
-    // 双 as 无法避免（单 as 会因结构不重叠报 TS2352）
-    this.observer.emit(event as unknown as EmittableEvent);
+    } as EmittableEvent);
   }
 }

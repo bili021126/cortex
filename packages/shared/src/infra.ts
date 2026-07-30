@@ -91,13 +91,13 @@ export enum PipelineEventType {
   InfraFileLockExpiredReclaimed = "infra.file_lock.expired_reclaimed",
   InfraComponentDegraded = "infra.component_degraded",
   // ── Interact（配置交互流）──
-  InteractConfigOverrideApplied = "interact.config_override_applied",
-  InteractConfigReloaded = "interact.config_reloaded",
-  InteractConfigSchemaViolation = "interact.config_schema_violation",
+  InteractConfigOverrideApplied = "interact.config_override_applied", // @reserved 声明先行，暂无生产者 — 2026-07
+  InteractConfigReloaded = "interact.config_reloaded", // @reserved 声明先行，暂无生产者 — 2026-07
+  InteractConfigSchemaViolation = "interact.config_schema_violation", // @reserved 声明先行，暂无生产者 — 2026-07
   // ── Mem（记忆流）──
-  MemRetrievalStrategySelected = "mem.retrieval_strategy_selected",
-  MemMemoryWarmupInitiated = "mem.memory_warmup_initiated",
-  MemMemoryObliterationTriggered = "mem.memory_obliteration_triggered",
+  MemRetrievalStrategySelected = "mem.retrieval_strategy_selected", // @reserved 声明先行，暂无生产者 — 2026-07
+  MemMemoryWarmupInitiated = "mem.memory_warmup_initiated", // @reserved 声明先行，暂无生产者 — 2026-07
+  MemMemoryObliterationTriggered = "mem.memory_obliteration_triggered", // @reserved 声明先行，暂无生产者 — 2026-07
   MemMemoryWritten = "mem.memory_written",
   // ── Exec（执行流——调度器心跳/超时/生命周期）──
   ExecNodeDelayed = "exec.node_delayed",
@@ -167,13 +167,13 @@ export type EventPayloadMap = {
   [PipelineEventType.InfraFileLockExpiredReclaimed]: { count: number; path: string; holders: string; detail: string };
   [PipelineEventType.InfraComponentDegraded]: { operation?: string; detail?: string; nodeId?: string; component?: string; source?: string; message?: string; level?: string };
   // ── Interact（配置交互流）──
-  [PipelineEventType.InteractConfigOverrideApplied]: { timestamp: number; key: string; source: 'env' | 'user' | 'project'; oldValue: unknown; newValue: unknown };
-  [PipelineEventType.InteractConfigReloaded]: { timestamp: number; watchPath: string; changedKeys: string[] };
-  [PipelineEventType.InteractConfigSchemaViolation]: { timestamp: number; schemaName: string; errors: { path: string; message: string }[] };
+  [PipelineEventType.InteractConfigOverrideApplied]: { timestamp: number; key: string; source: 'env' | 'user' | 'project'; oldValue: unknown; newValue: unknown }; // @reserved 声明先行，暂无生产者 — 2026-07
+  [PipelineEventType.InteractConfigReloaded]: { timestamp: number; watchPath: string; changedKeys: string[] }; // @reserved 声明先行，暂无生产者 — 2026-07
+  [PipelineEventType.InteractConfigSchemaViolation]: { timestamp: number; schemaName: string; errors: { path: string; message: string }[] }; // @reserved 声明先行，暂无生产者 — 2026-07
   // ── Mem（记忆流）──
-  [PipelineEventType.MemRetrievalStrategySelected]: { timestamp: number; query: string; strategy: string; reason: string };
-  [PipelineEventType.MemMemoryWarmupInitiated]: { timestamp: number; embeddingModel: string; dimension: number };
-  [PipelineEventType.MemMemoryObliterationTriggered]: { timestamp: number; pattern: string; reason: string };
+  [PipelineEventType.MemRetrievalStrategySelected]: { timestamp: number; query: string; strategy: string; reason: string }; // @reserved 声明先行，暂无生产者 — 2026-07
+  [PipelineEventType.MemMemoryWarmupInitiated]: { timestamp: number; embeddingModel: string; dimension: number }; // @reserved 声明先行，暂无生产者 — 2026-07
+  [PipelineEventType.MemMemoryObliterationTriggered]: { timestamp: number; pattern: string; reason: string }; // @reserved 声明先行，暂无生产者 — 2026-07
   [PipelineEventType.MemMemoryWritten]: { entryId: string; domain?: string; scene?: string; byteSize: number };
   // ── Exec（执行流——调度器心跳/超时/生命周期）──
   [PipelineEventType.ExecNodeDelayed]: { nodeId: string; agentId: string; elapsed: number; action: 'wait' | 'extend'; level: 'warn' | 'ping' };
