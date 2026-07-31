@@ -1,0 +1,32 @@
+{
+  "id": "AM-2026-0722-003",
+  "version": "v3.6",
+  "section": "§一 代码事实·核心契约已稳定（write/read 数据完整性）",
+  "category": "add",
+  "supersedes": null,
+  "status": "pending_judgment",
+  "merged_into": null,
+  "summary": "将「同步写入 API 的索引一致性」升为核心稳定契约——commitMemory 等同步 mutation API 必须在返回前同步完成内存索引写入，持久化作为异步耐久性备份。内存即真相源，commit→read 必须即时一致。此契约填补 write/read 数据完整性在『同步 API × 异步持久化』边界上的空白。",
+  "rationale": "本轮记忆层重构（H6「先持久化再放入索引」）将 AbstractMemoryStore.commitMemory 的 _indexPut 推迟到 Promise.race(persist).then() 中执行，而 commitMemory 是同步 API、立即 return true。由于 _be（持久化后端）为必填构造参数、persist 恒存在，异步分支永远被走——每次同步 commit 后紧接的 read 都读不到刚提交的条目。\n\n后果：memory-store 8 个核心测试失败（writePending→commit→read 读回 undefined、FSM commit→archive、DedupService 精确去重、BM25 归档过滤、obliterate 缓存清理、权重老化回写）。这是 P0 级数据完整性缺陷——记忆写入后不可即时读取，直接违反 §一『write/read 数据完整性』已稳定契约的隐含前提。\n\n根因是『同步 API 契约』与『异步持久化实现』的边界未被宪法明确约束：H6 出于『避免 persist 失败时内存中存在幽灵条目』的善意，却牺牲了同步 commit→read 的即时一致性——而 H6 自身的 catch 分支本就会无条件 _indexPut，说明『索引不依赖 persist 成功』早已是既定语义，只是未被前置与固化。\n\n修复（已落地，commit 00181636）：_indexPut 前置为同步执行（内存即真相源），持久化降级为异步 fire-and-forget 备份，失败仅告警、下次 flush 重试。验证：memory 214 pass / memory-store 109 pass 全绿。\n\n本提案将此修复背后的不变量固化入宪，使其成为可被门禁与代码审查校验的稳定契约，防止未来任何『把同步 mutation 的索引改成异步』的回归。",
+  "before": "【§一 代码事实·核心契约已稳定】\n- 核心契约已稳定：EventPayloadMap（agent-pool / task-board 对齐）、write/read/embedBatch 数据完整性、NotificationPipe 持久化初始化、convertToDocument XSS 防护、updateProposalStatus 路径校验、FSM dispatch 执行语义",
+  "after": "【§一 代码事实·核心契约已稳定】\n- 核心契约已稳定：EventPayloadMap（agent-pool / task-board 对齐）、write/read/embedBatch 数据完整性、**同步写入 API 索引一致性**、NotificationPipe 持久化初始化、convertToDocument XSS 防护、updateProposalStatus 路径校验、FSM dispatch 执行语义\n\n> **同步写入 API 索引一致性（AM-2026-0722-003）**：凡同步 mutation API（如 commitMemory）必须在返回前同步完成内存索引写入；持久化仅作为异步耐久性备份，其成功与否不得阻塞索引可见性。语义前提：内存即真相源，commit→read 即时一致；持久化失败自愈于下次 flush。禁止将同步 mutation 的索引写入推迟到 Promise 微任务/异步回调（会使同步 commit 后紧接的 read 读不到刚提交条目）。",
+  "impact": {
+    "principles": [],
+    "contracts": [
+      "§一 核心契约·write/read 数据完整性——新增『同步写入 API 索引一致性』子契约"
+    ],
+    "crossReferences": [
+      "§一 代码事实·核心契约已稳定",
+      "packages/memory/src/implementations/AbstractMemoryStore.ts（commitMemory）",
+      "packages/memory-store/src/memory-store.ts（read 委托）"
+    ],
+    "agents": [],
+    "breaking": false,
+    "rationale": "本次修宪为声明性固化——固化的不变量与已落地修复（commit 00181636）完全一致，且与 H6 catch 分支既有『无条件 _indexPut』语义一致，不改变任何现行运行时行为，不降低任何既有契约保护力度。仅新增一条可校验的数据完整性子契约。breaking=false。"
+  },
+  "source": {
+    "agent": "昔涟（提案+评判）",
+    "trace": "本轮记忆层修复：commit 00181636『fix(memory): commit→read 同步化修复 + worldbook 测试补齐』。根因诊断经 git show HEAD --numstat 确认 H6 重构（memory-store.ts +84/-32、AbstractMemoryStore.ts +20/-9）引入 _indexPut 异步化；修复验证 memory 214 / memory-store 109 全绿。"
+  },
+  "_ruling_pending": "本提案 status=pending_judgment。依 §二·原则七『修宪须走完整闭环（提案→审计→裁决→落笔），不自改』及 §六『用户终裁』——需开拓者（用户）亲自裁决（批准/驳回/修正）。裁决通过后方可落笔：编辑宪法 §一 + 版本号 v3.6→v3.7 + §修正记录追加本条。提案人未擅动宪法正文。"
+}

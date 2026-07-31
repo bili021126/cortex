@@ -160,3 +160,18 @@ vitest.workspace.d.ts
 vitest.workspace.d.ts.map
 # 运行时 trace 日志
 memory-trace.log
+
+# 外部工具技能副本（Claude/Continue/Junie/agents 已归档至 .archived/external-tools-2026-07-24/）
+.agents/
+# pnpm store 历史遗留（已归档至 .archived/external-tools-2026-07-24/，防再入库）
+.pnpm-store/
+# Qoder IDE 运行时产物与通用技能副本（项目定制 skills/cortex-* 与 agents/cyrene-* 保留跟踪）
+.qoder/better-loop/
+.qoder/better-harness/
+.qoder/skills/excalidraw/
+.qoder/skills/frontend-design/
+.qoder/skills/github/
+.qoder/skills/profiling/
+.qoder/skills/rspress-api-docs/
+.qoder/skills/typescript-refactoring-patterns/
+.qoder/skills/typescript-style-guide/
