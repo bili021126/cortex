@@ -57,7 +57,12 @@ function _handleTimeoutActions(actions: TimeoutAction[], ctx: LoopContext): void
 
       case 'ping':
         // 异步探测——不 blocking
-        ctx.pool.ping(a.agentId).catch((err) => { console.warn(`[scheduler] agent ping failed for ${a.agentId}:`, err instanceof Error ? err.message : String(err)); });
+        // P2 fix: ping 失败（探测到死亡或自身异常）时升级处理——failNode + emit NodeFailed，不静默
+        void ctx.pool.ping(a.agentId).then((alive) => {
+          if (!alive) _handlePingDead(ctx, a);
+        }).catch((err) => {
+          _handlePingDead(ctx, a, `Agent ping failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
         ctx.observer.emit({
           type: PipelineEventType.ExecNodeDelayed,
           priority: PipelinePriority.NORMAL,
@@ -83,6 +88,30 @@ function _handleTimeoutActions(actions: TimeoutAction[], ctx: LoopContext): void
         break;
     }
   }
+}
+
+/** P2 fix: ping 探测确认节点死亡（或 ping 自身异常）——升级为 failNode + NodeFailed，不静默 */
+function _handlePingDead(ctx: LoopContext, a: TimeoutAction, reason?: string): void {
+  try {
+    ctx.board.failNode(a.nodeId);
+  } catch (e) {
+    try {
+      ctx.observer.emit({
+        type: PipelineEventType.InfraComponentDegraded,
+        priority: PipelinePriority.NORMAL,
+        payload: { operation: "agent-ping-kill-best-effort", detail: String(e) },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+    } catch { console.error(`[scheduler] best-effort ping kill failed: ${e}`); }
+  }
+  ctx.observer.emit({
+    type: PipelineEventType.NodeFailed,
+    priority: PipelinePriority.CRITICAL,
+    payload: { nodeId: a.nodeId, error: reason ?? `Agent ping dead after ${a.elapsed}ms` },
+    timestamp: Date.now(),
+    notificationType: "WARNING",
+  });
 }
 
 /**
@@ -265,8 +294,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
           observer.emit({
             type: PipelineEventType.SchedulerInvariantViolation,
             priority: PipelinePriority.CRITICAL,
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            payload: { nodeId: pendingNodes[0]!.id, message: `Circular dependency detected among ${pendingNodes.length} pending nodes` },
+            payload: { nodeId: pendingNodes[0]?.id ?? "unknown", message: `Circular dependency detected among ${pendingNodes.length} pending nodes` },
             timestamp: Date.now(),
             notificationType: "WARNING",
           });
@@ -358,6 +386,13 @@ export class TopologicalLayeredDriver implements ILoopDriver {
 
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             return Promise.race([dispatchPromise.then((r) => { clearTimeout(tid!); return r; }), timeoutPromise]).then((result) => {
+              // ── 终态守卫：超时已 failNode 或节点已终态 → 跳过 enqueue 与补偿逻辑 ──
+              // 防止 timeoutPromise 触发 failNode 后 dispatchPromise 仍完成时产生重复 replan / 二次补偿
+              const terminalStatus = board.getNode(nodeId)?.status;
+              if (terminalStatus === "failed" || terminalStatus === "done") {
+                return result;
+              }
+
               if (!result.success) {
                 const reason = result.output ?? result.error ?? "unknown";
                 replanManager.enqueue(node, reason);
@@ -581,40 +616,45 @@ export class SequentialDriver implements ILoopDriver {
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const result = await Promise.race([dispatchPromise.then((r) => { clearTimeout(tid2!); return r; }), timeoutPromise]);
 
-          allResults.push(result);
-          if (result.success) completed++;
-          else {
-            failed++;
-            const reason = result.output ?? result.error ?? "unknown";
-            replanManager.enqueue(node, reason);
-            observer.emit({
-              type: PipelineEventType.NodeFailed,
-              priority: PipelinePriority.CRITICAL,
-              payload: { nodeId: node.id, error: result.error ?? "unknown" },
-              timestamp: Date.now(),
-              notificationType: "WARNING",
-            });
+          // ── 终态守卫：超时已 failNode 或节点已终态 → 跳过 enqueue 与补偿逻辑 ──
+          // 防止 timeoutPromise 触发 failNode 后 dispatchPromise 仍完成时产生重复 replan / 二次补偿
+          const terminalStatus = board.getNode(node.id)?.status;
+          if (terminalStatus !== "failed" && terminalStatus !== "done") {
+            allResults.push(result);
+            if (result.success) completed++;
+            else {
+              failed++;
+              const reason = result.output ?? result.error ?? "unknown";
+              replanManager.enqueue(node, reason);
+              observer.emit({
+                type: PipelineEventType.NodeFailed,
+                priority: PipelinePriority.CRITICAL,
+                payload: { nodeId: node.id, error: result.error ?? "unknown" },
+                timestamp: Date.now(),
+                notificationType: "WARNING",
+              });
 
-            // ── 补偿：失败节点 → abort 下游子节点 + degrade 父节点 ──
-            const compensations = computeCompensation(node.id, board);
-            for (const action of compensations) {
-              if (action.event === "abort_children") {
-                try { board.failNode(action.nodeId); } catch { /* 子节点可能已终态 */ }
-                observer.emit({
-                  type: PipelineEventType.NodeFailed,
-                  priority: PipelinePriority.CRITICAL,
-                  payload: { nodeId: action.nodeId, error: `Compensation: upstream node ${action.triggerNodeId} failed` },
-                  timestamp: Date.now(),
-                  notificationType: "WARNING",
-                });
-              } else if (action.event === "degrade") {
-                observer.emit({
-                  type: PipelineEventType.InfraComponentDegraded,
-                  priority: PipelinePriority.NORMAL,
-                  payload: { operation: "compensation-degrade", nodeId: action.nodeId, detail: `Downstream node ${action.triggerNodeId} failed, degrade` },
-                  timestamp: Date.now(),
-                  notificationType: "WARNING",
-                });
+              // ── 补偿：失败节点 → abort 下游子节点 + degrade 父节点 ──
+              const compensations = computeCompensation(node.id, board);
+              for (const action of compensations) {
+                if (action.event === "abort_children") {
+                  try { board.failNode(action.nodeId); } catch { /* 子节点可能已终态 */ }
+                  observer.emit({
+                    type: PipelineEventType.NodeFailed,
+                    priority: PipelinePriority.CRITICAL,
+                    payload: { nodeId: action.nodeId, error: `Compensation: upstream node ${action.triggerNodeId} failed` },
+                    timestamp: Date.now(),
+                    notificationType: "WARNING",
+                  });
+                } else if (action.event === "degrade") {
+                  observer.emit({
+                    type: PipelineEventType.InfraComponentDegraded,
+                    priority: PipelinePriority.NORMAL,
+                    payload: { operation: "compensation-degrade", nodeId: action.nodeId, detail: `Downstream node ${action.triggerNodeId} failed, degrade` },
+                    timestamp: Date.now(),
+                    notificationType: "WARNING",
+                  });
+                }
               }
             }
           }
@@ -814,6 +854,29 @@ export class WaveDriver implements ILoopDriver {
 
         // 波内拓扑排序 + 并行
         const layers = topologicalSort(waveNodes, observer);
+        // ── 环形依赖防护：与 TopologicalLayeredDriver 对齐——emit 环警告 + failNode 全部 waveNodes + continue ──
+        // 否则 layers.length === 0 时 for 循环空转，while(true) 纯同步忙循环阻塞事件循环
+        if (layers.length === 0 && waveNodes.length > 0) {
+          observer.emit({
+            type: PipelineEventType.SchedulerInvariantViolation,
+            priority: PipelinePriority.CRITICAL,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            payload: { nodeId: waveNodes[0]!.id, message: `WaveDriver circular dependency detected among ${waveNodes.length} wave nodes` },
+            timestamp: Date.now(),
+            notificationType: "WARNING",
+          });
+          for (const n of waveNodes) {
+            try { board.failNode(n.id); } catch (fe) {
+              if (observer) {
+                try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "wave-circular-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { console.error(`[scheduler] wave-circular observer.emit failed: ${String(fe)}`); }
+              }
+            }
+            allResults.push({ nodeId: n.id, success: false, error: "Circular dependency" });
+            failed++;
+          }
+          continue;
+        }
+
         for (const layer of layers) {
           const layerPromises = layer.map((nodeId) => {
             const node = board.getNode(nodeId);
@@ -991,7 +1054,14 @@ export class PipelineModel implements IExecutionModel {
         };
 
         const steps: IDispatchStep[] = [new SpawnStep(), new ExecuteStep(), new BoundaryGuardStep(), new CleanupStep()];
-        return await runDispatchPipeline(dispatchCtx, steps);
+        const res = await runDispatchPipeline(dispatchCtx, steps);
+        // 多视角自愈：spawn 阶段失败（未写入节点 results）的视角视为未参与执行，
+        // 过滤掉不参与整体 success 判定——仅 execute 失败才使整体失败（dispatch-multi 契约 Test 3）
+        if (node.needsMultiPerspective && res && !res.success) {
+          const executed = board.getNode(node.id)?.results.some((r) => r.agentType === at);
+          if (!executed) return null;
+        }
+        return res;
       } catch (err) {
         // 单 agent 异常不影响其他 agent——CleanupStep 已在 runDispatchPipeline 的 finally 中执行
         observer.emit({
@@ -1015,9 +1085,12 @@ export class PipelineModel implements IExecutionModel {
       return { nodeId: node.id, success: false, error: "All agents failed to claim multi-perspective node" };
     }
 
-    const combined = results.map((r) =>
-      `[${r.agentType ?? "unknown"}]:\n${r.output ?? "(无输出)"}`
-    ).join("\n\n---\n\n");
+    const combined = results.map((r) => {
+      // 失败 Agent 的 error 始终附带在输出中——保证部分失败信息对上层可见
+      const base = r.output ?? "(无输出)";
+      const errSuffix = r.error ? `\n[错误]: ${r.error}` : "";
+      return `[${r.agentType ?? "unknown"}]:\n${base}${errSuffix}`;
+    }).join("\n\n---\n\n");
 
     const successCount = results.filter((r) => r.success).length;
     const failCount = results.length - successCount;
@@ -1026,13 +1099,12 @@ export class PipelineModel implements IExecutionModel {
     summary += `]`;
 
     const finalOutput = combined + "\n\n" + summary;
-    const finalNode = board.getNode(node.id);
-    const isDone = finalNode?.status === "done";
 
     return {
       nodeId: node.id,
       agentType: agentTypes[0] as AgentType,
-      success: isDone || results.every((r) => r.success),
+      // 整体成功 = 所有实际执行视角均成功；spawn 失败视角已在上面过滤（多视角自愈）
+      success: results.every((r) => r.success),
       output: finalOutput,
     };
   }
@@ -1137,6 +1209,9 @@ export class SemanticModelRouter implements IModelRouter {
   private readonly _cache = new Map<number, { tier: ModelTier; at: number }>();
   private static readonly CACHE_MAX = 500;
 
+  /** P2 fix: in-flight 分类 Promise 去重——相同 payload 并发请求复用同一次分类，防 thundering herd */
+  private readonly _classifyInFlight = new Map<number, Promise<ModelTier>>();
+
   /** 分类器超时（ms） */
   private readonly _classifierTimeoutMs: number;
 
@@ -1235,35 +1310,73 @@ export class SemanticModelRouter implements IModelRouter {
     const hash = _hashStr(payload);
     const cached = this._cache.get(hash);
     if (cached) {
+      // P2 fix: 命中缓存时刷新访问时间——真 LRU（原实现命中不更新时间戳，实际为 FIFO）
+      cached.at = Date.now();
       return { tier: cached.tier, source: "classifier-cached" };
     }
 
-    // B 路径：LLM 语义分类（带超时 + 重试）
+    // B 路径：LLM 语义分类（带超时 + 重试 + 并发去重）
     if (this.classifier) {
-      for (let attempt = 0; attempt <= this._classifierRetries; attempt++) {
-        try {
-          const tier = await _withTimeout(
-            this.classifier(payload),
-            this._classifierTimeoutMs,
-          );
-          if (VALID_TIERS.has(tier)) {
-            // LRU 淘汰：超过上限时删除最旧的条目
-            if (this._cache.size >= SemanticModelRouter.CACHE_MAX) {
-              const oldest = [...this._cache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
-              if (oldest) this._cache.delete(oldest[0]);
-            }
-            this._cache.set(hash, { tier, at: Date.now() });
-            return { tier, source: "classifier" };
-          }
-        } catch {
-          // 超时或异常——重试或回退
-          console.error(`[scheduler] classifier timeout/error at attempt ${attempt}`);
-        }
-      }
+      const tier = await this._classify(payload, hash);
+      if (tier) return { tier, source: "classifier" };
     }
 
     // 保守回退：不猜了
     return { tier: "standard", source: "fallback" };
+  }
+
+  /**
+   * 执行一次语义分类（带超时 + 重试），并对相同 payload 的并发分类请求去重。
+   * @returns 分类得到的合法 tier；全部失败/超时返回 undefined（调用方回退 standard）
+   */
+  private async _classify(payload: string, hash: number): Promise<ModelTier | undefined> {
+    // P2 fix: thundering herd——相同 payload 并发时复用同一次分类 Promise，等待其落定
+    const existing = this._classifyInFlight.get(hash);
+    if (existing) {
+      const tier = await existing.catch(() => undefined);
+      if (tier && VALID_TIERS.has(tier)) {
+        this._cache.set(hash, { tier, at: Date.now() });
+        return tier;
+      }
+      return undefined;
+    }
+
+    // 发起分类任务并登记去重，完成后释放
+    const task = this._classifyTask(payload).finally(() => {
+      this._classifyInFlight.delete(hash);
+    });
+    this._classifyInFlight.set(hash, task);
+
+    const tier = await task.catch(() => undefined);
+    if (tier && VALID_TIERS.has(tier)) {
+      // LRU 淘汰：超过上限时删除最旧的条目
+      if (this._cache.size >= SemanticModelRouter.CACHE_MAX) {
+        const oldest = [...this._cache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+        if (oldest) this._cache.delete(oldest[0]);
+      }
+      this._cache.set(hash, { tier, at: Date.now() });
+      return tier;
+    }
+    return undefined;
+  }
+
+  /** 分类器核心——超时 + 重试循环；全部失败时抛错由 _classify 捕获回退 */
+  private async _classifyTask(payload: string): Promise<ModelTier> {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const classifier = this.classifier!;
+    for (let attempt = 0; attempt <= this._classifierRetries; attempt++) {
+      try {
+        const tier = await _withTimeout(
+          classifier(payload),
+          this._classifierTimeoutMs,
+        );
+        if (VALID_TIERS.has(tier)) return tier;
+      } catch {
+        // 超时或异常——重试或回退
+        console.error(`[scheduler] classifier timeout/error at attempt ${attempt}`);
+      }
+    }
+    throw new Error("classifier failed after retries");
   }
 
   /**

@@ -184,20 +184,9 @@ export class EmbeddingService implements IEmbeddingService {
         await loadPromise;
       }
       const elapsed = Date.now() - startTime;
-      // @justification 原则五豁免——preloadModel 实例方法，在 observer 就绪前调用。
-      //   console.warn 作为预热阶段唯一可用的诊断通道。
-      //   有 observer 时 emit 诊断事件，否则 fallback 到 console.warn。
-      if (this._observer) {
-        this._observer.emit({
-          type: PipelineEventType.MemoryEmbeddingWarmupFailed,
-          priority: PipelinePriority.NORMAL,
-          payload: { error: `ONNX 模型预加载完成 (${(elapsed / 1000).toFixed(1)}s)` },
-          timestamp: Date.now(),
-          notificationType: "FYI",
-        });
-      } else {
-        console.warn(`[embedding] ONNX 模型预加载完成 (${(elapsed / 1000).toFixed(1)}s)`);
-      }
+      // P1-4: 成功路径不再 emit MemoryEmbeddingWarmupFailed（语义错用——成功也发失败事件）。
+      //   最小改动方案：成功仅 console 日志；失败路径保留事件供观察者感知模型不可用。
+      console.warn(`[embedding] ONNX 模型预加载完成 (${(elapsed / 1000).toFixed(1)}s)`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       // @justification 原则五豁免——preloadModel 实例方法，在 observer 就绪前调用。

@@ -1,4 +1,4 @@
-﻿// ============================================================
+// ============================================================
 // Cyrene-Agent 璁板繂绯荤粺 鈥?鍐呭瓨瀛樺偍绠＄悊鍣紙閫傞厤鐗堬級
 //
 // 浠?Cyrene-Agent src/main/memory/memory-store.ts 鎻愬彇銆?
@@ -16,6 +16,8 @@ import { appendMemoryTrace } from "./memory-trace.js"
 
 const CURRENT_SCHEMA_VERSION = 2
 const QUOTE_SNIPPET_MAX = 300
+/** Resolver processing 超时：超过 30s 无进展则回收回 queued（P1-9） */
+const RESOLVER_PROCESSING_TIMEOUT_MS = 30_000
 const RESOLVER_PRIORITY_RANK: Record<string, number> = {
   high: 3,
   normal: 2,
@@ -140,15 +142,20 @@ export class MemoryStoreManager {
         })
       }
     } catch (err) {
+      // P0-2: 损坏时备份原始文件并以带标记的空存储启动——禁止 save 覆盖损坏文件
       try { backupMemoryFile(this.filePath) } catch { /* ignore */ }
       this.cache = cloneDefaultStore()
-      await this.save(this.cache)
+      this.cache._corrupted = true
+      if (typeof process !== "undefined") {
+        process.stderr.write(`[memory] memory.json 损坏，已备份原始文件并以空存储启动: ${err instanceof Error ? err.message : String(err)}\n`)
+      }
       appendMemoryTrace({
         op: "migration.recoverDefault",
         layer: "migration",
         status: "error",
         error: err instanceof Error ? err.message : String(err),
       })
+      // 注意：不调用 this.save()，保留损坏文件供人工恢复
     }
     return this.cache
   }
@@ -156,13 +163,17 @@ export class MemoryStoreManager {
   async save(store: MemoryStoreData): Promise<void> {
     const dir = path.dirname(this.filePath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(this.filePath, JSON.stringify(store, null, 2), "utf8")
+    // P0-2: tmp + rename 原子写，防止写一半崩溃损坏文件
+    const tmpPath = this.filePath + ".tmp"
+    fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2), "utf8")
+    fs.renameSync(tmpPath, this.filePath)
     this.cache = store
   }
 
   async getL0(): Promise<L0Profile> {
     const store = await this.load()
-    return store.l0
+    // 深拷贝：避免调用方绕过 save 直接改缓存（P2）
+    return structuredClone(store.l0)
   }
 
   async upsertL0Field(field: L0WritableField, value: L0Profile[L0WritableField]): Promise<void> {
@@ -178,15 +189,28 @@ export class MemoryStoreManager {
   }
 
   async updateL0(patch: Partial<L0Profile>): Promise<void> {
+    // 合并为一次 save，避免逐字段多次写盘（P2）
+    const store = await this.load()
+    const patchObj: Record<string, unknown> = {}
     for (const [field, value] of Object.entries(patch) as Array<[keyof L0Profile, L0Profile[keyof L0Profile]]>) {
       if (field === "updatedAt") continue
-      await this.upsertL0Field(field as L0WritableField, value as L0Profile[L0WritableField])
+      patchObj[field] = value
     }
+    const next: L0Profile = { ...store.l0, ...(patchObj as Partial<L0Profile>), updatedAt: Date.now() }
+    store.l0 = next
+    await this.save(store)
+    appendMemoryTrace({
+      op: "l0.update.batch",
+      layer: "L0",
+      status: "ok",
+      details: { fields: Object.keys(patchObj) },
+    })
   }
 
   async getL1(): Promise<L1Profile> {
     const store = await this.load()
-    return store.l1
+    // 深拷贝：避免调用方绕过 save 直接改缓存（P2）
+    return structuredClone(store.l1)
   }
 
   async replaceL1Field(field: L1WritableField, value: L1Profile[L1WritableField]): Promise<void> {
@@ -202,9 +226,16 @@ export class MemoryStoreManager {
   }
 
   async updateL1(patch: Partial<L1Profile>): Promise<void> {
-    for (const [field, value] of Object.entries(patch) as Array<[L1WritableField, L1Profile[L1WritableField]]>) {
-      await this.replaceL1Field(field, value)
-    }
+    // 合并为一次 save，避免逐字段多次写盘（P2）
+    const store = await this.load()
+    store.l1 = { ...store.l1, ...patch }
+    await this.save(store)
+    appendMemoryTrace({
+      op: "l1.update.batch",
+      layer: "L1",
+      status: "ok",
+      details: { fields: Object.keys(patch) },
+    })
   }
 
   async addL2Memory(input: L2Input): Promise<L2Memory> {
@@ -360,7 +391,8 @@ export class MemoryStoreManager {
 
   async getAllL2(): Promise<L2Memory[]> {
     const store = await this.load()
-    return store.l2
+    // 深拷贝：避免调用方绕过 save 直接改缓存（P2）
+    return structuredClone(store.l2)
   }
 
   async getEvidenceByMemoryId(memoryId: string): Promise<MemoryEvidence[]> {
@@ -467,6 +499,16 @@ export class MemoryStoreManager {
 
   async getResolverQueue(limit = 20): Promise<ConflictLog[]> {
     const store = await this.load()
+    // P1-9: 回收超时 processing（>30s 无进展）→ queued，防止 Resolver 队列卡死
+    const now = Date.now()
+    let recycled = false
+    for (const log of store.conflictLogs ?? []) {
+      if (log.resolverStatus === "processing" && log.resolverStartedAt !== undefined && now - log.resolverStartedAt > RESOLVER_PROCESSING_TIMEOUT_MS) {
+        log.resolverStatus = "queued"
+        recycled = true
+      }
+    }
+    if (recycled) await this.save(store)
     return (store.conflictLogs ?? [])
       .filter((log: ConflictLog): boolean => (
         log.status === "candidate" &&

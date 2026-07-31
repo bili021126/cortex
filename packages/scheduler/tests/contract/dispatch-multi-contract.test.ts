@@ -177,7 +177,7 @@ describe("dispatchMulti() Agent fan-out 契约", () => {
   // 当所有 Agent 都报告后，multi-perspective 节点自动置为 done (isDone=true)，
   // 导致即使有 Agent 失败，整体 success 仍为 true.
   // 期望行为: success = results.every(r => r.success) —— 任一个失败则整体失败
-  it.skip("Test 3: 部分失败 → results.every = false 但成功的输出保留", async () => {
+  it("Test 3: 部分失败 → results.every = false 但成功的输出保留", async () => {
     // node tags 同时匹配 code + review
     const node = tn("partial-fail-node", {
       tags: ["code", "audit"],

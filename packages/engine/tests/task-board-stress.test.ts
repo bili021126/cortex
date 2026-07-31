@@ -60,7 +60,7 @@ function mockEmbedder() {
 // 暗雷 1：并发 claim 安全性（同一层多节点竞争）
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R1：并发 claim 安全性", () => {
+describe("暗雷 R1：并发 claim 安全性", () => {
   it("同层多个同类型节点不会互相抢认领——Scheduler 按节点 ID 分发", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
@@ -124,7 +124,7 @@ describe.skip("暗雷 R1：并发 claim 安全性", () => {
 // 暗雷 2：父节点失败 → 子节点级联决策
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R2：父节点失败 → 子节点级联", () => {
+describe("暗雷 R2：父节点失败 → 子节点级联", () => {
   it("当前策略：父节点失败不阻止子节点执行（需显式设计级联策略）", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
@@ -177,7 +177,7 @@ describe.skip("暗雷 R2：父节点失败 → 子节点级联", () => {
 // 暗雷 3：重规划节点插入运行中层
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R3：重规划节点插入运行中层", () => {
+describe("暗雷 R3：重规划节点插入运行中层", () => {
   it("重规划产生的新节点被正确执行（不依赖预计算层）", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
@@ -247,14 +247,13 @@ describe.skip("暗雷 R3：重规划节点插入运行中层", () => {
 
     const scheduler = new Scheduler(board, pool, observer, metaAgent);
 
-    // 第一个调用成功，第二个失败
-    let callCount = 0;
+    // 按 payload 分流：good-1 成功、bad-1 必然失败——消除同层并行执行的 callCount 顺序依赖
     const dualAdapter = new LlmAdapter({
       apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
-    dualAdapter.injectMock(async () => {
-      callCount++;
-      if (callCount === 1) return { content: "done", toolCalls: [] };
-      throw new Error("Fail on second node");
+    dualAdapter.injectMock(async (messages) => {
+      const text = messages.map((m) => String(m.content ?? "")).join("\n");
+      if (text.includes("Will fail")) throw new Error("Fail on bad-1");
+      return { content: "done", toolCalls: [] };
     });
     const codeAgent = createAgent(codeAgentConfig("test"),dualAdapter, new Toolkit());
     await codeAgent.wakeup();
@@ -263,7 +262,7 @@ describe.skip("暗雷 R3：重规划节点插入运行中层", () => {
 
     const report = await scheduler.executeAll();
 
-    // good-1 成功
+    // good-1 成功（payload 分流保证 good-1 必然成功、bad-1 必然失败）
     const goodResult = report.results.find((r) => r.nodeId === "good-1");
     expect(goodResult?.success).toBe(true);
 
@@ -276,7 +275,7 @@ describe.skip("暗雷 R3：重规划节点插入运行中层", () => {
 // 暗雷 5：CircuitBreaker 熔断（N 次同因失败 → node.blocked）
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R5：CircuitBreaker 熔断机制", () => {
+describe("暗雷 R5：CircuitBreaker 熔断机制", () => {
   it("3 轮重规划上限已是软熔断——超过后放弃节点", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
@@ -337,7 +336,7 @@ describe.skip("暗雷 R5：CircuitBreaker 熔断机制", () => {
 // 暗雷 6：部分层失败处理
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R6：部分层失败处理", () => {
+describe("暗雷 R6：部分层失败处理", () => {
   it("同层部分节点失败不影响其他节点和后续层", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
@@ -359,14 +358,13 @@ describe.skip("暗雷 R6：部分层失败处理", () => {
 
     const scheduler = new Scheduler(board, pool, observer);
 
-    // Code agent: 第一次调用 OK，第二次抛异常
-    let callCount = 0;
+    // 按 payload 分流：L0-ok 成功、L0-bad 必然失败——消除同层并行执行的 callCount 顺序依赖
     const codeAdapter = new LlmAdapter({
       apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock"});
-    codeAdapter.injectMock(async () => {
-      callCount++;
-      if (callCount === 1) return { content: "OK", toolCalls: [] };
-      throw new Error("Fail");
+    codeAdapter.injectMock(async (messages) => {
+      const text = messages.map((m) => String(m.content ?? "")).join("\n");
+      if (text.includes("Will fail")) throw new Error("Fail");
+      return { content: "OK", toolCalls: [] };
     });
     const codeAgent = createAgent(codeAgentConfig("test"),codeAdapter, new Toolkit());
     await codeAgent.wakeup();
@@ -433,7 +431,7 @@ describe.skip("暗雷 R6：部分层失败处理", () => {
 // 暗雷 R7：多视角 spawn 失败自愈（release 死锁回归）
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R7：多视角 spawn 失败自愈", () => {
+describe("暗雷 R7：多视角 spawn 失败自愈", () => {
   it("spawn 失败的 Agent 类型被 release，其他 Agent 继续执行并最终 done", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
@@ -478,8 +476,10 @@ describe.skip("暗雷 R7：多视角 spawn 失败自愈", () => {
     // 节点最终 done（Review 产出即等齐，因为 Analysis 已 release）
     const n = board.getNode("mp-heal")!;
     expect(n.status).toBe("done");
-    expect(n.claimedBy).not.toContain(AgentType.Analysis);
-    expect(n.claimedBy).toContain(AgentType.Review);
+    // done 终态后 claimedBy 已被 TaskBoard.complete 清空（终态清理）——
+    // 失败视角 Analysis 已被 release（无残留认领），且 Review 结果已落盘
+    expect(n.claimedBy).toEqual([]);
+    expect(n.results.some((r) => r.agentType === AgentType.Review)).toBe(true);
   }, 20000);
 
   it("全部 Agent spawn 失败后 release → 节点回到 pending", async () => {
@@ -516,7 +516,7 @@ describe.skip("暗雷 R7：多视角 spawn 失败自愈", () => {
 // 暗雷 R8：claim-release 竞态压测
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R8：claim-release 竞态压测", () => {
+describe("暗雷 R8：claim-release 竞态压测", () => {
   it("高频 claim→release→claim 循环不产生僵尸 claimed 节点", () => {
     const board = new TaskBoard();
 
@@ -582,7 +582,7 @@ describe.skip("暗雷 R8：claim-release 竞态压测", () => {
 // 暗雷 R9：MemoryStore CAS 并发防改写
 // ═══════════════════════════════════════════════════
 
-describe.skip("暗雷 R9：MemoryStore CAS 并发防改写", () => {
+describe("暗雷 R9：MemoryStore CAS 并发防改写", () => {
   it("peek() 返回可变引用——修改穿透到内部状态", async () => {
     const store = new MemoryStore(new InMemoryMemoryStore(), undefined, mockEmbedder());
     await store.init(":memory:");

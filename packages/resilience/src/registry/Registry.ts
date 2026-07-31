@@ -717,8 +717,13 @@ export class Registry implements IResilienceRegistry {
    * });
    * ```
    */
-  onEvent(handler: (event: ResilienceEvent) => void): void {
+  onEvent(handler: (event: ResilienceEvent) => void): () => void {
     this._eventHandlers.push(handler);
+    // 与 onStateChange 契约对齐：返回取消函数，调用方可显式退订防泄漏
+    return () => {
+      const i = this._eventHandlers.indexOf(handler);
+      if (i >= 0) this._eventHandlers.splice(i, 1);
+    };
   }
 
   // ────────────────────────────────────────

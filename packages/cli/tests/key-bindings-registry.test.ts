@@ -225,14 +225,18 @@ describe("KeyRegistry", () => {
 
   it("序列键超时后复位", () => {
     vi.useFakeTimers();
-    registry.register({
-      id: "seq", key: "g then i", label: "Go Input", category: "navigation", handler: vi.fn(),
-    });
-    registry.handleKeyPress("g"); // 前缀匹配
-    vi.advanceTimersByTime(1100); // 超时
-    const r = registry.handleKeyPress("i");
-    expect(r).toBe(false); // 序列已复位，不匹配
-    vi.useRealTimers();
+    try {
+      registry.register({
+        id: "seq", key: "g then i", label: "Go Input", category: "navigation", handler: vi.fn(),
+      });
+      registry.handleKeyPress("g"); // 前缀匹配
+      vi.advanceTimersByTime(1100); // 超时
+      const r = registry.handleKeyPress("i");
+      expect(r).toBe(false); // 序列已复位，不匹配
+    } finally {
+      // 断言失败也必须恢复真实定时器，防止泄漏到后续测试
+      vi.useRealTimers();
+    }
   });
 
   it("getBindingsForContext 过滤", () => {

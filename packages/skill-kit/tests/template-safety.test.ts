@@ -1,48 +1,28 @@
 // @ci: unit
 import { describe, it, expect } from "vitest";
+import { SkillTemplateEngine } from "@cortex/skill-kit";
 
 describe("Skill template engine — prototype safety", () => {
+  const engine = new SkillTemplateEngine();
+
   it("变量路径禁止访问 __proto__", () => {
-    const context = { safe: "ok" };
-    const path = "__proto__";
-    const parts = path.split(".");
-    let current: unknown = context;
-    for (const part of parts) {
-      if (part === "__proto__" || part === "constructor" || part === "prototype") {
-        current = undefined;
-        break;
-      }
-      if (typeof current === "object" && current !== null && part in (current as Record<string, unknown>)) {
-        current = (current as Record<string, unknown>)[part];
-      } else {
-        current = undefined;
-      }
-    }
-    expect(current).toBeUndefined();
+    const ctx = { safe: "ok", polluted: "secret" };
+    // 渲染含 __proto__ 路径的模板，应返回 undefinedPlaceholder（""），绝不解析出原型内容
+    const out = engine.render("{{ __proto__.polluted }}", ctx);
+    expect(out).toBe("");
   });
 
   it("变量路径禁止访问 constructor", () => {
-    const context = { safe: "ok" };
-    const parts = "constructor".split(".");
-    let current: unknown = context;
-    for (const part of parts) {
-      if (part === "__proto__" || part === "constructor" || part === "prototype") {
-        current = undefined;
-        break;
-      }
-    }
-    expect(current).toBeUndefined();
+    const ctx = { safe: "ok" };
+    const out = engine.render("{{ constructor }}", ctx);
+    expect(out).toBe("");
+    // 嵌套路径同样被拦截
+    expect(engine.render("{{ deep.constructor.name }}", ctx)).toBe("");
   });
 
   it("正常变量路径正常解析", () => {
-    const context = { deep: { key: "value" } };
-    const parts = "deep.key".split(".");
-    let current: unknown = context;
-    for (const part of parts) {
-      if (typeof current === "object" && current !== null && part in (current as Record<string, unknown>)) {
-        current = (current as Record<string, unknown>)[part];
-      }
-    }
-    expect(current).toBe("value");
+    const ctx = { deep: { key: "value" } };
+    const out = engine.render("{{ deep.key }}", ctx);
+    expect(out).toBe("value");
   });
 });

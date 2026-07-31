@@ -192,6 +192,66 @@
     "decision_made": {
       "channel": "routine",
       "ackRequired": false
+    },
+    "code_generated": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "feature_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "diagnosis_complete": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "test_passing": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "audit_passed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "research_done": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "pattern_extracted": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "skill_crystallized": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "ops_diagnosed": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "env_checked": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "memory_queried": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "task_dispatched": {
+      "channel": "routine",
+      "ackRequired": false
+    },
+    "api_designed": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "data_modeled": {
+      "channel": "important",
+      "ackRequired": false
+    },
+    "confirmation_decision": {
+      "channel": "urgent",
+      "ackRequired": true
     }
   },
   "committeeRules": [

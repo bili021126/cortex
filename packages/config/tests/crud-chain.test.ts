@@ -118,7 +118,7 @@ describe("ConfigStore CRUD 链路", () => {
   describe("TuningStore", () => {
     it("点路径调参——setTuningParam / getTuningParam", () => {
       seedFile("tuning.json", JSON.stringify({
-        env: {}, tuning: { execution: { reactMaxLoops: 10, reactContextHardLimit: 30000, maxToolRounds: 20, toolTimeoutMs: 30000, commandTimeoutSec: 120, taskTimeoutSec: 600, nodeDispatchTimeoutMs: 120000, executeAllTimeoutMs: 300000 }, scheduling: { workerPoolMaxQueue: 100, claimLeaseMs: 120000, maxReplanPerNode: 3, maxTotalReplans: 10 }, trust: { baseScore: 50, autoApproveL2: 70, autoApproveL3: 85, l0l1Bonus: 0.5, l2Penalty: 8, l3Penalty: 15, bypassTtlMs: 300000 }, verification: { cacheTtlMs: 60000, barrelMaxSize: 10, tsFileMaxSize: 10 }, memory: { bm25K1: 1.2, bm25B: 0.75, vectorDedupThreshold: 0.95, staleFreezeDays: 30, frozenObliterateDays: 7, maintenanceWeightThreshold: 0.05 }, rlm: { maxDepth: 3, minComplexityChars: 500, minConfidence: 0.6 } },
+        env: {}, tuning: { execution: { reactMaxLoops: 10 }, trust: { baseScore: 50, autoApproveL2: 70, autoApproveL3: 85, l0l1Bonus: 0.5, l2Penalty: 8, l3Penalty: 15, bypassTtlMs: 300000 }, verification: { cacheTtlMs: 60000, barrelMaxSize: 10, tsFileMaxSize: 10 }, memory: { bm25K1: 1.2, bm25B: 0.75, vectorDedupThreshold: 0.95, staleFreezeDays: 30, frozenObliterateDays: 7, maintenanceWeightThreshold: 0.05 }, rlm: { maxDepth: 3, minComplexityChars: 500, minConfidence: 0.6 } },
       }));
       const store = new TuningStore(readFile, writeFile, TEST_DIR);
 

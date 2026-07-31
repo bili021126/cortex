@@ -106,14 +106,14 @@ describe("Cross-package governance pipeline", () => {
 
     // GovernanceEventEmitter 发射修宪提案事件
     emitter.emitAmendmentProposed({
-      type: PipelineEventType.GovernanceAmendmentProposed,
       id: "AM-001",
       severity: "WARNING",
       source: "doc-govern",
       summary: "修改宪法 §3 —— 增加模块化铁律",
       detail: "提案详情...",
       suggestedAction: "fix",
-    } as any);
+      amendmentId: "AM-001",
+    });
 
     // PipelineObserver 收到事件
     expect(observer.emitted).toHaveLength(1);
@@ -181,14 +181,14 @@ describe("Cross-package governance pipeline", () => {
 
     // 2. 模拟发射合规违规事件（治理反馈）
     emitter.emitComplianceViolation({
-      type: PipelineEventType.GovernanceComplianceViolation,
       id: "CV-001",
       severity: "WARNING",
       source: "doc-govern",
       summary: `记忆管线降级 10 次，需审查`,
       detail: `模块: memory-pipeline, 降级次数: 10`,
       suggestedAction: "escalate",
-    } as any);
+      violationLevel: "P2",
+    });
 
     // 3. PipelineObserver 收到合规违规事件
     expect(observer.emitted).toHaveLength(1);
@@ -248,13 +248,13 @@ describe("Cross-package governance pipeline", () => {
       // 验证通知层收到正确事件
       // GovernanceEventEmitter 发射阶段结果
       emitter.emitAuditReport({
-        type: PipelineEventType.GovernanceAuditReport,
         id: "AR-001",
         severity: "FYI",
         source: "governance-loop",
         summary: "修宪管线执行完成",
         detail: `阶段: ${result.stageResults.map((r: any) => r.stage).join(" → ")}`,
-      } as any);
+        auditType: "plan_review",
+      });
 
       // 模拟桥接到 notification
       if (observer.emitted.length > 0) {
@@ -280,42 +280,42 @@ describe("Cross-package governance pipeline", () => {
 
     // 修宪提案
     emitter.emitAmendmentProposed({
-      type: PipelineEventType.GovernanceAmendmentProposed,
       id: "AM-002",
       severity: "FYI",
       source: "doc-govern",
       summary: "测试提案",
-    } as any);
+      amendmentId: "AM-002",
+    });
     expect(observer.emitted[0]?.type).toBe(PipelineEventType.GovernanceAmendmentProposed);
 
     // 审计报告
     emitter.emitAuditReport({
-      type: PipelineEventType.GovernanceAuditReport,
       id: "AR-002",
       severity: "FYI",
       source: "doc-govern",
       summary: "测试审计",
-    } as any);
+      auditType: "doc_audit",
+    });
     expect(observer.emitted[1]?.type).toBe(PipelineEventType.GovernanceAuditReport);
 
     // 合规违规
     emitter.emitComplianceViolation({
-      type: PipelineEventType.GovernanceComplianceViolation,
       id: "CV-002",
       severity: "WARNING",
       source: "sentinel",
       summary: "测试合规违规",
-    } as any);
+      violationLevel: "P1",
+    });
     expect(observer.emitted[2]?.type).toBe(PipelineEventType.GovernanceComplianceViolation);
 
     // 圆桌共识
     emitter.emitRoundtableConsensus({
-      type: PipelineEventType.GovernanceRoundtableConsensus,
       id: "RT-001",
       severity: "FYI",
       source: "committee",
       summary: "测试圆桌共识",
-    } as any);
+      participants: ["doc-govern"],
+    });
     expect(observer.emitted[3]?.type).toBe(PipelineEventType.GovernanceRoundtableConsensus);
 
     // 验证发射了 4 个不同的事件

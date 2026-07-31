@@ -113,42 +113,59 @@ export function toError(err: unknown): Error {
 /**
  * 合并多个 AbortSignal 为一个组合信号。
  *
- * 当任意一个源信号 abort 时，组合信号也随之 abort。
- * 若任一源信号已 abort，返回该信号。
- *
- * 策略（按优先级）：
- * 1. AbortSignal.any() — Node.js 20+ / 现代浏览器
- * 2. 手动合并 — 通过监听所有信号的 abort 事件同步给新 controller
+ * 内部委托给 combineSignalsWithCleanup——组合信号的监听器由源信号持有，
+ * 若组合后从不 abort 且无清理，监听器会泄漏。本函数不返回清理函数（兼容旧签名），
+ * 长生命周期场景请使用 combineSignalsWithCleanup 并在 finally 中调用 cleanup。
  *
  * @param signals 要合并的 AbortSignal 列表
  * @returns 合并后的 AbortSignal
+ */
+export function combineSignals(signals: AbortSignal[]): AbortSignal {
+  return combineSignalsWithCleanup(signals).signal;
+}
+
+/**
+ * 合并多个 AbortSignal 并返回清理函数。
+ *
+ * 当任意一个源信号 abort 时，组合信号也随之 abort。
+ * 若任一源信号已 abort，返回该信号。
+ *
+ * 手动合并降级分支（无 AbortSignal.any）会在源信号上注册监听器——
+ * 若组合信号从不 abort，监听器会永久残留。调用方必须在 finally 中调用 cleanup 移除。
+ *
+ * @param signals 要合并的 AbortSignal 列表
+ * @returns { signal, cleanup }：signal 为合并信号，cleanup 移除手动合并分支的监听器
  *
  * @example
  * ```typescript
- * const combined = combineSignals([externalSignal, timeoutSignal]);
- * // 当 externalSignal 或 timeoutSignal 任一 abort 时，combined 也 abort
+ * const { signal, cleanup } = combineSignalsWithCleanup([externalSignal, timeoutSignal]);
+ * try {
+ *   await fetch(url, { signal });
+ * } finally {
+ *   cleanup();
+ * }
  * ```
  */
-export function combineSignals(signals: AbortSignal[]): AbortSignal {
+export function combineSignalsWithCleanup(signals: AbortSignal[]): { signal: AbortSignal; cleanup: CleanupFn } {
   if (signals.length === 0) {
-    return new AbortController().signal;
+    return { signal: new AbortController().signal, cleanup: () => { /* 无监听器 */ } };
   }
 
   if (signals.length === 1) {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    return signals[0]!;
+    return { signal: signals[0]!, cleanup: () => { /* 无监听器 */ } };
   }
 
   // 检查是否有已中止的信号
   for (const signal of signals) {
     if (signal.aborted) {
-      return signal;
+      return { signal, cleanup: () => { /* 无监听器 */ } };
     }
   }
 
-  // 优先使用 AbortSignal.any()（Node.js 20+）
+  // 优先使用 AbortSignal.any()（Node.js 20+，无监听器泄漏问题）
   if (typeof AbortSignal.any === 'function') {
-    return AbortSignal.any(signals);
+    return { signal: AbortSignal.any(signals), cleanup: () => { /* 无监听器 */ } };
   }
 
   // 降级方案：手动合并
@@ -157,11 +174,21 @@ export function combineSignals(signals: AbortSignal[]): AbortSignal {
     controller.abort();
   };
 
+  const listeners: Array<[AbortSignal, () => void]> = [];
   for (const signal of signals) {
     signal.addEventListener('abort', abortMerged, { once: true });
+    listeners.push([signal, abortMerged]);
   }
 
-  return controller.signal;
+  return {
+    signal: controller.signal,
+    // P2 fix: 显式移除监听器——组合信号从不 abort 时防泄漏
+    cleanup: () => {
+      for (const [signal, listener] of listeners) {
+        signal.removeEventListener('abort', listener);
+      }
+    },
+  };
 }
 
 // ============================================================

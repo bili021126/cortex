@@ -112,15 +112,28 @@ export class EntityGraph {
 
   load(): EntityGraphData {
     if (this.cache) return this.cache
+    const filePath = this.getPath()
+    if (!fs.existsSync(filePath)) {
+      this.cache = { entities: [], relations: [] }
+      return this.cache
+    }
     try {
-      const filePath = this.getPath()
-      if (fs.existsSync(filePath)) {
-        const raw = fs.readFileSync(filePath, "utf8")
-        this.cache = JSON.parse(raw) as EntityGraphData
-      } else {
-        this.cache = { entities: [], relations: [] }
+      const raw = fs.readFileSync(filePath, "utf8")
+      const parsed = JSON.parse(raw) as EntityGraphData
+      // 结构校验：防损坏文件被当作合法空图谱
+      if (!Array.isArray(parsed.entities) || !Array.isArray(parsed.relations)) {
+        throw new Error("invalid entity-graph shape")
       }
-    } catch {
+      this.cache = parsed
+    } catch (err) {
+      // P2: 损坏时备份 .corrupt 并告警，不静默清空
+      try {
+        const corruptPath = filePath + ".corrupt"
+        fs.copyFileSync(filePath, corruptPath)
+        console.error(`[EntityGraph] 图谱文件损坏，已备份到 ${corruptPath}`, err)
+      } catch {
+        console.error(`[EntityGraph] 图谱文件损坏且备份失败: ${err instanceof Error ? err.message : String(err)}`)
+      }
       this.cache = { entities: [], relations: [] }
     }
     return this.cache
@@ -131,7 +144,10 @@ export class EntityGraph {
     const filePath = this.getPath()
     const dir = path.dirname(filePath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(filePath, JSON.stringify(this.cache, null, 2), "utf8")
+    // P2: tmp + rename 原子写，防止写一半崩溃损坏图谱文件
+    const tmpPath = filePath + ".tmp"
+    fs.writeFileSync(tmpPath, JSON.stringify(this.cache, null, 2), "utf8")
+    fs.renameSync(tmpPath, filePath)
   }
 
   /** 从一条对话文本中提取实体并入库 */

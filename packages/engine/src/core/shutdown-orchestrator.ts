@@ -38,6 +38,8 @@ export class ShutdownOrchestrator {
   private _observer?: IPipelineObserver;
   /** 可选的 AgentTracker 引用——shutdown 时同步生命周期状态 */
   private _agentTracker?: AgentTrackerLike;
+  /** P2 fix: 幂等守卫——shutdown 已开始/完成时重复调用直接返回 */
+  private _shuttingDown = false;
 
   constructor(observer?: IPipelineObserver) {
     this._observer = observer;
@@ -72,32 +74,43 @@ export class ShutdownOrchestrator {
    * 同时通知 AgentTracker 生命周期状态变更。
    */
   async shutdown(): Promise<void> {
+    // P2 fix: 幂等守卫——重复 shutdown 直接返回，防止二次关闭副作用
+    if (this._shuttingDown) return;
+    this._shuttingDown = true;
+
     for (const name of [...this.order].reverse()) {
       const c = this.components.get(name);
       if (!c) continue;
       try {
         const componentPhase = c.phase;
-        let shutdownTimer: ReturnType<typeof setTimeout> | undefined;
-        await Promise.race([
-          (async () => {
-            await c.stop?.();
-            // stop 后同步 AgentTracker——任务不再被调度
-            if (this._agentTracker && componentPhase) {
-              this._agentTracker.syncLifecycleState(name, 'stop');
+        // P2 fix: 超时后不再 reject 中断——记录跳过并继续后续组件关闭；
+        //   后台任务交由进程退出路径收尾（或由组件自身 dispose 保障）
+        const timedOut = await new Promise<boolean>((resolve) => {
+          const timeoutId = setTimeout(() => resolve(true), this.SHUTDOWN_TIMEOUT_MS);
+          void (async () => {
+            try {
+              await c.stop?.();
+              // stop 后同步 AgentTracker——任务不再被调度
+              if (this._agentTracker && componentPhase) {
+                this._agentTracker.syncLifecycleState(name, 'stop');
+              }
+              c.dispose?.();
+              // dispose 后同步 AgentTracker——强制标记为 failed
+              if (this._agentTracker && componentPhase) {
+                this._agentTracker.syncLifecycleState(name, 'dispose');
+              }
+            } catch (err) {
+              // 组件自身异常 → 上报并跳过（不阻塞后续组件）
+              this._emitComponentError(name, err);
+            } finally {
+              clearTimeout(timeoutId);
+              resolve(false);
             }
-            c.dispose?.();
-            // dispose 后同步 AgentTracker——强制标记为 failed
-            if (this._agentTracker && componentPhase) {
-              this._agentTracker.syncLifecycleState(name, 'dispose');
-            }
-          })().finally(() => clearTimeout(shutdownTimer)),
-          new Promise<void>((_, reject) => {
-            shutdownTimer = setTimeout(
-              () => reject(new Error(`[ShutdownOrchestrator] shutdown timeout: ${name}`)),
-              this.SHUTDOWN_TIMEOUT_MS,
-            );
-          }),
-        ]);
+          })();
+        });
+        if (timedOut) {
+          this._emitComponentError(name, new Error(`[ShutdownOrchestrator] shutdown timeout: ${name}（超时后跳过，后台任务由进程退出路径收尾）`));
+        }
       } catch (err) {
         this._emitComponentError(name, err);
       }

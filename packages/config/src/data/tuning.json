@@ -13,20 +13,7 @@
   },
   "tuning": {
     "execution": {
-      "reactMaxLoops": 32,
-      "reactContextHardLimit": 128000,
-      "maxToolRounds": 20,
-      "toolTimeoutMs": 30000,
-      "commandTimeoutSec": 120,
-      "taskTimeoutSec": 600,
-      "nodeDispatchTimeoutMs": 120000,
-      "executeAllTimeoutMs": 300000
-    },
-    "scheduling": {
-      "workerPoolMaxQueue": 100,
-      "claimLeaseMs": 120000,
-      "maxReplanPerNode": 3,
-      "maxTotalReplans": 10
+      "reactMaxLoops": 32
     },
     "trust": {
       "baseScore": 50,

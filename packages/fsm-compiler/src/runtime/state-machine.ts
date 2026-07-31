@@ -102,6 +102,9 @@ export class GuardError extends Error {
 // ────────────────────────────────────────────────────────────
 
 export class StateMachine<TState extends string, TEvent extends string, TContext = void> {
+  /** history 最大长度——环形裁剪，防止无界增长（审计保近原则） */
+  private static readonly HISTORY_MAX = 1000;
+
   private _current: TState;
   private _history: TransitionRecord<TState, TEvent, TContext>[];
   private _transitionTable: TransitionTable<TState, TEvent>;
@@ -232,6 +235,10 @@ export class StateMachine<TState extends string, TEvent extends string, TContext
       id: `${this._machineId}-${++this._transitionIdCounter}-${Date.now()}`,
     };
     this._history.push(record);
+    // P2 fix: 环形裁剪——超过 HISTORY_MAX 时移除最旧记录，防止无界增长
+    if (this._history.length > StateMachine.HISTORY_MAX) {
+      this._history.splice(0, this._history.length - StateMachine.HISTORY_MAX);
+    }
 
     // Update state BEFORE executing action
     this._current = entry.target;
@@ -241,8 +248,9 @@ export class StateMachine<TState extends string, TEvent extends string, TContext
       try {
         const result = this._actions.execute(entry.action, context);
         if (result instanceof Promise) {
-          // Note: In synchronous dispatch, we fire-and-forget async actions.
-          // For proper async handling, use dispatchAsync().
+          // Note: dispatch() 是同步方法，异步 action 采用 fire-and-forget——
+          // 若需要 await 异步 action 的完成，请在调用方自行 await（本运行时未提供 dispatchAsync）。
+          // 失败通过 onAsyncActionError 回调上报，不中断状态转换。
           result.catch((err) => {
             const actionName = entry.action as string;
             this._onAsyncActionError(actionName, err);

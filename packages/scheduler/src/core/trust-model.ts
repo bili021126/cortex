@@ -37,6 +37,8 @@ export class TrustModel implements ITrustModel {
   /** 二维聚合表：key = `${agentType}:${domain}` */
   private readonly _entries = new Map<string, TrustEntry>();
   private readonly _statePath: string | undefined;
+  /** 保存串行化队列——防止并发 save 乱序/竞态（P1-11） */
+  private _saveQueue: Promise<unknown> = Promise.resolve();
 
   constructor(statePath?: string) {
     this._statePath = statePath;
@@ -105,8 +107,10 @@ export class TrustModel implements ITrustModel {
     entry.updatedAt = now;
     this._entries.set(key, entry);
 
-    // 持久化——不阻塞决策逻辑
-    this.save().catch(() => { /* 持久化失败不抛出 */ });
+    // 持久化——不阻塞决策逻辑，但失败必须上报（P1-11：不再静默吞错）
+    this.save().catch((err) => {
+      console.error(`[scheduler] trust_model.save_failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
   }
 
   // ── 全局操作 ──────────────────────────────────────
@@ -121,30 +125,53 @@ export class TrustModel implements ITrustModel {
   /**
    * 将信任状态写入 JSON 文件。
    * 仅当构造时传入了 statePath 时才执行写入。
+   * tmp + rename 原子写；Promise 链串行化防止并发乱序（P1-11）。
    */
   async save(): Promise<void> {
-    if (!this._statePath) return;
+    const statePath = this._statePath;
+    if (!statePath) return;
     const data = JSON.stringify([...this._entries.entries()]);
-    await fs.mkdir(path.dirname(this._statePath), { recursive: true });
-    await fs.writeFile(this._statePath, data, "utf-8");
+    const run = this._saveQueue.then(async () => {
+      const dir = path.dirname(statePath);
+      await fs.mkdir(dir, { recursive: true });
+      const tmpPath = statePath + ".tmp";
+      await fs.writeFile(tmpPath, data, "utf-8");
+      await fs.rename(tmpPath, statePath);
+    });
+    // 队列吞错但链不断——后续 save 仍可执行（latest-wins 语义）
+    this._saveQueue = run.catch(() => {});
+    return await run;
   }
 
   /**
    * 从 JSON 文件加载信任状态。
-   * 首次启动无文件时不报错（静默回退）。
+   * 首次启动无文件时不报错（静默回退）；
+   * 文件损坏时备份 .corrupt 并告警，以空状态启动（P2）。
    */
   async load(): Promise<void> {
     if (!this._statePath) return;
+    let raw: string;
     try {
-      const data = await fs.readFile(this._statePath, "utf-8");
-      const parsed: [string, TrustEntry][] = JSON.parse(data);
+      raw = await fs.readFile(this._statePath, "utf-8");
+    } catch {
+      return; // 首次启动无文件，静默忽略
+    }
+    try {
+      const parsed: [string, TrustEntry][] = JSON.parse(raw);
       this._entries.clear();
       for (const [key, entry] of parsed) {
         this._entries.set(key, entry);
       }
-    } catch {
-      console.error(`[scheduler] trust_model.load_failed_first_start`);
-      // 首次启动无文件，静默忽略
+    } catch (err) {
+      // 文件存在但解析失败 = 损坏：备份原始文件并告警，不再静默空启动
+      try {
+        const corruptPath = this._statePath + ".corrupt";
+        await fs.copyFile(this._statePath, corruptPath);
+        console.error(`[scheduler] trust_model 状态文件损坏，已备份到 ${corruptPath}，以空状态启动`, err);
+      } catch (backupErr) {
+        console.error(`[scheduler] trust_model 状态文件损坏且备份失败，以空状态启动`, err, backupErr);
+      }
+      this._entries.clear();
     }
   }
 
@@ -265,6 +292,10 @@ export class TrustModel implements ITrustModel {
         entry.level = newLevel;
         entry.consecutiveAccepts = 0; // 衰减打断连续接受链
         entry.updatedAt = Date.now();
+        // 衰减结果落盘（fire-and-forget，失败上报）——同步查询路径无法 await（P2）
+        this.save().catch((err) => {
+          console.error(`[scheduler] trust_model.decay_save_failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
       }
     }
   }

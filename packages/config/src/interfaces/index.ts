@@ -49,7 +49,6 @@ export type {
 export type {
   EnvVarEntry,
   ExecutionTuning,
-  SchedulingTuning,
   TrustTuning,
   VerificationTuning,
   MemoryTuning,

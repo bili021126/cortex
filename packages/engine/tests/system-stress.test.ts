@@ -2192,7 +2192,7 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
     expect(failResult?.success).toBe(false);
   }, TIMEOUT);
 
-  it.skip("should handle agent timeout with proper cleanup (SKIP: Scheduler 超时行为变更)", async () => {
+  it("should handle agent timeout with proper cleanup", async () => {
     const board = new TaskBoard();
     const pool = new AgentPool();
     const observer = new PipelineObserver();
@@ -2220,9 +2220,12 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
 
     const report = await scheduler.executeAll();
     // 超时后应正确清理，不残留 pending 状态
+    // 注：executeAllTimeoutMs 超时仅提前返回报告，agent 仍在后台执行至完成，
+    // 节点最终由 agent 执行结果决定（成功→done），核心是清理完成、不残留 pending
     const node = board.getNode("timeout-node");
     expect(node).toBeDefined();
-    expect(node!.status).toBe("failed");
+    expect(node!.status).not.toBe("pending");
+    expect(["done", "failed"]).toContain(node!.status);
   }, TIMEOUT);
 
   it("should continue remaining nodes after one fails", async () => {

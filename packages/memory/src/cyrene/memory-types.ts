@@ -168,4 +168,6 @@ export interface MemoryStoreData {
   reflectionLogs?: ReflectionLog[]
   conflictLogs?: ConflictLog[]
   version: number
+  /** @internal 存储文件损坏后以空存储启动的标记（load 时不覆盖损坏文件） */
+  _corrupted?: boolean
 }

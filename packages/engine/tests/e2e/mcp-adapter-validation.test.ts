@@ -162,12 +162,14 @@ describe("MCP Adapter Validation — 无鉴权生态测试", () => {
     describe(`Server: ${spec.id} (${spec.formatNotes})`, () => {
       let client: McpClient;
       let adapters: Tool[] = [];
+      let startError: string | undefined;
 
       beforeAll(async () => {
         client = new McpClient(spec.config);
         const started = await safeStart(client);
         if (!started.ok) {
-          console.warn(`  ⚠️  ${spec.id} 启动失败: ${started.error}`);
+          // 保存启动错误——由 [A] 显式 fail，避免整个 suite 静默变绿
+          startError = started.error;
           return;
         }
 
@@ -175,7 +177,6 @@ describe("MCP Adapter Validation — 无鉴权生态测试", () => {
         for (const toolDef of tools) {
           adapters.push(new McpToolAdapter(client, toolDef, spec.config.id));
         }
-        console.log(`  ✅ ${spec.id} 已连接——${adapters.length} 个工具`);
       }, 90_000);
 
       afterAll(async () => {
@@ -184,8 +185,8 @@ describe("MCP Adapter Validation — 无鉴权生态测试", () => {
 
       it(`[A] 工具数量 >= ${spec.minTools}`, () => {
         if (adapters.length === 0) {
-          console.warn("  ⚠️  未启动，跳过");
-          return;
+          // 服务器启动失败 → 显式失败（不再静默跳过）
+          expect.fail(`${spec.id} 服务器启动失败，无工具可测: ${startError ?? "unknown error"}`);
         }
         expect(adapters.length).toBeGreaterThanOrEqual(spec.minTools);
       });
@@ -254,7 +255,6 @@ describe("MCP Adapter Validation — 无鉴权生态测试", () => {
             }
             expect(typeof result.output).toBe("string");
             expect(result.output!.length).toBeGreaterThan(0);
-            console.log(`  📤 ${sample.tool} → ${result.output!.slice(0, 120)}${result.output!.length > 120 ? "…" : ""}`);
           } catch (e) {
             // 采样失败不阻塞——可能是网络问题
             console.warn(`  ⚠️  执行失败 (可能是网络/环境问题): ${String(e)}`);

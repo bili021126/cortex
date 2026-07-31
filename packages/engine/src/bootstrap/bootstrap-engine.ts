@@ -320,6 +320,9 @@ export async function bootstrapEngine(
   // §6.2.4 NotificationRuntime —— PipelineObserver → NotificationPipe 桥接
   // @layer 治理层→治理层：PipelineObserver → NotificationPipe 桥接
   const notificationPipe = new NotificationPipe();
+  // P0-1: 加载事件路由表——factory 已加载 event-routing.json（routeTable key 为 snake_case，
+  //       resolve() 对 dotted 事件名取点号最后一段映射，如 "governance.amendment_proposed" → "amendment_proposed"）
+  notificationPipe.loadRoutes(config.eventRouting.routeTable);
   const govValidator = new ZeroTokenValidator();
   const notificationRuntime = new NotificationRuntime(observer, notificationPipe, {
     enableTelemetry: true,

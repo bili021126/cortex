@@ -44,23 +44,13 @@ describe("并发路径: 3个plan→scheduler竞争→gate→memory事务", () =>
     toolkit.setGate(gate);
     toolkit.setObserver(observer);
 
-    // 注册多个 Code Agent 实例以支持并发
-    const adapters = [
-      new LlmAdapter({ apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock" }),
-      new LlmAdapter({ apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock" }),
-      new LlmAdapter({ apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock" }),
-    ];
-    adapters.forEach((a) => {
-      a.injectMock(async () => ({ content: "Task completed successfully.", tool_calls: [] }));
-    });
-
+    // 注册 Code Agent——Scheduler 按类型 1:1，单实例串行/并行执行全部 code 节点
     pool.register({ type: AgentType.Code, maxInstances: 5 });
-
-    for (let i = 0; i < 3; i++) {
-      const agent = createAgent(codeAgentConfig(`mock concurrent agent ${i}`), adapters[i]!, toolkit, store);
-      await agent.wakeup();
-      scheduler.register(`${AgentType.Code}-${i}`, agent, "mock-chat");
-    }
+    const adapter = new LlmAdapter({ apiKey: "mock", baseUrl: "mock", chatModel: "mock", reasonerModel: "mock" });
+    adapter.injectMock(async () => ({ content: "Task completed successfully.", tool_calls: [] }));
+    const agent = createAgent(codeAgentConfig(`mock concurrent agent`), adapter, toolkit, store);
+    await agent.wakeup();
+    scheduler.register(AgentType.Code, agent, "mock-chat");
   });
 
   afterAll(async () => {
@@ -129,8 +119,8 @@ describe("并发路径: 3个plan→scheduler竞争→gate→memory事务", () =>
     expect(ids).toHaveLength(3);
     expect(new Set(ids).size).toBe(3); // 无重复ID
 
-    // 验证全部可读且数据完整
-    const allEntries = await store.read({ kind: "TaskLog" as any });
+    // 验证全部可读且数据完整——显式 limit 防被前置测试注入的 TaskLog 挤出默认 3 条上限
+    const allEntries = await store.read({ kind: "TaskLog" as any, limit: 50 });
     const planEntries = allEntries.filter((e) =>
       e.summary?.startsWith("Concurrent memory"),
     );

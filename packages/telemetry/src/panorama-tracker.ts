@@ -71,9 +71,9 @@ export class PanoramaTracker {
         success: false, output: "", error: "", toolCalls: [], replanCount: 0,
       });
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const t = this.traces.get(nodeId)!;
-      t.status = "claimed"; t.claimedAt = now;
+      // has() 已保证存在；仍显式判空以规避 noUncheckedIndexedAccess 逃逸
+      const t = this.traces.get(nodeId);
+      if (t) { t.status = "claimed"; t.claimedAt = now; }
     }
   }
 

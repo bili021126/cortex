@@ -44,6 +44,17 @@ describe("FileBasedMemoryStore", () => {
     } catch {
       // 忽略清理错误
     }
+    // 顺带清理历史残留：早期 autoFlush 测试误在 tests/.test-data 下建目录
+    try {
+      const legacyRoot = path.join(process.cwd(), "tests", ".test-data");
+      for (const name of await fs.readdir(legacyRoot)) {
+        if (name.startsWith("noflush-")) {
+          await fs.rm(path.join(legacyRoot, name), { recursive: true, force: true });
+        }
+      }
+    } catch {
+      // 目录不存在或不可读——忽略
+    }
   });
 
   describe("init / isReady", () => {
@@ -393,7 +404,8 @@ describe("FileBasedMemoryStore", () => {
   describe("autoFlush option", () => {
     it("should work with autoFlush disabled", async () => {
       const storeNoFlush = new FileBasedMemoryStore({ autoFlush: false });
-      await storeNoFlush.init(path.join(testDir, "..", `noflush-${Date.now()}`));
+      // 建在 testDir 内部，随 afterEach 一起清理（避免在父目录留下残留）
+      await storeNoFlush.init(path.join(testDir, `noflush-${Date.now()}`));
       const id = await storeNoFlush.write(createSampleInput());
       const entry = await storeNoFlush.get(id);
       expect(entry).toBeDefined();

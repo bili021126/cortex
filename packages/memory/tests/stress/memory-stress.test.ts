@@ -192,7 +192,7 @@ describe("场景2: 并发 writePending → commit → 无脏数据", () => {
     expect(results2.length).toBe(2);
   });
 
-  it("writePending 一半 commit 一半 rollback 应只有 commit 的可见", () => {
+  it("writePending 一半 commit 一半 rollback 应只有 commit 的可见", async () => {
     const id1 = store.writePending(createSampleInput({ summary: "commit-me" }));
     const id2 = store.writePending(createSampleInput({ summary: "rollback-me" }));
     const id3 = store.writePending(createSampleInput({ summary: "commit-me-too" }));
@@ -201,9 +201,14 @@ describe("场景2: 并发 writePending → commit → 无脏数据", () => {
     store.rollback(id2);
     store.commitMemory(id3);
 
-    const results = store.read({});
-    // 注意 read 是异步的，但 InMemoryMemoryStore 的 pending 处理是同步的
-    // 这里我们用 has() 来检查
+    const results = await store.read({});
+    // commit 的可见，rollback 的不可见
+    expect(results.length).toBe(2);
+    const summaries = results.map((r) => r.summary);
+    expect(summaries).toContain("commit-me");
+    expect(summaries).toContain("commit-me-too");
+    expect(summaries).not.toContain("rollback-me");
+    // 同步检查 has() 状态
     expect(store.has(id1)).toBe(true);  // committed
     expect(store.has(id2)).toBe(false); // rolled back
     expect(store.has(id3)).toBe(true);  // committed

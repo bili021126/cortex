@@ -12,6 +12,8 @@ export default tseslint.config(
       "**/test-output/",
       "**/dist-test/",
       ".cortex/",
+      ".archived/",
+      ".qoder/",
       "projects/",
       "**/coverage/",
       "packages/desktop/src/renderer/**",

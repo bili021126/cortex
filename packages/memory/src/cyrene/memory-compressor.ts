@@ -191,22 +191,27 @@ async function compressMemories(getEntriesBySource: (source: string) => Array<{ 
       if (!cleanSummary || cleanSummary.length < 5) continue
 
       const subEntryIds = group.map((g) => g.l2.id)
-
-      await memoryStore.addL2Memory({
-        content: cleanSummary,
-         
-        triggerText: group[0]!.l2.triggerText,
-         
-        sourceConversationId: group[0]!.l2.sourceConversationId,
-        ragId: undefined,
-        embedding: [],
-        isPinned: false,
-        isSummary: true,
-        subEntryIds,
-      })
-
+      
+      // P1-10: 压缩非事务——先归档原始条目（对用户隐藏），再写入总结；
+      // add 失败则回滚 archive（恢复 active），防止部分提交丢数据
       await memoryStore.archiveL2Batch(subEntryIds)
-
+      try {
+        await memoryStore.addL2Memory({
+          content: cleanSummary,
+          triggerText: group[0]!.l2.triggerText,
+          sourceConversationId: group[0]!.l2.sourceConversationId,
+          ragId: undefined,
+          embedding: [],
+          isPinned: false,
+          isSummary: true,
+          subEntryIds,
+        })
+      } catch (err) {
+        // 回滚：恢复已归档的原始条目为 active
+        await memoryStore.updateL2Status(subEntryIds, "active").catch(() => {})
+        throw err
+      }
+      
       await memoryStore.appendReflectionLog({
         type: "compression",
         summary: `压缩 ${subEntryIds.length} 条记忆为一条总结`,

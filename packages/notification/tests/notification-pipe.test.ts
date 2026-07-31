@@ -82,6 +82,25 @@ describe("RouteTable", () => {
     table.register("evt", { channel: NotificationChannel.Urgent, ackRequired: true });
     expect(table.resolve("evt").channel).toBe(NotificationChannel.Urgent);
   });
+
+  // P0-1: 命名统一——routeTable key 为 snake_case，生产事件为 dotted PipelineEventType 值
+  it("resolve dotted 事件名 → 取点号最后一段查表", () => {
+    table.load({
+      amendment_proposed: { channel: NotificationChannel.Urgent, ackRequired: true },
+    });
+    // "governance.amendment_proposed" → 取 "amendment_proposed" → urgent
+    const route = table.resolve("governance.amendment_proposed");
+    expect(route.channel).toBe(NotificationChannel.Urgent);
+    expect(route.ackRequired).toBe(true);
+    // has() 同步识别 dotted 命中
+    expect(table.has("governance.amendment_proposed")).toBe(true);
+  });
+
+  it("resolve dotted 事件名未注册 → fallback Info + has() 为 false", () => {
+    const route = table.resolve("governance.unknown_thing");
+    expect(route.channel).toBe(NotificationChannel.Info);
+    expect(table.has("governance.unknown_thing")).toBe(false);
+  });
 });
 
 // ════════════════════════════════════════════════════════
@@ -285,6 +304,48 @@ describe("NotificationPipe", () => {
       expect(event.requestId).toMatch(/^notif-/);
       expect(event.timestamp).toBeGreaterThanOrEqual(before);
       expect(event.timestamp).toBeLessThanOrEqual(after);
+    });
+
+    // P0-1: push 语义——调用方显式设置 channel/ackRequired 时不被空路由覆盖
+    it("push 未命中路由且调用方显式设 channel → 保留调用方语义（DECISION_REQUIRED → Urgent）", () => {
+      const urgentHandler = vi.fn();
+      pipe.on(NotificationChannel.Urgent, urgentHandler);
+
+      // 路由表为空——resolve 到 DEFAULT_ROUTE（Info），但调用方已显式设置 Urgent
+      pipe.push({
+        type: "governance.some_decision",
+        summary: "需要决策",
+        channel: NotificationChannel.Urgent,
+        ackRequired: true,
+      });
+
+      expect(urgentHandler).toHaveBeenCalledOnce();
+      const evt = urgentHandler.mock.calls[0][0] as NotificationEvent;
+      expect(evt.channel).toBe(NotificationChannel.Urgent);
+      expect(evt.ackRequired).toBe(true);
+    });
+
+    // P0-1: 显式路由命中 → 路由覆盖调用方（如 event-routing.json 的 amendment_proposed → urgent）
+    it("bootstrap 链路：governance.amendment_proposed 经路由表走 Urgent 通道", () => {
+      // 模拟 bootstrap 的 loadRoutes(config.eventRouting.routeTable)——含 amendment_proposed
+      pipe.loadRoutes({
+        amendment_proposed: { channel: NotificationChannel.Urgent, ackRequired: true },
+        code_changed: { channel: NotificationChannel.Routine, ackRequired: false },
+      });
+
+      const urgentHandler = vi.fn();
+      const routineHandler = vi.fn();
+      pipe.on(NotificationChannel.Urgent, urgentHandler);
+      pipe.on(NotificationChannel.Routine, routineHandler);
+
+      // 生产事件为 dotted PipelineEventType 值
+      pipe.push({ type: "governance.amendment_proposed", summary: "修宪提案" });
+
+      expect(urgentHandler).toHaveBeenCalledOnce();
+      expect(routineHandler).not.toHaveBeenCalled();
+      const evt = urgentHandler.mock.calls[0][0] as NotificationEvent;
+      expect(evt.channel).toBe(NotificationChannel.Urgent);
+      expect(evt.ackRequired).toBe(true);
     });
   });
 

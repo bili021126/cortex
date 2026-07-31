@@ -12,7 +12,6 @@ export const TUNING_SCHEMA: JsonSchema = {
       type: "object",
       properties: {
         execution: { type: "object" },
-        scheduling: { type: "object" },
         trust: { type: "object" },
         verification: { type: "object" },
         memory: { type: "object" },

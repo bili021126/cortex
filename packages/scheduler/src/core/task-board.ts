@@ -1,4 +1,4 @@
-import { PipelineEventType, PipelinePriority, getAgentTags, type AgentType, type IPipelineObserver, type InvariantReporter, type InvariantViolation, type TaskNode, type ITaskBoard } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority, getAgentTags, type AgentType, type IPipelineObserver, type InvariantReporter, type InvariantViolation, type TaskNode, type ITaskBoard, type ISchedulerAgentPool } from "@cortex/shared";
 import { CLAIM_LEASE_MS } from "@cortex/config";
 
 /**
@@ -42,6 +42,8 @@ export type { ITaskBoard };
 export class TaskBoard implements ITaskBoard {
   private nodes = new Map<string, TaskNode>();
   private _observer?: IPipelineObserver;
+  /** AgentPool 引用——claim lease 回收前交叉验证原 agent 是否仍活跃 */
+  private _pool?: ISchedulerAgentPool;
 
   /**
    * invariant 违规上报后端。
@@ -55,6 +57,11 @@ export class TaskBoard implements ITaskBoard {
   /** 注入 PipelineObserver（与 onInvariant 互补的双通道模式） */
   setObserver(observer: IPipelineObserver): void {
     this._observer = observer;
+  }
+
+  /** 注入 AgentPool——lease 回收前交叉验证原 agent 是否仍活跃 */
+  setPool(pool: ISchedulerAgentPool): void {
+    this._pool = pool;
   }
 
   addNode(node: TaskNode): void {
@@ -90,8 +97,19 @@ export class TaskBoard implements ITaskBoard {
 
     // 普通节点：仅 pending 可认领，单 Agent
     // R5-T1 fix: claimed 节点超时自动回收为 pending（lease 120s）
+    // P2 fix: 回收前验证原 agent 是否仍活跃——若实例仍存在则续期而非回收，
+    //   防止超长执行（> CLAIM_LEASE_MS）的 agent 被回收导致双重执行
     if (node.status === "claimed" && node.claimedAt) {
       if (Date.now() - node.claimedAt > CLAIM_LEASE_MS) {
+        const claimer = node.claimedBy[0];
+        const claimerStillActive = claimer !== undefined
+          ? this._pool?.getStatus(claimer) !== undefined
+          : false;
+        if (claimerStillActive) {
+          // 原 agent 仍活跃 → 续期，不回收（等 agent 完成路径释放）
+          node.claimedAt = Date.now();
+          return null;
+        }
         node.status = "pending";
         node.claimedBy = [];
         node.claimedAt = undefined;
@@ -104,6 +122,26 @@ export class TaskBoard implements ITaskBoard {
     node.claimedBy = [agentType];
     node.claimedAt = Date.now();
     return node;
+  }
+
+  /**
+   * 续期认领——延长 lease。
+   * 用于长执行场景：agent 仍在活跃执行但接近 CLAIM_LEASE_MS 时调用，
+   * 防止 lease 过期被回收导致同一节点被二次执行。
+   *
+   * @param nodeId 节点 ID
+   * @param agentType 认领者
+   * @returns true 表示续期成功（节点当前被该 agent 认领）
+   */
+  renewClaim(nodeId: string, agentType: AgentType): boolean {
+    const node = this.nodes.get(nodeId);
+    if (!node) return false;
+    // 仅普通 claimed 节点且认领者匹配才可续期
+    if (node.needsMultiPerspective) return false;
+    if (node.status !== "claimed") return false;
+    if (!node.claimedBy.includes(agentType)) return false;
+    node.claimedAt = Date.now();
+    return true;
   }
 
   /**
@@ -126,6 +164,16 @@ export class TaskBoard implements ITaskBoard {
       node.claimedBy.splice(idx, 1);
       if (node.claimedBy.length === 0 && node.status !== "pending") {
         node.status = "pending";
+      } else if (node.claimedBy.length > 0) {
+        // 多视角自愈：移除失败视角后，剩余认领者已全部产出 → 等齐置 done。
+        // 否则节点会卡 running 直到 complete() 重入——但失败视角已 release，
+        // 需在此补齐等齐判定（spawn 失败自愈场景）。
+        const claimed = new Set(node.claimedBy);
+        const done = new Set(node.results.map((r) => r.agentType));
+        if (claimed.size === done.size && [...claimed].every((t) => done.has(t))) {
+          node.status = "done";
+          node.claimedBy = []; // 终态清理
+        }
       }
       return true;
     }

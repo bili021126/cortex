@@ -34,6 +34,7 @@ import type { IMemoryStore } from "../interfaces/MemoryStore.js";
 import type { TransactionalMemoryStore, TransactionContext, TransactionIsolation, TransactionResult, TransactionLinkOp } from "../interfaces/TransactionalMemoryStore.js";
 import { MemoryStoreError, MemoryStoreErrorCode, MemoryValidationError, TransactionError } from "../errors/MemoryStoreError.js";
 import { generateId, shortId } from "../_utils.js";
+import * as crypto from "node:crypto";
 
 // ══════════════════════════════════════════════════════════════
 // Constants & Interfaces
@@ -41,6 +42,12 @@ import { generateId, shortId } from "../_utils.js";
 
 /** Default transaction timeout in milliseconds (30 seconds). */
 const TMO = 30_000;
+
+/** Pending 条目 TTL——超过 24h 未 commit 视为放弃，由 maintain() 清理（清单2）。 */
+const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** CSA 热度统计低频落盘间隔（毫秒）——避免每次 read 都写盘（P2）。 */
+const CSA_FLUSH_INTERVAL_MS = 5_000;
 
 /**
  * PendingEntry — 两阶段提交中处于 Pending 状态的记忆条目内部记录。
@@ -131,6 +138,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   /** 两阶段提交中处于 Pending 状态的条目（id → PendingEntry） */
   protected readonly _pendingEntries = new Map<string, PendingEntry>();
 
+  /** 已湮灭条目 ID 集合——obliterate 成功后条目已从 _entries 移除，
+   *  靠此集合维持幂等（重复湮灭同一 ID 返回 true）。湮灭为永久操作，只增不减。 */
+  protected readonly _obliteratedIds = new Set<string>();
+
   /** 所有事务的内部状态（id → InternalTransaction） */
   protected readonly _transactions = new Map<string, InternalTransaction>();
 
@@ -145,6 +156,9 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
   /** 存储是否已初始化 */
   private _init = false;
+
+  /** CSA 热度统计上次落盘时间戳（低频节流用，P2） */
+  private _lastCsaFlushAt = 0;
 
   // ══════════════════════════════════════════════
   // Constructor
@@ -351,12 +365,19 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
     if (m === "CSA") {
       const n = Date.now();
+      const touched: MemoryEntry[] = [];
       for (const e of r) {
         const s = this._entries.get(e.id);
         if (s) {
           s.accessCount = (s.accessCount ?? 0) + 1;
           s.lastAccessedAt = n;
+          touched.push(s);
         }
+      }
+      // 低频落盘热度统计（≥5s 间隔才写盘），失败上报不阻塞读取（P2）
+      if (touched.length > 0 && n - this._lastCsaFlushAt >= CSA_FLUSH_INTERVAL_MS) {
+        this._lastCsaFlushAt = n;
+        for (const s of touched) this._firePersist(s);
       }
     }
 
@@ -398,7 +419,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     this._ei();
     const r: MemoryEntry[] = [];
     for (const [id, p] of this._pendingEntries)
-      r.push(this._bp(id, p));
+      // id 去 pending_ 前缀——与 commitMemory/rollback 期望的干净 ID 一致（P1-7）
+      r.push(this._bp(id.replace(/^pending_/, ""), p));
     return r;
   }
 
@@ -424,7 +446,15 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
   async init(db: string) {
     if (this._init) return;
     await this._be.init(db);
-    await this._be.load(this);
+    try {
+      await this._be.load(this);
+    } catch (err) {
+      // 半初始化防护：load 失败时清空已注入的条目/链路，保证重试 init 干净（P2）
+      this._entries.clear();
+      this._hashIndex.clear();
+      this._links.clear();
+      throw err;
+    }
     this._init = true;
   }
 
@@ -560,9 +590,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   async set(id: string, e: MemoryEntry) {
     this._ei();
-    this._indexPut(id, { ...e });
+    // 与 write() 对齐：先持久化成功再更新内存索引，失败不污染内存（P1-2）
     try {
       await this._be.persist(e);
+      this._indexPut(id, { ...e });
     } catch (err) {
       this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { operation: "set", error: String(err).slice(0, 200) }, timestamp: Date.now() });
       throw err;
@@ -581,6 +612,9 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     if (!this._entries.has(id))
       return false;
 
+    // 先 remove 成功（非 ENOENT 错误会抛出）再删内存，防止内存已删而持久化残留（P1-4）
+    await this._be.remove(id);
+
     this._indexDel(id);
     this._links.delete(id);
 
@@ -590,7 +624,6 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       ls.push(...f);
     }
 
-    await this._be.remove(id);
     return true;
   }
 
@@ -662,6 +695,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     // 状态转换白名单校验（引用 shared 中的单一事实来源）
     if (!MEMORY_VALID_TRANSITIONS[e]?.has(n)) return false;
     x.semantic_state = n;
+    // 状态迁移落盘：cas 是同步 API，fire-and-forget persist（P1-6）
+    this._firePersist(x);
     return true;
   }
 
@@ -684,6 +719,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   obliterate(id: string) {
     this._ei();
+    // 幂等：已湮灭（含已从 _entries 移除的）直接返回 true
+    if (this._obliteratedIds.has(id)) return true;
     const e = this._entries.get(id);
     if (!e) return false;
     // 幂等：已是 Obliterated 直接返回 true
@@ -693,6 +730,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     if (ok) {
       this._indexDel(id);
       this._links.delete(id);
+      this._obliteratedIds.add(id);
+      // 湮灭持久化：删除文件 + 刷新索引（P0-1）。
+      // obliterate 为同步 API（接口约束），无法 await——fire-and-forget 落盘并上报失败。
+      this._fireRemove(id);
     }
     return ok;
   }
@@ -702,9 +743,20 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     return this.archive(id);
   }
 
-  /** maintain —— 维护扫描（当前为空实现，子类可重写） */
+  /** maintain —— 维护扫描：清理过期 Pending 条目（TTL 兑底，清单2），其余由子类扩展 */
   maintain(): MaintainReport {
-    return { archived: 0, obliterated: 0, orphanedLinks: 0 };
+    const report: MaintainReport = { archived: 0, obliterated: 0, orphanedLinks: 0 };
+    const n = Date.now();
+    let expiredPending = 0;
+    for (const [id, p] of this._pendingEntries) {
+      // 超时未 commit 的 Pending 条目视为放弃，移除防泄漏
+      if (n - p.createdAt > PENDING_TTL_MS) {
+        this._pendingEntries.delete(id);
+        expiredPending++;
+      }
+    }
+    if (expiredPending > 0) report.skipped = `expired pending: ${expiredPending}`;
+    return report;
   }
 
   // ══════════════════════════════════════════════
@@ -724,8 +776,18 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     this._ei();
     this._vw(i);
 
+    // 对齐 write()：应用 preWriteHook 门禁 + 注入 sessionId + 生成 content_hash（清单5/P1-8）
+    const f = this._ah(i);
+    const ch = f.content_hash ?? this._hashOf(f);
+    // 去重检查：内容已存在的 Active 条目直接返回其 ID，不再重复 pending（清单5）
+    const dup = ch ? this.findByContentHash(ch) : undefined;
+    if (dup && this._entries.has(dup)) return dup;
+
     const cleanId = generateId();
-    this._pendingEntries.set("pending_" + cleanId, { input: { ...i }, createdAt: Date.now() });
+    this._pendingEntries.set("pending_" + cleanId, {
+      input: { ...f, sessionId: f.sessionId ?? this._sid, content_hash: ch },
+      createdAt: Date.now(),
+    });
     return cleanId;
   }
 
@@ -744,6 +806,16 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     // FSM guard: 校验 pending→active 合法性
     const transitionOk = MEMORY_VALID_TRANSITIONS["Pending"]?.has("Active") ?? false;
     if (!transitionOk) return false;
+
+    // 去重检查：内容已存在于 Active 索引（非本 pending）时拒绝提交，对齐 write 去重语义（清单5）
+    const ch = p.input.content_hash ?? this._hashOf(p.input);
+    if (ch) {
+      const dup = this.findByContentHash(ch);
+      if (dup && dup !== mid && this._entries.has(dup)) {
+        this._pendingEntries.delete("pending_" + mid);
+        return false;
+      }
+    }
 
     const n = Date.now();
     const e: MemoryEntry = {
@@ -768,9 +840,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     this._pendingEntries.delete("pending_" + mid);
 
     // 内存索引同步放入——commitMemory 是同步 API，commit→read 必须立即一致（内存即真相源）。
-    // 持久化作为耐久性备份异步进行；失败不影响内存可读性，下次 flush 重试。
-    // （原 H6 "先持久化再索引" 会把 _indexPut 推迟到 Promise.then，导致同步 commit 后
-    //   紧接 read 读不到刚提交的条目；且 catch 分支本就会无条件 _indexPut，此处统一前置。）
+    // 持久化作为耐久性备份异步进行；失败时恢复 pending 状态可重试，不再静默吞错（P1-3）。
     this._indexPut(mid, e);
     if (this._be && typeof this._be.persist === "function") {
       const persistTimeout = new Promise<void>((_, reject) =>
@@ -780,10 +850,12 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
         (this._be.persist(e) as Promise<void>),
         persistTimeout,
       ]).catch((err) => {
+        // 持久化失败：恢复 pending 状态以便下次 commitMemory 重试（P1-3）
+        this._pendingEntries.set("pending_" + mid, p);
         if (typeof process !== "undefined") {
-          process.stderr.write(`[memory] persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          process.stderr.write(`[memory] commitMemory persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
         }
-        // 条目已在内存索引中，下次 flush 重试持久化
+        this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { operation: "commitMemory", error: String(err).slice(0, 200) }, timestamp: Date.now() });
       });
     }
 
@@ -882,6 +954,18 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     ex.push(l);
     this._links.set(sid, ex);
 
+    // 关联落盘：link 是同步 API，fire-and-forget flushLinks（P2）
+    if (this._be && typeof this._be.flushLinks === "function") {
+      Promise.resolve()
+        .then(() => this._be.flushLinks(this._links))
+        .catch((err) => {
+          if (typeof process !== "undefined") {
+            process.stderr.write(`[memory] link flushLinks failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          this._observer?.emit({ type: PipelineEventType.MemoryFlushSkipped, priority: PipelinePriority.HIGH, payload: { source: "MemoryStore.link", detail: String(err).slice(0, 200) }, timestamp: Date.now() });
+        });
+    }
+
     return structuredClone(l) as MemoryLink;
   }
 
@@ -935,7 +1019,10 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
     if (!x)
       throw new TransactionError("Transaction not found", t.id);
 
-    x.pendingWrites.push({ ...i });
+    // 生成 content_hash——commit 走 write() 时使用，对齐 memory-store write 的 hash 逻辑（清单7）
+    const w = { ...i };
+    if (!w.content_hash) w.content_hash = this._hashOf(w);
+    x.pendingWrites.push(w);
     return "pending_" + (x.pendingWrites.length - 1) + "_" + shortId();
   }
 
@@ -1045,7 +1132,7 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       throw new TransactionError("Transaction is " + x.status, t.id);
 
     const committedIds: string[] = [];
-    const committedLinks: Array<{ sourceId: string; targetId: string; linkType: LinkType }> = [];
+    const committedLinks: Array<{ id: string; sourceId: string; targetId: string; linkType: LinkType }> = [];
 
     try {
       const ids: string[] = [];
@@ -1058,8 +1145,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
       for (const l of x.pendingLinks)
         if (l.action === "link") {
-          this.link(l.sourceId, l.targetId, l.linkType, l.weight);
-          committedLinks.push({ sourceId: l.sourceId, targetId: l.targetId, linkType: l.linkType });
+          const lk = this.link(l.sourceId, l.targetId, l.linkType, l.weight);
+          if (lk) committedLinks.push({ id: lk.id, sourceId: lk.sourceId, targetId: lk.targetId, linkType: lk.linkType });
         }
 
       if (x.pendingLinks.length > 0) {
@@ -1095,9 +1182,27 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       for (const cl of committedLinks) {
         const ls = this._links.get(cl.sourceId);
         if (ls) {
-          const idx = ls.findIndex(l => l.targetId === cl.targetId && l.linkType === cl.linkType);
+          // 按 id 精确匹配删除（同一 source+type 可能存在多条边）
+          const idx = ls.findIndex(l => l.id === cl.id);
           if (idx >= 0) ls.splice(idx, 1);
         }
+      }
+      // 补偿后落盘：把内存中的回滚状态同步到持久化层（P1-5）
+      try {
+        await this._be.flushIndex(this._entries);
+        await this._be.flushLinks(this._links);
+      } catch (flushErr) {
+        this._observer?.emit({
+          type: PipelineEventType.ErrorReported,
+          priority: PipelinePriority.HIGH,
+          payload: {
+            source: "MemoryStore._commit",
+            severity: "degraded",
+            error: `事务补偿后落盘失败: ${String(flushErr).slice(0, 200)}`,
+            hint: `txnId=${x.id}`,
+          },
+          timestamp: Date.now(),
+        });
       }
       x.status = "error";
       return {
@@ -1222,15 +1327,19 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
 
   /**
    * _pe — Purge Expired transactions.
-   * 清理所有已超时且仍处于 active 状态的事务，将其标记为 rolledback。
+   * 清理已超时的 active 事务（标记 rolledback），以及已死亡的 error 事务（防泄漏，清单6）。
    */
   private _pe() {
     const n = Date.now();
-    for (const [id, t] of this._transactions)
+    for (const [id, t] of this._transactions) {
       if (n > t.timeoutAt && t.status === "active") {
         t.status = "rolledback";
         this._transactions.delete(id);
+      } else if (t.status === "error") {
+        // commit 失败后事务已死亡，清理时直接删除防泄漏
+        this._transactions.delete(id);
       }
+    }
   }
 
   /**
@@ -1271,6 +1380,73 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
    */
   private _ah(i: MemoryWriteInput) {
     return this._hook ? this._hook(i) : i;
+  }
+
+  /**
+   * _hashOf — 生成内容哈希（SHA256）。
+   * 与 memory-store 适配层 write 的 hash 逻辑对齐（summary + content_blob）。
+   *
+   * @param i - 记忆写入输入
+   * @returns SHA256 十六进制摘要，失败时返回空串
+   */
+  private _hashOf(i: MemoryWriteInput): string {
+    try {
+      return crypto.createHash("sha256").update(i.summary + JSON.stringify(i.content_blob)).digest("hex");
+    } catch {
+      return "";
+    }
+  }
+
+  /**
+   * _firePersist — fire-and-forget 持久化单条目。
+   * 用于同步 API（cas/archive/read-CSA）的状态变更落盘，失败上报不抛出。
+   *
+   * @param entry - 待持久化的记忆条目
+   */
+  private _firePersist(entry: MemoryEntry): void {
+    if (this._be && typeof this._be.persist === "function") {
+      Promise.resolve()
+        .then(() => this._be.persist(entry))
+        .catch((err) => {
+          if (typeof process !== "undefined") {
+            process.stderr.write(`[memory] persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          this._observer?.emit({ type: PipelineEventType.MemoryPersistFailed, priority: PipelinePriority.HIGH, payload: { operation: "cas", error: String(err).slice(0, 200) }, timestamp: Date.now() });
+        });
+    }
+  }
+
+  /**
+   * _fireRemove — fire-and-forget 湮灭持久化（P0-1）。
+   * 删除条目文件并刷新索引/链路，失败上报不抛出。
+   *
+   * @param id - 待湮灭的记忆条目 ID
+   */
+  private _fireRemove(id: string): void {
+    if (this._be && typeof this._be.remove === "function") {
+      Promise.resolve()
+        .then(async () => {
+          await this._be.remove(id);
+          await this._be.flushIndex(this._entries);
+          await this._be.flushLinks(this._links);
+        })
+        .catch((err) => {
+          if (typeof process !== "undefined") {
+            process.stderr.write(`[memory] obliterate persist failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+          this._observer?.emit({
+            type: PipelineEventType.ErrorReported,
+            priority: PipelinePriority.HIGH,
+            payload: {
+              source: "MemoryStore.obliterate",
+              severity: "degraded",
+              error: String(err).slice(0, 200),
+              hint: `memoryId=${id}`,
+            },
+            timestamp: Date.now(),
+          });
+        });
+    }
   }
 
   /**

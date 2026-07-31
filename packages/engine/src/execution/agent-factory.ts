@@ -84,6 +84,8 @@ export function createAgent(
   const maxLoops = config.maxLoops ?? DEFAULT_ENGINE_CONFIG.defaultMaxLoops;
   const state = new PoolAwareState(config.type);
   let safeReporter: SafeErrorReporter | null = null;
+  /** P2 fix: 并发执行引用计数——进入 +1/finally -1，归零才回 Awake，防并发执行时状态失真 */
+  let _executingCount = 0;
 
   // ── ReAct 上下文（execution 时构建完整 ctx） ──
   const buildCtx = (): ReActContext => ({
@@ -125,6 +127,8 @@ export function createAgent(
           error: "AGENT_TRANSITION_DENIED",
         };
       }
+      // P2 fix: 引用计数 +1——进入执行，等待 finally 归零才回 Awake
+      _executingCount++;
       try {
         const enrichedNode = config.preExecuteHook
           ? await config.preExecuteHook(node)
@@ -164,7 +168,9 @@ export function createAgent(
             );
         return result;
       } finally {
-        if (state.status === AS.Active) {
+        _executingCount--;
+        // P2 fix: 引用计数归零才回 Awake——并发执行时任一在途 execute 完成后不移回，防止状态失真
+        if (_executingCount === 0 && state.status === AS.Active) {
           state.transition(AS.Awake);
         }
       }

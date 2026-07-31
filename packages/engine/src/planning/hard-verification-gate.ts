@@ -67,6 +67,8 @@ export class HardVerificationGate {
   private _gitDiffTime = 0;
   private _eslintCache: Array<{ file: string; rule: string }> | null = null;
   private _eslintTime = 0;
+  /** P2 fix: eslint 检查退化标记——超时/失败后置 true，用于可观测性与告警 */
+  private _eslintDegraded = false;
   private static readonly CACHE_TTL = VERIFICATION_CACHE_TTL_MS;
 
   /** 治理事件类型常量 */
@@ -123,7 +125,8 @@ export class HardVerificationGate {
     return {
       ruleName: "eslint",
       passed: matched,
-      reason: matched ? undefined : `违禁模式 "${violation}" 未被 ESLint 报出`,
+      // P2 fix: 退化标记——eslint 超时/失败时结果不可信，标注 reason 供上层感知
+      reason: matched ? undefined : `违禁模式 "${violation}" 未被 ESLint 报出${this._eslintDegraded ? "（eslint 检查已退化——结果可能不完整）" : ""}`,
     };
   }
 
@@ -243,8 +246,9 @@ export class HardVerificationGate {
     const now = Date.now();
     if (this._eslintCache && now - this._eslintTime < HardVerificationGate.CACHE_TTL) return this._eslintCache;
     try {
+      // P2 fix: timeout 30s→10s（与 zero-token-validator 对齐），降低同步 eslint 对事件循环的阻塞
       const out = execFileSync("pnpm", ["exec", "eslint", "--quiet", "--format", "compact", "packages/"], {
-        encoding: "utf-8", timeout: 30_000, cwd: process.cwd(),
+        encoding: "utf-8", timeout: 10_000, cwd: process.cwd(),
       });
       const errors: Array<{ file: string; rule: string }> = [];
       for (const line of out.split("\n")) {
@@ -253,8 +257,14 @@ export class HardVerificationGate {
       }
       this._eslintCache = errors;
       this._eslintTime = now;
+      this._eslintDegraded = false;
       return errors;
-    } catch (err) { DegradationBoundary.handle(err, 'hard-verification-gate', 'trace'); return []; }
+    } catch (err) {
+      // P2 fix: 退化标记——eslint 检查失败/超时时结果不可信
+      this._eslintDegraded = true;
+      DegradationBoundary.handle(err, 'hard-verification-gate', 'trace');
+      return [];
+    }
   }
 }
 

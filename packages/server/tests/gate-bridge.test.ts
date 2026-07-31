@@ -72,18 +72,22 @@ describe("RemoteGateBridge", () => {
 
   it("超时 300s 后自动拒绝", async () => {
     vi.useFakeTimers();
-    const promise = bridge.confirm({
-      id: "req-timeout",
-      toolName: "write_file",
-      level: "L2",
-      summary: "timeout test",
-      detail: "{}",
-    });
+    try {
+      const promise = bridge.confirm({
+        id: "req-timeout",
+        toolName: "write_file",
+        level: "L2",
+        summary: "timeout test",
+        detail: "{}",
+      });
 
-    vi.advanceTimersByTime(300_001);
-    const resp = await promise;
-    expect(resp).toEqual({ requestId: "req-timeout", approved: false });
-    vi.useRealTimers();
+      vi.advanceTimersByTime(300_001);
+      const resp = await promise;
+      expect(resp).toEqual({ requestId: "req-timeout", approved: false });
+    } finally {
+      // 断言失败也必须恢复真实定时器，防止泄漏到后续测试
+      vi.useRealTimers();
+    }
   });
 
   it("重复 resolve 同 requestId——第二次返回 false", () => {

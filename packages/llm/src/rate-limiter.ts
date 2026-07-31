@@ -109,6 +109,12 @@ export class RateLimiter {
       // 清理 60 秒外的记录
       const cutoff = now - 60_000;
       const active = window.filter((t) => t > cutoff);
+      // P2 fix: 窗口内无活跃记录时删除空窗口 key，防止 _windows 无界增长
+      if (active.length === 0) {
+        this._windows.delete(keyFingerprint);
+      } else {
+        this._windows.set(keyFingerprint, active);
+      }
       if (active.length >= rpmLimit) {
         return {
           allowed: false,
@@ -170,19 +176,31 @@ export class RateLimiter {
   private _scheduleSaveQuotas(): void {
     if (this._savePending) return;
     this._savePending = true;
-    setImmediate(async () => {
+    setImmediate(() => {
       this._savePending = false;
-      try {
-        const obj: QuotaStore = {};
-        for (const [k, v] of this._dayQuotas) { obj[k] = v; }
-        // M-02 修复：tmp→rename 原子模式，崩溃后不丢失原数据
-        const tmpPath = this._quotaPath + ".tmp";
-        await fs.promises.writeFile(tmpPath, JSON.stringify(obj, null, 2), "utf-8");
-        await fs.promises.rename(tmpPath, this._quotaPath);
-      } catch {
-        // 写入失败不阻塞主流程
-      }
+      void this.flush().catch((err) => {
+        // P2 fix: save 失败上报（保留不阻塞主流程语义，但不再静默）
+        console.error(`[rate-limiter] 每日配额持久化失败: ${err instanceof Error ? err.message : String(err)}`);
+      });
     });
+  }
+
+  /**
+   * 显式持久化每日配额（幂等）。
+   * 失败时 reject——调用方可选择上报；也可用于进程退出前落盘。
+   */
+  async flush(): Promise<void> {
+    try {
+      const obj: QuotaStore = {};
+      for (const [k, v] of this._dayQuotas) { obj[k] = v; }
+      // M-02 修复：tmp→rename 原子模式，崩溃后不丢失原数据
+      const tmpPath = this._quotaPath + ".tmp";
+      await fs.promises.writeFile(tmpPath, JSON.stringify(obj, null, 2), "utf-8");
+      await fs.promises.rename(tmpPath, this._quotaPath);
+    } catch (err) {
+      // 保留不阻塞主流程语义——调用方决定如何处理
+      throw err instanceof Error ? err : new Error(String(err));
+    }
   }
 
   /** 获取今日用量 */

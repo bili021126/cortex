@@ -65,6 +65,6 @@
     "api":       { "type": "api",      "profile": "read-only",     "role": "API 设计",                 "emoji": "🔌", "produces": ["api_designed"], "memoryQueryStrategy": "api" },
     "data":      { "type": "data",     "profile": "read-only",     "role": "数据模型",                 "emoji": "🗄️", "produces": ["data_modeled"], "memoryQueryStrategy": "data" },
     "zhongli":   { "type": "strategist","profile": null,          "role": "钟离 — 战略把关(Core-2预留)","emoji":"🪨","status":"awake","key":"DEEPSEEK_CHAT","model":"deepseek-v4-flash","produces":["strategy_assessed"],"toolPermissions":["read_file","search_code","web_search","list_files"] },
-    "yanfei":    { "type": "confirmGate","profile": null,         "role": "烟绯 — 确认门决策(Core-2预留)","emoji":"⚖️","key":"DEEPSEEK_CHAT","model":"deepseek-v4-flash","produces":["confirmation_decision"] }
+    "yanfei":    { "type": "confirm-gate","profile": null,       "role": "烟绯 — 确认门决策(Core-2预留)","emoji":"⚖️","key":"DEEPSEEK_CHAT","model":"deepseek-v4-flash","produces":["confirmation_decision"] }
   }
 }

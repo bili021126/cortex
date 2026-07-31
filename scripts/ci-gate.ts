@@ -25,7 +25,7 @@
  *   // @ci: benchmark    性能基准，CI 跳过（结果非断言，不做门禁）
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 
@@ -53,8 +53,8 @@ function stripAnsi(s: string): string {
 
 function run(cmd: string, args: string[], cwd: string): { ok: boolean; stdout: string } {
   try {
-    const fullCmd = [cmd, ...args].map((a) => (a.includes(" ") ? `"${a}"` : a)).join(" ");
-    const stdout = execSync(fullCmd, {
+    // execFileSync 直接传参数数组——避免 shell 拼接注入，跨平台更安全
+    const stdout = execFileSync(cmd, args, {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],

@@ -99,12 +99,15 @@ export class NotificationPipe {
    */
   push(event: Partial<NotificationEvent> & { type: string }): void {
     const route = this.routeTable.resolve(event.type);
+    // 仅显式路由命中时才用路由覆盖调用方语义；
+    // 未命中（DEFAULT_ROUTE）且调用方已显式设置 channel/ackRequired 时保留调用方值。
+    const explicit = this.routeTable.has(event.type);
 
     const fullEvent: NotificationEvent = {
       requestId: event.requestId ?? generateRequestId(),
       type: event.type,
-      channel: route.channel,
-      ackRequired: route.ackRequired,
+      channel: explicit ? route.channel : (event.channel ?? route.channel),
+      ackRequired: explicit ? route.ackRequired : (event.ackRequired ?? route.ackRequired),
       summary: event.summary ?? event.type,
       detail: event.detail,
       sourceAgent: event.sourceAgent,
@@ -263,8 +266,8 @@ export class NotificationPipe {
       // 检查时间窗口
       const rule = this.mergeRules.find((r) => r.groupBy === "mergeKey");
       const windowMs = rule?.windowMs ?? 300_000;
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const firstTimestamp = events[0]!.timestamp;
+      // events.length === 0 已跳过——首个事件必然存在，判空仅为满足 noUncheckedIndexedAccess
+      const firstTimestamp = events[0]?.timestamp ?? now;
 
       // @fix N-04 — 移除 `events.length > 0` 恒真条件，仅依赖时间窗口 flush
       if (now - firstTimestamp >= windowMs) {
@@ -285,15 +288,17 @@ export class NotificationPipe {
     const events = this.mergeBuffer.get(key);
     if (!events || events.length === 0) return;
 
+    // events 非空——显式判空防数组越界
+    const primary = events[0];
+    if (!primary) return;
+    const last = events[events.length - 1] ?? primary;
+
     const merged: MergedNotification = {
       mergeKey: key,
       events: [...events],
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      primary: events[0]!,
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      windowStart: events[0]!.timestamp,
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      windowEnd: events[events.length - 1]!.timestamp,
+      primary,
+      windowStart: primary.timestamp,
+      windowEnd: last.timestamp,
     };
 
     // 归并后的事件走 primary 的通道

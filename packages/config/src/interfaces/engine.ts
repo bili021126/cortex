@@ -9,13 +9,13 @@ import type { SearchConfig } from "./search.js";
 
 /** 引擎运行时配置——所有字段可选，未提供时走默认值 */
 export interface EngineConfig {
-  /** Agent ReAct 循环上限。默认 64 */
+  /** Agent ReAct 循环上限。默认 32（tuning.json 真相源） */
   defaultMaxLoops?: number;
   /** InspectorAgent ReAct 循环上限（降低以抑制幻觉风险）。默认 48 */
   inspectorMaxLoops?: number;
-  /** 单节点最大重规划轮次。默认 10 */
+  /** 单节点最大重规划轮次。默认 3（SCHEDULER_MAX_REPLAN_PER_NODE） */
   maxReplanPerNode?: number;
-  /** 单次 executeAll 全局最大重规划次数。默认 50 */
+  /** 单次 executeAll 全局最大重规划次数。默认 10（SCHEDULER_MAX_TOTAL_REPLANS） */
   maxTotalReplans?: number;
   /** executeAll 全局超时 (ms)。默认 600_000 (10分钟) */
   executeAllTimeoutMs?: number;

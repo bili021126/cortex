@@ -146,10 +146,26 @@ export class RlmExecuteStep implements IDispatchStep {
   ): Promise<DispatchCtx> {
     const layers = this._layerSubTasks(subTasks);
     const allAnnotations: DensityAnnotated[] = [];
+    // P2 fix: 实际尝试执行的子任务数——层截断时分母不等于 subTasks.length，防止误判失败
+    let attemptedCount = 0;
+
+    // P2 fix: 层截断告警——超过 MAX_RLM_DEPTH 的层被丢弃时 emit 告警
+    if (layers.length > MAX_RLM_DEPTH) {
+      try {
+        ctx.observer.emit({
+          type: PipelineEventType.SchedulerReplanLimit,
+          priority: PipelinePriority.NORMAL,
+          payload: { totalReplans: layers.length, maxReplans: MAX_RLM_DEPTH, deferred: layers.length - MAX_RLM_DEPTH },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      } catch { /* 告警自身异常不传播 */ }
+    }
 
     for (let li = 0; li < layers.length && li < MAX_RLM_DEPTH; li++) {
       const layer = layers[li];
       if (!layer) continue;
+      attemptedCount += layer.length;
       const layerContext = mergeContext(allAnnotations);
 
       for (let si = 0; si < layer.length; si += MAX_PARALLEL_SUBTASKS) {
@@ -174,8 +190,9 @@ export class RlmExecuteStep implements IDispatchStep {
         nodeId: ctx.node.id,
         agentType: agentType as AgentType,
         // 修正 C-06：1/10 子任务产出即标记成功 → 成功率 ≥ 50% 才算成功
-        success: allAnnotations.length > 0 && subTasks.length > 0
-          ? (allAnnotations.length / subTasks.length) >= 0.5
+        // P2 fix: 分母改为实际尝试执行的子任务数——层截断不再把未尝试的子任务计入分母
+        success: allAnnotations.length > 0 && attemptedCount > 0
+          ? (allAnnotations.length / attemptedCount) >= 0.5
           : allAnnotations.length > 0,
         output: merged || "(RLM 子任务执行完成，无产出)",
       },

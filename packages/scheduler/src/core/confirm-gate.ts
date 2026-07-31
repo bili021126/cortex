@@ -261,13 +261,22 @@ export class ConfirmGate implements Disposable {
     }
 
     // 有 bridge 时走真实用户交互
+    // P2 fix: bridge 路径加超时——超时 fail-closed（拒绝）并清理三表，防 bridge 挂死
     if (this.bridge) {
       const req = this.pending.get(requestId);
       if (!req) return false;
+      let bridgeTimer: ReturnType<typeof setTimeout> | undefined;
       try {
-        const response = await this.bridge.confirm(req);
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          bridgeTimer = setTimeout(() => reject(new Error(`ConfirmGate bridge confirm 超时（${effectiveTimeout}ms）`)), effectiveTimeout);
+        });
+        const response = await Promise.race([this.bridge.confirm(req), timeoutPromise]);
         return response.approved;
+      } catch {
+        // 超时或 bridge 异常 → fail-closed（拒绝）
+        return false;
       } finally {
+        if (bridgeTimer) clearTimeout(bridgeTimer);
         this.pending.delete(requestId);
         this.resolvers.delete(requestId);
         this.rejecters.delete(requestId);

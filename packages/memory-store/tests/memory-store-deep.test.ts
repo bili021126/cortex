@@ -227,6 +227,8 @@ describe("@cortex/memory-store — 深度测试", () => {
     // maintain() 走 getAllEntries 老化路径（不重置访问时间），触发回写
     // （若回写只传 { weight } 会把整条抹掉 → 旧 bug）
     localStore.maintain();
+    // maintain() 为同步签名——老化回写异步（set 内部 await persist），等待落定后断言
+    await new Promise((r) => setTimeout(r, 0));
 
     // 直接从 backend 读原始条目（getAllEntries 不改访问时间）：必须完整保留，仅 weight 降低
     const after = backend.getAllEntries().find((m) => m.id === id);

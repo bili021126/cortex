@@ -11,13 +11,18 @@
 import type {
   EngineConfig,
 } from "./interfaces/index.js";
+import {
+  SCHEDULER_MAX_REPLAN_PER_NODE,
+  SCHEDULER_MAX_TOTAL_REPLANS,
+} from "./constants/scheduler-params.js";
 
 /** 默认引擎配置——所有值精确匹配当前系统行为 */
 export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
   defaultMaxLoops: 32,
   inspectorMaxLoops: 48,
-  maxReplanPerNode: 10,
-  maxTotalReplans: 50,
+  // P1-2: 与 scheduler 实际消费的 constants 单源对齐（3/10），消除死配置数值漂移
+  maxReplanPerNode: SCHEDULER_MAX_REPLAN_PER_NODE,
+  maxTotalReplans: SCHEDULER_MAX_TOTAL_REPLANS,
   executeAllTimeoutMs: 600_000,
   reactLoopTimeoutMs: 300_000,
   manifoldGateAcquireTimeoutMs: 60_000,

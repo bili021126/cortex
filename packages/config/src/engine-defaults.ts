@@ -19,6 +19,8 @@ import {
   FROZEN_OBLITERATE_DAYS,
   MAINTENANCE_WEIGHT_THRESHOLD,
   SCHEMA_VERSION,
+  SCHEDULER_ROUND_TIMEOUT_MS,
+  REACT_MAX_LOOPS,
 } from "./constants/index.js";
 
 import { loadConfigDomain, resolveConfigDataDir, type ConfigFileReader } from "./loader.js";
@@ -45,11 +47,11 @@ export const SHUTDOWN_FORCE_EXIT_DELAY_MS = 2_000;
 /** 调度器最大轮数 */
 export const SCHEDULER_MAX_ROUNDS = 25;
 
-/** 调度器每轮超时（毫秒） */
-export const SCHEDULER_ROUND_TIMEOUT_MS = 300_000;
+/** 调度器每轮超时（毫秒）——P2 收敛：单源在 constants/scheduler-params.ts */
+export { SCHEDULER_ROUND_TIMEOUT_MS };
 
-/** ReAct 最大循环次数 */
-export const REACT_MAX_LOOPS = 32;
+/** ReAct 最大循环次数——P1-1 单源在 constants/react-strategy.ts，此处仅转发 */
+export { REACT_MAX_LOOPS };
 
 /** ManifoldGate 获取锁超时（毫秒） */
 export const DEFAULT_ACQUIRE_TIMEOUT_MS = 60_000;

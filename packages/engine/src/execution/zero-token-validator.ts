@@ -230,6 +230,17 @@ export class CrossPackageContractRule implements ZeroTokenRule {
       return { ruleName: this.name, passed: true, detail: "无跨包引用，跳过" };
     }
 
+    // 防注入：校验包名仅含合法 npm 包名字符（对齐 hard-verification-gate.ts:181）。
+    // 不合法则跳过该规则并告警——防止 "../../" 等路径穿越拼接进 packages/ 路径
+    if (!/^[a-z][a-z0-9-]*$/.test(sourcePkg) || !/^[a-z][a-z0-9-]*$/.test(targetPkg)) {
+      console.warn(`[zero-token-validator] 跨包契约检查跳过——非法包名: sourcePkg=${sourcePkg} targetPkg=${targetPkg}`);
+      return {
+        ruleName: this.name,
+        passed: true,
+        detail: `非法包名，跳过（sourcePkg=${sourcePkg}, targetPkg=${targetPkg}）`,
+      };
+    }
+
     try {
       const srcDir = `packages/${sourcePkg}/src`;
       const tgtDir = `packages/${targetPkg}/src`;

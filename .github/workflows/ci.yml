@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main, master]
 
+# 同分支 push 取消前序未完成运行（节省资源，保留最新）
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gate:
     name: 门禁（构建 + 类型检查 + 单元测试 + Lint）
@@ -15,9 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: "缓存 pnpm store"
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
       - run: pnpm install --frozen-lockfile
       - name: "构建全部包（tsc -b project refs + 非 TS 产物）"
         run: |

@@ -412,8 +412,8 @@ describe("MemoryStore", () => {
     expect(store.obliterate(b)).toBe(true);
     expect(store.peek(b)).toBeUndefined();
 
-    // 已湮灭再次 obliterate：条目已删除，返回 false
-    expect(store.obliterate(a)).toBe(false);
+    // 已湮灭再次 obliterate：幂等返回 true（_obliteratedIds 记忆——C-07 契约）
+    expect(store.obliterate(a)).toBe(true);
   });
 
   it("freeze 后 CAS 允许 Archived → Active（恢复）", async () => {

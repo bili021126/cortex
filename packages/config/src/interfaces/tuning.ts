@@ -15,24 +15,9 @@ export interface EnvVarEntry {
   desc: string;
 }
 
-/** 执行参数 */
+/** 执行参数——P1-5 收敛：仅 reactMaxLoops 有消费点，其余 7 字段已删除 */
 export interface ExecutionTuning {
   reactMaxLoops: number;
-  reactContextHardLimit: number;
-  maxToolRounds: number;
-  toolTimeoutMs: number;
-  commandTimeoutSec: number;
-  taskTimeoutSec: number;
-  nodeDispatchTimeoutMs: number;
-  executeAllTimeoutMs: number;
-}
-
-/** 调度参数 */
-export interface SchedulingTuning {
-  workerPoolMaxQueue: number;
-  claimLeaseMs: number;
-  maxReplanPerNode: number;
-  maxTotalReplans: number;
 }
 
 /** 信任参数 */
@@ -70,10 +55,9 @@ export interface RlmTuning {
   minConfidence: number;
 }
 
-/** 调参分组 */
+/** 调参分组——P1-5 收敛：scheduling 分组 4 字段均无消费点，已删除 */
 export interface TuningParams {
   execution: ExecutionTuning;
-  scheduling: SchedulingTuning;
   trust: TrustTuning;
   verification: VerificationTuning;
   memory: MemoryTuning;

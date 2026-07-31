@@ -163,7 +163,7 @@ describe("plan() → TaskNode[] shape 契约", () => {
       expect(nodes[0].type).toBe("review");
     });
 
-    it.skip("尾部逗号修复（SKIP: _parsePlan 容错链已变更）", async () => {
+    it("尾部逗号修复", async () => {
       // LLM 经典错误：数组最后一个元素后有多余逗号
       const meta = new MetaAgent(
         mockLlmRaw('[{"task":"trailing comma","type":"analysis"},]'),

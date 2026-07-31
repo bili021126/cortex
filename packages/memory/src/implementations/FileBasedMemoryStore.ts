@@ -132,20 +132,28 @@ class FileBackend implements MemoryStoreBackend {
       const json = JSON.stringify(entry, null, this._prettyPrint ? 2 : undefined);
       await fs.writeFile(tmpPath, json, "utf-8");
       await fs.rename(tmpPath, filePath);
+    }).catch((err) => {
+      // 失败上报，仍继续向上抛出供调用方处理
+      console.error(`[memory] persist failed: id=${id} err=${err instanceof Error ? err.message : String(err)}`);
+      throw err;
     });
     this._persistLocks.set(id, next);
-    // 清理已完成锁，防止 Map 无限增长
-    void next.then(() => {
-      if (this._persistLocks.get(id) === next) this._persistLocks.delete(id);
-    });
-    return next;
+    // 清理已完成/已失败锁——finally 语义：rejected Promise 也必须删锁，
+    // 否则该 id 永久无法再落盘（P1-1 锁毒化）
+    void next.then(
+      () => { if (this._persistLocks.get(id) === next) this._persistLocks.delete(id); },
+      () => { if (this._persistLocks.get(id) === next) this._persistLocks.delete(id); },
+    );
+    return await next;
   }
 
   async remove(id: string): Promise<void> {
     try {
       await fs.unlink(path.join(this._entriesDir, `${id}.json`));
-    } catch {
-      // 文件不存在，忽略
+    } catch (err) {
+      // 只忽略文件不存在的 ENOENT，其他错误（权限/IO）必须抛出（P1-4）
+      if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return;
+      throw err;
     }
   }
 

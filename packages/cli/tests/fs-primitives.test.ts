@@ -1,8 +1,9 @@
 // @ci: unit
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import os from "node:os";
+import { Toolkit } from "@cortex/platform";
 
 // We'll test the NodeFileSystemAdapter directly
 // since it's the underlying implementation for all platform tools
@@ -24,13 +25,20 @@ describe("NodeFileSystemAdapter", () => {
     expect(content).toBe("hello cortex");
   });
 
-  it("路径越界拒绝——文件不在工作区内", () => {
-    // The actual sandbox check is in Toolkit._resolvePath()
-    // which throws on path traversal
-    const filePath = path.join(tmpDir, "..", "outside.txt");
-    const resolved = path.resolve(filePath);
-    // Assert that the resolved path is outside tmpDir
-    expect(resolved.startsWith(tmpDir)).toBe(false);
+  it("路径越界拒绝——Toolkit._resolvePath 对越界路径抛错", () => {
+    // 真实实例化 Toolkit 并设置沙箱根目录，直接调用 _resolvePath
+    const toolkit = new Toolkit();
+    toolkit.setWorkspaceRoot(tmpDir);
+    // bind 保留 this 上下文（_resolvePath 内部依赖 this.workspaceRoot）
+    const resolvePath = (toolkit as unknown as { _resolvePath(p: string): string })._resolvePath.bind(toolkit);
+
+    // 越界路径（tmpDir 的父目录）应抛错
+    const escapePath = path.join(tmpDir, "..", "outside.txt");
+    expect(() => resolvePath(escapePath)).toThrow(/路径越界/);
+
+    // 工作区内路径正常解析
+    const insidePath = path.join(tmpDir, "inside.txt");
+    expect(resolvePath(insidePath)).toBe(path.resolve(insidePath));
   });
 
   it("delete 不存在文件返回 false", () => {

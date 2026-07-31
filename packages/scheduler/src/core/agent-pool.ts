@@ -155,6 +155,7 @@ export class AgentPool implements IAgentPool {
       this.active.get(agentType)?.delete(instanceId);
       this._subtaskInstances.get(agentType)?.delete(instanceId);
       this._activeByInstance.delete(instanceId);
+      this.heartbeats.delete(instanceId);
       return;
     }
 
@@ -171,6 +172,8 @@ export class AgentPool implements IAgentPool {
     this.active.get(agentType)?.delete(instanceId);
     this._subtaskInstances.get(agentType)?.delete(instanceId);
     this._activeByInstance.delete(instanceId);
+    // P2 fix: 清理心跳记录——防止 destroy 后 heartbeats 泄漏（staleSeconds 误判超时）
+    this.heartbeats.delete(instanceId);
     this.statuses.delete(instanceId);
   }
 

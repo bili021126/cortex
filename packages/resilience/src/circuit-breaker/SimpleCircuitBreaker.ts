@@ -107,6 +107,13 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
   /** 状态变更事件处理器列表 */
   private readonly _handlers: Array<(state: CircuitState, previous: CircuitState) => void> = [];
 
+  /**
+   * 原子试探门闩——HALF_OPEN 下仅首个请求执行 fn 并持有此门闩，
+   * 其余并发请求快速失败（走 fallback 或抛 CircuitBreakerOpenError），
+   * 防止同一 tick 内所有并发 call 全部穿透放行。
+   */
+  private _halfOpenProbe: Promise<unknown> | null = null;
+
   /** 连续失败阈值 */
   private readonly _threshold: number;
 
@@ -186,9 +193,12 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
       }
     }
 
-    // HALF_OPEN 状态下，如果先前试探请求已成功（不应发生，防御性检查）
-    // 正常 HALF_OPEN 流程在 recordSuccess/recordFailure 中处理
+    // HALF_OPEN：原子试探门闩——仅首个请求执行 fn，其余并发请求快速失败
+    if (this._state === 'HALF_OPEN') {
+      return await this._handleHalfOpenCall(fn, fallback);
+    }
 
+    // CLOSED：正常放行调用
     try {
       const result = await fn();
       this.recordSuccess();
@@ -197,6 +207,63 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
       this.recordFailure();
       // fallback 仅在 OPEN 状态下生效（阻止 fn 穿透）
       // CLOSED/HALF_OPEN 状态下，原始错误直接传播给 retry 循环
+      if (fallback !== undefined && this._state === 'OPEN') {
+        return await fallback();
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * 处理 HALF_OPEN 状态下的调用——原子试探门闩。
+   *
+   * 并发穿透防护：同一时刻仅首个请求执行 fn 并持有门闩，
+   * 其余并发请求快速失败（走 fallback 或抛 CircuitBreakerOpenError），
+   * 防止 OPEN 超时后同一 tick 内所有并发 call 全部穿透。
+   * 试探落定后统一裁决：
+   *   - 成功 → recordSuccess → HALF_OPEN → CLOSED（闭合）
+   *   - 失败 → recordFailure → HALF_OPEN → OPEN（重新熔断）
+   *
+   * @param fn 被保护的异步函数
+   * @param fallback 可选降级函数
+   * @returns 试探结果或降级结果
+   * @throws {CircuitBreakerOpenError} 门闩被占用且无 fallback 时抛出
+   */
+  private async _handleHalfOpenCall<T>(
+    fn: () => Promise<T>,
+    fallback?: () => Promise<T>,
+  ): Promise<T> {
+    // 已有试探在途 → 非试探请求快速失败（不记录——避免污染成功/失败计数）
+    if (this._halfOpenProbe !== null) {
+      if (fallback !== undefined) {
+        return await fallback();
+      }
+      throw new CircuitBreakerOpenError(this.name);
+    }
+
+    // 成为唯一试探：持有门闩，落定后统一裁决
+    const probe: Promise<T> = Promise.resolve()
+      .then(() => fn())
+      .then(
+        (result) => {
+          this._halfOpenProbe = null;
+          // 试探成功 → recordSuccess → HALF_OPEN → CLOSED
+          this.recordSuccess();
+          return result;
+        },
+        (err: unknown) => {
+          this._halfOpenProbe = null;
+          // 试探失败 → recordFailure → HALF_OPEN → OPEN
+          this.recordFailure();
+          throw err;
+        },
+      );
+    this._halfOpenProbe = probe;
+
+    try {
+      return await probe;
+    } catch (err) {
+      // 试探失败已回到 OPEN——此时执行 fallback 或抛原始错误
       if (fallback !== undefined && this._state === 'OPEN') {
         return await fallback();
       }
@@ -254,6 +321,7 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
   reset(): void {
     this._consecutiveFailures = 0;
     this._openedAt = 0;
+    this._halfOpenProbe = null;
     this._transitionTo('CLOSED');
   }
 
@@ -275,6 +343,8 @@ export class SimpleCircuitBreaker implements ICircuitBreaker {
       this._openedAt = Date.now();
     }
     // HALF_OPEN: 不需要特殊处理
+    // 强制转换时释放试探门闩——在途 probe 的裁决回调仍执行但不会引用失效门闩
+    this._halfOpenProbe = null;
 
     this._transitionTo(state);
   }

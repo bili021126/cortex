@@ -51,8 +51,9 @@ export function deriveStatus(
   // 连续有害判定
   let consecutiveNegative = 0;
   for (let i = history.length - 1; i >= 0; i--) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    if (history[i]!.rating === -1) {
+    const entry = history[i];
+    if (!entry) break;
+    if (entry.rating === -1) {
       consecutiveNegative++;
     } else {
       break;

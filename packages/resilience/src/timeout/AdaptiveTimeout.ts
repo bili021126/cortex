@@ -23,7 +23,7 @@
 // ============================================================
 
 import { TimeoutError, type ITimeoutPolicy, type TimeoutResult } from '../registry/Registry.js';
-import { combineSignals, createTimeoutSignal, clamp, getErrorName, toError } from '../utils.js';
+import { combineSignalsWithCleanup, createTimeoutSignal, clamp, getErrorName, toError } from '../utils.js';
 
 // ============================================================
 // ── AdaptiveTimeoutOptions —— 自适应超时策略配置 ──
@@ -381,9 +381,11 @@ export class AdaptiveTimeout implements ITimeoutPolicy {
     const [timeoutSignal, cleanupTimeout] = createTimeoutSignal(currentTimeout);
 
     // ── 第 2 步：合并外部信号（如有） ──
-    const combinedSignal = signal
-      ? combineSignals([signal, timeoutSignal])
-      : timeoutSignal;
+    // P2 fix: 使用 combineSignalsWithCleanup 并在 finally 中移除手动合并分支的监听器
+    const combined = signal
+      ? combineSignalsWithCleanup([signal, timeoutSignal])
+      : { signal: timeoutSignal, cleanup: cleanupTimeout };
+    const combinedSignal = combined.signal;
 
     // ── 第 3 步：准备超时兜底 Promise ──
     const timeoutGuard = new Promise<never>((_, reject) => {
@@ -399,7 +401,7 @@ export class AdaptiveTimeout implements ITimeoutPolicy {
       const value = await Promise.race([fn(combinedSignal), timeoutGuard]);
 
       // fn 先完成 → 清理资源
-      cleanupTimeout();
+      combined.cleanup();
 
       const elapsedMs = Date.now() - startedAt;
 
@@ -409,7 +411,7 @@ export class AdaptiveTimeout implements ITimeoutPolicy {
 
       return { success: true, value, elapsedMs };
     } catch (err) {
-      cleanupTimeout();
+      combined.cleanup();
       const elapsedMs = Date.now() - startedAt;
 
       // ── 第 6 步：错误分类 ──

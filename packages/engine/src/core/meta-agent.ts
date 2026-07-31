@@ -16,6 +16,7 @@ import {
   PIPELINE_CTX_RECENT_LIMIT,
   PIPELINE_CTX_HARD_CAP,
   VALID_TIERS,
+  SCHEDULER_MAX_REPLAN_PER_NODE,
 } from "@cortex/config";
 import type { SkillRegistry } from "@cortex/skill-kit";
 import type { PromptManager, PlanningPromptBlocks } from "./prompt-manager.js";
@@ -214,7 +215,7 @@ export class MetaAgent {
     reason: string,
     replanCount: number,
     originalIntent?: string,
-    maxReplan = 3,
+    maxReplan = SCHEDULER_MAX_REPLAN_PER_NODE,
   ): Promise<ReplanResult> {
     const prompt = [
       `Original intent: ${originalIntent ?? failedNode.payload}`,
@@ -265,7 +266,7 @@ export class MetaAgent {
     boundaryReason: string,
     replanCount: number,
     originalIntent?: string,
-    maxReplan = 3,
+    maxReplan = SCHEDULER_MAX_REPLAN_PER_NODE,
   ): Promise<ReplanResult> {
     const prompt = [
       `Original intent: ${originalIntent ?? violatingNode.payload}`,

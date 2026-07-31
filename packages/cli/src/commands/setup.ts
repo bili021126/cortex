@@ -42,7 +42,6 @@ function runScript(cmd: string, args: string[], cwd: string): Promise<CommandRes
     const child = spawn(cmd, args, {
       cwd,
       stdio: "inherit",
-      shell: true,
     });
 
     child.on("close", (code) => {

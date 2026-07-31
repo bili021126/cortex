@@ -12,8 +12,9 @@ import {
 
 describe("@cortex/config — DEFAULT_ENGINE_CONFIG", () => {
   it("最大重规划配额与决策一致", () => {
-    expect(DEFAULT_ENGINE_CONFIG.maxReplanPerNode).toBe(10);
-    expect(DEFAULT_ENGINE_CONFIG.maxTotalReplans).toBe(50);
+    // P1-2: 与 scheduler 实际消费的 constants 单源对齐（SCHEDULER_MAX_REPLAN_PER_NODE=3 / SCHEDULER_MAX_TOTAL_REPLANS=10）
+    expect(DEFAULT_ENGINE_CONFIG.maxReplanPerNode).toBe(3);
+    expect(DEFAULT_ENGINE_CONFIG.maxTotalReplans).toBe(10);
   });
 
   it("executeAllTimeoutMs 为 10 分钟", () => {
@@ -64,7 +65,7 @@ describe("@cortex/config — resolveConfig", () => {
   it("无参调用返回默认值副本", () => {
     const cfg = resolveConfig();
     expect(cfg.defaultMaxLoops).toBe(32);
-    expect(cfg.maxReplanPerNode).toBe(10);
+    expect(cfg.maxReplanPerNode).toBe(3);
     // 副本不可影响全局默认
     cfg.defaultMaxLoops = 999 as never;
     expect(DEFAULT_ENGINE_CONFIG.defaultMaxLoops).toBe(32);
@@ -73,7 +74,7 @@ describe("@cortex/config — resolveConfig", () => {
   it("部分覆盖——标量字段", () => {
     const cfg = resolveConfig({ defaultMaxLoops: 32 });
     expect(cfg.defaultMaxLoops).toBe(32);
-    expect(cfg.maxReplanPerNode).toBe(10); // 未覆盖回退默认
+    expect(cfg.maxReplanPerNode).toBe(3); // 未覆盖回退默认
   });
 
   it("部分覆盖——嵌套对象浅合并", () => {

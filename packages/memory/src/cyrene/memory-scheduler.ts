@@ -45,7 +45,12 @@ export class MemoryScheduler {
     this.deps.enqueueTask("MemoryMaintenance", async () => {
       await this.runQueuedMemoryWrite(seq)
     }).catch((e) => {
-      console.error("[Memory] 记忆写入失败，不影响主流程", e)
+      // P2: 结构化上报——主流程不受影响，但失败原因必须可见
+      console.error("[Memory] 记忆写入失败，不影响主流程", {
+        phase: "MemoryMaintenance",
+        seq,
+        error: e instanceof Error ? e.message : String(e),
+      })
     })
   }
 
@@ -69,7 +74,11 @@ export class MemoryScheduler {
       }
     }
 
-    await this.deps.replaceL1Field("roundCount", newCount)
+    try {
+      await this.deps.replaceL1Field("roundCount", newCount)
+    } catch (err) {
+      console.error("[Memory] roundCount 更新失败，不影响主流程", err)
+    }
 
     if (newCount % 5 === 0) {
       try {

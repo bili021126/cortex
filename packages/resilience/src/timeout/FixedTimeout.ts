@@ -16,7 +16,7 @@
 // ============================================================
 
 import { TimeoutError, type ITimeoutPolicy, type TimeoutResult } from '../registry/Registry.js';
-import { combineSignals, createTimeoutSignal, getErrorName, toError } from '../utils.js';
+import { combineSignalsWithCleanup, createTimeoutSignal, getErrorName, toError } from '../utils.js';
 
 // ============================================================
 // ── FixedTimeoutOptions —— 固定超时策略配置 ──
@@ -161,9 +161,11 @@ export class FixedTimeout implements ITimeoutPolicy {
     const [timeoutSignal, cleanupTimeout] = createTimeoutSignal(this.timeoutMs);
 
     // ── 第 2 步：合并外部信号（如有） ──
-    const combinedSignal = signal
-      ? combineSignals([signal, timeoutSignal])
-      : timeoutSignal;
+    // P2 fix: 使用 combineSignalsWithCleanup 并在 finally 中移除手动合并分支的监听器
+    const combined = signal
+      ? combineSignalsWithCleanup([signal, timeoutSignal])
+      : { signal: timeoutSignal, cleanup: cleanupTimeout };
+    const combinedSignal = combined.signal;
 
     // ── 第 3 步：准备超时兜底 Promise ──
     // 当 combinedSignal 因超时而 abort 时，此 Promise reject
@@ -181,12 +183,12 @@ export class FixedTimeout implements ITimeoutPolicy {
       const value = await Promise.race([fn(combinedSignal), timeoutGuard]);
 
       // fn 先完成 → 清理资源
-      cleanupTimeout();
+      combined.cleanup();
 
       const elapsedMs = Date.now() - startedAt;
       return { success: true, value, elapsedMs };
     } catch (err) {
-      cleanupTimeout();
+      combined.cleanup();
       const elapsedMs = Date.now() - startedAt;
 
       // ── 第 5 步：错误分类 ──

@@ -8,6 +8,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveConfigDataDir, loadConfigDomain, type ConfigFileReader } from "@cortex/config";
+import { AgentType } from "@cortex/shared";
 import type { CortexAgentsConfig, AgentManifest } from "../types.js";
 
 /** 基于 Node fs 的文件读取器 */
@@ -219,6 +220,11 @@ function _validateAgent(id: string, agent: AgentManifest): void {
 
   if (!agent.type) {
     throw new Error(`${prefix}: 缺少 type`);
+  }
+  // P1-3: 校验 type 必须为 AgentType 枚举合法值（防手写字符串漂移）
+  const validTypes = Object.values(AgentType) as string[];
+  if (!validTypes.includes(agent.type)) {
+    throw new Error(`${prefix}: type "${agent.type}" 不在 AgentType 枚举中（合法值: ${validTypes.join(", ")}）`);
   }
   if (!agent.role) {
     throw new Error(`${prefix}: 缺少 role`);

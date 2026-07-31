@@ -3,7 +3,7 @@
 // @role 记忆管道——检索→增强→执行→写入→校验
 
 import { LinkType, type AgentType, type MemoryEntry, type MemoryKind, type MemoryQuery, type NodeResult, type ReadMode, type SafeErrorReporter, type TaskNode } from "@cortex/shared";
-import { PRESET_CONTEXT_POLICIES } from "@cortex/config";
+import { PRESET_CONTEXT_POLICIES, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import { ContextBuilder, type MemoryStore, MemoryEntryStateMachine } from "@cortex/memory-store";
 import type { Toolkit } from "@cortex/platform";
@@ -292,7 +292,7 @@ export async function executeWithMemoryPipeline(
     toolkit: ctx.toolkit,
     systemPrompt: ctx.systemPrompt,
     maxLoops: ctx.maxLoops,
-    reactLoopTimeoutMs: ctx.reactLoopTimeoutMs ?? 300_000,
+    reactLoopTimeoutMs: ctx.reactLoopTimeoutMs ?? DEFAULT_ENGINE_CONFIG.reactLoopTimeoutMs,
     model,
     memory: ctx.memory,
     safeReporter: safeReporter ?? ctx.safeReporter,

@@ -30,8 +30,26 @@ export class SpawnStep implements IDispatchStep {
     this._acquireTimeoutMs = acquireTimeoutMs;
   }
 
+  /**
+   * 视角失败统一收尾（多视角 spawn 自愈语义）：
+   * - 普通节点：release + failNode（节点整体失败，无可挽救视角）
+   * - 多视角节点：仅 release 失败视角，其他视角继续执行；若这是最后一个认领视角
+   *   （claimedBy 已空）→ failNode（全部失败，不可恢复）
+   * 并发安全：同步无 await，Node 单线程天然原子。
+   */
+  private _settlePerspectiveFailure(ctx: DispatchCtx): DispatchCtx {
+    const { board, node, agentType } = ctx;
+    board.release(node.id, agentType as AgentType);
+    const after = board.getNode(node.id);
+    const isLast = !!after && after.claimedBy.length === 0;
+    if (!node.needsMultiPerspective || isLast) {
+      board.failNode(node.id);
+    }
+    return ctx;
+  }
+
   async run(ctx: DispatchCtx): Promise<DispatchCtx> {
-    const { agentType, agent, board, pool, observer, node } = ctx;
+    const { agentType, agent, pool, observer, node } = ctx;
 
     if (!agentType || !agent) {
       return {
@@ -48,8 +66,7 @@ export class SpawnStep implements IDispatchStep {
     if (!isSubtask) {
       slotAcquired = await ManifoldGate.acquire(agentType as AgentType, effectiveTimeout);
       if (!slotAcquired) {
-        board.release(node.id, agentType as AgentType);
-        board.failNode(node.id);
+        this._settlePerspectiveFailure(ctx);
         observer.emit({
           type: PipelineEventType.NodeSpawnFailed,
           priority: PipelinePriority.HIGH,
@@ -78,8 +95,7 @@ export class SpawnStep implements IDispatchStep {
       : pool.spawn(agentType as AgentType, instanceId);
     if (!spawned) {
       if (slotAcquired) ManifoldGate.release(agentType as AgentType);
-      board.release(node.id, agentType as AgentType);
-      board.failNode(node.id);
+      this._settlePerspectiveFailure(ctx);
       observer.emit({
         type: PipelineEventType.NodeSpawnFailed,
         priority: PipelinePriority.HIGH,
@@ -108,8 +124,7 @@ export class SpawnStep implements IDispatchStep {
     // 4. 状态校验
     if (agent.status !== AgentStatus.Awake && agent.status !== AgentStatus.Active) {
       if (slotAcquired) ManifoldGate.release(agentType as AgentType);
-      board.release(node.id, agentType as AgentType);
-      board.failNode(node.id);
+      this._settlePerspectiveFailure(ctx);
       return {
         ...ctx,
         result: {
