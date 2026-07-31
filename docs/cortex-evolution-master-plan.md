@@ -335,5 +335,5 @@ Phase 5 记忆 ──→ MemoryWorldModel V/M/C
   docs/core/Cortex-架构映射-五流六层七原则.md                架构映射
 
 宪法层:
-  docs/constitution/Cortex 概念顶层设计 v3.0.md             宪法 v3.1
+  docs/constitution/Cortex 概念顶层设计 v3.7.md             宪法 v3.7
 ```

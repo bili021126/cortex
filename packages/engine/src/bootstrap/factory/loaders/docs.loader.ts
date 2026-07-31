@@ -27,7 +27,7 @@ export function loadDocsConfig(_projectRoot: string, dataDirOverride?: string): 
   } catch {
     console.error(`[bootstrap] docs.config_load_failed`);
     return {
-      constitutionPath: "docs/constitution/Cortex 概念顶层设计 v2.5.35.md",
+      constitutionPath: "docs/constitution/Cortex 概念顶层设计 v3.7.md",
       docRegistry: [],
     };
   }
@@ -35,7 +35,7 @@ export function loadDocsConfig(_projectRoot: string, dataDirOverride?: string): 
   // 可选文件不存在时 loadConfigDomain 返回 undefined
   if (!config) {
     return {
-      constitutionPath: "docs/constitution/Cortex 概念顶层设计 v2.5.35.md",
+      constitutionPath: "docs/constitution/Cortex 概念顶层设计 v3.7.md",
       docRegistry: [],
     };
   }
@@ -49,7 +49,7 @@ function _validateStructure(config: CortexDocsConfig): CortexDocsConfig {
   }
 
   if (!config.constitutionPath) {
-    config.constitutionPath = "docs/constitution/Cortex 概念顶层设计 v2.5.35.md";
+    config.constitutionPath = "docs/constitution/Cortex 概念顶层设计 v3.7.md";
   }
 
   if (!Array.isArray(config.docRegistry)) {

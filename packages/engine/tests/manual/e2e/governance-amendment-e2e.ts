@@ -38,7 +38,7 @@ import type { AmendmentProposal, JudgmentResult } from "@cortex/shared";
 
 const ROOT_DIR = path.resolve(process.cwd());
 const CONSTITUTION_DIR = path.join(ROOT_DIR, "docs", "constitution");
-const CONSTITUTION_FILE = "Cortex 概念顶层设计 v3.0.md";
+const CONSTITUTION_FILE = "Cortex 概念顶层设计 v3.7.md";
 const CONSTITUTION_PATH = path.join(CONSTITUTION_DIR, CONSTITUTION_FILE);
 const BACKUP_DIR = path.join(CONSTITUTION_DIR, "backup");
 const AMENDMENTS_DIR = path.join(ROOT_DIR, "docs", "amendments");

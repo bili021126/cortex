@@ -3,7 +3,7 @@
 > 此文件由 bootstrapEngine 自动注入到每个 Agent 的 system prompt 头部。
 > 违者将在 CI lint 环节被拦截。你不是在"建议"，你是在"执行法律"。
 > 
-> 版本：v4.2（新增 §零 交付铁律——工程完整性强制执行）
+> 版本：v4.4（统一版本标注 + §十六/§十七 章节归位 + 新增 §十八 契约铁律）
 
 ---
 
@@ -323,60 +323,7 @@ prompts/
 > 治理篇（架构规范、Agent 交互协议）见 `prompts/coding-standards-governance.md`。
 > dev篇（开发者补充）见 `prompts/coding-standards-dev.md`。
 > 
-> **宪法依据**：Cortex 概念顶层设计 v3.3——七条不可变原则（含子约束9 类型安全保障）
-
----
-
-## 十六、类型更新联动——编译期强制拦截（v4.3 新增）
-
-> **地位：新增类型定义时必须同步更新关联文件。TypeScript 不替你做的事，此节替你强制执行。**
-
-### 16.1 状态机类型联动
-
-```
-❌ error：新增 MemState 或 MemEvent 时，必须同步更新 defineFsm<MemState, MemEvent>({...}) 的 FSM 定义
-✅ 保证：defineFsm 是类型安全辅助函数——新状态未加入 states 数组 → 编译报错
-✅ 保证：新事件未加入 transitions 数组 → 编译报错
-```
-
-### 16.2 Agent/Event 类型联动
-
-```
-❌ error：新增 AgentType → 必须更新 agents.json 和 agent-registry.ts
-❌ error：新增 PipelineEventType → 必须更新 EventPayloadMap（共享类型定义）
-```
-
-### 16.3 联动速查
-
-| 新增 | 必须同步更新 |
-|------|-------------|
-| MemState/Event | defineFsm 定义（fsm-compiler + memory-state-machine） |
-| AgentType | agents.json + agent-registry.ts + TAG_VOCABULARY |
-| PipelineEventType | EventPayloadMap（shared + config 双份） |
-| 工具权限 | AGENT_TOOL_PERMISSIONS（agent-registry.ts） |
-
----
-
-## 十七、Engine 层依赖方向——架构约束（v4.3 新增）
-
-> **地位：Core-2 引擎拆分后的强制层依赖规则。**
-
-```
-engine/src/
-  core/           ← 最小内核（scheduler, meta-agent, 基础设施）
-  execution/      ← 执行层（agent-factory, react-loop, pool-aware）
-  planning/       ← 规划层（simulation-runner, governance-events）
-  memory-bridge/  ← 记忆桥接（pipeline, skill-pipeline）
-
-✅ 依赖方向：core ← execution ← planning ← memory-bridge（单向无环）
-❌ 禁止：core/ 直接引用 execution/ 或 planning/
-❌ 禁止：memory-bridge/ 反向引用 core/
-```
-
----
-
-> **§十五管"跨包整合"，§十六管"类型联动"，§十七管"层依赖"。**
-> 代码法典从单体规范扩展到架构约束——至此闭合。
+> **宪法依据**：Cortex 概念顶层设计 v3.7——七条不可变原则（含原则八 配置与类型内核分级）
 
 ---
 
@@ -1319,3 +1266,130 @@ class Scheduler {
 ✅ 要求：PipelineEventType 枚举变更 → CI 验证 EventPayloadMap 完整性
 ✅ 要求：ICortexApi 方法签名变更 → CI 验证 CLI/TUI 所有调用方
 ```
+
+---
+
+## 十六、类型更新联动——编译期强制拦截（v4.4 归位，原 v4.3 新增）
+
+> **地位：新增类型定义时必须同步更新关联文件。TypeScript 不替你做的事，此节替你强制执行。**
+
+### 16.1 状态机类型联动
+
+```
+❌ error：新增 MemState 或 MemEvent 时，必须同步更新 defineFsm<MemState, MemEvent>({...}) 的 FSM 定义
+✅ 保证：defineFsm 是类型安全辅助函数——新状态未加入 states 数组 → 编译报错
+✅ 保证：新事件未加入 transitions 数组 → 编译报错
+```
+
+### 16.2 Agent/Event 类型联动
+
+```
+❌ error：新增 AgentType 枚举值 → 必须更新 @cortex/shared agent-enums.ts（单源）+ agent-registry.ts + agent-manifests.json（agents.json 已标 @deprecated）
+❌ error：新增 PipelineEventType → 必须更新 EventPayloadMap（@cortex/shared 单份权威）
+```
+
+### 16.3 联动速查
+
+| 新增 | 必须同步更新 |
+|------|-------------|
+| MemState/Event | defineFsm 定义（fsm-compiler + memory-state-machine） |
+| AgentType | shared/agent-enums.ts（单源）+ agent-registry.ts + agent-manifests.json |
+| PipelineEventType | EventPayloadMap（@cortex/shared 单份权威，config 版已删） |
+| 工具权限 | AGENT_TOOL_PERMISSIONS（agent-registry.ts） |
+
+---
+
+## 十七、Engine 层依赖方向——架构约束（v4.4 归位，原 v4.3 新增）
+
+> **地位：Core-2 引擎拆分后的强制层依赖规则。**
+
+```
+engine/src/
+  core/           ← 最小内核（scheduler, meta-agent, 基础设施）
+  execution/      ← 执行层（agent-factory, react-loop, pool-aware）
+  planning/       ← 规划层（simulation-runner, governance-events）
+  memory-bridge/  ← 记忆桥接（pipeline, skill-pipeline）
+
+✅ 依赖方向：core ← execution ← planning ← memory-bridge（单向无环）
+❌ 禁止：core/ 直接引用 execution/ 或 planning/
+❌ 禁止：memory-bridge/ 反向引用 core/
+```
+
+> 实测（2026-08-01）：engine/src 共 10 个子目录（agents / bootstrap / components / core / execution / lifecycle / memory-bridge / planning / plugin / registry）——以上四层为依赖方向的骨干层，其余目录（agents/components/lifecycle/plugin/registry/bootstrap）不在此单向链内，但同样禁止反向依赖 core。
+
+---
+
+> **§十五管"跨包整合"，§十六管"类型联动"，§十七管"层依赖"。**
+> 代码法典从单体规范扩展到架构约束——至此闭合。
+
+---
+
+## 十八、契约铁律——系统级防御补全（v4.4 新增）
+
+> **地位：与 §十五 并列的编译期铁律。第二轮全方位审查（P0×4）的根因收敛于此。**
+> 违者将在 CI gate 被拦截。
+
+### 18.1 湮灭必须落盘
+
+```
+❌ error：obliterate 湮灭仅清内存缓存、不写库——重启后数据复活
+✅ 要求：湮灭先落盘（SQLite delete/标记）再清缓存；写库失败必须抛错中止
+```
+
+> 判例：memory-store.ts obliterate 湮灭不落盘（P0-1）——湮灭后仅清内存，重启后条目回滚。
+
+### 18.2 显式路由命中不覆盖调用方语义
+
+```
+❌ error：路由/分发命中目标后，覆盖或丢弃调用方传入的语义参数（如 requestId / 回调 / 源事件上下文）
+✅ 要求：路由命中只决定"发往何处"，不改变"载荷语义"——下游收到与调用方意图一致的完整上下文
+```
+
+> 判例：通知路由链断裂（P0-3）——bootstrap 未调 loadRoutes()，治理事件无人订阅；路由链恢复后仍需保证事件载荷不因路由而丢字段。
+
+### 18.3 tmp+rename 原子写
+
+```
+❌ error：直接 writeFile 覆盖目标文件——写入中断留下半截文件
+✅ 要求：先写临时文件（同目录 .tmp），fsync 后 rename 原子替换；失败清理临时文件
+```
+
+> 适用：所有 JSON 配置落盘、记忆库文件、修正案/审计报告写入。
+
+### 18.4 断路器 HALF_OPEN 门闩
+
+```
+❌ error：HALF_OPEN 状态下直接放行全部请求——熔断探测与并发穿透同时发生
+✅ 要求：HALF_OPEN 只放行探测请求（单飞），探测成功→CLOSED，失败→OPEN；其余请求在探测期间保持短路
+```
+
+### 18.5 try-finally 锁语义
+
+```
+❌ error：acquire 锁后无 finally release——异常路径锁泄漏导致永久死锁
+✅ 要求：锁获取与释放成对出现在 try/finally 中；嵌套锁按逆序释放
+```
+
+### 18.6 return await 铁律
+
+```
+❌ error：async 函数 return promise 不带 await——错误堆栈截断 + finally 时序漂移
+✅ 要求：async 函数内 return 前必须 await（return await promise）
+```
+
+> 与 §三 异步规范对齐：TS 配置 no-floating-promises + return-await 双保险。
+
+### 18.7 禁非空断言（重申）
+
+```
+❌ error：禁止非空断言 !（§10.1 重申）——运行时崩溃第一来源
+✅ 要求：可选链 ?. 或显式守卫（if (x === undefined) throw new Error(...)）
+```
+
+> 本轮 P2×42+ 清理中非空断言高频出现——升格为契约铁律层级。
+
+---
+
+> **§十八 契约铁律与 §十五 跨包整合铁律共同构成系统级防御：**
+> §十五 管"编译期契约"（类型/事件/接口），§十八 管"运行时行为"（落盘/路由/锁/熔断）。
+> 代码法典至此闭合。

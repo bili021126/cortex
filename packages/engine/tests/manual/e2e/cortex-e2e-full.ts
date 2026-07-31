@@ -28,7 +28,7 @@ const TASKS: AgentTask[] = [
   { name: "北斗", type: "ops", tags: ["ops"], payload: "用 run_shell 执行 npx tsc --noEmit -p packages/engine/tsconfig.src.json，报告编译结果。" },
   { name: "安柏", type: "inspector", tags: ["inspect"], payload: "用 list_files 采集 packages/engine/src/core/ 下所有 .ts 文件，统计文件数和总行数。" },
   { name: "莫娜", type: "loop", tags: ["loop"], payload: "扫描 skills/ 目录，提取一个可复用的技能模板，用 write_file 输出为 webui/SkillTemplate.json。" },
-  { name: "凝光", type: "doc-govern", tags: ["doc-govern"], payload: "检查 docs/constitution/Cortex 概念顶层设计 v3.0.md 是否存在并确认结构完整。" },
+  { name: "凝光", type: "doc-govern", tags: ["doc-govern"], payload: "检查 docs/constitution/Cortex 概念顶层设计 v3.7.md 是否存在并确认结构完整。" },
   { name: "久岐忍", type: "api", tags: ["api"], payload: "设计 health-check API 端点规范，用 write_file 输出为 docs/api/api-spec.md。" },
 ];
 

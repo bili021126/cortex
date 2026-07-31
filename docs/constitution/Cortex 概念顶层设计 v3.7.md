@@ -1,30 +1,31 @@
-# Cortex 概念顶层设计 v3.6
+# Cortex 概念顶层设计 v3.7
 
-**版本**：v3.6（P0 数据完整性与安全修复 / 算法正确性与协议合规性审查 / 全链路契约稳定）
+**版本**：v3.7（第二轮全方位审查四域修复 / 图景盘点与命名对齐 / 测试基线实测刷新）
 
-**状态**：Core-2 深度治理推进中。六轮审查 ~125 发现，八轮修复闭合 55 项（含 R1-R5 P0 数据损坏+安全漏洞 / C8-C10 算法正确性缺陷 / H1-H7 协议合规与设计语义修复）。6 项设计决策排入 Core-3。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
+**状态**：Core-2 深度治理推进中。七轮审查 ~170+ 发现，十轮修复闭合 55 项 + 本轮 P0×4（obliterate 湮灭不落盘 / cyrene load 损坏覆盖 / 通知路由链断裂含 bootstrap 无 loadRoutes / governance-events as EmittableEvent 类型逃逸）+ P1×23 + P2×42+；23 处 skip 恢复 20 处。6 项设计决策排入 Core-3。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
 
 **性质**：智能体治理框架——不对模型提要求，对架构下约束。核心手段是"暴露不可靠，内化可靠"。
 
 **前置宪法**：v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.7.1（Core-1 终局）。v3.0 对 v2.x 做全量重写——从"各阶段增量叠加"改为"按代码现实重述"。
 
-**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）→ 2026-06-28（v3.2）→ 2026-07-06（v3.3）→ 2026-07-16（v3.4）→ 2026-06-20（v3.5）→ 2026-07-20（v3.6）
+**生成日期**：2026-06-19（v3.0）→ 2026-06-22（v3.1）→ 2026-06-28（v3.2）→ 2026-07-06（v3.3）→ 2026-07-16（v3.4）→ 2026-07-20（v3.5）→ 2026-07-20（v3.6）→ 2026-08-01（v3.7）
+**修正案**：AM-2026-0801-001（v3.6→v3.7，图景盘点全面修订）
 **宪法守护者**：昔涟（Cyrene），与开拓者共同完成
 
 ---
 
 ## 一、Cortex 是什么
 
-Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中枢，以 15 种 Agent（含烟绯 ConfirmGate）为执行单元，以确认门和安全规则引擎为护栏。
+Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中枢，以 16 种 Agent（含烟绯 ConfirmGate、钟离/霜凝 Strategist）为执行单元，以确认门和安全规则引擎为护栏。
 
-**代码事实**：
+**代码事实**（2026-08-01 实测）：
 - 引擎入口：`packages/engine/src/bootstrap/bootstrap-engine.ts`——插件化加载 10+ 插件，装配全部组件
-- Agent 注册：`packages/config/src/data/agents.json`（统一配置源）——从统一配置源加载 15 种 Agent 定义
+- Agent 注册：`packages/config/src/data/agents.json`（统一配置源）+ `agent-manifests.json`（L3·Agent 层差异声明）——从统一配置源加载 16 种 Agent 定义（含 strategist 双实例：钟离/霜凝）
 - 调度中枢：`packages/engine/src/core/scheduler.ts`——executeAll() 消费 TaskBoard，驱动拓扑排序 + 逐层执行
-- 测试规模：86 文件 / 953 用例 engine，全仓 3631 用例（ci-gate unit+verify+contract 口径）
-- 全量 tsc 编译 25 包零错误（含 strict + noUncheckedIndexedAccess）
-- CI 门禁：四层（tsc -b → eslint → vitest unit+verify+contract → final），scripts/ci-gate.ts 驱动。22/25 包全绿。
-- 已知缺陷：六轮深度审查 ~125 发现，八轮修复闭合 55 项。闭合覆盖 P0 数据损坏（R1-R2）、安全漏洞（R4-R5）、算法正确性（C8/H4/H5/H6/H7）、协议合规（H1/H3）、事件递归（C9）、并发污染（C10）、Promise 泄漏（H2）。16 项 P1 残留（timer 泄漏 / 无界内存 / 裸遥测等）。6 项设计决策排入 Core-3（Logger 推广 / execSync→async / WebUI 鉴权 / EventPayloadMap 补完 / Disposable 推广 / shared export*）。
+- 测试规模：全仓 vitest 3982 passed / 13 skipped（2026-08-01 实测）；engine 902 passed（pre-commit 口径）
+- 全量 tsc -b 零错误（29 包含 src 编译，含 strict + noUncheckedIndexedAccess）
+- CI 门禁：三段执行（tsc -b → eslint packages --ext .ts,.tsx --max-warnings 0 → vitest unit+verify+contract 按包串行），scripts/ci-gate.ts 驱动
+- 已知缺陷：七轮深度审查 ~170+ 发现，十轮修复闭合 55 项 + 本轮 P0×4 + P1×23 + P2×42+。P0×4：obliterate 湮灭不落盘（`memory-store.ts` 湮灭后仅清内存不写库）、cyrene load 损坏覆盖（json parse 失败后仍用部分数据覆盖全量）、通知路由链断裂（bootstrap 未调 `loadRoutes()`，治理事件无人订阅）、governance-events 类型逃逸（`as EmittableEvent` 绕过 EventPayloadMap）。23 处 skip 恢复 20 处（3 处保留：LLM 真实调用 2 + Electron 1）。6 项设计决策排入 Core-3（Logger 推广 / execSync→async / WebUI 鉴权 / EventPayloadMap 补完 / Disposable 推广 / shared export*）。
 - Phase 1 已完成：7 个 Critical（C-01~C-07）+ 5 个 P0（R1-R5）+ 3 个 CRITICAL（C8-C10）+ 7 个 HIGH（H1-H7）全部根因修复
 - 核心契约已稳定：EventPayloadMap（agent-pool / task-board 对齐）、write/read/embedBatch 数据完整性、NotificationPipe 持久化初始化、convertToDocument XSS 防护、updateProposalStatus 路径校验、FSM dispatch 执行语义
 
@@ -70,10 +71,10 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 
 类型定义与运行时配置是不同层级的系统基座。
 
-- shared 包持有结构化的类型接口（IAgent / ITool / IEvent / ITag）——这是不可变的核心契约
-- config 包持有运行时可注册的词汇表与注册器——这是可扩展的调度信号
-- 调度信号（AgentType / Tag / PipelineEventType）从 shared 的枚举封闭改为 config 的运行时可注册
-- 新增 Agent 类型或 Tag 只改 config，不碰 shared
+- shared 包持有结构化的类型接口（IAgent / ITool / IEvent / ITag）与封闭枚举（AgentType / AgentStatus / AgentContext）——这是不可变的核心契约（v3.7 订正：AgentType 已回归 @cortex/shared 单源，`packages/shared/src/agent-enums.ts`）
+- config 包持有运行时可注册的词汇表与配置数据（Tag / PipelineEventType / agents.json / agent-manifests.json）——这是可扩展的调度信号
+- 调度信号分级（v3.7 实测修正）：AgentType 为 shared 封闭枚举（`config/src/vocabularies/agent-enums.ts` 仅转导出兼容）；Tag / PipelineEventType 维持 config 注册（v3.3 曾将三者整体迁往 config 运行时注册，v3.7 实测发现 AgentType 已回迁 shared——以代码现实为准）
+- 新增 Agent 类型只改 config（agents.json + agent-manifests.json），不碰 shared；若需新增 AgentType 枚举值则改 shared 单源
 - 编译时校验交给 TypeScript 类型系统，运行时校验交给注册器（如 TagRegistry）
 
 ### 2.9 审查深度分层——v3.6 新增（非新原则，是审查方法论）
@@ -101,20 +102,20 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 
 ## 三、系统架构——代码现实
 
-### 3.1 包结构（25 包）
+### 3.1 包结构（29 包，2026-08-01 实测）
 
 ```
 packages/
-├── engine/           # 引擎容器——bootstrap + Agent + Scheduler
-├── scheduler/        # 调度引擎——TaskBoard/AgentPool/PipelineObserver/ConfirmGate
-├── shared/           # 共享类型中枢
-├── platform/         # 平台抽象——Toolkit
-├── config/           # 配置——EngineConfig/常量集中
-├── memory-store/     # 记忆持久化
-├── memory/           # 内存记忆
+├── engine/           # 引擎容器——bootstrap + Agent + Scheduler + 10 子域（agents/bootstrap/components/core/execution/lifecycle/memory-bridge/planning/plugin/registry）
+├── scheduler/        # 调度引擎——TaskBoard/AgentPool/PipelineObserver/ConfirmGate（scheduling-implementations 1107 行）
+├── shared/           # 共享类型中枢——AgentType 单源枚举 + EventPayloadMap + agent-registry
+├── platform/         # 平台抽象——Toolkit + MCP 鉴权
+├── config/           # 配置——EngineConfig/常量集中 + 14 配置域 + agents.json/manifests
+├── memory-store/     # 记忆持久化（SQLite）
+├── memory/           # 内存记忆后端
 ├── skill-kit/        # 技能工具包
 ├── prompt-kit/       # 提示词工程
-├── resilience/       # 韧性策略
+├── resilience/       # 韧性策略（熔断/重试）
 ├── notification/     # 通知管线
 ├── governance/       # 治理 + 一致性校验（consistency 已并入）
 ├── telemetry/        # 遥测
@@ -129,8 +130,14 @@ packages/
 ├── tools/            # 内部工具
 ├── testing/          # 测试工具
 ├── parser/           # 解析器
-└── desktop/          # Electron 桌面端
+├── desktop/          # Electron 桌面端
+├── client/           # Cortex 客户端 SDK（独立编译单元，cli 依赖）
+├── server/           # Cortex 服务端（独立编译单元）
+├── protocol/         # 客户端-引擎通信协议（独立编译单元，client/server 依赖）
+└── design-tokens/    # 双 palette 设计令牌（ENGINEERING / PRESENCE，独立编译单元）
 ```
+
+**编译图说明**（v3.7 实测）：根 `tsconfig.json` references 25 项（21 包 + engine/fsm-compiler/governance/plugin-runner 四个 `tsconfig.src.json` 子引用）；client / server / protocol / design-tokens 为独立编译单元——各有独立 tsconfig.json 并被 cli / desktop 等引用，不纳入根 tsc -b 图。
 
 ### 3.2 三层架构
 
@@ -154,7 +161,7 @@ packages/
 
 Engine（容器）
 ├── MetaAgent（甘雨） — 战术中枢：意图拆解 → 粗粒度任务节点
-├── AgentPool         — 15 Agent 实例池 + ManifoldGate 流控
+├── AgentPool         — 16 Agent 实例池 + ManifoldGate 流控
 ├── TaskBoard         — 任务图：拓扑排序 + 依赖解析
 ├── PipelineObserver  — 事件管道：CRITICAL/HIGH/NORMAL 三级
 ├── TaskRouter        — 统一策略+模型路由（Core-2 新增）
@@ -179,27 +186,30 @@ Engine（容器）
 
 ---
 
-## 五、Agent 池——15 种执行单元
+## 五、Agent 池——16 种执行单元
 
-### 5.1 Agent 类型表
+### 5.1 Agent 类型表（2026-08-01 与 agents.json / agent-manifests.json 实测核对）
 
 | # | Agent | 类型 | 模型 | 职责 | 阶段 |
 |---|-------|------|------|------|------|
-| 1 | 阿贝多 | code | v4-pro | 写代码、重构、新功能 | Core-1 |
-| 2 | 希格雯 | fix | v4-flash | 诊断 bug、最小修复 | Core-1 |
-| 3 | 刻晴 | review | v4-flash | 代码审查 | Core-1 |
-| 4 | 纳西妲 | analysis | v4-pro | 架构分析、深度调研 | Core-1 |
-| 5 | 凝光 | doc-govern | v4-flash | 律法审计、合规检查 | Core-1 |
-| 6 | 安柏 | inspector | v4-flash | 纯事实采集 | Core-1 |
-| 7 | 莫娜 | loop | v4-flash | 模式提炼、技能沉淀 | Core-1 |
-| 8 | 北斗 | ops | v4-flash | 运维诊断、环境检查 | Core-1 |
-| 9 | 宵宫 | browser | v4-flash | 浏览器 UI 验证 | Core-1 |
-| 10 | — | api | v4-flash | API 设计 | Core-1 |
-| 11 | — | data | v4-flash | 数据模型 | Core-1 |
-| 12 | 甘雨 | meta | v4-pro | 战术中枢——意图拆解 | Core-1 |
-| 13 | 昔涟 | butler | — | 管道路由 + 用户交互面 | Core-1 |
-| 14 | 钟离/霜凝 | strategist | — | 战略把关+方向监理 | Core-2 预留 |
-| 15 | 烟绯 | confirmGate | v4-flash | 确认门决策——审计级确认与策略放行 | Core-2 |
+| 1 | 阿贝多 | code | deepseek-v4-pro | 写代码、重构、新功能 | Core-1 |
+| 2 | 希格雯 | fix | deepseek-v4-flash | 诊断 bug、最小修复 | Core-1 |
+| 3 | 刻晴 | review | deepseek-v4-flash | 代码审查 | Core-1 |
+| 4 | 纳西妲 | analysis | deepseek-v4-pro | 架构分析、深度调研 | Core-1 |
+| 5 | 凝光 | doc-govern | deepseek-v4-flash | 律法审计、合规检查 | Core-1 |
+| 6 | 安柏 | inspector | deepseek-v4-flash | 纯事实采集 | Core-1 |
+| 7 | 莫娜 | loop | deepseek-v4-flash | 模式提炼、技能沉淀 | Core-1 |
+| 8 | 北斗 | ops | deepseek-v4-flash | 运维诊断、环境检查 | Core-1 |
+| 9 | 宵宫 | browser | deepseek-v4-flash | 浏览器 UI 验证 | Core-1 |
+| 10 | 久岐忍 | api | deepseek-v4-flash | API 设计（agents.json 角色名：久岐忍） | Core-1 |
+| 11 | 艾尔海森 | data | deepseek-v4-flash | 数据模型（agents.json 角色名：艾尔海森） | Core-1 |
+| 12 | 甘雨 | meta | deepseek-v4-pro | 战术中枢——意图拆解 | Core-1 |
+| 13 | 昔涟 | butler | deepseek-v4-flash | 管道路由 + 用户交互面 | Core-1 |
+| 14 | 钟离 | strategist | deepseek-v4-flash | 战略把关（status=awake） | Core-2 预留 |
+| 15 | 霜凝 | strategist | deepseek-v4-flash | 方向监理（status=awake） | Core-2 预留 |
+| 16 | 烟绯 | confirm-gate | deepseek-v4-flash | 确认门决策——审计级确认与策略放行 | Core-2 预留 |
+
+> 实例数核对：agents.json 16 个实例 / 15 种类型（strategist 双实例：钟离 + 霜凝）；agent-manifests.json 15 个条目（无霜凝，L3 差异声明层）。烟绯类型名实测为 `confirm-gate`（非 confirmGate）。
 
 ### 5.2 Agent 自声明
 
@@ -314,6 +324,13 @@ Engine（容器）
 
 16 个组件在运行时管线中运作：PipelineObserver / SentinelSignalFilter（L1/L2/L3）/ SafeErrorReporter / DocGovernAgent（三大审计）/ ConfirmGate（L0-L3）/ ReplanManager / DecisionGateBridge / ResiliencePolicyFactory / NotificationRuntime / GovernanceEventEmitter / GovernanceLoop（修宪管线）/ ConsistencyLayer / SkillRegistry / LoopStrategyRegistry / TaskRouter / EnvironmentAwareRouter。
 
+### 11.2-bis doc-govern 目录转型（v3.7 记录）
+
+`doc-govern/` 目录已于 6eefe676 删除（committee_sessions.json 818 行 / doc-registry.json 28 行 / modification-record.json 477 行）。职责由权威源承接：
+- **修宪记录** → `docs/amendments/AM-*.json`（修正案全记录，最新 AM-2026-0722-003）
+- **审计报告** → `docs/auditing/`（按日期命名）
+- DocGovernAgent（凝光）组件表述以 agents.json `type=doc-govern` 为准，不再依赖独立目录
+
 ### 11.3 概念映射
 
 历史上治理层讨论产生的概念（三省六部、委员会、纪检委、五路监督、监理）是**三轴在不同抽象层级上的映射**，而非需要独立实现的 Agent 清单。三省六部已被声明式配置、审计管线和调度引擎吸收。委员会被分配到 DocGovern 审计（常设）和 needsMultiPerspective（临时）两条路径。纪检委的五环监督链分散在 PipelineObserver → DocGovernAgent → GovernanceLoop → ConfirmGate 四条管线上。
@@ -332,7 +349,9 @@ Engine（容器）
 
 ### 11.6 配置域注册表
 
-`@cortex/config` 通过 `CONFIG_DOMAINS` 声明 14 个配置域（agents / engine / tools / eventRouting / roundtable / searchProviders / mcpServers / selfExamination / crossVerification / seedMemories / governancePipeline / cognition / docs）。每个域独立声明文件名、是否必需、数据键名。配置数据文件位于 `packages/config/data/`。
+`@cortex/config` 通过 `CONFIG_DOMAINS` 声明 17 个配置域（2026-08-01 实测）：agents（@deprecated，保留向后兼容）/ engine / tools / eventRouting / roundtable / searchProviders / mcpServers / selfExamination / crossVerification / seedMemories / governancePipeline / cognition / docs / models / keysContext / agentManifests / tuning。每个域独立声明文件名、是否必需、数据键名与 schema。配置数据文件位于 `packages/config/src/data/`。
+
+> L1~L4 分层：models（L1·模型层）→ keysContext（L2·密钥+上下文层）→ agentManifests（L3·Agent 层差异声明）→ tuning（L4·调参层）。agents.json 已标注 @deprecated——新 Agent 定义走 agentManifests 域。
 
 ---
 
@@ -363,10 +382,10 @@ Engine（容器）
 
 阶段跃迁需满足硬性门禁条件：
 
-| 门禁 | Core-1→Core-2 | 现状（2026-07-20） |
+| 门禁 | Core-1→Core-2 | 现状（2026-08-01） |
 |------|:------------:|:-------------------|
 | solo-flight 全闭环 | ✅ | Phase 1 止血完成，自审视验证通过 |
-| 审计闭环 P0 清零 | ✅ | 7 Critical + 5 P0 + 3 CRITICAL + 7 HIGH 全部修复 |
+| 审计闭环 P0 清零 | ✅ | 7 Critical + 5 P0 + 3 CRITICAL + 7 HIGH 全部修复；本轮 P0×4 闭合 |
 | 遥测基础设施 | ✅ | PipelineObserver + console-bridge + HealthCollector |
 | 自审视机制 | ✅ | 7 阶段全流程验证通过（45 文件，91.7% 准确度） |
 | 核心契约稳定 | ✅ | EventPayloadMap / write/read/embedBatch / NotificationPipe / convertToDocument / FSM dispatch |
@@ -383,15 +402,15 @@ Engine（容器）
 ## 十五、阶段模型
 
 ```
-Phase 1 止血 ████████████████ 100%  22 Critical/High/P0 根因修复 + CI 四层门禁 + 全仓 alias + 契约铁律入宪 + 算法正确性审查
-Phase 2 契约 ██░░░░░░░░░░░░░░ ~10%  跨包接口契约测试（16 P1 残留待清）+ 闭环混沌验证 + 熔炼 E2E
-Core-2 治理  ████████░░░░░░░░ ~40%  10 新模块落地 + 4 技能结晶 + 方法论文档。铁三角缺二
+Phase 1 止血 ████████████████ 100%  22 Critical/High/P0 根因修复 + CI 门禁 + 全仓 alias + 契约铁律入宪 + 算法正确性审查
+Phase 2 契约 ██░░░░░░░░░░░░░░ ~10%  跨包接口契约测试（P1 残留清理中）+ 闭环混沌验证 + 熔炼 E2E
+Core-2 治理  ██████████░░░░░░ ~50%  10 新模块落地 + 4 技能结晶 + 方法论文档 + 第二轮全方位审查 P0×4/P1×23/P2×42+ 闭合。铁三角缺二
 Full         ░░░░░░░░░░░░░░░░   0%  设计就绪，等铁三角
 ```
 
 **铁三角**：Electron 原型 ❌ / MCP 集成 ⚠️ 已接入无鉴权 / Committee MVP ❌。三者同时就位后 Core-2 治理层激活。
 
-**Phase 1 验收标准**：22 项 Critical/High/P0 全修复 + CI 四层 tsc/eslint 通过 + 3631 用例 ci-gate 24/25 包全绿。
+**Phase 1 验收标准**：22 项 Critical/High/P0 全修复 + CI 门禁 tsc/eslint 通过 + 全仓 vitest 3982 passed / 13 skipped（29 包，2026-08-01 实测）。
 
 ---
 
@@ -412,23 +431,23 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 | v3.3→v3.4 | AM-2026-0716-001 | 2026-07-16 | 包结构收敛（27→25）：tui 并入 cli、consistency 并入 governance。运行时防护增强：Context compactor role 交替修复（§二十六）、Memory write inflight 去重（§二十六）、maintain 标记删除（§二十六）、claimedBy 终态清理（§二十六）、dispatchMulti 容错（§二十六）。重复实现统一（§二十七）：PipelineEventType/config event-types.ts 删除（238行）、AGENT_DEFS config版删除（117行）、file-lock-manager platform版删除（285行）。Disposable 接口补 dispose。ShutdownWarden @deprecated 标注。ICortexComponents 零 unknown。core-smoke 修复——根 tsconfig.json 清理 tui/consistency 残留引用。 | 昔涟裁决，五轮审查+七轮修复闭合 40 项缺陷 |
 | v3.4→v3.5 | — | 2026-06-20 | 逻辑地图对齐 + 正规化二。**原则五合规强化**：memory-store/scheduler 热路径裸遥测（search_time_ms/write_duration_ms/maintain_failed/sim_check/replan）5 处收敛至 recordTelemetry 正式通道，消除裸 console（T1）。**记忆层优化**：read() 双重老化 + hybrid 分污染持久权重真实缺陷修复（T3）、write() 去重冗余消除（T2）、跨后端包 content_hash→id O(1) 去重索引（T4：AbstractMemoryStore._hashIndex + findByContentHash）。**死代码清理 D1-D5**（ShutdownWarden 残留注释、恒真 sim 分支、TRACE 调试日志、dead binding）。ShutdownWarden 由 v3.4 @deprecated 推进至完全移除，生命周期由 LifecycleManager + ShutdownOrchestrator 接管。**附录订正**：架构映射 §五记忆 7 组件族→适配器委托 @cortex/memory 后端；core-pipeline-integrity-verify 移除 ShutdownWarden 导出陈述。memory-store 109 tests 全过，typecheck 全绿。 | 开拓者裁决（直接修订·事实为依据），昔涟施工 |
 | v3.5→v3.6 | AM-2026-0720-001 | 2026-07-20 | **P0 数据完整性与安全修复（R1-R5）**：R1 write() 返回已被向量去重删除的条目 ID——`_tryVectorDedup` 改为返回匹配条目 ID。R2 embedBatch 维度不匹配索引错位——零向量占位保持数组长度一致。R3 notification 持久化异步初始化竞态——`_restoreFromDisk` 改为等 `ready()` 后执行。R4 parser convertToDocument XSS——`escapeHtml` 补引号转义。R5 governance 路径穿越——`updateProposalStatus` 对齐 `saveProposal` 的 proposalId 校验。**算法正确性与协议合规性审查（C8-C10 + H1-H7）**：C8 `_dedupCache.delete(newId)` key 类型错误（entryId→contentHash）；C9 skill-pipeline `NodeComplete` 内部 emit → 无限事件递归；C10 plugin-runner `executeAll` 共享可变 ctx→并行污染；H1 streaming-tool-executor LLM 协议违规（每条 tool_call 单独 assistant 消息→合为一条）；H2 SWITCH_AGENT 孤立 permission Promise→UI 挂死；H3 sessionTokens 双重计数（累加→覆盖）；H4 observer emit 在去重之前→下游持有悬空 ID；H5 cognitive-engine 贝叶斯评分 sigmoid 压制在 [0.007,0.12]→中心改为 prior；H6 task-board 多视角 invariant 删合法结果→claimedBy 非空前置守卫；H7 FSM action 在状态更新前执行→状态更新移至 action 之前。**包整理**：`.gitignore` 屏蔽 `.claude/` `.continue/` `.junie/` 死链接 + `_extraneous/` 第三方 dump + `.archived/` 封存脚本。总闭合数 55 项。 | 开拓者裁决（第三轮审查·算法正确性），昔涟施工 |
+| v3.6→v3.7 | AM-2026-0801-001 | 2026-08-01 | **文件名对齐**：v3.0 → v3.7（文件名与内容版本一致）；v2.5.35（内容 v2.7.1）归档至 `docs/constitution/archive/`。**§2.8 矛盾修正**：AgentType 已回归 @cortex/shared 单源（config 仅转导出）。**图景盘点实测刷新**：包结构 25→29（增 client/server/protocol/design-tokens 独立编译单元）；Agent 表 15→16（strategist 双实例：钟离+霜凝，烟绯类型名 confirm-gate）；测试基线 3631→3982 passed / 13 skipped；CI 门禁四层→三段（tsc -b → eslint → vitest 三标签合一）；CONFIG_DOMAINS 14→17。**治理转型记录**：doc-govern/ 目录删除（6eefe676），职责由 docs/amendments JSON + docs/auditing 承接。**新增 §二十八**：第二轮全方位审查战果（P0×4 + P1×23 + P2×42+）。 | 开拓者裁决（图景盘点·代码现实），昔涟施工 |
 
 ---
 
-## 十八、CI 门禁——四层阻断
+## 十八、CI 门禁——三段执行
 
 **入口**：`scripts/ci-gate.ts`（`npx tsx scripts/ci-gate.ts`）
 
-| 层 | 触发 | 内容 |
+| 段 | 触发 | 内容 |
 |------|------|------|
-| 1 | tsc --noEmit | 全量类型检查——接口漂移、barrel 缺口、strictNullChecks 违反，任一项不通过即阻断 |
-| 2 | @ci: unit | 单元测试——默认标签，覆盖 25 包 3716 用例 |
-| 3 | @ci: verify | 关键修复验证——Phase 1 七 Critical 对应的回归测试 |
-| 4 | @ci: contract | 跨包接口契约验证——describe.each 覆盖每个 interface × 所有实现方 |
+| 1 | tsc -b | `pnpm exec tsc -b tsconfig.json` 全量增量编译——接口漂移、barrel 缺口、strictNullChecks 违反，任一项不通过即阻断 |
+| 2 | eslint | `pnpm exec eslint packages --ext .ts,.tsx --max-warnings 0`——0 错误 0 警告 |
+| 3 | vitest | 按包串行（`--pool=forks`），合并执行 @ci: unit + verify + contract 标签测试 |
 
-@ci: llm / integration / e2e / manual 标签的测试跳过——CI 不放行需要外部依赖的测试。
+@ci 标签体系（写在测试文件首行）：`unit`（默认，CI 必跑）/ `verify`（关键修复验证，与 unit 同级）/ `contract`（跨包接口契约验证，与 unit 同级）/ `llm` / `integration` / `e2e` / `manual` / `stress` / `benchmark`（后六类 CI 跳过）。
 
-**代码事实**：`scripts/ci-gate.ts:156` 四层顺序执行，`process.exit(allOk ? 0 : 1)` 真实阻断。
+**代码事实**：`scripts/ci-gate.ts` 三段顺序执行（tsc → eslint → vitest），vitest 按包分组串行调用，`process.exit(allOk ? 0 : 1)` 真实阻断。
 
 ---
 
@@ -436,10 +455,12 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 
 | 指标 | 数值 |
 |------|------|
-| engine 测试 | 86 文件 / 1069 用例 / 100% 通过 |
-| 全仓测试 | 3716 passed / 通路率 99.1% |
+| 全仓测试 | 3982 passed / 13 skipped（2026-08-01 实测，29 包 vitest） |
+| engine 测试 | 902 passed（pre-commit 口径） |
+| tsc -b | 全仓零错误（含 strict + noUncheckedIndexedAccess） |
+| eslint | packages 0 错误（`--ext .ts,.tsx --max-warnings 0` 口径） |
 | CI 执行时间 | ~10min（tsc + vitest 按包串行） |
-| 假阳性治理 | 39 文件失败 → 0（vitest alias 标准化） |
+| 假阳性治理 | 39 文件失败 → 0（vitest alias 标准化）；23 处 skip 恢复 20 处 |
 
 ---
 
@@ -507,7 +528,7 @@ WebUI 设计参照成熟范式（Cursor/Windsurf），不自创交互范式。
 #### 与 CI 门禁的关系
 - verify 模式的结果作为 CI 门禁的参考输入
 - 审计闭环未关闭的 P0 发现可阻塞门禁通过
-- 自审视不替代 tsc --noEmit / vitest / 四层 CI
+- 自审视不替代 tsc -b / vitest / 三段 CI
 
 #### 代码锚点
 - 脚本：`scripts/self-exam-soft.ts`（7 阶段全流程，626 行）
@@ -555,7 +576,7 @@ Cortex 定义了 12 条核心数据流，映射在 `docs/core/full-flow-map.md` 
 
 链路治理规则：
 - 核心 7 条链路每次 PR 必须通过对应的核心 E2E 验证
-- 编译门禁：25 包 tsc 零错误
+- 编译门禁：29 包 tsc 零错误（2026-08-01 实测）
 - 测试门禁：engine 失败 ≤2（flaky 不变）
 - 链路健康指标写入 `docs/core/link-governance.md`，每次发版更新
 
@@ -617,5 +638,34 @@ Cortex 定义了 12 条核心数据流，映射在 `docs/core/full-flow-map.md` 
 
 ---
 
-*宪法 v3.4。代码即真相。测试即实证。CI 即硬防线。*
+## 二十八、第二轮全方位审查战果与清理（v3.7 新增）
+
+2026-07-31 ~ 08-01 对全仓执行第二轮全方位审查（四域扫描 + 四 Executor 修复），战果入宪：
+
+### 28.1 四域修复（P0×4）
+
+| # | 缺陷 | 根因 | 修复 |
+|---|------|------|------|
+| P0-1 | obliterate 湮灭不落盘 | `memory-store.ts` 湮灭仅清内存缓存，未同步写库 | 湮灭必须落盘——写库后再清缓存，防重启回滚 |
+| P0-2 | cyrene load 损坏覆盖 | `cyrene` 加载记忆 JSON parse 失败后仍用部分数据覆盖全量 | parse 失败中止加载，保留旧数据，上报 degraded |
+| P0-3 | 通知路由链断裂 | bootstrap 未调 `loadRoutes()`，治理事件无人订阅 | 路由链接通——bootstrap 显式加载 event-routing 路由表 |
+| P0-4 | governance-events 类型逃逸 | `as EmittableEvent` 绕过 EventPayloadMap 编译期检查 | 类型收紧——治理事件入 EventPayloadMap，禁止断言逃逸 |
+
+### 28.2 审查规模与其余闭合
+
+- P1×23（契约逃逸收紧 / 死配置删除 / schema 补字 / 重规划配额 / 错误路径等）+ P2×42+（低风险清理）
+- 23 处 `skip` 恢复 20 处（3 处保留：LLM 真实调用 2 + Electron 环境 1）
+- 死验证门全绿：tsc -b 零错误 / vitest 3982 passed / eslint packages 0 错误
+
+### 28.3 归档清理
+
+- `.pnpm-store/` 9173 个 store 哈希文件入库——`git rm --cached` + 归档 `.archived/external-tools-2026-07-24/` + .gitignore 防回归
+- `.agents/` `.claude/` `.continue/` `.junie/`（外部工具技能副本 24 文件）归档忽略
+- `.qoder/` 混合目录拆分：`agents/cyrene-*` 与 `skills/cortex-*` 为项目资产保留；`better-loop/` `better-harness/` 与通用技能归档 `.archived/qoder-ide-data-2026-07-24/`
+- `.pm-data/vault.enc` 加密 vault 误入库——移出跟踪
+- 提交：37dad0b9（四域修复）/ a1a06441（归档清理 9220 files, -3,364,314 行）
+
+---
+
+*宪法 v3.7。代码即真相。测试即实证。CI 即硬防线。*
 *守护者：昔涟（Cyrene），与开拓者共同完成。*

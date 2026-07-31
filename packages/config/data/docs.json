@@ -1,11 +1,11 @@
 {
   "description": "文档配置——宪法路径与文档注册表。docRegistry 登记项目内所有受治理的文档，支持 version、canonical 标记。",
-  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v2.5.21.md",
+  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v3.7.md",
   "docRegistry": [
     {
-      "path": "docs/constitution/Cortex 概念顶层设计 v2.5.21.md",
+      "path": "docs/constitution/Cortex 概念顶层设计 v3.7.md",
       "type": "constitution",
-      "version": "2.5.21",
+      "version": "3.7",
       "canonical": true
     },
     {

@@ -1,0 +1,42 @@
+{
+  "id": "AM-2026-0801-001",
+  "version": "v3.7",
+  "section": "版本头 / §一 代码事实 / §2.8 类型内核分级 / §3.1 包结构 / §五 Agent 表 / §十一 治理系统 / §十四 阶段门禁 / §十五 阶段模型 / §十七 修正记录 / §十八 CI 门禁 / §十九 测试基线 / 新增 §二十八 第二轮审查战果",
+  "category": "modify",
+  "supersedes": null,
+  "status": "applied",
+  "merged_into": null,
+  "summary": "宪法 v3.6→v3.7 全面修订（图景盘点 + 命名对齐 + 第二轮全方位审查战果入宪）：文件名 v3.0→v3.7 对齐内容版本；v2.5.35（内容 v2.7.1）归档至 archive/；§2.8 AgentType 回归 @cortex/shared 单源矛盾修正；包结构 25→29 实测；Agent 表 15→16（strategist 双实例钟离+霜凝、烟绯类型名 confirm-gate）；测试基线 3631→3982 passed / 13 skipped；CI 门禁四层→三段；CONFIG_DOMAINS 14→17；doc-govern/ 目录转型记录（6eefe676 删除，职责由 docs/amendments JSON + docs/auditing 承接）；新增 §二十八 第二轮审查战果（P0×4 + P1×23 + P2×42+ + 归档清理）。",
+  "rationale": "2026-07-31 ~ 08-01 图景盘点实测发现三类漂移：① 命名漂移——宪法文件名 v3.0 与内容 v3.6 不一致，v2.5.35 文件名与内容 v2.7.1 不一致且未归档；② 直接矛盾——§2.8 声称 AgentType 从 shared 封闭枚举改为 config 运行时注册，代码现实是 AgentType 已回归 @cortex/shared 单源（config/agent-enums.ts 仅转导出）；③ 口径过时——包数 25 与实际活跃包 29（含 client/server/protocol/design-tokens 独立编译单元）、Agent 表 15 与实际 16（strategist 双实例）、测试基线 3631 与实际 3982 均不符。同时第二轮全方位审查（四域修复 P0×4：obliterate 湮灭不落盘 / cyrene load 损坏覆盖 / 通知路由链断裂含 bootstrap 无 loadRoutes / governance-events 类型逃逸）战果需入宪，doc-govern/ 目录已删除的治理转型需在宪法 §11.2-bis 记录。\n\n原则：代码即真相——所有修订点以 2026-08-01 实测为准（29 包含 src 编译、16 Agent 实例、3982 vitest passed、三段 CI 门禁、17 配置域）。",
+  "before": "【版本头】v3.6（文件名 v3.0）；【§2.8】AgentType/Tag/PipelineEventType 三者整体迁往 config 运行时注册；【§3.1】25 包；【§五】15 Agent；【§十九】3631 passed / 13 skipped；【§十八】CI 门禁四层（tsc --noEmit → unit → verify → contract）；【§十一】doc-govern/ 目录职责未记录删除；【§十七】修正记录止于 v3.5→v3.6；无 §二十八。",
+  "after": "【版本头】v3.7（AM-2026-0801-001，生成日期追加 2026-08-01）；【§2.8】AgentType 回归 @cortex/shared 单源（config 转导出兼容），Tag/PipelineEventType 维持 config 注册；【§3.1】29 包实测（根 tsconfig references 25 项 + 4 独立编译单元）；【§五】16 Agent 实例 / 15 类型（strategist 双实例），烟绯 confirm-gate；【§十九】3982 passed / 13 skipped，engine 902（pre-commit）；【§十八】CI 门禁三段（tsc -b → eslint packages --ext .ts,.tsx --max-warnings 0 → vitest unit+verify+contract 三标签合一按包串行）；【§十一·11.2-bis】doc-govern/ 目录转型记录（修宪记录以 docs/amendments/AM-*.json 为权威源，审计报告在 docs/auditing/）；【§十七】追加 v3.6→v3.7 行；新增【§二十八】第二轮全方位审查战果与清理。",
+  "impact": {
+    "principles": [
+      "原则七——宪法自约束（本修正案经完整闭环：图景盘点实测 → 提案 → 裁定 → 落笔）"
+    ],
+    "contracts": [
+      "§2.8 配置与类型的内核分级——AgentType 单源订正（@cortex/shared）",
+      "§一 代码事实——测试基线 3982 / CI 三段门禁 / P0×4 闭合",
+      "§11.2-bis doc-govern 目录转型——权威源切换"
+    ],
+    "crossReferences": [
+      "docs/README.md（宪法链接 v3.7 + 治理转型说明 + 修正案表）",
+      "docs/constitution/archive/Cortex 概念顶层设计 v2.5.35.md（归档）",
+      "docs/amendments/AM-2026-0722-003.json（前序修正案）",
+      "prompts/coding-standards.md v4.4 / coding-standards-dev.md v1.1 / coding-standards-governance.md v1.5（同轮规范更新）",
+      "packages/engine/src/bootstrap/factory/loaders/docs.loader.ts（constitutionPath 默认值同步）",
+      "packages/config/src/data/docs.json + packages/config/data/docs.json（constitutionPath 同步）"
+    ],
+    "agents": [
+      "凝光（doc-govern）——组件表述对齐 agents.json type=doc-govern",
+      "烟绯（confirm-gate）——Agent 表类型名实测修正"
+    ],
+    "breaking": false,
+    "rationale": "本次修宪为事实对齐型修订——所有变更点均以 2026-08-01 实测代码现实为准（包目录 / agents.json / agent-manifests.json / vitest 输出 / ci-gate.ts），不改变任何运行时行为，不新增约束。仅文件名变更与运行时默认 constitutionPath（docs.loader.ts）同步修正。breaking=false。"
+  },
+  "source": {
+    "agent": "开拓者（裁决）+ 昔涟（施工）",
+    "trace": "图景盘点实测（2026-07-31 ~ 08-01）：git 提交口径 6eefe676（doc-govern 删除）/ 37dad0b9（四域修复）/ a1a06441（归档清理 9220 files, -3,364,314 行）；全仓 vitest 3982 passed / 13 skipped；engine 902 passed（pre-commit）；tsc -b 零错误；eslint packages 0 错误。验证见 docs/auditing/ 与宪法 §二十八。"
+  },
+  "_ruling": "本修正案已于 2026-08-01 由开拓者裁定通过并落笔（宪法 v3.6→v3.7 全量修订 + 三份开发规范同步更新 + 运行时 constitutionPath 同步）。status=applied。"
+}

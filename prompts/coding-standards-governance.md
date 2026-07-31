@@ -5,7 +5,7 @@
 > 
 > 标注约定：「✅ 已实现」= 代码中有对应实现；「📋 规划」= 设计目标，尚未落地；「规范要求」= 应遵守的约束，但代码中未强制执行。
 > 
-> 版本：v1.4（v1.3 + E2E分层规范 + FSM治理）
+> 版本：v1.5（@ci 标签对齐 CI 三段门禁 + 湮灭落盘契约铁律 + doc-govern 转型 + 宪法依据 v3.7）
 
 ---
 
@@ -78,6 +78,8 @@ Active → Archived → Frozen → Obliterated
 | Frozen | 仅显式指定 | ❌ 新关联 | 冻结 |
 | Obliterated | 仅显式指定 | ❌ 新关联 | 不可逆终点 |
 
+> **湮灭必须落盘（v1.5 契约铁律，对齐核心篇 §18.1）**：进入 Obliterated 前必须先写库（SQLite delete/标记），成功后再清内存缓存——湮灭不落盘则重启后数据复活。写库失败必须抛错中止，禁止"仅清内存"式湮灭。判例：P0-1（memory-store.ts 湮灭后仅清内存不写库）。
+
 > **DocGovern 分区例外**：审计记录、修宪提案、判例记录永久保存，不受 30 天窗口限制。
 
 **双轨检索**：
@@ -109,11 +111,11 @@ Created → Awake → Active → Awake → ... → Draining → Destroyed
 
 ```
 ✅ 要求：每个测试文件首行注释标注 @ci 标签
-// @ci: unit | llm | integration | e2e | manual
+// @ci: unit | verify | contract | llm | integration | e2e | manual | stress | benchmark
 ```
 
-- `unit` → CI 门禁强制运行
-- `llm/integration/e2e/manual` → 跳过门禁，手动驱动
+- `unit`（默认，CI 必跑）/ `verify`（关键修复验证，与 unit 同级）/ `contract`（跨包接口契约验证，与 unit 同级）——三标签合一，CI 门禁第三段（vitest 按包串行）合并执行
+- `llm` / `integration` / `e2e` / `manual` / `stress` / `benchmark` → 跳过门禁，手动驱动
 - 无标签默认视为 `unit`
 
 ---
@@ -273,9 +275,9 @@ scheduler.invariant          → SafeErrorReporter（安全上报）
 > 
 > **注入规则**：Scheduler / MetaAgent / AgentPool / DocGovernAgent / MemoryStore 相关 → 全量注入。CodeAgent / ReviewAgent / AnalysisAgent / InspectorAgent 等纯执行 Agent → 不注入治理篇。
 > 
-> **审查记录**：v1.1 经完整代码审查（2026-05-31），第十三至十六节已标注「已实现/规划」状态。v1.2 新增十七节架构定位矩阵。v1.3 九节补业界定位，新增十八节 Harness 四层架构、十九节技能系统闭环。
+> **审查记录**：v1.1 经完整代码审查（2026-05-31），第十三至十六节已标注「已实现/规划」状态。v1.2 新增十七节架构定位矩阵。v1.3 九节补业界定位，新增十八节 Harness 四层架构、十九节技能系统闭环。v1.4（E2E 分层规范 + FSM 治理）。v1.5（2026-08-01）：@ci 标签体系对齐 CI 三段门禁（unit/verify/contract 三合一）；九节补湮灭落盘契约铁律（P0-1）；DocGovernAgent 表述对齐 doc-govern/ 目录转型（宪法 §11.2-bis：目录已删，修宪记录以 docs/amendments/AM-*.json 为权威源，审计报告在 docs/auditing/）；宪法依据 v2.5.28 → v3.7。
 > 
-> **宪法依据**：Cortex 概念顶层设计 v2.5.28——§3 系统架构 + §5 Agent 池 + §7 确认门 + §8 PipelineObserver + §10 记忆系统 + §11 治理层
+> **宪法依据**：Cortex 概念顶层设计 v3.7——§3 系统架构 + §5 Agent 池 + §7 确认门 + §8 PipelineObserver + §10 记忆系统 + §11 治理系统（含 11.2-bis doc-govern 转型）
 
 ---
 

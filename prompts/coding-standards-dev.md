@@ -5,8 +5,8 @@
 > 不属于 `prompts/coding-standards.md`（注入 Agent 的代码法典），
 > 也不属于 `prompts/coding-standards-governance.md`（注入 Scheduler/MetaAgent 的治理篇）。
 >
-> 版本：v1.0
-> 从宪法 v2.5.28、代码法典、治理篇及十一次大型重构中提炼。
+> 版本：v1.1（统一版本标注 + 包结构/依赖图实测修正 + 契约铁律对齐 coding-standards §十八）
+> 从宪法 v3.7、代码法典、治理篇及十一次大型重构中提炼。
 
 ---
 
@@ -60,9 +60,10 @@
 ─────────────                    ───────────────────────
 @cortex/config                   @cortex/engine
 @cortex/shared                   @cortex/cli
-                                 @cortex/factory
                                  @cortex/llm
                                  @cortex/tools
+
+> 实测（2026-08-01）：图中为示意清单非全量——@cortex/factory 非独立包，是 engine 内 `bootstrap/factory/` 子域（见次原则十三）。
 ```
 
 箭头方向永远从左到右。🚫 禁止倒置——如果 `config` 为了取某个类型而去依赖 `engine`，必须重构。
@@ -165,7 +166,7 @@
 
 ## 次原则十二 —— engine 模块联邦，不拆包
 
-`@cortex/engine` 是高内聚的模块联邦——14 个子目录已形成清晰职责边界（core / memory / platform / agents / bootstrap / governance / consistency / components / registry / skills）。
+`@cortex/engine` 是高内聚的模块联邦——10 个子目录已形成清晰职责边界（agents / bootstrap / components / core / execution / lifecycle / memory-bridge / planning / plugin / registry，2026-08-01 实测）。
 
 - 🚫 禁止：将 engine 拆分为多个独立 npm 包（存在跨模块循环依赖风险、包管理负担加重、公共 API 僵化）
 - ✅ 允许：`memory/` 子系统在解除对 `core/pipeline-runner.ts` 的依赖后，可独立为 `@cortex/memory`
@@ -174,12 +175,12 @@
 
 ---
 
-## 次原则十三 —— factory 包是唯一配置读取入口
+## 次原则十三 —— engine bootstrap/factory 是唯一配置读取入口
 
-`@cortex/factory`（工部）是唯一的配置加载与组装层。
+`@cortex/engine` 的 `bootstrap/factory/` 子域（loaders → assemblers → bootstrap 管线）是唯一的配置加载与组装层；`@cortex/config` 持有配置域注册表（CONFIG_DOMAINS）与 schema 校验。
 
 - 🚫 禁止：engine / cli / 其他包直接 `readFileSync` 读取 `cortex-agents.json` 或任何配置文件
-- ✅ 要求：所有配置读取走 factory 包的 `loaders → schemas → assemblers → bootstrap` 管线
+- ✅ 要求：所有配置读取走 `bootstrap/factory/` 的 `loaders → schemas → assemblers → bootstrap` 管线
 
 ---
 
@@ -265,8 +266,8 @@ Agent.produces → routeTable → channels
 
 > **此文件是 Cortex 的开发规范——适用于所有在 Cortex 仓库中写代码的人。**
 >
-> 宪法依据：Cortex 概念顶层设计——八条不可变原则
-> 代码依据：`prompts/coding-standards.md`（Agent 端）、`prompts/coding-standards-governance.md`（治理端）
+> 宪法依据：Cortex 概念顶层设计 v3.7——七条不可变原则（含原则八 配置与类型内核分级）
+> 代码依据：`prompts/coding-standards.md`（Agent 端，含 §十八 契约铁律）、`prompts/coding-standards-governance.md`（治理端）
 
 
 ## §十 类型安全与 lint 纪律
@@ -315,7 +316,7 @@ void somePromise();
 
 ### §10.5 验收标准
 
-`pnpm exec eslint --quiet packages/` 必须返回 0 行输出。CI 门禁拦截含 lint error 的 PR。
+`pnpm exec eslint packages --ext .ts,.tsx --max-warnings 0` 必须 0 错误 0 警告（CI 门禁第二段口径，2026-08-01 实测）。CI 门禁拦截含 lint error 的 PR。
 
 ---
 
@@ -340,7 +341,7 @@ tsc -b --force  # 全量重编，不允许增量跳过
 
 ### §11.3 事件契约验证
 
-PipelineEventType 新增枚举值必须同步更新 EventPayloadMap。CI 通过编译期类型检查拦截遗漏。
+PipelineEventType 新增枚举值必须同步更新 EventPayloadMap（@cortex/shared 单份权威——config 版 event-types.ts 已于 v3.4 删除）。CI 通过编译期类型检查拦截遗漏。
 
 ### §11.4 上下文压缩集成测试
 
