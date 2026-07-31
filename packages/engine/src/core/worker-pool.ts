@@ -52,6 +52,7 @@ export class WorkerPool {
   }
 
   async parseJson<T = unknown>(rawText: string, timeout?: number): Promise<T> {
+    if (this._shutdown) return await Promise.reject(new Error("WorkerPool 已 shutdown，拒绝新任务"));
     return await new Promise<T>((resolve, reject) => {
       const worker = this._getIdleWorker();
       const task: WorkerTask = { type: "parse-json", payload: rawText, timeout };

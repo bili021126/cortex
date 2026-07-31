@@ -1,6 +1,8 @@
 /** Scheduler 调度参数 */
 export const SCHEDULER_MAX_REPLAN_PER_NODE = 3;
 export const SCHEDULER_MAX_TOTAL_REPLANS = 10;
+/** 连续降级 drain 次数上限——防无限重规划链 */
+export const SCHEDULER_MAX_DEGRADED_DRAINS = 5;
 export const SCHEDULER_ROUND_TIMEOUT_MS = 300_000;
 
 /** WorkerPool 队列上限——超出时新任务被立即拒绝 */

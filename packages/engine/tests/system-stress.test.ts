@@ -455,13 +455,11 @@ describe("场景 3：重规划预算耗尽", () => {
     expect(doomedResult).toBeDefined();
     expect(doomedResult!.success).toBe(false);
 
-    // 重规划尝试次数 = 10（SCHEDULER_MAX_TOTAL_REPLANS，全局 budget）
+    // 重规划链深度继承（P0-B(b)）：单节点链条在 per-node 上限（3）处拦截，不依赖全局预算
     const replanAttempts = replanEvents.filter((e) => e.type === "replan");
-    expect(replanAttempts).toHaveLength(10);
-
-    // SchedulerReplanLimit 事件被触?
-    expect(replanLimitHit).toBe(true);
-
+    expect(replanAttempts.length).toBeGreaterThan(0);
+    expect(replanAttempts.length).toBeLessThanOrEqual(3);
+    
     // 失败计数
     expect(report.failed).toBeGreaterThanOrEqual(1);
   });
@@ -586,23 +584,23 @@ describe("场景 3：重规划预算耗尽", () => {
     await agent.wakeup();
     scheduler.register(AgentType.Code, agent, "mock");
 
-    let replanLimitEmitted = false;
     let runReplanCount = 0;
     observer.on(PipelinePriority.CRITICAL, (e: ObservableEvent) => {
       if (e.type === PipelineEventType.NodeReplan) runReplanCount++;
-      if (e.type === PipelineEventType.SchedulerReplanLimit) replanLimitEmitted = true;
     });
 
     const report = await scheduler.executeAll();
 
     // 基础断言
     expect(report.failed).toBeGreaterThanOrEqual(1);
-    expect(runReplanCount).toBeLessThanOrEqual(10);
 
-    // @fix D2 验证：SchedulerReplanLimit 事件已发射，队列被清?
-    //   修复前：hasPending=true ?tryFireReplan()→null ?continue 死循??依赖 executeAllTimeout
-    //   修复后：清理队列 ?hasPending=false ?break 自然退出（SchedulerReplanLimit 证明预算触顶?
-    expect(replanLimitEmitted).toBe(true);
+    // P0-B(b) 深度继承后：单节点链条在 per-node 上限（3）处拦截，全局预算（常量 10）不再触顶
+    // SchedulerReplanLimit 事件不再必然发射——终止性由 per-node 拦截保证
+    expect(runReplanCount).toBeGreaterThan(0);
+    expect(runReplanCount).toBeLessThanOrEqual(3);
+
+    // @fix D2 验证：有限 replan 后自然退出（不依赖 executeAllTimeout 超时空转）
+    expect(report.durationMs).toBeLessThan(SHORT_STRESS_CONFIG.executeAllTimeoutMs);
   });
 
   it("executeAll 调用——reset 防止状态泄漏", async () => {
@@ -1825,8 +1823,9 @@ describe("场景 11：AgentPool destroy 绕过状态机", () => {
     const destroyViolation = violations.find((v: any) => v.source === "AgentPool.destroy");
     expect(destroyViolation).toBeDefined();
     // message 含状态信息，detail ?JSON string
-    const detailObj = JSON.parse(destroyViolation.detail);
-    expect(detailObj.instanceId).toBe(instanceId);
+    // message 含状态信息，detail 为 `${message} | ${JSON.stringify(details)}` 拼接——断言两部分都在
+    expect(destroyViolation.detail).toContain("destroy 绕过状态机");
+    expect(destroyViolation.detail).toContain(`"instanceId":"${instanceId}"`);
 
     // Agent 被成功回收（即使绕过状态机?
     expect(pool.getStatus(instanceId)).toBeUndefined();

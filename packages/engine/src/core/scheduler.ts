@@ -12,6 +12,7 @@ import { resolveConfig } from "@cortex/config";
 import type { EngineConfig } from "@cortex/config";
 // 原则五（统一可观测）：指标走正式遥测通道，禁止裸 console
 import { recordTelemetry } from "@cortex/telemetry";
+import { resilienceFactory } from "../execution/resilience-integration.js";
 
 /** MemoryStore 维护接口——替代 as any 类型守卫 */
 interface Maintainable { maintain(): unknown }
@@ -131,7 +132,7 @@ export class Scheduler implements IScheduler {
     const adapter = this.metaAgent?.llmAdapter;
     if (!adapter) return undefined;
     return async (model: string, messages: Array<{ role: string; content: string }>) => {
-      const res = await adapter.chat(model, messages as Parameters<typeof adapter.chat>[1]);
+      const res = await resilienceFactory.execute("llm-call", async () => await adapter.chat(model, messages as Parameters<typeof adapter.chat>[1]));
       return res.content ?? "";
     };
   }

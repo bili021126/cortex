@@ -32,10 +32,10 @@ function mockLlmThrow(): LlmCallable {
   return vi.fn<LlmCallable>().mockRejectedValue(new Error("network error"));
 }
 
-/** 长 payload（>200 字确保触发拆解） */
-const LONG_PAYLOAD = "A".repeat(250);
+/** 长 payload（>500 字确保触发拆解，对齐 RLM_MIN_COMPLEXITY_CHARS=500） */
+const LONG_PAYLOAD = "A".repeat(520);
 
-/** 短 payload（<200 字不触发拆解） */
+/** 短 payload（<500 字不触发拆解） */
 const SHORT_PAYLOAD = "Fix typo in file.ts";
 
 afterEach(() => {

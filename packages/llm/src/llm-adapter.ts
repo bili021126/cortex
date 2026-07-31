@@ -389,11 +389,11 @@ export class LlmAdapter {
           });
 
           // 记录 token 消耗（权限配额追踪，异步 fire-and-forget）
-          void limiter.recordTokens(fp, json.usage?.total_tokens ?? 0);
+          void limiter.recordTokens(fp, json.usage?.total_tokens ?? 0).catch(() => {});
 
           // ── 遥测：LLM 响应延迟 ──
           const callElapsed = Date.now() - t0;
-          void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "false" }]);
+          void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "false" }]).catch(() => {});
 
           return response;
         } catch (bodyReadErr) {

@@ -42,12 +42,12 @@ describe('AgentPool', () => {
     expect(ok).toBe(false);
   });
 
-  it('spawnSubtask 不占配额', () => {
+  it('spawnSubtask 不占主配额', () => {
     pool.register(makeConfig('code', 1));
     pool.spawn('code' as AgentType, 'c1');
     const ok = pool.spawnSubtask('code' as AgentType, 'c2');
     expect(ok).toBe(true); // 子任务不占上限
-    expect(pool.count('code' as AgentType)).toBe(2);
+    expect(pool.count('code' as AgentType)).toBe(1); // 主配额不变
   });
 
   it('setStatus 合法流转', () => {
@@ -103,5 +103,43 @@ describe('AgentPool', () => {
     pool.setStatus('c1', AgentStatus.Awake);
     const statuses = pool.getStatuses('code' as AgentType);
     expect(statuses).toHaveLength(2);
+  });
+
+  // ── P1-B3 回归测试 ──────────────────────────────────
+
+  it('P1-B3①: spawnSubtask 不占主配额——满配后仍可创建子任务', () => {
+    pool.register(makeConfig('code', 1));
+    pool.spawn('code' as AgentType, 'c1');
+    // 主配额已满
+    expect(pool.spawn('code' as AgentType, 'c2')).toBe(false);
+    // 子任务不受影响
+    expect(pool.spawnSubtask('code' as AgentType, 'sub1')).toBe(true);
+    expect(pool.count('code' as AgentType)).toBe(1); // 主配额不变
+    expect(pool.canSpawn('code' as AgentType)).toBe(false); // canSpawn 只看主配额
+  });
+
+  it('P1-B3②: spawnSubtask 防重复 id——与 spawn 一致', () => {
+    pool.register(makeConfig('code', 5));
+    pool.spawn('code' as AgentType, 'shared-id');
+    // 重复 id 的子任务被拒绝
+    expect(pool.spawnSubtask('code' as AgentType, 'shared-id')).toBe(false);
+  });
+
+  it('P1-B3③: spawnSubtask 补全 _activeByInstance——ping 可探测', async () => {
+    pool.register(makeConfig('code', 2));
+    pool.spawnSubtask('code' as AgentType, 'sub-ping');
+    // ping 应返回 true
+    const alive = await pool.ping('sub-ping');
+    expect(alive).toBe(true);
+  });
+
+  it('P1-B3④: destroy 同时清理子任务集合', async () => {
+    pool.register(makeConfig('code', 2));
+    pool.spawn('code' as AgentType, 'c1');
+    pool.spawnSubtask('code' as AgentType, 'sub1');
+    pool.destroy('code' as AgentType, 'sub1');
+    // destroy 后 ping 应返回 false
+    await expect(pool.ping('sub1')).resolves.toBe(false);
+    expect(pool.count('code' as AgentType)).toBe(1); // 主实例不受影响
   });
 });

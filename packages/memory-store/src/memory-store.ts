@@ -269,7 +269,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     // ── 后端写入 + inflight 注册 ──
     const writePromise = (async (): Promise<string> => {
       const id = await this._backend.write(input);
-      this._dedupCache.set(contentHash, id); // 写入成功立即缓存
+      this._dedupCacheSet(contentHash, id); // 写入成功立即缓存
       return id;
     })();
     this._inflightWrites.set(contentHash, writePromise);
@@ -343,6 +343,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
     // ── 传递 keywords 到后端：后端在 summary/semantic_gist 层过滤，适配器补充 content_blob 搜索 ──
     const backendQuery = { ...query };
+    // P1-A fix: 放大后端查询 limit 确保适配器层过滤后仍能返回 resolvedLimit 条
+    // （后端先按 weight 排序裁切，适配器再补 TTL/标记删除/关键词过滤 → 先裁后滤欠取）
+    // 注意 hybrid 分支有自己的排序裁切，不干扰此路径
+    backendQuery.limit = Math.max(backendQuery.limit ?? 0, resolvedLimit * 3);
     // ── 遥测：Memory 检索耗时 ──
     const t0 = Date.now();
     let results = await this._backend.read(backendQuery, mode);
@@ -517,6 +521,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
   archive(memoryId: string): boolean {
     this._bm25Index?.removeDocument(memoryId);
+    this._evictCaches(memoryId);
     return this._backend.archive(memoryId);
   }
 
@@ -537,11 +542,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     if (this._hybridEnabled) {
       this._bm25Index.removeDocument(memoryId);
     }
-    // _dedupCache 是 content_hash → id 映射，需按 value 查找后删除
-    for (const [hash, id] of this._dedupCache) {
-      if (id === memoryId) { this._dedupCache.delete(hash); break; }
-    }
-    this._vectorCache.delete(memoryId);
+    this._evictCaches(memoryId);
     return this._backend.obliterate(memoryId);
   }
 
@@ -557,30 +558,30 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         try {
           const emb = await this._embedder.embedText(text);
           if (emb?.length === EMBEDDING_DIM) {
-            this._vectorCache.set(entry.id, emb);
+            this._vectorCacheSet(entry.id, emb);
           }
         } catch {
           this._emitDegraded("embedding", "commitMemory embedding 失败");
         }
       } else {
-        this._vectorCache.set(entry.id, entry.embedding);
+        this._vectorCacheSet(entry.id, entry.embedding);
       }
 
       // content_hash 去重缓存
       // R4-H1 fix: 两阶段提交路径 content_hash 可能为空——在此补算
       if (entry.content_hash) {
-        this._dedupCache.set(entry.content_hash, entry.id);
+        this._dedupCacheSet(entry.content_hash, entry.id);
       } else {
         const ch = crypto
           .createHash(CONTENT_HASH_ALGO)
           .update(entry.summary + JSON.stringify(entry.content_blob))
           .digest("hex");
-        this._dedupCache.set(ch, entry.id);
+        this._dedupCacheSet(ch, entry.id);
       }
 
       // 向量索引缓存
       if (entry.embedding) {
-        this._vectorCache.set(entry.id, entry.embedding);
+        this._vectorCacheSet(entry.id, entry.embedding);
       }
 
       // BM25 索引更新
@@ -760,6 +761,33 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     }
   }
 
+  /** 从两级缓存中驱逐指定 memoryId 的所有关联项（供 archive/obliterate 共用） */
+  private _evictCaches(memoryId: string): void {
+    // _dedupCache 是 content_hash → id 映射，需按 value 查找后删除
+    for (const [hash, id] of this._dedupCache) {
+      if (id === memoryId) { this._dedupCache.delete(hash); break; }
+    }
+    this._vectorCache.delete(memoryId);
+  }
+
+  /** _dedupCache 带 LRU 淘汰的 setter */
+  private _dedupCacheSet(contentHash: string, id: string): void {
+    if (this._dedupCache.size >= MemoryStore.MAX_DEDUP_CACHE) {
+      const first = this._dedupCache.keys().next().value;
+      if (first !== undefined) this._dedupCache.delete(first);
+    }
+    this._dedupCache.set(contentHash, id);
+  }
+
+  /** _vectorCache 带 LRU 淘汰的 setter */
+  private _vectorCacheSet(id: string, emb: number[]): void {
+    if (this._vectorCache.size >= MemoryStore.MAX_VECTOR_CACHE) {
+      const first = this._vectorCache.keys().next().value;
+      if (first !== undefined) this._vectorCache.delete(first);
+    }
+    this._vectorCache.set(id, emb);
+  }
+
   // ══════════════════════════════════════════════
   // 钩子
   // ══════════════════════════════════════════════
@@ -815,12 +843,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     try {
       const dupId = this._backend.findByContentHash(contentHash);
       if (dupId) {
-        // H7 fix: LRU 淘汰——超限时删除最早插入的条目
-        if (this._dedupCache.size >= MemoryStore.MAX_DEDUP_CACHE) {
-          const first = this._dedupCache.keys().next().value;
-          if (first !== undefined) this._dedupCache.delete(first);
-        }
-        this._dedupCache.set(contentHash, dupId);
+        this._dedupCacheSet(contentHash, dupId);
         // R6-H9 fix: 去重审计——记录被去重的条目
         void recordTelemetry("memory.dedup_hit", 1, [
           { key: "matchType", value: "content_hash" },
@@ -844,13 +867,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       // 仅在冷启动（缓存为空）时从后端加载一次
       if (this._vectorCache.size === 0) {
         const all = await this._backend.read({}, "HCA");
+        // P0-A fix: 冷启动只装载 Active 条目的 embedding，避免归档/湮灭条目污染去重候选集
         for (const e of all) {
-          if (e.embedding) {
-            if (this._vectorCache.size >= MemoryStore.MAX_VECTOR_CACHE) {
-              const first = this._vectorCache.keys().next().value;
-              if (first !== undefined) this._vectorCache.delete(first);
-            }
-            this._vectorCache.set(e.id, e.embedding);
+          if (e.semantic_state === "Active" && e.embedding) {
+            this._vectorCacheSet(e.id, e.embedding);
           }
         }
       }
@@ -862,6 +882,16 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
       const matches = this._dedupService.vectorDedup(embedding, cachedEntries);
       const bestMatch = matches[0];
       if (bestMatch) {
+        // P0-A fix: 校验 bestMatch 对应条目当前为 Active 态，否则为脏缓存命中→跳过
+        const existingEntry = this._backend.peek(bestMatch.existingId);
+        if (existingEntry && existingEntry.semantic_state !== "Active") {
+          // 脏缓存：目标已归档/湮灭——清理缓存、不删 newId、返回 null 让新条目保留
+          this._vectorCache.delete(bestMatch.existingId);
+          for (const [h, eid] of this._dedupCache) {
+            if (eid === bestMatch.existingId) { this._dedupCache.delete(h); break; }
+          }
+          return null;
+        }
         await this._backend.delete(newId);
         this._bm25Index?.removeDocument(newId);
         this._dedupCache.delete(contentHash); // C8 fix: key 是 contentHash，非 entryId

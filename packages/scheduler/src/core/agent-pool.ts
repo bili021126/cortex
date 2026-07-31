@@ -25,6 +25,8 @@ export class AgentPool implements IAgentPool {
   private heartbeats = new Map<string, number>(); // instanceId → lastHeartbeat
   /** M6 fix: 反向索引 instanceId → type，使 ping() 从 O(n·m) 降为 O(1) */
   private readonly _activeByInstance = new Map<string, AgentType>();
+  /** P1-B3: 子任务独立集合——不占主配额，不计入 maxInstances */
+  private readonly _subtaskInstances = new Map<AgentType, Set<string>>();
   private _observer?: IPipelineObserver;
 
   /**
@@ -98,9 +100,17 @@ export class AgentPool implements IAgentPool {
   spawnSubtask(agentType: AgentType, instanceId: string): boolean {
     const config = this.configs.get(agentType);
     if (!config) return false;
-    const instances = this.active.get(agentType);
-    if (!instances) return false;
+    // P1-B3①: 防重复 id——同 spawn 一致的防御
+    if (this.statuses.has(instanceId)) return false;
+    // P1-B3②: 子任务用独立集合，不占 active 主配额
+    let instances = this._subtaskInstances.get(agentType);
+    if (!instances) {
+      instances = new Set();
+      this._subtaskInstances.set(agentType, instances);
+    }
     instances.add(instanceId);
+    // P1-B3③: 补 _activeByInstance 使 ping() 能探测到
+    this._activeByInstance.set(instanceId, agentType);
     this.statuses.set(instanceId, AgentStatus.Created);
     return true;
   }
@@ -143,6 +153,7 @@ export class AgentPool implements IAgentPool {
     const current = this.statuses.get(instanceId);
     if (current === undefined || current === AgentStatus.Destroyed) {
       this.active.get(agentType)?.delete(instanceId);
+      this._subtaskInstances.get(agentType)?.delete(instanceId);
       this._activeByInstance.delete(instanceId);
       return;
     }
@@ -158,6 +169,7 @@ export class AgentPool implements IAgentPool {
       this._reportInvariant("AgentPool.destroy", violation.message, violation.details);
     }
     this.active.get(agentType)?.delete(instanceId);
+    this._subtaskInstances.get(agentType)?.delete(instanceId);
     this._activeByInstance.delete(instanceId);
     this.statuses.delete(instanceId);
   }

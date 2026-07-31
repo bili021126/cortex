@@ -1,5 +1,5 @@
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type NodeResult, type TaskNode } from "@cortex/shared";
-import { SCHEDULER_MAX_REPLAN_PER_NODE, SCHEDULER_MAX_TOTAL_REPLANS } from "@cortex/config";
+import { SCHEDULER_MAX_REPLAN_PER_NODE, SCHEDULER_MAX_TOTAL_REPLANS, SCHEDULER_MAX_DEGRADED_DRAINS } from "@cortex/config";
 import type { ITaskBoard } from "./task-board.js";
 import type { EngineConfig } from "@cortex/config";
 
@@ -62,6 +62,9 @@ export class ReplanManager {
   private totalReplans = 0;
   private replanMap = new Map<string, string[]>(); // originalId → replan-generated new ids
 
+  /** P0-B: 连续降级 drain 计数——超出上限后清空队列停止派生 */
+  private _degradedDrainCount = 0;
+
   /**
    * @param board TaskBoard 引用
    * @param observer PipelineObserver 引用
@@ -99,6 +102,9 @@ export class ReplanManager {
 
     const count = this.replanCount.get(node.id) ?? 0;
     if (count >= SCHEDULER_MAX_REPLAN_PER_NODE) return;
+
+    // P1-B1: 同一节点相同 disposition 已在队列中则跳过（防重复入队）
+    if (this.replanQueue.some((item) => item.node.id === node.id && item.disposition === disposition)) return;
 
     this.replanQueue.push({ node, reason, count, disposition });
     this.observer.emit({
@@ -165,6 +171,27 @@ export class ReplanManager {
       return;
     }
 
+    // P0-B(a): 降级 drain 有限预算——超出上限则清空队列彻底停止
+    if (this._degradedDrainCount >= SCHEDULER_MAX_DEGRADED_DRAINS) {
+      console.warn(
+        `[DEGRADED:scheduler] degraded drain budget exhausted (${SCHEDULER_MAX_DEGRADED_DRAINS} rounds), clearing ${this.replanQueue.length} queued replans`,
+      );
+      this.observer.emit({
+        type: PipelineEventType.SchedulerReplanLimit,
+        priority: PipelinePriority.CRITICAL,
+        payload: {
+          totalReplans: this.totalReplans,
+          maxReplans: SCHEDULER_MAX_TOTAL_REPLANS,
+          deferred: this.replanQueue.length,
+        },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+      this.replanQueue.length = 0;
+      return;
+    }
+    this._degradedDrainCount++;
+
     const batch = this.replanQueue.splice(0);
     if (batch.length === 0) return;
 
@@ -225,6 +252,7 @@ export class ReplanManager {
     this.replanCount.clear();
     this.totalReplans = 0;
     this.replanQueue.length = 0;
+    this._degradedDrainCount = 0;
   }
 
   /**
@@ -255,19 +283,37 @@ export class ReplanManager {
       ? await provider.requestBoundaryReplan(item.node, item.reason, count, undefined, maxPerNode)
       : await provider.requestReplan(item.node, item.reason, count, undefined, maxPerNode);
 
+    // P1-B2: 先收集 newIds，后落板——若加节点中途抛异常则回滚全部新节点
     const newIds: string[] = [];
-    for (const n of result.nodes) {
-      n.isRlmSubtask = true;
-      this.board.addNode(n);
-      this.replanCount.set(n.id, 0);
-      newIds.push(n.id);
-    }
-    this.replanMap.set(item.node.id, newIds);
+    try {
+      for (const n of result.nodes) {
+        n.isRlmSubtask = true;
+        this.board.addNode(n);
+        // P0-B(b): 新节点继承祖先 replan 深度而非清零——确保失败链有限收敛
+        this.replanCount.set(n.id, count);
+        newIds.push(n.id);
+      }
+      this.replanMap.set(item.node.id, newIds);
 
-    if (result.impactScope === "subtree") {
-      this.board.removeSubtree(item.node.id);
-    } else {
-      this.board.removeNode(item.node.id);
+      if (result.impactScope === "subtree") {
+        this.board.removeSubtree(item.node.id);
+      } else {
+        this.board.removeNode(item.node.id);
+      }
+    } catch (err) {
+      // P1-B2: 回滚——移除已 addNode 的新节点，保住原节点不变
+      for (const id of newIds) {
+        this.board.removeNode(id);
+        this.replanCount.delete(id);
+      }
+      this.observer.emit({
+        type: PipelineEventType.SchedulerReplanFailed,
+        priority: PipelinePriority.CRITICAL,
+        payload: { nodeId: item.node.id, error: `replan atomic rollback: ${String(err).slice(0, 200)}` },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+      throw err;
     }
   }
 

@@ -292,7 +292,9 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
     await this.conn.http.execute(input);
 
     // 监听 TUI channel 的节点事件
+    const startTime = Date.now();
     return await new Promise<ExecutionReport>((resolve) => {
+      let settled = false;
       const results: { nodeId: string; success: boolean; output?: string; error?: string; agentType?: AgentType }[] = [];
       let completedCount = 0;
       const totalNodes = nodes.length;
@@ -319,11 +321,13 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
           completedCount++;
         }
 
-        if (completedCount >= totalNodes) {
+        if (completedCount >= totalNodes && !settled) {
+          settled = true;
+          clearTimeout(timeoutId);
           unsubTui();
           resolve({
             results,
-            durationMs: 0,
+            durationMs: Date.now() - startTime,
             totalNodes,
             completedNodes: results.filter((r) => r.success).length,
           } as unknown as ExecutionReport);
@@ -331,11 +335,13 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
       });
 
       // 超时保护：60s 后强制 resolve
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         unsubTui();
         resolve({
           results,
-          durationMs: 60000,
+          durationMs: Date.now() - startTime,
           totalNodes,
           completedNodes: results.filter((r) => r.success).length,
         } as unknown as ExecutionReport);

@@ -150,7 +150,7 @@ export class UrgentChannel extends BaseChannel {
     };
     // 兼容：真实 persistence 有 ready()（异步 init），mock 无 ready()（同步可用）
     if (typeof p.ready === 'function') {
-      void p.ready().then(doRestore);
+      void p.ready().then(doRestore).catch(err => console.warn('[DEGRADED:notification]', String(err)));
     } else {
       doRestore();
     }
@@ -216,7 +216,7 @@ export class ImportantChannel extends BaseChannel {
       }
     };
     if (typeof p.ready === 'function') {
-      void p.ready().then(doRestore);
+      void p.ready().then(doRestore).catch(err => console.warn('[DEGRADED:notification]', String(err)));
     } else {
       doRestore();
     }

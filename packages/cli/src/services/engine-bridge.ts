@@ -433,21 +433,30 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   /** 读取 Talk 专属记忆（ICortexApi） */
   async readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
     const store = this.ctx.talkMemoryStore;
-    if (!store) return [];
+    if (!store) {
+      console.warn('[DEGRADED] engine-bridge.readTalkMemory: talkMemoryStore 未初始化');
+      return [];
+    }
     return await store.read(query);
   }
 
   /** 写入 Talk 专属记忆（ICortexApi） */
   async writeTalkMemory(entry: MemoryWriteInput): Promise<void> {
     const store = this.ctx.talkMemoryStore;
-    if (!store) return;
+    if (!store) {
+      console.warn('[DEGRADED] engine-bridge.writeTalkMemory: talkMemoryStore 未初始化，记忆写入已丢弃');
+      return;
+    }
     await store.write(entry);
   }
 
   /** 只读访问主记忆库（ICortexApi，修复原 (bridge as any).ctx hack） */
   async readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
     const store = this.ctx.memoryStore;
-    if (!store) return [];
+    if (!store) {
+      console.warn('[DEGRADED] engine-bridge.readMainMemory: memoryStore 未初始化');
+      return [];
+    }
     return await store.read(query);
   }
 
