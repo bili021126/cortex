@@ -18,7 +18,7 @@ import type { BootstrapResult, AgentManifest } from "./types.js";
 /**
  * Bootstrap —— 从配置文件到运行时对象的完整流水线。
  *
- * @param projectRoot 项目根目录（包含 cortex-agents.json 等配置文件）
+ * @param projectRoot 项目根目录（用于解析 prompt 文件路径等）
  * @returns BootstrapResult —— 所有组装好的配置对象
  * @throws 若校验失败（编译期报错，拒绝启动）
  *
@@ -41,19 +41,19 @@ export function bootstrap(projectRoot: string, dataDirOverride?: string): Bootst
   try {
     agentsConfig = loadAgentsConfig(projectRoot, dataDirOverride);
   } catch (e) {
-    throw new Error(`[factory bootstrap] 加载 cortex-agents.json 失败: ${String(e)}`, { cause: e });
+    throw new Error(`[factory bootstrap] 加载 agents 配置域失败: ${String(e)}`, { cause: e });
   }
 
   try {
     cognitionConfig = loadCognitionConfig(projectRoot, dataDirOverride);
   } catch (e) {
-    throw new Error(`[factory bootstrap] 加载 cortex-cognition.json 失败: ${String(e)}`, { cause: e });
+    throw new Error(`[factory bootstrap] 加载 cognition 配置域失败: ${String(e)}`, { cause: e });
   }
 
   try {
     docsConfig = loadDocsConfig(projectRoot, dataDirOverride);
   } catch (e) {
-    throw new Error(`[factory bootstrap] 加载 cortex-docs.json 失败: ${String(e)}`, { cause: e });
+    throw new Error(`[factory bootstrap] 加载 docs 配置域失败: ${String(e)}`, { cause: e });
   }
 
   // ── 第二阶段：validateAll ────────────────────────

@@ -52,9 +52,19 @@ function stripAnsi(s: string): string {
 }
 
 function run(cmd: string, args: string[], cwd: string): { ok: boolean; stdout: string } {
+  // Windows：.cmd/.bat 不可被 execFileSync 直接 spawn（ENOENT/EINVAL）——经 cmd.exe /c 执行
+  let spawnCmd = cmd;
+  let spawnArgs = args;
+  if (process.platform === "win32") {
+    const joined = [cmd, ...args]
+      .map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a))
+      .join(" ");
+    spawnCmd = "cmd.exe";
+    spawnArgs = ["/d", "/s", "/c", joined];
+  }
   try {
     // execFileSync 直接传参数数组——避免 shell 拼接注入，跨平台更安全
-    const stdout = execFileSync(cmd, args, {
+    const stdout = execFileSync(spawnCmd, spawnArgs, {
       cwd,
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],

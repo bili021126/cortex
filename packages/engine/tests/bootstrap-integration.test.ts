@@ -142,7 +142,7 @@ describe("T1: bootstrapEngine 启动全流水线", () => {
     // 技能系统
     expect(result.skillRegistry).toBeDefined();
 
-    // 常规 Agent（cortex-agents.json 中定义的可调度 Agent）
+    // 常规 Agent（agents 配置域中定义的可调度 Agent）
     expect(result.agents.size).toBeGreaterThanOrEqual(8); // code/review/analysis/ops/loop/doc/api/data/fix
 
     // 配置

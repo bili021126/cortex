@@ -21,7 +21,7 @@ const DEFAULT_ROUTE: RouteEntry = {
  * RouteTable —— 显式路由表。
  *
  * 为什么不用 if-else：
- *   新增事件类型只需在 cortex-agents.json 的 routeTable 中加一行，
+ *   新增事件类型只需在 event-routing 配置域的 routeTable 中加一行，
  *   不需要改动任何业务代码。查表 O(1) 也不随事件种类增长而退化。
  */
 export class RouteTable {

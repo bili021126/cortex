@@ -99,7 +99,7 @@ export const COMMAND_DEFS: readonly CommandDef[] = [
   {
     name: "setup",
     alias: "su",
-    description: "交互式配置界面 — 管理 cortex-agents.json / cortex-cognition.json / cortex-docs.json",
+    description: "交互式配置界面 — 管理 agents / cognition / docs 等配置域",
   },
   {
     name: "version",

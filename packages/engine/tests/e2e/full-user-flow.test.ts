@@ -763,7 +763,7 @@ describe("C-2 bootstrapEngine 起动失败路径", () => {
     observer.emit({
       type: PipelineEventType.ErrorReported,
       priority: PipelinePriority.CRITICAL,
-      payload: { source: "bootstrapEngine", severity: "fatal", error: "Missing cortex-agents.json" },
+      payload: { source: "bootstrapEngine", severity: "fatal", error: "agents 配置域加载失败" },
       timestamp: Date.now(),
       notificationType: "WARNING",
     });
@@ -798,7 +798,7 @@ describe("C-2 bootstrapEngine 起动失败路径", () => {
 // ═════════════════════════════════════════════════════════
 
 describe("全闭环 E2E 错误路径", () => {
-  it("⑲ bootstrap失败路径——缺失cortex-agents.json应明确报错", () => {
+  it("⑲ bootstrap失败路径——缺失配置域应明确报错", () => {
     const observer = new PipelineObserver();
     const events: ObservableEvent[] = [];
     observer.on(PipelinePriority.CRITICAL, (e) => { events.push(e); });
@@ -806,7 +806,7 @@ describe("全闭环 E2E 错误路径", () => {
     observer.emit({
       type: PipelineEventType.ErrorReported,
       priority: PipelinePriority.CRITICAL,
-      payload: { source: "bootstrap", severity: "fatal", error: "cortex-agents.json not found" },
+      payload: { source: "bootstrap", severity: "fatal", error: "agents 配置域文件不存在" },
       timestamp: Date.now(),
       notificationType: "WARNING",
     });

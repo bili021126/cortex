@@ -6,7 +6,7 @@
  * shutdown 边界、LLM 未配置时的错误路径。
  *
  * 轻量模式不需要 API key——EngineBridge.ensureInitialized()。
- * Bootstrap 依赖引擎全量环境（含 cortex-agents.json / plugins），
+ * Bootstrap 依赖引擎全量环境（含 agents 配置域 / plugins），
  * 此处验证其前置条件检查，而非完整加载。
  */
 import { describe, it, expect } from "vitest";

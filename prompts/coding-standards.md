@@ -161,7 +161,7 @@ fetchData().catch(e => console.warn("非关键操作失败:", e));
 | 版本/默认值 | `constants/version.ts` | CORTEX_VERSION, CORTEX_PHASE, DEFAULT_* |
 | LLM | `constants/llm.ts` | DEFAULT_LLM_BASE_URL, DEFAULT_LLM_CHAT_MODEL 等 |
 | 环境变量 | `constants/env.ts` | ENV_DEEPSEEK_*, ENV_CORTEX_* 等 |
-| 文件路径 | `constants/file-paths.ts` | FILE_CORTEX_AGENTS_JSON, DIR_CONSTITUTION 等 |
+| 文件路径 | `constants/file-paths.ts` | FILE_PERSONA_TALK_TXT, DIR_CONSTITUTION 等 |
 | 超时 | `constants/timeouts.ts` | DEFAULT_TASK_TIMEOUT_SEC, DEFAULT_COMMAND_TIMEOUT_SEC |
 | MetaAgent 提示词 | `constants/meta-agent.ts` | PLANNING_SYSTEM, REPLAN_SYSTEM, buildPlanningSystem(workspaceRoot) |
 | 管线上下文 | `constants/pipeline.ts` | PIPELINE_CTX_MAX_OUTPUT_LEN, PIPELINE_CTX_RECENT_LIMIT 等 |
@@ -175,18 +175,18 @@ fetchData().catch(e => console.warn("非关键操作失败:", e));
 |---|---|---|
 | Agent 注册表 | `src/agent-registry.ts` | TAG_VOCABULARY, AGENT_TAGS, AGENT_CHINESE_ROLE, CHINESE_NAME_TO_TYPE, AGENT_DISPLAY, AGENT_DISPLAY_BY_TYPE, CHAT_AGENT_ALIASES, AGENT_TOOL_PERMISSIONS, resolveAgentPermissions, buildChineseRoleMap, setAgentRegistry（运行时覆写 API） |
 
-> **架构原则**：config 层 = 配置 GUI/CLI（存取原始数据），shared 层 = 映射转化引擎（string→AgentType-key 转换 + 运行时覆写）。Agent 域的硬编码 fallback 在 shared，运行时真相源在 cortex-agents.json。
+> **架构原则**：config 层 = 配置 GUI/CLI（存取原始数据），shared 层 = 映射转化引擎（string→AgentType-key 转换 + 运行时覆写）。Agent 域的硬编码 fallback 在 shared，运行时真相源在 agents 配置域（src/data/agents.json，经 engine bootstrap → setAgentRegistry 注入）。
 
 **禁止字面量类型**：
 - (a) 环境变量名（如 `DEEPSEEK_API_KEY`）→ 用 `ENV_DEEPSEEK_API_KEY`
-- (b) 项目路径与文件名（如 `cortex-agents.json`、`.cortex/persona-talk.txt`）→ 用 `FILE_CORTEX_AGENTS_JSON` 等
+- (b) 项目路径与文件名（如 `.cortex/persona-talk.txt`、`docs/constitution`）→ 用 `FILE_PERSONA_TALK_TXT` / `DIR_CONSTITUTION` 等
 - (c) 版本号字符串（如 `v0.2.0`、`Core-1`）→ 用 `CORTEX_VERSION` / `CORTEX_PHASE`
 - (d) 默认超时值、配额数等数值常量
 
 ### 7.2 新增功能开发优先级（铁律）
 
 ```
-第1优先：配置化 —— 能通过 cortex-agents.json / cortex-cognition.json / 环境变量 驱动
+第1优先：配置化 —— 能通过 agents 配置域 / cognition 配置域 / 环境变量 驱动
 第2优先：@cortex/config 常量 —— 编译期常量统一定义在 packages/config/src/constants/
 第3选择：硬编码 —— 仅当前两者都无法实现时才允许
 ```
@@ -239,8 +239,8 @@ await page.setViewportSize(BROWSER_DEFAULT_VIEWPORT);
 ```
 
 ```
-// cortex-agents.json 已拆分为 config/data/agents.json + cognition.json + governance-pipeline.json + seed-memories.json + ...
-// → 原 cortex-agents.json 必须删除（或改为纯引用导出脚本）
+// 根级 cortex-agents.json 已拆分为 src/data/ 配置域（agents.json + cognition.json + governance-pipeline.json + seed-memories.json + ...）
+// → 原根级文件已删除；运行时经 resolveConfigDataDir() 读 dist/data/（build 时从 src/data 复制）
 ```
 
 > 已拆分的文件不删除 = 配置漂移的源头。两份"真相"同时存在，总有一份是错的。
@@ -252,7 +252,7 @@ await page.setViewportSize(BROWSER_DEFAULT_VIEWPORT);
   1. @cortex/shared：src/agent-registry.ts（TAG_VOCABULARY + AGENT_TAGS + AGENT_CHINESE_ROLE + CHINESE_NAME_TO_TYPE + AGENT_DISPLAY + AGENT_DISPLAY_BY_TYPE + CHAT_AGENT_ALIASES + AGENT_TOOL_PERMISSIONS）
   2. @cortex/config：constants/meta-agent.ts（PLANNING_SYSTEM 的"可用兵种"部分）
   3. @cortex/config：interfaces/agent.ts（AgentDefinition 类型如有新增字段）
-  4. cortex-agents.json（agent 运行时定义）
+  4. agents 配置域（src/data/agents.json —— agent 运行时定义）
   5. engine：bootstrap/register-agents.ts（如新类型需要特殊工厂逻辑）
 
 ✅ 不再需要修改：
@@ -262,7 +262,7 @@ await page.setViewportSize(BROWSER_DEFAULT_VIEWPORT);
 > v2.6.3 架构收敛：config 层 agent-tags.ts/agent-display.ts 已删除，
 > shared 层 agent-tags.ts/agent-display.ts/agent-permissions.ts 已删除，
 > 统一收口至 shared/src/agent-registry.ts（从 5 文件碎片收敛为 1 文件）。
-> 运行时真相源 = cortex-agents.json（经 engine bootstrap load-config.ts → setAgentRegistry 注入）。
+> 运行时真相源 = agents 配置域（src/data/agents.json，经 engine bootstrap load-config.ts → setAgentRegistry 注入）。
 > 零向后兼容——无 re-export shim、无 @deprecated 注释、无 barrel 重导出。
 ```
 

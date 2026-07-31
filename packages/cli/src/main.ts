@@ -28,7 +28,7 @@ import { NodeFileSystemAdapter, Toolkit } from "@cortex/platform";
 // ── Config 常量 ──────────────────────────────────
 import {
   FILE_DOTENV,
-  FILE_CORTEX_AGENTS_JSON,
+  DIR_CONSTITUTION,
   CLI_EXIT_INTERNAL_ERROR,
   WINDOWS_CHCP_UTF8,
   ENV_CORTEX_ENABLE_CLI,
@@ -80,8 +80,9 @@ function parseProjectRoot(): string {
 
 const PROJECT_ROOT = parseProjectRoot();
 
+// 哨兵：docs/constitution 目录存在 = 项目根是 cortex 仓库（cortex-agents.json 已拆分进 config 域，不再作哨兵）
 const CONFIG_ROOT = (PROJECT_ROOT !== process.cwd() &&
-  !nodeFs.existsSync(nodePath.join(PROJECT_ROOT, FILE_CORTEX_AGENTS_JSON)))
+  !nodeFs.existsSync(nodePath.join(PROJECT_ROOT, DIR_CONSTITUTION)))
   ? process.cwd()
   : PROJECT_ROOT;
 
@@ -169,7 +170,7 @@ try {
     if (llms.size > 0) {
       toolkit = new Toolkit();
 
-      try { await bootstrapMcp(toolkit, CONFIG_ROOT); } catch (e) {
+      try { await bootstrapMcp(toolkit); } catch (e) {
         if (!process.env["VITEST"]) console.warn(`[bootstrap] MCP 后端配置加载失败: ${String(e)}`);
       }
 

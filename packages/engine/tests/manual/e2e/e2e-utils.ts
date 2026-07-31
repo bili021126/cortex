@@ -6,7 +6,7 @@
  *   2. stdout 缓冲导致日志延迟——使用 stderr.write 强制刷新
  *   3. DeepSeek API 端点 /chat/completions（非 /v1/...）
  *   4. LlmAdapter 正确构造（非手搓，含 tool_choice 支持）
- *   5. 项目根路径 —— 向上搜索 cortex-agents.json
+ *   5. 项目根路径 —— 向上搜索 docs/constitution 目录（根级配置 json 已拆分进 config 域）
  */
 
 import * as path from "node:path";
@@ -34,29 +34,29 @@ export function loadEnv(dir: string): void {
 }
 
 // ── 项目根 ────────────────────────────────────
-/** 向上搜索项目根（sentinel: cortex-cognition.json——沙箱屏蔽 cortex-agents.json） */
+/** 向上搜索项目根（sentinel: docs/constitution 目录——根级配置 json 已拆分进 config 域） */
 export function findProjectRoot(startDir?: string): string {
-  const SENTINEL = "cortex-cognition.json";
+  const SENTINEL_DIR = "docs/constitution";
   // 优先取 CORTEX_ROOT 环境变量（沙箱场景）
-  if (process.env["CORTEX_ROOT"] && fs.existsSync(path.join(process.env["CORTEX_ROOT"], SENTINEL))) {
+  if (process.env["CORTEX_ROOT"] && fs.existsSync(path.join(process.env["CORTEX_ROOT"], SENTINEL_DIR))) {
     return process.env["CORTEX_ROOT"];
   }
   // 从当前模块路径向上推导（独立于 process.cwd）
   try {
     const moduleDir = path.dirname(fileURLToPath(import.meta.url));
     let dir = moduleDir;
-    while (!fs.existsSync(path.join(dir, SENTINEL))) {
+    while (!fs.existsSync(path.join(dir, SENTINEL_DIR))) {
       const parent = path.dirname(dir);
       if (parent === dir) break;
       dir = parent;
     }
-    if (fs.existsSync(path.join(dir, SENTINEL))) return dir;
+    if (fs.existsSync(path.join(dir, SENTINEL_DIR))) return dir;
   } catch { /* import.meta.url 不可用 */ }
   // 最后回退到 process.cwd
   let dir = startDir ?? process.cwd();
-  while (!fs.existsSync(path.join(dir, SENTINEL))) {
+  while (!fs.existsSync(path.join(dir, SENTINEL_DIR))) {
     const parent = path.dirname(dir);
-    if (parent === dir) throw new Error(`找不到 ${SENTINEL}——请在项目根目录下运行`);
+    if (parent === dir) throw new Error(`找不到 ${SENTINEL_DIR}——请在项目根目录下运行`);
     dir = parent;
   }
   return dir;

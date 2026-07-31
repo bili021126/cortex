@@ -113,6 +113,13 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     description: "引擎运行时参数——循环上限、超时、Inspector 配置",
   },
   {
+    name: "enginePlugins",
+    fileName: "engine-plugins.json",
+    required: false,
+    dataKey: "plugins",
+    description: "引擎插件加载清单——Core-2 激活的插件（按依赖拓扑排序）",
+  },
+  {
     name: "tools",
     fileName: "tools.json",
     required: false,

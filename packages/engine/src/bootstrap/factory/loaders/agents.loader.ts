@@ -190,7 +190,7 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
 /** 校验基本结构 */
 function _validateStructure(config: CortexAgentsConfig): CortexAgentsConfig {
   if (!config || typeof config !== "object") {
-    throw new Error("cortex-agents.json: 顶层必须为对象");
+    throw new Error("agents 配置域: 顶层必须为对象");
   }
 
   if (!config.agents || typeof config.agents !== "object") {

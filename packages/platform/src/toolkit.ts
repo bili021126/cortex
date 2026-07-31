@@ -36,7 +36,7 @@ import { createTool as createRunTest } from "./tools/run-test.js";
 import { createTool as createDiffFiles } from "./tools/diff-files.js";
 import type { ToolContext } from "./tools/types.js";
 
-// ─── 工具元数据 —— cortex-agents.json 可全覆盖 ────
+// ─── 工具元数据 —— agents/tools 配置域可全覆盖 ────
 
 export interface ToolMeta {
   category?: ToolCategory;
@@ -72,7 +72,7 @@ export class Toolkit {
   private workspaceRoot: string | null = null;
   private fs: IFileSystemAdapter;
   private readonly config: Required<EngineConfig>;
-  /** JSON 注入的元数据覆盖（cortex-agents.json / tools.json 工具域） */
+  /** JSON 注入的元数据覆盖（tools.json 工具域等） */
   private _toolMeta: Record<string, ToolMeta> = {};
   /** 工具使用约束——按工具名 → Agent 类型 → 约束文本 */
   private _constraints = new Map<string, Record<string, string>>();
@@ -112,7 +112,7 @@ export class Toolkit {
     return await this._aggregator.search(query, maxResults);
   }
 
-  /** 注入工具元数据覆盖（从 cortex-agents.json "tools" 域加载） */
+  /** 注入工具元数据覆盖（从 tools 配置域加载） */
   setToolMeta(meta: Record<string, ToolMeta>): void {
     this._toolMeta = meta;
     // 从元数据中提取约束

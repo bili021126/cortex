@@ -72,7 +72,7 @@ export interface BootstrapConfig {
  * 支持两种初始化模式：
  * 1. 轻量模式（ensureInitialized）—— 使用 MiniAgentPool，无 Agent 注册
  * 2. 配置驱动模式（ensureBootstrapped）—— 使用 bootstrapEngine，
- *    从 cortex-agents.json 加载所有 Agent 定义并注册
+ *    从 agents 配置域加载所有 Agent 定义并注册
  */
 export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   private ctx: BridgeContext = { initialized: false };
@@ -104,8 +104,8 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   }
 
   /**
-   * 配置驱动初始化——使用 bootstrapEngine 加载 cortex-agents.json
-   * 等配置文件，创建所有 Agent 并注册到 Scheduler。
+   * 配置驱动初始化——使用 bootstrapEngine 加载 agents 等配置域，
+   * 创建所有 Agent 并注册到 Scheduler。
    *
    * 此方法完全替代硬编码 Agent 创建流程。
    * 必须先调用 setBootstrapConfig() 设置 LlmAdapter 等参数。
@@ -215,7 +215,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     // 注意：Scheduler 构造需要 AgentPool 实例。在原型阶段，
     // MiniAgentPool 满足接口要求。
     // 配置驱动模式请使用 ensureBootstrapped()，它会用真实 AgentPool
-    // 并从 cortex-agents.json 加载所有 Agent。
+    // 并从 agents 配置域加载所有 Agent。
     const scheduler = new Scheduler(board, this._pool, observer, undefined, this.engineConfig);
 
     this.ctx = {

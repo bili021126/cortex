@@ -63,7 +63,7 @@ async function main() {
   // 沙箱兼容：从脚本路径推导项目根
   try {
     const url = import.meta.url.replace("file:///", "");
-    if (fs.existsSync(path.join(path.dirname(url), "../../../../../../cortex-cognition.json"))) {
+    if (fs.existsSync(path.join(path.dirname(url), "../../../../../../docs/constitution"))) {
       const rootDir = path.resolve(path.dirname(url), "../../../../../..");
       process.env["CORTEX_ROOT"] = rootDir;
     }

@@ -2,13 +2,12 @@
  * bootstrap/mcp.ts — MCP 后端初始化
  *
  * 从 main.ts 抽离的 MCP Server 加载与搜索聚合器引导逻辑。
- * 加载优先级：config/data/mcp-servers.json（新格式）→ cortex-agents.json searchProviders（旧格式）
+ * 加载优先级：mcpServers 域（新格式）→ searchProviders 域（回退）
  *
  * @module bootstrap/mcp
  */
 
 import * as nodeFs from "node:fs";
-import * as nodePath from "node:path";
 import {
   SearchAggregator,
   McpSearchBackend,
@@ -19,7 +18,6 @@ import {
 import {
   ENV_CORTEX_NO_SEARCH,
   ENV_VITEST,
-  FILE_CORTEX_AGENTS_JSON,
   resolveConfigDataDir,
   loadConfigDomain,
   type McpServerEntry,
@@ -39,9 +37,9 @@ export interface McpBootstrapResult {
  *
  * 设置 CORTEX_NO_SEARCH=1 可跳过整个初始化流程。
  */
-/** 加载 MCP 服务端配置（优先新格式 mcpServers，回退旧格式 searchProviders） */
-function _loadMcpConfigs(configRoot: string): McpServerConfig[] {
-  // 1) 优先 mcpServers 域（config 包 data/mcp-servers.json）
+/** 加载 MCP 服务端配置（优先 mcpServers 域，回退 searchProviders 域） */
+function _loadMcpConfigs(): McpServerConfig[] {
+  // 1) 优先 mcpServers 域（新格式）
   try {
     const dataDir = resolveConfigDataDir();
     const readFile: ConfigFileReader = (fp) => nodeFs.readFileSync(fp, "utf-8");
@@ -53,18 +51,23 @@ function _loadMcpConfigs(configRoot: string): McpServerConfig[] {
         .filter((c) => c.enabled !== false);
     }
   } catch {
-    // mcp-servers.json 缺失——回退 searchProviders
+    // mcpServers 域缺失——回退 searchProviders 域
   }
 
-  // 2) 回退 searchProviders（旧格式，从 cortex-agents.json 读取）
-  const configPath = nodePath.join(configRoot, FILE_CORTEX_AGENTS_JSON);
-  if (nodeFs.existsSync(configPath)) {
-    const raw = JSON.parse(nodeFs.readFileSync(configPath, "utf-8"));
-    const searchProviders = raw?.searchProviders;
-    if (searchProviders?.backends && Array.isArray(searchProviders.backends)) {
-      return (searchProviders.backends as McpServerConfig[])
-        .filter((b) => b.enabled !== false);
+  // 2) 回退 searchProviders 域（旧 searchProviders 形态）
+  try {
+    const dataDir = resolveConfigDataDir();
+    const readFile: ConfigFileReader = (fp) => nodeFs.readFileSync(fp, "utf-8");
+    const sp = loadConfigDomain<{ providers?: { backends?: McpServerConfig[] } }>(
+      "searchProviders",
+      readFile,
+      dataDir,
+    );
+    if (sp?.providers?.backends) {
+      return sp.providers.backends.filter((b) => b.enabled !== false);
     }
+  } catch {
+    // searchProviders 域缺失——返回空
   }
 
   return [];
@@ -105,13 +108,12 @@ async function _startMcpBackends(
 
 export async function bootstrapMcp(
   toolkit: Toolkit,
-  configRoot: string,
 ): Promise<McpBootstrapResult> {
   if (process.env[ENV_CORTEX_NO_SEARCH] === "1") {
     return { aggregator: null, startedCount: 0 };
   }
 
-  const mcpConfigs = _loadMcpConfigs(configRoot);
+  const mcpConfigs = _loadMcpConfigs();
   if (mcpConfigs.length === 0) {
     return { aggregator: null, startedCount: 0 };
   }

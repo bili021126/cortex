@@ -1,8 +1,8 @@
 // ============================================================
 // @cortex/engine/registry/agent-registry — Agent 类型安全注册表
 //
-// Core-2 #8: 替代 cortex-agents.json 作为 Agent 定义的唯一源。
-//   Agent 不再从 JSON 读取，而是通过 TS 类注册。
+// Core-2 #8: 替代 JSON 配置域作为 Agent 定义的运行时唯一源。
+//   Agent 定义经 TS 类注册（配置域数据仍为声明面）。
 //
 // 用法:
 //   const registry = new AgentRegistry();

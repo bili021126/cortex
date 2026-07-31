@@ -12,7 +12,12 @@ import * as fs from "node:fs";
 import { AgentType, LinkType, type MemoryKind } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import { MemoryStore } from "@cortex/memory-store";
-import cortexConfig from "../../../../../cortex-agents.json" assert { type: "json" };
+import { resolveConfigDataDir } from "@cortex/config";
+
+// agents 配置域——根级 cortex-agents.json 已拆分进 packages/config/src/data/（resolveConfigDataDir 源码模式指向 src/data）
+const cortexConfig = JSON.parse(
+  fs.readFileSync(path.join(resolveConfigDataDir(), "agents.json"), "utf-8"),
+) as { agents: Record<string, unknown> };
 
 // ═══════════════════════════════════════════════
 // JSON → Persona 类型映射（agent key → AgentType）
@@ -33,7 +38,7 @@ const PERSONA_TYPE_MAP: Record<string, AgentType> = {
   kuki: AgentType.Api,
   alhaitham: AgentType.Data};
 
-/** 从 cortex-agents.json 提取圆桌 Persona 数据，转换为旧 persona-prompts.json 格式 */
+/** 从 agents 配置域提取圆桌 Persona 数据，转换为旧 persona-prompts.json 格式 */
 export function getPersonaPrompts(): Record<string, { emoji: string; name: string; title: string; systemPrompt: string }> {
   const result: Record<string, { emoji: string; name: string; title: string; systemPrompt: string }> = {};
   // 项目根目录：当前文件位于 packages/engine/tests/manual/config/，向上 5 层到项目根

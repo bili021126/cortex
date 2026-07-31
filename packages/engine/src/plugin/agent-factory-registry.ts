@@ -1,7 +1,7 @@
 // ============================================================
 // @cortex/engine/plugin/agent-factory-registry —— Agent 工厂注册表
 //
-// 配置驱动：新增 Agent 类型只需 registerAgentFactory() + cortex-agents.json，
+// 配置驱动：新增 Agent 类型只需 registerAgentFactory() + agents 配置域，
 // 不再需要改 scheduler.plugin.ts 的 switch 分支。
 //
 // @since v3.1 — 配置驱动装配

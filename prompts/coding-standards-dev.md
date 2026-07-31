@@ -179,7 +179,7 @@
 
 `@cortex/engine` 的 `bootstrap/factory/` 子域（loaders → assemblers → bootstrap 管线）是唯一的配置加载与组装层；`@cortex/config` 持有配置域注册表（CONFIG_DOMAINS）与 schema 校验。
 
-- 🚫 禁止：engine / cli / 其他包直接 `readFileSync` 读取 `cortex-agents.json` 或任何配置文件
+- 🚫 禁止：engine / cli / 其他包直接 `readFileSync` 读取任何配置文件（agents 配置域 / cognition 配置域 / mcp-servers 配置域等）
 - ✅ 要求：所有配置读取走 `bootstrap/factory/` 的 `loaders → schemas → assemblers → bootstrap` 管线
 
 ---
@@ -195,7 +195,7 @@ Agent 不自行定义工具白名单。
 
 ## 次原则十五 —— 事件配置三元组闭环
 
-事件定义必须在 `cortex-agents.json` 中三段闭环：
+事件定义必须在 agents 配置域（src/data/agents.json）中三段闭环：
 
 ```
 Agent.produces → routeTable → channels
@@ -240,7 +240,7 @@ Agent.produces → routeTable → channels
 | 陷阱 | 说明 |
 |------|------|
 | `bootstrapEngine` 遗漏 `toolkit.setGate()` | 创建 ConfirmGate 后必须显式注入 Toolkit，否则门控被完全绕过 |
-| `cortex-agents.schema.json` 与 `loader` 不同步 | schema 字段变更时必须同步更新 loader 校验逻辑，否则 VS Code 持续报"缺少属性" |
+| `agents.schema.json` 与 `loader` 不同步 | schema 字段变更时必须同步更新 loader 校验逻辑，否则 VS Code 持续报"缺少属性" |
 | Windows 下 `mkdir -p` 不支持 | 用逐级 `mkdir` 或 `powershell` 替代 |
 | Windows fetch `AbortController` 失效 | TCP 卡死连接无法被中断，需外层 `Promise.race(timeoutPromise)` 硬兜底 |
 | E2E 测试需显式 bypass `ConfirmGate` | `write_file` 等 L2 工具在无交互界面测试中永久阻塞 |

@@ -8,7 +8,7 @@
 import type { AgentType } from "@cortex/shared";
 import type { RouteTableMap, MergeRule } from "@cortex/notification";
 
-// ─── cortex-agents.json 类型 ─────────────────────────
+// ─── agents 配置域类型 ─────────────────────────
 
 /** 单个 Agent 定义 */
 export interface AgentManifest {
@@ -106,7 +106,7 @@ export interface RoundtableTemplate {
   rules?: string[];
 }
 
-/** cortex-agents.json 顶层结构 */
+/** agents 配置域顶层结构 */
 export interface CortexAgentsConfig {
   agents: Record<string, AgentManifest>;
   eventRouting: EventRoutingConfig;
@@ -213,7 +213,7 @@ export interface GovernancePipelineConfig {
   };
 }
 
-// ─── cortex-cognition.json 类型 ──────────────────────
+// ─── cognition 配置域类型 ─────────────────────
 
 /** 激活矩阵项 */
 export interface ActivationEntry {
@@ -235,7 +235,7 @@ export interface AttentionStrategy {
   maxMemoryItems: number;
 }
 
-/** cortex-cognition.json 顶层结构 */
+/** cognition 配置域顶层结构 */
 export interface CortexCognitionConfig {
   /** 激活矩阵 */
   activationMatrix: ActivationEntry[];
@@ -243,7 +243,7 @@ export interface CortexCognitionConfig {
   attention: AttentionStrategy;
 }
 
-// ─── cortex-docs.json 类型 ───────────────────────────
+// ─── docs 配置域类型 ─────────────────────────
 
 /** 文档注册项 */
 export interface DocEntry {
@@ -257,7 +257,7 @@ export interface DocEntry {
   canonical: boolean;
 }
 
-/** cortex-docs.json 顶层结构 */
+/** docs 配置域顶层结构 */
 export interface CortexDocsConfig {
   /** 宪法路径 */
   constitutionPath: string;

@@ -743,7 +743,7 @@ const DEFAULT_WAVE_DEFINITIONS: WaveDefinition[] = [
  * 未分类节点放入最后一波（兜底）。
  *
  * @param waveDefinitions 可选自定义波浪定义，不传则使用默认 4 波分组。
- *   支持从 cortex-agents.json 或外部配置读取后注入。
+ *   支持从 agents 配置域或外部配置读取后注入。
  */
 export class WaveDriver implements ILoopDriver {
   readonly name = "wave";

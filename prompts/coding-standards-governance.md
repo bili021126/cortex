@@ -230,7 +230,7 @@ scheduler.invariant          → SafeErrorReporter（安全上报）
 
 ## 十六、MetaAgent 多元调度与思考逻辑
 
-> ⚠️ 本章节为 MetaAgent 思考模式的**概念设计**——当前 MetaAgent 的调度和推理行为由 prompt 驱动，未实现配置驱动的策略切换。`cortex-agents.json` 中不存在 `metaAgent.strategies` 字段，`TaskNode` 中不存在 `strategy`/`reasoningMode` 字段。
+> ⚠️ 本章节为 MetaAgent 思考模式的**概念设计**——当前 MetaAgent 的调度和推理行为由 prompt 驱动，未实现配置驱动的策略切换。agents 配置域中不存在 `metaAgent.strategies` 字段，`TaskNode` 中不存在 `strategy`/`reasoningMode` 字段。
 
 ### 16.1 调度思维模式（如何拆任务）——概念设计
 
@@ -267,7 +267,7 @@ scheduler.invariant          → SafeErrorReporter（安全上报）
 ✅ 要求：每次调度决策必须记录：选了什么策略 + 为什么选（引用触发条件）
 ```
 
-> 当前 MetaAgent 的策略选择能力由 system prompt 描述驱动，尚未实现 `cortex-agents.json` 配置驱动的强制策略切换。此节为演进方向声明。
+> 当前 MetaAgent 的策略选择能力由 system prompt 描述驱动，尚未实现 agents 配置域驱动（`metaAgent.strategies` 字段）的强制策略切换。此节为演进方向声明。
 
 ---
 
@@ -314,7 +314,7 @@ Cortex 的 Harness 实现为四层架构，对应治理篇前面各节所描述�
 
 | 层 | 业界定义 | Cortex 实现 | 对应节 |
 |---|---------|------------|-------|
-| **Model Layer** | LLM 接入与适配 | `@cortex/llm` 的 `LlmAdapter` + DeepSeek 为主模型，通过 `cortex-agents.json` 按 Agent 类型配置模型选择 | — |
+| **Model Layer** | LLM 接入与适配 | `@cortex/llm` 的 `LlmAdapter` + DeepSeek 为主模型，通过 agents 配置域（src/data/agents.json）按 Agent 类型配置模型选择 | — |
 | **Executor Layer** | 沙箱化的工具执行 | Toolkit Sandboxing（宪法原则三）+ ConfirmGate 权限门控（§7.1 L0-L3 可逆性等级）——工具调用必须过确认门 | 八节 |
 | **State Layer** | 持久化与状态管理 | TaskBoard（任务状态）+ MemoryStore（记忆四态）+ DocGovern（治理审计永久层） | 九节 |
 | **Orchestration Layer** | 循环、调度、生命周期 | Scheduler（拓扑排序+群调度）+ MetaAgent（规划）+ AgentPool（生命周期状态机）+ ReplanManager（重规划） | 十、十三节 |

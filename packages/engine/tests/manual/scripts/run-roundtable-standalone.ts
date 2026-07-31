@@ -15,7 +15,12 @@ import { compressForRoundtable } from "@cortex/platform";
 import { runMeeting, SOFT_CONSENSUS_ROUNDTABLE, Persona } from "../config/roundtable-config";
 import { resolveLlmConfig } from "../config/llm-defaults";
 import { AgentType } from "@cortex/shared";
-import cortexConfig from "../../../../../cortex-agents.json" assert { type: "json" };
+import { resolveConfigDataDir } from "@cortex/config";
+
+// agents 配置域——根级 cortex-agents.json 已拆分进 packages/config/src/data/
+const cortexConfig = JSON.parse(
+  fs.readFileSync(path.join(resolveConfigDataDir(), "agents.json"), "utf-8"),
+) as { agents: Record<string, unknown> };
 
 // ── 加载 .env ──
 function loadEnv() {

@@ -6,7 +6,7 @@
 //
 // 架构：
 //   - AGENT_DEFS（§2）：AgentType-key 单一起源——所有子表自动派生
-//   - 运行时覆写层（§4）：setAgentRegistry() 从 cortex-agents.json 动态注入
+//   - 运行时覆写层（§4）：setAgentRegistry() 从 agents 配置域动态注入
 //   - 权限解析（§6）：resolveAgentPermissions() 按 AgentType + AgentContext 动态授予
 //
 // 新增 Agent 类型只需两处修改：
@@ -459,7 +459,7 @@ export function buildChineseRoleMap(
 
 /**
  * 注入运行时 Agent 注册表覆写。
- * bootstrapEngine 在启动时调用，将 cortex-agents.json 中的
+ * bootstrapEngine 在启动时调用，将 agents 配置域中的
  * 自定义 tags 和 toolPermissions 注入到 shared 层运行时状态。
  */
 export function setAgentRegistry(

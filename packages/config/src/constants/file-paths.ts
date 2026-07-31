@@ -5,9 +5,6 @@
  * @layer root
  */
 
-/** Agent 配置文件名 */
-export const FILE_CORTEX_AGENTS_JSON = "cortex-agents.json";
-
 /** Persona 人设文件目录（.cortex/lore/{character}/ 下） */
 export const DIR_LORE = "lore";
 
@@ -43,12 +40,6 @@ export const FILE_CODING_STANDARDS = "prompts/coding-standards.md";
 
 /** 引擎数据库文件名（.cortex 目录下） */
 export const FILE_ENGINE_DB = "engine.db";
-
-/** 认知配置文件 */
-export const FILE_CORTEX_COGNITION_JSON = "cortex-cognition.json";
-
-/** 文档配置文件名 */
-export const FILE_CORTEX_DOCS_JSON = "cortex-docs.json";
 
 /** 用户全局配置目录名（~/.cortex/ 下的目录名） */
 export const DIR_GLOBAL_CONFIG = ".cortex";

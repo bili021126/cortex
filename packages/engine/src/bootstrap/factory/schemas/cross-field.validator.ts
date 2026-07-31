@@ -25,7 +25,7 @@ export interface CrossFieldValidationResult {
 
 /**
  * 执行跨字段校验。
- * @param config 已加载的 cortex-agents.json 配置
+ * @param config 已加载的 agents 配置域配置
  */
 export function validateCrossField(config: CortexAgentsConfig): CrossFieldValidationResult {
   const result: CrossFieldValidationResult = {
