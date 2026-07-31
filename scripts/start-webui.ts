@@ -117,7 +117,7 @@ async function main() {
       { type: "exec.lifecycle_phase_changed", priority: 2, payload: { phase: "mission_start", from: "idle", to: "running", missionId: mockMissionId }, notificationType: "FYI", triggerSource: "governance" },
       { type: "node.start", priority: 2, payload: { nodeId: "mock-node-1", nodeType: "analysis", agent: "nahida", timestamp: now + 1000 }, notificationType: "FYI", triggerSource: "skill-tool" },
       { type: "exec.lifecycle_phase_changed", priority: 2, payload: { phase: "heartbeat", agent: "nahida", status: "running" }, notificationType: "FYI", triggerSource: "governance" },
-      { type: "token_usage", priority: 2, payload: { agent: "nahida", promptTokens: 2450, completionTokens: 860, cacheHit: true, cost: 0.0035, model: "deepseek-v4" }, triggerSource: "skill-tool" },
+      { type: "token_usage", priority: 2, payload: { agent: "nahida", promptTokens: 2450, completionTokens: 860, cacheHit: true, cost: 0.0035, model: "deepseek-v4-flash" }, triggerSource: "skill-tool" },
       { type: "token_usage", priority: 2, payload: { agent: "keqing", promptTokens: 1120, completionTokens: 340, cacheHit: false, cost: 0.0018, model: "deepseek-v4-flash" }, triggerSource: "skill-tool" },
       { type: "governance.audit_report", priority: 1, payload: { title: "v3.2 宪法审计", date: "2026-06-28", conclusion: "合规，7项不一致中0项阻断", auditor: "凝光" }, notificationType: "FYI", triggerSource: "governance" },
       { type: "governance.constitution_updated", priority: 1, payload: { from: "v3.1", to: "v3.2", date: "2026-06-28", reason: "WebUI+自审视入宪" }, notificationType: "FYI", triggerSource: "governance" },

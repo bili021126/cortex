@@ -229,7 +229,7 @@ function createLlmAdapters(stores: ConfigStores): Map<string, LlmAdapter> {
   const llmBaseUrl = process.env[ENV_DEEPSEEK_BASE_URL] || DEFAULT_LLM_BASE_URL;
   const llmChatModel = process.env[ENV_DEEPSEEK_CHAT_MODEL] || DEFAULT_LLM_CHAT_MODEL;
   const llmCyreneChatModel = process.env[ENV_DEEPSEEK_CYRENE_CHAT_MODEL] || llmChatModel;
-  const llmReasonerModel = process.env[ENV_DEEPSEEK_REASONER_MODEL] || "deepseek-reasoner";
+  const llmReasonerModel = process.env[ENV_DEEPSEEK_REASONER_MODEL] || DEFAULT_LLM_REASONER_MODEL;
   const llmGanyuChatModel = process.env[ENV_DEEPSEEK_GANYU_CHAT_MODEL] || llmReasonerModel;
   const llmReasoningEffort = (process.env[ENV_DEEPSEEK_REASONING_EFFORT] as "high" | "max") || undefined;
 

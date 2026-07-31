@@ -126,15 +126,10 @@ export class HttpRouter {
 
   private handleHealth(res: ServerResponse): void {
     const health = this.engine.healthCollector;
+    // Round-10 P0-1：接入真实快照——降级事件经 DegradationBoundary → HealthCollector 聚合，
+    // 此处不再返回硬编码零（观测最后一公里断点修复）
     const snapshot = health
-      ? {
-          timestamp: Date.now(),
-          totalDegradations: 0,
-          bySource: {},
-          byLevel: {},
-          recentSources: [],
-          degradedSince: null,
-        }
+      ? health.snapshot()
       : {
           timestamp: Date.now(),
           totalDegradations: 0,

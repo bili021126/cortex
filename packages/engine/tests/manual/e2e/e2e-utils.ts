@@ -72,7 +72,7 @@ export function createE2eAdapter(): LlmAdapter {
     apiKey: key,
     baseUrl,
     chatModel: process.env["DEEPSEEK_CHAT_MODEL"] ?? "deepseek-v4-flash",
-    reasonerModel: process.env["DEEPSEEK_REASONER_MODEL"] ?? "deepseek-v4-pro",
+    reasonerModel: process.env["DEEPSEEK_REASONER_MODEL"] ?? "deepseek-v4-flash",
     label: "e2e-test",
   });
 }
