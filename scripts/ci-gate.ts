@@ -63,8 +63,9 @@ function run(cmd: string, args: string[], cwd: string): { ok: boolean; stdout: s
       windowsHide: true,
     });
     return { ok: true, stdout };
-  } catch (e: any) {
-    return { ok: false, stdout: (e.stdout ?? "") + "\n" + (e.stderr ?? "") };
+  } catch (e) {
+    const err = e as { stdout?: unknown; stderr?: unknown };
+    return { ok: false, stdout: String(err.stdout ?? "") + "\n" + String(err.stderr ?? "") };
   }
 }
 
@@ -156,7 +157,7 @@ async function main() {
 
   // ── 门禁栈：类型检查 → Lint → 修复验证 → 契约验证 → 单元测试 ──
   if (!dryRun) {
-    console.log("\n🔒 [门禁 1/4] tsc -b 全量增量编译检查...");
+    console.log("\n🔒 [门禁 1/3] tsc -b 全量增量编译检查...");
     try {
       const tscResult = run("pnpm", ["exec", "tsc", "-b", "tsconfig.json"], ROOT);
       if (!tscResult.ok) {
@@ -170,7 +171,7 @@ async function main() {
     }
 
     // ── 门禁 2/4：ESLint ──
-    console.log("\n🔒 [门禁 2/4] eslint packages/**/src — 全包检查...");
+    console.log("\n🔒 [门禁 2/3] eslint packages/**/src — 全包检查...");
     try {
       const eslintResult = run("pnpm", ["exec", "eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
       if (!eslintResult.ok) {
