@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "updatedAt": "2026-07-31T19:26:51.680Z",
+  "metrics": {
+    "bm25.precision_at_3": 0.733333,
+    "bm25.ndcg_at_5": 0.972001,
+    "hybrid.ndcg_at_3": 0.848464,
+    "hybrid.bm25_baseline_ndcg_at_3": 0.914735
+  }
+}

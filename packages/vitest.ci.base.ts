@@ -14,12 +14,14 @@ const ALL_PKGS = [
 ];
 
 export function resolveAlias(packageDir: string): Record<string, string> {
-  const base = Object.fromEntries(
-    ALL_PKGS.map((p) => [`@cortex/${p}`, resolve(packageDir, `../${p}/src/index.ts`)]),
-  );
-  // 子路径导出——pkg.json 的 exports["./subpath"] 映射
-  // @cortex/memory/cyrene → memory/src/cyrene/index.ts
-  base["@cortex/memory/cyrene"] = resolve(packageDir, "../memory/src/cyrene/index.ts");
+  // 子路径必须排在最前——vite 字符串 alias 前缀匹配，主包名会吞掉子路径导入
+  const base: Record<string, string> = {
+    // @cortex/memory/cyrene → memory/src/cyrene/index.ts
+    "@cortex/memory/cyrene": resolve(packageDir, "../memory/src/cyrene/index.ts"),
+  };
+  for (const p of ALL_PKGS) {
+    base[`@cortex/${p}`] = resolve(packageDir, `../${p}/src/index.ts`);
+  }
   return base;
 }
 

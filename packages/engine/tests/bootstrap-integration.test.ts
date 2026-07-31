@@ -1,7 +1,9 @@
-// @ci: unit
-// 已评估：保留 skip。bootstrapEngine 跨字段校验失败——
-// yanfei produces trust_assessed/decision_made 但 routeTable 中无对应路由。
-// 需 governance routeTable 配置补齐后激活。
+// @ci: contract
+// 状态：已激活（2026-06 全量图景审计确认）——
+// 头部曾标注“保留 skip：yanfei produces trust_assessed/decision_made 但 routeTable 无对应路由”，
+// 该断点早已修复（event-routing.json 已含 trust_assessed/decision_made 路由），
+// 测试实际 7/7 全绿。此为装配级跨包契约：真实 bootstrapEngine + 真实配置目录。
+// 注意：routeTable 与 agent produces 的交叉一致性由本测试守护——配置域再漂移会在此暴露。
 /**
  * bootstrap-integration.test.ts — Core-2 引擎集成验证
  *

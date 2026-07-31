@@ -42,7 +42,8 @@ import { LlmAdapter as LlmAdapterValue } from "@cortex/llm";
 import { WorkerPool } from "../core/worker-pool.js";
 import * as os from "node:os";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type PipelineHandler, type ReadMode, type TaskNode } from "@cortex/shared";
-import { resolveConfigDataDir, type EngineConfig } from "@cortex/config";
+import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, type EngineConfig } from "@cortex/config";
+import { ContextManager } from "@cortex/context-manager";
 import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
@@ -193,6 +194,15 @@ export async function bootstrapEngine(
   const metaAgent = container.get<MetaAgentPlugin>("metaAgent").getInstance();
   // §6.0a 注入 PromptManager —— MetaAgent 的 planning prompt 走声明式块组装
   metaAgent.setPromptManager(promptManager);
+  // §6.0a-1 Phase 3 ContextManager 接线——context-policies 域注册后注入 MetaAgent
+  // 接线失败不阻断启动（MetaAgent 保留 tag→策略路由 fallback）
+  try {
+    const contextRegistry = new ConfigRegistry();
+    registerDefaultDomains(contextRegistry);
+    metaAgent.setContextManager(new ContextManager(contextRegistry));
+  } catch (e) {
+    console.warn(`[bootstrap] ContextManager 注入失败（回退 tag→策略路由）: ${String(e)}`);
+  }
   const scheduler = container.get<SchedulerPlugin>("scheduler").getInstance();
   const agents = container.get<SchedulerPlugin>("scheduler").getAgents();
   const butler = container.get<SchedulerPlugin>("scheduler").getButler();
@@ -223,6 +233,11 @@ export async function bootstrapEngine(
   DegradationBoundary.collector = healthCollector;
   // G1-5: bootstrap 阶段 observer 已就绪，注入 DegradationBoundary 使其 handle() 走 observer.emit
   DegradationBoundary._observer = observer;
+  // 消除零生产者：降级事件 → audit.jsonl 审计跟踪 + silent 降级 → MetricCounter 计数
+  DegradationBoundary._audit = (source, level, errorType) => {
+    auditTrail.recordDegradation(source, level, errorType);
+  };
+  DegradationBoundary._counter = metricCounter;
   metricCounter.startPeriodicFlush(
     60_000, // 每分钟 flush 一次
     (snapshots) => {
@@ -272,7 +287,7 @@ export async function bootstrapEngine(
   ].filter(Boolean);
   // C3 fix: 当所有环境变量为空时回退到硬编码默认模型，避免空优先级列表导致全路由不可用
   if (envModelPriority.length === 0) {
-    envModelPriority.push("deepseek-v4-chat");
+    envModelPriority.push("deepseek-v4-flash");
   }
   const envRouter = new EnvironmentAwareRouter({
     modelPriority: envModelPriority,

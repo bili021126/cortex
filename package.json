@@ -14,6 +14,8 @@
     "ci": "npx tsx scripts/ci-gate.ts",
     "ci:all": "npx tsx scripts/ci-gate.ts --all",
     "ci:dry": "npx tsx scripts/ci-gate.ts --dry-run",
+    "bench": "npx tsx scripts/bench-gate.ts",
+    "bench:update": "npx tsx scripts/bench-gate.ts --update-baseline",
     "self-exam": "npx tsx scripts/self-exam-soft.ts",
     "roundtable": "npx tsx packages/engine/tests/manual/scripts/conversation-11.ts",
     "build:config": "npx tsx scripts/build-config.ts",

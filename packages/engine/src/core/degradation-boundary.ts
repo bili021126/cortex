@@ -10,7 +10,7 @@
 // @fix G1-1 — 裸 console → PipelineObserver.emit
 // ============================================================
 
-import type { HealthCollector } from "@cortex/telemetry";
+import type { HealthCollector, MetricCounter } from "@cortex/telemetry";
 import { PipelineEventType, PipelinePriority, type IPipelineObserver } from "@cortex/shared";
 
 /** 降级等级 */
@@ -34,6 +34,18 @@ export class DegradationBoundary {
   static _observer?: IPipelineObserver;
 
   /**
+   * 审计跟踪回调——由 bootstrap 注入，落盘 audit.jsonl。
+   * 消除 AuditTrail 零生产者：每条非 silent 降级事件都留审计痕迹。
+   */
+  static _audit?: (source: string, level: string, errorType: string) => void;
+
+  /**
+   * 静默降级计数器——由 bootstrap 注入（MetricCounter）。
+   * silent 路径不产生 observer 事件，但必须计数（消除 MetricCounter 零生产者）。
+   */
+  static _counter?: MetricCounter;
+
+  /**
    * 处理降级事件。
    *
    * @param error  原始异常
@@ -45,10 +57,17 @@ export class DegradationBoundary {
     source: string,
     level: DegradationLevel = 'trace'
   ): void {
-    if (level === 'silent') return;
+    if (level === 'silent') {
+      // silent 路径：只计数，不产生事件/日志（MetricCounter 语义：silent 降级 +1）
+      DegradationBoundary._counter?.incrementDegradation(source);
+      return;
+    }
 
     // 记录到健康聚合器
     DegradationBoundary.collector?.record(source, level);
+
+    // 审计跟踪（audit.jsonl 落盘）
+    DegradationBoundary._audit?.(source, level, error instanceof Error ? error.name : typeof error);
 
     const msg = `[DEGRADED:${source}] ${error instanceof Error ? error.message : String(error)}`;
 

@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-20",
+  "thresholds": {
+    "engine": 60,
+    "memory": 30
+  }
+}

@@ -11,6 +11,7 @@
  *   npx tsx scripts/ci-gate.ts                正常门禁（只跑 @ci: unit）
  *   npx tsx scripts/ci-gate.ts --all          全量（包括 @ci: llm / integration）
  *   npx tsx scripts/ci-gate.ts --dry-run      仅扫描 @ci 标签，不执行
+ *   npx tsx scripts/ci-gate.ts --coverage    启用覆盖率阈值门禁（按 scripts/coverage-thresholds.json）
  *   npx tsx scripts/ci-gate.ts --json         机器可读 JSON 输出
  *
  * @ci 标签规范（写在测试文件第一行注释中）:
@@ -26,7 +27,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 
 // ─── 类型 ────────────────────────────────────────────────
@@ -43,6 +44,14 @@ interface TestFile {
 const ROOT = resolve(import.meta.dirname, "..");
 const CI_TAG_RE = /@ci\s*:\s*(unit|verify|contract|llm|integration|e2e|manual|stress|benchmark)/;
 const TEST_FILE_RE = /\.test\.ts$/;
+const COVERAGE_THRESHOLDS_PATH = resolve(ROOT, "scripts/coverage-thresholds.json");
+
+/** 覆盖率阈值配置：包名 → lines 百分比下限 */
+interface CoverageThresholds {
+  version: number;
+  updatedAt: string;
+  thresholds: Record<string, number>;
+}
 
 // ─── 工具 ────────────────────────────────────────────────
 
@@ -151,6 +160,76 @@ function scanAllTests(): TestFile[] {
   return files.map((f) => ({ path: f, ciTag: extractCiTag(f) }));
 }
 
+// ─── 覆盖率门禁 ────────────────────────────────────────────
+
+interface CoverageSummary {
+  total?: { lines?: { pct: number } };
+}
+
+/**
+ * 对核心包跑 vitest coverage（json-summary），解析 lines 覆盖率并检查阈值。
+ * 阈值配置见 scripts/coverage-thresholds.json —— 由真实基线数据固化，防退化不追高。
+ */
+function runCoverageGate(): void {
+  if (!existsSync(COVERAGE_THRESHOLDS_PATH)) {
+    console.log("   ⏭ 覆盖率门禁跳过：未找到 " + relative(ROOT, COVERAGE_THRESHOLDS_PATH));
+    return;
+  }
+  const cfg = JSON.parse(readFileSync(COVERAGE_THRESHOLDS_PATH, "utf8")) as CoverageThresholds;
+  const pkgs = Object.keys(cfg.thresholds);
+  if (pkgs.length === 0) {
+    console.log("   ⏭ 覆盖率门禁跳过：阈值配置为空");
+    return;
+  }
+
+  let allOk = true;
+  for (const pkg of pkgs) {
+    const pkgDir = join(ROOT, "packages", pkg);
+    if (!existsSync(pkgDir)) {
+      console.log(`   ⏭ 覆盖率门禁跳过：packages/${pkg} 不存在`);
+      continue;
+    }
+    const summaryPath = join(pkgDir, "coverage", "coverage-summary.json");
+    // 清理上一次的 coverage 产物，防止读到陈旧数据
+    rmSync(join(pkgDir, "coverage"), { recursive: true, force: true });
+
+    console.log(`   📊 coverage: packages/${pkg} (阈值 ${cfg.thresholds[pkg]}%)...`);
+    const r = run(
+      "pnpm",
+      [
+        "exec",
+        "vitest",
+        "run",
+        "--pool=forks",
+        "--poolOptions.forks.maxForks=1",
+        "--poolOptions.forks.minForks=1",
+        "--coverage.enabled",
+        "--coverage.include=src/**",
+        "--coverage.reporter=json-summary",
+      ],
+      pkgDir,
+    );
+    if (!r.ok || !existsSync(summaryPath)) {
+      console.error(`   ❌ coverage: packages/${pkg} 未产出 coverage-summary.json`);
+      allOk = false;
+      continue;
+    }
+
+    const summary = JSON.parse(readFileSync(summaryPath, "utf8")) as CoverageSummary;
+    const pct = summary.total?.lines?.pct ?? 0;
+    const threshold = cfg.thresholds[pkg]!;
+    const status = pct >= threshold ? "✅" : "❌";
+    console.log(`   ${status} coverage: packages/${pkg} — lines ${pct.toFixed(2)}% (阈值 ${threshold}%)`);
+    if (pct < threshold) allOk = false;
+  }
+
+  if (!allOk) {
+    console.error("\n❌ 覆盖率门禁未通过 — 低于阈值的包需补充测试，或确认后调整 scripts/coverage-thresholds.json");
+    process.exit(1);
+  }
+  console.log("   ✅ 覆盖率门禁通过\n");
+}
+
 // ─── 入口 ────────────────────────────────────────────────
 
 async function main() {
@@ -164,6 +243,7 @@ async function main() {
   const runAll = args.includes("--all");
   const dryRun = args.includes("--dry-run");
   const jsonMode = args.includes("--json");
+  const withCoverage = args.includes("--coverage");
 
   // ── 门禁栈：类型检查 → Lint → 修复验证 → 契约验证 → 单元测试 ──
   if (!dryRun) {
@@ -305,6 +385,14 @@ async function main() {
   console.log("");
   console.log(allOk ? "✅ 门禁通过" : "❌ 门禁未通过");
   console.log(`   Tests: ${totalPassed}/${totalTests} passed` + (skipped.length > 0 ? ` | ${skipped.length} skipped` : ""));
+
+  // ── 门禁 3/3：覆盖率阈值（可选，--coverage）──
+  if (withCoverage && allOk) {
+    console.log("\n🔒 [门禁 3/3] 覆盖率阈值检查...");
+    runCoverageGate();
+  } else if (withCoverage && !allOk) {
+    console.log("\n⏭ 覆盖率门禁跳过：测试阶段已失败");
+  }
 
   if (jsonMode) {
     console.log(

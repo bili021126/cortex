@@ -308,6 +308,15 @@ function mrr(predicted: string[], groundTruthIds: string[]): number {
 }
 
 // ════════════════════════════════════════════════════════
+// 基准指标输出——bench-gate.ts 解析此行并与基线对比（回归门限）
+// 行格式: BENCH_METRIC:<name>=<value>
+// ════════════════════════════════════════════════════════
+
+function benchmarkMetric(name: string, value: number): void {
+  process.stdout.write(`BENCH_METRIC:${name}=${value.toFixed(6)}\n`);
+}
+
+// ════════════════════════════════════════════════════════
 // ① BM25 关键词检索 vs 后端基础匹配
 // ════════════════════════════════════════════════════════
 
@@ -322,14 +331,17 @@ describe("Bench ①: BM25 关键词检索 vs 后端", () => {
       });
     }
 
+    let totalP3 = 0;
     for (const gt of QUERY_GROUND_TRUTHS) {
       const bm25Results = index.search(gt.queryText).map((r) => r.id);
       const p3 = precisionAtK(bm25Results, gt.expectedOrder, 3);
+      totalP3 += p3;
 
       // BM25 应至少召回 Top-1 gt 中的记忆
       expect(bm25Results.length).toBeGreaterThan(0);
       expect(p3).toBeGreaterThan(0);
     }
+    benchmarkMetric("bm25.precision_at_3", totalP3 / QUERY_GROUND_TRUTHS.length);
   });
 
   it("BM25 多字段加权——summary 比 semantic_gist 权重更高", () => {
@@ -384,6 +396,7 @@ describe("Bench ①: BM25 关键词检索 vs 后端", () => {
     }
     const avgNDCG = totalNDCG / QUERY_GROUND_TRUTHS.length;
     expect(avgNDCG).toBeGreaterThanOrEqual(0.4);
+    benchmarkMetric("bm25.ndcg_at_5", avgNDCG);
   });
 });
 
@@ -527,6 +540,8 @@ describe("Bench ②: 混合检索 BM25+向量融合", () => {
 
     // Hybrid 不应低于纯 BM25
     expect(avgHybridNDCG).toBeGreaterThanOrEqual(avgBm25NDCG * 0.8);
+    benchmarkMetric("hybrid.ndcg_at_3", avgHybridNDCG);
+    benchmarkMetric("hybrid.bm25_baseline_ndcg_at_3", avgBm25NDCG);
   });
 });
 

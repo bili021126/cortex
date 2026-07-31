@@ -56,6 +56,8 @@ export interface NotificationRuntimeOptions {
 export class NotificationRuntime {
   private _started = false;
   private _handler?: PipelineHandler;
+  /** 已推送通知计数（真实计数——修复遥测硬编码 0 的假信号） */
+  private _sentCount = 0;
 
   /** 默认语义映射 */
   private readonly defaultSemantics: Partial<Record<string, NotificationSemantics>> = {
@@ -80,6 +82,7 @@ export class NotificationRuntime {
   start(): void {
     if (this._started) return;
     this._started = true;
+    this._sentCount = 0;
 
     this._handler = (event: ObservableEvent) => {
       this._handleEvent(event);
@@ -143,6 +146,7 @@ export class NotificationRuntime {
     // 发送到通知管线
     try {
       this.notificationPipe.push(notification);
+      this._sentCount += 1;
     } catch (e: unknown) {
       this.observer.emit({
         type: PipelineEventType.ErrorReported,
@@ -153,9 +157,9 @@ export class NotificationRuntime {
       });
     }
 
-    // 遥测
+    // 遥测——真实计数（此前硬编码 0：指标与行为脱钩的假信号）
     if (this.options.enableTelemetry !== false) {
-      void recordTelemetry("notification.runtime.sent", 0, [
+      void recordTelemetry("notification.runtime.sent", this._sentCount, [
         { key: "eventType", value: event.type as string },
         { key: "semantics", value: semantics },
         { key: "channel", value: notification.channel },
