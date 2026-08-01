@@ -30,6 +30,7 @@ import { BoundaryGuardStep } from "../dispatch-steps/boundary-guard-step.js";
 import type { DispatchCtx, IDispatchStep } from "../dispatch-steps/types.js";
 import { isTestEnv } from "../utils/internal.js";
 import { computeCompensation } from "./compensation.js";
+import { telemetryController, TelemetryLevel } from "@cortex/telemetry";
 
 // ══════════════════════════════════════════════
 // IScheduleStrategy 实现
@@ -268,9 +269,15 @@ export class TopologicalLayeredDriver implements ILoopDriver {
 
       try {
         round++;
-        // ── 遥测：AgentPool 空闲率 ──
+        // ── 遥测：AgentPool 空闲率（S2-6：直接入 telemetryController，
+        //    value 为真实 idleRate——此前 console.error 间接路径解析到 total，数据错位）
         const poolStats = ctx.pool.getPoolStats();
-        console.error(`[telemetry] agent_pool.idle_rate total=${poolStats.total} idle=${poolStats.idle} busy=${poolStats.busy} idleRate=${poolStats.idleRate}`);
+        telemetryController.record({
+          metric: "agent_pool.idle_rate",
+          value: poolStats.idleRate,
+          level: TelemetryLevel.TRACE,
+          tags: { total: poolStats.total, idle: poolStats.idle, busy: poolStats.busy },
+        });
         const pendingNodes = board.getPendingNodes();
 
         if (pendingNodes.length === 0) {
@@ -794,9 +801,14 @@ export class WaveDriver implements ILoopDriver {
       }
 
       round++;
-      // ── 遥测：AgentPool 空闲率 ──
+      // ── 遥测：AgentPool 空闲率（S2-6：同轮询驱动，value 为真实 idleRate）
       const poolStats = ctx.pool.getPoolStats();
-      console.error(`[telemetry] agent_pool.idle_rate total=${poolStats.total} idle=${poolStats.idle} busy=${poolStats.busy} idleRate=${poolStats.idleRate}`);
+      telemetryController.record({
+        metric: "agent_pool.idle_rate",
+        value: poolStats.idleRate,
+        level: TelemetryLevel.TRACE,
+        tags: { total: poolStats.total, idle: poolStats.idle, busy: poolStats.busy },
+      });
       const pendingNodes = board.getPendingNodes();
       if (pendingNodes.length === 0) {
         if (replanFlight) { await replanFlight; replanFlight = null; }

@@ -4,10 +4,11 @@
  
 
 import { MemoryStore, defaultEmbeddingService } from "@cortex/memory-store";
-import { InMemoryMemoryStore } from "@cortex/memory";
+import { SqliteMemoryStore } from "@cortex/memory";
 import { ConsistencyLayer } from "@cortex/governance";
 import { MemoryManager, MemoryStoreManager } from "@cortex/memory";
 import { initRAG, ragAddMemory, ragSearchMemoryEntries } from "@cortex/memory";
+import { recordTelemetry } from "@cortex/telemetry";
 import type { PipelineObserver } from "@cortex/scheduler";
 import type { IFileSystemAdapter, IMemoryStore, MemoryEntry, MemoryWriteInput, ReadMode } from "@cortex/shared";
 
@@ -27,7 +28,7 @@ export async function initMemoryStore(
 ): Promise<IMemoryStore | undefined> {
   let store = memory;
   if (!store && dbPath) {
-    const backend = new InMemoryMemoryStore();
+    const backend = new SqliteMemoryStore();
     store = new MemoryStore(backend, observer, defaultEmbeddingService);
     await store.init(dbPath);
   }
@@ -89,6 +90,44 @@ export interface CyreneMemoryInitResult {
 }
 
 /**
+ * RagBridge——MemoryManager 的 RAG 依赖对（add/search）。
+ *
+ * ragReady=false 时两个函数均抛显式错误（S2-3）：
+ * 绝不返回假 id/空数组让调用方误以为检索成功。
+ */
+export interface RagBridge {
+  addMemory: (text: string, source: string, metadata?: Record<string, unknown>) => Promise<string>;
+  searchMemoryEntries: (query: string, source?: string, topK?: number, options?: { recordRecall?: boolean }) => Promise<Array<{ id: string; text: string; createdAt: number; score: number; metadata?: Record<string, unknown> }>>;
+}
+
+/**
+ * 构造 RAG 桥接（S2-3 显式降级）。
+ *
+ * @param ragReady - RAG 初始化是否成功。false 时降级函数抛显式错误并记录 telemetry
+ */
+export function createRagBridge(ragReady: boolean): RagBridge {
+  if (ragReady) {
+    return { addMemory: ragAddMemory, searchMemoryEntries: ragSearchMemoryEntries };
+  }
+  return {
+    addMemory: async (_text: string, _source: string, _metadata?: Record<string, unknown>) => {
+      await recordTelemetry("memory.rag.degraded", 1, [{ key: "operation", value: "add" }]);
+      throw new Error(
+        "[init-memory] RAG 不可用（embeddings 初始化失败）——addMemory 拒绝降级假 id，" +
+        "请检查嵌入模型配置后重启",
+      );
+    },
+    searchMemoryEntries: async (_query: string, _source?: string, _topK?: number, _options?: { recordRecall?: boolean }) => {
+      await recordTelemetry("memory.rag.degraded", 1, [{ key: "operation", value: "search" }]);
+      throw new Error(
+        "[init-memory] RAG 不可用（embeddings 初始化失败）——searchMemoryEntries 拒绝返回空数组，" +
+        "请检查嵌入模型配置后重启",
+      );
+    },
+  };
+}
+
+/**
  * 初始化 Cyrene-Agent 记忆层（L0/L1/L2 三层画像记忆）。
  *
  * 作为 MemoryStore 的扩展——Cyrene 管理更细粒度的用户画像、
@@ -105,25 +144,25 @@ export async function initCyreneMemory(
   // 初始化加载（触发迁移/新建）
   await store.load();
 
-  // 初始化 RAG 向量存储（嵌入模型 + 检索器），失败时优雅降级
+  // 初始化 RAG 向量存储（嵌入模型 + 检索器），失败时显式降级（S2-3）
+  // ——降级后 addMemory/searchMemoryEntries 抛显式错误而非返回假 id/空数组，
+  //   降级状态记录入 telemetry，调用方可见可查。
   let ragReady = false;
   try {
     await initRAG("auto", undefined, undefined, undefined, "none");
     ragReady = true;
   } catch (e) {
     process.stderr.write(`[init-memory] RAG init failed (embeddings unavailable): ${e instanceof Error ? e.message : String(e).slice(0, 150)}\n`);
+    await recordTelemetry(
+      "memory.rag.degraded",
+      1,
+      [{ key: "operation", value: "init" }],
+      { reason: e instanceof Error ? e.message : String(e).slice(0, 300) },
+    );
   }
 
-  // MemoryManager 接入 RAG 桥接
-  const manager = new MemoryManager({
-    addMemory: ragReady ? ragAddMemory : async (_text: string, _source: string, _metadata?: Record<string, unknown>) => {
-      const id = `cyrene_rag_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      return id;
-    },
-    searchMemoryEntries: ragReady ? ragSearchMemoryEntries : async (_query: string, _source?: string, _topK?: number, _options?: { recordRecall?: boolean }) => {
-      return [];
-    },
-  });
+  // MemoryManager 接入 RAG 桥接（S2-3：降级时拒绝假 id/空数组，抛显式错误）
+  const manager = new MemoryManager(createRagBridge(ragReady));
 
   return { manager, store };
-}
+}

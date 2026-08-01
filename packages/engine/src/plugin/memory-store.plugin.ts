@@ -9,7 +9,7 @@
 
 import type { EnginePlugin, PluginContext, PluginHealth } from "./types.js";
 import { MemoryStore, defaultEmbeddingService } from "@cortex/memory-store";
-import { InMemoryMemoryStore } from "@cortex/memory";
+import { SqliteMemoryStore } from "@cortex/memory";
 
 export class MemoryStorePlugin implements EnginePlugin {
   readonly name = "memoryStore";
@@ -24,7 +24,8 @@ export class MemoryStorePlugin implements EnginePlugin {
       return;
     }
     const observer = ctx.get<PipelineObserverPlugin>("pipelineObserver").getInstance();
-    const backend = new InMemoryMemoryStore();
+    // SQLite 持久化后端（WAL + FTS5 检索 + 防抖刷写）——重启后记忆可读回
+    const backend = new SqliteMemoryStore();
     this.instance = new MemoryStore(backend, observer, defaultEmbeddingService);
 
     // 初始化持久化层（SQLite 建表 + 加载数据）

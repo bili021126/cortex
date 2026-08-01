@@ -215,6 +215,13 @@ export class NotificationPipe {
     return this.routeTable.snapshot();
   }
 
+  // ── 生命周期 ─────────────────────────────────────
+
+  /** 关闭底层持久化连接（释放文件句柄——Windows 下删除目录前必须调用） */
+  close(): void {
+    this.persistence?.close();
+  }
+
   // ── 私有 ─────────────────────────────────────────
 
   /** 将事件路由到对应物理通道 */

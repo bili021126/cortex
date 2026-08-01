@@ -91,7 +91,7 @@ export { resolveByScope, type SkillScope } from "./planning/skill-scope.js";
 export { executeWithMemoryPipeline, defaultMemoryQuery, makeMemoryQuery, resolvePipeline, DirectStep, DEFAULT_PIPELINE, DIRECT_PIPELINE, registerSkillPipeline, emitSkillReferenced, extractSkillUsageFromOutput } from "./memory-bridge/index.js";
 
 // ── Cyrene 记忆层（L0/L1/L2 画像记忆扩展） ─────
-export { initCyreneMemory } from "./bootstrap/init-memory.js";
+export { initCyreneMemory, createRagBridge } from "./bootstrap/init-memory.js";
 
 // ── Bootstrap 集成入口 ──────────────────────────
 export { bootstrapEngine, resolveLlm } from "./bootstrap/bootstrap-engine.js";

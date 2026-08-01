@@ -161,6 +161,9 @@ importers:
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
+      '@cortex/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
     devDependencies:
       typescript:
         specifier: ^5.7.0
@@ -222,6 +225,10 @@ importers:
         version: 5.4.21(@types/node@24.13.3)
 
   packages/doctor:
+    dependencies:
+      '@cortex/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -290,8 +297,8 @@ importers:
         specifier: ^2.17.2
         version: 2.17.2
       better-sqlite3:
-        specifier: ^11.0.0
-        version: 11.10.0
+        specifier: ^12.0.0
+        version: 12.11.1
     devDependencies:
       '@cortex/testing':
         specifier: workspace:*
@@ -400,7 +407,13 @@ importers:
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
+      better-sqlite3:
+        specifier: ^12.0.0
+        version: 12.11.1
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.0
+        version: 7.6.13
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
@@ -450,9 +463,15 @@ importers:
 
   packages/notification:
     devDependencies:
+      '@types/better-sqlite3':
+        specifier: ^7.6.0
+        version: 7.6.13
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.17
+      better-sqlite3:
+        specifier: ^12.0.0
+        version: 12.11.1
       eslint:
         specifier: ^10.4.1
         version: 10.4.1
@@ -588,6 +607,9 @@ importers:
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared
+      '@cortex/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -1859,8 +1881,9 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-sqlite3@11.10.0:
-    resolution: {integrity: sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ==}
+  better-sqlite3@12.11.1:
+    resolution: {integrity: sha512-dq9AtApgg5PGFtBzPFSBl3HZQjHok5gaQCM6zh2Yk0aSmDCs1CbnVI8/HgASQkNKsWFpseIO9beg5xxpYhbIfA==}
+    engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x || 26.x}
 
   bindings@1.5.0:
     resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
@@ -4069,7 +4092,7 @@ snapshots:
 
   baseline-browser-mapping@2.10.37: {}
 
-  better-sqlite3@11.10.0:
+  better-sqlite3@12.11.1:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3

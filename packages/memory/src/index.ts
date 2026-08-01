@@ -44,6 +44,12 @@ export type { FileBasedMemoryStoreOptions } from "./implementations/FileBasedMem
 export { AbstractMemoryStore } from "./implementations/AbstractMemoryStore.js";
 export type { MemoryStoreBackend } from "./implementations/AbstractMemoryStore.js";
 
+// ─── SQLite 持久化（S2-1） ────────────────────────
+export { SqliteMemoryStore } from "./implementations/sqlite/sqlite-storage-backend.js";
+export type { SqliteStorageBackendOptions, SqliteRetryConfig } from "./implementations/sqlite/sqlite-storage-backend.js";
+export { SQLITE_MIGRATIONS, SQLITE_SCHEMA_VERSION, migrateSqlite } from "./implementations/sqlite/sqlite-migrations.js";
+export type { SqliteMigration, MigratableDb } from "./implementations/sqlite/sqlite-migrations.js";
+
 // ─── 注册表 ────────────────────────────────────────
 export { MemoryStoreRegistry } from "./registry/MemoryStoreRegistry.js";
 export type { StoreRegistration } from "./registry/MemoryStoreRegistry.js";

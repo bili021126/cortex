@@ -110,8 +110,8 @@
 **改动**：
 | # | 改动 | 文件 |
 |---|---|---|
-| S2-13 | 治理组件真实 LLM 验证环境：manual e2e 补治理验证用例（HardVerificationGate / ZeroTokenValidator / DecisionGateBridge 各 1 条真实 LLM 场景） | engine/tests/manual/ |
-| S2-14 | 治理状态文档化：docs 标注"待真实 LLM 验证后激活" | docs/ |
+| S2-13 | 治理组件真实 LLM 验证环境：manual e2e 补治理验证用例（HardVerificationGate / ZeroTokenValidator / DecisionGateBridge 各 1 条真实 LLM 场景） | engine/tests/manual/e2e/governance-llm-verify.ts |
+| S2-14 | 治理状态文档化：docs 标注“待真实 LLM 验证后激活” | docs/auditing/refactor-phase2-governance-llm-verify-2026-06-20.md |
 
 **验收标准**：
 1. 3 条治理真实 LLM 验证用例可运行（CORTEX_ENABLE_LLM=1 环境），结果归档

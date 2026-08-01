@@ -1,6 +1,7 @@
 // @ci: unit
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent, type PipelineHandler } from "@cortex/shared";
+import { NotificationChannel } from "@cortex/notification";
 import { NotificationRuntime } from "@cortex/engine";
 
 /** Mock PipelineObserver——记录注册/注销的 handler */
@@ -262,6 +263,31 @@ describe("NotificationRuntime", () => {
       observer.emitToHandlers(PipelinePriority.NORMAL, event);
 
       expect(pipe.push).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("S2-4: MemoryPersistFailed 事件闭环", () => {
+    it("记忆持久化失败 → 转通知且语义为 WARNING（Important 通道）", () => {
+      runtime.start();
+
+      const event: ObservableEvent = {
+        type: PipelineEventType.MemoryPersistFailed,
+        priority: PipelinePriority.HIGH,
+        payload: { operation: "persist", error: "disk full" },
+        timestamp: Date.now(),
+        requestId: "evt-persist-fail",
+      };
+
+      observer.emitToHandlers(PipelinePriority.HIGH, event);
+
+      expect(pipe.push).toHaveBeenCalledTimes(1);
+      expect(pipe.sent[0]).toMatchObject({
+        type: PipelineEventType.MemoryPersistFailed,
+        channel: NotificationChannel.Important,
+        ackRequired: false,
+        semantics: "WARNING",
+        summary: "错误: disk full",
+      });
     });
   });
 });

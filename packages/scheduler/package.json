@@ -20,7 +20,8 @@
   },
   "dependencies": {
     "@cortex/config": "workspace:*",
-    "@cortex/shared": "workspace:*"
+    "@cortex/shared": "workspace:*",
+    "@cortex/telemetry": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

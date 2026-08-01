@@ -9,6 +9,7 @@
 //   - packageJsonChecker:  检查各包 package.json 必须字段
 //   - positioningDocChecker: 检查各包 PACKAGE_POSITIONING.md 存在
 //   - testHeaderChecker:   检查测试文件首行 `// @ci:` 标注
+//   - auditTrailChecker:   读取 audit.jsonl 审计跟踪（spec S2-8）
 //
 // @module-convention
 // 1. 所有检查器通过 registerChecker 注册，管线自动编排。
@@ -31,6 +32,7 @@ import {
   type DoctorOptions,
   type PackageMeta,
 } from "./types.js";
+import { AuditTrailChecker } from "./audit-checker.js";
 
 // ============================================================
 // 常量定义
@@ -425,6 +427,7 @@ export class HealthChecker {
       new PackageJsonChecker(),
       new PositioningDocChecker(),
       new TestHeaderChecker(),
+      new AuditTrailChecker(),
     ];
   }
 
@@ -502,9 +505,19 @@ export class HealthChecker {
 
     // 并行执行所有检查器
     const startTime = Date.now();
+    // spec S2-8：透传扩展选项（如 auditSpanId）给检查器——
+    // 仅复制 DoctorOptions 之外的键，避免 only/skip 等过滤语义泄漏
+    const extraCheckerOpts: CheckerOptions = { verbose, projectRoot: root };
+    if (options) {
+      for (const [k, v] of Object.entries(options)) {
+        if (!(k in extraCheckerOpts) && k !== "only" && k !== "skip" && k !== "format" && k !== "threshold" && k !== "output") {
+          extraCheckerOpts[k] = v;
+        }
+      }
+    }
     const results = await Promise.all(
       activeCheckers.map((checker) =>
-        checker.check(root, { verbose, projectRoot: root }).catch((err: unknown) => {
+        checker.check(root, extraCheckerOpts).catch((err: unknown) => {
           const errMsg = err instanceof Error ? err.message : String(err);
           const failedResult: CheckResult = {
             checker: checker.name,

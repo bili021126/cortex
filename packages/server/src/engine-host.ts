@@ -38,6 +38,7 @@ import {
 } from "@cortex/config";
 import type { ModelCapabilities } from "@cortex/shared";
 import { HealthCollector } from "@cortex/telemetry";
+import type { NotificationPipe } from "@cortex/notification";
 import type { IScheduler, ConfirmGate } from "@cortex/scheduler";
 import type {
   IPipelineObserver,
@@ -73,6 +74,7 @@ export class EngineHost {
   private readonly llms: Map<string, LlmAdapter>;
   private readonly toolkit: Toolkit;
   private readonly stores: ConfigStores;
+  /** 复用 bootstrap 内部真实 HealthCollector（S2-9：不再自建孤儿实例） */
   private readonly _healthCollector: HealthCollector;
 
   private constructor(
@@ -80,13 +82,14 @@ export class EngineHost {
     llms: Map<string, LlmAdapter>,
     toolkit: Toolkit,
     stores: ConfigStores,
-    healthCollector: HealthCollector,
   ) {
     this.result = result;
     this.llms = llms;
     this.toolkit = toolkit;
     this.stores = stores;
-    this._healthCollector = healthCollector;
+    // S2-9：bootstrap 内 DegradationBoundary → HealthCollector 已接线，
+    // 此处复用同一实例（真实数据源），不再自建恒零采集器
+    this._healthCollector = result.healthCollector ?? new HealthCollector();
   }
 
   /**
@@ -113,10 +116,9 @@ export class EngineHost {
       workspaceRoot: options.workspaceRoot,
     });
 
-    // Create health collector
-    const healthCollector = new HealthCollector();
-
-    return new EngineHost(result, llms, toolkit, stores, healthCollector);
+    // S2-9：不再自建 HealthCollector——bootstrap 内部实例经
+    // DegradationBoundary 接线，健康端点直接读真实数据源
+    return new EngineHost(result, llms, toolkit, stores);
   }
 
   // ── Getters ──────────────────────────────────────────
@@ -155,6 +157,11 @@ export class EngineHost {
 
   get healthCollector(): HealthCollector {
     return this._healthCollector;
+  }
+
+  /** S2-10/S2-11: NotificationPipe——通知消费端（WS 订阅/ack）经此接线 */
+  get notificationPipe(): NotificationPipe | undefined {
+    return this.result.notificationPipe;
   }
 
   get llmAdapters(): Map<string, LlmAdapter> {

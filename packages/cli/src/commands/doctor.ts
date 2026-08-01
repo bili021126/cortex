@@ -25,16 +25,19 @@ const DOCTOR_HELP = [
   "  --skip <names>     跳过指定检查器（逗号分隔）",
   "  --threshold <n>    健康分阈值（低于此值退出码 1）",
   "  --verbose, -v      输出所有发现（含 info 级别）",
+  "  --audit-span-id <s> audit-trail 检查器按 spanId 过滤查询",
   "",
   "内置检查器:",
   "  package-json         检查各包 package.json 必须字段",
   "  positioning-doc      检查各包 PACKAGE_POSITIONING.md 存在性",
   "  test-header          检查测试文件首行 @ci 标注",
+  "  audit-trail          读取审计跟踪（类型分布/spanId 查询）",
   "",
   "示例:",
   "  cortex doctor",
   "  cortex doctor --only package-json,test-header",
   "  cortex doctor --format json --output report.json",
+  "  cortex doctor --only audit-trail --audit-span-id span-1",
 ].join("\n");
 
 /** 解析 doctor 命令行选项 → DoctorOptions */
@@ -46,6 +49,7 @@ function _parseDoctorOpts(options: Record<string, unknown>): DoctorOptions {
     ? parseInt(String(options["threshold"]), 10)
     : undefined;
   const verbose = (options["verbose"] ?? options["v"]) as boolean | undefined;
+  const auditSpanId = (options["audit-span-id"] ?? options["auditSpanId"]) as string | undefined;
 
   return {
     format: format === "json" ? "json" : "text",
@@ -53,6 +57,7 @@ function _parseDoctorOpts(options: Record<string, unknown>): DoctorOptions {
     ...(skip ? { skip } : {}),
     ...(threshold !== undefined ? { threshold } : {}),
     ...(verbose !== undefined ? { verbose } : {}),
+    ...(auditSpanId ? { auditSpanId } : {}),
   };
 }
 

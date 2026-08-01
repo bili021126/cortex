@@ -13,7 +13,8 @@ export type WSChannel =
   | "gate"
   | "agent"
   | "memory"
-  | "session";
+  | "session"
+  | "notification";
 
 /** WebSocket 消息包装 */
 export interface WSMessage<T = unknown> {

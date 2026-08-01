@@ -11,7 +11,7 @@
 // @refactor v3.0 — 引擎插件化解耦
 // ============================================================
 
-import type { AgentManifest } from "./factory/index.js";
+import type { AgentManifest, BootstrapResult } from "./factory/index.js";
 import { loadConfig, resolveCodingStandards, resolveLlm, injectRegistryFromConfig } from "./load-config.js";
 import { enhancePrompts } from "./factory/loaders/agents.loader.js";
 import { PromptManager } from "../core/prompt-manager.js";
@@ -29,7 +29,7 @@ import { DecisionGateBridge } from "../execution/decision-gate-bridge.js";
 import { resilienceFactory } from "../execution/resilience-integration.js";
 import { NotificationRuntime } from "../planning/notification-runtime.js";
 import { ZeroTokenValidator } from "../execution/zero-token-validator.js";
-import { NotificationPipe } from "@cortex/notification";
+import { NotificationPipe, NotificationPersistence } from "@cortex/notification";
 import type { IModelRouter, PipelineObserver } from "@cortex/scheduler";
 // 集中注册：触发全部插件注册至 PluginLoader
 import "../plugin/register-all.js";
@@ -41,15 +41,16 @@ import type { LlmAdapter } from "@cortex/llm";
 import { LlmAdapter as LlmAdapterValue } from "@cortex/llm";
 import { WorkerPool } from "../core/worker-pool.js";
 import * as os from "node:os";
+import * as path from "node:path";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type PipelineHandler, type ReadMode, type TaskNode } from "@cortex/shared";
-import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, PRESET_ALERT_RULES, type EngineConfig } from "@cortex/config";
+import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, PRESET_ALERT_RULES, isTestEnv, type EngineConfig } from "@cortex/config";
 import { ContextManager } from "@cortex/context-manager";
 import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import { initCyreneMemory } from "./init-memory.js";
 import { setJudgeLlmService, setCompressorLlmService, setResolverLlmService } from "@cortex/memory";
-import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector, alertEngine, telemetryController, TelemetryLevel } from "@cortex/telemetry";
+import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector, alertEngine, telemetryController, TelemetryLevel, setTelemetry, shutdownTelemetry, FileCollector } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
 
@@ -78,6 +79,27 @@ export type { BootstrapEngineResult };
 //   config 的 PRESET_ALERT_RULES 为声明式（threshold/consecutive），
 //   AlertRule 为命令式（condition 回调），此处做声明式 → 命令式适配注入。
 //   触发时落 audit.jsonl（degradation 条目）+ observer 发 TeleDegradationThresholdBreached。
+// §6.0.0a1 AuditTrail 真实调用点（spec S2-7）
+//   config_override：调用方显式传入 engineConfig 覆写默认引擎配置时记录
+//   config_violation：配置加载跨字段校验产生的警告（validateCrossField 输出）
+function recordBootstrapAudit(
+  auditTrail: AuditTrail,
+  options: BootstrapEngineOptions,
+  config: BootstrapResult,
+): void {
+  if (options.engineConfig) {
+    auditTrail.recordConfigOverride({
+      key: "engineConfig",
+      source: "bootstrapEngine.options",
+      oldValue: "<default>",
+      newValue: JSON.stringify(options.engineConfig),
+    });
+  }
+  if (config.warnings.length > 0) {
+    auditTrail.recordConfigViolation("cross-field", config.warnings);
+  }
+}
+
 function setupAlertEngine(auditTrail: AuditTrail, observer: PipelineObserver): NodeJS.Timeout {
   for (const rule of PRESET_ALERT_RULES) {
     alertEngine.addRule({
@@ -153,6 +175,24 @@ export async function bootstrapEngine(
   // §1.5 设置 Toolkit 的 workspaceRoot（路径沙箱）
   const wsRoot = options.workspaceRoot ?? projectRoot;
   options.toolkit.setWorkspaceRoot(wsRoot);
+
+  // §1.6 setTelemetry —— 文件遥测默认启用（spec S2-5）
+  //   默认落盘 `${workspaceRoot}/.cortex/telemetry.jsonl`；
+  //   CORTEX_TELEMETRY_FILE 语义：未设置=默认路径启用；off=禁用文件采集；
+  //   其他值=自定义路径。测试环境未显式设置时跳过（防污染仓库，守护测试显式开启）。
+  const telemetryFileEnv = process.env.CORTEX_TELEMETRY_FILE;
+  const fileTelemetryEnabled = telemetryFileEnv !== "off"
+    && (telemetryFileEnv !== undefined || !isTestEnv());
+  if (fileTelemetryEnabled) {
+    try {
+      const telemetryFilePath = telemetryFileEnv
+        ? path.resolve(telemetryFileEnv)
+        : path.join(wsRoot, ".cortex", "telemetry.jsonl");
+      await setTelemetry(new FileCollector(telemetryFilePath));
+    } catch (e) {
+      process.stderr.write(`[bootstrap] setTelemetry failed（非致命，保留控制台采集）: ${e instanceof Error ? e.message : String(e)}\n`);
+    }
+  }
 
   // §2 注入运行时注册表 + 工具元数据
   injectRegistryFromConfig(config.agentDefinitions);
@@ -262,6 +302,9 @@ export async function bootstrapEngine(
   // §6.0.0a Phase 0 遥测基础设施初始化
   const auditTrail = new AuditTrail();
   const metricCounter = new MetricCounter();
+
+  // §6.0.0a1 AuditTrail 真实调用点（spec S2-7）——见 recordBootstrapAudit
+  recordBootstrapAudit(auditTrail, options, config);
 
   // §6.0.0b HealthCollector —— 降级健康聚合
   const healthCollector = new HealthCollector();
@@ -375,7 +418,11 @@ export async function bootstrapEngine(
 
   // §6.2.4 NotificationRuntime —— PipelineObserver → NotificationPipe 桥接
   // @layer 治理层→治理层：PipelineObserver → NotificationPipe 桥接
-  const notificationPipe = new NotificationPipe();
+  // S2-10：注入 NotificationPersistence——Urgent/Important 通道磁盘持久化，
+  //   重启后未确认通知可恢复（路径约定与 memory-store.plugin 一致）。
+  const notificationPipe = new NotificationPipe(
+    new NotificationPersistence(`${wsRoot}/.cortex/notifications.db`.replace(/\\/g, "/")),
+  );
   // P0-1: 加载事件路由表——factory 已加载 event-routing.json（routeTable key 为 snake_case，
   //       resolve() 对 dotted 事件名取点号最后一段映射，如 "governance.amendment_proposed" → "amendment_proposed"）
   notificationPipe.loadRoutes(config.eventRouting.routeTable);
@@ -535,8 +582,10 @@ export async function bootstrapEngine(
     governanceEmitter,
     decisionBridge,
     notificationRuntime,
+    notificationPipe,
     auditTrail,
     metricCounter,
+    healthCollector,
     shutdown: async () => {
       // 先发射关闭开始事件
       observer.emit({
@@ -558,6 +607,11 @@ export async function bootstrapEngine(
       metricCounter.stop();
       clearInterval(alertTimer);
       auditTrail.flush();
+      // S2-10 补充：停止通知运行时 + 关闭通知持久化连接
+      //   NotificationPersistence 持有 .cortex/notifications.db 的 better-sqlite3 句柄，
+      //   不关闭则 Windows 下删除工作区目录报 EPERM（memory-persist-restart T4 实测）。
+      notificationRuntime.stop();
+      notificationPipe.close();
       // MemoryStore 归档——在 shutdown orchestrator close 存储之前先 endSession
       if (memory) {
         try { await memory.endSession(); } catch (err) { logger.error("memory.endSession failed", {}, err instanceof Error ? err : undefined); }
@@ -572,6 +626,10 @@ export async function bootstrapEngine(
       workerPool.shutdown();
       // 插件容器关闭（反向顺序 stop 各插件）
       await container.shutdown();
+      // 遥测文件采集器 flush 落盘（S2-5——记录在案的 shutdown 时机）
+      try {
+        await shutdownTelemetry();
+      } catch (err) { logger.error("shutdownTelemetry failed", {}, err instanceof Error ? err : undefined); }
       // 最后卸载 ConsoleBridge，恢复原始 console
       uninstallConsoleBridge();
     },

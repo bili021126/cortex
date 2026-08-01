@@ -137,13 +137,13 @@ describe("HealthChecker", () => {
 
   // ── 基础功能 ─────────────────────────────────────
 
-  it("默认注册三个内置检查器", () => {
+  it("默认注册四个内置检查器", () => {
     const checker = new HealthChecker();
     const checkers = checker.getCheckers();
 
-    expect(checkers).toHaveLength(3);
+    expect(checkers).toHaveLength(4);
     const names = checkers.map((c) => c.name).sort();
-    expect(names).toEqual(["package-json", "positioning-doc", "test-header"]);
+    expect(names).toEqual(["audit-trail", "package-json", "positioning-doc", "test-header"]);
   });
 
   it("诊断健康项目返回 healthy 状态", async () => {
@@ -166,7 +166,7 @@ describe("HealthChecker", () => {
     const report = await checker.diagnose(fixture.root);
 
     expect(report.status).toBe("healthy");
-    expect(report.checks).toHaveLength(3);
+    expect(report.checks).toHaveLength(4);
     expect(report.meta.packageCount).toBe(2);
     expect(report.meta.runId).toMatch(/^doctor-/);
     expect(report.meta.durationMs).toBeGreaterThanOrEqual(0);
@@ -403,7 +403,7 @@ describe("HealthChecker", () => {
     const report = await doctor(fixture.root);
     expect(report).toBeDefined();
     expect(report.status).toBe("healthy");
-    expect(report.checks).toHaveLength(3);
+    expect(report.checks).toHaveLength(4);
     expect(report.meta.runId).toMatch(/^doctor-/);
   });
 
@@ -428,7 +428,7 @@ describe("HealthChecker", () => {
     };
 
     checker.registerChecker(customChecker);
-    expect(checker.getCheckers()).toHaveLength(4);
+    expect(checker.getCheckers()).toHaveLength(5);
   });
 
   it("registerChecker 同名覆盖已有检查器", () => {
@@ -451,7 +451,7 @@ describe("HealthChecker", () => {
 
     checker.registerChecker(overrideChecker);
     const checkers = checker.getCheckers();
-    expect(checkers).toHaveLength(3);
+    expect(checkers).toHaveLength(4);
     const pkgJsonChecker = checkers.find((c) => c.name === "package-json");
     expect(pkgJsonChecker!.description).toBe("覆盖版本");
   });
@@ -478,8 +478,8 @@ describe("HealthChecker", () => {
       skip: "package-json,positioning-doc",
     });
 
-    expect(report.checks).toHaveLength(1);
-    expect(report.checks[0].checker).toBe("test-header");
+    expect(report.checks).toHaveLength(2);
+    expect(report.checks.map((c) => c.checker).sort()).toEqual(["audit-trail", "test-header"]);
   });
 
   // ── runOnly 方法 ────────────────────────────────
@@ -504,7 +504,7 @@ describe("HealthChecker", () => {
 
       expect(report.status).toBe("healthy");
       expect(report.meta.packageCount).toBe(0);
-      expect(report.checks).toHaveLength(3);
+      expect(report.checks).toHaveLength(4);
       // 所有检查器在无包时都应通过
       for (const check of report.checks) {
         expect(check.passed).toBe(true);
@@ -615,5 +615,91 @@ describe("HealthChecker", () => {
     expect(report.checks).toHaveLength(0);
     expect(report.status).toBe("healthy");
     expect(report.meta.packageCount).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// audit-trail 检查器（spec S2-8）
+// ═══════════════════════════════════════════════════════
+
+describe("audit-trail 检查器（spec S2-8）", () => {
+  let auditFixture: ReturnType<typeof createFixtureMonorepo>;
+
+  beforeEach(() => {
+    auditFixture = createFixtureMonorepo();
+  });
+
+  afterEach(() => {
+    auditFixture.destroy();
+  });
+
+  it("audit.jsonl 缺失时返回 info 发现且不阻断", async () => {
+    const checker = new HealthChecker();
+    const report = await checker.diagnose(auditFixture.root, { only: "audit-trail" });
+
+    expect(report.checks).toHaveLength(1);
+    const check = report.checks[0]!;
+    expect(check.passed).toBe(true);
+    expect(check.findings[0]).toMatchObject({
+      id: "AUDIT-FILE-001",
+      severity: "info",
+    });
+    expect(report.status).toBe("healthy");
+  });
+
+  it("audit.jsonl 存在时报告类型分布（2+ 类条目可读）", async () => {
+    const logDir = path.join(auditFixture.root, ".cortex", "logs");
+    fs.mkdirSync(logDir, { recursive: true });
+    const lines = [
+      { id: "a1", timestamp: 1, type: "config_override", key: "k", source: "s", oldValue: "o", newValue: "n" },
+      { id: "a2", timestamp: 2, type: "config_violation", schemaName: "cross-field", errors: ["e1"] },
+      { id: "a3", timestamp: 3, type: "degradation", source: "smoke", level: "trace", errorType: "Error" },
+      "not-json",
+    ];
+    fs.writeFileSync(
+      path.join(logDir, "audit.jsonl"),
+      lines.map((l) => typeof l === "string" ? l : JSON.stringify(l)).join("\n") + "\n",
+      "utf-8",
+    );
+
+    const checker = new HealthChecker();
+    const report = await checker.diagnose(auditFixture.root, { only: "audit-trail" });
+
+    const check = report.checks[0]!;
+    const dataFinding = check.findings.find((f) => f.id === "AUDIT-DATA-001")!;
+    expect(dataFinding.title).toContain("4 条");
+    expect(dataFinding.title).toContain("3 类");
+    expect(dataFinding.message).toContain("config_override");
+    expect(dataFinding.message).toContain("config_violation");
+    expect(dataFinding.message).toContain("degradation");
+    // 损坏行计入统计并跳过
+    expect(dataFinding.message).toContain("损坏行 1 条");
+    expect(report.status).toBe("healthy");
+  });
+
+  it("auditSpanId 选项经 diagnose 透传并调用 queryBySpan", async () => {
+    const logDir = path.join(auditFixture.root, ".cortex", "logs");
+    fs.mkdirSync(logDir, { recursive: true });
+    const lines = [
+      { id: "a1", timestamp: 1, type: "config_override", key: "k", source: "s", oldValue: "o", newValue: "n", spanId: "span-1" },
+      { id: "a2", timestamp: 2, type: "config_override", key: "k", source: "s", oldValue: "o", newValue: "n", spanId: "span-2" },
+    ];
+    fs.writeFileSync(
+      path.join(logDir, "audit.jsonl"),
+      lines.map((l) => JSON.stringify(l)).join("\n") + "\n",
+      "utf-8",
+    );
+
+    const checker = new HealthChecker();
+    const report = await checker.diagnose(auditFixture.root, { only: "audit-trail", auditSpanId: "span-2" });
+
+    const check = report.checks[0]!;
+    const spanFinding = check.findings.find((f) => f.id === "AUDIT-SPAN-001")!;
+    expect(spanFinding.title).toContain('spanId "span-2" 命中 1 条');
+
+    // 未命中场景：spanId 不存在时命中 0 条（不报错）
+    const miss = await checker.diagnose(auditFixture.root, { only: "audit-trail", auditSpanId: "nope" });
+    const missFinding = miss.checks[0]!.findings.find((f) => f.id === "AUDIT-SPAN-001")!;
+    expect(missFinding.title).toContain('spanId "nope" 命中 0 条');
   });
 });

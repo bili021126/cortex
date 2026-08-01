@@ -46,9 +46,10 @@
 - **用户决策**：CLI 是交互层基底，desktop/tui/webui 是高层——CLI 不是废弃或复活二选一，而是**交互能力底座**，各 UI 端建在其上
 - **重构方向**：① query-loop 直连 LlmAdapter 改为经 engine 链路（streamChat 等正式入口）；② 工具执行接 ConfirmGate/BoundaryGuard（消除旁路）；③ CLI run 命令接 MetaAgent 规划（消除绕过）；④ 交互原语（流式对话/工具调用/规划）下沉 CLI，desktop/tui/webui 消费同一底座
 
-### L2 治理层——暂不激活，真实 LLM 验证先行（用户决策）
+### L2 治理层——已验证（2026-06-20），具备激活条件，emit 保持现状
 - **用户决策**：先不激活——治理组件（硬验证门/零 token 校验/合规）的测试需要跑**真实 LLM 调用**才知道是否有效
-- **重构方向**：① 不投入激活工程；② 先建治理组件真实 LLM 验证环境（manual e2e 体系已存在，补治理组件验证用例）；③ 验证结论出来后再决定激活方式；④ 期间治理事件/组件保持现状，但文档标注“待真实 LLM 验证后激活”（防止“看似运行”误判）
+- **验证结果**：✅ S2-13 三组件真实 LLM 验证 3/3 通过（HardVerificationGate 拦截幻觉 + 拒绝回路 / ZeroTokenValidator 降级语义 / DecisionGateBridge 桥接回路），见 docs/auditing/refactor-phase2-governance-llm-verify-2026-06-20.md
+- **决策**：治理组件行为全部符合设计——无收敛必要；仍不投入激活工程（emit 保持现状），待触发源（GovernanceEventEmitter 生产者）决策后再接激活工程
 
 ### L3 观测层——激活
 - `setTelemetry` 接线 → FileCollector（落盘）+ 读取端（doctor/scripts 查询）

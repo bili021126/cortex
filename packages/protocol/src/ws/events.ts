@@ -217,6 +217,42 @@ export type WSSessionServerEvent =
   | WSSessionEndedEvent
   | WSSessionResumedEvent;
 
+// ─── notification channel ──────────────────────────────────
+
+/**
+ * 通知事件（S2-11）——Urgent/Important 通道通知经 WS 推送。
+ * ackRequired=true 时客户端应以 notification.ack 命令应答。
+ */
+export interface WSNotificationEvent {
+  channel: "notification";
+  data: {
+    type: "notification.pushed";
+    requestId: string;
+    eventType: string;
+    channel: "urgent" | "important" | "routine" | "info";
+    summary: string;
+    detail?: string;
+    sourceAgent?: string;
+    ackRequired: boolean;
+    timestamp: number;
+  };
+}
+
+/** ack 结果回执（notification.ack 命令的应答） */
+export interface WSNotificationAckedEvent {
+  channel: "notification";
+  data: {
+    type: "notification.acked";
+    requestId: string;
+    acked: boolean;
+  };
+}
+
+/** Notification channel 事件联合 */
+export type WSNotificationServerEvent =
+  | WSNotificationEvent
+  | WSNotificationAckedEvent;
+
 // ─── 总联合 ─────────────────────────────────────────────────
 
 /** 所有服务端事件的联合类型——三端渲染的唯一类型锚点 */
@@ -242,7 +278,9 @@ export type WSServerEvent =
   // memory (3 events)
   | WSMemoryServerEvent
   // session (3 events)
-  | WSSessionServerEvent;
+  | WSSessionServerEvent
+  // notification (2 events)
+  | WSNotificationServerEvent;
 
 /** 按 channel 提取事件子集 */
 export type WSServerEventByChannel<C extends WSServerEvent["channel"]> =

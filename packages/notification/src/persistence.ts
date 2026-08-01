@@ -12,6 +12,8 @@
 // ============================================================
 
 import type { NotificationChannel, NotificationEvent } from "./types.js";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 
 // ─── SQLite 数据库最小接口 ──────────────────────────────
 //
@@ -25,6 +27,7 @@ interface SqliteDb {
   prepare(sql: string): SqliteStatement;
   exec(sql: string): void;
   pragma(sql: string): void;
+  close(): void;
 }
 
 /** better-sqlite3 预处理语句的最小接口 */
@@ -152,14 +155,28 @@ export class NotificationPersistence {
     await this._ready;
   }
 
+  /** 关闭数据库连接——释放文件句柄（Windows 下删除目录依赖句柄释放） */
+  close(): void {
+    if (!this.db) return;
+    try {
+      this.db.close();
+    } catch {
+      // 关闭失败不抛——幂等降级
+    }
+    this.db = null;
+    this.available = false;
+  }
+
   // ── 私有 ──────────────────────────────────────────
 
   private async _init(): Promise<void> {
     try {
       // 动态加载 better-sqlite3——避免 must-have 依赖
-      // @ts-expect-error — better-sqlite3 是可选的运行时依赖，不在 package.json 中声明
+      //（@types/better-sqlite3 为 devDependency，类型仅测试期可见）
       const BetterSqlite3 = await import("better-sqlite3");
       const Database = BetterSqlite3.default ?? BetterSqlite3;
+      // 确保父目录存在（与 FileCollector 一致——dbPath 目录可能尚未创建）
+      mkdirSync(dirname(this.dbPath), { recursive: true });
       this.db = new Database(this.dbPath) as unknown as SqliteDb;
       this.db.pragma("journal_mode = WAL");
       this._createTable();

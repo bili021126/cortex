@@ -18,10 +18,18 @@ export interface WSUnsubscribeCommand {
   channels: WSChannel[];
 }
 
+/** 通知应答命令（S2-12）——客户端确认/驳回 urgent 通知 */
+export interface WSNotificationAckCommand {
+  type: "notification.ack";
+  requestId: string;
+  approved: boolean;
+}
+
 /** 客户端可发送的所有命令 */
 export type WSClientCommand =
   | WSSubscribeCommand
   | WSUnsubscribeCommand
   | WSChatStartCommand
   | WSChatCancelCommand
-  | WSGateResolveCommand;
+  | WSGateResolveCommand
+  | WSNotificationAckCommand;

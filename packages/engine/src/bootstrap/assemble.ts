@@ -14,7 +14,7 @@ import type { ConsistencyLayer } from "@cortex/governance";
 import type { BootstrapResult } from "./factory/index.js";
 import type { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import type { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
-import type { AuditTrail, MetricCounter } from "@cortex/telemetry";
+import type { AuditTrail, MetricCounter, HealthCollector } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 // ── Core-2 模块 ──
 import type { TaskRouter } from "../execution/task-router.js";
@@ -23,6 +23,7 @@ import type { SentinelSignalFilter } from "../planning/sentinel-signal-filter.js
 import type { GovernanceEventEmitter } from "../planning/governance-events.js";
 import type { DecisionGateBridge } from "../execution/decision-gate-bridge.js";
 import type { NotificationRuntime } from "../planning/notification-runtime.js";
+import type { NotificationPipe } from "@cortex/notification";
 
 export interface BootstrapEngineResult {
   scheduler: IScheduler;
@@ -57,10 +58,14 @@ export interface BootstrapEngineResult {
   decisionBridge?: DecisionGateBridge;
   /** Core-2: NotificationRuntime —— PipelineObserver → NotificationPipe 桥接 */
   notificationRuntime?: NotificationRuntime;
+  /** S2-10: NotificationPipe —— 四通道通知管线（含磁盘持久化），供消费端订阅/应答 */
+  notificationPipe?: NotificationPipe;
   /** Phase 0: AuditTrail —— 审计跟踪 */
   auditTrail?: AuditTrail;
   /** Phase 0: MetricCounter —— 内存遥测计数器 */
   metricCounter?: MetricCounter;
+  /** Phase 0: HealthCollector —— 降级健康聚合（真实数据源，供健康端点读取） */
+  healthCollector?: HealthCollector;
   /** 优雅关闭——逆序释放所有引擎资源 */
   shutdown(): Promise<void>;
 }

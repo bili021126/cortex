@@ -21,6 +21,9 @@
 // ── 核心入口 ──
 export { HealthChecker, doctor } from "./checker.js";
 
+// ── 观测层检查器（spec S2-8）──
+export { AuditTrailChecker, AUDIT_SPAN_ID_OPTION } from "./audit-checker.js";
+
 // ── 类型导出 ──
 export type {
   FindingSeverity,

@@ -68,6 +68,8 @@ export class NotificationRuntime {
     [PipelineEventType.NodeComplete]: "FYI",
     [PipelineEventType.NodeFailed]: "WARNING",
     [PipelineEventType.SchedulerDone]: "FYI",
+    // S2-4：记忆持久化失败不静默——升为 WARNING（Important 通道）
+    [PipelineEventType.MemoryPersistFailed]: "WARNING",
   };
 
   constructor(

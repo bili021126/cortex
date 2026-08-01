@@ -123,6 +123,8 @@ export interface DoctorOptions {
   output?: string;
   /** 是否输出所有发现（含 info 级别） */
   verbose?: boolean;
+  /** 审计查询 spanId（spec S2-8：audit-trail 检查器按 spanId 过滤） */
+  auditSpanId?: string;
 }
 
 // ============================================================

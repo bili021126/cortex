@@ -28,6 +28,8 @@ import type {
 } from "@cortex/protocol";
 import { PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
+import type { WSNotificationAckCommand } from "@cortex/protocol";
+import { bridgeNotifications, handleNotificationAck } from "./notification-bridge.js";
 
 /** Daemon configuration options */
 export interface DaemonOptions {
@@ -53,6 +55,8 @@ export class CortexDaemon {
   private stateAggregator: StateAggregator | null = null;
   private startedAt = 0;
   private statusTimer: ReturnType<typeof setInterval> | null = null;
+  /** S2-11: 通知→WS 桥接的解除订阅函数（stop 时调用防泄漏） */
+  private _unbridgeNotifications: (() => void) | null = null;
 
   constructor(options: DaemonOptions) {
     this.options = {
@@ -121,6 +125,14 @@ export class CortexDaemon {
       observer.on(PipelinePriority.CRITICAL, handler);
       observer.on(PipelinePriority.HIGH, handler);
       observer.on(PipelinePriority.NORMAL, handler);
+    }
+
+    // S2-11: 通知消费端接线——Urgent/Important 通道通知经 WS 推送（落地可查）
+    const pipe = this.engine.notificationPipe;
+    if (pipe) {
+      this._unbridgeNotifications = bridgeNotifications(pipe, (channel, data) => {
+        this.wsGateway?.broadcast(channel, data);
+      });
     }
 
     // Create WS gateway
@@ -230,6 +242,10 @@ export class CortexDaemon {
       this.engine = null;
     }
 
+    // S2-11: 解除通知→WS 订阅（防 handler 累积泄漏）
+    this._unbridgeNotifications?.();
+    this._unbridgeNotifications = null;
+
     // Close WS gateway
     await this.wsGateway?.stop();
     this.wsGateway = null;
@@ -322,6 +338,17 @@ export class CortexDaemon {
       case "gate.resolve":
         if (this.gateBridge) {
           handleGateCommand(cmd, this.gateBridge);
+        }
+        break;
+      case "notification.ack":
+        // S2-12: ack 回路——客户端应答 urgent 通知，回执确认结果
+        if (this.engine) {
+          const ackCmd = cmd as WSNotificationAckCommand;
+          this.wsGateway?.sendTo(
+            connId,
+            "notification",
+            handleNotificationAck(this.engine.notificationPipe, ackCmd.requestId, ackCmd.approved),
+          );
         }
         break;
       default:
