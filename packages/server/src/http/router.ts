@@ -142,22 +142,32 @@ export class HttpRouter {
   }
 
   private handleDaemonHealth(res: ServerResponse): void {
-    const snapshot = {
-      timestamp: Date.now(),
-      totalDegradations: 0,
-      bySource: {},
-      byLevel: {},
-      recentSources: [],
-      degradedSince: null,
-      daemon: {
-        pid: process.pid,
-        uptimeMs: process.uptime() * 1000,
-        version: "0.1.0",
-        engineReady: true,
-        activeSessions: this.sessionManager.size,
+    // S1-5：接真实快照——与 handleHealth 同源，降级事件经
+    // DegradationBoundary → HealthCollector 聚合，不再返回硬编码零；
+    // engineReady 用 healthCollector 真实存在性判断（不再恒 true）
+    const health = this.engine.healthCollector;
+    const snapshot = health
+      ? health.snapshot()
+      : {
+          timestamp: Date.now(),
+          totalDegradations: 0,
+          bySource: {},
+          byLevel: {},
+          recentSources: [],
+          degradedSince: null,
+        };
+    sendJson(res, 200, {
+      data: {
+        ...snapshot,
+        daemon: {
+          pid: process.pid,
+          uptimeMs: process.uptime() * 1000,
+          version: "0.1.0",
+          engineReady: health !== undefined,
+          activeSessions: this.sessionManager.size,
+        },
       },
-    };
-    sendJson(res, 200, { data: snapshot });
+    });
   }
 
   private handleState(res: ServerResponse): void {

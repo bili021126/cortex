@@ -325,6 +325,11 @@ export class CortexDaemon {
         }
         break;
       default:
+        // S1-6：未知 WS 命令不再静默——console.warn 经 console-bridge →
+        // ErrorReported → 哨兵/通知链路，保证可观测
+        console.warn(
+          `[daemon] 未知 WS 命令类型: ${String((cmd as { type?: unknown }).type ?? "(missing)")}`,
+        );
         break;
     }
   }
