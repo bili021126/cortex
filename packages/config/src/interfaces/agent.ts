@@ -58,10 +58,16 @@ export interface AgentDisplay {
 
 /** Agent 圆桌会议 Persona */
 export interface AgentRoundtable {
-  /** 圆桌标题 */
+  /** 圆桌标题（兼容旧名 roundtableTitle——统一以 title 为准） */
   title: string;
   /** 圆桌 persona 提示词文件路径（相对项目根） */
   persona?: string;
+  /** 圆桌 persona 提示词（内联字符串，与 personaPromptFile 二选一） */
+  personaPrompt?: string;
+  /** 圆桌 persona 提示词文件路径（相对项目根，与 personaPrompt 二选一） */
+  personaPromptFile?: string;
+  /** 圆桌标题（B1 兼容：engine 旧字段名，与 title 同值） */
+  roundtableTitle?: string;
 }
 
 /** agents.json 顶层结构 */

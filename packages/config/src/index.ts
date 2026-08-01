@@ -177,6 +177,10 @@ export {
   TRUST_L0_L1_BONUS,
   TRUST_L2_PENALTY,
   TRUST_L3_PENALTY,
+  TRUST_L0_L1_PENALTY,
+  type TrustRecord,
+  computeTrustScore,
+  shouldAutoApprove,
   // ── FSM Guard ──
   FSM_ARCHIVE_WEIGHT_THRESHOLD,
   FSM_RESTORE_ACCESS_THRESHOLD,

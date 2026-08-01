@@ -4,7 +4,7 @@
 // @file-overview
 // 本文档是 @cortex/llm 的桶导出。
 // 宪法 v2.5.2 裁定：独立为 @cortex/llm 包，零 Engine 运行时依赖，
-// 仅依赖 @cortex/shared 类型。
+// 依赖 @cortex/shared（类型）+ @cortex/resilience + @cortex/telemetry（F1：注释与事实对齐）
 //
 // @contract LlmAdapter 契约
 // - chat(taskNode, model): 向 LLM 发起 chat completion 请求

@@ -14,6 +14,7 @@ import type {
 import {
   SCHEDULER_MAX_REPLAN_PER_NODE,
   SCHEDULER_MAX_TOTAL_REPLANS,
+  EXECUTE_ALL_TIMEOUT_MS,
 } from "./constants/scheduler-params.js";
 
 /** 默认引擎配置——所有值精确匹配当前系统行为 */
@@ -23,7 +24,8 @@ export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
   // P1-2: 与 scheduler 实际消费的 constants 单源对齐（3/10），消除死配置数值漂移
   maxReplanPerNode: SCHEDULER_MAX_REPLAN_PER_NODE,
   maxTotalReplans: SCHEDULER_MAX_TOTAL_REPLANS,
-  executeAllTimeoutMs: 600_000,
+  // A1: 与 constants/engine.json 单源对齐（600s）——不再本地硬编码
+  executeAllTimeoutMs: EXECUTE_ALL_TIMEOUT_MS,
   reactLoopTimeoutMs: 300_000,
   manifoldGateAcquireTimeoutMs: 60_000,
 

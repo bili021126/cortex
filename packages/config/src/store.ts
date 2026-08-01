@@ -18,7 +18,7 @@ import { CONFIG_DOMAINS, loadConfigDomain, validateDomainWithSchema, type Config
 import type { ModelEntry } from "./interfaces/model.js";
 import type { KeyEntry, ContextLimitEntry, KeysContextConfig } from "./interfaces/key-context.js";
 import type { AgentProfile, AgentManifestConfig } from "./interfaces/agent-manifest.js";
-import type { AgentManifest } from "./interfaces/agent.js";
+import type { AgentManifestDecl } from "./interfaces/agent-manifest.js";
 import type { EnvVarEntry, TuningParams, TuningConfig } from "./interfaces/tuning.js";
 
 // ─── 文件写入器类型 ────────────────────────────────────
@@ -294,18 +294,18 @@ export class AgentManifestStore extends ConfigStore<AgentManifestConfig> {
 
   // ── Agent 操作 ──
 
-  /** 获取单个 agent */
-  getAgent(key: string): AgentManifest | undefined {
+  /** 获取单个 agent（声明形态） */
+  getAgent(key: string): AgentManifestDecl | undefined {
     return this.read().agents[key];
   }
 
-  /** 列举所有 agent */
-  listAgents(): Record<string, AgentManifest> {
+  /** 列举所有 agent（声明形态） */
+  listAgents(): Record<string, AgentManifestDecl> {
     return this.read().agents;
   }
 
   /** 添加 agent——自动注册 tags 到 _tags 主表 */
-  addAgent(key: string, manifest: AgentManifest): void {
+  addAgent(key: string, manifest: AgentManifestDecl): void {
     const data = this.read();
     if (data.agents[key]) {
       throw new Error(`[AgentManifestStore] Agent "${key}" 已存在`);
@@ -319,7 +319,7 @@ export class AgentManifestStore extends ConfigStore<AgentManifestConfig> {
   }
 
   /** 更新 agent——自动同步 tags */
-  updateAgent(key: string, patch: Partial<AgentManifest>): void {
+  updateAgent(key: string, patch: Partial<AgentManifestDecl>): void {
     const data = this.read();
     const existing = data.agents[key];
     if (!existing) {
@@ -413,7 +413,7 @@ export class AgentManifestStore extends ConfigStore<AgentManifestConfig> {
   // ── 私有辅助 ──
 
   /** 从 agent 提取标签同步到 _tags */
-  private _syncTagsFromAgent(data: AgentManifestConfig, agent: AgentManifest): void {
+  private _syncTagsFromAgent(data: AgentManifestConfig, agent: AgentManifestDecl): void {
     if (!agent.tags || agent.tags.length === 0) return;
     if (!data._tags) data._tags = [];
     for (const tag of agent.tags) {

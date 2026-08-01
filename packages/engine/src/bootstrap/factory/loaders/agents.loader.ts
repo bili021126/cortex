@@ -10,6 +10,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { resolveConfigDataDir, loadConfigDomain, type ConfigFileReader } from "@cortex/config";
+import type { AgentManifestConfig } from "@cortex/config";
 import { AgentType } from "@cortex/shared";
 import type { CortexAgentsConfig, AgentManifest } from "../types.js";
 
@@ -28,18 +29,29 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
 
   // ── 加载各配置域 ──────────────────────────────
 
-  // 1. Agent 定义（必需）
+  // 1. Agent 定义（必需）——B2：agentManifests 域（L3 声明差异 + profile 展开）
+  //    agent 声明仅携带差异（type/profile/key/model/tags/toolPermissions/...），
+  //    完整字段由 _profiles 预置展开合并。旧 agents.json 域已退役。
   let agentsRaw: Record<string, AgentManifest>;
   try {
-    const loaded = loadConfigDomain<Record<string, AgentManifest>>(
-      "agents",
+    const manifests = loadConfigDomain<AgentManifestConfig>(
+      "agentManifests",
       readFileNode,
       dataDir,
     );
-    if (!loaded) throw new Error("agents 配置为空");
-    agentsRaw = loaded;
+    if (!manifests) throw new Error("agentManifests 配置为空");
+    agentsRaw = {};
+    for (const [id, decl] of Object.entries(manifests.agents)) {
+      const base = decl.profile ? manifests._profiles[decl.profile] : undefined;
+      agentsRaw[id] = {
+        ...(base ?? {}),
+        ...decl,
+        type: decl.type as AgentType,
+        id,
+      } as AgentManifest;
+    }
   } catch (e) {
-    throw new Error(`加载 agents.json 失败: ${String(e)}`, { cause: e });
+    throw new Error(`加载 agent-manifests.json 失败: ${String(e)}`, { cause: e });
   }
 
   // 2. 事件路由（必需）
@@ -87,65 +99,9 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
     searchProviders = undefined;
   }
 
-  // 5. 自审视（可选）
-  let selfExamination: CortexAgentsConfig["selfExamination"];
-  try {
-    selfExamination = loadConfigDomain<CortexAgentsConfig["selfExamination"]>(
-      "selfExamination",
-      readFileNode,
-      dataDir,
-    );
-  } catch (e) {
-    if (typeof process !== "undefined") {
-      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
-    }
-    selfExamination = undefined;
-  }
-
-  // 6. 交叉验证（可选）
-  let crossVerification: CortexAgentsConfig["crossVerification"];
-  try {
-    crossVerification = loadConfigDomain<CortexAgentsConfig["crossVerification"]>(
-      "crossVerification",
-      readFileNode,
-      dataDir,
-    );
-  } catch (e) {
-    if (typeof process !== "undefined") {
-      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
-    }
-    crossVerification = undefined;
-  }
-
-  // 7. 种子记忆（可选）
-  let seedMemories: CortexAgentsConfig["seedMemories"];
-  try {
-    seedMemories = loadConfigDomain<CortexAgentsConfig["seedMemories"]>(
-      "seedMemories",
-      readFileNode,
-      dataDir,
-    );
-  } catch (e) {
-    if (typeof process !== "undefined") {
-      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
-    }
-    seedMemories = undefined;
-  }
-
-  // 8. 治理管线（可选）
-  let governancePipeline: CortexAgentsConfig["governancePipeline"];
-  try {
-    governancePipeline = loadConfigDomain<CortexAgentsConfig["governancePipeline"]>(
-      "governancePipeline",
-      readFileNode,
-      dataDir,
-    );
-  } catch (e) {
-    if (typeof process !== "undefined") {
-      process.stderr.write(`[agents.loader] ${e instanceof Error ? e.message : String(e)}\n`);
-    }
-    governancePipeline = undefined;
-  }
+  // 5-8. D1：自审视/交叉验证/种子记忆/治理管线四域改按需加载——
+  //      当前 engine 运行时零消费（混沌审计负债 4），不再默认加载；
+  //      接消费方时在调用侧 loadConfigDomain 按需获取。
 
   // 9. 工具元数据（可选）
   let tools: CortexAgentsConfig["tools"];
@@ -174,10 +130,7 @@ export function loadAgentsConfig(projectRoot: string, dataDirOverride?: string):
     eventRouting,
     roundtableTemplates,
     searchProviders,
-    selfExamination,
-    crossVerification,
-    seedMemories,
-    governancePipeline,
+    // D1：selfExamination/crossVerification/seedMemories/governancePipeline 按需加载——暂缺省
     tools,
   };
 
@@ -231,9 +184,8 @@ function _validateAgent(id: string, agent: AgentManifest): void {
   if (!agent.role) {
     throw new Error(`${prefix}: 缺少 role`);
   }
-  if (!agent.systemPrompt && !agent.systemPromptFile) {
-    throw new Error(`${prefix}: 缺少 systemPrompt 或 systemPromptFile`);
-  }
+  // B2：systemPrompt 不再必填——agentManifests 域允许轻量 agent（如 api/data）无提示词，
+  //     由 type 声明驱动；有提示词的 agent 在 _resolvePromptFiles 阶段注入。
   if (!Array.isArray(agent.produces)) {
     throw new Error(`${prefix}: produces 必须为数组`);
   }

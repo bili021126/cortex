@@ -1,5 +1,5 @@
 // ============================================================
-// @cortex/engine/memory/memory-store —— MemoryStore 适配器
+// @cortex/memory-store（F1：迁移残留注释修正） —— MemoryStore 适配器
 //
 // @layer 适配器 — 委托 @cortex/memory 后端，引擎层仅挂载 embedding + 权重老化 + maintain。
 // @since v3.0.0 — 存储核心已迁至 @cortex/memory，本适配器桥接引擎层能力。

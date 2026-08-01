@@ -1,33 +1,8 @@
 import { type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type AgentType, type ITrustModel, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3, CONFIRM_GATE_BYPASS_TTL_MS, ReversibilityLevel as RL, type ReversibilityLevel, TrustLevel as TL } from "@cortex/config";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, computeTrustScore, shouldAutoApprove, CONFIRM_GATE_BYPASS_TTL_MS, type TrustRecord, ReversibilityLevel as RL, type ReversibilityLevel, TrustLevel as TL } from "@cortex/config";
 
-// ─── 信任分模型（内联实现——镜像 @cortex/engine/agents/confirm-gate-agent）───
-// 因 scheduler → engine 系反向引用（环形依赖），纯函数内联于此。
-// 同步更新时需与 engine 源保持一致的评分公式。
-
-interface TrustRecord {
-  agentType: string;
-  toolName: string;
-  success: boolean;
-  riskLevel: "L0" | "L1" | "L2" | "L3";
-  timestamp: number;
-}
-
-function computeTrustScore(records: TrustRecord[]): number {
-  if (records.length === 0) return TRUST_BASE_SCORE;
-  let score = TRUST_BASE_SCORE;
-  for (const r of records.slice(-20)) {
-    if (r.success) score += TRUST_L0_L1_BONUS;
-    else score -= r.riskLevel === "L3" ? 15 : r.riskLevel === "L2" ? 8 : 3;
-  }
-  return Math.max(0, Math.min(100, score));
-}
-
-function shouldAutoApprove(score: number, riskLevel: string): boolean {
-  if (riskLevel === "L0" || riskLevel === "L1") return true;
-  if (riskLevel === "L2") return score >= TRUST_AUTO_APPROVE_L2;
-  return score >= TRUST_AUTO_APPROVE_L3;
-}
+// B4：信任分模型单源在 @cortex/config/constants/confirm-gate.ts——
+// 原镜像实现（computeTrustScore/shouldAutoApprove/TrustRecord）已删除，统一 import。
 
 /**
  * 默认确认超时（毫秒）。

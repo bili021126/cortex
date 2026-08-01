@@ -14,5 +14,5 @@ export const CLAIM_LEASE_MS = 120_000;
 /** 单节点 dispatch 超时——与 reactLoopTimeoutMs 取 min */
 export const NODE_DISPATCH_TIMEOUT_MS = 120_000;
 
-/** executeAll 全局超时默认值 */
-export const EXECUTE_ALL_TIMEOUT_MS = 300_000;
+/** executeAll 全局超时默认值（A1：与 defaults/engine.json 单源对齐 600s） */
+export const EXECUTE_ALL_TIMEOUT_MS = 600_000;

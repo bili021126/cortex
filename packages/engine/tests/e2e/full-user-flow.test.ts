@@ -126,7 +126,10 @@ describe("④ MetaAgent 分配 contextScene — TaskNode 携带场景标识", ()
   it("ContextManager 按场景解析策略", () => {
     const registry = new ConfigRegistry();
     registry.register({
-      key: "context-policies",
+      name: "context-policies",
+      fileName: "context-policies.json",
+      required: false,
+      description: "test",
       defaults: {
         "code-review": {
           id: "code-review",
@@ -184,7 +187,10 @@ describe("⑥ ContextManager 注入策略 — Agent 收到正确的检索预设"
   it("ContextManager 为 code 场景返回正确的检索模式", () => {
     const registry = new ConfigRegistry();
     registry.register({
-      key: "context-policies",
+      name: "context-policies",
+      fileName: "context-policies.json",
+      required: false,
+      description: "test",
       defaults: {
         "code-implementation": {
           id: "code-implementation",
@@ -376,7 +382,10 @@ describe("⑪ 切换到 talk 模式 — 加载 persona 不加载工程记忆", (
   it("ContextManager talk 场景策略与 code 不同", () => {
     const registry = new ConfigRegistry();
     registry.register({
-      key: "context-policies",
+      name: "context-policies",
+      fileName: "context-policies.json",
+      required: false,
+      description: "test",
       defaults: {
         "code-implementation": {
           id: "code-implementation",

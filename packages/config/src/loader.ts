@@ -48,6 +48,11 @@ import {
   TUNING_SCHEMA,
   TOOLS_SCHEMA,
   EVENT_ROUTING_SCHEMA,
+  ENGINE_SCHEMA,
+  ENGINE_PLUGINS_SCHEMA,
+  ROUNDTABLE_SCHEMA,
+  COGNITION_SCHEMA,
+  DOCS_SCHEMA,
 } from "./schemas/index.js";
 
 // ─── 域注册 ───────────────────────────────────────────
@@ -78,9 +83,10 @@ export interface JsonSchema {
 /**
  * 配置域描述符——注册一个配置域所需的元信息。
  * 新增配置域只需在 CONFIG_DOMAINS 数组添加一项即可。
+ * B5：与 ConfigRegistry 统一——defaults/envPrefix 为运行时注册字段。
  */
 export interface ConfigDomain {
-  /** 域标识（如 "agents", "engine"） */
+  /** 域标识（如 "agents", "engine"）——registry 的 key 即此值 */
   name: string;
   /** JSON 文件名（如 "agents.json"） */
   fileName: string;
@@ -92,6 +98,10 @@ export interface ConfigDomain {
   schema?: JsonSchema;
   /** 域描述（人类可读） */
   description: string;
+  /** 运行时默认值（ConfigRegistry.get 返回）——B5 统一字段 */
+  defaults?: Record<string, unknown>;
+  /** 环境变量前缀（如 "CORTEX_ENGINE_"）——B5 统一字段，Resolver 预留 */
+  envPrefix?: string;
 }
 
 /**
@@ -110,6 +120,7 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     name: "engine",
     fileName: "engine.json",
     required: false,
+    schema: ENGINE_SCHEMA,
     description: "引擎运行时参数——循环上限、超时、Inspector 配置",
   },
   {
@@ -117,6 +128,7 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "engine-plugins.json",
     required: false,
     dataKey: "plugins",
+    schema: ENGINE_PLUGINS_SCHEMA,
     description: "引擎插件加载清单——Core-2 激活的插件（按依赖拓扑排序）",
   },
   {
@@ -139,6 +151,7 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "roundtable.json",
     required: false,
     dataKey: "templates",
+    schema: ROUNDTABLE_SCHEMA,
     description: "圆桌会议模板列表——多 Agent 协作审议模板",
   },
   {
@@ -184,12 +197,14 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     name: "cognition",
     fileName: "cognition.json",
     required: false,
+    schema: COGNITION_SCHEMA,
     description: "认知配置——Agent 激活矩阵与注意力策略",
   },
   {
     name: "docs",
     fileName: "docs.json",
     required: false,
+    schema: DOCS_SCHEMA,
     description: "文档配置——宪法路径与文档注册表",
   },
   {

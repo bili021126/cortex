@@ -3,12 +3,17 @@
 import { describe, it, expect } from "vitest";
 import { ConfigRegistry } from "@cortex/config";
 
+/** B5：ConfigDomain 单源——register 需要完整域描述 */
+function mkDomain(name: string, defaults: Record<string, unknown> = {}): Record<string, unknown> {
+  return { name, fileName: name + ".json", required: false, description: "test", defaults };
+}
+
 describe("ConfigRegistry", () => {
   // ── 基本操作 ──────────────────────────────────────
 
   it("should register a domain and retrieve it", () => {
     const registry = new ConfigRegistry();
-    registry.register({ key: "test", defaults: { foo: "bar" } });
+    registry.register(mkDomain("test", { foo: "bar" }) as never);
     const retrieved = registry.get("test");
     expect(retrieved).toEqual({ foo: "bar" });
   });
@@ -25,21 +30,21 @@ describe("ConfigRegistry", () => {
 
   it("should list all registered domain keys", () => {
     const registry = new ConfigRegistry();
-    registry.register({ key: "a", defaults: {} });
-    registry.register({ key: "b", defaults: {} });
+    registry.register(mkDomain("a", {}) as never);
+    registry.register(mkDomain("b", {}) as never);
     expect(registry.list()).toEqual(["a", "b"]);
   });
 
   it("should overwrite domain on duplicate register", () => {
     const registry = new ConfigRegistry();
-    registry.register({ key: "dup", defaults: { val: "first" } });
-    registry.register({ key: "dup", defaults: { val: "second" } });
+    registry.register(mkDomain("dup", { val: "first" }) as never);
+    registry.register(mkDomain("dup", { val: "second" }) as never);
     expect(registry.get("dup")).toEqual({ val: "second" });
   });
 
   it("should handle empty key gracefully", () => {
     const registry = new ConfigRegistry();
-    registry.register({ key: "", defaults: { val: 1 } });
+    registry.register(mkDomain("", { val: 1 }) as never);
     expect(registry.has("")).toBe(true);
     expect(registry.get("")).toEqual({ val: 1 });
     expect(registry.list()).toContain("");
@@ -50,7 +55,7 @@ describe("ConfigRegistry", () => {
   it("should handle large number of domains (100+)", () => {
     const registry = new ConfigRegistry();
     for (let i = 0; i < 150; i++) {
-      registry.register({ key: `domain-${i}`, defaults: { index: i } });
+      registry.register(mkDomain(`domain-${i}`, { index: i }) as never);
     }
     expect(registry.list()).toHaveLength(150);
     // 随机抽检
@@ -61,9 +66,9 @@ describe("ConfigRegistry", () => {
 
   it("should handle special characters in domain keys", () => {
     const registry = new ConfigRegistry();
-    registry.register({ key: "my-domain_1", defaults: { a: 1 } });
-    registry.register({ key: "namespace/key", defaults: { b: 2 } });
-    registry.register({ key: " $pecial ", defaults: { c: 3 } });
+    registry.register(mkDomain("my-domain_1", { a: 1 }) as never);
+    registry.register(mkDomain("namespace/key", { b: 2 }) as never);
+    registry.register(mkDomain(" $pecial ", { c: 3 }) as never);
     expect(registry.has("my-domain_1")).toBe(true);
     expect(registry.has("namespace/key")).toBe(true);
     expect(registry.has(" $pecial ")).toBe(true);
@@ -72,7 +77,7 @@ describe("ConfigRegistry", () => {
 
   it("should preserve domain defaults after get() mutation attempt", () => {
     const registry = new ConfigRegistry();
-    registry.register({ key: "safe", defaults: { immutable: true, list: [1, 2, 3] } });
+    registry.register(mkDomain("safe", { immutable: true, list: [1, 2, 3] }) as never);
 
     // 尝试修改 get() 返回的对象
     // 注意：get() 直接返回 domain.defaults 引用，不创建副本
@@ -89,14 +94,13 @@ describe("ConfigRegistry", () => {
 
   it("should accept domain with schema field", () => {
     const registry = new ConfigRegistry();
-    const schema = { type: "object", properties: { x: { type: "number" } } };
-    registry.register({ key: "with-schema", defaults: { x: 42 }, schema });
+    registry.register({ ...mkDomain("with-schema", { x: 42 }), schema: { type: "object" } } as never);
     expect(registry.has("with-schema")).toBe(true);
   });
 
   it("should accept domain with envPrefix field", () => {
     const registry = new ConfigRegistry();
-    registry.register({ key: "with-env", defaults: {}, envPrefix: "MY_" });
+    registry.register({ ...mkDomain("with-env"), envPrefix: "MY_" } as never);
     const retrieved = registry.get("with-env");
     expect(retrieved).toEqual({});
   });

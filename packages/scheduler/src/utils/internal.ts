@@ -5,18 +5,10 @@
  * 对外暴露的类型应定义在对应模块文件中并通过 index.ts 桶导出。
  */
 
-import { ENV_VITEST, ENV_NODE_ENV } from "@cortex/config";
+import { isTestEnv } from "@cortex/config";
 
-/**
- * 测试环境检测 —— 替代散落在各处的 `process.env.ENV_VITEST` 硬编码。
- *
- * 使用方式：
- *   import { isTestEnv } from "../utils/internal.js";
- *   if (!isTestEnv()) { console.error(...); }
- */
-export function isTestEnv(): boolean {
-  return !!process.env[ENV_VITEST] || !!process.env[ENV_NODE_ENV]?.startsWith("test");
-}
+// B3：isTestEnv 单源归位——config 定义，本文件 re-export（兼容既有 import 路径）
+export { isTestEnv };
 
 /**
  * 仅在非测试环境下执行回调。

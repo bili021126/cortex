@@ -142,7 +142,7 @@ export class CortexDaemon {
     });
 
     // Create HTTP server with router
-    const router = new HttpRouter(this.engine, this.sessionManager, this.chatExecutor);
+    const router = new HttpRouter(this.engine, this.sessionManager, this.chatExecutor, this.options.projectRoot);
 
     this.httpServer = new http.Server();
 

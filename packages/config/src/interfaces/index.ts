@@ -28,6 +28,7 @@ export type {
 // ── Agent Manifest ──
 export type {
   AgentProfile,
+  AgentManifestDecl,
   AgentManifestConfig,
 } from "./agent-manifest.js";
 

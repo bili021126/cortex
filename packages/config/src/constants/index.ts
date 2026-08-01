@@ -97,7 +97,11 @@ export {
   TRUST_L0_L1_BONUS,
   TRUST_L2_PENALTY,
   TRUST_L3_PENALTY,
+  TRUST_L0_L1_PENALTY,
   CONFIRM_GATE_BYPASS_TTL_MS,
+  type TrustRecord,
+  computeTrustScore,
+  shouldAutoApprove,
 } from "./confirm-gate.js";
 
 // ── 遥测告警规则 ──

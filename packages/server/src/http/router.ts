@@ -6,6 +6,8 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { EngineHost } from "../engine-host.js";
 import type { SessionManager } from "../session-manager.js";
 import type { ChatExecutor } from "../chat-executor.js";
@@ -20,12 +22,19 @@ export class HttpRouter {
   private readonly engine: EngineHost;
   private readonly sessionManager: SessionManager;
   private readonly chatExecutor: ChatExecutor;
+  private readonly projectRoot: string;
   private stateAggregator: StateAggregator | null = null;
 
-  constructor(engine: EngineHost, sessionManager: SessionManager, chatExecutor: ChatExecutor) {
+  constructor(
+    engine: EngineHost,
+    sessionManager: SessionManager,
+    chatExecutor: ChatExecutor,
+    projectRoot?: string,
+  ) {
     this.engine = engine;
     this.sessionManager = sessionManager;
     this.chatExecutor = chatExecutor;
+    this.projectRoot = projectRoot ?? process.cwd();
   }
 
   /**
@@ -182,8 +191,37 @@ export class HttpRouter {
           engineReady: health !== undefined,
           activeSessions: this.sessionManager.size,
         },
+        // F4：ObservabilityInfo 兑现——S2-9 数据源补齐（telemetry/audit 行数 + 记忆持久化）
+        observability: this._collectObservability(),
       },
     });
+  }
+
+  /** 读取观测层数据源状态（.cortex/telemetry.jsonl / audit.jsonl 行数） */
+  private _collectObservability(): {
+    telemetryFile: string | null;
+    telemetryEntries: number;
+    auditEntries: number;
+    memoryPersisted: boolean;
+  } {
+    const root = this.projectRoot ?? process.cwd();
+    const cortexDir = join(root, ".cortex");
+    const telemetryFile = join(cortexDir, "telemetry.jsonl");
+    const auditFile = join(cortexDir, "audit.jsonl");
+    const countLines = (fp: string): number => {
+      try {
+        if (!existsSync(fp)) return 0;
+        return readFileSync(fp, "utf-8").split("\n").filter((l) => l.trim().length > 0).length;
+      } catch {
+        return 0;
+      }
+    };
+    return {
+      telemetryFile: existsSync(telemetryFile) ? telemetryFile : null,
+      telemetryEntries: countLines(telemetryFile),
+      auditEntries: countLines(auditFile),
+      memoryPersisted: this.engine.memory?.isPersisted === true,
+    };
   }
 
   private handleState(res: ServerResponse): void {

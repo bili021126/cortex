@@ -1,5 +1,5 @@
 // @layer 治理层
-import { TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS } from "@cortex/config";
+import type { TrustRecord } from "@cortex/config";
 import { AgentType } from "@cortex/shared";
 import type { AgentFactoryConfig } from "../execution/agent-factory.js";
 
@@ -12,38 +12,15 @@ import type { AgentFactoryConfig } from "../execution/agent-factory.js";
  * 信任分持续下降 → Agent 降权
  */
 
-export interface TrustRecord {
-  agentType: string;
-  toolName: string;
-  success: boolean;
-  riskLevel: "L0" | "L1" | "L2" | "L3";
-  timestamp: number;
-}
+// B4：TrustRecord/computeTrustScore/shouldAutoApprove 单源在 config/constants/confirm-gate.ts——
+// 本文件 re-export 保持 engine 公共 API 兼容（index.ts:48-49 导出面不变）
+export type { TrustRecord } from "@cortex/config";
+export { computeTrustScore, shouldAutoApprove } from "@cortex/config";
 
 export interface TrustScore {
   score: number;        // 0-100
   recentRecords: TrustRecord[];
   lastUpdated: number;
-}
-
-export function computeTrustScore(records: TrustRecord[]): number {
-  if (records.length === 0) return TRUST_BASE_SCORE;
-  
-  let score = TRUST_BASE_SCORE;
-  for (const r of records.slice(-20)) {
-    if (r.success) score += TRUST_L0_L1_BONUS;
-    else score -= r.riskLevel === "L3" ? 15 : r.riskLevel === "L2" ? 8 : 3;
-  }
-  return Math.max(0, Math.min(100, score));
-}
-
-export function shouldAutoApprove(score: number, riskLevel: string): boolean {
-  // L0-L1 始终自动通过
-  if (riskLevel === "L0" || riskLevel === "L1") return true;
-  // L2: 信任分 ≥ 阈值自动通过
-  if (riskLevel === "L2") return score >= TRUST_AUTO_APPROVE_L2;
-  // L3: 信任分 ≥ 阈值自动通过
-  return score >= TRUST_AUTO_APPROVE_L3;
 }
 
 export function createConfirmGateAgent(systemPrompt?: string): AgentFactoryConfig {

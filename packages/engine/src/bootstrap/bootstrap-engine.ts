@@ -44,7 +44,7 @@ import { WorkerPool } from "../core/worker-pool.js";
 import * as os from "node:os";
 import * as path from "node:path";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type PipelineHandler, type ReadMode, type TaskNode } from "@cortex/shared";
-import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, PRESET_ALERT_RULES, isTestEnv, type EngineConfig } from "@cortex/config";
+import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, PRESET_ALERT_RULES, isTestEnv, loadConfigDomain, type ConfigFileReader, type EngineConfig } from "@cortex/config";
 import { ContextManager } from "@cortex/context-manager";
 import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
@@ -202,28 +202,20 @@ export async function bootstrapEngine(
   // §3 已由 plugin/register-all.js 集中注册完成全部插件注册
 
   // §4 从 engine-plugins.json 读取插件清单（配置驱动，不再硬编码）
+  // E1a：改走 loadConfigDomain（loader 门面 + schema 校验），不再直读文件
   const pluginsDataDir = resolveConfigDataDir();
-  let pluginsJson: { plugins: string[] };
+  const readFileNode: ConfigFileReader = (fp: string) => readFileSync(fp, "utf-8");
+  let pluginNames: string[];
   try {
-    // 文件大小限制 10MB（配置文件上限）
-    const MAX_SIZE = 10 * 1024 * 1024;
-    const _stats = statSync(`${pluginsDataDir}/engine-plugins.json`);
-    if (_stats.size > MAX_SIZE) {
-      throw new Error(`插件清单文件过大: ${_stats.size} bytes`);
-    }
-    try {
-      pluginsJson = JSON.parse(readFileSync(`${pluginsDataDir}/engine-plugins.json`, "utf-8")) as { plugins: string[] };
-    } catch (e) {
-      // G1-5: bootstrap 阶段 observer 可能未就绪，console.warn 是故意的——见 G1-5
-      console.warn(`[bootstrap] engine-plugins.json 解析失败，使用最小插件集: ${e}`);
-      pluginsJson = { plugins: [] };
-    }
+    const loaded = loadConfigDomain<string[]>("enginePlugins", readFileNode, pluginsDataDir);
+    pluginNames = loaded ?? [];
   } catch (e) {
-    console.warn(`[bootstrap] engine-plugins.json 缺失或无法读取，使用最小插件集: ${e instanceof Error ? e.message : String(e)}`);
-    pluginsJson = { plugins: [] };
+    // G1-5: bootstrap 阶段 observer 可能未就绪，console.warn 是故意的——见 G1-5
+    console.warn(`[bootstrap] engine-plugins.json 加载失败，使用最小插件集: ${e instanceof Error ? e.message : String(e)}`);
+    pluginNames = [];
   }
   const pluginConfig: EnginePluginLoadConfig = {
-    plugins: pluginsJson.plugins,
+    plugins: pluginNames,
     engineConfig: options.engineConfig,
     workspaceRoot: wsRoot,
     externals: {

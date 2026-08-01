@@ -5,8 +5,15 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": { "cortex-daemon": "./dist/main.js" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "bin": {
+    "cortex-daemon": "./dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -21,7 +28,8 @@
     "@cortex/protocol": "workspace:*",
     "@cortex/scheduler": "workspace:*",
     "@cortex/shared": "workspace:*",
-    "@cortex/telemetry": "workspace:*"
+    "@cortex/telemetry": "workspace:*",
+    "@cortex/notification": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

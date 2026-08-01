@@ -14,7 +14,10 @@ import { ContextManager } from "../../src/context-manager.js";
 function createManagerWithPolicies(): ContextManager {
   const registry = new ConfigRegistry();
   registry.register({
-    key: "context-policies",
+    name: "context-policies",
+    fileName: "context-policies.json",
+    required: false,
+    description: "test",
     defaults: {
       "code-review": {
         id: "code-review",
@@ -43,7 +46,10 @@ function createManagerWithPolicies(): ContextManager {
 function createManagerEmptyPolicies(): ContextManager {
   const registry = new ConfigRegistry();
   registry.register({
-    key: "context-policies",
+    name: "context-policies",
+    fileName: "context-policies.json",
+    required: false,
+    description: "test",
     defaults: {},
   });
   return new ContextManager(registry);

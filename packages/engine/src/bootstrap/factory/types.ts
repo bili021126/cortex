@@ -1,114 +1,71 @@
 // @layer 规划-执行层
 // ============================================================
-// @cortex/engine 内部 Bootstrap 配置流水线 · 配置引擎类型域
+// @cortex/engine 内部 Bootstrap 配置流水线 · 配置引擎类型
 //（包内模块，非独立包）
 //
 // factory 模块是 Cortex engine 的唯一配置读取入口。
 // 所有运行时配置经此加载、校验、组装。
+//
+// B1 收敛：13 个与 @cortex/config/interfaces 语义一致的接口已删除副本，
+// 统一从 config re-export（单一图纸）；AgentManifest/ActivationEntry 保留
+// AgentType 收窄（config 零依赖约束用 string，engine 运行时需要枚举）。
+// 旧 agents 域容器类型（Cortex*Config 等）随 B2 agentManifests 切换退役。
 // ============================================================
 
 import type { AgentType } from "@cortex/shared";
 import type { RouteTableMap, MergeRule } from "@cortex/notification";
+import type {
+  AgentManifest as ConfigAgentManifest,
+  AgentDisplay,
+  AgentRoundtable,
+  EventRoutingConfig as ConfigEventRoutingConfig,
+  CommitteeRule,
+  RoundtableTemplate,
+  SelfExaminationConfig,
+  CrossVerificationPair,
+  CrossVerificationConfig,
+  GovernancePipelineConfig,
+  AttentionStrategy,
+  ActivationEntry as ConfigActivationEntry,
+  DocEntry,
+} from "@cortex/config";
 
-// ─── agents 配置域类型 ─────────────────────────
+// ─── Agent 域类型（B1：config 单源 + engine 类型收窄） ───
 
-/** 单个 Agent 定义 */
-export interface AgentManifest {
-  /** Agent 标识（如 "ganyu", "albedo"） */
-  id: string;
-  /** Agent 类型 */
-  type: AgentType;
-  /** 角色名（人类可读，格式："短名 — 头衔"） */
-  role: string;
-  /** 系统提示词（内联字符串，与 systemPromptFile 二选一） */
-  systemPrompt?: string;
-  /** 系统提示词文件路径（相对项目根，与 systemPrompt 二选一） */
-  systemPromptFile?: string;
-  /** 展示信息——统一的 emoji + 短名 + 头衔（收敛自 agent-registry.json） */
-  display?: AgentDisplay;
-  /** 圆桌会议 Persona——仅参与圆桌的 Agent 有此字段（收敛自 persona-prompts.json） */
-  roundtable?: AgentRoundtable;
-  /** 生产的事件类型列表 */
-  produces: string[];
-  /** 使用的模型 */
-  model: string;
-  /** API key 分组 */
-  key: string;
-  /** 最大实例数（默认 1） */
-  maxInstances?: number;
-  /** 认领标签（用于 Scheduler 匹配分发） */
-  tags?: string[];
-  /** 工具权限列表（用于 Toolkit 权限校验） */
-  toolPermissions?: string[];
-  /** 记忆查询策略名（如 "code", "review", "analysis"，用于 MemoryStore 检索） */
-  memoryQueryStrategy?: string;
-  /** 规划系统提示词（仅 meta agent 使用，与 planningPromptFile 二选一） */
-  planningPrompt?: string;
-  /** 规划系统提示词文件路径（相对项目根） */
-  planningPromptFile?: string;
-  /** 重规划系统提示词（仅 meta agent 使用，与 replanPromptFile 二选一） */
-  replanPrompt?: string;
-  /** 重规划系统提示词文件路径（相对项目根） */
-  replanPromptFile?: string;
-}
+/** 单个 Agent 定义（B1：config AgentManifest + type 收窄为 AgentType） */
+export type AgentManifest = Omit<ConfigAgentManifest, "type"> & { type: AgentType };
 
-/** Agent 展示信息（统一收敛自此） */
-export interface AgentDisplay {
-  emoji: string;
-  shortName: string;
-  title: string;
-}
+export type { AgentDisplay, AgentRoundtable };
 
-/** Agent 圆桌会议 Persona */
-export interface AgentRoundtable {
-  /** 圆桌 persona 提示词（内联字符串，与 personaPromptFile 二选一） */
-  personaPrompt?: string;
-  /** 圆桌 persona 提示词文件路径（相对项目根） */
-  personaPromptFile?: string;
-  roundtableTitle: string;
-}
-
-/** 事件路由配置 */
-export interface EventRoutingConfig {
-  /** 路由表——eventType → channel + ackRequired */
+/** 事件路由配置（B1：config 单源 + routeTable/mergeRules 收窄为 notification 类型） */
+export type EventRoutingConfig = Omit<ConfigEventRoutingConfig, "routeTable" | "mergeRules"> & {
   routeTable: RouteTableMap;
-  /** 通道配置覆盖 */
-  channels?: Record<string, unknown>;
-  /** 归并规则 */
   mergeRules?: MergeRule[];
-  /** 委员会召集规则 */
-  committeeRules?: CommitteeRule[];
-}
+};
 
-/** 委员会召集规则 */
-export interface CommitteeRule {
-  /** 规则 ID */
-  id: string;
-  /** 触发事件类型 */
-  triggerEvent: string;
-  /** 参与的 Agent 类型列表 */
-  members: AgentType[];
-  /** 是否紧急召集（跳过议程队列） */
-  urgent: boolean;
-}
+export type { CommitteeRule };
 
-/** 圆桌会议模板 */
-export interface RoundtableTemplate {
-  /** 模板名称（用于 `cortex roundtable start <name>`） */
-  name: string;
-  /** 人类可读描述 */
-  description: string;
-  /** 参与 Persona 数 */
-  personas: number;
-  /** 轮次数 */
-  rounds: number;
-  /** 参与的 Agent Persona 名列表 */
-  agents: string[];
-  /** 自定义规则（追加在通用规则之后） */
-  rules?: string[];
-}
+/** 圆桌会议模板（B1：config 单源） */
+export type { RoundtableTemplate };
 
-/** agents 配置域顶层结构 */
+/** 自审视脚本配置（B1：config 单源） */
+export type { SelfExaminationConfig };
+
+/** 交叉验证配对/配置（B1：config 单源） */
+export type { CrossVerificationPair, CrossVerificationConfig };
+
+/** 治理管线配置（B1：config 单源） */
+export type { GovernancePipelineConfig };
+
+/** 注意力策略（B1：config 单源） */
+export type { AttentionStrategy };
+
+/** 文档注册项（B1：config 单源） */
+export type { DocEntry };
+
+// ─── 旧 agents 域容器类型（B2 退役——engine 切 agentManifests 后删除） ───
+
+/** agents 配置域顶层结构（旧域容器——B2 随 agents.json 退役） */
 export interface CortexAgentsConfig {
   agents: Record<string, AgentManifest>;
   eventRouting: EventRoutingConfig;
@@ -128,50 +85,7 @@ export interface CortexAgentsConfig {
   tools?: Record<string, unknown>;
 }
 
-/** 自审视脚本配置 */
-export interface SelfExaminationConfig {
-  description: string;
-  agents: {
-    hard: string[];
-    soft: string[];
-  };
-  consensusAgents: string[];
-  agentTypes: {
-    hard: string[];
-    soft: string[];
-  };
-  outputDir: {
-    hard: string;
-    soft: string;
-  };
-  consensusOutput: string;
-  archiveBase: string;
-  cleanupFiles: string[];
-  templates: {
-    hard: string;
-    soft: string;
-  };
-  reportMaxCharsDefault: number;
-}
-
-/** 交叉验证配对 */
-export interface CrossVerificationPair {
-  reporterKey: string;
-  reporterName: string;
-  reporterEmoji: string;
-  verifierKey: string;
-  verifierName: string;
-  verifierEmoji: string;
-  reportFilePattern: string;
-}
-
-/** 交叉验证配置 */
-export interface CrossVerificationConfig {
-  description: string;
-  pairs: CrossVerificationPair[];
-}
-
-/** 种子记忆配置 */
+/** 种子记忆配置（旧域容器——B2 随 agents.json 退役） */
 export interface SeedMemoriesConfig {
   description: string;
   entries: Array<{
@@ -184,7 +98,7 @@ export interface SeedMemoriesConfig {
   }>;
 }
 
-/** 搜索提供商配置 */
+/** 搜索提供商配置（旧域容器——B2 随 agents.json 退役） */
 export interface SearchProvidersConfig {
   backends: Array<{
     id: string;
@@ -199,45 +113,14 @@ export interface SearchProvidersConfig {
   };
 }
 
-/** 治理管线配置 */
-export interface GovernancePipelineConfig {
-  enabled: boolean;
-  stages: string[];
-  ciGate: {
-    script: string;
-    timeoutMs: number;
-    blockOnFailure: boolean;
-  };
-  triggers: {
-    onAmendmentProposed: boolean;
-    onSchedule: boolean;
-    onCommit: boolean;
-  };
-}
+// ─── cognition 配置域类型（旧域容器——B2 随 agents.json 退役） ───
 
-// ─── cognition 配置域类型 ─────────────────────
-
-/** 激活矩阵项 */
-export interface ActivationEntry {
-  /** Agent 类型 */
+/** 激活矩阵项（B1：config 单源 + agentType 收窄为 AgentType） */
+export type ActivationEntry = Omit<ConfigActivationEntry, "agentType"> & {
   agentType: AgentType;
-  /** 默认是否激活 */
-  active: boolean;
-  /** 取向覆写 */
-  orientation?: string;
-}
+};
 
-/** 注意力策略 */
-export interface AttentionStrategy {
-  /** HCA 权重（近期上下文注意力） */
-  hcaWeight: number;
-  /** CSA 权重（压缩语义注意力） */
-  csaWeight: number;
-  /** 最大记忆条数 */
-  maxMemoryItems: number;
-}
-
-/** cognition 配置域顶层结构 */
+/** cognition 配置域顶层结构（旧域容器——B2 随 agents.json 退役） */
 export interface CortexCognitionConfig {
   /** 激活矩阵 */
   activationMatrix: ActivationEntry[];
@@ -245,21 +128,9 @@ export interface CortexCognitionConfig {
   attention: AttentionStrategy;
 }
 
-// ─── docs 配置域类型 ─────────────────────────
+// ─── docs 配置域类型（旧域容器——B2 随 agents.json 退役） ───
 
-/** 文档注册项 */
-export interface DocEntry {
-  /** 文档路径（相对项目根） */
-  path: string;
-  /** 文档类型 */
-  type: "constitution" | "design" | "audit" | "review" | "governance";
-  /** 版本 */
-  version: string;
-  /** 是否正史文档 */
-  canonical: boolean;
-}
-
-/** docs 配置域顶层结构 */
+/** docs 配置域顶层结构（旧域容器——B2 随 agents.json 退役） */
 export interface CortexDocsConfig {
   /** 宪法路径 */
   constitutionPath: string;

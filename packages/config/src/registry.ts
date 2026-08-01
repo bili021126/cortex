@@ -1,4 +1,6 @@
 import { PRESET_CONTEXT_POLICIES } from "./data/context-policies.js";
+import type { ConfigDomain } from "./loader.js";
+import { CONFIG_DOMAINS } from "./loader.js";
 
 /**
  * @cortex/config — ConfigRegistry
@@ -11,19 +13,8 @@ import { PRESET_CONTEXT_POLICIES } from "./data/context-policies.js";
  * @layer root — 零外部依赖
  */
 
-/**
- * 注册域描述符——向 ConfigRegistry 注册一个配置域所需的元信息。
- */
-export interface ConfigDomain {
-  /** 域唯一标识（如 "context-policies"） */
-  key: string;
-  /** JSON Schema（Phase 3 预留 —— 不引入 Zod 依赖） */
-  schema?: unknown;
-  /** 默认值 */
-  defaults: Record<string, unknown>;
-  /** 环境变量前缀（Phase 4 启用 env override） */
-  envPrefix?: string;
-}
+// B5：ConfigDomain 单源在 loader.ts（name/fileName/required/dataKey/schema/description + defaults/envPrefix）——
+// 本文件不再自建同名接口，registry 与 loader 共用同一域描述类型（registry 的 key 即 name）。
 
 /**
  * ConfigRegistry —— 轻量运行时配置注册表。
@@ -44,12 +35,12 @@ export class ConfigRegistry {
    * 已存在的 key 会被覆盖（最后注册者优先）。
    */
   register(domain: ConfigDomain): void {
-    this._domains.set(domain.key, domain);
+    this._domains.set(domain.name, domain);
   }
-
+  
   /**
    * 获取已注册域的默认值。
-   * @throws 若 key 尚未注册
+   * @throws 当 key 尚未注册
    */
   get<T>(key: string): T {
     const domain = this._domains.get(key);
@@ -59,7 +50,7 @@ export class ConfigRegistry {
         `Available: [${this.list().join(", ")}]`,
       );
     }
-    return domain.defaults as T;
+    return (domain.defaults ?? {}) as T;
   }
 
   /**
@@ -78,16 +69,25 @@ export class ConfigRegistry {
 }
 
 /**
- * 注册内置默认域到 ConfigRegistry。
+ * 注册全部配置域到 ConfigRegistry（D2：registry 成为域目录）。
  *
- * Phase 3 预设域：
- *   - context-policies：上下文策略库
- *
- * @param registry 目标注册表实例
+ * - 18 个 JSON 数据域：defaults 留空——读取走 loader/resolveConfig 门面（阶段 E）
+ * - context-policies：内置常量域
  */
-export function registerDefaultDomains(registry: ConfigRegistry): void {
+export function registerAllDomains(registry: ConfigRegistry): void {
+  for (const domain of CONFIG_DOMAINS) {
+    registry.register(domain);
+  }
   registry.register({
-    key: "context-policies",
+    name: "context-policies",
+    fileName: "context-policies.ts", // 数据为 TS 常量，非 JSON 文件
+    required: false,
+    description: "上下文策略库",
     defaults: PRESET_CONTEXT_POLICIES as unknown as Record<string, unknown>,
   });
+}
+
+/** @deprecated 旧名——请使用 registerAllDomains */
+export function registerDefaultDomains(registry: ConfigRegistry): void {
+  registerAllDomains(registry);
 }
