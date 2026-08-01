@@ -23,7 +23,6 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@cortex/config": "workspace:*",
     "@cortex/shared": "workspace:*"
   },
   "devDependencies": {

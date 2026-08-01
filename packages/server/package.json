@@ -17,13 +17,11 @@
     "@cortex/config": "workspace:*",
     "@cortex/engine": "workspace:*",
     "@cortex/llm": "workspace:*",
-    "@cortex/memory-store": "workspace:*",
     "@cortex/platform": "workspace:*",
     "@cortex/protocol": "workspace:*",
     "@cortex/scheduler": "workspace:*",
     "@cortex/shared": "workspace:*",
-    "@cortex/telemetry": "workspace:*",
-    "@cortex/tools": "workspace:*"
+    "@cortex/telemetry": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",
