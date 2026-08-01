@@ -105,5 +105,7 @@
 ## 阶段 3 提交序列
 
 ```
-<待填——门禁通过后提交>
+0b0dc79d / 2afaf650 （阶段 2 验收 = 阶段 3 起始基线）
+5395bf5b refactor: 阶段3底座打实——protocol契约同步/client底座扩展/API共面加专化/机制门禁
+        （87 files；pre-commit 门禁通过：tsc engine + vitest engine + eslint engine）
 ```
