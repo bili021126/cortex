@@ -495,8 +495,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
   /**
    * CAS (Compare-And-Swap) 状态转换。
-   * 后端为纯内存操作（单线程 JS EventLoop 保证原子性），无 persistFn 回滚风险。
-   * @see FIND-002 — 已核实为误报（不存在 persistFn 异常回滚路径）
+   * 后端为纯内存操作（单线程 JS EventLoop 保证原子性），无 persistFn 异常回滚路径。
    */
   cas(memoryId: string, expected: SemanticState, newState: SemanticState): boolean {
     // 自引用幂等：实际状态与预期一致时才放行
