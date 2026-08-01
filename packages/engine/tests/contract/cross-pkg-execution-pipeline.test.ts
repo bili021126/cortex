@@ -12,9 +12,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AgentType, PipelineEventType, PipelinePriority, type PlatformBridge, type IPipelineObserver, type ObservableEvent, type Tool, type ToolResult, type ToolInvocation, ReversibilityLevel, ToolCategory, type ConfirmationRequest, type ConfirmationResponse } from "@cortex/shared";
+import { AgentType, PipelineEventType, PipelinePriority, type PlatformBridge, type IPipelineObserver, type ObservableEvent, type Tool, type ToolResult, type ToolInvocation, type ConfirmationRequest, type ConfirmationResponse } from "@cortex/shared";
 import { PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { Toolkit } from "@cortex/platform";
+import { ReversibilityLevel, ToolCategory } from "@cortex/config";
 
 // ── Helpers ──────────────────────────────────────────────
 

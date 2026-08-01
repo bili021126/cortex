@@ -5,7 +5,8 @@
 
 import { describe, it, expect } from "vitest";
 import { ConfirmGate } from "@cortex/scheduler";
-import { ReversibilityLevel } from "@cortex/shared";
+import { ReversibilityLevel } from "@cortex/config";
+
 
 describe("ConfirmGate边界", () => {
   it("信任分0时L2需确认", () => {

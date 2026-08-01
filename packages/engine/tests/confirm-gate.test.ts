@@ -1,9 +1,10 @@
 // @ci: unit
 import { describe, it, expect, vi } from "vitest";
 import { ConfirmGate } from "@cortex/scheduler";
-import { ReversibilityLevel, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority } from "@cortex/shared";
 import { PipelineObserver } from "@cortex/scheduler";
 import type { ObservableEvent } from "@cortex/shared";
+import { ReversibilityLevel } from "@cortex/config";
 
 describe("ConfirmGate", () => {
   it("L2/L3 需要确认", () => {

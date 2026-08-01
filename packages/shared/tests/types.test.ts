@@ -8,7 +8,6 @@ import { describe, it, expect } from "vitest";
 import {
   AgentType,
   AgentStatus,
-  ReversibilityLevel,
   TaskNode,
   NodeResult,
   SemanticState,
@@ -20,7 +19,6 @@ import {
   ExecutionReport,
   LockType,
   PlatformKind,
-  RiskDomain,
   TAG_VOCABULARY,
   AGENT_TAGS,
   AGENT_TOOL_PERMISSIONS,
@@ -189,11 +187,6 @@ describe("@cortex/shared v2.0 types", () => {
     expect(PipelinePriority.NORMAL).toBe(2);
   });
 
-  it("ReversibilityLevel L0 read-only, L3 irreversible", () => {
-    expect(ReversibilityLevel.L0).toBe("L0");
-    expect(ReversibilityLevel.L3).toBe("L3");
-  });
-
   it("PlatformKind distinguishes CLI from Electron", () => {
     expect(PlatformKind.CLI).toBe("cli");
     expect(PlatformKind.Electron).toBe("electron");
@@ -202,11 +195,6 @@ describe("@cortex/shared v2.0 types", () => {
   it("LockType Read/Write for file lock manager", () => {
     expect(LockType.Read).toBe("read");
     expect(LockType.Write).toBe("write");
-  });
-
-  it("RiskDomain covers file_write/shell_exec/network/config_change", () => {
-    const domains: RiskDomain[] = ["file_write", "shell_exec", "network", "config_change"];
-    expect(domains).toHaveLength(4);
   });
 
   it("MemoryLink references source-target with link type and weight", () => {

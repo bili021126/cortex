@@ -6,8 +6,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ConfirmGate, TopologicalLayeredDriver, ReplanManager } from "@cortex/scheduler";
-import { ReversibilityLevel } from "@cortex/shared";
-import { SCHEDULER_MAX_TOTAL_REPLANS, SCHEDULER_MAX_DEGRADED_DRAINS } from "@cortex/config";
+
+import { SCHEDULER_MAX_TOTAL_REPLANS, SCHEDULER_MAX_DEGRADED_DRAINS, ReversibilityLevel } from "@cortex/config";
 import type { TaskNode, AgentType } from "@cortex/shared";
 import type { IReplanProvider } from "@cortex/scheduler";
 

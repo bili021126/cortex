@@ -1,10 +1,11 @@
 // @ci: integration
 import { describe, it, expect, beforeEach } from "vitest";
 import { TrustModel } from "@cortex/scheduler";
-import { TrustLevel, type AgentType } from "@cortex/shared";
+import type { AgentType } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { TrustLevel } from "@cortex/config";
 
 // ── 持久化测试辅助：每个测试使用独立 tmpdir，杜绝共享 state 文件竞态 ──
 function makeStatePath(): string {

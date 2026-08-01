@@ -9,7 +9,8 @@
  */
 import { describe, it, expect } from "vitest";
 import { ConfirmGate } from "@cortex/scheduler";
-import { ReversibilityLevel as RL } from "@cortex/shared";
+import { ReversibilityLevel as RL } from "@cortex/config";
+
 
 describe("M1: ConfirmGate handleTimeout 回收 pending", () => {
   it("L0 timeout 移除 pending 并返回 false", () => {

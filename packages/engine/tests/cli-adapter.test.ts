@@ -2,7 +2,8 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { CLIAdapter } from "@cortex/platform";
 import type { ConfirmationRequest } from "@cortex/shared";
-import { ReversibilityLevel } from "@cortex/shared";
+import { ReversibilityLevel } from "@cortex/config";
+
 
 /**
  * CLIAdapter 测试。

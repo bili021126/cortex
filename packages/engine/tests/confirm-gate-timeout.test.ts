@@ -2,7 +2,8 @@
 // P3: ConfirmGate 超时回退场景测试——验证超时自动拒绝、bypass 放行、dispose 安全关闭。
 import { describe, it, expect } from "vitest";
 import { ConfirmGate } from "@cortex/scheduler";
-import { ReversibilityLevel } from "@cortex/shared";
+import { ReversibilityLevel } from "@cortex/config";
+
 
 describe("ConfirmGate 超时回退", () => {
   // ── 超时自动拒绝 ──────────────────────────────

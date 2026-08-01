@@ -2,7 +2,8 @@
 import { describe, it, expect } from "vitest";
 import { ConfirmGate } from "@cortex/scheduler";
 import type { PlatformBridge, ConfirmationRequest, ConfirmationResponse, PlatformContext } from "@cortex/shared";
-import { ReversibilityLevel, PlatformKind } from "@cortex/shared";
+import { PlatformKind } from "@cortex/shared";
+import { ReversibilityLevel } from "@cortex/config";
 
 /**
  * 测试用 MockBridge —— 模拟 PlatformBridge，不依赖真实 stdin。

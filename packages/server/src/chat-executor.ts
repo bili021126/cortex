@@ -17,7 +17,8 @@ import type {
   WSChatCompleteEvent,
   WSChatErrorEvent,
 } from "@cortex/protocol";
-import type { LlmMessage, ReversibilityLevel } from "@cortex/shared";
+import type { LlmMessage } from "@cortex/shared";
+import type { ReversibilityLevel } from "@cortex/config";
 
 const SYSTEM_PROMPT = "[系统指令] 你是 Cortex 工程助手。";
 const READ_ONLY = new Set([

@@ -98,15 +98,10 @@ export type {
 } from "./memory.js";
 
 // ── Toolkit 域 ──
-export {
-  ToolCategory,
-  ReversibilityLevel,
-  toReversibilityClass,
-  TrustLevel,
-  toolNameToRiskDomain,
-} from "./toolkit.js";
+// 注：工具枚举值（ToolCategory/ReversibilityLevel/TrustLevel 及
+// toReversibilityClass/toolNameToRiskDomain/RiskDomain）已单源化至
+// @cortex/config（vocabularies/tool-enums.ts），不再从 shared 导出。
 export type {
-  RiskDomain,
   ToolDefinition,
   ToolInvocation,
   ToolResult,

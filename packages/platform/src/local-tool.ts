@@ -7,7 +7,8 @@
  * @core v3 —— Tool 接口统一抽象的一部分
  */
 
-import type { Tool, ToolHandler, ToolResult, ToolCategory, ReversibilityLevel } from "@cortex/shared";
+import type { Tool, ToolHandler, ToolResult } from "@cortex/shared";
+import type { ToolCategory, ReversibilityLevel } from "@cortex/config";
 
 export class LocalTool implements Tool {
   readonly needsLock: boolean;

@@ -7,9 +7,10 @@
 // @core v3 —— Tool 接口统一：export createTool(ctx): Tool
 // ============================================================
 
-import { ToolCategory, ReversibilityLevel as RL, type Tool, type DirectoryEntry } from "@cortex/shared";
+import type { Tool, DirectoryEntry } from "@cortex/shared";
 import { LocalTool } from "../local-tool.js";
 import type { ToolContext } from "./types.js";
+import { ToolCategory, ReversibilityLevel as RL } from "@cortex/config";
 
 export function createTool(ctx: ToolContext): Tool {
   return new LocalTool(

@@ -1,10 +1,10 @@
-import { AgentType as AT, AgentStatus as AS, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode, ToolCategory, ReversibilityLevel } from "@cortex/shared";
+import { AgentType as AT, AgentStatus as AS, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
 import type { AgentPool } from "@cortex/scheduler";
 import { createAgent, type AgentFactoryConfig } from "../execution/agent-factory.js";
-import { BROWSER_DEFAULT_VIEWPORT } from "@cortex/config";
+import { BROWSER_DEFAULT_VIEWPORT, ToolCategory, ReversibilityLevel } from "@cortex/config";
 import { chromium, type Browser, type Page } from "playwright";
 import { BUILTIN_BROWSER_ACTIONS, buildBrowserDoHandler, type BrowserActionDef } from "./browser-actions.js";
 import { LocalTool } from "@cortex/platform";

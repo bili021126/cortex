@@ -9,9 +9,10 @@
 // @core v3 —— Tool 接口统一：export createTool(ctx): Tool
 // ============================================================
 
-import { ToolCategory, ReversibilityLevel as RL, type Tool } from "@cortex/shared";
+import type { Tool } from "@cortex/shared";
 import { LocalTool } from "../local-tool.js";
 import type { ToolContext } from "./types.js";
+import { ToolCategory, ReversibilityLevel as RL } from "@cortex/config";
 
 const MAX_FILE_SIZE = 500_000; // 500KB
 const MAX_DIFF_LINES = 1_000;

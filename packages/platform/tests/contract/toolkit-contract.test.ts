@@ -8,7 +8,8 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Toolkit } from "@cortex/platform";
-import { ReversibilityLevel as RL, AgentType } from "@cortex/shared";
+import { AgentType } from "@cortex/shared";
+import { ReversibilityLevel as RL } from "@cortex/config";
 
 // ─── Mock ConfirmGate ───────────────────────────────────
 

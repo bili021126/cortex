@@ -20,7 +20,8 @@ import * as path from "node:path";
 import { McpClient, McpToolAdapter } from "@cortex/platform";
 import type { McpServerConfig, McpToolDef } from "@cortex/platform";
 import type { Tool } from "@cortex/shared";
-import { ToolCategory, ReversibilityLevel } from "@cortex/shared";
+import { ToolCategory, ReversibilityLevel } from "@cortex/config";
+
 
 // ════════════════════════════════════════════════════════════
 // 测试配置：5 个无鉴权 MCP Server

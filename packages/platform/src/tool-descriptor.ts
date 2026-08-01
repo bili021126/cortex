@@ -11,7 +11,8 @@
 // requiresGate 标记是否需要 ConfirmGate 拦截。
 // ============================================================
 
-import type { Tool, ReversibilityLevel, AgentType } from "@cortex/shared";
+import type { Tool, AgentType } from "@cortex/shared";
+import type { ReversibilityLevel } from "@cortex/config";
 
 export interface ToolDescriptor {
   tool: Tool;

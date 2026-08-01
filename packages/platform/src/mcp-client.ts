@@ -21,7 +21,8 @@
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
-import { ToolCategory, ReversibilityLevel, type Tool, type ToolResult } from "@cortex/shared";
+import type { Tool, ToolResult } from "@cortex/shared";
+import { ToolCategory, ReversibilityLevel } from "@cortex/config";
 
 // ─── 类型定义 ──────────────────────────────────────
 

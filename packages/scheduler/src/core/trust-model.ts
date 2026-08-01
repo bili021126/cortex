@@ -18,9 +18,10 @@
 //   resetAll() → 全部回到 L1
 // ============================================================
 
-import { TrustLevel, type AgentType, type ITrustModel, type RiskDomain, type TrustEntry, type TrustScore, toolNameToRiskDomain } from "@cortex/shared";
+import type { AgentType, ITrustModel, TrustEntry, TrustScore } from "@cortex/shared";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
+import { TrustLevel, type RiskDomain, toolNameToRiskDomain } from "@cortex/config";
 
 // ─── 内部常量 ──────────────────────────────────────────
 
@@ -289,7 +290,8 @@ export class TrustModel implements ITrustModel {
       const steps = Math.floor(elapsed / DECAY_THRESHOLD_MS);
       const newLevel = Math.max(TrustLevel.L1, entry.level - steps);
       if (newLevel !== entry.level) {
-        entry.level = newLevel;
+        // S1-1 后 TrustEntry.level 为字面量联合（0|1|2|3），Math.max 返回 number，断言收敛
+        entry.level = newLevel as TrustEntry["level"];
         entry.consecutiveAccepts = 0; // 衰减打断连续接受链
         entry.updatedAt = Date.now();
         // 衰减结果落盘（fire-and-forget，失败上报）——同步查询路径无法 await（P2）

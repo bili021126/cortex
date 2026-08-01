@@ -1,5 +1,5 @@
-import { ReversibilityLevel as RL, type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type ReversibilityLevel, type AgentType, type ITrustModel, TrustLevel as TL, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3, CONFIRM_GATE_BYPASS_TTL_MS } from "@cortex/config";
+import { type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type AgentType, type ITrustModel, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS, TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3, CONFIRM_GATE_BYPASS_TTL_MS, ReversibilityLevel as RL, type ReversibilityLevel, TrustLevel as TL } from "@cortex/config";
 
 // ─── 信任分模型（内联实现——镜像 @cortex/engine/agents/confirm-gate-agent）───
 // 因 scheduler → engine 系反向引用（环形依赖），纯函数内联于此。

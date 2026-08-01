@@ -4,71 +4,26 @@
 //
 // @core v3 — 统一 Tool 接口：本地工具与 MCP 工具对上层透明，
 //         Toolkit 不区分来源，统一通过 Tool.execute() 调度。
+//
+// 单源约束：工具枚举值（ToolCategory/ReversibilityLevel/TrustLevel/
+// RiskDomain/toolNameToRiskDomain/toReversibilityClass）唯一源在
+// @cortex/config（packages/config/src/vocabularies/tool-enums.ts）。
+// 本文件受 L0 零依赖约束，仅以字面量联合类型表达契约（与 config
+// 枚举值双向兼容），不再定义任何枚举值。
 // ============================================================
 
 import type { AgentType } from "./agent.js";
 
-/**
- * 工具分类
- * @since Core-2 — 接口固化，后续新增字段需向下兼容
- */
-export enum ToolCategory {
-  Read = "Read",
-  Write = "Write",
-  Shell = "Shell",
-  Search = "Search",
-}
-
-/**
- * 可逆性等级
- * @since Core-2 — 接口固化，后续新增字段需向下兼容
- */
-export enum ReversibilityLevel {
-  L0 = "L0", // 纯读取，永不确认
-  L1 = "L1", // 可逆写入，信任够则放行
-  L2 = "L2", // 不可逆写入，永远确认
-  L3 = "L3", // 不可恢复，永远确认
-}
-
-/**
- * ReversibilityLevel → modification-record 中 ReversibilityClass 的显式映射。
- */
-export function toReversibilityClass(level: ReversibilityLevel): "reversible" | "irreversible" | "meta" {
-  switch (level) {
-    case ReversibilityLevel.L0: return "meta";
-    case ReversibilityLevel.L1: return "reversible";
-    case ReversibilityLevel.L2:
-    case ReversibilityLevel.L3: return "irreversible";
-  }
-}
-
-// ─── 信任模型 ──────────────────────────────────────────────
-
-/** Agent 信任等级——决定 L1 操作是否免确认 */
-export enum TrustLevel {
-  L0 = 0, // 不可信——强制确认
-  L1 = 1, // 冷启动——每次确认
-  L2 = 2, // 可信——连续 5 次接受后晋升
-  L3 = 3, // 高度可信——L1 操作免确认
-}
-
-export type RiskDomain =
-  | "file_write"
-  | "shell_exec"
-  | "network"
-  | "config_change";
-
-/** 工具名 → RiskDomain 映射 */
-export function toolNameToRiskDomain(toolName: string): RiskDomain | null {
-  if (toolName === "write_file" || toolName === "delete_file") return "file_write";
-  if (toolName === "run_shell") return "shell_exec";
-  if (toolName === "web_search" || toolName.startsWith("mcp:")) return "network";
-  return null;
-}
+/** 工具分类（值域：@cortex/config ToolCategory） */
+type ToolCategory = "Read" | "Write" | "Shell" | "Search";
+/** 可逆性等级（值域：@cortex/config ReversibilityLevel） */
+type ReversibilityLevel = "L0" | "L1" | "L2" | "L3";
+/** Agent 信任等级——决定 L1 操作是否免确认（值域：@cortex/config TrustLevel） */
+type TrustLevel = 0 | 1 | 2 | 3;
+/** 风险域（值域：@cortex/config RiskDomain） */
+type RiskDomain = "file_write" | "shell_exec" | "network" | "config_change";
 
 // ─── 工具定义 ──────────────────────────────────────────────
-
-// ToolCategory 定义已迁至 @cortex/config
 
 /** LLM function calling 用的工具声明（不含执行逻辑） */
 export interface ToolDefinition {
@@ -124,8 +79,6 @@ export interface Tool {
   execute(params: Record<string, unknown>): Promise<ToolResult>;
 }
 
-// ─── 可逆性等级（定义已迁至 @cortex/config）───────────────
-
 // ─── 确认门 ────────────────────────────────────────────────
 
 export interface ConfirmationRequest {
@@ -154,8 +107,6 @@ export interface IConfirmGate {
 }
 
 // ─── 信任模型 ──────────────────────────────────────────────
-
-// ─── 信任模型（定义已迁至 @cortex/config）──────────────────
 
 /** 信任条目——内部追踪数据 */
 export interface TrustEntry {

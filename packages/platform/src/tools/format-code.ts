@@ -7,9 +7,10 @@
 // @core v3 —— Tool 接口统一：export createTool(ctx): Tool
 // ============================================================
 
-import { ToolCategory, ReversibilityLevel as RL, type Tool } from "@cortex/shared";
+import type { Tool } from "@cortex/shared";
 import { LocalTool } from "../local-tool.js";
 import type { ToolContext } from "./types.js";
+import { ToolCategory, ReversibilityLevel as RL } from "@cortex/config";
 
 const ALLOWED_FORMATTERS = ["prettier", "eslint", "biome"] as const;
 type Formatter = (typeof ALLOWED_FORMATTERS)[number];

@@ -3,8 +3,8 @@
 
  
 import type { TaskNode, NodeResult, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
-import { AgentType, ReversibilityLevel as RL } from "@cortex/shared";
-import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_LOOP, ENV_CORTEX_DEBUG, ENV_REACT_DEBUG } from "@cortex/config";
+import { AgentType } from "@cortex/shared";
+import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_LOOP, ENV_CORTEX_DEBUG, ENV_REACT_DEBUG, ReversibilityLevel as RL } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";

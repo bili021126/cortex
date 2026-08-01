@@ -1,12 +1,12 @@
-import { ToolCategory, ReversibilityLevel as RL, getAgentToolPermissions, resolveAgentPermissions, LockType, PipelineEventType, PipelinePriority } from "@cortex/shared";
-import type { ToolInvocation, ToolResult, ToolDefinition, Tool, ReversibilityLevel, AgentType, IFileSystemAdapter, AgentContext, IPipelineObserver } from "@cortex/shared";
+import { getAgentToolPermissions, resolveAgentPermissions, LockType, PipelineEventType, PipelinePriority } from "@cortex/shared";
+import type { ToolInvocation, ToolResult, ToolDefinition, Tool, AgentType, IFileSystemAdapter, AgentContext, IPipelineObserver } from "@cortex/shared";
 import type { ConfirmGate } from "@cortex/scheduler";
 import type { IFileLockManager } from "@cortex/shared";
 import { realpathSync } from "node:fs";
 import * as path from "node:path";
 import { NodeFileSystemAdapter } from "./node-fs-adapter.js";
-import { resolveConfig } from "@cortex/config";
-import type { EngineConfig } from "@cortex/config";
+import { resolveConfig, ToolCategory, ReversibilityLevel as RL } from "@cortex/config";
+import type { EngineConfig, ReversibilityLevel } from "@cortex/config";
 import { SearchAggregator } from "./search-aggregator.js";
 import { DdgSearchBackend } from "./search-backend.js";
 import type { SearchResult } from "./search-backend.js";
@@ -330,7 +330,14 @@ export class Toolkit {
 
   /** 获取工具的可逆性等级（JSON 覆盖优先，其次 Tool 内置） */
   reversibilityOf(toolName: string): ReversibilityLevel {
-    return this._toolMeta[toolName]?.level ?? this.tools.get(toolName)?.level ?? RL.L2;
+    const metaLevel = this._toolMeta[toolName]?.level;
+    if (metaLevel !== undefined) return metaLevel;
+    const toolLevel = this.tools.get(toolName)?.level;
+    if (toolLevel !== undefined) {
+      // shared 契约字段为字面量联合类型，映射回 config 枚举值（S1-1 单源）
+      return { L0: RL.L0, L1: RL.L1, L2: RL.L2, L3: RL.L3 }[toolLevel];
+    }
+    return RL.L2;
   }
 
   // ── 路径安全解析 ────────────────────────────

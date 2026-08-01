@@ -14,12 +14,12 @@
  * 不依赖 bootstrapEngine 配置文件（手动装配组件）。
  */
 import { describe, it, expect, vi } from "vitest";
-import { AgentType, PipelineEventType, PipelinePriority, ReversibilityLevel, type ILifecycle, type MemoryEntry, type MemoryWriteInput, type ObservableEvent, type TaskNode } from "@cortex/shared";
+import { AgentType, PipelineEventType, PipelinePriority, type ILifecycle, type MemoryEntry, type MemoryWriteInput, type ObservableEvent, type TaskNode } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { HealthCollector } from "@cortex/telemetry";
 import { MemoryStore } from "@cortex/memory-store";
 import { ContextManager, DomainGateController } from "@cortex/context-manager";
-import { ConfigRegistry } from "@cortex/config";
+import { ConfigRegistry, ReversibilityLevel } from "@cortex/config";
 import { Toolkit } from "@cortex/platform";
 import { createE2eMockFactory } from "../fixtures/mock-llm-factory.js";
 // 引擎内部模块使用相对路径（dist/ 构建产物不完整）

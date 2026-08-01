@@ -14,9 +14,10 @@
 // @core v3 —— Tool 接口统一：export createTool(ctx): Tool
 // ============================================================
 
-import { ToolCategory, ReversibilityLevel as RL, type Tool } from "@cortex/shared";
+import type { Tool } from "@cortex/shared";
 import { LocalTool } from "../local-tool.js";
 import type { ToolContext } from "./types.js";
+import { ToolCategory, ReversibilityLevel as RL } from "@cortex/config";
 
 const FRAMEWORK_DETECT: Array<{ pattern: string; runner: string; args: string[] }> = [
   { pattern: "playwright.config.", runner: "playwright", args: ["test"] },

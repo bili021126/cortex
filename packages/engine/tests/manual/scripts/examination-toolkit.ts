@@ -17,7 +17,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { execSync } from "node:child_process";
 import { LocalTool, Toolkit } from "@cortex/platform";
-import { ReversibilityLevel as RL, ToolCategory } from "@cortex/shared";
+import { ReversibilityLevel as RL, ToolCategory } from "@cortex/config";
+
 
 const MAX_OUTPUT_CHARS = 4000; // 单次工具调用的最大输出字符数
 
