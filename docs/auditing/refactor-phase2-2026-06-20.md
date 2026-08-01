@@ -11,7 +11,7 @@
 | 治理层状态 | 「声明先行空转层」：GovernanceEventEmitter 零生产者，治理组件全部空转 | phase1 调研 |
 | 通知层状态 | 只入不出：NotificationPipe 无持久化、无消费端、无 ack 回路 | phase1 调研 |
 
-阶段 2 起止提交：`<待填>`（本阶段改动未提交，见「提交序列」节）
+阶段 2 起止提交：`7d9def22`（阶段 1 验收归档）→ `0b0dc79d`（阶段 2 验收，pre-commit 门禁通过）
 
 ## 改动清单（对照 spec §2 勾选）
 
@@ -135,10 +135,12 @@
 | 2 | DecisionGateBridge 的 request() 契约目前无调用方 | 治理层零生产者 | 已由缺口对照确认 fail-closed 行为；激活时补注册 |
 | 3 | sharp/ONNX embedding 预加载失败（测试环境） | sharp@0.32.6 原生模块缺失（win32-x64 .node 未安装） | 降级路径生效不阻断；需要时 `npm install --platform=win32 --arch=x64 sharp` |
 | 4 | phase1 遗留 6 项（loop-strategy-registry 假接线 / shared 契约 / doctor gitignore / design-tokens 0 测试 / v4 审计脚本沉淀 / @layer 覆盖率） | 阶段边界外 | 阶段 3 计划 |
-| 5 | 本阶段改动未提交（git） | 待用户确认提交时机 | 按惯例每阶段独立 commit（pre-commit 门禁通过） |
+| 5 | 阶段 2 改动已提交（`0b0dc79d`） | ✅ 已闭合（2026-06-20） | — |
 
 ## 阶段 2 提交序列
 
 ```
-<待填——本阶段改动尚未提交>
+7d9def22 （阶段 1 验收归档 = 阶段 2 起始基线）
+0b0dc79d refactor: 阶段2激活空转层——SQLite持久化/观测接线/通知闭环/治理LLM验证
+        （49 files, +3206/-65；pre-commit 门禁通过：tsc engine + vitest engine 921+1 skipped + eslint engine）
 ```
