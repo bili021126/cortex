@@ -146,13 +146,14 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
     const markers = all.filter((e: MemoryEntry) => e.summary.startsWith("持久化标记-"));
     // CI 诊断（2026-06-20）：Linux 环境偶发 markers=1——失败时输出实际数据定位
     if (markers.length !== 2) {
-      console.error("[T2-diagnose] all:", JSON.stringify(all.map((e) => ({ id: e.id, summary: e.summary }))));
-      console.error("[T2-diagnose] files:", {
+      // 前缀 Error: 让 ci-gate 的失败行过滤（/Error:/i）能打印诊断
+      console.error("Error: [T2-diagnose] all:", JSON.stringify(all.map((e) => ({ id: e.id, summary: e.summary }))));
+      console.error("Error: [T2-diagnose] files:", JSON.stringify({
         db: fs.existsSync(TEMP_DB),
         wal: fs.existsSync(TEMP_DB + "-wal"),
         shm: fs.existsSync(TEMP_DB + "-shm"),
         dbSize: fs.existsSync(TEMP_DB) ? fs.statSync(TEMP_DB).size : -1,
-      });
+      }));
     }
     expect(markers.length).toBe(2);
 
