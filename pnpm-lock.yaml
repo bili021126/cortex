@@ -635,6 +635,9 @@ importers:
       '@cortex/llm':
         specifier: workspace:*
         version: link:../llm
+      '@cortex/notification':
+        specifier: workspace:*
+        version: link:../notification
       '@cortex/platform':
         specifier: workspace:*
         version: link:../platform
