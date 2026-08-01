@@ -1,8 +1,19 @@
 {
-  "version": 1,
+  "version": 2,
   "updatedAt": "2026-06-20",
   "thresholds": {
     "engine": 60,
-    "memory": 30
+    "memory": 30,
+    "cli": 35,
+    "telemetry": 48,
+    "governance": 40,
+    "config": 70,
+    "llm": 63,
+    "scheduler": 27,
+    "memory-store": 45,
+    "resilience": 79,
+    "notification": 71,
+    "context-manager": 73,
+    "shared": 72
   }
 }

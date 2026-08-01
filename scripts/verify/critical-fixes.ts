@@ -37,7 +37,7 @@ async function main() {
   console.log("┌─ C-01: 命令注入防护 ─────────────────────┐");
   try {
     const { HardVerificationGate } = await import(
-      "../../packages/engine/src/core/hard-verification-gate.js"
+      "../../packages/engine/src/planning/hard-verification-gate.js"
     ) as any;
     const gate = new HardVerificationGate();
     const result = gate.check({
@@ -78,7 +78,8 @@ async function main() {
   try {
     const { SimpleCircuitBreaker, CircuitBreakerOpenError }
       = await import("../../packages/resilience/src/index.ts") as any;
-    const cb = new SimpleCircuitBreaker("verify-c04", {
+    const cb = new SimpleCircuitBreaker({
+      name: "verify-c04",
       threshold: 1,
       halfOpenAfterMs: 60000,
     });
@@ -86,7 +87,7 @@ async function main() {
     await cb.call(async () => { throw new Error("fail"); }).catch(() => {});
 
     // 验证 CB 内部状态为 OPEN
-    const state = cb["_state" as any];
+    const state = cb.state;
     check("C-04: 触发失败后状态为 OPEN", state === "OPEN", state);
 
     // 验证第二次调用抛出 CircuitBreakerOpenError

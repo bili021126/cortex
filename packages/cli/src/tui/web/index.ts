@@ -151,6 +151,8 @@ export async function startWebUI(options: StartWebUIOptions): Promise<StartWebUI
   const pipelineHandler = (event: ObservableEvent): void => {
     stateAggregator.onPipelineEvent(event);
     apiRouter.recordEvent(event.type, event.payload);
+    // PanoramaTracker 事件流喂入——消除生产实现零调用点（2026-06 全量审计修复）
+    options.panoramaTracker?.onEvent(event);
   };
   options.observer.on(PipelinePriority.CRITICAL, pipelineHandler);
   options.observer.on(PipelinePriority.HIGH, pipelineHandler);

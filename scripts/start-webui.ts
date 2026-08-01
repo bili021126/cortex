@@ -11,6 +11,7 @@ import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "@cortex/platform";
 import { PipelinePriority } from "@cortex/shared";
 import type { TaskNode } from "@cortex/shared";
+import { PanoramaTracker } from "@cortex/telemetry";
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..");
 
@@ -49,11 +50,16 @@ async function main() {
   console.log("[webui] 启动 WebUI 服务...");
   const port = parseInt(process.env.CORTEX_WEBUI_PORT ?? "3001", 10);
 
+  // ── PanoramaTracker 接线（2026-06 全量审计修复：消除生产零调用点）──
+  // 事件流经 startWebUI 内部 pipelineHandler 自动喂入（tracker.onEvent）
+  const panoramaTracker = new PanoramaTracker();
+
   const { stop } = await startWebUI({
     port,
     observer,
     taskBoard,
     agentPool,
+    panoramaTracker,
   });
 
   console.log(`[webui] 已启动 → http://localhost:${port}`);

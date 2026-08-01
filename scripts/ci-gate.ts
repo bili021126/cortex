@@ -14,6 +14,10 @@
  *   npx tsx scripts/ci-gate.ts --coverage    启用覆盖率阈值门禁（按 scripts/coverage-thresholds.json）
  *   npx tsx scripts/ci-gate.ts --json         机器可读 JSON 输出
  *
+ * 门禁栈：tsc → eslint → critical-fixes（L5 混沌校验）→ vitest → [--coverage]
+ *   L5 混沌校验 = scripts/verify/critical-fixes.ts，零依赖独立脚本，
+ *   守护 Phase 1 止血的 7 个 Critical 修复（命令注入/回滚/断路器/幂等）不回归。
+ *
  * @ci 标签规范（写在测试文件第一行注释中）:
  *   // @ci: unit         CI 必跑（默认值）
  *   // @ci: verify       关键修复验证，CI 必跑（与 unit 同级）
@@ -245,9 +249,9 @@ async function main() {
   const jsonMode = args.includes("--json");
   const withCoverage = args.includes("--coverage");
 
-  // ── 门禁栈：类型检查 → Lint → 修复验证 → 契约验证 → 单元测试 ──
+  // ── 门禁 1/4：类型检查 ──
   if (!dryRun) {
-    console.log("\n🔒 [门禁 1/3] tsc -b 全量增量编译检查...");
+    console.log("\n🔒 [门禁 1/4] tsc -b 全量增量编译检查...");
     try {
       const tscResult = run("pnpm", ["exec", "tsc", "-b", "tsconfig.json"], ROOT);
       if (!tscResult.ok) {
@@ -261,7 +265,7 @@ async function main() {
     }
 
     // ── 门禁 2/4：ESLint ──
-    console.log("\n🔒 [门禁 2/3] eslint packages/**/src — 全包检查...");
+    console.log("\n🔒 [门禁 2/4] eslint packages/**/src — 全包检查...");
     try {
       const eslintResult = run("pnpm", ["exec", "eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
       if (!eslintResult.ok) {
@@ -272,6 +276,21 @@ async function main() {
       console.log("   ✅ lint 通过\n");
     } catch (e) {
       console.error(`❌ eslint 执行异常: ${e}`);
+      process.exit(1);
+    }
+
+    // ── 门禁 3/4：L5 混沌校验（critical-fixes）──
+    // 五层门禁规范中的闭环混沌校验层：独立零依赖脚本，守护 7 个 Critical 修复不回归。
+    console.log("\n🔒 [门禁 3/4] critical-fixes 混沌校验...");
+    try {
+      const cfResult = run("pnpm", ["exec", "tsx", "scripts/verify/critical-fixes.ts"], ROOT);
+      if (!cfResult.ok) {
+        console.error("❌ critical-fixes 混沌校验失败，阻断");
+        process.exit(1);
+      }
+      console.log("   ✅ 混沌校验通过\n");
+    } catch (e) {
+      console.error(`❌ critical-fixes 执行异常: ${e}`);
       process.exit(1);
     }
   }
@@ -320,6 +339,7 @@ async function main() {
     return;
   }
 
+  // ── 门禁 4/4：vitest 按包串行 ──
   console.log(`\n🧪 vitest 按包串行 — ${runAll ? "全量模式" : `unit + verify + contract (${targetFiles.length} 个文件)`}`);
   console.log(`   @ci: llm/integration/e2e/manual → ${skipped.length} 个文件跳过\n`);
 
@@ -386,9 +406,9 @@ async function main() {
   console.log(allOk ? "✅ 门禁通过" : "❌ 门禁未通过");
   console.log(`   Tests: ${totalPassed}/${totalTests} passed` + (skipped.length > 0 ? ` | ${skipped.length} skipped` : ""));
 
-  // ── 门禁 3/3：覆盖率阈值（可选，--coverage）──
+  // ── 门禁 5/5：覆盖率阈值（可选，--coverage）──
   if (withCoverage && allOk) {
-    console.log("\n🔒 [门禁 3/3] 覆盖率阈值检查...");
+    console.log("\n🔒 [门禁 5/5] 覆盖率阈值检查...");
     runCoverageGate();
   } else if (withCoverage && !allOk) {
     console.log("\n⏭ 覆盖率门禁跳过：测试阶段已失败");
