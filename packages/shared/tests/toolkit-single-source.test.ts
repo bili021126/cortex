@@ -11,8 +11,11 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const pkgRoot = path.join(process.cwd(), "packages");
+// 基于本文件位置解析仓库根（ci-gate 按包串行运行时 cwd 为包目录，
+// 不能依赖 process.cwd()——否则路径会拼成 packages/shared/packages/...）
+const pkgRoot = path.join(fileURLToPath(new URL("../../../", import.meta.url)), "packages");
 const read = (rel: string): string =>
   fs.readFileSync(path.join(pkgRoot, rel), "utf8");
 
