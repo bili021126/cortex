@@ -123,8 +123,8 @@ packages/src/
 packages/test-output/
 packages/tests/.test-data/
 # 废弃包（全量图景审计裁决：DELETE）
+# doctor 为活包（cli 消费 + S2-8 audit 查询）——已从忽略清单移除（2026-06-20）
 packages/parser/
-packages/doctor/
 packages/tools/
 # 非项目内容
 3.*剧情.txt
