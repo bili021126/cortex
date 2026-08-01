@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@cortex/client": "workspace:*",
+    "@cortex/design-tokens": "workspace:*",
     "@cortex/shared": "workspace:*",
     "pixi.js": "^7.3.0",
     "pixi-live2d-display": "0.5.0-beta",

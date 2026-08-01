@@ -180,6 +180,9 @@ importers:
       '@cortex/client':
         specifier: workspace:*
         version: link:../client
+      '@cortex/design-tokens':
+        specifier: workspace:*
+        version: link:../design-tokens
       '@cortex/shared':
         specifier: workspace:*
         version: link:../shared

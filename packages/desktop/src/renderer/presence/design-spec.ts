@@ -8,7 +8,12 @@
  *   - 模型: packages/desktop/resources/models/cyrene/Cyrene.model3.json
  *   - 人设: .cortex/lore/cyrene/persona-talk.txt
  *   - 表情名: model3.json Expressions 中定义的中文名（"闪耀"/"问号"/"星星眼"/"圈圈眼"/"墨镜"）
+ *
+ * 色值（§4）：S1-3 收编后直接消费 @cortex/design-tokens（CYRENE_PALETTE），
+ * 不再维护本地副本。
  */
+
+import { CYRENE_PALETTE, type PersonaPalette } from "@cortex/design-tokens";
 
 // ═══════════════════════════════════════════════════
 // §1 表情→Live2D Expression 映射
@@ -193,11 +198,12 @@ export const BOOT_SEQUENCE = {
 } as const;
 
 // ═══════════════════════════════════════════════════
-// §4 PRESENCE palette 精确值
+// §4 PRESENCE palette（收编自 @cortex/design-tokens）
 // ═══════════════════════════════════════════════════
 
 /**
- * 昔涟的 palette——[权威] 逐区取自她的 Live2D 贴图。
+ * 昔涟的 palette——直接引用 @cortex/design-tokens 的 CYRENE_PALETTE
+ * （[权威] 逐区取自她的 Live2D 贴图 texture_0.png）。
  *
  * 来源：packages/desktop/resources/models/cyrene/texture_0.png
  *   primary  #b57edc  ← 主发色·薰衣草紫（披风与发梢主调）
@@ -206,21 +212,15 @@ export const BOOT_SEQUENCE = {
  *   bg.base  #14101c  ← 星空披风最深处的暖紫暗，不是蓝黑
  *   bg.surface #1d1730 ← 深紫底
  *
- * 权威色值集中定义在 @cortex/design-tokens 的 CYRENE_PALETTE，
- * 此处为设计层同步副本，供 presence 文档自查。二者必须一致。
- * 多角色（甘雨/纳西妲）见 design-tokens PRESENCE_PALETTES。
+ * S1-3 收编：双源清零——本地不再维护色值副本，只保留消费层别名。
+ * 多角色（甘雨/纳西妲）见 design-tokens 的 PRESENCE_PALETTES。
  */
 export const PRESENCE_COLORS = {
-  bg: {
-    base:    "#14101c",   // 星空披风最深处的暖紫暗
-    surface: "#1d1730",   // 深紫底
-    elevated:"#282040",
-    overlay: "#332a50",
-  },
-  primary:     "#b57edc", // 主发色·薰衣草紫
-  primaryHover:"#c99cec",
-  primaryMuted:"#b57edc22",
-  accent:      "#8fd9c4", // 薄荷青挑染
-  warmth:      "#fce8dd", // 暖象牙肤色
-  warmthMuted: "#fce8dd22",
-} as const;
+  bg: CYRENE_PALETTE.bg,
+  primary: CYRENE_PALETTE.primary,
+  primaryHover: CYRENE_PALETTE.primaryHover,
+  primaryMuted: CYRENE_PALETTE.primaryMuted,
+  accent: CYRENE_PALETTE.accent,
+  warmth: CYRENE_PALETTE.warmth,
+  warmthMuted: CYRENE_PALETTE.warmthMuted,
+} as const satisfies Pick<PersonaPalette, "bg" | "primary" | "primaryHover" | "primaryMuted" | "accent" | "warmth" | "warmthMuted">;
