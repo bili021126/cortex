@@ -50,7 +50,7 @@ L0 基础层      shared · config · tools · logging · resilience · telemetr
 
 | 包 | 定位 | 依赖 | 边界约束（MUST NOT） |
 |----|------|------|---------------------|
-| `@cortex/llm` | DeepSeek V4 API 适配层——chat/chatStream、七级 reasoning_effort、capabilities 驱动 thinking 判定、LRU 缓存、断路器、限流、审计日志 | resilience, shared | 不含 Agent 逻辑；不含调度逻辑；不直接操作文件系统（审计日志除外）；不依赖 engine/scheduler/platform |
+| `@cortex/llm` | DeepSeek V4 API 适配层——chat/chatStream、七级 reasoning_effort、capabilities 驱动 thinking 判定、LRU 缓存、断路器、限流、审计日志 | resilience, shared, telemetry | 不含 Agent 逻辑；不含调度逻辑；不直接操作文件系统（审计日志除外）；不依赖 engine/scheduler/platform |
 | `@cortex/doctor` | 项目健康诊断——依赖、配置、完整性检查 | tools | 不含修复逻辑（只诊断）；不依赖 L1+ 包 |
 | `@cortex/scheduler` | 四抽象调度引擎——IScheduleStrategy × ILoopDriver × IExecutionModel × IModelRouter | config, shared | 不含 LLM 调用；不含工具执行；通过接口注入 Agent 实现 |
 | `@cortex/memory` | 记忆系统核心——记忆类型定义、生命周期状态机 | config, shared | 不含存储实现（由 memory-store 提供）；不含向量检索 |
@@ -63,7 +63,7 @@ L0 基础层      shared · config · tools · logging · resilience · telemetr
 
 | 包 | 定位 | 依赖 | 边界约束（MUST NOT） |
 |----|------|------|---------------------|
-| `@cortex/memory-store` | 记忆存储与检索——向量检索、图谱推理、SQLite 持久化 | config, fsm-compiler, llm, memory, shared | 不含 Agent 调度逻辑；不含治理规则 |
+| `@cortex/memory-store` | 记忆存储与检索——向量检索、图谱推理、SQLite 持久化 | config, fsm-compiler, llm, memory, shared, telemetry | 不含 Agent 调度逻辑；不含治理规则 |
 | `@cortex/platform` | 平台层——Toolkit 工具注册、权限校验、ReversibilityLevel 分级 | config, scheduler, shared | 不含 LLM 调用；不含 Agent 生命周期管理 |
 
 ## L3 — 领域 / 治理
@@ -80,7 +80,7 @@ L0 基础层      shared · config · tools · logging · resilience · telemetr
 | `@cortex/engine` | ⭐ 运行时内核——Agent 生命周期编排、ReAct 循环、Bootstrap 集成、全部下层子系统协调 | 16 包（见 layer-contract） | 不含 UI 渲染；不含 HTTP 服务；不含 CLI 命令解析 |
 | `@cortex/cli` | 命令行入口 + Ink TUI 终端渲染 + WebUI 后端（/api/v1/*）+ EngineBridge 桥接 | engine 等 | 不含核心算法（委托 engine）；API 层仅做路由/校验/序列化 |
 | `@cortex/server` | 独立 daemon 守护进程——托管 engine + RESTful /api/v1 + WebSocket 网关 + 会话管理（bin: cortex-daemon） | engine, config, llm, memory-store, platform, protocol, scheduler, shared, telemetry, tools | 不含核心算法（委托 engine）；不含 UI 渲染 |
-| `@cortex/desktop` | Electron + Live2D 桌宠（渲染 + 主进程 IPC） | engine, llm, shared | 不含调度逻辑；通过 IPC 委托 engine |
+| `@cortex/desktop` | Electron + Live2D 桌宠（渲染 + 主进程 IPC） | client, design-tokens, shared | 不含调度逻辑；通过 IPC 委托 engine |
 
 ---
 

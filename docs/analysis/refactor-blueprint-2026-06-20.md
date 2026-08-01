@@ -83,12 +83,12 @@
 
 ## 三、实施节奏（三阶段，每阶段独立可验证）
 
-### 阶段 1：真相复位（低风险，1-2 轮）
-1. shared 双源清零（4 消费方改 import）
-2. 死依赖 + 孤儿包 + 幽灵注释清理
-3. daemon 健康端点接真实 HealthCollector
-4. 文档同步：CLI 废弃声明、PACKAGE_POSITIONING 修正、五流六层 @layer 覆盖率如实标注
-5. 验证：门禁五段 + v4 零消费审计对比
+### 阶段 1：真相复位（低风险，1-2 轮）✅ 已完成（2026-06-20）
+1. ✅ shared 双源清零（41 消费方改 import + 守护测试）
+2. ✅ 死依赖 + 孤儿包 + 幽灵注释清理（doctor/memory/server 死依赖删除、design-tokens 收编、@cortex/factory 幽灵注释清除）
+3. ✅ daemon 健康端点接真实 HealthCollector（+ WS 未知命令日志）
+4. ✅ 文档同步：PACKAGE_POSITIONING 三处依赖列修正、五流六层 @layer 覆盖率如实标注（74 文件仅 24 标注）
+5. ✅ 验证：门禁五段 + v4 零消费审计对比（见 docs/auditing/refactor-phase1-2026-06-20.md）
 
 ### 阶段 2：激活空转层（中风险，2-3 轮）
 6. 记忆持久化：FileBasedMemoryStore 接线 + RAG 降级显式化

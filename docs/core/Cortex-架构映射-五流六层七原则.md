@@ -590,6 +590,25 @@ CLI/TUI 输入
 | — | 交互层 | **新增——v2.7.1 没有独立的交互层**，CLI/ButlerAgent 散落在多处 |
 | — | 基础设施层 | **新增——v2.7.1 未独立成层**，config/logging/telemetry 等散落在约束层和内化层 |
 
+### 8.5 @layer 标注覆盖率现状（如实标注）
+
+**2026-06-20 实测**：`packages/engine/src` 共 74 个 .ts 文件，**仅 24 个含 `@layer` 标注**。分布：
+
+| 层标签 | 文件数 | 示例 |
+|--------|--------|------|
+| 治理层 | 9 | notification-runtime / zero-token-validator / governance-events / hard-verification-gate |
+| 规划-执行层 | 9 | agent-factory / react-loop / meta-agent / bootstrap-engine |
+| 技能-工具层 | 2 | （技能注册/工具面） |
+| 记忆层 | 1 | memory-bridge/pipeline |
+| 交互层 | 1 | （权轴桥接） |
+| 执行层 | 1 | 零星标注 |
+| 边界标注（治理层→交互层） | 1 | bootstrap-engine 权轴桥接 |
+
+说明：
+- **“基础设施层”标签 0 命中**——config 包用 `@layer root`、platform 用 `@layer platform`、shared 用 `@layer shared`，尚无统一的基础设施层标签。
+- 剩余 50 个文件无任何 `@layer` 标注（含核心的 scheduler/board/pool 等）——分层归属靠路径约定而非显式声明。
+- **阶段 3（S3-10 机制化）补齐**：统一标签词表（六层 + root/platform/shared/适配器），全部 src 文件头注释按词表标注，并以门禁校验标注-路径一致性。
+
 ---
 
 *归档：开拓者与昔涟（Cyrene），2026-06-19（原始）→ 2026-06-23（v2.0 合并三部曲 + 原则约束矩阵）*
