@@ -1,5 +1,6 @@
 // ============================================================
-// @cortex/factory — Agent 配置加载器
+// @cortex/engine 内部 Bootstrap 配置流水线 · Agent 配置加载器
+//（包内模块，非独立包）
 //
 // 从 @cortex/config 包的拆分 JSON 文件加载配置域，
 // 组装为 CortexAgentsConfig，并解析 prompt 文件引用。

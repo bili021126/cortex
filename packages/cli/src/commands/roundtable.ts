@@ -15,7 +15,7 @@ import type { DocRegistry } from "@cortex/governance";
 import type { LlmMessage, AgentType } from "@cortex/shared";
 import { AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK } from "@cortex/shared";
 
-/** 圆桌会议模板（与 @cortex/factory RoundtableTemplate 同构） */
+/** 圆桌会议模板（与 @cortex/engine bootstrap/factory 的 RoundtableTemplate 同构） */
 interface RoundtableTemplate {
   name: string;
   description: string;

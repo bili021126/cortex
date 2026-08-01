@@ -1,5 +1,6 @@
 // ============================================================
-// @cortex/factory — Bootstrap 主流程
+// @cortex/engine 内部 Bootstrap 配置流水线 · Bootstrap 主流程
+//（包内模块，非独立包）
 //
 // 唯一对外入口：bootstrap(projectRoot)
 //
@@ -24,7 +25,7 @@ import type { BootstrapResult, AgentManifest } from "./types.js";
  *
  * @example
  * ```typescript
- * import { bootstrap } from "@cortex/factory";
+ * import { bootstrap } from "../bootstrap/factory/index.js";
  * const result = bootstrap("/path/to/project");
  * // result.agentDefinitions → 供 Scheduler 注册
  * // result.eventRouting → 供 NotificationPipe 加载

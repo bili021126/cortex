@@ -1,5 +1,6 @@
 // ============================================================
-// @cortex/factory — 跨字段校验器
+// @cortex/engine 内部 Bootstrap 配置流水线 · 跨字段校验器
+//（包内模块，非独立包）
 //
 // 三合一联验：produces ↔ routeTable ↔ channels
 // 在 validateAll() 阶段执行，编译期堵死配置漂移。
