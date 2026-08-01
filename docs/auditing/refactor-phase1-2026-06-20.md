@@ -63,10 +63,67 @@
 
 - memory-store.ts:499 `@see FIND-002 — 已核实为误报` → 改写为简洁说明（保留核实结论“无 persistFn 异常回滚路径”，删除编号引用）
 
-## 验收证据（Task 9 填充）
+## 门禁五段全量回归（Task 9 Step 1）
 
-（对照 spec §1.2 七条验收标准，每条附命令输出/测试结果）
+命令：`npx tsx scripts/ci-gate.ts --coverage` → **CI_GATE_EXIT=0**
 
-## 遗留项
+| 段 | 结果 |
+|---|---|
+| 1/5 tsc -b 全量增量编译 | ✅ 类型检查通过 |
+| 2/5 eslint packages/**/src | ✅ lint 通过 |
+| 3/5 critical-fixes 混沌校验 | ✅ 混沌校验通过 |
+| 4/5 vitest 按包串行（unit+verify+contract，250 文件） | ✅ **3778/3783 passed**（25 个 llm/integration/e2e/manual 跳过）；与基线 3771/3776 对比净增测试（新增守护测试 9 个） |
+| 5/5 覆盖率阈值 | ✅ 14 包全部达标（engine 70.46%/shared 81.63%/config 78.18% 等） |
 
-（未闭合项 + 原因 + 阶段 3 计划）
+> 回归途中抓到真 bug：shared 守护测试路径解析依赖 `process.cwd()`，ci-gate 按包运行时路径拼成 `packages/shared/packages/...` 报 ENOENT（4 测试红）——修复为 `import.meta.url` 基准后全绿（commit `aae30c8b`）。
+
+## v4 零消费审计对比（Task 9 Step 2）
+
+> ⚠️ 口径说明：基线脚本（.tmp-audit-v4.mjs）为临时文件已删且未提交，无法完全复现 3906/40/137/782 的统计口径；重建版（正则近似扫描）数字与基线不可直接对比。以**可验证事实**做聚焦对比：
+
+| 聚焦项 | 基线（2026-06-20 调研） | 现态（重建版审计 + 直接验证） | 判定 |
+|---|---|---|---|
+| design-tokens 孤儿 | DEAD=40 中含其全部 29 导出（0 消费） | 重建版：dead=0 / unconsumed=0；desktop 真实 import CYRENE_PALETTE + PersonaPalette | ✅ 孤儿消除 |
+| shared export * 泄漏 | 调研记录“shared 19 条 export *” | shared/src 全仓 grep `export *` **0 命中** | ✅ LEAK 大头清零 |
+| shared 三 enum 值定义 | 三 enum + 2 函数 + 1 type 在 shared | shared/src 无 `export enum/const` 值定义（仅私有字面量 type alias，非导出）；config/vocabularies/tool-enums.ts 唯一源 | ✅ 值域单源 |
+| shared 导出面 | 231 导出（调研数据附录） | 三 enum + toReversibilityClass/toolNameToRiskDomain/RiskDomain 6 符号移除；重建版 236（含 type 导出口径差异，仅记录趋势） | ✅ 缩减方向 |
+| 重建版全量数字（参考） | 3906/40/137/782（口径不同） | 1991/249/35/312——正则近似，含大量误判（如 cli UI 组件 export 在 dist 消费） | 📝 仅参考 |
+
+## 验收标准逐条证据（spec §1.2）
+
+| # | 验收标准 | 证据 | 状态 |
+|---|---|---|---|
+| 1 | grep 三 enum 在 shared/src 零命中（值定义）；config 唯一源 | shared/src 无 `export enum/const` 值定义（grep 命中 12 处均为私有字面量 type alias/注释）；tool-enums.ts 完整含 3 enum + RiskDomain + 2 函数；守护测试 toolkit-single-source.test.ts 5 断言 | ✅ |
+| 2 | 4 处死依赖删除后 lockfile 通过；doctor/memory/server 源码零 import | commit `c14e1a77`；pnpm install --lockfile-only 通过；三包 tsc EXIT=0 | ✅ |
+| 3 | design-tokens 接 desktop 主题（真实 import）或删除 | commit `041addec`：desktop/package.json 加 workspace 依赖，design-spec.ts import CYRENE_PALETTE + satisfies Pick<PersonaPalette>；renderer+main TSC=0 | ✅ |
+| 4 | daemon /health 返回真实 snapshot；测试断言非硬编码 | commit `96445362`；daemon-health.test.ts 4 断言（真实 totalDegradations=3/engineReady 存在性双向/daemon 段）；server 20/20 | ✅ |
+| 5 | WS 未知命令日志出现于 console-bridge 链路 | daemon.ts default 分支 `console.warn("[daemon] 未知 WS 命令类型: ...")`（S1-6，console-bridge → ErrorReported 链路） | ✅ |
+| 6 | 门禁五段全绿；v4 对比归档 | CI_GATE_EXIT=0（3778/3783 + 覆盖率全达标）；聚焦对比见上节 | ✅ |
+| 7 | 测试流程归档完成 | 本文件（基线/改动清单/验证记录/守护测试/验收证据/遗留项） | ✅ |
+
+## 遗留项（Task 9 Step 4）
+
+| # | 未闭合项 | 原因 | 阶段 3 计划 |
+|---|---|---|---|
+| 1 | loop-strategy-registry setter 死代码（setDefaultPipeline/setDirectPipeline 无调用方，静态字段恒空） | 假接线，A 类核对表第 3 条 | 接线（真实注入管道）或删除 setter + 收敛策略注册 |
+| 2 | shared 接口契约（ToolDefinition 等）留在 shared，值域在 config | S1-1 分层设计：shared 受 L0 零依赖约束不能 import config；字面量联合双向兼容 | S3-11 迁移完成态扫描器上线后统一机制化 |
+| 3 | packages/doctor 在 .gitignore:127 但 14 文件已跟踪 | 历史遗留怪象 | 决策去留（git rm --cached 或移出 ignore） |
+| 4 | design-tokens / desktop 测试仍为 0 | 本阶段未涉及测试补齐 | 蓝图阶段 3 第 14 条“0 测试包补测试” |
+| 5 | v4 审计基线脚本未归档（.tmp 临时文件） | 临时文件惯例 | 阶段 2 前将重建版脚本沉淀到 scripts/ 并固化口径 |
+| 6 | engine/src @layer 覆盖率 24/74 | 阶段 1 仅如实标注 | S3-10 统一标签词表 + 门禁校验 |
+
+## 阶段 1 提交序列
+
+```
+28f188ac （基线 HEAD）
+cdfa0468 docs: 调研/蓝图/spec/计划归档
+bea7947d refactor: shared 三 enum 双源清零
+c14e1a77 chore: 删除 4 处死依赖声明
+041addec refactor: design-tokens 收编
+696ce071 docs: 清除 @cortex/factory 幽灵包注释
+96445362 fix: daemon 健康端点接真实快照 + WS 未知命令日志
+2083ccef docs: PACKAGE_POSITIONING 修正 + @layer 覆盖率标注 + 蓝图勾选
+a238e79c docs: A 类 22 条核对表归档 + FIND-002 清理
+aae30c8b fix: 守护测试路径解析（ci-gate 按包运行兼容）
+<本提交> docs: 阶段 1 验收归档
+```
