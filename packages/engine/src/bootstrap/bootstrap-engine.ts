@@ -30,7 +30,7 @@ import { resilienceFactory } from "../execution/resilience-integration.js";
 import { NotificationRuntime } from "../planning/notification-runtime.js";
 import { ZeroTokenValidator } from "../execution/zero-token-validator.js";
 import { NotificationPipe } from "@cortex/notification";
-import type { IModelRouter } from "@cortex/scheduler";
+import type { IModelRouter, PipelineObserver } from "@cortex/scheduler";
 // 集中注册：触发全部插件注册至 PluginLoader
 import "../plugin/register-all.js";
 import { PluginLoader, type EnginePluginLoadConfig } from "@cortex/plugin-runner";
@@ -42,14 +42,14 @@ import { LlmAdapter as LlmAdapterValue } from "@cortex/llm";
 import { WorkerPool } from "../core/worker-pool.js";
 import * as os from "node:os";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type PipelineHandler, type ReadMode, type TaskNode } from "@cortex/shared";
-import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, type EngineConfig } from "@cortex/config";
+import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, PRESET_ALERT_RULES, type EngineConfig } from "@cortex/config";
 import { ContextManager } from "@cortex/context-manager";
 import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
 import { LifecycleManager } from "../lifecycle/lifecycle-manager.js";
 import { initCyreneMemory } from "./init-memory.js";
 import { setJudgeLlmService, setCompressorLlmService, setResolverLlmService } from "@cortex/memory";
-import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector } from "@cortex/telemetry";
+import { installConsoleBridge, uninstallConsoleBridge, AuditTrail, MetricCounter, SILENT_THRESHOLD, HealthCollector, alertEngine, telemetryController, TelemetryLevel } from "@cortex/telemetry";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { ShutdownOrchestrator } from "../core/shutdown-orchestrator.js";
 
@@ -73,6 +73,41 @@ import type { ILifecycle } from "@cortex/shared";
 import type { BootstrapEngineResult } from "./assemble.js";
 
 export type { BootstrapEngineResult };
+
+// §6.0.0c AlertEngine —— 预置规则注入 + 周期检查
+//   config 的 PRESET_ALERT_RULES 为声明式（threshold/consecutive），
+//   AlertRule 为命令式（condition 回调），此处做声明式 → 命令式适配注入。
+//   触发时落 audit.jsonl（degradation 条目）+ observer 发 TeleDegradationThresholdBreached。
+function setupAlertEngine(auditTrail: AuditTrail, observer: PipelineObserver): NodeJS.Timeout {
+  for (const rule of PRESET_ALERT_RULES) {
+    alertEngine.addRule({
+      metric: rule.metric,
+      level: rule.level === "alert" ? TelemetryLevel.ALERT : TelemetryLevel.NOTICE,
+      message: rule.message,
+      condition: (points) =>
+        "consecutive" in rule
+          ? points.length >= (rule.consecutive ?? 1)
+          : points.some((p) => p.value > rule.threshold),
+    });
+  }
+  return setInterval(() => {
+    for (const point of alertEngine.check(telemetryController)) {
+      auditTrail.recordDegradation("alert-engine", point.level, point.metric);
+      observer.emit({
+        type: PipelineEventType.TeleDegradationThresholdBreached,
+        priority: PipelinePriority.HIGH,
+        payload: {
+          timestamp: Date.now(),
+          source: `alert:${point.metric}`,
+          count: point.value,
+          threshold: Number(point.tags.triggeredCount ?? 0),
+        },
+        timestamp: Date.now(),
+        notificationType: "WARNING",
+      });
+    }
+  }, 60_000);
+}
 
 export interface BootstrapEngineOptions {
   llms: Map<string, LlmAdapter>;
@@ -259,6 +294,12 @@ export async function bootstrapEngine(
       }
     },
   );
+
+  // §6.0.0c AlertEngine —— 预置规则注入 + 周期检查
+  //   config 的 PRESET_ALERT_RULES 为声明式（threshold/consecutive），
+  //   AlertRule 为命令式（condition 回调），此处做声明式 → 命令式适配注入。
+  //   触发时落 audit.jsonl（degradation 条目）+ observer 发 TeleDegradationThresholdBreached。
+  const alertTimer = setupAlertEngine(auditTrail, observer);
 
   const logger = createLogger("bootstrapEngine");
 
@@ -515,6 +556,7 @@ export async function bootstrapEngine(
       }
       // Phase 0 遥测基础设施清理
       metricCounter.stop();
+      clearInterval(alertTimer);
       auditTrail.flush();
       // MemoryStore 归档——在 shutdown orchestrator close 存储之前先 endSession
       if (memory) {

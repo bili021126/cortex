@@ -6,10 +6,10 @@
 
 | 来源 | 命令 | 备注 |
 |------|------|------|
-| `.github/workflows/ci.yml` → `ci-gate.ts` | `npx tsc --noEmit -p tsconfig.json` | 门禁 1/4 步骤，阻断式检查 |
+| `.github/workflows/ci.yml` → `ci-gate.ts` | `pnpm exec tsc -b tsconfig.json` | 门禁 1/5 步骤，阻断式检查 |
 | `.github/workflows/ci.yml` 诊断脚本 | `pnpm exec tsc --listFiles --noEmit` | 仅调试用，非门禁步骤 |
 
-**验证结果**：✅ CI 类型检查通过 `tsc --noEmit -p tsconfig.json` 在根 tsconfig 引用图上执行全量检查，阻断失败。
+**验证结果**：✅ CI 类型检查通过 `tsc -b tsconfig.json` 在根 tsconfig 引用图上执行全量增量编译，阻断失败。
 
 ---
 

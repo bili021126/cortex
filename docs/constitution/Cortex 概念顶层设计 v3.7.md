@@ -24,7 +24,7 @@ Cortex 是一个智能体治理框架。它以 MetaAgent（甘雨）为战术中
 - 调度中枢：`packages/engine/src/core/scheduler.ts`——executeAll() 消费 TaskBoard，驱动拓扑排序 + 逐层执行
 - 测试规模：全仓 vitest 3982 passed / 13 skipped（2026-08-01 实测）；engine 902 passed（pre-commit 口径）
 - 全量 tsc -b 零错误（29 包含 src 编译，含 strict + noUncheckedIndexedAccess）
-- CI 门禁：三段执行（tsc -b → eslint packages --ext .ts,.tsx --max-warnings 0 → vitest unit+verify+contract 按包串行），scripts/ci-gate.ts 驱动
+- CI 门禁：五段执行（tsc -b → eslint packages --ext .ts,.tsx --max-warnings 0 → critical-fixes 混沌校验 → vitest unit+verify+contract 按包串行 → coverage 阈值 [--coverage 显式启用]），scripts/ci-gate.ts 驱动
 - 已知缺陷：七轮深度审查 ~170+ 发现，十轮修复闭合 55 项 + 本轮 P0×4 + P1×23 + P2×42+。P0×4：obliterate 湮灭不落盘（`memory-store.ts` 湮灭后仅清内存不写库）、cyrene load 损坏覆盖（json parse 失败后仍用部分数据覆盖全量）、通知路由链断裂（bootstrap 未调 `loadRoutes()`，治理事件无人订阅）、governance-events 类型逃逸（`as EmittableEvent` 绕过 EventPayloadMap）。23 处 skip 恢复 20 处（3 处保留：LLM 真实调用 2 + Electron 1）。6 项设计决策排入 Core-3（Logger 推广 / execSync→async / WebUI 鉴权 / EventPayloadMap 补完 / Disposable 推广 / shared export*）。
 - Phase 1 已完成：7 个 Critical（C-01~C-07）+ 5 个 P0（R1-R5）+ 3 个 CRITICAL（C8-C10）+ 7 个 HIGH（H1-H7）全部根因修复
 - 核心契约已稳定：EventPayloadMap（agent-pool / task-board 对齐）、write/read/embedBatch 数据完整性、NotificationPipe 持久化初始化、convertToDocument XSS 防护、updateProposalStatus 路径校验、FSM dispatch 执行语义
@@ -435,19 +435,21 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 
 ---
 
-## 十八、CI 门禁——三段执行
+## 十八、CI 门禁——五段执行
 
-**入口**：`scripts/ci-gate.ts`（`npx tsx scripts/ci-gate.ts`）
+**入口**：`scripts/ci-gate.ts`（`npx tsx scripts/ci-gate.ts [--coverage]`）
 
 | 段 | 触发 | 内容 |
 |------|------|------|
 | 1 | tsc -b | `pnpm exec tsc -b tsconfig.json` 全量增量编译——接口漂移、barrel 缺口、strictNullChecks 违反，任一项不通过即阻断 |
 | 2 | eslint | `pnpm exec eslint packages --ext .ts,.tsx --max-warnings 0`——0 错误 0 警告 |
-| 3 | vitest | 按包串行（`--pool=forks`），合并执行 @ci: unit + verify + contract 标签测试 |
+| 3 | critical-fixes | `pnpm exec tsx scripts/verify/critical-fixes.ts`——L5 混沌校验（零依赖独立脚本），守护 7 项 Critical 修复（命令注入/回滚/断路器/幂等）不回归 |
+| 4 | vitest | 按包串行（`--pool=forks`），合并执行 @ci: unit + verify + contract 标签测试 |
+| 5 | coverage | `--coverage` 显式启用——按包 lines% 阈值（`scripts/coverage-thresholds.json` 固化基线），低于阈值阻断 |
 
 @ci 标签体系（写在测试文件首行）：`unit`（默认，CI 必跑）/ `verify`（关键修复验证，与 unit 同级）/ `contract`（跨包接口契约验证，与 unit 同级）/ `llm` / `integration` / `e2e` / `manual` / `stress` / `benchmark`（后六类 CI 跳过）。
 
-**代码事实**：`scripts/ci-gate.ts` 三段顺序执行（tsc → eslint → vitest），vitest 按包分组串行调用，`process.exit(allOk ? 0 : 1)` 真实阻断。
+**代码事实**：`scripts/ci-gate.ts` 五段顺序执行（tsc → eslint → critical-fixes → vitest → coverage[可选]），vitest 按包分组串行调用，`process.exit(allOk ? 0 : 1)` 真实阻断。
 
 ---
 
@@ -459,7 +461,7 @@ Core-2 过渡期催生了 Cortex 演进方法论——九阶段闭环：混沌 �
 | engine 测试 | 902 passed（pre-commit 口径） |
 | tsc -b | 全仓零错误（含 strict + noUncheckedIndexedAccess） |
 | eslint | packages 0 错误（`--ext .ts,.tsx --max-warnings 0` 口径） |
-| CI 执行时间 | ~10min（tsc + vitest 按包串行） |
+| CI 执行时间 | 五段含 coverage 全绿实测（2026-06-20） |
 | 假阳性治理 | 39 文件失败 → 0（vitest alias 标准化）；23 处 skip 恢复 20 处 |
 
 ---

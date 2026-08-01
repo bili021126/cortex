@@ -249,9 +249,9 @@ async function main() {
   const jsonMode = args.includes("--json");
   const withCoverage = args.includes("--coverage");
 
-  // ── 门禁 1/4：类型检查 ──
+  // ── 门禁 1/5：类型检查 ──
   if (!dryRun) {
-    console.log("\n🔒 [门禁 1/4] tsc -b 全量增量编译检查...");
+    console.log("\n🔒 [门禁 1/5] tsc -b 全量增量编译检查...");
     try {
       const tscResult = run("pnpm", ["exec", "tsc", "-b", "tsconfig.json"], ROOT);
       if (!tscResult.ok) {
@@ -264,8 +264,8 @@ async function main() {
       process.exit(1);
     }
 
-    // ── 门禁 2/4：ESLint ──
-    console.log("\n🔒 [门禁 2/4] eslint packages/**/src — 全包检查...");
+    // ── 门禁 2/5：ESLint ──
+    console.log("\n🔒 [门禁 2/5] eslint packages/**/src — 全包检查...");
     try {
       const eslintResult = run("pnpm", ["exec", "eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
       if (!eslintResult.ok) {
@@ -279,9 +279,9 @@ async function main() {
       process.exit(1);
     }
 
-    // ── 门禁 3/4：L5 混沌校验（critical-fixes）──
+    // ── 门禁 3/5：L5 混沌校验（critical-fixes）──
     // 五层门禁规范中的闭环混沌校验层：独立零依赖脚本，守护 7 个 Critical 修复不回归。
-    console.log("\n🔒 [门禁 3/4] critical-fixes 混沌校验...");
+    console.log("\n🔒 [门禁 3/5] critical-fixes 混沌校验...");
     try {
       const cfResult = run("pnpm", ["exec", "tsx", "scripts/verify/critical-fixes.ts"], ROOT);
       if (!cfResult.ok) {
@@ -339,7 +339,7 @@ async function main() {
     return;
   }
 
-  // ── 门禁 4/4：vitest 按包串行 ──
+  // ── 门禁 4/5：vitest 按包串行 ──
   console.log(`\n🧪 vitest 按包串行 — ${runAll ? "全量模式" : `unit + verify + contract (${targetFiles.length} 个文件)`}`);
   console.log(`   @ci: llm/integration/e2e/manual → ${skipped.length} 个文件跳过\n`);
 

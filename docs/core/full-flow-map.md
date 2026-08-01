@@ -668,30 +668,38 @@ Phase 5 在需求中提及（钟离契约监督），当前脚本中未实现独
 
 ### 入口
 
-**文件**: `scripts/ci-gate.ts:143-283`  
+**文件**: `scripts/ci-gate.ts:239-429`  
 **函数**: `main()`  
-**命令**: `npx tsx scripts/ci-gate.ts [--all] [--dry-run] [--json]`
+**命令**: `npx tsx scripts/ci-gate.ts [--all] [--dry-run] [--json] [--coverage]`
 
 ### 步骤列表
 
 | # | 行号 | 函数/逻辑 | 输入 → 输出 |
 |---|-----|----------|------------|
-| **门禁 1/4: tsc** | | | |
-| 1 | L158-168 | `run("npx", ["tsc", "--noEmit", "-p", "tsconfig.json"], ROOT)` | 全量 TypeScript 编译 → ok/not ok |
-| 2 | L160-163 | 失败阻断 | tscResult !ok → `process.exit(1)` |
+| **门禁 1/5: tsc** | | | |
+| 1 | L252-265 | `run("pnpm", ["exec", "tsc", "-b", "tsconfig.json"], ROOT)` | 全量增量编译 → ok/not ok |
+| 2 | L257-259 | 失败阻断 | tscResult !ok → `process.exit(1)` |
+| **门禁 2/5: eslint** | | | |
+| 3 | L267-280 | `run("pnpm", ["exec", "eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT)` | 全包检查 → 0 错误 0 警告 |
+| 4 | L271-274 | 失败阻断 | eslintResult !ok → `process.exit(1)` |
+| **门禁 3/5: critical-fixes 混沌校验** | | | |
+| 5 | L282-295 | `run("pnpm", ["exec", "tsx", "scripts/verify/critical-fixes.ts"], ROOT)` | 7 项 Critical 修复不回归校验 → ok/not ok |
+| 6 | L287-289 | 失败阻断 | cfResult !ok → `process.exit(1)` |
 | **扫描** | | | |
-| 3 | L172 | `scanAllTests()` | `walkTests(packages/)` → `TestFile[]`（含 @ci 标签） |
-| 4 | L174 | 过滤 target | `filter(t => t.ciTag === "unit" \|\| "verify" \|\| "contract")` |
-| 5 | L175 | 标记 skipped | llm/integration/e2e/manual 跳过 |
-| 6 | L178-186 | @ci 标签审计 | 未标注文件 → console.warn（不断路） |
-| **门禁 2-4: vitest** | | | |
-| 7 | L217-222 | 按包分组 | `extractPackageRoot(filePath)` → `packages/<name>` |
-| 8 | L229-265 | 逐包串行 vitest | `pnpm vitest run --pool=threads` → 解析 passed/total |
-| 9 | L243-245 | 大包单线程 | files.length > 40 → `--poolOptions.threads.maxThreads=1` |
+| 7 | L299 | `scanAllTests()` | `walkTests(packages/)` → `TestFile[]`（含 @ci 标签） |
+| 8 | L301 | 过滤 target | `filter(t => t.ciTag === "unit" \|\| "verify" \|\| "contract")` |
+| 9 | L302 | 标记 skipped | llm/integration/e2e/manual 跳过 |
+| 10 | L304-315 | @ci 标签审计 | 未标注文件 → `process.exit(1)` 阻断 |
+| **门禁 4/5: vitest** | | | |
+| 11 | L346-353 | 按包分组 | `extractPackageRoot(filePath)` → `packages/<name>` |
+| 12 | L359-403 | 逐包串行 vitest | `pnpm vitest run --pool=forks` → 解析 passed/total |
+| 13 | L376-378 | 大包单进程 | files.length > 40 → `--poolOptions.forks.maxForks=1` |
+| **门禁 5/5: coverage（可选 --coverage）** | | | |
+| 14 | L409-415 | `runCoverageGate()` | 按包 lines% ≥ 阈值（`scripts/coverage-thresholds.json` 固化基线） |
 | **结果** | | | |
-| 10 | L267-269 | 汇总输出 | 门禁通过/未通过 + Tests: passed/total |
+| 15 | L405-407 | 汇总输出 | 门禁通过/未通过 + Tests: passed/total |
 
-### @ci 标签体系 (L32)
+### @ci 标签体系 (L20-33)
 
 | 标签 | CI 行为 | 说明 |
 |------|--------|------|
@@ -703,7 +711,7 @@ Phase 5 在需求中提及（钟离契约监督），当前脚本中未实现独
 | `e2e` | 跳过 | 端到端测试 |
 | `manual` | 永远不跑 | 人工触发 |
 
-### vitest 输出解析 (L121-132)
+### vitest 输出解析 (L146-165)
 
 ```typescript
 // 兼容新旧两种 vitest 格式
@@ -712,18 +720,22 @@ const re = /Tests\s+(?:\d+\s+(?:failed|skipped)\s+\|\s+)?(\d+)\s+passed(?:\s+\|\
 
 ### 关键分支点
 
-1. **--dry-run** (`ci-gate.ts:188-211`): 仅扫描 @ci 标签，不执行
-2. **--all** (`ci-gate.ts:151`): 全量模式（包括 llm/integration 等）
-3. **--json** (`ci-gate.ts:271-280`): 机器可读 JSON 输出
-4. **tsc 失败阻断** (`ci-gate.ts:160-163`): 第一步失败 → 直接 exit(1)
-5. **空包跳过** (`ci-gate.ts:234-238`): 某包无 target 测试 → 打印跳过信息
+1. **--dry-run** (`ci-gate.ts:317-340`): 仅扫描 @ci 标签，不执行
+2. **--all** (`ci-gate.ts:247`): 全量模式（包括 llm/integration 等）
+3. **--json** (`ci-gate.ts:417-426`): 机器可读 JSON 输出
+4. **tsc 失败阻断** (`ci-gate.ts:257-259`): 第一步失败 → 直接 exit(1)
+5. **eslint 失败阻断** (`ci-gate.ts:271-274`): 第二步失败 → 直接 exit(1)
+6. **critical-fixes 失败阻断** (`ci-gate.ts:287-289`): 第三步失败 → 直接 exit(1)
+7. **空包跳过** (`ci-gate.ts:364-369`): 某包无 target 测试 → 打印跳过信息
+8. **coverage 跳过** (`ci-gate.ts:413-415`): 测试阶段已失败 → 覆盖率门禁跳过
 
 ### 已知问题
 
 - tsc 是全量编译（非增量），大项目耗时较长
 - vitest 按包串行，未利用并行能力（历史原因：workspace 模式 OOM）
-- @ci 标签缺失仅 warn，不阻断（渐进式推行）
+- @ci 标签缺失直接阻断（严格推行）
 - 无 e2e 验证环节（`@ci: e2e` 直接跳过）
+- coverage 门禁默认跳过，需 `--coverage` 显式启用
 
 ### E2E 覆盖
 
