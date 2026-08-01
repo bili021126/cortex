@@ -1,3 +1,4 @@
+// @layer 规划-执行层
 /**
  * MetaAgentReplanAdapter —— 将 MetaAgent 适配为 IReplanProvider 接口。
  *

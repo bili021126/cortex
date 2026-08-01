@@ -22,12 +22,14 @@ export class CortexConnection {
     this.http = new CortexHttpClient({
       baseUrl: `${protocol}://${host}:${port}`,
       headers: config?.headers,
+      timeoutMs: config?.timeoutMs,
     });
 
     this.ws = new CortexWSClient({
       url: `${wsProtocol}://${host}:${port}`,
       channels: config?.channels,
       reconnect: config?.reconnect,
+      sendQueueLimit: config?.sendQueueLimit,
       WebSocketImpl: config?.WebSocketImpl,
     });
   }

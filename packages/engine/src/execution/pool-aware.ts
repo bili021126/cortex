@@ -1,3 +1,4 @@
+// @layer 执行层
 import { AgentStatus as AS, type AgentStatus, type SafeErrorReporter } from "@cortex/shared";
 import { AgentPool as AgentPoolClass, type AgentPool } from "@cortex/scheduler";
 import { isTestEnv } from "@cortex/config";

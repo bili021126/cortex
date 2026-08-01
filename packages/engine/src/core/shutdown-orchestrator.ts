@@ -1,3 +1,4 @@
+// @layer 规划-执行层
 /**
  * core/shutdown-orchestrator.ts — 统一生命周期编排器
  *

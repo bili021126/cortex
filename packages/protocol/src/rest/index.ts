@@ -1,7 +1,6 @@
 export * from "./pagination.js";
 export * from "./state.js";
 export * from "./nodes.js";
-export * from "./agents.js";
 export * from "./health.js";
 export * from "./execute.js";
 export * from "./events.js";
@@ -9,3 +8,4 @@ export * from "./config.js";
 export * from "./chat.js";
 export * from "./memory.js";
 export * from "./sessions.js";
+export * from "./capabilities.js";

@@ -1,3 +1,4 @@
+// @layer 规划-执行层
 /**
  * lifecycle/lifecycle-manager.ts — 生命周期编排器
  *

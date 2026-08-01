@@ -299,8 +299,9 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
       let completedCount = 0;
       const totalNodes = nodes.length;
 
-      const unsubTui = this.conn.ws.on("tui", (msg: { data: Record<string, unknown> }) => {
-        const data = msg.data;
+      const unsubTui = this.conn.ws.on("tui", (msg) => {
+        // tui 通道为预留通道（B1 收窄后 data: unknown）——此处显式断言为事件负载
+        const data = msg.data as Record<string, unknown>;
         onEvent(data);
 
         if (data.type === "node_complete") {

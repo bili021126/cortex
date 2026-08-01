@@ -941,6 +941,67 @@ function main(): number {
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+ * 源码 import 扫描（D2：未声明隐式依赖检测）
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+const IMPORT_RE = /(?:from\s+["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\))/g;
+
+/** 扫描包 src 下所有 .ts 文件的 @cortex/* import 目标（相对路径 import 不追踪） */
+export function scanSrcImports(pkgRoot: string): Set<string> {
+  const targets = new Set<string>();
+  const walk = (dir: string): void => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir)) {
+      if (entry.startsWith(".") || entry === "node_modules" || entry === "dist" || entry === "coverage") continue;
+      const full = join(dir, entry);
+      const st = statSync(full);
+      if (st.isDirectory()) {
+        walk(full);
+      } else if (entry.endsWith(".ts")) {
+        const src = readFileSync(full, "utf-8");
+        for (const m of src.matchAll(IMPORT_RE)) {
+          const target = m[1] ?? m[2];
+          if (target?.startsWith("@cortex/")) {
+            const segs = target.split("/");
+            targets.add(`${segs[0]}/${segs[1]}`);
+          }
+        }
+      }
+    }
+  };
+  walk(join(pkgRoot, "src"));
+  return targets;
+}
+
+/**
+ * 检测未在 package.json（dependencies + devDependencies）声明的隐式 @cortex/* 依赖。
+ * 即「源码 import 了但声明缺失」——package.json 声明与真实引用的交叉校验。
+ */
+export function detectUndeclaredImports(allPkgs: PkgInfo[]): { pkgId: string; imported: string }[] {
+  const result: { pkgId: string; imported: string }[] = [];
+  for (const pkg of allPkgs) {
+    if (pkg.isRoot) continue;
+    // PkgInfo.filePath 指向 package.json 本身——src 目录为同目录下的 src/
+    const pkgJson = JSON.parse(readFileSync(pkg.filePath, "utf-8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const declared = new Set([
+      ...Object.keys(pkgJson.dependencies ?? {}),
+      ...Object.keys(pkgJson.devDependencies ?? {}),
+    ]);
+    const imports = scanSrcImports(join(dirname(pkg.filePath), "src"));
+    for (const imported of imports) {
+      if (imported === "@cortex/tools") continue; // tools 自引用豁免
+      if (!declared.has(imported)) {
+        result.push({ pkgId: pkg.id, imported });
+      }
+    }
+  }
+  return result.sort((a, b) => a.pkgId.localeCompare(b.pkgId));
+}
+
 /**
  * 检测当前模块是否作为 CLI 入口被直接运行。
  * 使用 import.meta.url 与 process.argv[1] 的绝对路径比较，

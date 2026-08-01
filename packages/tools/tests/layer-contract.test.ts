@@ -22,6 +22,7 @@ import {
   buildEdges,
   detectCycles,
   detectLayerViolations,
+  detectUndeclaredImports,
   CORTEX_LAYER_CONTRACT,
 } from "../src/index.js";
 
@@ -78,6 +79,36 @@ describe("依赖分层契约 — 单向分层", () => {
     expect(
       rendered,
       `检测到分层违规（低层反向依赖高层）:\n  ${rendered.join("\n  ")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("依赖分层契约 — includeDev 扩展（D2）", () => {
+  it("devDependencies 纳入后仍无分层违规", () => {
+    const devEdges = buildEdges(allPkgs, deps, true);
+    const violations = detectLayerViolations(devEdges, CORTEX_LAYER_CONTRACT);
+    const rendered = violations.map((v) => `${v.from}→${v.to}`);
+    expect(
+      rendered,
+      `includeDev 检测到分层违规:\n  ${rendered.join("\n  ")}`,
+    ).toEqual([]);
+  });
+
+  it("devDependencies 纳入后仍无循环依赖", () => {
+    const devEdges = buildEdges(allPkgs, deps, true);
+    const cycles = detectCycles(devEdges);
+    const rendered = cycles.map((c) => c.path.join(" → "));
+    expect(rendered, `includeDev 检测到循环依赖: ${rendered.join(" | ")}`).toEqual([]);
+  });
+});
+
+describe("依赖分层契约 — src import 扫描（D2 未声明隐式依赖）", () => {
+  it("无「源码 import 了但 package.json 未声明」的隐式依赖", () => {
+    const undeclared = detectUndeclaredImports(workspacePkgs);
+    const rendered = undeclared.map((u) => `${u.pkgId} → ${u.imported}`);
+    expect(
+      rendered,
+      `检测到未声明隐式依赖（请在 package.json 补齐声明）:\n  ${rendered.join("\n  ")}`,
     ).toEqual([]);
   });
 });

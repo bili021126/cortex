@@ -5,13 +5,33 @@
  * 使用 global WebSocket（Node 22+ / Browser）或注入实现（Node 20）。
  */
 
-import type { WSChannel, WSMessage, WSClientCommand, LlmMessageDTO } from "@cortex/protocol";
+import type {
+  WSChannel,
+  WSMessage,
+  WSClientCommand,
+  LlmMessageDTO,
+  WSServerEvent,
+} from "@cortex/protocol";
 import { isWSMessage } from "@cortex/protocol";
 import type { WSClientConfig } from "./types.js";
 import { ConnectionError } from "./errors.js";
 
-/** 事件处理器 */
-export type WSEventHandler<T = unknown> = (message: WSMessage<T>) => void;
+/**
+ * 事件处理器（B1：按通道泛型收窄 data 类型——已定义事件的通道自动收窄，
+ * 预留通道（无对应服务端事件）为 unknown）。
+ */
+export type WSEventHandler<C extends WSChannel> =
+  (message: WSMessage<C extends WSServerEvent["channel"] ? Extract<WSServerEvent, { channel: C }>["data"] : unknown>) => void;
+
+/** 连接生命周期事件（B3） */
+export type WSConnectionEvent =
+  | { type: "connected" }
+  | { type: "disconnected" }
+  | { type: "reconnecting"; attempt: number; delayMs: number }
+  | { type: "reconnect_failed"; attempts: number };
+
+/** 内部存储用宽松 handler 类型 */
+type InternalHandler = (message: WSMessage<unknown>) => void;
 
 const DEFAULT_RECONNECT = { maxRetries: 10, backoffMs: 1000, maxBackoffMs: 30000 };
 
@@ -26,11 +46,15 @@ function randomSessionId(): string {
 
 export class CortexWSClient {
   private ws: WebSocket | null = null;
-  private handlers = new Map<WSChannel, Set<WSEventHandler>>();
+  private handlers = new Map<WSChannel, Set<InternalHandler>>();
   private subscribedChannels = new Set<WSChannel>();
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionalClose = false;
+  /** B4：非 OPEN 时发送缓冲 */
+  private sendQueue: WSClientCommand[] = [];
+  /** B3：连接生命周期监听器 */
+  private statusHandlers = new Set<(event: WSConnectionEvent) => void>();
 
   constructor(private readonly config: WSClientConfig) {}
 
@@ -43,6 +67,7 @@ export class CortexWSClient {
   /** 断开连接 */
   disconnect(): void {
     this.intentionalClose = true;
+    this.sendQueue = [];
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -65,20 +90,26 @@ export class CortexWSClient {
     this._send({ type: "unsubscribe", channels });
   }
 
-  /** 注册事件监听器，返回取消函数 */
-  on<T>(channel: WSChannel, handler: WSEventHandler<T>): () => void {
+  /** 注册事件监听器（B1：data 类型按通道自动收窄），返回取消函数 */
+  on<C extends WSChannel>(channel: C, handler: WSEventHandler<C>): () => void {
     let set = this.handlers.get(channel);
     if (!set) {
       set = new Set();
       this.handlers.set(channel, set);
     }
-    set.add(handler as WSEventHandler<unknown>);
-    return () => this.off(channel, handler as WSEventHandler<unknown>);
+    set.add(handler as InternalHandler);
+    return () => this.off(channel, handler as InternalHandler);
   }
 
   /** 移除事件监听器 */
-  off(channel: WSChannel, handler: WSEventHandler): void {
+  off(channel: WSChannel, handler: InternalHandler): void {
     this.handlers.get(channel)?.delete(handler);
+  }
+
+  /** 注册连接生命周期监听（B3），返回取消函数 */
+  onStatus(handler: (event: WSConnectionEvent) => void): () => void {
+    this.statusHandlers.add(handler);
+    return () => this.statusHandlers.delete(handler);
   }
 
   /** 发起流式对话，返回 sessionId */
@@ -111,6 +142,11 @@ export class CortexWSClient {
     this._send({ type: "gate.resolve", requestId, approved });
   }
 
+  /** 应答通知（B2：S2-12 客户端闭环）——确认/驳回 urgent 通知 */
+  ackNotification(requestId: string, approved: boolean): void {
+    this._send({ type: "notification.ack", requestId, approved });
+  }
+
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
   }
@@ -139,6 +175,13 @@ export class CortexWSClient {
 
   private _onOpen(): void {
     this.reconnectAttempts = 0;
+    // B4：先 flush 排队命令（先入先出）
+    const pending = this.sendQueue.splice(0);
+    for (const cmd of pending) {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify(cmd));
+      }
+    }
     // 合并初始配置通道，并在每次（重）连接后恢复全部订阅
     if (this.config.channels) {
       for (const ch of this.config.channels) this.subscribedChannels.add(ch);
@@ -146,6 +189,7 @@ export class CortexWSClient {
     if (this.subscribedChannels.size > 0) {
       this._send({ type: "subscribe", channels: [...this.subscribedChannels] });
     }
+    this._emitStatus({ type: "connected" });
   }
 
   private _onMessage(event: MessageEvent): void {
@@ -168,7 +212,10 @@ export class CortexWSClient {
   private _onClose(): void {
     this.ws = null;
     if (!this.intentionalClose) {
+      this._emitStatus({ type: "disconnected" });
       this._scheduleReconnect();
+    } else {
+      this.sendQueue = [];
     }
   }
 
@@ -177,6 +224,7 @@ export class CortexWSClient {
     if (this.reconnectAttempts >= opts.maxRetries) {
       // 重连耗尽——通知调用方，不再自动重试
       this.config.reconnect?.onFailed?.(this.reconnectAttempts);
+      this._emitStatus({ type: "reconnect_failed", attempts: this.reconnectAttempts });
       return;
     }
 
@@ -187,6 +235,11 @@ export class CortexWSClient {
     // 加抖动避免雷群效应
     const jitter = backoff * 0.2 * Math.random();
     this.reconnectAttempts++;
+    this._emitStatus({
+      type: "reconnecting",
+      attempt: this.reconnectAttempts,
+      delayMs: backoff + jitter,
+    });
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -194,9 +247,18 @@ export class CortexWSClient {
     }, backoff + jitter);
   }
 
+  private _emitStatus(event: WSConnectionEvent): void {
+    for (const handler of this.statusHandlers) handler(event);
+  }
+
   private _send(command: WSClientCommand): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(command));
+      return;
     }
+    // B4：非 OPEN 时入队（上限内），open 后 flush——重连瞬间的命令不再丢失
+    const limit = this.config.sendQueueLimit ?? 100;
+    if (this.sendQueue.length >= limit) this.sendQueue.shift();
+    this.sendQueue.push(command);
   }
 }

@@ -1,3 +1,4 @@
+// @layer 规划-执行层
 /**
  * SimulationRunner —— 世界模型仿真层执行器
  * 

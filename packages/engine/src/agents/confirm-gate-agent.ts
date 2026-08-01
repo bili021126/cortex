@@ -1,3 +1,4 @@
+// @layer 治理层
 import { TRUST_AUTO_APPROVE_L2, TRUST_AUTO_APPROVE_L3, TRUST_BASE_SCORE, TRUST_L0_L1_BONUS } from "@cortex/config";
 import { AgentType } from "@cortex/shared";
 import type { AgentFactoryConfig } from "../execution/agent-factory.js";

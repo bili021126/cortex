@@ -1,3 +1,4 @@
+// @layer 记忆层
 /**
  * SkillPipeline —— 技能提取与持久化管道（Core-1 技能闭环）。
  *

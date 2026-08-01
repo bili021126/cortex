@@ -1,3 +1,4 @@
+// @layer 治理层
 // ============================================================
 // @cortex/engine/registry/agent-registry — Agent 类型安全注册表
 //

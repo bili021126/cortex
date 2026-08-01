@@ -9,7 +9,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { EngineHost } from "../engine-host.js";
 import type { SessionManager } from "../session-manager.js";
 import type { ChatExecutor } from "../chat-executor.js";
-import { problem } from "@cortex/protocol";
+import { problem, PROTOCOL_VERSION } from "@cortex/protocol";
+import { AgentType } from "@cortex/shared";
 import { handleChat } from "./chat-handler.js";
 import { handleMemoryGet, handleMemoryPost, handleMemoryDelete } from "./memory-handler.js";
 import { handleSessionGet, handleSessionPost, handleSessionDelete } from "./session-handler.js";
@@ -35,6 +36,12 @@ export class HttpRouter {
     const path = url.pathname;
     const method = req.method ?? "GET";
 
+    // GET /api/v1/capabilities（C5：能力发现——共面/专化声明的载体）
+    if (method === "GET" && path === "/api/v1/capabilities") {
+      this.handleCapabilities(res);
+      return true;
+    }
+
     // GET /api/v1/health
     if (method === "GET" && path === "/api/v1/health") {
       this.handleHealth(res);
@@ -44,6 +51,15 @@ export class HttpRouter {
     // GET /api/v1/daemon/health
     if (method === "GET" && path === "/api/v1/daemon/health") {
       this.handleDaemonHealth(res);
+      return true;
+    }
+
+    // POST /api/v1/execute（C2：daemon 补齐 execute 路由——G10 修复，
+    //   RemoteEngineBridge/WebUI 的 execute 不再对 daemon 404）
+    if (method === "POST" && path === "/api/v1/execute") {
+      void handleExecute(req, res, this.engine).catch(err =>
+        sendProblem(res, 500, "Execute Error", err instanceof Error ? err.message : String(err))
+      );
       return true;
     }
 
@@ -63,7 +79,7 @@ export class HttpRouter {
 
     // GET /api/v1/nodes
     if (method === "GET" && path === "/api/v1/nodes") {
-      this.handleNodes(res);
+      this.handleNodes(res, url);
       return true;
     }
 
@@ -182,8 +198,11 @@ export class HttpRouter {
     sendJson(res, 200, { data: snapshot });
   }
 
-  private handleNodes(res: ServerResponse): void {
+  private handleNodes(res: ServerResponse, url: URL): void {
     try {
+      // C4：分页形状对齐——返回 PaginatedResponse 结构（与 client getNodes 类型声明一致）
+      const page = Math.max(1, Number(url.searchParams.get("page") ?? 1) || 1);
+      const limit = Math.max(1, Number(url.searchParams.get("limit") ?? 50) || 50);
       const nodes = this.engine.board.getAllNodes();
       const nodeSnapshots = nodes.map((n) => ({
         id: n.id,
@@ -193,7 +212,17 @@ export class HttpRouter {
         status: n.status === "done" ? "complete" : n.status === "claimed" ? "pending" : n.status,
         parentId: n.parentId,
       }));
-      sendJson(res, 200, { data: nodeSnapshots });
+      const total = nodeSnapshots.length;
+      const start = (page - 1) * limit;
+      sendJson(res, 200, {
+        data: nodeSnapshots.slice(start, start + limit),
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
     } catch (err) {
       sendProblem(res, 500, "Internal Error", err instanceof Error ? err.message : String(err));
     }
@@ -201,16 +230,72 @@ export class HttpRouter {
 
   private handleAgents(res: ServerResponse): void {
     try {
+      // C3：语义统一——按 agentType 返回状态字符串映射（与 client getAgents 类型声明一致，
+      //   修复「client 期望 / daemon 返回 pool stats / WebUI 返回 statuses」三头错）
       const pool = this.engine.pool;
-      const stats = pool.getPoolStats();
-      sendJson(res, 200, { data: stats });
+      const result: Record<string, string[]> = {};
+      for (const type of Object.values(AgentType)) {
+        result[type] = pool.getStatuses(type).map((s) => String(s));
+      }
+      sendJson(res, 200, { data: result });
     } catch (err) {
       sendProblem(res, 500, "Internal Error", err instanceof Error ? err.message : String(err));
     }
   }
+
+  private handleCapabilities(res: ServerResponse): void {
+    // C5：能力发现——daemon 身份 + 共面/专化声明
+    sendJson(res, 200, {
+      data: {
+        server: "daemon",
+        version: PROTOCOL_VERSION,
+        api: {
+          state: true,
+          health: true,
+          nodes: true,
+          agents: true,
+          chat: true,
+          memory: true,
+          sessions: true,
+          daemonHealth: true,
+          execute: true,
+          events: false,
+          config: false,
+        },
+        wsChannels: ["state", "pipeline", "system", "config", "chat", "gate", "notification"],
+      },
+    });
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────
+
+/**
+ * POST /api/v1/execute（C2）——daemon 工具执行入口（G10 修复）。
+ * 与 WebUI 语义一致：toolkit.execute("execute", { input })——引擎正式工具链路。
+ */
+async function handleExecute(req: IncomingMessage, res: ServerResponse, engine: EngineHost): Promise<void> {
+  const raw = await readBody(req);
+  let body: { input?: unknown };
+  try {
+    body = JSON.parse(raw) as { input?: unknown };
+  } catch {
+    sendProblem(res, 422, "Validation Error", "请求体必须为 JSON");
+    return;
+  }
+  const input = body?.input;
+  if (typeof input !== "string" || input.trim() === "") {
+    sendProblem(res, 422, "Validation Error", "input 必填且为非空字符串");
+    return;
+  }
+  const toolkit = engine.toolkitInstance;
+  const result = await toolkit.execute({ toolName: "execute", params: { input } }, AgentType.Code);
+  if (!result.success) {
+    sendProblem(res, 500, "Execute Error", result.error ?? "工具执行失败");
+    return;
+  }
+  sendJson(res, 200, { data: { output: result.output ?? "" } });
+}
 
 export function sendJson(res: ServerResponse, status: number, body: unknown): void {
   if (res.headersSent) return;

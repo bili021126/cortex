@@ -67,9 +67,6 @@ export interface AgentManifestDTO {
   memoryQueryStrategy?: string;
 }
 
-/** PATCH /agents/:id 请求 */
-export type PatchAgentRequest = Partial<Omit<AgentManifestDTO, "id">>;
-
 // ─── Tuning ───────────────────────────────────────────
 
 /** 调优配置 DTO */

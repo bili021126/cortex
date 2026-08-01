@@ -31,7 +31,9 @@ import type {
   SessionListResponse,
   CreateSessionRequest,
   DeleteSessionResponse,
+  MemoryDeleteResponse,
   DaemonHealthSnapshot,
+  ServerCapabilities,
 } from "@cortex/protocol";
 import type { HttpClientConfig } from "./types.js";
 import { ProtocolError } from "./errors.js";
@@ -167,6 +169,11 @@ export class CortexHttpClient {
     return res.data;
   }
 
+  /** 删除记忆（B7：补齐 daemon 已有路由 DELETE /api/v1/memory/:id） */
+  async deleteMemory(id: string): Promise<void> {
+    await this.request<MemoryDeleteResponse>("DELETE", `/api/v1/memory/${encodeURIComponent(id)}`);
+  }
+
   /** 获取会话列表 */
   async getSessions(): Promise<SessionDTO[]> {
     const res = await this.request<SessionListResponse>("GET", "/api/v1/sessions");
@@ -190,19 +197,38 @@ export class CortexHttpClient {
     return res.data;
   }
 
+  /** 能力发现（C5）——连接任意服务端后先探测能力面（共面 + 专化声明） */
+  async getCapabilities(): Promise<ServerCapabilities> {
+    const res = await this.request<SingleResponse<ServerCapabilities>>("GET", "/api/v1/capabilities");
+    return res.data;
+  }
+
   // ─── 内部 ──────────────────────────────────────────
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { signal?: AbortSignal; timeoutMs?: number },
+  ): Promise<T> {
     const url = `${this.config.baseUrl}${path}`;
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...this.config.headers,
     };
 
+    // B5：外部 signal + 配置/调用级超时——组合信号，远端挂起不再永久阻塞
+    const signals: AbortSignal[] = [];
+    if (opts?.signal) signals.push(opts.signal);
+    const timeoutMs = opts?.timeoutMs ?? this.config.timeoutMs;
+    if (timeoutMs && timeoutMs > 0) signals.push(AbortSignal.timeout(timeoutMs));
+    const signal = signals.length > 0 ? AbortSignal.any(signals) : undefined;
+
     const res = await fetch(url, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     });
 
     if (!res.ok) {

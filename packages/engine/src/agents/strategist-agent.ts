@@ -1,3 +1,4 @@
+// @layer 规划-执行层
 import { AgentType as AT, AgentStatus as AS, PipelineEventType, type AgentType, type AgentStatus, type TaskNode, type NodeResult, type SafeErrorReporter, type ObservableEvent } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { AgentPool } from "@cortex/scheduler";

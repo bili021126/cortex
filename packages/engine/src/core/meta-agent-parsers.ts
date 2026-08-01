@@ -1,3 +1,4 @@
+// @layer 规划-执行层
 // @cortex/engine/core/meta-agent-parsers —— MetaAgent JSON/节点解析纯函数
 // 从 MetaAgent 类剥离出的内聚解析模块（W5/M5 god-object 拆分）
 

@@ -10,6 +10,8 @@ export interface HttpClientConfig {
   baseUrl: string;
   /** 额外请求头 */
   headers?: Record<string, string>;
+  /** 请求超时（毫秒，默认 0 = 无超时；B5） */
+  timeoutMs?: number;
 }
 
 /** WebSocket 客户端配置 */
@@ -26,6 +28,8 @@ export interface WSClientConfig {
     /** 重连耗尽后的回调（不再自动重试） */
     onFailed?: (attempts: number) => void;
   };
+  /** 发送缓冲上限（B4：非 OPEN 时排队等待的命令数，默认 100，超出丢最旧） */
+  sendQueueLimit?: number;
   /** WebSocket 实现注入（Node 20 无全局 WebSocket 时使用） */
   WebSocketImpl?: typeof WebSocket;
 }
@@ -39,5 +43,7 @@ export interface CortexConnectionConfig {
   headers?: Record<string, string>;
   channels?: WSChannel[];
   reconnect?: WSClientConfig["reconnect"];
+  sendQueueLimit?: number;
+  timeoutMs?: number;
   WebSocketImpl?: typeof WebSocket;
 }

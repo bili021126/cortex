@@ -1,3 +1,4 @@
+// @layer 执行层
 // ============================================================
 // @cortex/engine/agents/browser-actions —— BrowserAgent 工具行为注册表
 //

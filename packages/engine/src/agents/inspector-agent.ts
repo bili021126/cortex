@@ -1,3 +1,4 @@
+// @layer 治理层
 import { AgentType as AT } from "@cortex/shared";
 import type { TaskNode, Agent, SafeErrorReporter, MemoryEntry, ReadMode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";

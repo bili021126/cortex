@@ -18,17 +18,16 @@ import { handleChatCommand } from "./ws/chat-channel.js";
 import { handleGateCommand } from "./ws/gate-channel.js";
 import { HttpRouter } from "./http/router.js";
 import { StateAggregator } from "./http/state-handler.js";
-import { PROTOCOL_VERSION } from "@cortex/protocol";
+import { PROTOCOL_VERSION, isWSClientCommand } from "@cortex/protocol";
 import type { Socket } from "node:net";
 import type {
-  WSClientCommand,
   WSSystemShutdownEvent,
   WSDaemonStatusEvent,
   WSConfigEvent,
+  WSSystemErrorEvent,
 } from "@cortex/protocol";
 import { PipelinePriority } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
-import type { WSNotificationAckCommand } from "@cortex/protocol";
 import { bridgeNotifications, handleNotificationAck } from "./notification-bridge.js";
 
 /** Daemon configuration options */
@@ -323,8 +322,24 @@ export class CortexDaemon {
   }
 
   private handleWsCommand(connId: string, msg: unknown): void {
-    if (typeof msg !== "object" || msg === null) return;
-    const cmd = msg as WSClientCommand;
+    // A2：入站校验——isWSClientCommand 结构性守卫替换类型断言。
+    // 非法命令不再静默：回 system.error 错误帧 + console.warn（可观测链路）。
+    if (!isWSClientCommand(msg)) {
+      const rawType = (() => {
+        if (typeof msg === "object" && msg !== null) {
+          return String((msg as { type?: unknown }).type ?? "(missing)");
+        }
+        return typeof msg;
+      })();
+      console.warn(`[daemon] 非法 WS 命令被拒: ${rawType}`);
+      this.wsGateway?.sendTo(connId, "system", {
+        type: "system.error",
+        message: `非法 WS 命令被拒: ${rawType}`,
+        reason: "isWSClientCommand 校验失败",
+      } satisfies WSSystemErrorEvent["data"]);
+      return;
+    }
+    const cmd = msg;
 
     switch (cmd.type) {
       case "chat.start":
@@ -343,11 +358,10 @@ export class CortexDaemon {
       case "notification.ack":
         // S2-12: ack 回路——客户端应答 urgent 通知，回执确认结果
         if (this.engine) {
-          const ackCmd = cmd as WSNotificationAckCommand;
           this.wsGateway?.sendTo(
             connId,
             "notification",
-            handleNotificationAck(this.engine.notificationPipe, ackCmd.requestId, ackCmd.approved),
+            handleNotificationAck(this.engine.notificationPipe, cmd.requestId, cmd.approved),
           );
         }
         break;

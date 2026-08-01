@@ -37,6 +37,8 @@ export {
   generateDot,
   generateMermaid,
   computeLayers,
+  scanSrcImports,
+  detectUndeclaredImports,
 } from './monorepo-analyzer.js';
 export type {
   PkgInfo,

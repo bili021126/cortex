@@ -1,3 +1,4 @@
+// @layer 执行层
 import { AgentType as AT, AgentStatus as AS, type TaskNode, type Agent, type SafeErrorReporter, type MemoryEntry, type ReadMode } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
