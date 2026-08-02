@@ -41,7 +41,9 @@ async function writeMarker(memory: IMemoryStore, tag: string, distinct?: string)
     kind: "EPISODIC" as never,
     content_blob: { marker: tag, ...(distinct ? { topic: distinct } : {}) },
     summary: `持久化标记-${tag}`,
-    semantic_gist: `持久化标记-${tag}`,
+    // CI 修复：semantic_gist 是向量去重的 embedding 输入——distinct 时必须完全不同，
+    // 否则 A/B 的 gist 仅差一个字母 → embedding 相似 → 向量去重合并（CI 上 embedding 可用）
+    semantic_gist: distinct ?? `持久化标记-${tag}`,
     content_hash: "",
     source: { agentType: AgentType.Code, taskId: `restart-${tag}` },
   });
