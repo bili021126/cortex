@@ -85,6 +85,14 @@ class FileBackend implements MemoryStoreBackend {
     try {
       const indexData = await fs.readFile(this._indexPath, "utf-8");
       const index: IndexFile = JSON.parse(indexData);
+      // R11-02：版本门控——拒绝比代码新的文件（降级守卫），避免盲转换加载损坏数据。
+      // 迁移点：未来 v2 在此分支（if (index.version === 1) 迁移到 2），当前仅 v1。
+      if (typeof index.version !== "number" || index.version > STORAGE_VERSION) {
+        console.warn(
+          `[memory] 索引版本 ${index.version} 高于当前支持的 ${STORAGE_VERSION}——拒绝加载（降级守卫），尝试重建: ${this._indexPath}`,
+        );
+        throw new Error(`unsupported index version: ${index.version}`);
+      }
       for (const entryId of Object.keys(index.entries)) {
         const entryPath = path.join(this._entriesDir, `${entryId}.json`);
         try {
@@ -119,6 +127,13 @@ class FileBackend implements MemoryStoreBackend {
     try {
       const linksData = await fs.readFile(this._linksPath, "utf-8");
       const linksFile: LinksFile = JSON.parse(linksData);
+      // R11-02：链路文件版本门控（与索引一致）
+      if (typeof linksFile.version !== "number" || linksFile.version > STORAGE_VERSION) {
+        console.warn(
+          `[memory] 链路文件版本 ${linksFile.version} 高于当前支持的 ${STORAGE_VERSION}——忽略链路（索引不受影响）: ${this._linksPath}`,
+        );
+        throw new Error(`unsupported links version: ${linksFile.version}`);
+      }
       for (const [sourceId, serializedLinks] of Object.entries(linksFile.links)) {
         store._loadLinks(sourceId, serializedLinks.map(l => ({
           ...l,
