@@ -126,6 +126,13 @@ function handleConfigSet(
 
   config.set(key, parsedValue);
 
+  // R11-07：持久化到本地配置（此前只改内存——下次进程读旧值）
+  try {
+    config.persist(path.resolve(process.cwd(), ".cortex", "config"));
+  } catch (e) {
+    return { success: false, error: `持久化失败: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 };
+  }
+
   return {
     success: true,
     output: `✓ ${key} = ${JSON.stringify(parsedValue)}`,

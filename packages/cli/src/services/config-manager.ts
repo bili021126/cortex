@@ -139,35 +139,50 @@ export class ConfigManager {
     return true;
   }
 
+  /**
+   * R11-07：持久化当前合并配置到指定文件（原子写 tmp+rename，防写中崩溃损坏）。
+   * cortex config set 后调用——此前只改内存、下次进程读旧值。
+   */
+  persist(filePath: string): void {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const tmp = filePath + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(this.config, null, 2), "utf-8");
+    fs.renameSync(tmp, filePath);
+  }
+
   // ── 内部 ──────────────────────────────────────────────
 
   private _loadConfig(configPath?: string): CliConfig {
-    // 从环境变量读取覆盖
-    const envFormat = process.env["CORTEX_CLI_DEFAULT_FORMAT"];
-    const envModel = process.env["CORTEX_LLM_CHAT_MODEL"];
-
+    // 文档优先级：CLI args > env (CORTEX_*) > local .cortex/config > global ~/.cortex/config > defaults
+    // R11-06 修复：按此顺序合并——此前 global > local > env > defaults 与文档相反
     const config = { ...DEFAULT_CONFIG };
 
+    // 1) 全局配置（最低文件层）
+    const globalConfig = path.join(os.homedir(), DIR_GLOBAL_CONFIG, "config");
+    if (configPath) {
+      // 显式路径（config --file）——只加载该文件
+      this._mergeFromFile(config, configPath);
+    } else {
+      if (fs.existsSync(globalConfig)) {
+        this._mergeFromFile(config, globalConfig);
+      }
+
+      // 2) 本地配置（向上搜索 .cortex/config）——覆盖全局
+      const localConfig = this._searchUp(FILE_LOCAL_CONFIG);
+      if (localConfig) this._mergeFromFile(config, localConfig);
+    }
+
+    // 3) 环境变量（覆盖文件）
+    const envFormat = process.env["CORTEX_CLI_DEFAULT_FORMAT"];
+    const envModel = process.env["CORTEX_LLM_CHAT_MODEL"];
     if (envFormat && (envFormat === "text" || envFormat === "json" || envFormat === "color")) {
       config.cli.defaultFormat = envFormat;
     }
     if (envModel) {
       config.llm.chatModel = envModel;
-    }
-
-    // 尝试从文件加载
-    if (configPath) {
-      this._mergeFromFile(config, configPath);
-    } else {
-      // 向上搜索 .cortex/config
-      const localConfig = this._searchUp(FILE_LOCAL_CONFIG);
-      if (localConfig) this._mergeFromFile(config, localConfig);
-
-      // 全局配置
-      const globalConfig = path.join(os.homedir(), DIR_GLOBAL_CONFIG, "config");
-      if (fs.existsSync(globalConfig)) {
-        this._mergeFromFile(config, globalConfig);
-      }
     }
 
     return config;
