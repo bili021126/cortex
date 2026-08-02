@@ -165,10 +165,6 @@ describe("@cortex/config — ENGINE_DEFAULTS", () => {
       .toBeLessThan(ENGINE_DEFAULTS.shutdownTimeoutMs);
   });
 
-  it("schedulerMaxRounds 应为正数", () => {
-    expect(ENGINE_DEFAULTS.schedulerMaxRounds).toBeGreaterThan(0);
-  });
-
   it("maxTotalMemories 应为正数", () => {
     expect(ENGINE_DEFAULTS.maxTotalMemories).toBeGreaterThan(0);
   });
@@ -181,10 +177,6 @@ describe("@cortex/config — ENGINE_DEFAULTS", () => {
   it("monitorThreshold 应为非负整数", () => {
     expect(ENGINE_DEFAULTS.monitorThreshold).toBeGreaterThanOrEqual(0);
     expect(Number.isInteger(ENGINE_DEFAULTS.monitorThreshold)).toBe(true);
-  });
-
-  it("embeddingCacheSize 应为合理值", () => {
-    expect(ENGINE_DEFAULTS.embeddingCacheSize).toBeGreaterThan(0);
   });
 
   it("vectorDedupThreshold 应在 0~1 范围内", () => {
@@ -225,12 +217,10 @@ describe("@cortex/config — loadEngineDefaults", () => {
   it("环境变量覆盖优先级（env > defaults）", () => {
     // CORTEX_ 环境变量应覆盖默认值
     process.env.CORTEX_LOCK_TIMEOUT_MS = "50000";
-    process.env.CORTEX_SCHEDULER_MAX_ROUNDS = "100";
-
+  
     const loaded = loadEngineDefaults();
     expect(loaded.lockTimeoutMs).toBe(50000);
-    expect(loaded.schedulerMaxRounds).toBe(100);
-  });
+    });
 
   it("overrides 优先级高于环境变量", () => {
     process.env.CORTEX_LOCK_TIMEOUT_MS = "50000";

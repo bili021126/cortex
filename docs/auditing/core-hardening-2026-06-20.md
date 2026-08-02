@@ -46,7 +46,7 @@
 | 边缘包（pattern-extractor/plugin-runner/tools/parser/doctor/skill-kit 等） | 大文件为单领域函数集群/单类实现（json-extractor 1415/markdown-extractor 1355/plugin-runner schema 1111/tools monorepo-analyzer 1040）——拆分收益低（与 scheduler/resilience 的多类集合不同）——确认保持 |
 | engine | 断链已接：ConsistencyLayer（preWriteHook/filterRead/verify）/ RAG 桥接 / MemoryManager 均接线 |
 | **技术债（已清零）** | **engine 测试类型检查缺口**：根 tsconfig 只引用 tsconfig.src.json（不编译 tests）——tsconfig.test.json 全量重查暴露 623 处既有错误——**专项处置（2026-06-20）四轮清零**：①tsconfig.test.json 关闭 noUncheckedIndexedAccess（测试索引宽松化，382 处）；②shared GovernanceEventPayload severity/source optional（契约修正）；③makeEvent/makeMemoryEvent 返回类型具体化→any（测试辅助函数）+ EmittableEvent 断言 + mock 补方法/字段 + 枚举修正 + 未定义名称补 import + manual e2e 特殊排除（tui-chain/rollback 依赖特殊性）；④最终验证：tsconfig.test.json --force **0 错误**（623→0），engine 1137/1138 无回归——**测试类型检查闭环达成** |
-| **字段挂空（处置）** | monitorWindowMs/monitorThreshold 已接（monitor.ts 单源化）；embeddingCacheSize/schedulerMaxRounds/schedulerRoundTimeoutMs **标注 @future 预留**（无生产消费——ENV_MAP 契约已注册——测试守护值合法——保留待调度层/embedding 缓存接入） |
+| **字段挂空（已处置）** | monitorWindowMs/monitorThreshold 已接（monitor.ts 单源化）；embeddingCacheSize/schedulerMaxRounds/schedulerRoundTimeoutMs **已移除**（2026-06-20 第 4 项——无正确消费点：chat-loop 的 maxRounds=20 与 SCHEDULER_MAX_ROUNDS=25 语义不同不宜强接——接口瘦身 + ENV_MAP/常量/测试同步删） |
 
 ## 门禁验证
 

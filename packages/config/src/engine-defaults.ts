@@ -19,7 +19,6 @@ import {
   FROZEN_OBLITERATE_DAYS,
   MAINTENANCE_WEIGHT_THRESHOLD,
   SCHEMA_VERSION,
-  SCHEDULER_ROUND_TIMEOUT_MS,
   REACT_MAX_LOOPS,
 } from "./constants/index.js";
 
@@ -44,12 +43,6 @@ export const SHUTDOWN_FORCE_EXIT_DELAY_MS = 2_000;
 
 // ─── Scheduler ─────────────────────────────────────
 
-/** 调度器最大轮数 */
-export const SCHEDULER_MAX_ROUNDS = 25;
-
-/** 调度器每轮超时（毫秒）——P2 收敛：单源在 constants/scheduler-params.ts */
-export { SCHEDULER_ROUND_TIMEOUT_MS };
-
 /** ReAct 最大循环次数——P1-1 单源在 constants/react-strategy.ts，此处仅转发 */
 export { REACT_MAX_LOOPS };
 
@@ -68,9 +61,6 @@ export const RETRIEVAL_BETA = 0.55;
 
 /** 向量维度（384d ONNX），单源定义 @cortex/config/constants/memory */
 export { EMBEDDING_DIM };
-
-/** 向量 LRU 缓存容量 */
-export const EMBEDDING_CACHE_SIZE = 10_000;
 
 /** 内容哈希算法 */
 export const CONTENT_HASH_ALGO = "sha256";
@@ -111,13 +101,8 @@ export interface EngineDefaults {
   cleanupIntervalMs: number;
   shutdownTimeoutMs: number;
   shutdownForceExitDelayMs: number;
-  // @future 预留：scheduler 包当前无消费点（测试守护值合法，ENV_MAP 契约已注册）——待调度层接入
-  schedulerMaxRounds: number;
-  schedulerRoundTimeoutMs: number;
   reactMaxLoops: number;
   embeddingDim: number;
-  // @future 预留：embedding 缓存当前无消费点（同上）
-  embeddingCacheSize: number;
   contentHashAlgo: string;
   vectorDedupThreshold: number;
   weightAgingFactor: number;
@@ -139,11 +124,8 @@ export const ENGINE_DEFAULTS: EngineDefaults = {
   cleanupIntervalMs: CLEANUP_INTERVAL_MS,
   shutdownTimeoutMs: SHUTDOWN_TIMEOUT_MS,
   shutdownForceExitDelayMs: SHUTDOWN_FORCE_EXIT_DELAY_MS,
-  schedulerMaxRounds: SCHEDULER_MAX_ROUNDS,
-  schedulerRoundTimeoutMs: SCHEDULER_ROUND_TIMEOUT_MS,
   reactMaxLoops: REACT_MAX_LOOPS,
   embeddingDim: EMBEDDING_DIM,
-  embeddingCacheSize: EMBEDDING_CACHE_SIZE,
   contentHashAlgo: CONTENT_HASH_ALGO,
   vectorDedupThreshold: VECTOR_DEDUP_THRESHOLD,
   weightAgingFactor: WEIGHT_AGING_FACTOR,
@@ -231,11 +213,8 @@ const ENV_MAP: Record<string, keyof EngineDefaults> = {
   CORTEX_CLEANUP_INTERVAL_MS: "cleanupIntervalMs",
   CORTEX_SHUTDOWN_TIMEOUT_MS: "shutdownTimeoutMs",
   CORTEX_SHUTDOWN_FORCE_EXIT_DELAY_MS: "shutdownForceExitDelayMs",
-  CORTEX_SCHEDULER_MAX_ROUNDS: "schedulerMaxRounds",
-  CORTEX_SCHEDULER_ROUND_TIMEOUT_MS: "schedulerRoundTimeoutMs",
   CORTEX_REACT_MAX_LOOPS: "reactMaxLoops",
   CORTEX_EMBEDDING_DIM: "embeddingDim",
-  CORTEX_EMBEDDING_CACHE_SIZE: "embeddingCacheSize",
   CORTEX_CONTENT_HASH_ALGO: "contentHashAlgo",
   CORTEX_VECTOR_DEDUP_THRESHOLD: "vectorDedupThreshold",
   CORTEX_WEIGHT_AGING_FACTOR: "weightAgingFactor",

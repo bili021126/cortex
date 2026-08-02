@@ -5,11 +5,8 @@ import {
   CLEANUP_INTERVAL_MS,
   SHUTDOWN_TIMEOUT_MS,
   SHUTDOWN_FORCE_EXIT_DELAY_MS,
-  SCHEDULER_MAX_ROUNDS,
-  SCHEDULER_ROUND_TIMEOUT_MS,
   REACT_MAX_LOOPS,
   EMBEDDING_DIM,
-  EMBEDDING_CACHE_SIZE,
   CONTENT_HASH_ALGO,
   VECTOR_DEDUP_THRESHOLD,
   WEIGHT_AGING_FACTOR,
@@ -44,24 +41,12 @@ describe("engine-defaults — 常量值", () => {
     expect(SHUTDOWN_FORCE_EXIT_DELAY_MS).toBe(2_000);
   });
 
-  it("SCHEDULER_MAX_ROUNDS = 25", () => {
-    expect(SCHEDULER_MAX_ROUNDS).toBe(25);
-  });
-
-  it("SCHEDULER_ROUND_TIMEOUT_MS = 300s", () => {
-    expect(SCHEDULER_ROUND_TIMEOUT_MS).toBe(300_000);
-  });
-
   it("REACT_MAX_LOOPS = 32 (tuning.json 真相源)", () => {
     expect(REACT_MAX_LOOPS).toBe(32);
   });
 
   it("EMBEDDING_DIM = 384", () => {
     expect(EMBEDDING_DIM).toBe(384);
-  });
-
-  it("EMBEDDING_CACHE_SIZE = 10_000", () => {
-    expect(EMBEDDING_CACHE_SIZE).toBe(10_000);
   });
 
   it("CONTENT_HASH_ALGO = sha256", () => {
@@ -110,11 +95,8 @@ describe("ENGINE_DEFAULTS — 单例", () => {
       "cleanupIntervalMs",
       "shutdownTimeoutMs",
       "shutdownForceExitDelayMs",
-      "schedulerMaxRounds",
-      "schedulerRoundTimeoutMs",
       "reactMaxLoops",
       "embeddingDim",
-      "embeddingCacheSize",
       "contentHashAlgo",
       "vectorDedupThreshold",
       "weightAgingFactor",
