@@ -43,9 +43,10 @@
 | governance | 秩序域：16 文件全 <520 行，无超大文件 |
 | engine | 断链已接：ConsistencyLayer（preWriteHook/filterRead/verify）/ RAG 桥接 / MemoryManager 均接线 |
 | **技术债（已清零）** | **engine 测试类型检查缺口**：根 tsconfig 只引用 tsconfig.src.json（不编译 tests）——tsconfig.test.json 全量重查暴露 623 处既有错误——**专项处置（2026-06-20）四轮清零**：①tsconfig.test.json 关闭 noUncheckedIndexedAccess（测试索引宽松化，382 处）；②shared GovernanceEventPayload severity/source optional（契约修正）；③makeEvent/makeMemoryEvent 返回类型具体化→any（测试辅助函数）+ EmittableEvent 断言 + mock 补方法/字段 + 枚举修正 + 未定义名称补 import + manual e2e 特殊排除（tui-chain/rollback 依赖特殊性）；④最终验证：tsconfig.test.json --force **0 错误**（623→0），engine 1137/1138 无回归——**测试类型检查闭环达成** |
-| **字段挂空（记录）** | monitorWindowMs / monitorThreshold / embeddingCacheSize 无消费点（ENV_MAP 有映射但无人读）——ENG-3/4 时一并处置 |
+| **字段挂空（处置）** | monitorWindowMs/monitorThreshold 已接（monitor.ts 单源化）；embeddingCacheSize/schedulerMaxRounds/schedulerRoundTimeoutMs **标注 @future 预留**（无生产消费——ENV_MAP 契约已注册——测试守护值合法——保留待调度层/embedding 缓存接入） |
 
 ## 门禁验证
 
 - tsc -b（根）✅ / eslint --max-warnings 0 ✅ / vitest：scheduler 104/104、config 122/122（+8 守护）、memory-store 109/109、engine 受影响 37/37 ✅
-- 提交序列：d6e60eea（scheduler）→ 2866b976（C2 schema）→ 894cb338（ENG-1/2）
+- **测试类型检查全仓闭环（2026-06-20）**：engine 623→0、fsm-compiler 53→0、plugin-runner/resilience/scheduler 基线 0——所有 tsconfig.test.json 包 `--force` 重查 0 错误
+- 提交序列：d6e60eea（scheduler）→ 2866b976（C2 schema）→ 894cb338（ENG-1/2）→ 32f67709（归档）→ 247efe00（ENG-4）→ cbb347f4（ENG-5）→ d3d5d0bd（类型债①）→ 7d84cc50（类型债②）→ eb423705（类型债③）→ fd5f9780（类型债④ engine 清零）→ 6d1d62a1（归档）→ 21dd0766（fsm 清零）→ dbebc6d9（挂空标注）
