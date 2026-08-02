@@ -23,7 +23,7 @@ import { PoolAwareState } from "./pool-aware.js";
 import type { ReActContext } from "./react-loop.js";
 import { executeWithMemoryPipeline, resolvePipeline } from "../memory-bridge/pipeline.js";
 import { loopStrategyRegistry } from "../core/loop-strategy-registry.js";
-import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
+import { DEFAULT_ENGINE_CONFIG, loadEngineDefaults } from "@cortex/config";
 
 /**
  * Agent 工厂配置——组合式替代 BaseAgent 继承。
@@ -81,7 +81,8 @@ export function createAgent(
   setPool(pool: AgentPool, instanceId: string): void;
   setSafeReporter(reporter: SafeErrorReporter): void;
 } {
-  const maxLoops = config.maxLoops ?? DEFAULT_ENGINE_CONFIG.defaultMaxLoops;
+  // ENG-1：tuning 覆盖链接线——tuning.json/env 的 reactMaxLoops 优先于 engine.json 默认值
+  const maxLoops = config.maxLoops ?? loadEngineDefaults().reactMaxLoops ?? DEFAULT_ENGINE_CONFIG.defaultMaxLoops;
   const state = new PoolAwareState(config.type);
   let safeReporter: SafeErrorReporter | null = null;
   /** P2 fix: 并发执行引用计数——进入 +1/finally -1，归零才回 Awake，防并发执行时状态失真 */

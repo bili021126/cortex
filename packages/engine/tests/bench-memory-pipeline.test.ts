@@ -81,7 +81,7 @@ function topicCenterVec(topic: string): number[] {
   // L2 归一化
   const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
   if (norm > 0) {
-    for (let i = 0; i < vec.length; i++) vec[i] /= norm;
+    for (let i = 0; i < vec.length; i++) vec[i] = (vec[i] ?? 0) / norm;
   }
   return vec;
 }
@@ -94,12 +94,12 @@ function memoryVec(topic: string, memoryIndex: number): number[] {
   const noiseScale = 0.08;
   const vec = [...center];
   for (let i = 0; i < EMBEDDING_DIM; i++) {
-    vec[i] += (rng() * 2 - 1) * noiseScale;
+    vec[i] = (vec[i] ?? 0) + (rng() * 2 - 1) * noiseScale;
   }
   // 重新归一化
   const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
   if (norm > 0) {
-    for (let i = 0; i < vec.length; i++) vec[i] /= norm;
+    for (let i = 0; i < vec.length; i++) vec[i] = (vec[i] ?? 0) / norm;
   }
   return vec;
 }
@@ -279,7 +279,7 @@ function ndcgAtK(predicted: string[], groundTruth: string[], k: number): number 
   // 相关性: gt 中的位置映射为相关分 (位置 0 → 5, 位置 1 → 4, ...)
   const relevance = new Map<string, number>();
   for (let i = 0; i < groundTruth.length; i++) {
-    relevance.set(groundTruth[i], groundTruth.length - i);
+    relevance.set(groundTruth[i]!, groundTruth.length - i);
   }
 
   const dcg = predicted.slice(0, k).reduce((sum, id, idx) => {
@@ -300,7 +300,7 @@ function ndcgAtK(predicted: string[], groundTruth: string[], k: number): number 
 function mrr(predicted: string[], groundTruthIds: string[]): number {
   const gtSet = new Set(groundTruthIds);
   for (let i = 0; i < predicted.length; i++) {
-    if (gtSet.has(predicted[i])) {
+    if (predicted[i] !== undefined && gtSet.has(predicted[i]!)) {
       return 1 / (i + 1);
     }
   }
@@ -364,7 +364,7 @@ describe("Bench ①: BM25 关键词检索 vs 后端", () => {
     const results = weightedIndex.search("登录 异常");
     expect(results.length).toBe(2);
     // summary 权重更高, sum-heavy 排第一
-    expect(results[0].id).toBe("sum-heavy");
+    expect(results[0]!.id).toBe("sum-heavy");
   });
 
   it("BM25 移除文档后不可被检索", () => {
@@ -426,8 +426,8 @@ describe("Bench ②: 混合检索 BM25+向量融合", () => {
     const scores = batchCosineSimilarity(queryVec, vecs);
     expect(scores).toHaveLength(3);
     // login 向量应最相似
-    expect(scores[0]).toBeGreaterThan(scores[1]);
-    expect(scores[0]).toBeGreaterThan(scores[2]);
+    expect(scores[0]!).toBeGreaterThan(scores[1]!);
+    expect(scores[0]!).toBeGreaterThan(scores[2]!);
   });
 
   it("HybridRetriever.score() 返回正确的融合结果", async () => {
@@ -698,7 +698,7 @@ describe("Bench ③: 认知引擎 vs 简单权重排序", () => {
       }
 
       const scored = engine.scoreAndRank(entries, hybridScores, gt.queryText, BASE_TIME, emptyGetLinks, emptyGetEntry);
-      if (scored.length > 0 && scored[0].entry.id === gt.expectedTop1) {
+      if (scored.length > 0 && scored[0]!.entry.id === gt.expectedTop1) {
         correctTop1++;
       }
     }
@@ -804,7 +804,7 @@ describe("Bench ⑤: MemoryStore 端到端混合管线", () => {
 
     // 结果应按 weight (或 hybridScore*10) 降序排列
     for (let i = 1; i < results.length; i++) {
-      expect(results[i - 1].weight).toBeGreaterThanOrEqual(results[i].weight);
+      expect(results[i - 1]!.weight).toBeGreaterThanOrEqual(results[i]!.weight);
     }
 
     // 清理

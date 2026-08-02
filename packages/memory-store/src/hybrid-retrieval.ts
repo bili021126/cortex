@@ -17,7 +17,7 @@
 import type { IEmbeddingService } from "./embedding.js";
 import { EMBEDDING_DIM } from "./schema.js";
 import type { MemoryEntry } from "@cortex/shared";
-import { RETRIEVAL_ALPHA, RETRIEVAL_BETA } from "@cortex/config";
+import { RETRIEVAL_ALPHA, RETRIEVAL_BETA, loadEngineDefaults } from "@cortex/config";
 
 // ── 类型 ──────────────────────────────────────
 
@@ -47,10 +47,10 @@ export interface HybridRetrievalConfig {
   boundaryEma: number;
 }
 
-/** 默认配置（alpha/beta 单源定义 @cortex/config） */
+/** 默认配置（alpha/beta 单源定义 @cortex/config；ENG-2 接入调参覆盖链） */
 export const DEFAULT_HYBRID_CONFIG: HybridRetrievalConfig = {
-  alpha: RETRIEVAL_ALPHA,
-  beta: RETRIEVAL_BETA,
+  alpha: loadEngineDefaults().retrievalAlpha ?? RETRIEVAL_ALPHA,
+  beta: loadEngineDefaults().retrievalBeta ?? RETRIEVAL_BETA,
   coarseMultiplier: 2,
   fineTopN: 15,
   enableBoundaryRegression: true,

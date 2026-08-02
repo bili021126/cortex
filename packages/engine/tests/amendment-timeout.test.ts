@@ -103,8 +103,8 @@ describe("amendment-timeout", () => {
         proposalId: "AM-003",
         action: "needs_attention",
         daysPending: 10});
-      expect(actions[0].reason).toContain("AM-003");
-      expect(actions[0].reason).toContain("10 天");
+      expect(actions[0]!.reason).toContain("AM-003");
+      expect(actions[0]!.reason).toContain("10 天");
     });
 
     it("returns warn_stale for expired draft", () => {
@@ -117,8 +117,8 @@ describe("amendment-timeout", () => {
         proposalId: "AM-004",
         action: "warn_stale",
         daysPending: 20});
-      expect(actions[0].reason).toContain("AM-004");
-      expect(actions[0].reason).toContain("20 天");
+      expect(actions[0]!.reason).toContain("AM-004");
+      expect(actions[0]!.reason).toContain("20 天");
     });
 
     it("returns auto_reject after maxStaleCount consecutive timeouts", () => {
@@ -134,7 +134,7 @@ describe("amendment-timeout", () => {
       expect(actions[0]).toMatchObject({
         proposalId: "AM-005",
         action: "auto_reject"});
-      expect(actions[0].reason).toContain("自动拒绝");
+      expect(actions[0]!.reason).toContain("自动拒绝");
     });
 
     it("handles multiple proposals with mixed results", () => {
@@ -173,7 +173,7 @@ describe("amendment-timeout", () => {
       // 自定义 TTL=3 → 4 天就超时
       const actions = checkTimeout([proposal], tmpDir, { judgmentTTLDays: 3 });
       expect(actions).toHaveLength(1);
-      expect(actions[0].action).toBe("needs_attention");
+      expect(actions[0]!.action).toBe("needs_attention");
     });
 
     it("returns empty when exactly at TTL boundary", () => {
