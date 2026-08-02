@@ -53,6 +53,11 @@ import {
   ROUNDTABLE_SCHEMA,
   COGNITION_SCHEMA,
   DOCS_SCHEMA,
+  MCP_SERVERS_SCHEMA,
+  SELF_EXAMINATION_SCHEMA,
+  CROSS_VERIFICATION_SCHEMA,
+  SEED_MEMORIES_SCHEMA,
+  GOVERNANCE_PIPELINE_SCHEMA,
 } from "./schemas/index.js";
 
 // ─── 域注册 ───────────────────────────────────────────
@@ -165,12 +170,14 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "mcp-servers.json",
     required: false,
     dataKey: "servers",
+    schema: MCP_SERVERS_SCHEMA,
     description: "MCP Server 配置——对齐行业标准 mcpServers 格式",
   },
   {
     name: "selfExamination",
     fileName: "self-examination.json",
     required: false,
+    schema: SELF_EXAMINATION_SCHEMA,
     description: "自审视脚本配置——hard/soft 模式独立配置",
   },
   {
@@ -178,6 +185,7 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "cross-verification.json",
     required: false,
     dataKey: "pairs",
+    schema: CROSS_VERIFICATION_SCHEMA,
     description: "交叉验证配对表——报告与验证者配对",
   },
   {
@@ -185,12 +193,14 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     fileName: "seed-memories.json",
     required: false,
     dataKey: "entries",
+    schema: SEED_MEMORIES_SCHEMA,
     description: "种子记忆——MemoryStore 初始化写入",
   },
   {
     name: "governancePipeline",
     fileName: "governance-pipeline.json",
     required: false,
+    schema: GOVERNANCE_PIPELINE_SCHEMA,
     description: "治理管线配置——制度制度化的运行引擎",
   },
   {
