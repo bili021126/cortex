@@ -19,7 +19,9 @@
   "exclude": [
     "tests/e2e/solo-flight-mock.test.ts",
     "tests/e2e/multi-agent-collab-mock.test.ts",
-    "tests/e2e/strategist-agent-mock.test.ts"
+    "tests/e2e/strategist-agent-mock.test.ts",
+    // manual e2e 依赖 @cortex/cli（queryLoop/planMode）——cli→engine 生产依赖循环使 engine 无法 devDep cli——架构性豁免（2026-06-20 第 3 项回退：循环检测 layer-contract 判定）
+    "tests/manual/e2e/tui-chain-e2e.test.ts"
   ],
   "references": [
     { "path": "../shared" },

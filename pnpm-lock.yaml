@@ -300,9 +300,6 @@ importers:
         specifier: ^12.0.0
         version: 12.11.1
     devDependencies:
-      '@cortex/cli':
-        specifier: workspace:*
-        version: link:../cli
       '@cortex/testing':
         specifier: workspace:*
         version: link:../testing
