@@ -99,12 +99,20 @@ class FileBackend implements MemoryStoreBackend {
         }
       }
     } catch (_e) {
-      // 检查索引文件是否存在以区分首次使用和文件损坏
+      // R11-03：索引损坏——从 entries/ 重建（条目文件是真相源），备份损坏索引。
+      // 此前：空存储启动 + 下次 flushIndex 从空 map 重写——永久孤立全部条目文件（记忆静默全丢）。
       try {
         await fs.access(this._indexPath);
-        console.warn(`[memory] 索引文件损坏，从空存储启动: ${this._indexPath}`);
-      } catch { /* empty */ }
-      // 索引不存在 = 首次使用，静默
+        try { await fs.copyFile(this._indexPath, `${this._indexPath}.corrupt.bak`); } catch { /* 备份失败不阻断 */ }
+        const rebuilt = await this._rebuildIndexFromEntries(store);
+        console.warn(
+          rebuilt > 0
+            ? `[memory] 索引损坏，已从 ${rebuilt} 个条目文件重建: ${this._indexPath}`
+            : `[memory] 索引损坏且 entries/ 为空——从空存储启动: ${this._indexPath}`,
+        );
+      } catch {
+        // 索引不存在 = 首次使用，静默
+      }
     }
 
     // 加载链路
@@ -120,6 +128,38 @@ class FileBackend implements MemoryStoreBackend {
     } catch {
       // 链路文件不存在
     }
+  }
+
+  /**
+   * R11-03：扫描 entries/*.json 重建索引——条目文件是真相源，索引损坏不丢数据。
+   * 重建成功后用恢复的条目 map 重写索引（损坏索引已备份 .corrupt.bak）。
+   */
+  private async _rebuildIndexFromEntries(store: AbstractMemoryStore): Promise<number> {
+    let count = 0;
+    // 重建时自维护 entries map（load 中 store.getAllEntries() 会触发 _ei() 未初始化断言）
+    const recovered = new Map<string, MemoryEntry>();
+    let files: string[] = [];
+    try { files = await fs.readdir(this._entriesDir); } catch { return 0; }
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      try {
+        const raw = await fs.readFile(path.join(this._entriesDir, f), "utf-8");
+        const deserialized: SerializedMemoryEntry = JSON.parse(raw);
+        if (!deserialized.id) continue;
+        const entry = {
+          ...deserialized,
+          content_blob: deserialized.content_blob as unknown as Record<string, unknown>,
+        };
+        store._loadEntry(deserialized.id, entry);
+        recovered.set(deserialized.id, entry as unknown as MemoryEntry);
+        count++;
+      } catch { /* 跳过损坏条目 */ }
+    }
+    if (count > 0) {
+      // 重建成功——重写索引（损坏索引已备份）
+      await this.flushIndex(recovered);
+    }
+    return count;
   }
 
   async persist(entry: MemoryEntry): Promise<void> {
