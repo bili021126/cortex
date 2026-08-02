@@ -13,8 +13,8 @@ describe("Engine Scheduler", () => {
   it("拓扑排序处理单节点", async () => {
     const { topologicalSort } = await import("@cortex/scheduler");
     const result = topologicalSort([{
-      id: "n1", type: "default", agentType: "code",
-      parentId: undefined, intent: "test",
+      id: "n1", type: "default",
+      parentId: undefined,
       status: "pending", createdAt: Date.now()
     }]);
     expect(result.length).toBe(1);

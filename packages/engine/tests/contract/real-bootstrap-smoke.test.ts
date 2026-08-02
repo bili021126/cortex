@@ -95,7 +95,7 @@ describe("真实 bootstrap 冒烟——装配级接线", () => {
     result.observer.emit({
       type: PipelineEventType.ExecLifecyclePhaseChanged,
       priority: PipelinePriority.NORMAL,
-      payload: { from: "running", to: "shutdown", phase: "smoke" },
+      payload: { from: "running", to: "shutdown", phase: "bootstrap_done" },
       timestamp: Date.now(),
       notificationType: "FYI",
     });

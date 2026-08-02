@@ -25,7 +25,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { AgentType, LinkType, PipelinePriority, PipelineEventType, type TaskNode, type MemoryKind, type SafeErrorReporter } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority, PipelineEventType, type TaskNode, type MemoryKind, type SafeErrorReporter , type EmittableEvent } from "@cortex/shared";
 import { LlmAdapter } from "@cortex/llm";
 import {
   TaskBoard,
@@ -454,14 +454,14 @@ async function main() {
       type: PipelineEventType.SchedulerInvariantViolation,
       priority: PipelinePriority.CRITICAL,
       payload: ctx,
-      timestamp: Date.now()});
+      timestamp: Date.now()} as unknown as EmittableEvent);
   };
   AgentPool.onInvariant = (ctx) => {
     observer.emit({
       type: PipelineEventType.AgentPoolInvariantViolation,
       priority: PipelinePriority.CRITICAL,
       payload: ctx,
-      timestamp: Date.now()});
+      timestamp: Date.now()} as unknown as EmittableEvent);
   };
   const gate = new ConfirmGate();
   gate.bypassAll();
@@ -607,7 +607,7 @@ async function main() {
       type: PipelineEventType.ErrorReported,
       priority: ctx.severity === "fatal" ? PipelinePriority.CRITICAL : PipelinePriority.HIGH,
       payload: ctx,
-      timestamp: Date.now()});
+      timestamp: Date.now()} as unknown as EmittableEvent);
   };
   for (const a of [codeAgent, reviewAgent, inspectorAgent, browserAgent, analysisAgent, docGovernAgent, loopAgent, opsAgent, apiAgent, dataAgent]) {
     a.setSafeReporter(safeReporter);

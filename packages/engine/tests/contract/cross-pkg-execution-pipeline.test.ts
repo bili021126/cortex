@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AgentType, PipelineEventType, PipelinePriority, type PlatformBridge, type IPipelineObserver, type ObservableEvent, type Tool, type ToolResult, type ToolInvocation, type ConfirmationRequest, type ConfirmationResponse } from "@cortex/shared";
+import { AgentType, PipelineEventType, PipelinePriority, type PlatformBridge, type IPipelineObserver, type ObservableEvent, type Tool, type ToolResult, type ToolInvocation, type ConfirmationRequest, type ConfirmationResponse , type EmittableEvent } from "@cortex/shared";
 import { PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { Toolkit } from "@cortex/platform";
 import { ReversibilityLevel, ToolCategory } from "@cortex/config";
@@ -95,7 +95,7 @@ describe("Cross-package execution pipeline", () => {
     };
 
     // engine 发射事件 → scheduler（PipelineObserver）接收
-    observer.emit(nodeEvent);
+    observer.emit(nodeEvent as unknown as EmittableEvent);
 
     expect(observer.events).toHaveLength(1);
     expect(observer.events[0]?.type).toBe(PipelineEventType.NodeStart);
@@ -262,7 +262,7 @@ describe("Cross-package execution pipeline", () => {
       payload: { nodeId: "lifecycle-node-1", agentType: "code" as any, success: true as const },
       timestamp: Date.now(),
     };
-    observer.emit(completeEvent);
+    observer.emit(completeEvent as unknown as EmittableEvent);
 
     expect(observer.events).toHaveLength(1);
     expect(observer.events[0]?.type).toBe(PipelineEventType.NodeComplete);
@@ -287,7 +287,7 @@ describe("Cross-package execution pipeline", () => {
       timestamp: Date.now(),
     };
 
-    observer.emit(completeEvent);
+    observer.emit(completeEvent as unknown as EmittableEvent);
 
     expect(observer.events).toHaveLength(1);
     expect(observer.events[0]?.type).toBe(PipelineEventType.NodeComplete);
@@ -304,7 +304,7 @@ describe("Cross-package execution pipeline", () => {
       timestamp: Date.now(),
     };
 
-    observer.emit(delayedEvent);
+    observer.emit(delayedEvent as unknown as EmittableEvent);
 
     expect(observer.events).toHaveLength(1);
     expect(observer.events[0]?.type).toBe(PipelineEventType.ExecNodeDelayed);
@@ -328,7 +328,7 @@ describe("Cross-package execution pipeline", () => {
       timestamp: Date.now(),
       notificationType: "FYI",
     };
-    observer.emit(gitEvent);
+    observer.emit(gitEvent as unknown as EmittableEvent);
 
     // 模拟 execFileSync 后的完成事件
     const completeEvent: ObservableEvent = {
@@ -342,7 +342,7 @@ describe("Cross-package execution pipeline", () => {
       },
       timestamp: Date.now(),
     };
-    observer.emit(completeEvent);
+    observer.emit(completeEvent as unknown as EmittableEvent);
 
     // 验证事件未被阻塞——所有 emit 都被收集
     expect(observer.events.length).toBeGreaterThanOrEqual(2);

@@ -8,7 +8,7 @@
  * 多视角完成竞态、CircuitBreaker 熔断、部分层失败处理
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentType, PipelinePriority } from "@cortex/shared";
+import { AgentType, PipelinePriority , type EmittableEvent } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, topologicalSort, ManifoldGate } from "@cortex/scheduler";
 import { createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MetaAgent, Scheduler } from "@cortex/engine";

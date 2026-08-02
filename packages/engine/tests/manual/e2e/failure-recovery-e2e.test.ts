@@ -10,7 +10,7 @@
  * @skip CI 中默认跳过（需完整引擎环境）
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { AgentType, PipelinePriority, AgentStatus, type TaskNode, type ObservableEvent } from "@cortex/shared";
+import { AgentType, PipelinePriority, AgentStatus, type TaskNode, type ObservableEvent , type EmittableEvent } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { MemoryStore } from "@cortex/memory-store";
 import { Toolkit } from "@cortex/platform";

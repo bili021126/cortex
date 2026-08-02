@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect, vi } from "vitest";
 import { ConfirmGate } from "@cortex/scheduler";
-import { PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { PipelineEventType, PipelinePriority , type EmittableEvent } from "@cortex/shared";
 import { PipelineObserver } from "@cortex/scheduler";
 import type { ObservableEvent } from "@cortex/shared";
 import { ReversibilityLevel } from "@cortex/config";
@@ -150,7 +150,7 @@ describe("ConfirmGate", () => {
       payload: { nodeId: "gate-no-bridge", agentId: "", elapsed: 0, action: "wait", level: "warn", reason: "gate operating without bridge" },
       timestamp: Date.now(),
       notificationType: "WARNING",
-    });
+    } as unknown as EmittableEvent);
     expect(warnings).toContain(PipelineEventType.ExecNodeDelayed);
   });
 

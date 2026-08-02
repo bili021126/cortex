@@ -15,7 +15,7 @@ import * as path from "node:path";
 import { bootstrapEngine, type BootstrapEngineResult } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "@cortex/platform";
-import type { TaskNode } from "@cortex/shared";
+import type { TaskNode , EmittableEvent } from "@cortex/shared";
 import { findProjectRoot, loadEnv } from "./e2e-utils.js";
 
 // ════════════════════════════════════════════════
@@ -64,7 +64,8 @@ const engine: BootstrapEngineResult = await bootstrapEngine(ROOT, {
 toolkit.setGate?.(engine.gate);
 engine.gate?.setBridge?.({
   confirm: async (req: any) => ({ requestId: req.id, approved: true }),
-  notify: (_msg: string) => {},
+  getPlatformContext: (() => ({})) as any,
+    notify: (_msg: string) => {},
 });
 
 // ════════════════════════════════════════════════

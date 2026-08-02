@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { AgentType, PipelineEventType, PipelinePriority, type TaskNode } from "@cortex/shared";
+import { AgentType, PipelineEventType, PipelinePriority, type TaskNode , type EmittableEvent } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver } from "@cortex/scheduler";
 import { LlmAdapter } from "@cortex/llm";
 import { MemoryStore } from "@cortex/memory-store";
@@ -174,7 +174,7 @@ describe("集成协作闭环", () => {
     expect(pool.spawn(AgentType.Code, "a1")).toBe(true);
     const ev: string[] = [];
     observer.on(PipelinePriority.HIGH, (e: any) => ev.push(e.type));
-    observer.emit({ type: PipelineEventType.NodeStart, priority: PipelinePriority.HIGH, payload: { nodeId: "n1" }, timestamp: Date.now() });
+    observer.emit({ type: PipelineEventType.NodeStart, priority: PipelinePriority.HIGH, payload: { nodeId: "n1" }, timestamp: Date.now() } as unknown as EmittableEvent);
     expect(ev).toContain(PipelineEventType.NodeStart);
   });
 });

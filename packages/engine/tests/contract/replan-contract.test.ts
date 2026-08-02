@@ -103,6 +103,7 @@ function createMockBoard() {
     getPendingNodes: vi.fn(() => addedNodes) as any,
     removeNode: vi.fn() as any,
     removeSubtree: vi.fn() as any,
+    clear: vi.fn() as any,
     addedNodes,
   };
   return mock;

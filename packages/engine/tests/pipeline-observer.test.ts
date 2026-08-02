@@ -1,7 +1,7 @@
 // @ci: unit
 import { describe, it, expect, vi } from "vitest";
 import { PipelineObserver } from "@cortex/scheduler";
-import { PipelinePriority, PipelineEventType, type ObservableEvent } from "@cortex/shared";
+import { PipelinePriority, PipelineEventType, type ObservableEvent , type EmittableEvent } from "@cortex/shared";
 
 describe("PipelineObserver", () => {
   it("注册 handler 后 emit 被调用", () => {
@@ -13,7 +13,7 @@ describe("PipelineObserver", () => {
       priority: PipelinePriority.NORMAL,
       payload: null,
       timestamp: Date.now()};
-    po.emit(event);
+    po.emit(event as unknown as EmittableEvent);
     expect(handler).toHaveBeenCalledWith(event);
   });
 
@@ -28,7 +28,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeComplete,
       priority: PipelinePriority.NORMAL,
       payload: null,
-      timestamp: Date.now()});
+      timestamp: Date.now()} as unknown as EmittableEvent);
 
     expect(normalHandler).toHaveBeenCalled();
     expect(criticalHandler).not.toHaveBeenCalled();
@@ -43,7 +43,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeComplete,
       priority: PipelinePriority.NORMAL,
       payload: null,
-      timestamp: Date.now()});
+      timestamp: Date.now()} as unknown as EmittableEvent);
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -63,7 +63,7 @@ describe("PipelineObserver", () => {
       priority: PipelinePriority.NORMAL,
       payload: null,
       timestamp: Date.now()};
-    po.emit(event);
+    po.emit(event as unknown as EmittableEvent);
 
     // handlerA 被移除，不应调用
     expect(handlerA).not.toHaveBeenCalled();
@@ -84,7 +84,7 @@ describe("PipelineObserver", () => {
       type: PipelineEventType.NodeFailed,
       priority: PipelinePriority.CRITICAL,
       payload: null,
-      timestamp: Date.now()});
+      timestamp: Date.now()} as unknown as EmittableEvent);
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -102,7 +102,7 @@ describe("PipelineObserver", () => {
       priority: PipelinePriority.HIGH,
       payload: null,
       timestamp: Date.now()};
-    po.emit(event);
+    po.emit(event as unknown as EmittableEvent);
 
     // handlerA 应正常调用
     expect(handlerA).toHaveBeenCalledWith(event);
@@ -123,7 +123,7 @@ describe("PipelineObserver", () => {
     // 未提供 requestId
     expect(event.requestId).toBeUndefined();
 
-    po.emit(event);
+    po.emit(event as unknown as EmittableEvent);
 
     // emit 后自动填充
     expect(event.requestId).toBeDefined();
@@ -143,7 +143,7 @@ describe("PipelineObserver", () => {
       timestamp: Date.now(),
       requestId: "custom-req-001"};
 
-    po.emit(event);
+    po.emit(event as unknown as EmittableEvent);
 
     // 调用方提供的 requestId 不被覆盖
     expect(event.requestId).toBe("custom-req-001");
@@ -162,7 +162,7 @@ describe("PipelineObserver", () => {
         type: PipelineEventType.NodeStart,
         priority: PipelinePriority.HIGH,
         payload: null,
-        timestamp: Date.now()});
+        timestamp: Date.now()} as unknown as EmittableEvent);
     }
 
     // 5 次 emit → 5 个不同的 requestId

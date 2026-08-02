@@ -14,7 +14,7 @@
  * 不依赖 bootstrapEngine 配置文件（手动装配组件）。
  */
 import { describe, it, expect, vi } from "vitest";
-import { AgentType, PipelineEventType, PipelinePriority, type ILifecycle, type MemoryEntry, type MemoryWriteInput, type ObservableEvent, type TaskNode } from "@cortex/shared";
+import { AgentType, PipelineEventType, PipelinePriority, type ILifecycle, type MemoryEntry, type MemoryWriteInput, type ObservableEvent, type TaskNode , type EmittableEvent } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { HealthCollector } from "@cortex/telemetry";
 import { MemoryStore } from "@cortex/memory-store";
@@ -99,7 +99,7 @@ describe("③ 甘雨规划任务 — plan() 产出 TaskNode[]", () => {
     ]);
 
     // 用 MetaAgent 的 adapter 验证 plan 输出格式
-    const result = await metaAdapter.chat([{ role: "user", content: "Add a utility function" }]);
+    const result = await metaAdapter.chat("mock-model", [{ role: "user", content: "Add a utility function" }]);
     expect(result.content).toContain("Task Plan");
     expect(result.content).toContain("implementation");
     expect(result.content).toContain("code_review");
@@ -335,7 +335,7 @@ describe("⑩ 记忆不被跨域泄漏 — code 场景查不到 talk 记忆", ()
     // 写入 talk 域记忆
     const id2 = await store.write({
       source: { agentType: AgentType.Code, taskId: "t-talk" },
-      kind: "ChatLog",
+      kind: "TaskLog",
       summary: "talk conversation",
       semantic_gist: "chat session",
       content_blob: {},
@@ -427,7 +427,7 @@ describe("⑫ talk 模式写入走独立 db — cyrene-memory.db 隔离", () => 
 
     const id2 = await store.write({
       source: { agentType: AgentType.Code, taskId: "talk-1" },
-      kind: "ChatLog",
+      kind: "TaskLog",
       summary: "talk message",
       semantic_gist: "chat message logged",
       content_blob: {},
@@ -559,7 +559,7 @@ describe("⑮ PipelineObserver 事件完整 — ExecLifecyclePhaseChanged 覆盖
       priority: PipelinePriority.HIGH,
       payload: null,
       timestamp: Date.now(),
-    });
+    } as unknown as EmittableEvent);
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -572,7 +572,7 @@ describe("⑮ PipelineObserver 事件完整 — ExecLifecyclePhaseChanged 覆盖
       timestamp: Date.now(),
     };
     expect(event.requestId).toBeUndefined();
-    observer.emit(event);
+    observer.emit(event as unknown as EmittableEvent);
     expect(event.requestId).toBeDefined();
     expect(event.requestId).toMatch(/^evt-/);
   });
@@ -882,7 +882,7 @@ describe("全闭环 E2E 错误路径", () => {
       payload: { nodeId: "slow-exec", reason: "Agent heartbeat timeout", delayMs: 30_000 },
       timestamp: Date.now(),
       notificationType: "WARNING",
-    });
+    } as unknown as EmittableEvent);
 
     // 超时后才发射 NodeFailed
     observer.emit({

@@ -17,7 +17,7 @@ import { ContextManager, DomainGateController, type ResolvedContext, type Contex
 import { MemoryStore, type IEmbeddingService } from "@cortex/memory-store";
 import { InMemoryMemoryStore } from "@cortex/memory";
 import { ConfigRegistry } from "@cortex/config";
-import { AgentType, PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type ReadMode, type MemorySource } from "@cortex/shared";
+import { AgentType, PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type ReadMode, type MemorySource , type EmittableEvent } from "@cortex/shared";
 
 // ── Mock 嵌入服务 ─────────────────────────────────────────
 
@@ -267,7 +267,7 @@ describe("Cross-package cognitive pipeline", () => {
       payload: {},
       timestamp: Date.now(),
     };
-    observer.emit(warmupEvent);
+    observer.emit(warmupEvent as unknown as EmittableEvent);
     expect(observer.events.length).toBe(beforeWarmup + 1);
     expect(observer.events[beforeWarmup]?.type).toBe(PipelineEventType.MemMemoryWarmupInitiated);
 
@@ -279,7 +279,7 @@ describe("Cross-package cognitive pipeline", () => {
       payload: {},
       timestamp: Date.now(),
     };
-    observer.emit(obliterateEvent);
+    observer.emit(obliterateEvent as unknown as EmittableEvent);
     expect(observer.events.length).toBe(beforeObliterate + 1);
     expect(observer.events[beforeObliterate]?.type).toBe(PipelineEventType.MemMemoryObliterationTriggered);
 
@@ -318,7 +318,7 @@ describe("Cross-package cognitive pipeline", () => {
       payload: { scene: "unknown-scene" },
       timestamp: Date.now(),
     };
-    observer.emit(warmupEvent);
+    observer.emit(warmupEvent as unknown as EmittableEvent);
 
     // 5. memory-store 能检索到之前写入的记忆（即使场景变了）
     const query: MemoryQuery = { keywords: ["code-review", "PR"] };

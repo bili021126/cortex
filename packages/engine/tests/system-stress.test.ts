@@ -6,7 +6,7 @@
  * 场景 3: 重规划预算耗尽——maxReplanPerNode + maxTotalReplans 双重上限
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentType, LinkType, PipelinePriority, PipelineEventType, AgentStatus } from "@cortex/shared";
+import { AgentType, LinkType, PipelinePriority, PipelineEventType, AgentStatus , type EmittableEvent } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import {
   TaskBoard, AgentPool, PipelineObserver, ManifoldGate} from "@cortex/scheduler";
