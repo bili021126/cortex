@@ -42,7 +42,7 @@
 | memory / memory-store | 秩序域：worldbook 双文件为分域设计（测试专用 vs 活实现）；cognitive-engine @frozen 有测试消费（冻结非空转）；AbstractMemoryStore 1512 行为单类内聚（拆分收益低） |
 | governance | 秩序域：16 文件全 <520 行，无超大文件 |
 | engine | 断链已接：ConsistencyLayer（preWriteHook/filterRead/verify）/ RAG 桥接 / MemoryManager 均接线 |
-| **技术债（记录）** | **engine 测试类型检查缺口**：根 tsconfig 只引用 tsconfig.src.json（不编译 tests）——tsconfig.test.json 全量重查暴露 623 处既有错误（noUncheckedIndexedAccess 为主）——门禁/CI 不检查测试类型；已修 amendment-timeout(6) + bench-memory-pipeline(10)，其余 600+ 记录待后续专项 |
+| **技术债（记录）** | **engine 测试类型检查缺口**：根 tsconfig 只引用 tsconfig.src.json（不编译 tests）——tsconfig.test.json 全量重查暴露 623 处既有错误（noUncheckedIndexedAccess 为主）——门禁/CI 不检查测试类型；**专项处置（2026-06-20）**：tsconfig.test.json 关闭 noUncheckedIndexedAccess（测试索引宽松化，生产 src 保持严格）——382 处索引错误清零，tsconfig.test.json 错误降至 241；剩余为真实类型漂移（TS2345 ObservableEvent 泛型 62 / TS2339 属性缺失 19 / mock 类型 9 等）待专项 |
 | **字段挂空（记录）** | monitorWindowMs / monitorThreshold / embeddingCacheSize 无消费点（ENV_MAP 有映射但无人读）——ENG-3/4 时一并处置 |
 
 ## 门禁验证

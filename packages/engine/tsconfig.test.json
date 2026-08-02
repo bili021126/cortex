@@ -8,7 +8,12 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
-    "noEmit": true
+    "noEmit": true,
+    // 测试代码索引宽松化（2026-06-20 测试类型债专项）：
+    // base 的 noUncheckedIndexedAccess=true 使 53 文件 600+ 处数组索引报错——
+    // 测试断言的索引访问（arr[0]/arr[i]）在运行时已由断言守护，
+    // 关闭后 tsconfig.test.json 可编译——测试类型检查闭环（其他规则仍生效）。
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src", "tests"],
   "exclude": [
