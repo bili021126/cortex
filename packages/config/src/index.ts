@@ -215,6 +215,10 @@ export {
   envTruthy,
 } from "./constants/index.js";
 
+// ── 密钥上下文（R11-09/10：modelFallback 链 + daemon 共享解析） ──
+export { loadKeyContextEntries, resolveKeyChain } from "./keys-context.js";
+export type { KeyContextEntry } from "./keys-context.js";
+
 // ── 默认值 + 解析 ─────────────────────────────────
 export {
   DEFAULT_ENGINE_CONFIG,

@@ -25,6 +25,8 @@ import {
   DEFAULT_LLM_REASONER_MODEL,
   LLM_KEY_NAMES,
   resolveModelCapabilities,
+  loadKeyContextEntries,
+  resolveKeyChain,
   type ModelStore,
   type KeyStore,
 } from "@cortex/config";
@@ -90,6 +92,10 @@ export async function bootstrapLlm(keyStore?: KeyStore, modelStore?: ModelStore)
 
   const fallbackKey = process.env[ENV_DEEPSEEK_API_KEY];
 
+  // R11-10：modelFallback 链式密钥解析（keys-context.json 声明但此前无运行时代码）
+  const keyEntries = loadKeyContextEntries();
+  const chainKey = (keyName: string, envVar: string) => resolveKeyChain(keyName, keyEntries) ?? process.env[envVar] ?? fallbackKey;
+
   // 从 models.json 解析模型能力声明——驱动 _shouldEnableThinking() + maxTokens
   const modelCaps = resolveModelCaps(modelStore);
   const chatCaps = modelCaps.get(llmChatModel) ?? modelCaps.get(DEFAULT_LLM_CHAT_MODEL);
@@ -113,22 +119,22 @@ export async function bootstrapLlm(keyStore?: KeyStore, modelStore?: ModelStore)
     });
 
   // 昔涟独立 Key + 独立 Chat 模型（不谈 reasoning，走 flash 能力）
-  const cyreneKey = resolveKey(pmStore, LLM_KEY_NAMES.CYRENE, ENV_DEEPSEEK_CYRENE_API_KEY, fallbackKey);
+  const cyreneKey = chainKey(LLM_KEY_NAMES.CYRENE, ENV_DEEPSEEK_CYRENE_API_KEY);
   if (cyreneKey) llms.set(LLM_KEY_NAMES.CYRENE, adapter(cyreneKey, "cyrene", llmCyreneChatModel, undefined, chatCaps));
 
   // 甘雨独立 Key + 独立模型（MetaAgent 需要 reasoning + thinking，走 pro 能力）
-  const ganyuKey = resolveKey(pmStore, LLM_KEY_NAMES.GANYU, ENV_DEEPSEEK_GANYU_API_KEY, fallbackKey);
+  const ganyuKey = chainKey(LLM_KEY_NAMES.GANYU, ENV_DEEPSEEK_GANYU_API_KEY);
   if (ganyuKey) {
     const ganyuAdapter = adapter(ganyuKey, "reasoner", llmGanyuChatModel, { reasoningEffort: llmReasoningEffort }, reasonerCaps);
     llms.set(LLM_KEY_NAMES.GANYU, ganyuAdapter);
   }
 
   // Chat 池 Key（通用 Chat 模型，走 flash 能力——不注入 reasoning_effort）
-  const chatKey = resolveKey(pmStore, LLM_KEY_NAMES.CHAT, ENV_DEEPSEEK_CHAT_API_KEY, fallbackKey);
+  const chatKey = chainKey(LLM_KEY_NAMES.CHAT, ENV_DEEPSEEK_CHAT_API_KEY);
   if (chatKey) llms.set(LLM_KEY_NAMES.CHAT, adapter(chatKey, "chat", undefined, undefined, chatCaps));
 
   // Reasoner Key——仅此路注入 reasoning_effort，走 pro 能力
-  const reasonerKey = resolveKey(pmStore, LLM_KEY_NAMES.REASONER, ENV_DEEPSEEK_REASONER_API_KEY, fallbackKey);
+  const reasonerKey = chainKey(LLM_KEY_NAMES.REASONER, ENV_DEEPSEEK_REASONER_API_KEY);
   if (reasonerKey) llms.set(LLM_KEY_NAMES.REASONER, adapter(reasonerKey, "reasoner", undefined, { reasoningEffort: llmReasoningEffort }, reasonerCaps));
 
   // config-driven key resolution——从 keys-context.json 装载额外密钥配置

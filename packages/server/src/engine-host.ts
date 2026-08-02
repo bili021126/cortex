@@ -33,6 +33,8 @@ import {
   DEFAULT_LLM_CHAT_MODEL,
   DEFAULT_LLM_REASONER_MODEL,
   resolveModelCapabilities,
+  loadKeyContextEntries,
+  resolveKeyChain,
   type ConfigFileReader,
   type ConfigFileWriter,
 } from "@cortex/config";
@@ -265,26 +267,30 @@ function createLlmAdapters(stores: ConfigStores): Map<string, LlmAdapter> {
       maxTokens: caps?.maxOutputTokens,
     });
 
+  // R11-09/10：daemon 与 CLI 共用 keys-context 链式解析（此前 daemon 不读 keys-context、modelFallback 无运行时代码）
+  const keyEntries = loadKeyContextEntries();
+  const chainKey = (keyName: string, envVar: string) => resolveKeyChain(keyName, keyEntries) ?? process.env[envVar] ?? fallbackKey;
+
   // Cyrene
-  const cyreneKey = process.env[ENV_DEEPSEEK_CYRENE_API_KEY] || fallbackKey;
+  const cyreneKey = chainKey(LLM_KEY_NAMES.CYRENE, ENV_DEEPSEEK_CYRENE_API_KEY);
   if (cyreneKey) {
     llms.set(LLM_KEY_NAMES.CYRENE, makeAdapter(cyreneKey, "cyrene", llmCyreneChatModel, undefined, chatCaps));
   }
 
   // Ganyu
-  const ganyuKey = process.env[ENV_DEEPSEEK_GANYU_API_KEY] || fallbackKey;
+  const ganyuKey = chainKey(LLM_KEY_NAMES.GANYU, ENV_DEEPSEEK_GANYU_API_KEY);
   if (ganyuKey) {
     llms.set(LLM_KEY_NAMES.GANYU, makeAdapter(ganyuKey, "reasoner", llmGanyuChatModel, { reasoningEffort: llmReasoningEffort }, reasonerCaps));
   }
 
   // Chat pool
-  const chatKey = process.env[ENV_DEEPSEEK_CHAT_API_KEY] || fallbackKey;
+  const chatKey = chainKey(LLM_KEY_NAMES.CHAT, ENV_DEEPSEEK_CHAT_API_KEY);
   if (chatKey) {
     llms.set(LLM_KEY_NAMES.CHAT, makeAdapter(chatKey, "chat", undefined, undefined, chatCaps));
   }
 
   // Reasoner
-  const reasonerKey = process.env[ENV_DEEPSEEK_REASONER_API_KEY] || fallbackKey;
+  const reasonerKey = chainKey(LLM_KEY_NAMES.REASONER, ENV_DEEPSEEK_REASONER_API_KEY);
   if (reasonerKey) {
     llms.set(LLM_KEY_NAMES.REASONER, makeAdapter(reasonerKey, "reasoner", undefined, { reasoningEffort: llmReasoningEffort }, reasonerCaps));
   }
