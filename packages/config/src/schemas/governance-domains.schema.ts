@@ -25,10 +25,11 @@ export const MCP_SERVERS_SCHEMA: JsonSchema = {
   },
 };
 
-/** self-examination.json——自审视脚本配置（hard/soft 模式） */
+/** self-examination.json——自审视脚本配置（hard/soft 模式，R11-19） */
 export const SELF_EXAMINATION_SCHEMA: JsonSchema = {
   type: "object",
   required: ["agents"],
+  additionalProperties: false,
   _message: "self-examination 必须包含 agents.hard 与 agents.soft 数组",
   properties: {
     description: { type: "string" },
@@ -40,6 +41,15 @@ export const SELF_EXAMINATION_SCHEMA: JsonSchema = {
         soft: { type: "array", items: { type: "string", minLength: 1 } },
       },
     },
+    // 数据文件实际键（宽松声明——2026-06-20 R11-19 补全）
+    consensusAgents: { type: "array", items: { type: "string" } },
+    agentTypes: { type: "object" },
+    outputDir: { type: "object" },
+    consensusOutput: { type: "string" },
+    archiveBase: { type: "string" },
+    cleanupFiles: { type: "array", items: { type: "string" } },
+    templates: { type: "object" },
+    reportMaxCharsDefault: { type: "integer", minimum: 0 },
   },
 };
 
@@ -80,10 +90,11 @@ export const SEED_MEMORIES_SCHEMA: JsonSchema = {
   _message: "seed-memories 必须为种子记忆数组（summary 必填）",
 };
 
-/** governance-pipeline.json——治理管线配置（阶段列表 + CI 门 + 触发条件） */
+/** governance-pipeline.json——治理管线配置（阶段列表 + CI 门 + 触发条件，R11-19） */
 export const GOVERNANCE_PIPELINE_SCHEMA: JsonSchema = {
   type: "object",
   required: ["enabled", "stages", "ciGate", "triggers"],
+  additionalProperties: false,
   _message: "governance-pipeline 必须包含 enabled/stages/ciGate/triggers",
   properties: {
     description: { type: "string" },

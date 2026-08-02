@@ -5,12 +5,14 @@
  */
 import type { JsonSchema } from "../loader.js";
 
-/** engine.json——循环上限、超时、Inspector 配置 */
+/** engine.json——循环上限、超时、Inspector 配置（R11-19：拒绝未知键防拼错） */
 export const ENGINE_SCHEMA: JsonSchema = {
   type: "object",
   required: [],
+  additionalProperties: false,
   _message: "engine 必须为对象",
   properties: {
+    description: { type: "string" },
     maxReplanPerNode: { type: "integer", minimum: 0 },
     maxTotalReplans: { type: "integer", minimum: 0 },
     // R11-08：声明 defaultMaxLoops——用户经 engine.json 调循环上限有校验（此前静默忽略）
@@ -65,10 +67,11 @@ export const ROUNDTABLE_SCHEMA: JsonSchema = {
   _message: "roundtable 必须为模板数组",
 };
 
-/** cognition.json——Agent 激活矩阵与注意力策略 */
+/** cognition.json——Agent 激活矩阵与注意力策略（R11-19） */
 export const COGNITION_SCHEMA: JsonSchema = {
   type: "object",
   required: ["activationMatrix", "attention"],
+  additionalProperties: false,
   _message: "cognition 必须包含 activationMatrix 与 attention",
   properties: {
     description: { type: "string" },
@@ -96,10 +99,11 @@ export const COGNITION_SCHEMA: JsonSchema = {
   },
 };
 
-/** docs.json——宪法路径与文档注册表 */
+/** docs.json——宪法路径与文档注册表（R11-19） */
 export const DOCS_SCHEMA: JsonSchema = {
   type: "object",
   required: ["constitutionPath", "docRegistry"],
+  additionalProperties: false,
   _message: "docs 必须包含 constitutionPath 与 docRegistry",
   properties: {
     description: { type: "string" },

@@ -1,5 +1,5 @@
 import { type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type AgentType, type ITrustModel, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
-import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, computeTrustScore, shouldAutoApprove, CONFIRM_GATE_BYPASS_TTL_MS, type TrustRecord, ReversibilityLevel as RL, type ReversibilityLevel, TrustLevel as TL } from "@cortex/config";
+import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, computeTrustScore, shouldAutoApprove, CONFIRM_GATE_BYPASS_TTL_MS, envTruthy, type TrustRecord, ReversibilityLevel as RL, type ReversibilityLevel, TrustLevel as TL } from "@cortex/config";
 import { recordTelemetry } from "@cortex/telemetry";
 
 // B4：信任分模型单源在 @cortex/config/constants/confirm-gate.ts——
@@ -230,7 +230,8 @@ export class ConfirmGate implements Disposable {
 
     // 非交互环境自动判定：L0/L1 放行，L2/L3 拒绝（安全优先）
     // 环境变量 CORTEX_AUTO_CONFIRM=true 时 L0/L1 放行
-    if (process.env[ENV_AUTO_CONFIRM] === 'true') {
+    // R11-16：统一真值词汇（1/true/yes/on）——CORTEX_AUTO_CONFIRM=1 此前无效
+    if (envTruthy(ENV_AUTO_CONFIRM) === true) {
       const req = this.pending.get(requestId);
       if (req) {
         // R5-S2 fix: AUTO_CONFIRM 不对 L3（不可逆）放行——即使设置了也必须交互确认

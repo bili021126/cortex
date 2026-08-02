@@ -62,6 +62,8 @@ export {
   ENV_CORTEX_ROOT,
   ENV_CORTEX_ENABLE_CLI,
   withAutoConfirm,
+  // R11-16：统一布尔 env 真值解析
+  envTruthy,
 } from "./env.js";
 
 // ── 文件路径 ──

@@ -85,3 +85,13 @@ export async function withAutoConfirm<T>(fn: () => Promise<T>): Promise<T> {
     else process.env[ENV_AUTO_CONFIRM] = prev;
   }
 }
+
+/** 布尔环境变量真值解析（R11-16）——统一 1/true/yes/on 真值词汇，未设置/非法返回 undefined */
+export function envTruthy(name: string): boolean | undefined {
+  const raw = process.env[name];
+  if (raw === undefined) return undefined;
+  const v = raw.trim().toLowerCase();
+  if (v === "1" || v === "true" || v === "yes" || v === "on") return true;
+  if (v === "0" || v === "false" || v === "no" || v === "off") return false;
+  return undefined;
+}

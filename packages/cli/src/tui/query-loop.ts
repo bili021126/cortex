@@ -240,11 +240,15 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
     : rawTools;
 
   // 最大工具调用轮次（从 config 读取，支持环境变量 CORTEX_MAX_TOOL_ROUNDS 覆盖）
+  // R11-17：非法 env 值（NaN/<=0）回退默认——此前 Number("abc")=NaN 使工具循环永零轮
   const envLimit = process.env[ENV_MAX_TOOL_ROUNDS];
-  const configMax = envLimit ? Number(envLimit) : DEFAULT_MAX_TOOL_ROUNDS;
+  const parsedLimit = envLimit ? Number(envLimit) : Number.NaN;
+  const configMax = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : DEFAULT_MAX_TOOL_ROUNDS;
   // plan/talk/party 模式：零工具 + 极低轮次上限——纯文本对话，不调用工具
   const MAX_TOOL_ROUNDS = mode === "plan" ? Math.min(configMax, 5) : configMax;
-  const CONTEXT_LIMIT = parseInt(process.env.CORTEX_CONTEXT_LIMIT || "500000", 10);
+  // R11-17：NaN 守卫（parseInt 对非数字输入产生 NaN）
+  const parsedCtx = parseInt(process.env.CORTEX_CONTEXT_LIMIT || "500000", 10);
+  const CONTEXT_LIMIT = Number.isFinite(parsedCtx) && parsedCtx > 0 ? parsedCtx : 500000;
   let toolRound = 0;
   let finalOutput = "";
   let sessionTokens = 0;

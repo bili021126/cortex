@@ -32,6 +32,7 @@ import {
   CLI_EXIT_INTERNAL_ERROR,
   WINDOWS_CHCP_UTF8,
   ENV_CORTEX_ENABLE_CLI,
+  envTruthy,
 } from "@cortex/config";
 
 // ── 引导模块 ─────────────────────────────────────
@@ -329,7 +330,8 @@ if (isDirectRun()) {
   console.error("⚠️  CLI/TUI 已废弃（2026-07）——Cortex 当前仅作为引擎库使用。");
   console.error("    直接通过 @cortex/engine API 调用。CLI/TUI 入口保留用于未来重建。");
   console.error("    如需临时启用：设置 CORTEX_ENABLE_CLI=1 环境变量。");
-  if (process.env[ENV_CORTEX_ENABLE_CLI] === "1") {
+  // R11-16：统一真值词汇（1/true/yes/on）
+  if (envTruthy(ENV_CORTEX_ENABLE_CLI) === true) {
     main().then((code) => process.exit(code)).catch((err) => {
       console.error(`✗ 致命错误: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(CLI_EXIT_INTERNAL_ERROR);

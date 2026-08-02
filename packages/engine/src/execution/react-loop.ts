@@ -4,7 +4,7 @@
  
 import type { TaskNode, NodeResult, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
 import { AgentType } from "@cortex/shared";
-import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_LOOP, ENV_CORTEX_DEBUG, ENV_REACT_DEBUG, ReversibilityLevel as RL } from "@cortex/config";
+import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_LOOP, ENV_CORTEX_DEBUG, ENV_REACT_DEBUG, envTruthy, ReversibilityLevel as RL } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
 import type { MemoryStore } from "@cortex/memory-store";
@@ -91,7 +91,8 @@ export async function runReActLoop(
   const usageLog: Array<{prompt_tokens?: number; completion_tokens?: number}> = [];
   const deadline = startTime + ctx.reactLoopTimeoutMs;
 
-  const REACT_DEBUG = process.env[ENV_CORTEX_DEBUG] === "1" || process.env[ENV_REACT_DEBUG] === "1";
+  // R11-16：统一真值词汇（1/true/yes/on）——CORTEX_DEBUG=true 此前被忽略
+  const REACT_DEBUG = envTruthy(ENV_CORTEX_DEBUG) === true || envTruthy(ENV_REACT_DEBUG) === true;
   const diagnostic = (msg: string): void => {
     if (REACT_DEBUG) console.error(`  🔁 [ReAct-${agentType}#${loops}] ${msg}`);
   };

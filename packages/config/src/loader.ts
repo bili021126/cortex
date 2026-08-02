@@ -532,8 +532,15 @@ export function validateJsonSchema(
         }
       }
     }
-    // additionalProperties — 处理未被 properties 覆盖的键
-    if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
+    // additionalProperties — 处理未被 properties 覆盖的键（R11-19：支持布尔 false 拒绝未知键）
+    if (schema.additionalProperties === false) {
+      const knownKeys = new Set(Object.keys(schema.properties ?? {}));
+      for (const key of Object.keys(obj)) {
+        if (!knownKeys.has(key)) {
+          errors.push({ path: `${path}.${key}`, message: `未知字段不被允许: ${key}` });
+        }
+      }
+    } else if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
       const knownKeys = new Set(Object.keys(schema.properties ?? {}));
       for (const key of Object.keys(obj)) {
         if (!knownKeys.has(key)) {
