@@ -36,10 +36,10 @@ function makeMockLLM(): Map<string, unknown> {
 }
 
 /** 写入一条可辨识的记忆并返回其 id */
-async function writeMarker(memory: IMemoryStore, tag: string): Promise<string> {
+async function writeMarker(memory: IMemoryStore, tag: string, distinct?: string): Promise<string> {
   const id = await memory.write({
     kind: "EPISODIC" as never,
-    content_blob: { marker: tag },
+    content_blob: { marker: tag, ...(distinct ? { topic: distinct } : {}) },
     summary: `持久化标记-${tag}`,
     semantic_gist: `持久化标记-${tag}`,
     content_hash: "",
@@ -128,9 +128,9 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
     const first = await boot(TEMP_DB);
     const memoryA = first.memory!;
     const idA = await writeMarker(memoryA, "restart-A");
-    const idB = await writeMarker(memoryA, "restart-B");
-    // CI 诊断：验证 id 唯一性（Linux 环境偶发 147 行 markers=1，疑似 idA===idB）
-    console.error("Error: [T2-diagnose] ids:", JSON.stringify({ idA, idB, same: idA === idB }));
+    // 2026-06-20 CI 修复：MemoryStore 向量去重会把语义相似条目合并（CI 上 embedding 可用）——
+    // B 的内容必须与 A 语义足够不同，否则去重返回 A 的 id 导致重启后仅 1 条
+    const idB = await writeMarker(memoryA, "restart-B", "量子力学与星轨导航的映射关系");
     await memoryA.close();
 
     // 第二次启动：同一 dbPath，读回
@@ -146,18 +146,7 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
 
     // 跨重启的条目数应等于写入数（无丢失、无重复）
     const markers = all.filter((e: MemoryEntry) => e.summary.startsWith("持久化标记-"));
-    // CI 诊断（2026-06-20）：Linux 环境偶发 markers=1——诊断内嵌断言消息（vitest 失败详情必显示）
-    expect(
-      markers.length,
-      `[T2-diagnose] ids=${JSON.stringify({ idA, idB, same: idA === idB })} ` +
-        `all=${JSON.stringify(all.map((e) => ({ id: e.id, summary: e.summary })))} ` +
-        `files=${JSON.stringify({
-          db: fs.existsSync(TEMP_DB),
-          wal: fs.existsSync(TEMP_DB + "-wal"),
-          shm: fs.existsSync(TEMP_DB + "-shm"),
-          size: fs.existsSync(TEMP_DB) ? fs.statSync(TEMP_DB).size : -1,
-        })}`,
-    ).toBe(2);
+    expect(markers.length).toBe(2);
 
     await memoryB.close();
   });
