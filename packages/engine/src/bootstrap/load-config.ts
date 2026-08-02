@@ -8,7 +8,7 @@ import { setAgentRegistry, type MemoryQuery, type TaskNode } from "@cortex/share
 import { readFileSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { LlmAdapter } from "@cortex/llm";
-import { DEFAULT_ENGINE_CONFIG } from "@cortex/config";
+import { DEFAULT_ENGINE_CONFIG, loadConfigDomain, loadEngineDefaults, resolveConfigDataDir, type ConfigFileReader, type EngineConfig } from "@cortex/config";
 import {
   codeMemoryQuery,
   reviewMemoryQuery,
@@ -20,6 +20,31 @@ import {
   dataMemoryQuery,
   fixMemoryQuery,
 } from "../agents/index.js";
+
+// ─── 引擎配置解析（ENG-5：engine.json 域接线 + tuning 覆盖链） ───
+
+/**
+ * 组装最终 EngineConfig——覆盖链：options（调用方显式）> engine.json（ENGINE_SCHEMA 校验）> DEFAULT_ENGINE_CONFIG。
+ * tuning 的 reactMaxLoops 仅当 options 未显式传 defaultMaxLoops 时覆盖。
+ */
+export function resolveEngineConfig(override?: EngineConfig): EngineConfig {
+  let fileConfig: EngineConfig | undefined;
+  try {
+    const readFileNode: ConfigFileReader = (fp: string) => readFileSync(fp, "utf-8");
+    fileConfig = loadConfigDomain<EngineConfig>("engine", readFileNode, resolveConfigDataDir()) ?? undefined;
+  } catch {
+    fileConfig = undefined;
+  }
+  return {
+    ...DEFAULT_ENGINE_CONFIG,
+    ...(fileConfig ?? {}),
+    ...(override ?? {}),
+    defaultMaxLoops:
+      override?.defaultMaxLoops
+      ?? loadEngineDefaults().reactMaxLoops
+      ?? DEFAULT_ENGINE_CONFIG.defaultMaxLoops,
+  };
+}
 
 // ─── 编码规范注入 ────────────────────────────────────
 

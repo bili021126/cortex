@@ -45,6 +45,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { PipelineEventType, PipelinePriority, type IFileSystemAdapter, type IMemoryStore, type MemoryEntry, type ObservableEvent, type PipelineHandler, type ReadMode, type TaskNode } from "@cortex/shared";
 import { resolveConfigDataDir, ConfigRegistry, registerDefaultDomains, PRESET_ALERT_RULES, isTestEnv, loadConfigDomain, type ConfigFileReader, type EngineConfig } from "@cortex/config";
+import { resolveEngineConfig } from "./load-config.js";
 import { ContextManager } from "@cortex/context-manager";
 import { readFileSync, statSync } from "node:fs";
 import { initSkillSystem } from "./init-skills.js";
@@ -216,7 +217,7 @@ export async function bootstrapEngine(
   }
   const pluginConfig: EnginePluginLoadConfig = {
     plugins: pluginNames,
-    engineConfig: options.engineConfig,
+    engineConfig: resolveEngineConfig(options.engineConfig),
     workspaceRoot: wsRoot,
     externals: {
       llms: options.llms,

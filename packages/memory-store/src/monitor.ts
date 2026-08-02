@@ -15,6 +15,8 @@
  * @fix M15 — 简化 start() 中的三次 .bind(this)，使用循环统一绑定。
  */
 import { PipelineEventType, PipelinePriority, type IPipelineObserver, type ObservableEvent } from "@cortex/shared";
+// ENG-4：监控窗口/阈值单源——config 常量，消本地硬编码 60_000/10
+import { MONITOR_WINDOW_MS, MONITOR_THRESHOLD } from "@cortex/config";
 
 export class MemoryStoreMonitor {
   /** 最近 N 秒内事件计数（用于阈值检测） */
@@ -43,8 +45,8 @@ export class MemoryStoreMonitor {
       logToStdout?: boolean;
     } = {},
   ) {
-    this._windowMs = options.windowMs ?? 60_000;
-    this._threshold = Math.max(1, Math.min(options.threshold ?? 10, 500));
+    this._windowMs = options.windowMs ?? MONITOR_WINDOW_MS;
+    this._threshold = Math.max(1, Math.min(options.threshold ?? MONITOR_THRESHOLD, 500));
     this._logToStdout = options.logToStdout ?? false;
   }
 
