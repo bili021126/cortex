@@ -32,41 +32,8 @@ import {
 } from "@cortex/config";
 import type { ModelCapabilities } from "@cortex/shared";
 
-/** 密码条目数据结构（原 @cortex/pm 内联） */
-interface PasswordEntry {
-  id: string;
-  name: string;
-  username: string;
-  password: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** pm vault 的最小接口 */
-interface PmStore {
-  getEntry(name: string): PasswordEntry | undefined;
-}
-
 /** 初始化的 LLM 适配器映射 */
 export type LlmBootstrapResult = Map<string, LlmAdapter>;
-
-/** 按优先级解析 API Key：vault → 专用环境变量 → DEEPSEEK_API_KEY 兜底 */
-function resolveKey(
-  pmStore: PmStore | undefined,
-  pmKey: string,
-  envVarName: string,
-  fallbackKey?: string,
-): string | undefined {
-  if (pmStore) {
-    try {
-      const entry = pmStore.getEntry(pmKey);
-      if (entry) return entry.password;
-    } catch {
-      // vault 读取失败，继续回退
-    }
-  }
-  return process.env[envVarName] || fallbackKey || undefined;
-}
 
 /**
  * 初始化 LLM 适配器三路实例（昔涟 / Chat池 / Reasoner / Ganyu）。
@@ -100,9 +67,6 @@ export async function bootstrapLlm(keyStore?: KeyStore, modelStore?: ModelStore)
   const modelCaps = resolveModelCaps(modelStore);
   const chatCaps = modelCaps.get(llmChatModel) ?? modelCaps.get(DEFAULT_LLM_CHAT_MODEL);
   const reasonerCaps = modelCaps.get(llmReasonerModel) ?? modelCaps.get(DEFAULT_LLM_REASONER_MODEL);
-
-  // 若设置了 PM_MASTER_KEY，尝试从 pm 加密 vault 加载密钥
-  const pmStore: PmStore | undefined = undefined;
 
   const adapter = (key: string, label: string, chatModelOverride?: string, extra?: Partial<{ reasoningEffort: "high" | "max" }>, caps?: ModelCapabilities) =>
     new LlmAdapter({

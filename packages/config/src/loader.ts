@@ -23,6 +23,8 @@
  */
 
 import * as path from "node:path";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 
 import type { AgentsConfig } from "./interfaces/agent.js";
@@ -289,20 +291,61 @@ export class ConfigValidationError extends Error {
  * @returns data 目录的绝对路径
  * @throws ConfigLoadError 若无法解析（非 Node.js ESM 环境）
  */
+/** 测试环境检测（本地实现——loader 保持零依赖，避免与 constants 循环） */
+function isTestEnv(): boolean {
+  return !!process.env["VITEST"] || !!process.env["NODE_ENV"]?.startsWith("test");
+}
+
+/**
+ * 解析配置数据目录（R11-01：运行时配置不再写入包安装目录）。
+ *
+ * 优先级：CORTEX_CONFIG_DIR env > 用户数据目录（~/.cortex/config，自动 seed）> 包 dist/data（测试/兜底）。
+ * 此前解析到 <@cortex/config>/dist/data——Electron 打包后只读（app.asar 内 writeFileSync 抛错）、
+ * dev 中写入污染 git（src/data 被运行时编辑弄脏工作树）。
+ * 测试环境（VITEST）保持包数据——测试隔离，不污染用户目录。
+ */
 export function resolveConfigDataDir(): string {
   if (_cachedDataDir) return _cachedDataDir;
 
   try {
-    // 从 dist/loader.js 推导：dist/loader.js → dist/ → dist/data/
+    // 包数据目录（权威只读源）
     const distDir = path.dirname(fileURLToPath(import.meta.url));
-    const resolved = path.join(distDir, "data");
-    _cachedDataDir = resolved;
-    return resolved;
+    const packageDataDir = path.join(distDir, "data");
+
+    // 测试环境：保持包数据（测试隔离）
+    if (isTestEnv()) {
+      _cachedDataDir = packageDataDir;
+      return packageDataDir;
+    }
+
+    // 生产：CORTEX_CONFIG_DIR 显式覆盖，否则用户数据目录（Electron 主进程可注入 userData）
+    const userDataDir = process.env["CORTEX_CONFIG_DIR"] ?? path.join(os.homedir(), ".cortex", "config");
+    seedIfMissing(userDataDir, packageDataDir);
+    _cachedDataDir = userDataDir;
+    return userDataDir;
   } catch {
     throw new ConfigLoadError(
       "无法解析 config data 目录。请确保在 Node.js ESM 环境中运行，或显式传入 dataDir 参数。",
       "loader",
     );
+  }
+}
+
+/**
+ * 用户数据目录缺失时从包数据 seed（复制全部 json）。
+ * 幂等——目录已存在直接返回。seed 失败静默（读取侧仍有包数据兜底）。
+ */
+function seedIfMissing(userDataDir: string, packageDataDir: string): void {
+  try {
+    if (fs.existsSync(userDataDir)) return;
+    fs.mkdirSync(userDataDir, { recursive: true });
+    for (const f of fs.readdirSync(packageDataDir)) {
+      if (f.endsWith(".json")) {
+        fs.copyFileSync(path.join(packageDataDir, f), path.join(userDataDir, f));
+      }
+    }
+  } catch {
+    // seed 失败——后续读取仍有包数据兜底
   }
 }
 
