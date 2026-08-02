@@ -29,8 +29,8 @@ loadEnv(ROOT);
 
 const API_KEY = process.env.DEEPSEEK_API_KEY!;
 const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
-const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? CHAT_MODEL;
+const CHAT_MODEL = "deepseek-v4-flash";
+const REASONER_MODEL = CHAT_MODEL;
 
 const llm = new LlmAdapter({ apiKey: API_KEY, baseUrl: BASE_URL, chatModel: CHAT_MODEL });
 const toolkit = new Toolkit();

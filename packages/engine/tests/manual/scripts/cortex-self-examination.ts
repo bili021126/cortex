@@ -403,7 +403,7 @@ async function main() {
   const llmCfg = resolveLlmConfig({ chatModel: "deepseek-v4-flash" });
   const BASE_URL = llmCfg.baseUrl;
   const CHAT_MODEL = llmCfg.chatModel;
-  const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? llmCfg.chatModel;
+  const REASONER_MODEL = llmCfg.chatModel;
   const REASONING_EFFORT = llmCfg.reasoningEffort;
   const REPORT_MAX_CHARS = parseInt(process.env.SE_REPORT_MAX_CHARS ?? String(cortexConfig.selfExamination.reportMaxCharsDefault), 10);
 

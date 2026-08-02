@@ -286,7 +286,7 @@ async function main() {
   }
 
   const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
-  const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
+  const CHAT_MODEL = "deepseek-v4-flash";
 
   const TARGET_URL =
     "https://rcnwa456pqsg.feishu.cn/wiki/ZDOvwxeqpi7xjZkyxJLcGoocn8d?sheet=6KGlri";

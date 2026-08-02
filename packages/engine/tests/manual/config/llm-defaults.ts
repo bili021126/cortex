@@ -34,7 +34,7 @@ export function resolveLlmConfig(overrides?: {
 }): LlmConfig {
   return {
     baseUrl: overrides?.baseUrl ?? process.env.DEEPSEEK_BASE_URL ?? DEFAULT_DEEPSEEK_BASE_URL,
-    chatModel: overrides?.chatModel ?? process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash",
-    reasonerModel: overrides?.reasonerModel ?? process.env.DEEPSEEK_REASONER_MODEL ?? "deepseek-v4-flash",
+    chatModel: overrides?.chatModel ?? "deepseek-v4-flash",
+    reasonerModel: overrides?.reasonerModel ?? "deepseek-v4-flash",
     reasoningEffort: overrides?.reasoningEffort ?? process.env.DEEPSEEK_REASONING_EFFORT ?? "max"};
 }
