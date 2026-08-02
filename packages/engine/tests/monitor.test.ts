@@ -48,7 +48,7 @@ function makeMockObserver(): IPipelineObserver & { emitted: ObservableEvent[]; h
   };
 }
 
-function makeMemoryEvent(overrides: Partial<ObservableEvent> = {}): ObservableEvent {
+function makeMemoryEvent(overrides: Partial<ObservableEvent> = {}): ObservableEvent<PipelineEventType.MemoryPersistFailed> {
   return {
     type: PipelineEventType.MemoryPersistFailed,
     priority: PipelinePriority.CRITICAL,

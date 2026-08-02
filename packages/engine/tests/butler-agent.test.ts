@@ -1,11 +1,11 @@
 // @ci: unit
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, AgentStatus, PipelinePriority } from "@cortex/shared";
-import type { ObservableEvent } from "@cortex/shared";
+import type { ObservableEvent, EmittableEvent } from "@cortex/shared";
 import { PipelineObserver } from "@cortex/scheduler";
 import { ButlerAgent } from "@cortex/engine";
 
-function makeEvent(type: string, priority: PipelinePriority, payload: Record<string, unknown> = {}): ObservableEvent {
+function makeEvent(type: string, priority: PipelinePriority, payload: Record<string, unknown> = {}): EmittableEvent {
   return { type: type as any, priority, payload: payload as any, timestamp: Date.now() };
 }
 

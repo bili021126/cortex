@@ -5,7 +5,7 @@ import { SentinelSignalFilter } from "@cortex/engine";
 import type { FilteredSignal } from "@cortex/engine";
 
 /** 构造测试用 ObservableEvent */
-function makeEvent(overrides: Partial<ObservableEvent> = {}): ObservableEvent {
+function makeEvent(overrides: Partial<ObservableEvent> = {}): ObservableEvent<PipelineEventType.NodeComplete> {
   return {
     type: PipelineEventType.NodeComplete,
     priority: PipelinePriority.NORMAL,

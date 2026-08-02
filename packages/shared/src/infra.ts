@@ -187,10 +187,10 @@ export type EventPayloadMap = {
  * 所有治理组件 emit 的 ObservableEvent 中，payload 应符合此结构。
  */
 export interface GovernanceEventPayload {
-  /** 事件严重性 */
-  severity: "FYI" | "WARNING" | "DECISION_REQUIRED";
-  /** 发射源 */
-  source: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop" | "rule-denied";
+  /** 事件严重性（可选——由事件类型/通知通道派生，消费方可选读取） */
+  severity?: "FYI" | "WARNING" | "DECISION_REQUIRED";
+  /** 发射源（可选——2026-06-20 类型债专项：实际用法允许省略，消费方按需读取） */
+  source?: "doc-govern" | "sentinel" | "confirm-gate" | "committee" | "strategist" | "governance-loop" | "rule-denied";
   /** 摘要 */
   summary: string;
   /** 详情（可选） */
