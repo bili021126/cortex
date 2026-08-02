@@ -211,6 +211,8 @@ export {
   SKILL_ACTIVE_TO_DEPRECATED_THRESHOLD,
   SKILL_FEEDBACK_POSITIVE_WEIGHT,
   SKILL_FEEDBACK_NEGATIVE_WEIGHT,
+  // R11-16：统一布尔 env 真值解析
+  envTruthy,
 } from "./constants/index.js";
 
 // ── 默认值 + 解析 ─────────────────────────────────
