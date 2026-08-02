@@ -103,7 +103,7 @@ describe("TuiEventBus", () => {
     it("取消未注册的监听器不抛异常", () => {
       const bus = new TuiEventBus();
       const listener = () => {};
-      expect(() => bus.off("nonexistent", listener)).not.toThrow();
+      expect(() => bus.off("nonexistent" as never, listener)).not.toThrow();
     });
 
     it("多次取消同一监听器安全", () => {

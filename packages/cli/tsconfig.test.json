@@ -1,0 +1,66 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "rootDir": ".",
+    "outDir": "./dist-test",
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "noUncheckedIndexedAccess": false
+  },
+  "include": [
+    "src",
+    "tests"
+  ],
+  "references": [
+    {
+      "path": "../client"
+    },
+    {
+      "path": "../config"
+    },
+    {
+      "path": "../doctor"
+    },
+    {
+      "path": "../engine/tsconfig.src.json"
+    },
+    {
+      "path": "../governance/tsconfig.src.json"
+    },
+    {
+      "path": "../llm"
+    },
+    {
+      "path": "../memory-store/tsconfig.src.json"
+    },
+    {
+      "path": "../parser"
+    },
+    {
+      "path": "../platform/tsconfig.src.json"
+    },
+    {
+      "path": "../protocol"
+    },
+    {
+      "path": "../scheduler/tsconfig.src.json"
+    },
+    {
+      "path": "../shared"
+    },
+    {
+      "path": "../skill-kit"
+    },
+    {
+      "path": "../telemetry"
+    },
+    {
+      "path": "../tools"
+    }
+  ]
+}

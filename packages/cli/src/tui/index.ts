@@ -31,6 +31,7 @@ export type {
   NodeRenderStatus,
   ConfirmResult,
   QueryLoopContext,
+  ReplMode,
 } from "./types.js";
 
 // ─── 查询循环 ──────────────────────────────────────

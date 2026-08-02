@@ -10,6 +10,7 @@ import {
   clearSession,
 } from "../src/tui/session-store.js";
 import type { SessionSnapshot } from "../src/tui/session-store.js";
+import { AgentType } from "@cortex/shared";
 
 describe("SessionStore", () => {
   let tmpDir: string;
@@ -140,7 +141,7 @@ describe("SessionStore", () => {
   it("should save with talkTrio and groups", () => {
     const session = validSession({
       talkTrio: true,
-      groups: [{ id: "g1", agents: ["code", "fix"], status: "active" }],
+      groups: [{ id: "g1", agents: [AgentType.Code, AgentType.Fix], status: "active" }] as never,
     });
 
     saveSession(tmpDir, session);

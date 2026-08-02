@@ -18,12 +18,16 @@ import {
   extractHistory,
   agentTalkPersona,
 } from "@cortex/cli";
-import type { TuiEvent, TuiHooks, ReplMode, LlmStreamBridge } from "@cortex/cli";
-import type { AgentType, LlmMessage, ICortexApi } from "@cortex/shared";
+import type { TuiEvent, TuiHooks, ReplMode } from "@cortex/cli";
+/** LlmStreamBridge——cli 未导出，测试本地定义（streamChat 流式桥接接口） */
+interface LlmStreamBridge {
+  streamChat(model: string, messages: LlmMessage[], tools: unknown[] | undefined, onChunk: (content: string, reasoning?: string) => void): Promise<StreamResult>;
+}
+import type { AgentType, LlmMessage, ICortexApi, ITuiEngineBridge } from "@cortex/shared";
 
 // ── 类型辅助 ──────────────────────────────────────────────
 
-type BridgeFull = LlmStreamBridge & Pick<ICortexApi, "chat" | "submitTask" | "executeAll">;
+type BridgeFull = ITuiEngineBridge & Pick<ICortexApi, "chat" | "submitTask" | "executeAll">;
 
 interface StreamResult {
   content: string | null;
@@ -61,16 +65,19 @@ function mockBridge(streamResult?: StreamResult): BridgeFull {
         return result;
       },
     ),
-    executeToolCall: vi.fn().mockResolvedValue({ success: true, output: "tool-output" }),
+    executeToolCall: vi.fn().mockResolvedValue({ success: true, output: "tool-output" } as never),
     getToolDefs: vi.fn().mockReturnValue([]),
     getChatModelName: vi.fn().mockReturnValue("test-model"),
     getReasonerModelName: vi.fn().mockReturnValue("test-reasoner"),
 
     // Pick<ICortexApi, "chat" | "submitTask" | "executeAll">
     chat: vi.fn().mockResolvedValue("chat-response"),
+    ensureTalkMemory: vi.fn().mockResolvedValue(undefined),
+    readTalkMemory: vi.fn().mockResolvedValue([]),
+    writeTalkMemory: vi.fn().mockResolvedValue(undefined),
     submitTask: vi.fn().mockResolvedValue(undefined),
     executeAll: vi.fn().mockResolvedValue({ executed: 0, failed: 0 } as never),
-  };
+  } as unknown as BridgeFull;
 }
 
 /**

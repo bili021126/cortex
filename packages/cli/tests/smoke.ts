@@ -121,8 +121,8 @@ section("cortex help (CommandRegistry)");
     description: "分发测试",
     handler: async () => { dispatched = true; return { success: true, exitCode: 0 }; },
   });
-  const dr = await registry.dispatch(["alpha"], ctx());
-  pass("dispatch 成功调用 handler", dispatched && dr.success);
+  const dr = await registry.dispatch(["alpha"], ctx() as never);
+  pass("dispatch 成功调用 handler", dispatched && dr.code === 0);
 }
 
 // ═════════════════════════════════════════

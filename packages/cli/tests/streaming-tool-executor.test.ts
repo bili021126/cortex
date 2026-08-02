@@ -10,8 +10,8 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { streamExecuteTools } from "@cortex/cli";
-import type { LlmStreamBridge, TuiHooks, TuiEvent } from "@cortex/cli";
-import type { AgentType, LlmMessage } from "@cortex/shared";
+import type { TuiHooks, TuiEvent } from "@cortex/cli";
+import type { AgentType, LlmMessage, ITuiEngineBridge } from "@cortex/shared";
 
 // ── 类型辅助 ──────────────────────────────────────────────
 
@@ -23,15 +23,19 @@ interface ToolCallInput {
 
 // ── Mock 工厂 ──────────────────────────────────────────────
 
-function mockBridge(overrides?: Partial<LlmStreamBridge>): LlmStreamBridge {
+function mockBridge(overrides?: Partial<ITuiEngineBridge>): ITuiEngineBridge {
   return {
-    streamChat: vi.fn(),
-    executeToolCall: vi.fn().mockResolvedValue({ success: true, output: "ok" }),
+    streamChat: vi.fn() as ITuiEngineBridge["streamChat"],
+    executeToolCall: vi.fn().mockResolvedValue({ success: true, output: "ok" } as never),
     getToolDefs: vi.fn().mockReturnValue([]),
     getChatModelName: vi.fn().mockReturnValue("test-model"),
     getReasonerModelName: vi.fn().mockReturnValue("test-reasoner"),
+    chat: vi.fn().mockResolvedValue("ok"),
+    ensureTalkMemory: vi.fn().mockResolvedValue(undefined),
+    readTalkMemory: vi.fn().mockResolvedValue([]),
+    writeTalkMemory: vi.fn().mockResolvedValue(undefined),
     ...overrides,
-  };
+  } as unknown as ITuiEngineBridge;
 }
 
 function mockHooks(overrides?: Partial<TuiHooks>): TuiHooks {

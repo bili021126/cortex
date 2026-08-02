@@ -252,13 +252,13 @@ describe("sessionReducer", () => {
   it("TOKEN_UPDATE 累积 token", () => {
     const s1 = sessionReducer(initialSessionState, {
       type: "TOKEN_UPDATE",
-      payload: { promptTokens: 100, completionTokens: 50, contextWindowSize: 128_000 },
+      payload: { type: "token_usage", promptTokens: 100, completionTokens: 50, sessionTotalTokens: 0, contextWindowSize: 128_000 } as never,
     });
     expect(s1.tokenUsage.sessionTotalTokens).toBe(150);
     expect(s1.tokenUsage.contextWindowSize).toBe(128_000);
     const s2 = sessionReducer(s1, {
       type: "TOKEN_UPDATE",
-      payload: { promptTokens: 200, completionTokens: 80, contextWindowSize: 64_000, cacheHitTokens: 30, cacheMissTokens: 10 },
+      payload: { type: "token_usage", promptTokens: 200, completionTokens: 80, sessionTotalTokens: 0, contextWindowSize: 64_000, cacheHitTokens: 30, cacheMissTokens: 10 } as never,
     });
     expect(s2.tokenUsage.sessionTotalTokens).toBe(430);
     expect(s2.tokenUsage.contextWindowSize).toBe(64_000);
@@ -278,7 +278,7 @@ describe("sessionReducer", () => {
     };
     const s = sessionReducer(withTokens, {
       type: "COMPACTION",
-      payload: { compactedCount: 3, estimatedTokens: 500 },
+      payload: { type: "compaction", compactedCount: 3, estimatedTokens: 500 } as never,
     });
     expect(s.tokenUsage.sessionTotalTokens).toBe(500);
     expect(s.tokenUsage.cacheHitTokens).toBe(50);
@@ -305,7 +305,7 @@ describe("sessionReducer", () => {
   it("PLAN_GENERATED 设置 plan 状态", () => {
     const s = sessionReducer(initialSessionState, {
       type: "PLAN_GENERATED",
-      payload: { nodes: [{ id: "p1", type: "task", tags: [], needsMultiPerspective: false, status: "pending", claimedBy: [agent], payload: "do", results: [], createdAt: 0 } as any] },
+      payload: { nodes: [{ id: "p1", type: "task", tags: [], needsMultiPerspective: false, status: "pending", claimedBy: [agent], payload: "do", results: [], createdAt: 0 } as any] } as never,
     });
     expect(s.planNodes).toHaveLength(1);
     expect(s.planNodes[0]!.id).toBe("p1");
@@ -337,7 +337,7 @@ describe("sessionReducer", () => {
       planNodes: [{ id: "n1", renderStatus: "pending" } as any],
       planState: "approved",
     };
-    const s = sessionReducer(withNodes, { type: "NODE_START", payload: { nodeId: "n1" } });
+    const s = sessionReducer(withNodes, { type: "NODE_START", payload: { nodeId: "n1" } as never });
     expect(s.planNodes[0]!.renderStatus).toBe("executing");
     expect(s.planState).toBe("executing");
   });
@@ -347,7 +347,7 @@ describe("sessionReducer", () => {
       ...initialSessionState,
       planNodes: [{ id: "n1", renderStatus: "executing" } as any],
     };
-    const s = sessionReducer(withNodes, { type: "NODE_COMPLETE", payload: { nodeId: "n1" } });
+    const s = sessionReducer(withNodes, { type: "NODE_COMPLETE", payload: { nodeId: "n1" } as never });
     expect(s.planNodes[0]!.renderStatus).toBe("done");
   });
 
@@ -356,7 +356,7 @@ describe("sessionReducer", () => {
       ...initialSessionState,
       planNodes: [{ id: "n1", renderStatus: "executing" } as any],
     };
-    const s = sessionReducer(withNodes, { type: "NODE_FAILED", payload: { nodeId: "n1", error: "crash" } });
+    const s = sessionReducer(withNodes, { type: "NODE_FAILED", payload: { nodeId: "n1", error: "crash" } as never });
     expect(s.planNodes[0]!.renderStatus).toBe("failed");
     expect(s.messages).toHaveLength(1);
     expect(s.messages[0]!.content).toContain("crash");
@@ -369,7 +369,7 @@ describe("sessionReducer", () => {
     };
     const s = sessionReducer(existing, {
       type: "TASK_TREE_UPDATE",
-      payload: { nodes: [{ id: "n1", type: "task", tags: [], needsMultiPerspective: false, status: "running", claimedBy: [agent], payload: "do", results: [], createdAt: 0 } as any] },
+      payload: { nodes: [{ id: "n1", type: "task", tags: [], needsMultiPerspective: false, status: "running", claimedBy: [agent], payload: "do", results: [], createdAt: 0 } as any] } as never,
     });
     expect(s.planNodes).toHaveLength(1);
     expect(s.planNodes[0]!.renderStatus).toBe("executing"); // 保留原有状态
@@ -379,7 +379,7 @@ describe("sessionReducer", () => {
   it("TOOL_START 追加工具记录", () => {
     const s = sessionReducer(initialSessionState, {
       type: "TOOL_START",
-      payload: { id: "t1", tool: "read", agent },
+      payload: { id: "t1", tool: "read", agent } as never,
     });
     expect(s.recentTools).toHaveLength(1);
     expect(s.recentTools[0]!.id).toBe("t1");
@@ -393,7 +393,7 @@ describe("sessionReducer", () => {
     };
     const s = sessionReducer(withTool, {
       type: "TOOL_RESULT",
-      payload: { id: "t1", success: true, durationMs: 100 },
+      payload: { id: "t1", success: true, durationMs: 100 } as never,
     });
     expect(s.recentTools[0]!.success).toBe(true);
     expect(s.recentTools[0]!.durationMs).toBe(100);
