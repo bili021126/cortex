@@ -131,6 +131,12 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
     // 2026-06-20 CI 修复：MemoryStore 向量去重会把语义相似条目合并（CI 上 embedding 可用）——
     // B 的内容必须与 A 语义足够不同，否则去重返回 A 的 id 导致重启后仅 1 条
     const idB = await writeMarker(memoryA, "restart-B", "量子力学与星轨导航的映射关系");
+    // CI 诊断：close 前读回，区分「写丢」（before<2）与「读丢」（before=2 但重启后<2）
+    const before = await memoryA.read({});
+    console.error(
+      "Error: [T2-d] before-close:",
+      JSON.stringify({ count: before.length, ids: before.map((e) => e.id), summaries: before.map((e) => e.summary) }),
+    );
     await memoryA.close();
 
     // 第二次启动：同一 dbPath，读回
@@ -146,7 +152,18 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
 
     // 跨重启的条目数应等于写入数（无丢失、无重复）
     const markers = all.filter((e: MemoryEntry) => e.summary.startsWith("持久化标记-"));
-    expect(markers.length).toBe(2);
+    expect(
+      markers.length,
+      `[T2-d] ids=${JSON.stringify({ idA, idB, same: idA === idB })} ` +
+        `before=${JSON.stringify(before.map((e) => ({ id: e.id, summary: e.summary })))} ` +
+        `all=${JSON.stringify(all.map((e) => ({ id: e.id, summary: e.summary })))} ` +
+        `files=${JSON.stringify({
+          db: fs.existsSync(TEMP_DB),
+          wal: fs.existsSync(TEMP_DB + "-wal"),
+          shm: fs.existsSync(TEMP_DB + "-shm"),
+          size: fs.existsSync(TEMP_DB) ? fs.statSync(TEMP_DB).size : -1,
+        })}`,
+    ).toBe(2);
 
     await memoryB.close();
   });
