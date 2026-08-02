@@ -15,7 +15,7 @@
 import { LockType, PipelineEventType, PipelinePriority, type FileLockManagerConfig } from "@cortex/shared";
 import { BaseLifecycle } from "@cortex/shared";
 import type { IPipelineObserver } from "@cortex/shared";
-import { DEFAULT_LOCK_TIMEOUT_MS } from "@cortex/config";
+import { DEFAULT_LOCK_TIMEOUT_MS, loadEngineDefaults } from "@cortex/config";
 
 // ── 内部数据模型 ─────────────────────────────────────────
 
@@ -49,7 +49,8 @@ export class FileLockManager extends BaseLifecycle {
   /** dispose() 后拒绝所有操作 */
   protected _disposed = false;
 
-  constructor(timeoutMs: number = DEFAULT_LOCK_TIMEOUT_MS, observer?: IPipelineObserver) {
+  // ENG-4：tuning 覆盖链——lockTimeoutMs 可被 tuning.json/env 调参
+  constructor(timeoutMs: number = loadEngineDefaults().lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS, observer?: IPipelineObserver) {
     super();
     this._timeoutMs = timeoutMs;
     this._observer = observer;
@@ -284,7 +285,7 @@ export class InMemoryFileLockManager extends FileLockManager {
   private _config: FileLockManagerConfig;
 
   constructor(config: FileLockManagerConfig) {
-    const timeoutMs = config.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS;
+    const timeoutMs = config.lockTimeoutMs ?? loadEngineDefaults().lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS;
     super(timeoutMs);
     this._config = config;
   }

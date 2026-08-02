@@ -16,6 +16,8 @@
 
 import type { ILifecycle } from "@cortex/shared";
 import { PipelineEventType, PipelinePriority, type IPipelineObserver } from "@cortex/shared";
+// ENG-4：关闭超时单源——config 常量，消本地硬编码 10_000
+import { SHUTDOWN_TIMEOUT_MS as CFG_SHUTDOWN_TIMEOUT_MS } from "@cortex/config";
 
 /** 最小 AgentTracker 接口——避免直接依赖 @cortex/scheduler */
 export interface AgentTrackerLike {
@@ -35,7 +37,7 @@ export interface AgentTrackerLike {
 export class ShutdownOrchestrator {
   private components = new Map<string, ILifecycle>();
   private order: string[] = [];
-  private readonly SHUTDOWN_TIMEOUT_MS = 10_000;
+  private readonly SHUTDOWN_TIMEOUT_MS = CFG_SHUTDOWN_TIMEOUT_MS;
   private _observer?: IPipelineObserver;
   /** 可选的 AgentTracker 引用——shutdown 时同步生命周期状态 */
   private _agentTracker?: AgentTrackerLike;

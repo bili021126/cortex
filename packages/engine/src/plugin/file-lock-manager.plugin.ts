@@ -16,7 +16,7 @@ import {
 } from "@cortex/shared";
 import { InMemoryFileLockManager } from "../core/file-lock-manager.js";
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
-import { DEFAULT_LOCK_TIMEOUT_MS } from "@cortex/config";
+import { DEFAULT_LOCK_TIMEOUT_MS, loadEngineDefaults } from "@cortex/config";
 
 export class FileLockManagerPlugin implements EnginePlugin {
   readonly name = "fileLockManager";
@@ -28,7 +28,7 @@ export class FileLockManagerPlugin implements EnginePlugin {
     this.instance = new InMemoryFileLockManager({
       lockTimeoutMs: ctx.config.toolTimeouts?.confirmWait
         ? ctx.config.toolTimeouts.confirmWait * 2 // 锁超时为确认超时两倍
-        : DEFAULT_LOCK_TIMEOUT_MS,
+        : loadEngineDefaults().lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS,
 
       // 死锁检测 → PipelineObserver 告警
       onDeadlockDetected: (holder: LockEntry, requester: string, requestedPath: string) => {
