@@ -74,7 +74,7 @@ class MockEngineBridge implements ITuiEngineBridge {
       failed: 0,
       totalNodes: nodes.length,
       durationMs: 10,
-      byAgent: {},
+      results: [],
     };
   }
 }
@@ -150,7 +150,7 @@ describe("TUI 完整链路: bootstrap→chat→talk→plan→approve→execute",
       approved: false,
       nodes: [],
       intent: "",
-      reviewStatus: "idle",
+      reviewStatus: "pending",
     };
 
     const gen = planMode("创建test文件", bridge, AgentType.Code, planState);
@@ -186,7 +186,7 @@ describe("TUI 完整链路: bootstrap→chat→talk→plan→approve→execute",
         },
       ],
       intent: "创建test文件",
-      reviewStatus: "approved",
+      reviewStatus: "reviewed",
     };
 
     const gen = planMode("创建test文件", bridge, AgentType.Code, planState);

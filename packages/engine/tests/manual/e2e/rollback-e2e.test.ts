@@ -16,7 +16,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
-import { ToolRollbackRegistry } from "../../../../tools/src/rollback-registry.js";
+import { ToolRollbackRegistry } from "@cortex/tools";
 import { TaskBoard } from "@cortex/scheduler";
 import { computeCompensation } from "@cortex/scheduler";
 import type { TaskNode } from "@cortex/shared";

@@ -51,6 +51,8 @@
     "tree-sitter": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",
     "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "@cortex/tools": "workspace:*",
+    "@cortex/cli": "workspace:*"
   }
 }
