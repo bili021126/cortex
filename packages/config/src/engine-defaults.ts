@@ -111,10 +111,12 @@ export interface EngineDefaults {
   cleanupIntervalMs: number;
   shutdownTimeoutMs: number;
   shutdownForceExitDelayMs: number;
+  // @future 预留：scheduler 包当前无消费点（测试守护值合法，ENV_MAP 契约已注册）——待调度层接入
   schedulerMaxRounds: number;
   schedulerRoundTimeoutMs: number;
   reactMaxLoops: number;
   embeddingDim: number;
+  // @future 预留：embedding 缓存当前无消费点（同上）
   embeddingCacheSize: number;
   contentHashAlgo: string;
   vectorDedupThreshold: number;
