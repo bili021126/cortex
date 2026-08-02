@@ -96,7 +96,7 @@ describe("异常恢复路径: 失败→replan→重试→超配额→降级", ()
   it("超过配额后降级路径可达 — DegradationBoundary 不抛异常", { timeout: 120000 }, () => {
     // 模拟 DegradationBoundary 降级调用
     expect(() => {
-      DegradationBoundary.handle(new Error("模拟超配额降级"), "scheduler", "warn");
+      DegradationBoundary.handle(new Error("模拟超配额降级"), "scheduler", "escalate");
     }).not.toThrow();
   });
 

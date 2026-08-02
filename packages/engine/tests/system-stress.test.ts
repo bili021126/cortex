@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { AgentType, LinkType, PipelinePriority, PipelineEventType, AgentStatus , type EmittableEvent } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import {
-  TaskBoard, AgentPool, PipelineObserver, ManifoldGate} from "@cortex/scheduler";
+  TaskBoard, AgentPool, PipelineObserver, ManifoldGate } from "@cortex/scheduler";
 import {
   createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig,
   MetaAgent, Scheduler} from "@cortex/engine";
@@ -600,7 +600,7 @@ describe("场景 3：重规划预算耗尽", () => {
     expect(runReplanCount).toBeLessThanOrEqual(3);
 
     // @fix D2 验证：有限 replan 后自然退出（不依赖 executeAllTimeout 超时空转）
-    expect(report.durationMs).toBeLessThan(SHORT_STRESS_CONFIG.executeAllTimeoutMs);
+    expect(report.durationMs ?? 0).toBeLessThan(SHORT_STRESS_CONFIG.executeAllTimeoutMs ?? 0);
   });
 
   it("executeAll 调用——reset 防止状态泄漏", async () => {
@@ -2117,7 +2117,7 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
     pool.register({ type: AgentType.Code, maxInstances: 5 });
 
     let slowExecuted = false;
-    const slowAgent: Agent = {
+    const slowAgent: { type: AgentType; status: AgentStatus; wakeup: () => Promise<void>; execute: () => Promise<unknown>; shutdown: () => Promise<void> } = {
       type: AgentType.Code,
       status: AgentStatus.Awake,
       wakeup: vi.fn().mockResolvedValue(undefined),
@@ -2130,7 +2130,7 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
     };
 
     const scheduler = new Scheduler(board, pool, observer);
-    scheduler.register(AgentType.Code, slowAgent, "mock");
+    scheduler.register(AgentType.Code, slowAgent as any, "mock");
 
     board.addNode(makeNode({ id: "cancel-me", payload: "Will be cancelled" }));
     board.addNode(makeNode({ id: "other", payload: "Should complete" }));
@@ -2170,7 +2170,7 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
     const observer = new PipelineObserver();
     pool.register({ type: AgentType.Code, maxInstances: 3 });
 
-    const crashAgent: Agent = {
+    const crashAgent: { type: AgentType; status: AgentStatus; wakeup: () => Promise<void>; execute: () => Promise<unknown>; shutdown: () => Promise<void> } = {
       type: AgentType.Code,
       status: AgentStatus.Awake,
       wakeup: vi.fn().mockResolvedValue(undefined),
@@ -2179,7 +2179,7 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
     };
 
     const scheduler = new Scheduler(board, pool, observer);
-    scheduler.register(AgentType.Code, crashAgent, "mock");
+    scheduler.register(AgentType.Code, crashAgent as any, "mock");
 
     board.addNode(makeNode({ id: "crash-test", payload: "crash" }));
 
@@ -2198,7 +2198,7 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
     const observer = new PipelineObserver();
     pool.register({ type: AgentType.Code, maxInstances: 3 });
 
-    const timeoutAgent: Agent = {
+    const timeoutAgent: { type: AgentType; status: AgentStatus; wakeup: () => Promise<void>; execute: () => Promise<unknown>; shutdown: () => Promise<void> } = {
       type: AgentType.Code,
       status: AgentStatus.Awake,
       wakeup: vi.fn().mockResolvedValue(undefined),
@@ -2214,7 +2214,7 @@ describe("场景 14：Scheduler 压力——并发/错误恢复/边界", () => {
       executeAllTimeoutMs: 500,
       manifoldGateAcquireTimeoutMs: 200,
     });
-    scheduler.register(AgentType.Code, timeoutAgent, "mock");
+    scheduler.register(AgentType.Code, timeoutAgent as any, "mock");
 
     board.addNode(makeNode({ id: "timeout-node", payload: "slow" }));
 

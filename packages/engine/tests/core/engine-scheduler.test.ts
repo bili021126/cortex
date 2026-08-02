@@ -15,7 +15,7 @@ describe("Engine Scheduler", () => {
     const result = topologicalSort([{
       id: "n1", type: "default",
       parentId: undefined,
-      status: "pending", createdAt: Date.now()
+      status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], payload: "test", createdAt: Date.now()
     }]);
     expect(result.length).toBe(1);
     expect(result[0]).toEqual(["n1"]);

@@ -26,7 +26,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 // engine 包测试 cwd = packages/engine
 const AUDIT_FILE = path.join(process.cwd(), ".cortex", "logs", "audit.jsonl");
 
-function makeMockLLM(): Map<string, unknown> {
+function makeMockLLM() {
   const adapter = mockLlmAdapter("Task completed successfully.");
   return new Map([["default", adapter]]);
 }

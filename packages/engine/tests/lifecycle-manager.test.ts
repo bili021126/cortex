@@ -134,7 +134,7 @@ describe("LifecycleManager", () => {
     const lm = new LifecycleManager();
     const events: string[] = [];
     lm.on((event, detail) => {
-      events.push(`${event}:${detail.component}`);
+      events.push(`${event}:${(detail as { component?: string }).component}`);
     });
 
     const a = makeComponent("a");
@@ -212,7 +212,7 @@ describe("LifecycleManager", () => {
     const lm = new LifecycleManager();
     const events: string[] = [];
     lm.on((event, detail) => {
-      events.push(`${event}:${detail.component ?? ""}`);
+      events.push(`${event}:${(detail as { component?: string }).component ?? ""}`);
     });
 
     const a = makeComponent("a", "stop"); // a 的 stop 会失败

@@ -545,8 +545,8 @@ describe("⑮ PipelineObserver 事件完整 — ExecLifecyclePhaseChanged 覆盖
     });
 
     expect(events.length).toBe(2);
-    expect(events[0].payload.phase).toBe("bootstrap_done");
-    expect(events[1].payload.phase).toBe("shutdown_start");
+    expect((events[0].payload as { phase?: string }).phase).toBe("bootstrap_done");
+    expect((events[1].payload as { phase?: string }).phase).toBe("shutdown_start");
   });
 
   it("PipelineObserver 支持 off 精确移除 handler", () => {
@@ -655,7 +655,7 @@ describe("⑯ ShutdownOrchestrator 反序关闭 — 所有组件释放", () => {
     await orchestrator.shutdown();
 
     // 应发射组件错误事件
-    expect(events.some(e => e.payload?.component === "bad")).toBe(true);
+    expect(events.some(e => (e.payload as { component?: string } | undefined)?.component === "bad")).toBe(true);
   });
 });
 

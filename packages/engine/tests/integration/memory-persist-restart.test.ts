@@ -30,7 +30,7 @@ const TEMP_DB = path.join(TEMP_DB_DIR, "memory-persist-restart.db");
 /** SQLite 文件魔数头（16 字节） */
 const SQLITE_MAGIC = "SQLite format 3\u0000";
 
-function makeMockLLM(): Map<string, unknown> {
+function makeMockLLM() {
   const adapter = mockLlmAdapter("Task completed successfully.");
   return new Map([["default", adapter]]);
 }

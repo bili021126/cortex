@@ -11,8 +11,9 @@ import {
   DIRECT_PIPELINE,
   defaultMemoryQuery,
   type ReActContext,
-  type PipelineCtx,
-  type IStep} from "@cortex/engine";
+} from "@cortex/engine";
+// PipelineCtx/IStep 由 @cortex/scheduler 导出（engine index.ts 注释明确）
+import type { PipelineCtx, IStep } from "@cortex/scheduler";
 import { Toolkit } from "@cortex/platform";
 import { MemoryStore } from "@cortex/memory-store";
 
@@ -223,13 +224,13 @@ describe("PipelineRunner", () => {
     const order: string[] = [];
     const step1: IStep = {
       name: "Step1",
-      async run(ctx) { order.push("Step1"); return ctx; }};
+      async run(ctx: PipelineCtx) { order.push("Step1"); return ctx; }};
     const step2: IStep = {
       name: "Step2",
-      async run(ctx) { order.push("Step2"); return ctx; }};
+      async run(ctx: PipelineCtx) { order.push("Step2"); return ctx; }};
     const step3: IStep = {
       name: "Step3",
-      async run(ctx) { order.push("Step3"); return ctx; }};
+      async run(ctx: PipelineCtx) { order.push("Step3"); return ctx; }};
 
     await PipelineRunner.run([step1, step2, step3], makeCtx());
     expect(order).toEqual(["Step1", "Step2", "Step3"]);
@@ -238,13 +239,13 @@ describe("PipelineRunner", () => {
   it("each step receives the result of the previous step", async () => {
     const step1: IStep = {
       name: "Enricher",
-      async run(ctx) {
+      async run(ctx: PipelineCtx) {
         ctx.enrichedNode = { ...ctx.node, payload: "enriched" };
         return ctx;
       }};
     const step2: IStep = {
       name: "Consumer",
-      async run(ctx) {
+      async run(ctx: PipelineCtx) {
         expect(ctx.enrichedNode).toBeDefined();
         expect(ctx.enrichedNode!.payload).toBe("enriched");
         return ctx;
@@ -263,7 +264,7 @@ describe("PipelineRunner", () => {
   it("returns final ctx with result set by last step", async () => {
     const step: IStep = {
       name: "Producer",
-      async run(ctx) {
+      async run(ctx: PipelineCtx) {
         ctx.result = {
           nodeId: ctx.node.id,
           agentType: ctx.agentType,

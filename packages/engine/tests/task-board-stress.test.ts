@@ -8,7 +8,7 @@
  * 多视角完成竞态、CircuitBreaker 熔断、部分层失败处理
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AgentType, PipelinePriority , type EmittableEvent } from "@cortex/shared";
+import { AgentType, PipelinePriority , type EmittableEvent, type SemanticState } from "@cortex/shared";
 import type { ObservableEvent } from "@cortex/shared";
 import { TaskBoard, AgentPool, PipelineObserver, ConfirmGate, topologicalSort, ManifoldGate } from "@cortex/scheduler";
 import { createAgent, codeAgentConfig, reviewAgentConfig, analysisAgentConfig, MetaAgent, Scheduler } from "@cortex/engine";
@@ -661,7 +661,7 @@ describe("暗雷 R9：MemoryStore CAS 并发防改写", () => {
     const snap2 = store.peek(id)!;
 
     expect(store.cas(id, snap1.semantic_state, "Archived")).toBe(true);
-    expect(store.cas(id, snap2.semantic_state, "")).toBe(false);
+    expect(store.cas(id, snap2.semantic_state, "" as SemanticState)).toBe(false);
     expect((store.peek(id)! as any).semantic_state).toBe("Archived");
   }, 20000);
 });

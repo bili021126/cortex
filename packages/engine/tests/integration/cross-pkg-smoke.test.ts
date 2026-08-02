@@ -106,8 +106,8 @@ describe("跨包集成烟雾测试", () => {
 
     // 验证是否有 SkillRegistry 或类似导出
     const hasSkillRegistry = typeof skillKit.SkillRegistry !== "undefined";
-    const hasSkillManager = typeof skillKit.SkillManager !== "undefined";
-    const hasRegisterSkill = typeof skillKit.registerSkill === "function";
+    const hasSkillManager = typeof (skillKit as any).SkillManager !== "undefined";
+    const hasRegisterSkill = typeof (skillKit as any).registerSkill === "function";
 
     expect(hasSkillRegistry || hasSkillManager || hasRegisterSkill).toBe(true);
   });

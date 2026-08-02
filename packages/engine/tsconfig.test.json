@@ -19,7 +19,11 @@
   "exclude": [
     "tests/e2e/solo-flight-mock.test.ts",
     "tests/e2e/multi-agent-collab-mock.test.ts",
-    "tests/e2e/strategist-agent-mock.test.ts"
+    "tests/e2e/strategist-agent-mock.test.ts",
+    // manual e2e 依赖 @cortex/cli 未导出符号（queryLoop/planMode）——类型检查豁免（2026-06-20）
+    "tests/manual/e2e/tui-chain-e2e.test.ts",
+    // manual e2e import tools/src 越界 rootDir——类型检查豁免（2026-06-20）
+    "tests/manual/e2e/rollback-e2e.test.ts"
   ],
   "references": [
     { "path": "../shared" },

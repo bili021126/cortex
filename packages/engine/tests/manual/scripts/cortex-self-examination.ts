@@ -60,7 +60,7 @@ import { resolveConfigDataDir } from "@cortex/config";
 // agents 配置域——根级 cortex-agents.json 已拆分进 packages/config/src/data/
 const cortexConfig = JSON.parse(
   fs.readFileSync(path.join(resolveConfigDataDir(), "agents.json"), "utf-8"),
-) as { agents: Record<string, unknown> };
+) as any;
 
 // ═══════════════════════════════════════════════
 // 1. 环境变量——从根目录 .env 加载
@@ -377,7 +377,7 @@ function writeExaminationSummary(
 
 function agentName(type: string): string {
   // 从 agents 配置域按 agentType 查 displayName
-  for (const [key, agent] of Object.entries(cortexConfig.agents)) {
+  for (const [key, agent] of Object.entries(cortexConfig.agents as Record<string, any>)) {
     if (agent.type === type) return `${agent.display?.shortName ?? key} (${key.charAt(0).toUpperCase() + key.slice(1)})`;
   }
   return type;

@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { PipelineEventType } from "@cortex/shared";
 
 // 通过 validate 间接测试 _grepInterface 的命令注入防护
 import { CrossPackageContractRule } from "../src/execution/zero-token-validator.js";
@@ -48,7 +49,7 @@ describe("CrossPackageContractRule — G-08 命令注入修复", () => {
       // 特殊字符 name：如果在 shell 中拼接，会执行 rm -rf /
       const result = rule.validate(
         {
-          type: "governance_audit",
+          type: "governance_audit" as PipelineEventType,
           priority: 0,
           timestamp: Date.now(),
           notificationType: "FYI",
@@ -76,7 +77,7 @@ describe("CrossPackageContractRule — G-08 命令注入修复", () => {
 
       const result = rule.validate(
         {
-          type: "governance_audit",
+          type: "governance_audit" as PipelineEventType,
           priority: 0,
           timestamp: Date.now(),
           notificationType: "FYI",
@@ -102,7 +103,7 @@ describe("CrossPackageContractRule — G-08 命令注入修复", () => {
 
       const result = rule.validate(
         {
-          type: "governance_audit",
+          type: "governance_audit" as PipelineEventType,
           priority: 0,
           timestamp: Date.now(),
           notificationType: "FYI",

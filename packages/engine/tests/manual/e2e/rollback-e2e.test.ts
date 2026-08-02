@@ -181,9 +181,9 @@ describe("场景4: 串行链路 → 中间节点失败 → 下游 abort", () => 
   if (process.env.CI) return; // 需要真实 LLM，CI 跳过
   it("computeCompensation 应返回下游 abort 动作", { timeout: 120000 }, () => {
     const board = new TaskBoard();
-    const parent: TaskNode = { id: "parent", type: "code", payload: "parent task", status: "pending", createdAt: Date.now() };
-    const child: TaskNode = { id: "child", type: "code", payload: "child task", status: "pending", createdAt: Date.now(), parentId: "parent" };
-    const grandchild: TaskNode = { id: "grandchild", type: "code", payload: "grandchild task", status: "pending", createdAt: Date.now(), parentId: "child" };
+    const parent: TaskNode = { id: "parent", type: "code", payload: "parent task", status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], createdAt: Date.now() };
+    const child: TaskNode = { id: "child", type: "code", payload: "child task", status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], createdAt: Date.now(), parentId: "parent" };
+    const grandchild: TaskNode = { id: "grandchild", type: "code", payload: "grandchild task", status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], createdAt: Date.now(), parentId: "child" };
 
     board.addNode(parent);
     board.addNode(child);
@@ -202,10 +202,10 @@ describe("场景4: 串行链路 → 中间节点失败 → 下游 abort", () => 
 
   it("根节点失败应仅 abort 所有子树", { timeout: 120000 }, () => {
     const board = new TaskBoard();
-    const root: TaskNode = { id: "root", type: "code", payload: "root", status: "pending", createdAt: Date.now() };
-    const child1: TaskNode = { id: "c1", type: "code", payload: "child1", status: "pending", createdAt: Date.now(), parentId: "root" };
-    const child2: TaskNode = { id: "c2", type: "code", payload: "child2", status: "pending", createdAt: Date.now(), parentId: "root" };
-    const subchild: TaskNode = { id: "sc1", type: "code", payload: "subchild", status: "pending", createdAt: Date.now(), parentId: "c1" };
+    const root: TaskNode = { id: "root", type: "code", payload: "root", status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], createdAt: Date.now() };
+    const child1: TaskNode = { id: "c1", type: "code", payload: "child1", status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], createdAt: Date.now(), parentId: "root" };
+    const child2: TaskNode = { id: "c2", type: "code", payload: "child2", status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], createdAt: Date.now(), parentId: "root" };
+    const subchild: TaskNode = { id: "sc1", type: "code", payload: "subchild", status: "pending", tags: [], needsMultiPerspective: false, claimedBy: [], results: [], createdAt: Date.now(), parentId: "c1" };
 
     board.addNode(root);
     board.addNode(child1);

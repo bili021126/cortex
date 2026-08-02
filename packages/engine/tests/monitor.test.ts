@@ -48,7 +48,7 @@ function makeMockObserver(): IPipelineObserver & { emitted: ObservableEvent[]; h
   };
 }
 
-function makeMemoryEvent(overrides: Partial<ObservableEvent> = {}): ObservableEvent<PipelineEventType.MemoryPersistFailed> {
+function makeMemoryEvent(overrides: Partial<ObservableEvent> = {}): any {
   return {
     type: PipelineEventType.MemoryPersistFailed,
     priority: PipelinePriority.CRITICAL,
@@ -231,7 +231,7 @@ describe("MemoryStoreMonitor", () => {
     monitor.start();
 
     observer.emit(makeMemoryEvent({
-      type: PipelineEventType.MemorySqlDegraded,
+      type: PipelineEventType.MemorySqlDegraded as any,
       priority: PipelinePriority.HIGH,
       payload: { operation: "query", detail: "slow query > 5s" },
     }));
@@ -253,7 +253,7 @@ describe("MemoryStoreMonitor", () => {
     monitor.start();
 
     observer.emit(makeMemoryEvent({
-      type: PipelineEventType.MemoryDeserializeFailed,
+      type: PipelineEventType.MemoryDeserializeFailed as any,
       priority: PipelinePriority.HIGH,
       payload: { rowId: "r123", error: "corrupt data" },
     }));
@@ -277,7 +277,7 @@ describe("MemoryStoreMonitor", () => {
     monitor.start();
 
     observer.emit(makeMemoryEvent({
-      type: PipelineEventType.MemoryWriteBlocked,
+      type: PipelineEventType.MemoryWriteBlocked as any,
       priority: PipelinePriority.HIGH,
       payload: { reason: "store not initialized" },
     }));

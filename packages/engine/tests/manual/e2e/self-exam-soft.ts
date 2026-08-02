@@ -24,6 +24,7 @@
  * 前提: 项目根目录 .env 已配置 DEEPSEEK_API_KEY, DEEPSEEK_CYRENE_KEY
  */
 
+import { resolve } from "node:path";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { execSync } from "node:child_process";
@@ -200,7 +201,7 @@ let totalTokensUsed = 0;
 async function callLlm(
   adapter: LlmAdapter,
   model: string,
-  messages: { role: string; content: string }[],
+  messages: Array<{ role: "system" | "user" | "assistant" | "tool"; content: string }>,
 ): Promise<{ content: string | null; tokens: number }> {
   const resp = await adapter.chat(model, messages);
   const tokens = (resp as any).usage?.totalTokens ?? 0;
@@ -486,6 +487,7 @@ if (totalClaims === 0) {
   }
 
   // 合并 claims
+  const claims: typeof allClaims = [];
   if (allClaims.length > 0) {
     for (const c of allClaims) {
       claims.push(c);

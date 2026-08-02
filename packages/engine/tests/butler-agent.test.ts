@@ -12,12 +12,12 @@ function makeEvent(type: string, priority: PipelinePriority, payload: Record<str
 describe("ButlerAgent", () => {
   let observer: PipelineObserver;
   let agent: ButlerAgent;
-  let stderrSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: any;
 
   beforeEach(() => {
     observer = new PipelineObserver();
     agent = new ButlerAgent(observer);
-    stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((() => true) as any);
   });
 
   // ── 状态机 ──────────────────────────────────

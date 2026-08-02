@@ -94,6 +94,7 @@ function makeNode(def: AgentTestDef): TaskNode {
     tags: [def.type] as any,
     payload: def.payload,
     status: "pending" as const,
+      needsMultiPerspective: false,
     claimedBy: [],
     results: [],
     createdAt: Date.now(),

@@ -20,7 +20,7 @@ import { resolveConfigDataDir } from "@cortex/config";
 // agents 配置域——根级 cortex-agents.json 已拆分进 packages/config/src/data/
 const cortexConfig = JSON.parse(
   fs.readFileSync(path.join(resolveConfigDataDir(), "agents.json"), "utf-8"),
-) as { agents: Record<string, unknown> };
+) as any; // agents: Record<string, unknown> };
 
 // ── 加载 .env ──
 function loadEnv() {
