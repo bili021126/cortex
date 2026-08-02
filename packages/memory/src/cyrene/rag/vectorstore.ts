@@ -20,7 +20,16 @@ export interface SearchResult {
   score: number;        // 加权后的综合分数（余弦 × weight × 衰减）
 }
 // ── 余弦相似度（嵌入已归一化，等价于点积） ──
+// R11-04：维度不匹配返回 0（防 NaN 静默传播）——模型更换后旧向量失效，大声警告一次
+let _dimsWarned = false;
 export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) {
+    if (!_dimsWarned) {
+      console.warn(`[RAG] 向量维度不匹配（${a.length} vs ${b.length}）——embedding 模型更换后旧向量失效，建议重嵌入`);
+      _dimsWarned = true;
+    }
+    return 0;
+  }
   let dot = 0;
   for (let i = 0; i < a.length; i++) {
     dot += a[i] * b[i];
@@ -139,6 +148,8 @@ export class JsonVectorStore {
   private filePath: string;
   private entries: RagMemoryEntry[] = [];
   private dirty = false;
+  /** R11-04：文件记录的 embedding 模型标记（null = 旧格式/未知） */
+  private fileModel: { name: string | null; dims: number | null } | null = null;
   /** IVF 索引，null = 未构建或需要重建 */
   private ivf: IvfIndex | null = null;
   /** 搜索次数计数，达到阈值时惰性重建索引 */
@@ -151,7 +162,25 @@ export class JsonVectorStore {
     try {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, "utf8");
-        this.entries = JSON.parse(raw) as RagMemoryEntry[];
+        const parsed = JSON.parse(raw);
+        // R11-04：旧格式（裸数组，无模型标记）→ 包装 + 警告；新格式直接读取
+        if (Array.isArray(parsed)) {
+          console.warn("[RAG] 检测到旧版向量库（无 embedding 模型标记）——下次保存将升级为新格式");
+          this.entries = parsed as RagMemoryEntry[];
+          this.fileModel = null;
+        } else if (parsed && Array.isArray(parsed.entries)) {
+          this.entries = parsed.entries as RagMemoryEntry[];
+          this.fileModel = parsed.model ?? null;
+          // 维度一致性检查——模型更换后旧向量静默失效（R11-04 核心）
+          try {
+            const current = getEmbeddingProvider();
+            if (this.fileModel?.dims && this.fileModel.dims !== current.dims) {
+              console.warn(
+                `[RAG] 向量库由 ${this.fileModel.name ?? "未知模型"}（${this.fileModel.dims}维）写入，当前是 ${current.name}（${current.dims}维）——维度不匹配，相似度不可靠，建议重嵌入`,
+              );
+            }
+          } catch { /* provider 未就绪 */ }
+        }
       }
     } catch (err) {
       console.warn("[RAG] failed to load vector store:", err);
@@ -162,7 +191,14 @@ export class JsonVectorStore {
     try {
       const dir = path.dirname(this.filePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(this.filePath, JSON.stringify(this.entries, null, 2), "utf8");
+      // R11-04：写模型标记（{ version, model, entries }）——加载时比较 dims
+      let model: { name: string; dims: number } | null = null;
+      try {
+        const p = getEmbeddingProvider();
+        model = { name: p.name, dims: p.dims };
+      } catch { /* provider 未就绪——写 null */ }
+      const file = { version: 1, model, entries: this.entries };
+      fs.writeFileSync(this.filePath, JSON.stringify(file, null, 2), "utf8");
       this.dirty = false;
     } catch (err) {
       console.warn("[RAG] failed to save vector store:", err);
