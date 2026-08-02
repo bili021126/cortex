@@ -41,6 +41,8 @@
 |---|---|
 | memory / memory-store | 秩序域：worldbook 双文件为分域设计（测试专用 vs 活实现）；cognitive-engine @frozen 有测试消费（冻结非空转）；AbstractMemoryStore 1512 行为单类内聚（拆分收益低） |
 | governance | 秩序域：16 文件全 <520 行，无超大文件 |
+| llm / prompt-kit / platform / notification / telemetry / context-manager | 秩序域（批量扫描）：llm-adapter 854 行为单类内聚（拆分收益低）；prompt-template-engine/mcp-client/toolkit 单类；notification 降级 console.warn 属 G1-5 类显式降级警告（可接受）；telemetry/context-manager 无硬编码/宣称/console |
+| **resilience（已开刀）** | **RES-1** Registry.ts 748 行多类集合拆分为 registry.types(156)/noop(67)/context(85)/impl(415) + re-export 桶（index 导出面不变）；StateMachineCircuitBreaker 722/AdaptiveTimeout 576/SimpleCircuitBreaker 407 为单类内聚（不拆）——tsc/eslint/287 测试全绿 |
 | engine | 断链已接：ConsistencyLayer（preWriteHook/filterRead/verify）/ RAG 桥接 / MemoryManager 均接线 |
 | **技术债（已清零）** | **engine 测试类型检查缺口**：根 tsconfig 只引用 tsconfig.src.json（不编译 tests）——tsconfig.test.json 全量重查暴露 623 处既有错误——**专项处置（2026-06-20）四轮清零**：①tsconfig.test.json 关闭 noUncheckedIndexedAccess（测试索引宽松化，382 处）；②shared GovernanceEventPayload severity/source optional（契约修正）；③makeEvent/makeMemoryEvent 返回类型具体化→any（测试辅助函数）+ EmittableEvent 断言 + mock 补方法/字段 + 枚举修正 + 未定义名称补 import + manual e2e 特殊排除（tui-chain/rollback 依赖特殊性）；④最终验证：tsconfig.test.json --force **0 错误**（623→0），engine 1137/1138 无回归——**测试类型检查闭环达成** |
 | **字段挂空（处置）** | monitorWindowMs/monitorThreshold 已接（monitor.ts 单源化）；embeddingCacheSize/schedulerMaxRounds/schedulerRoundTimeoutMs **标注 @future 预留**（无生产消费——ENV_MAP 契约已注册——测试守护值合法——保留待调度层/embedding 缓存接入） |
