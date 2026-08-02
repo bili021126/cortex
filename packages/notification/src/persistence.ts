@@ -197,8 +197,8 @@ export class NotificationPersistence {
     const row = (this.db.pragma as unknown as (sql: string, opts?: { simple: boolean }) => unknown)("user_version", { simple: true });
     const current = typeof row === "number" ? row : 0;
     // 降级守卫：拒绝操作比代码新的 schema（避免 INSERT 列不匹配每次 persist 抛错且被吞）
-    if (current > NotificationSqlitePersistence.SCHEMA_VERSION) {
-      process.stderr.write(`[NotificationPersistence] 数据库 schema 版本 ${current} 高于代码支持的 ${NotificationSqlitePersistence.SCHEMA_VERSION}——持久化禁用\n`);
+    if (current > NotificationPersistence.SCHEMA_VERSION) {
+      process.stderr.write(`[NotificationPersistence] 数据库 schema 版本 ${current} 高于代码支持的 ${NotificationPersistence.SCHEMA_VERSION}——持久化禁用\n`);
       this.available = false;
       return;
     }
@@ -220,7 +220,7 @@ export class NotificationPersistence {
         CREATE INDEX IF NOT EXISTS idx_nq_channel ON notification_queue(channel);
         CREATE INDEX IF NOT EXISTS idx_nq_timestamp ON notification_queue(timestamp);
       `);
-      this.db.pragma(`user_version = ${NotificationSqlitePersistence.SCHEMA_VERSION}`);
+      this.db.pragma(`user_version = ${NotificationPersistence.SCHEMA_VERSION}`);
     }
   }
 
