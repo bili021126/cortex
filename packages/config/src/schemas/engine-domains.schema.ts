@@ -13,6 +13,8 @@ export const ENGINE_SCHEMA: JsonSchema = {
   properties: {
     maxReplanPerNode: { type: "integer", minimum: 0 },
     maxTotalReplans: { type: "integer", minimum: 0 },
+    // R11-08：声明 defaultMaxLoops——用户经 engine.json 调循环上限有校验（此前静默忽略）
+    defaultMaxLoops: { type: "integer", minimum: 1 },
     executeAllTimeoutMs: { type: "integer", minimum: 1000 },
     reactLoopTimeoutMs: { type: "integer", minimum: 1000 },
     inspectorMaxLoops: { type: "integer", minimum: 0 },

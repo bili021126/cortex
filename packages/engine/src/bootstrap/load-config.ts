@@ -24,8 +24,8 @@ import {
 // ─── 引擎配置解析（ENG-5：engine.json 域接线 + tuning 覆盖链） ───
 
 /**
- * 组装最终 EngineConfig——覆盖链：options（调用方显式）> engine.json（ENGINE_SCHEMA 校验）> DEFAULT_ENGINE_CONFIG。
- * tuning 的 reactMaxLoops 仅当 options 未显式传 defaultMaxLoops 时覆盖。
+ * 组装最终 EngineConfig——覆盖链：options（调用方显式）> engine.json（ENGINE_SCHEMA 校验）> tuning > DEFAULT_ENGINE_CONFIG。
+ * R11-08 修复：defaultMaxLoops 尊重 fileConfig（engine.json）——tuning 的 reactMaxLoops 仅当文件未显式声明时兜底。
  */
 export function resolveEngineConfig(override?: EngineConfig): EngineConfig {
   let fileConfig: EngineConfig | undefined;
@@ -41,6 +41,7 @@ export function resolveEngineConfig(override?: EngineConfig): EngineConfig {
     ...(override ?? {}),
     defaultMaxLoops:
       override?.defaultMaxLoops
+      ?? fileConfig?.defaultMaxLoops
       ?? loadEngineDefaults().reactMaxLoops
       ?? DEFAULT_ENGINE_CONFIG.defaultMaxLoops,
   };
