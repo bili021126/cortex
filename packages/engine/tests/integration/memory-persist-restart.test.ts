@@ -129,6 +129,8 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
     const memoryA = first.memory!;
     const idA = await writeMarker(memoryA, "restart-A");
     const idB = await writeMarker(memoryA, "restart-B");
+    // CI 诊断：验证 id 唯一性（Linux 环境偶发 147 行 markers=1，疑似 idA===idB）
+    console.error("Error: [T2-diagnose] ids:", JSON.stringify({ idA, idB, same: idA === idB }));
     await memoryA.close();
 
     // 第二次启动：同一 dbPath，读回
@@ -147,7 +149,8 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
     // CI 诊断（2026-06-20）：Linux 环境偶发 markers=1——诊断内嵌断言消息（vitest 失败详情必显示）
     expect(
       markers.length,
-      `[T2-diagnose] all=${JSON.stringify(all.map((e) => ({ id: e.id, summary: e.summary })))} ` +
+      `[T2-diagnose] ids=${JSON.stringify({ idA, idB, same: idA === idB })} ` +
+        `all=${JSON.stringify(all.map((e) => ({ id: e.id, summary: e.summary })))} ` +
         `files=${JSON.stringify({
           db: fs.existsSync(TEMP_DB),
           wal: fs.existsSync(TEMP_DB + "-wal"),
