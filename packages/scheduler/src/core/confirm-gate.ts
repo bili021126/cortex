@@ -1,5 +1,6 @@
 import { type ConfirmationRequest, type ConfirmationResponse, type PlatformBridge, type AgentType, type ITrustModel, type IPipelineObserver, PipelineEventType, PipelinePriority, type Disposable } from "@cortex/shared";
 import { DEFAULT_ENGINE_CONFIG, ENV_CONFIRM_GATE_TIMEOUT_MS, ENV_AUTO_CONFIRM, isTestEnv, computeTrustScore, shouldAutoApprove, CONFIRM_GATE_BYPASS_TTL_MS, type TrustRecord, ReversibilityLevel as RL, type ReversibilityLevel, TrustLevel as TL } from "@cortex/config";
+import { recordTelemetry } from "@cortex/telemetry";
 
 // B4：信任分模型单源在 @cortex/config/constants/confirm-gate.ts——
 // 原镜像实现（computeTrustScore/shouldAutoApprove/TrustRecord）已删除，统一 import。
@@ -90,7 +91,13 @@ export class ConfirmGate implements Disposable {
         riskLevel: level,
         timestamp: Date.now(),
       });
-      console.error(`[telemetry] gate.trust_auto tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level} score=${score}`);
+      // SCH-3：裸 console 伪装 telemetry → 真 recordTelemetry（与 llm-adapter 遥测收敛一致）
+      void recordTelemetry("gate.trust_auto", 1, [
+        { key: "tool", value: trustContext?.toolName ?? "unknown" },
+        { key: "agent", value: trustContext?.agentType ?? "unknown" },
+        { key: "risk", value: level },
+        { key: "score", value: String(score) },
+      ]).catch(() => {});
       return { approved: true, reason: "trust auto", score };
     }
     // C1 fix: 非 auto-approve 路径不在此记录信任——由外层 recordDecision() 统一记录最终结果，
@@ -127,14 +134,24 @@ export class ConfirmGate implements Disposable {
     }
 
     if (this._bypass && Date.now() < this._bypassExpiresAt) {
-      console.error(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      void recordTelemetry("gate.verdict", 1, [
+        { key: "verdict", value: "approved" },
+        { key: "tool", value: trustContext?.toolName ?? "unknown" },
+        { key: "agent", value: trustContext?.agentType ?? "unknown" },
+        { key: "risk", value: level },
+      ]).catch(() => {});
       return false;
     }
     if (this._bypass) this._bypass = false; // 过期后自动关闭
 
     // L0 永不确认
     if (level === RL.L0) {
-      console.error(`[telemetry] gate.verdict verdict=approved tool=${trustContext?.toolName ?? "unknown"} agent=${trustContext?.agentType ?? "unknown"} risk=${level}`);
+      void recordTelemetry("gate.verdict", 1, [
+        { key: "verdict", value: "approved" },
+        { key: "tool", value: trustContext?.toolName ?? "unknown" },
+        { key: "agent", value: trustContext?.agentType ?? "unknown" },
+        { key: "risk", value: level },
+      ]).catch(() => {});
       return false;
     }
 
