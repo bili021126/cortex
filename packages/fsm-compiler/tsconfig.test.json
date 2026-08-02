@@ -8,7 +8,9 @@
     "composite": false,
     "declaration": false,
     "declarationMap": false,
-    "noEmit": true
+    "noEmit": true,
+    // 测试代码索引宽松化（2026-06-20 类型债专项，与 engine 同策）——base 的 noUncheckedIndexedAccess 关闭
+    "noUncheckedIndexedAccess": false
   },
-  "include": ["src", "tests", "vitest.config.ts", "vitest.ci.config.ts"]
+  "include": ["src", "tests"]
 }

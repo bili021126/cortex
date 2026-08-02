@@ -161,7 +161,7 @@ describe("FsmParser — edge cases", () => {
       finalStates: [],
     };
 
-    const ast = parser.parseObject(def);
+    const ast = parser.parseObject(def as any);
     expect(ast.machine.id).toBe("m");
     expect(ast.stateMap.size).toBe(1);
     expect(ast.transitionMap.size).toBe(1);
@@ -340,7 +340,7 @@ describe("TypeScriptGenerator", () => {
   };
 
   it("should generate all output sections", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
 
     expect(output.types).toBeTruthy();
@@ -351,7 +351,7 @@ describe("TypeScriptGenerator", () => {
   });
 
   it("should generate state enum with all states", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
 
     expect(output.types).toContain("TestMachineState");
@@ -361,7 +361,7 @@ describe("TypeScriptGenerator", () => {
   });
 
   it("should generate event enum with all events", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
 
     expect(output.types).toContain("TestMachineEvent");
@@ -370,7 +370,7 @@ describe("TypeScriptGenerator", () => {
   });
 
   it("should generate a TRANSITION_TABLE constant", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
 
     expect(output.types).toContain("TRANSITION_TABLE");
@@ -380,7 +380,7 @@ describe("TypeScriptGenerator", () => {
   });
 
   it("should generate a runtime class", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
 
     expect(output.runtime).toContain("TestMachineStateMachine");
@@ -390,7 +390,7 @@ describe("TypeScriptGenerator", () => {
   });
 
   it("should generate guard stubs", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
 
     expect(output.guards).toContain("canFinish");
@@ -398,7 +398,7 @@ describe("TypeScriptGenerator", () => {
   });
 
   it("should generate action stubs", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
 
     expect(output.actions).toContain("onStart");
@@ -413,7 +413,7 @@ describe("TypeScriptGenerator", () => {
       ],
     };
 
-    const ast = parser.parseObject(noGuardDef);
+    const ast = parser.parseObject(noGuardDef as any);
     const output = generator.generate(ast);
 
     expect(output.guards).toContain("No guards defined");
@@ -428,21 +428,21 @@ describe("TypeScriptGenerator", () => {
       ],
     };
 
-    const ast = parser.parseObject(noActionDef);
+    const ast = parser.parseObject(noActionDef as any);
     const output = generator.generate(ast);
 
     expect(output.actions).toContain("No actions defined");
   });
 
   it("should support readonly option", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast, { readonly: true });
 
     expect(output.types).toContain("readonly");
   });
 
   it("should generate import for runtime when guards/actions exist", () => {
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     const output = generator.generate(ast);
   
     expect(output.imports.some((i) => i.includes("@cortex/fsm-compiler/runtime"))).toBe(true);
@@ -468,7 +468,7 @@ describe("TypeScriptGenerator", () => {
       finalStates: [],
     };
   
-    const ast = parser.parseObject(dupDef);
+    const ast = parser.parseObject(dupDef as any);
     const output = generator.generate(ast);
   
     // 应至少有一条警告
@@ -485,7 +485,7 @@ describe("TypeScriptGenerator", () => {
   it("should NOT warn on unique from+event transitions", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
   
-    const ast = parser.parseObject(minimalDef);
+    const ast = parser.parseObject(minimalDef as any);
     generator.generate(ast);
   
     expect(warnSpy).not.toHaveBeenCalled();
@@ -504,7 +504,7 @@ describe("TypeScriptGenerator", () => {
       ],
     };
 
-    const ast = parser.parseObject(noGadDef);
+    const ast = parser.parseObject(noGadDef as any);
     const output = generator.generate(ast);
 
     // The generator's guard/action strings are always non-empty
@@ -542,21 +542,21 @@ describe("DiagramGenerator", () => {
 
   describe("toMermaid()", () => {
     it("should generate stateDiagram-v2 header", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const mermaid = diagramGen.toMermaid(ast);
 
       expect(mermaid).toContain("stateDiagram-v2");
     });
 
     it("should include initial state pointer", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const mermaid = diagramGen.toMermaid(ast);
 
       expect(mermaid).toContain("[*] --> green");
     });
 
     it("should include all transitions", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const mermaid = diagramGen.toMermaid(ast);
 
       expect(mermaid).toContain("green --> yellow");
@@ -572,7 +572,7 @@ describe("DiagramGenerator", () => {
         ],
       };
 
-      const ast = parser.parseObject(defWithGuard);
+      const ast = parser.parseObject(defWithGuard as any);
       const mermaid = diagramGen.toMermaid(ast);
 
       expect(mermaid).toContain("change [isSafe]");
@@ -584,7 +584,7 @@ describe("DiagramGenerator", () => {
         finalStates: ["red"],
       };
 
-      const ast = parser.parseObject(defWithFinal);
+      const ast = parser.parseObject(defWithFinal as any);
       const mermaid = diagramGen.toMermaid(ast);
 
       expect(mermaid).toContain("red --> [*]");
@@ -603,7 +603,7 @@ describe("DiagramGenerator", () => {
         finalStates: [],
       };
 
-      const ast = parser.parseObject(defWithSelfLoop);
+      const ast = parser.parseObject(defWithSelfLoop as any);
       const mermaid = diagramGen.toMermaid(ast);
 
       expect(mermaid).toContain("s --> s");
@@ -612,7 +612,7 @@ describe("DiagramGenerator", () => {
 
   describe("toDot()", () => {
     it("should generate digraph FSM header", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("digraph FSM");
@@ -620,7 +620,7 @@ describe("DiagramGenerator", () => {
     });
 
     it("should include start point", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("__start__");
@@ -628,7 +628,7 @@ describe("DiagramGenerator", () => {
     });
 
     it("should include all states as nodes", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("green");
@@ -642,14 +642,14 @@ describe("DiagramGenerator", () => {
         finalStates: ["red"],
       };
 
-      const ast = parser.parseObject(defWithFinal);
+      const ast = parser.parseObject(defWithFinal as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("shape=doublecircle");
     });
 
     it("should format initial state with bold circle", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("green");
@@ -657,7 +657,7 @@ describe("DiagramGenerator", () => {
     });
 
     it("should include all transitions with labels", () => {
-      const ast = parser.parseObject(sampleDef);
+      const ast = parser.parseObject(sampleDef as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("green -> yellow");
@@ -673,7 +673,7 @@ describe("DiagramGenerator", () => {
         ],
       };
 
-      const ast = parser.parseObject(defWithDetails);
+      const ast = parser.parseObject(defWithDetails as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("change [isSafe] / onChange");
@@ -692,7 +692,7 @@ describe("DiagramGenerator", () => {
         finalStates: [],
       };
 
-      const ast = parser.parseObject(defWithInternal);
+      const ast = parser.parseObject(defWithInternal as any);
       const dot = diagramGen.toDot(ast);
 
       expect(dot).toContain("style=dashed");

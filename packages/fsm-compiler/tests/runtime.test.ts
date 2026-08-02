@@ -104,7 +104,7 @@ describe("StateMachine -- advanced", () => {
     const machine = new StateMachine(basicDef, "idle" as const);
 
     const ctx = { userId: "u1", reason: "manual" };
-    machine.dispatch("start" as const, ctx);
+    machine.dispatch("start" as const, ctx as any);
 
     expect(machine.history[0].context).toEqual(ctx);
   });
@@ -170,7 +170,7 @@ describe("StateMachine -- advanced", () => {
     });
 
     const machine = new StateMachine(actionDef, "a" as const, { actions });
-    machine.dispatch("go" as const, { target: "B" });
+    machine.dispatch("go" as const, { target: "B" } as any);
 
     expect(sideEffect).toBe("went to B");
     expect(machine.current).toBe("b");
