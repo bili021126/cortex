@@ -85,18 +85,20 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
     IPC_CHANNELS.SETTINGS_SET,
     async (_event, key: string, value: unknown) => {
       const settingsPath = getSettingsPath();
+      let data: Record<string, unknown>;
       try {
         const raw = fs.readFileSync(settingsPath, "utf-8");
-        const data = JSON.parse(raw);
-        data[key] = value;
-        fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2), "utf-8");
+        data = JSON.parse(raw);
       } catch {
-        fs.writeFileSync(
-          settingsPath,
-          JSON.stringify({ [key]: value }, null, 2),
-          "utf-8",
-        );
+        // R11-20：解析失败——备份原始文件后从空对象合并，绝不覆盖可读文件（此前 catch 分支
+        // 写 { [key]: value } 丢弃所有其他设置；单次损坏导致下次写入全量静默丢失）
+        try {
+          fs.copyFileSync(settingsPath, `${settingsPath}.corrupt-${Date.now()}.bak`);
+        } catch { /* 文件不存在则无需备份 */ }
+        data = {};
       }
+      data[key] = value;
+      fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2), "utf-8");
       return { ok: true };
     },
   );
