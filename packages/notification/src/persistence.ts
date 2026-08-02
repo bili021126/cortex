@@ -96,8 +96,9 @@ export class NotificationPersistence {
         event.acked ? 1 : 0,
         event.ackedAt ?? null,
       );
-    } catch {
-      // 持久化失败不阻塞通知管线
+    } catch (err) {
+      // R11-05：不再空吞——上报 stderr（可观测）——持久化失败不阻塞通知管线
+      process.stderr.write(`[NotificationPersistence] persist 失败: ${String(err).slice(0, 200)}\n`);
     }
   }
 
@@ -187,24 +188,40 @@ export class NotificationPersistence {
     }
   }
 
+  /** R11-05：数据库 schema 版本（PRAGMA user_version 门控——此前 CREATE IF NOT EXISTS 无迁移，schema 变更静默杀死持久化） */
+  private static readonly SCHEMA_VERSION = 1;
+
   private _createTable(): void {
     if (!this.db) return;
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS notification_queue (
-        request_id TEXT PRIMARY KEY,
-        event_type TEXT NOT NULL,
-        channel TEXT NOT NULL,
-        summary TEXT NOT NULL,
-        detail TEXT,
-        source_agent TEXT,
-        merge_key TEXT,
-        timestamp INTEGER NOT NULL,
-        acked INTEGER NOT NULL DEFAULT 0,
-        acked_at INTEGER
-      );
-      CREATE INDEX IF NOT EXISTS idx_nq_channel ON notification_queue(channel);
-      CREATE INDEX IF NOT EXISTS idx_nq_timestamp ON notification_queue(timestamp);
-    `);
+    // 读 user_version（better-sqlite3 simple 模式返回 number）
+    const row = (this.db.pragma as unknown as (sql: string, opts?: { simple: boolean }) => unknown)("user_version", { simple: true });
+    const current = typeof row === "number" ? row : 0;
+    // 降级守卫：拒绝操作比代码新的 schema（避免 INSERT 列不匹配每次 persist 抛错且被吞）
+    if (current > NotificationSqlitePersistence.SCHEMA_VERSION) {
+      process.stderr.write(`[NotificationPersistence] 数据库 schema 版本 ${current} 高于代码支持的 ${NotificationSqlitePersistence.SCHEMA_VERSION}——持久化禁用\n`);
+      this.available = false;
+      return;
+    }
+    // 迁移链：v0 → v1（建表）。未来 v2 在此追加步骤（如 ADD COLUMN priority）。
+    if (current < 1) {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS notification_queue (
+          request_id TEXT PRIMARY KEY,
+          event_type TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          detail TEXT,
+          source_agent TEXT,
+          merge_key TEXT,
+          timestamp INTEGER NOT NULL,
+          acked INTEGER NOT NULL DEFAULT 0,
+          acked_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS idx_nq_channel ON notification_queue(channel);
+        CREATE INDEX IF NOT EXISTS idx_nq_timestamp ON notification_queue(timestamp);
+      `);
+      this.db.pragma(`user_version = ${NotificationSqlitePersistence.SCHEMA_VERSION}`);
+    }
   }
 
   private _rowToEvent(row: PersistedRow): NotificationEvent {
