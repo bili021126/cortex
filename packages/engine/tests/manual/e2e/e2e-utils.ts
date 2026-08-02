@@ -63,7 +63,7 @@ export function findProjectRoot(startDir?: string): string {
 }
 
 // ── LlmAdapter ────────────────────────────────
-/** 创建标准 LlmAdapter（从 .env 加载密钥） */
+/** 创建标准 LlmAdapter（从 .env 加载密钥；测试模型定死 flash——2026-06-20） */
 export function createE2eAdapter(): LlmAdapter {
   const key = process.env["DEEPSEEK_API_KEY"];
   if (!key) throw new Error("DEEPSEEK_API_KEY 未设置");
@@ -71,8 +71,9 @@ export function createE2eAdapter(): LlmAdapter {
   return new LlmAdapter({
     apiKey: key,
     baseUrl,
-    chatModel: process.env["DEEPSEEK_CHAT_MODEL"] ?? "deepseek-v4-flash",
-    reasonerModel: process.env["DEEPSEEK_REASONER_MODEL"] ?? "deepseek-v4-flash",
+    // 测试模型定死 flash——不再受 DEEPSEEK_CHAT_MODEL/REASONER_MODEL env 影响（2026-06-20）
+    chatModel: "deepseek-v4-flash",
+    reasonerModel: "deepseek-v4-flash",
     label: "e2e-test",
   });
 }
