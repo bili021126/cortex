@@ -61,11 +61,20 @@ export const DEFAULT_HYBRID_CONFIG: HybridRetrievalConfig = {
 // ── 余弦相似度 ──────────────────────────────
 
 /** 计算两个归一化向量的余弦相似度 */
+// R11-11：维度不匹配返回 0 + 警告（此前 Math.min 截断产生静默错误分数——embedding 维度经 env 翻转后旧向量失效）
+let _dimsWarned = false;
 export function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) {
+    if (!_dimsWarned) {
+      console.warn(
+        `[memory-store] 向量维度不匹配（${a.length} vs ${b.length}）——embedding 模型/维度变更后旧向量失效，建议重嵌入`,
+      );
+      _dimsWarned = true;
+    }
+    return 0;
+  }
   let dot = 0;
-  const len = Math.min(a.length, b.length);
-  for (let i = 0; i < len; i++) {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  for (let i = 0; i < a.length; i++) {
     dot += a[i]! * b[i]!;
   }
   return dot; // 假设已归一化，dot ∈ [-1, 1]
