@@ -90,8 +90,9 @@ export class FileCollector implements ITelemetryCollector {
 
     this._buffer.push(data);
     // R11-15：有界缓冲——大小/时间阈值触发异步 flush（此前仅 shutdown flush——长时间运行内存无界增长）
+    // _lastFlushAt 初始 0（未 flush 过）——时间阈值不触发，仅大小阈值生效（防首次 collect 竞态）
     const now = Date.now();
-    if (this._buffer.length >= MAX_BUFFER_SIZE || now - this._lastFlushAt >= FLUSH_INTERVAL_MS) {
+    if (this._buffer.length >= MAX_BUFFER_SIZE || (this._lastFlushAt > 0 && now - this._lastFlushAt >= FLUSH_INTERVAL_MS)) {
       this._scheduleFlush();
     }
     return { accepted: true };
