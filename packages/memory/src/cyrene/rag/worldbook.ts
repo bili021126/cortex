@@ -362,7 +362,10 @@ export class WorldbookManager {
       })
       .slice(0, WorldbookManager.MAX_ACTIVE);
     return active.map((e) => {
-      const title = e.id.replace(/^wb_[^_]+_/, "").replace(/_/g, " ");
+      // R12-A2：标题提取兼容新 ID（wb_<hash> 无标题段）——旧格式保留文件名_标题，新格式 fallback 首关键词
+      const title = e.id.includes("_", 3)
+        ? e.id.replace(/^wb_[^_]+_/, "").replace(/_/g, " ")
+        : (e.keywords[0] ?? "世界书");
       return `【${title}】\n${e.content}`;
     });
   }

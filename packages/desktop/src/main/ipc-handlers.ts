@@ -88,7 +88,12 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
       let data: Record<string, unknown>;
       try {
         const raw = fs.readFileSync(settingsPath, "utf-8");
-        data = JSON.parse(raw);
+        const parsed: unknown = JSON.parse(raw);
+        // R12-A3：合法 JSON 但非纯对象（数组/字符串/null）——视为损坏走备份路径（此前 data[key]=value 静默无效仍返回 ok:true）
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error(`settings.json 非对象: ${typeof parsed}`);
+        }
+        data = parsed as Record<string, unknown>;
       } catch {
         // R11-20：解析失败——备份原始文件后从空对象合并，绝不覆盖可读文件（此前 catch 分支
         // 写 { [key]: value } 丢弃所有其他设置；单次损坏导致下次写入全量静默丢失）

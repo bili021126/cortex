@@ -180,8 +180,8 @@ export class NotificationPersistence {
       mkdirSync(dirname(this.dbPath), { recursive: true });
       this.db = new Database(this.dbPath) as unknown as SqliteDb;
       this.db.pragma("journal_mode = WAL");
-      this._createTable();
-      this.available = true;
+      // R12-A1：_createTable 返回可用性——降级守卫置 false 后不被无条件覆盖（R11-05 回归修复）
+      this.available = this._createTable();
     } catch {
       // better-sqlite3 不可用——降级为纯内存模式
       this.available = false;
@@ -191,8 +191,8 @@ export class NotificationPersistence {
   /** R11-05：数据库 schema 版本（PRAGMA user_version 门控——此前 CREATE IF NOT EXISTS 无迁移，schema 变更静默杀死持久化） */
   private static readonly SCHEMA_VERSION = 1;
 
-  private _createTable(): void {
-    if (!this.db) return;
+  private _createTable(): boolean {
+    if (!this.db) return false;
     // 读 user_version（better-sqlite3 simple 模式返回 number）
     const row = (this.db.pragma as unknown as (sql: string, opts?: { simple: boolean }) => unknown)("user_version", { simple: true });
     const current = typeof row === "number" ? row : 0;
@@ -200,7 +200,7 @@ export class NotificationPersistence {
     if (current > NotificationPersistence.SCHEMA_VERSION) {
       process.stderr.write(`[NotificationPersistence] 数据库 schema 版本 ${current} 高于代码支持的 ${NotificationPersistence.SCHEMA_VERSION}——持久化禁用\n`);
       this.available = false;
-      return;
+      return false;
     }
     // 迁移链：v0 → v1（建表）。未来 v2 在此追加步骤（如 ADD COLUMN priority）。
     if (current < 1) {
@@ -222,6 +222,7 @@ export class NotificationPersistence {
       `);
       this.db.pragma(`user_version = ${NotificationPersistence.SCHEMA_VERSION}`);
     }
+    return true;
   }
 
   private _rowToEvent(row: PersistedRow): NotificationEvent {
