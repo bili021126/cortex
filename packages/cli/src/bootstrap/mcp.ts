@@ -30,6 +30,8 @@ export interface McpBootstrapResult {
   aggregator: SearchAggregator | null;
   /** 成功启动的 MCP 后端数 */
   startedCount: number;
+  /** R12-D5：停止全部 MCP stdio 子进程（CLI 退出时调用——防泄漏） */
+  stopAll: () => Promise<void>;
 }
 
 /**
@@ -100,22 +102,31 @@ async function _startMcpBackends(
   if (started.length > 0) {
     const aggregator = new SearchAggregator({ backends: [...started, ddgBackend] });
     toolkit.setSearchAggregator(aggregator);
-    return { aggregator, startedCount: started.length };
+    return {
+      aggregator,
+      startedCount: started.length,
+      // R12-D5：stopAll 接线——CLI 退出时停止全部 MCP stdio 子进程（此前 zero 调用——每次会话泄漏）
+      stopAll: async () => {
+        for (const b of started) {
+          try { await b.stop(); } catch { /* 单个失败不阻断 */ }
+        }
+      },
+    };
   }
 
-  return { aggregator: null, startedCount: 0 };
+  return { aggregator: null, startedCount: 0, stopAll: async () => {} };
 }
 
 export async function bootstrapMcp(
   toolkit: Toolkit,
 ): Promise<McpBootstrapResult> {
   if (process.env[ENV_CORTEX_NO_SEARCH] === "1") {
-    return { aggregator: null, startedCount: 0 };
+    return { aggregator: null, startedCount: 0, stopAll: async () => {} };
   }
 
   const mcpConfigs = _loadMcpConfigs();
   if (mcpConfigs.length === 0) {
-    return { aggregator: null, startedCount: 0 };
+    return { aggregator: null, startedCount: 0, stopAll: async () => {} };
   }
 
   return await _startMcpBackends(mcpConfigs, toolkit);

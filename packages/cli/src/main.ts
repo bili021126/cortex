@@ -154,6 +154,8 @@ if (INK_MODE) {
 
 let engineBridge: EngineBridge;
 let registry: CommandRegistry;
+// R12-D5：MCP 后端 stopAll 引用（模块级——顶层赋值 + main 内 finally 读取）
+let mcpStopAll: (() => Promise<void>) | undefined;
 
 const CORTEX_DAEMON_PORT = Number(process.env.CORTEX_DAEMON_PORT ?? "3210");
 
@@ -171,7 +173,10 @@ try {
     if (llms.size > 0) {
       toolkit = new Toolkit();
 
-      try { await bootstrapMcp(toolkit); } catch (e) {
+      try {
+        const mcpResult = await bootstrapMcp(toolkit);
+        mcpStopAll = mcpResult.stopAll;
+      } catch (e) {
         if (!process.env["VITEST"]) console.warn(`[bootstrap] MCP 后端配置加载失败: ${String(e)}`);
       }
 
@@ -267,6 +272,8 @@ export async function main(): Promise<number> {
         // 无论 startInkTui 正常返回还是抛出，都恢复被重定向的流，避免异常被吞进
         // 日志文件、终端静默退出（C5）。restoreInkStreams 幂等，stdout 亦一并恢复。
         restoreInkStreams();
+        // R12-D5：停止 MCP stdio 子进程（防每次会话泄漏）
+        if (mcpStopAll) { try { await mcpStopAll(); } catch { /* 停止失败不阻断退出 */ } }
       }
     } finally {
       // 断开远程连接（幂等）

@@ -237,7 +237,13 @@ function _resolvePromptFiles(config: CortexAgentsConfig, projectRoot: string): v
 
 /** 读取 prompt 文件内容 */
 function _readPromptFile(projectRoot: string, filePath: string): string {
-  const fullPath = path.join(projectRoot, filePath);
+  // R12-D8：路径校验——防 ../ 逃逸出项目根（任意克隆仓库的 prompts 接管系统指令）
+  const resolved = path.resolve(projectRoot, filePath);
+  const rootResolved = path.resolve(projectRoot);
+  if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) {
+    throw new Error(`Prompt 文件越界（禁止读取项目根之外）: ${filePath}`);
+  }
+  const fullPath = resolved;
   if (!fs.existsSync(fullPath)) {
     throw new Error(`Prompt 文件不存在: ${fullPath}`);
   }

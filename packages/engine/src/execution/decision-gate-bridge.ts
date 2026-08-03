@@ -17,6 +17,7 @@
 
 import type { IPipelineObserver, ObservableEvent } from "@cortex/shared";
 import { PipelineEventType, PipelinePriority } from "@cortex/shared";
+import { ReversibilityLevel } from "@cortex/config";
 import type { ConfirmGate } from "@cortex/scheduler";
 import { recordTelemetry } from "@cortex/telemetry";
 
@@ -136,8 +137,14 @@ export class DecisionGateBridge {
     const start = Date.now();
 
     try {
-      // ConfirmGate 需要 ReversibilityLevel，这里用 L2（需要确认）
-      // 注意：这是一个简化实现，实际可能需要扩展 ConfirmGate API
+      // R12-D1：waitFor 前注册 request（ConfirmGate 首行 !pending.has(id) 立即拒绝——决策链此前全死）
+      this.confirmGate.request({
+        id: request.requestId,
+        toolName: "governance-decision",
+        level: ReversibilityLevel.L2,
+        summary: request.summary,
+        detail: request.detail,
+      });
       const approved = await this.confirmGate.waitFor(request.requestId, this.timeoutMs);
 
       return {

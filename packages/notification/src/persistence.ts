@@ -105,6 +105,8 @@ export class NotificationPersistence {
   /** 从磁盘加载指定通道的未确认事件 */
   loadPending(channel: NotificationChannel): NotificationEvent[] {
     if (!this.available || !this.db) return [];
+    // R12-D4：读取前清理过期 acked 行（cleanup 此前零调用——acked 行永不清理，notification_queue 无界增长）
+    try { this.cleanup(7 * 24 * 60 * 60 * 1000); } catch { /* 清理失败不阻断读取 */ }
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM notification_queue
