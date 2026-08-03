@@ -63,6 +63,8 @@ export type OnCommandFn = (connId: string, msg: unknown) => void;
 /** WSGateway options */
 export interface WSGatewayOptions {
   onCommand?: OnCommandFn;
+  /** R12-P0-3：WS 连接令牌——配置后 handleUpgrade 校验 query token，拒绝未携带/不匹配的连接 */
+  authToken?: string;
 }
 
 // ─── WSGateway ────────────────────────────────────────
@@ -70,15 +72,32 @@ export interface WSGatewayOptions {
 export class WSGateway {
   private connections = new Map<string, WSConnection>();
   private readonly onCommand: OnCommandFn | undefined;
+  private readonly authToken: string | undefined;
 
   constructor(options: WSGatewayOptions = {}) {
     this.onCommand = options.onCommand;
+    this.authToken = options.authToken;
+  }
+
+  /** R12-P0-3：查询指定连接是否订阅了某频道（gate.resolve 的来源校验） */
+  hasChannel(connId: string, channel: string): boolean {
+    const conn = this.connections.get(connId);
+    return conn?.subscription.channels.has(channel) ?? false;
   }
 
   /**
    * Handle an HTTP upgrade request (called from http.Server 'upgrade' event).
    */
   handleUpgrade(req: IncomingMessage, socket: Socket, _head: Buffer): void {
+    // R12-P0-3：令牌鉴权——配置了 authToken 时校验 query token（挡任意本地进程/网页 CSWSH 代批）
+    if (this.authToken) {
+      const query = (req.url ?? "").split("?")[1] ?? "";
+      const token = new URLSearchParams(query).get("token");
+      if (token !== this.authToken) {
+        socket.end("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        return;
+      }
+    }
     const key = req.headers["sec-websocket-key"];
     if (!key || Array.isArray(key)) {
       socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");

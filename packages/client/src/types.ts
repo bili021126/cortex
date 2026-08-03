@@ -18,6 +18,8 @@ export interface HttpClientConfig {
 export interface WSClientConfig {
   /** WebSocket URL（如 "ws://localhost:3001"） */
   url: string;
+  /** R12-P0-3：WS 鉴权令牌（daemon 的 CORTEX_DAEMON_WS_TOKEN）——连接时拼到 URL query */
+  authToken?: string;
   /** 初始订阅的通道 */
   channels?: WSChannel[];
   /** 重连策略 */

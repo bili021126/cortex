@@ -162,7 +162,11 @@ export class CortexWSClient {
     }
 
     try {
-      this.ws = new WSImpl(this.config.url);
+      // R12-P0-3：连接令牌——配置了 authToken 时拼到 URL query（daemon WS 鉴权）
+      const wsUrl = this.config.authToken
+        ? `${this.config.url}${this.config.url.includes("?") ? "&" : "?"}token=${encodeURIComponent(this.config.authToken)}`
+        : this.config.url;
+      this.ws = new WSImpl(wsUrl);
     } catch (err) {
       throw new ConnectionError(`Failed to create WebSocket: ${err}`, err);
     }

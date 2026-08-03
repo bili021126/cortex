@@ -143,7 +143,13 @@ export class CortexDaemon {
     }
 
     // Create WS gateway
+    // R12-P0-3：WS 连接令牌——env 未配置时随机生成（stderr 提示）——desktop 需经 IPC/env 同步后携带
+    const wsToken = process.env["CORTEX_DAEMON_WS_TOKEN"] ?? crypto.randomUUID();
+    if (!process.env["CORTEX_DAEMON_WS_TOKEN"]) {
+      process.stderr.write(`[daemon] WS 鉴权令牌未配置——已随机生成（需同步给 desktop 客户端）: ${wsToken}\n`);
+    }
     this.wsGateway = new WSGateway({
+      authToken: wsToken,
       onCommand: (connId, msg) => {
         this.handleWsCommand(connId, msg);
       },
@@ -363,8 +369,13 @@ export class CortexDaemon {
         }
         break;
       case "gate.resolve":
+        // R12-P0-3：来源校验——只有订阅了 gate 频道的连接才能代批（防无鉴权代批 L2/L3）
         if (this.gateBridge) {
-          handleGateCommand(cmd, this.gateBridge);
+          if (this.wsGateway?.hasChannel(connId, "gate")) {
+            handleGateCommand(cmd, this.gateBridge);
+          } else {
+            console.warn(`[daemon] 拒绝 gate.resolve——连接 ${connId} 未订阅 gate 频道（来源校验）`);
+          }
         }
         break;
       case "notification.ack":

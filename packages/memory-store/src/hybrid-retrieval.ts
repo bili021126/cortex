@@ -94,7 +94,9 @@ function minMaxNormalize(scores: number[]): number[] {
   const min = Math.min(...scores);
   const max = Math.max(...scores);
   const range = max - min;
-  if (range === 0) return scores.map(() => 0.5);
+  // R12-P0-2：全同分（含全 0——维度守卫/零命中路径）→ 判 0 而非 0.5——
+  // 此前全 0.5 让无关条目以"置信分"通过阈值（initialThreshold < 0.5），且污染自适应阈值
+  if (range === 0) return scores.map(() => 0);
   return scores.map((s) => (s - min) / range);
 }
 

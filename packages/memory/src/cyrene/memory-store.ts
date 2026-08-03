@@ -122,6 +122,8 @@ export class MemoryStoreManager {
         // R11-12：降级检测用 >（此前 !==——旧代码读新文件时触发“迁移”，
         // 扁平默认合并丢弃旧代码不知道的字段并写回——静默截断新版本数据）
         if (typeof parsed.schemaVersion === "number" && parsed.schemaVersion > CURRENT_SCHEMA_VERSION) {
+          // R12-P0-1：降级分支补备份（与损坏分支一致——保留新版本文件供恢复）
+          try { backupMemoryFile(this.filePath) } catch { /* 备份失败不阻断 */ }
           process.stderr.write(
             `[memory] memory.json schema ${parsed.schemaVersion} 高于代码支持的 ${CURRENT_SCHEMA_VERSION}——拒绝迁移/写回（降级守卫），以空存储启动\n`,
           )
@@ -177,6 +179,10 @@ export class MemoryStoreManager {
   }
 
   async save(store: MemoryStoreData): Promise<void> {
+    // R12-P0-1：降级守卫补写侧——_corrupted 标记拒绝写回（此前只拦读不拦写，首次写入即全量覆盖新版本数据）
+    if (store._corrupted) {
+      throw new Error("[memory] memory.json 已标记损坏/降级——拒绝写回（防止覆盖更高 schema 版本的数据）")
+    }
     const dir = path.dirname(this.filePath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     // R11-12：剥离 _corrupted 内部标记——只保留在内存，不污染持久 schema
