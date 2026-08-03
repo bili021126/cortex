@@ -7,6 +7,7 @@
 
 import * as fs from "fs"
 import * as path from "path"
+import { createHash } from "crypto"
 import { WORLDBOOK_CONSTANTS } from "./worldbook-constants.js"
 
 export interface WorldbookEntry {
@@ -237,8 +238,13 @@ export class WorldbookManager {
 
       const entryContent = contentLines.join("\n").trim();
       if (entryContent) {
+        // R11-22：稳定 ID——内容哈希（此前从文件名+标题派生——重命名文件/标题静默孤立激活/DMAE 状态）
+        const hash = createHash("sha256")
+          .update(`${entryContent}|${keywords.join(",")}|${priority ?? ""}|${permanent ? "1" : "0"}`)
+          .digest("hex")
+          .slice(0, 12)
         entries.push({
-          id: `wb_${fileName.replace(/\.md$/, "")}_${title.replace(/\s+/g, "_")}`,
+          id: `wb_${hash}`,
           keywords, content: entryContent, priority, permanent, enabled: true,
           intrinsicValue, linkTriggers,
         });
