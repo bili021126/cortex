@@ -311,11 +311,15 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
     // ── BM25 索引更新 ──
     if (this._hybridEnabled) {
-      this._bm25Index.addDocument(finalId, {
-        summary: input.summary ?? "",
-        semantic_gist: input.semantic_gist ?? "",
-        payload: typeof input.content_blob === "string" ? input.content_blob : JSON.stringify(input.content_blob),
-      });
+      // R12-C6：去重命中（finalId 是已有条目）时跳过——用新输入覆盖已有条目的索引文本会造成
+      // 索引与持久化内容漂移（关键词检索评分永久错误）——已有条目的索引保留原内容
+      if (finalId === id) {
+        this._bm25Index.addDocument(finalId, {
+          summary: input.summary ?? "",
+          semantic_gist: input.semantic_gist ?? "",
+          payload: typeof input.content_blob === "string" ? input.content_blob : JSON.stringify(input.content_blob),
+        });
+      }
     }
 
     return finalId;
@@ -389,9 +393,9 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     // ── 混合检索增强（BM25 + 向量融合 + 贪心精排）──
     if (this._hybridEnabled && query.queryEmbedding && results.length > 0) {
       try {
-        // ① BM25 文本检索
+        // ① BM25 文本检索——R12-C7：候选集模式（窗口外候选不再静默得 0 触发全同分路径）
         const queryText = query.keywords?.join(" ") ?? "";
-        const bm25Results = this._bm25Index.search(queryText, results.length * 2);
+        const bm25Results = this._bm25Index.search(queryText, results.length * 2, new Set(results.map((m) => m.id)));
         const bm25Map = new Map(bm25Results.map((r) => [r.id, r.score]));
 
         // ② 混合评分

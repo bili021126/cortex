@@ -198,7 +198,10 @@ export class JsonVectorStore {
         model = { name: p.name, dims: p.dims };
       } catch { /* provider 未就绪——写 null */ }
       const file = { version: 1, model, entries: this.entries };
-      fs.writeFileSync(this.filePath, JSON.stringify(file, null, 2), "utf8");
+      // R12-C8：原子写（tmp+rename）——崩溃不丢全部向量（此前直接 writeFileSync，load catch 置空后下次 save 覆盖）
+      const tmpPath = this.filePath + ".tmp";
+      fs.writeFileSync(tmpPath, JSON.stringify(file, null, 2), "utf8");
+      fs.renameSync(tmpPath, this.filePath);
       this.dirty = false;
     } catch (err) {
       console.warn("[RAG] failed to save vector store:", err);

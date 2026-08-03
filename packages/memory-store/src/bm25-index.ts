@@ -198,9 +198,10 @@ export class BM25Index {
    * 搜索并返回 Top-N 结果。
    * @param query 查询文本
    * @param topN 返回数量（默认 20）
+   * @param candidates 可选候选集——只返回候选集内的评分（R12-C7：候选可能被 topN 截断静默得 0，触发混合检索全同分路径）
    * @returns 按 BM25 分降序的结果
    */
-  search(query: string, topN = 20): BM25Result[] {
+  search(query: string, topN = 20, candidates?: Set<string>): BM25Result[] {
     if (!query || this._docCount === 0) return [];
 
     const queryTokens = tokenize(query);
@@ -250,7 +251,10 @@ export class BM25Index {
 
     // 排序 → Top-N
     scores.sort((a, b) => b.score - a.score);
-    return scores.slice(0, topN);
+    // R12-C7：候选集模式——评分已全量（逐文档），只过滤返回候选集内（窗口外候选不再静默得 0）
+    return candidates
+      ? scores.filter((r) => candidates.has(r.id)).slice(0, topN)
+      : scores.slice(0, topN);
   }
 
   // ── 内部 ──────────────────────────────────

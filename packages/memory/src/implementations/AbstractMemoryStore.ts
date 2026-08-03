@@ -355,6 +355,17 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       );
     }
 
+    // R12-C5：domainGate 实现——allow 白名单（空=全部）/ block 黑名单（命中排除）；未声明 domain 视为 general
+    if (q.domainGate) {
+      const { allow, block } = q.domainGate;
+      r = r.filter(e => {
+        const d = e.domain ?? "general";
+        if (block?.includes(d)) return false;
+        if (allow && allow.length > 0 && !allow.includes(d)) return false;
+        return true;
+      });
+    }
+
     if (q.bfsDepth && q.bfsDepth > 0)
       r = this._bfs(r, q.bfsDepth, q.bfsMaxNodes);
 
