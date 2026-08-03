@@ -34,11 +34,22 @@ export function handleChatCommand(
             sendFn(channel, data);
           }
         });
+      } else {
+        // R12-H5：WS 复用会话时更新 send（REST 创建的 session send 是 no-op——流式事件静默消失）
+        session.send = (msg) => {
+          if (typeof msg === "object" && msg !== null && "channel" in msg && "data" in msg) {
+            const { channel, data } = msg as { channel: string; data: unknown };
+            sendFn(channel, data);
+          }
+        };
       }
 
       // Restore history if provided
       if (history && history.length > 0) {
-        session.history = history.map((m) => ({
+        // R12-H4：history 元素形状校验——role 缺失/非法的条目丢弃（此前零校验直达 LLM 消息链）
+        session.history = history
+          .filter((m) => m && typeof m === "object" && (m.role === "user" || m.role === "assistant"))
+          .map((m) => ({
           role: m.role,
           content: m.content ?? "",
           ...(m.tool_call_id ? { tool_call_id: m.tool_call_id } : {}),

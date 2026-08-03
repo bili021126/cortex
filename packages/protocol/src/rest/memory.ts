@@ -15,6 +15,10 @@ export interface MemoryEntryDTO {
   createdAt: number;
   updatedAt: number;
   metadata?: Record<string, unknown>;
+  // R12-H2：daemon 实际返回字段（此前 DTO 缺——客户端消费全 undefined）
+  summary?: string;
+  domain?: string;
+  semanticState?: string;
 }
 
 /** GET /memory 查询参数 */

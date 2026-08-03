@@ -36,10 +36,14 @@ export interface BootSequenceCallbacks {
 }
 
 export interface DaemonBootInfo {
-  chatModel: string;
-  reasonerModel: string;
+  // R12-H6：对齐 daemon/health 实际返回（daemon 块：pid/uptimeMs/version/engineReady/activeSessions；chatModel/reasonerModel 仅 system.status 有——可选容错）
+  chatModel?: string;
+  reasonerModel?: string;
   uptimeMs: number;
   activeSessions: number;
+  pid?: number;
+  version?: string;
+  engineReady?: boolean;
 }
 
 export interface BootSequenceOptions {

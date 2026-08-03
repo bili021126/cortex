@@ -15,7 +15,7 @@ export class CortexConnection {
 
   constructor(config?: CortexConnectionConfig) {
     const host = config?.host ?? "localhost";
-    const port = config?.port ?? 3001;
+    const port = config?.port ?? 3210;
     const protocol = config?.protocol ?? "http";
     const wsProtocol = config?.wsProtocol ?? "ws";
 

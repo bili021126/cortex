@@ -55,6 +55,8 @@ export interface WSConnection {
   socket: Socket;
   readyState: WS_READY_STATE;
   subscription: Subscription;
+  /** R12-H1：分包缓冲——帧数据不足时暂存，下次 data 拼接 */
+  frameBuffer: Buffer;
 }
 
 /** Command handler callback */
@@ -125,6 +127,7 @@ export class WSGateway {
     const conn: WSConnection = {
       id: connId,
       socket,
+      frameBuffer: Buffer.alloc(0),
       readyState: WS_READY_STATE.OPEN,
       subscription: { channels: new Set() },
     };
@@ -133,7 +136,11 @@ export class WSGateway {
 
     // Listen for data frames
     socket.on("data", (data: Buffer) => {
-      this._handleFrame(conn, data);
+      // R12-H1：分包/粘包缓冲——单包假设此前导致分包丢帧、粘包丢第二帧
+      const buf = conn.frameBuffer.length > 0 ? Buffer.concat([conn.frameBuffer, data]) : data;
+      conn.frameBuffer = Buffer.alloc(0);
+      const rest = this._handleFrames(conn, buf);
+      if (rest && rest.length > 0) conn.frameBuffer = rest;
     });
 
     socket.on("close", () => {
@@ -190,45 +197,82 @@ export class WSGateway {
 
   // ── Private methods ────────────────────────────────────
 
-  /** Handle incoming WS frame */
-  private _handleFrame(conn: WSConnection, data: Buffer): void {
-    if (data.length < 2) return;
+    /**
+   * R12-H1：循环解析帧——一包可能含多帧（粘包）；不足一帧时返回剩余字节（下次 data 拼接）。
+   * 返回未消费的剩余字节（0 长度 = 全部消费）。
+   */
+  private _handleFrames(conn: WSConnection, data: Buffer): Buffer {
+    let offset = 0;
+    while (offset < data.length) {
+      const frame = this._parseFrame(conn, data, offset);
+      if (frame === null) {
+        // 帧头不完整（数据不足）——剩余字节等下次 data 拼接
+        return data.subarray(offset);
+      }
+      offset = frame.nextOffset;
+      switch (frame.opcode) {
+        case OPCODE.TEXT: {
+          const text = frame.payload.toString("utf-8");
+          this._handleMessage(conn, text);
+          break;
+        }
+        case OPCODE.PING:
+          this._sendFrame(conn, OPCODE.PONG, frame.payload);
+          break;
+        case OPCODE.CLOSE: {
+          let code = 1000;
+          let reason = "";
+          if (frame.payload.length >= 2) {
+            code = frame.payload.readUInt16BE(0);
+            reason = frame.payload.subarray(2).toString("utf-8");
+          }
+          this._closeConnection(conn, code, reason || "Client closed");
+          return Buffer.alloc(0);
+        }
+        default:
+          // 未知/未实现 opcode——跳过
+          break;
+      }
+    }
+    return Buffer.alloc(0);
+  }
 
-    const byte0 = data[0] ?? 0;
-    const byte1 = data[1] ?? 0;
+  /** 解析单帧（从 offset 起）——帧头/载荷不完整返回 null（等待更多数据） */
+  private _parseFrame(conn: WSConnection, data: Buffer, start: number): { opcode: number; payload: Buffer; nextOffset: number } | null {
+    if (data.length < start + 2) return null;
+
+    const byte0 = data[start] ?? 0;
+    const byte1 = data[start + 1] ?? 0;
     const opcode = byte0 & 0x0f;
     const masked = (byte1 & 0x80) !== 0;
     let payloadLength = byte1 & 0x7f;
-    let offset = 2;
+    let offset = start + 2;
 
     if (payloadLength === 126) {
-      if (data.length < 4) return;
+      if (data.length < offset + 2) return null;
       payloadLength = data.readUInt16BE(offset);
       offset += 2;
     } else if (payloadLength === 127) {
-      if (data.length < 10) return;
-      // Only handle low 32 bits of 64-bit length (sufficient)
+      if (data.length < offset + 8) return null;
       payloadLength = Number(data.readBigUInt64BE(offset));
       offset += 8;
     }
 
     if (payloadLength > MAX_FRAME_PAYLOAD) {
       this._closeConnection(conn, 1009, "Frame too large");
-      return;
+      return { opcode: OPCODE.CLOSE, payload: Buffer.alloc(0), nextOffset: data.length };
     }
 
-    // Read mask key
     let maskKey: Buffer | null = null;
     if (masked) {
-      if (data.length < offset + 4) return;
+      if (data.length < offset + 4) return null;
       maskKey = data.subarray(offset, offset + 4);
       offset += 4;
     }
 
-    if (data.length < offset + payloadLength) return;
+    if (data.length < offset + payloadLength) return null;
     let payload = data.subarray(offset, offset + payloadLength);
 
-    // Unmask — 4-byte block XOR for performance
     if (maskKey) {
       const len = payload.length;
       const buf = Buffer.allocUnsafe(len);
@@ -245,29 +289,8 @@ export class WSGateway {
       payload = buf;
     }
 
-    switch (opcode) {
-      case OPCODE.TEXT: {
-        const text = payload.toString("utf-8");
-        this._handleMessage(conn, text);
-        break;
-      }
-      case OPCODE.PING:
-        this._sendFrame(conn, OPCODE.PONG, payload);
-        break;
-      case OPCODE.CLOSE: {
-        let code = 1000;
-        let reason = "";
-        if (payload.length >= 2) {
-          code = payload.readUInt16BE(0);
-          reason = payload.subarray(2).toString("utf-8");
-        }
-        this._closeConnection(conn, code, reason);
-        break;
-      }
-      // BINARY / CONTINUATION: ignore
-    }
+    return { opcode, payload, nextOffset: offset + payloadLength };
   }
-
   /** Handle WS text message (JSON command) */
   private _handleMessage(conn: WSConnection, text: string): void {
     let msg: unknown;
