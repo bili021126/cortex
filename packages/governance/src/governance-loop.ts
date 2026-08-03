@@ -31,6 +31,9 @@ import { checkTimeout, updateStaleCount, type TimeoutAction } from "./amendment-
  * 来自 @cortex/config 常量 */
 const AMENDMENTS_DIR = DIR_AMENDMENTS;
 
+/** R11-21：修宪提案格式版本（formatVersion 字段；无字段 = v1） */
+const PROPOSAL_FORMAT_VERSION = 1;
+
 // ─── 提案管理 ──────────────────────────────────
 
 /**
@@ -47,6 +50,27 @@ export function loadPendingProposals(rootDir: string, observer?: IPipelineObserv
     try {
       const raw = fs.readFileSync(path.join(dir, entry.name), "utf-8");
       const p = JSON.parse(raw) as AmendmentProposal;
+      // R11-21：提案格式校验——修改宪法的数据路径此前无任何格式守卫（盲转换，字段缺失静默写入宪法）
+      const pv = (p as AmendmentProposal & { formatVersion?: number }).formatVersion;
+      if (typeof pv === "number" && pv > PROPOSAL_FORMAT_VERSION) {
+        const msg = `跳过修宪提案（formatVersion ${pv} 高于支持 ${PROPOSAL_FORMAT_VERSION}）: ${entry.name}`;
+        if (observer) {
+          observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { component: "governance-loop", operation: "loadPendingProposals", detail: msg }, timestamp: Date.now(), notificationType: "FYI" });
+        } else {
+          console.warn(`[GovernanceLoop] ${msg}`);
+        }
+        continue;
+      }
+      // 关键字段形状校验——缺任何必填字段的提案拒绝进入管线
+      if (!p.id || !p.version || !p.section || !p.category || !p.summary || !p.status || !p.before || !p.after) {
+        const msg = `跳过修宪提案（关键字段缺失）: ${entry.name}`;
+        if (observer) {
+          observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { component: "governance-loop", operation: "loadPendingProposals", detail: msg }, timestamp: Date.now(), notificationType: "FYI" });
+        } else {
+          console.warn(`[GovernanceLoop] ${msg}`);
+        }
+        continue;
+      }
       if (p.status === "draft" || p.status === "pending_judgment") {
         proposals.push(p);
       }
