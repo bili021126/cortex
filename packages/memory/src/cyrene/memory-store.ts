@@ -119,6 +119,22 @@ export class MemoryStoreManager {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, "utf8")
         const parsed = JSON.parse(raw) as Partial<MemoryStoreData>
+        // R11-12：降级检测用 >（此前 !==——旧代码读新文件时触发“迁移”，
+        // 扁平默认合并丢弃旧代码不知道的字段并写回——静默截断新版本数据）
+        if (typeof parsed.schemaVersion === "number" && parsed.schemaVersion > CURRENT_SCHEMA_VERSION) {
+          process.stderr.write(
+            `[memory] memory.json schema ${parsed.schemaVersion} 高于代码支持的 ${CURRENT_SCHEMA_VERSION}——拒绝迁移/写回（降级守卫），以空存储启动\n`,
+          )
+          appendMemoryTrace({
+            op: "migration.downgrade-guard",
+            layer: "migration",
+            status: "error",
+            error: `schema ${parsed.schemaVersion} > ${CURRENT_SCHEMA_VERSION}`,
+          })
+          this.cache = cloneDefaultStore()
+          this.cache._corrupted = true
+          return this.cache
+        }
         const needsMigration = parsed.schemaVersion !== CURRENT_SCHEMA_VERSION
         this.cache = repairMigrations(parsed)
         if (needsMigration) {
@@ -163,9 +179,12 @@ export class MemoryStoreManager {
   async save(store: MemoryStoreData): Promise<void> {
     const dir = path.dirname(this.filePath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    // R11-12：剥离 _corrupted 内部标记——只保留在内存，不污染持久 schema
+    const { _corrupted: _drop, ...clean } = store
+    void _drop
     // P0-2: tmp + rename 原子写，防止写一半崩溃损坏文件
     const tmpPath = this.filePath + ".tmp"
-    fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2), "utf8")
+    fs.writeFileSync(tmpPath, JSON.stringify(clean, null, 2), "utf8")
     fs.renameSync(tmpPath, this.filePath)
     this.cache = store
   }
