@@ -44,6 +44,11 @@ export interface FileCollectorOptions {
  * await collector.shutdown();
  * ```
  */
+
+// R11-15：有界缓冲阈值——缓冲满或超时自动 flush（长时间运行不无界增长）
+const MAX_BUFFER_SIZE = 500;
+const FLUSH_INTERVAL_MS = 30_000;
+
 export class FileCollector implements ITelemetryCollector {
   readonly name: string;
   private readonly _filePath: string;
@@ -51,6 +56,9 @@ export class FileCollector implements ITelemetryCollector {
   private readonly _trailingNewline: boolean;
   private _shutdown = false;
   private _buffer: TelemetryData[] = [];
+  /** R11-15：有界缓冲阈值——缓冲达到 MAX_BUFFER_SIZE 或距上次 flush 超过 FLUSH_INTERVAL_MS 时异步 flush */
+  private _flushInFlight: Promise<void> | null = null;
+  private _lastFlushAt = 0;
 
   /**
    * @param filePath - 输出文件路径
@@ -81,6 +89,11 @@ export class FileCollector implements ITelemetryCollector {
     }
 
     this._buffer.push(data);
+    // R11-15：有界缓冲——大小/时间阈值触发异步 flush（此前仅 shutdown flush——长时间运行内存无界增长）
+    const now = Date.now();
+    if (this._buffer.length >= MAX_BUFFER_SIZE || now - this._lastFlushAt >= FLUSH_INTERVAL_MS) {
+      this._scheduleFlush();
+    }
     return { accepted: true };
   }
 
@@ -122,6 +135,17 @@ export class FileCollector implements ITelemetryCollector {
   async shutdown(): Promise<void> {
     await this.flush();
     this._shutdown = true;
+  }
+
+  /** R11-15：阈值触发 flush——串行化（_flushInFlight 防重入），失败保留缓冲下次阈值再试 */
+  private _scheduleFlush(): void {
+    if (this._flushInFlight) return;
+    this._flushInFlight = this.flush()
+      .catch(() => { /* 写入失败保留缓冲——下次阈值再试 */ })
+      .finally(() => {
+        this._flushInFlight = null;
+        this._lastFlushAt = Date.now();
+      });
   }
 
   /**
