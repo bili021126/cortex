@@ -353,9 +353,10 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     void recordTelemetry("memory.search_time_ms", Date.now() - t0, [{ key: "mode", value: mode }]).catch(() => {});
 
     // ── 适配器层过滤：30 天 TTL + 标记删除 ──
+    // R12-C3：TTL 基于 lastAccessedAt（活跃条目不因创建满 30 天失明）——旧条目 fallback createdAt
     const now = Date.now();
     results = results.filter(
-      (m: MemoryEntry) => (now - m.createdAt) <= MEMORY_TTL_MS && !this._pendingObliterate.has(m.id),
+      (m: MemoryEntry) => (now - (m.lastAccessedAt || m.createdAt)) <= MEMORY_TTL_MS && !this._pendingObliterate.has(m.id),
     );
 
     // ── 适配器层过滤：content_blob 关键词匹配 ──
@@ -699,7 +700,8 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           if (aged < e.weight * 0.9) {
             try {
               // 读-改-写：传完整条目仅更新 weight，避免整体替换抹掉其他字段。
-              const p = this._backend.set(e.id, { ...e, weight: aged });
+              // R12-C1：aging 锚点——同步刷新 lastAccessedAt 阻止重复施加（无锚点时衰减速率与 maintain 频率成正比）
+              const p = this._backend.set(e.id, { ...e, weight: aged, lastAccessedAt: Date.now() });
               if (p) p.catch((err) => this._safeAgingError(err, e.id, "set"));
             } catch (e) {
               // best-effort: 非关键降级路径

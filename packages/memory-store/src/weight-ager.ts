@@ -113,7 +113,10 @@ export class WeightAger {
     const candidates: ObliterateCandidate[] = [];
     for (const m of entries) {
       if (m.semantic_state !== "Archived") continue;
-      if (m.lastAccessedAt > obliterateThreshold && (m.expires_at ?? 0) === 0) continue;
+      // R12-C2：过期语义修正——最近访问过（未超湮灭阈值）保留；设置了未来 expires_at 的未到期条目保留
+      // （此前条件反了：expires_at ≠ 0 即进湮灭候选——"保留 90 天"的未来过期记忆被立即湮灭）
+      if (m.lastAccessedAt > obliterateThreshold) continue;
+      if (m.expires_at && m.expires_at > now) continue;
       candidates.push({
         id: m.id,
         lastAccessedAt: m.lastAccessedAt,

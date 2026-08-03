@@ -327,8 +327,11 @@ export class MemoryStoreManager {
       mem.status = "active"
     } else if (mem.weight >= 10) {
       mem.status = mem.weight >= 30 ? "active" : "aging"
-    } else {
+    } else if (Date.now() - mem.lastAccessedAt > 30 * 24 * 60 * 60 * 1000) {
+      // R12-C4：只有长期未访问（>30 天）+ 低权重才归档——新条目（weight 0-9）不被"召回即降级"
       mem.status = "archived"
+    } else {
+      mem.status = "aging"
     }
     await this.save(store)
     appendMemoryTrace({
