@@ -593,9 +593,10 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     toolRollbackRegistry.reset();
     this._currentRollbackTaskId = undefined;
 
-    // 若已 bootstrap，使用 ShutdownOrchestrator 统一关闭
-    if (this.ctx.bootstrapResult?.orchestrator) {
-      await this.ctx.bootstrapResult.orchestrator.shutdown();
+    // R12-D7：调完整 shutdown（BootstrapEngineResult.shutdown 处理 orchestrator/lifecycle/workerPool/container/telemetry——
+    // 此前只调 orchestrator——alertTimer/workerPool/notification/telemetry 全残留；rebootstrap 前也需先关旧引擎）
+    if (this.ctx.bootstrapResult) {
+      await this.ctx.bootstrapResult.shutdown();
     }
 
     // MemoryStore 兜底关闭（orchestrator 可能已处理，幂等安全）
