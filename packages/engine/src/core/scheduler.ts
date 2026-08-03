@@ -281,7 +281,17 @@ export class Scheduler implements IScheduler {
    */
   private async _runDispatchPipeline(ctx: DispatchCtx, steps: IDispatchStep[]): Promise<NodeResult> {
     for (const step of steps) {
-      ctx = await step.run(ctx);
+      // R12-B5：步骤 throw 也走 Cleanup（此前只有结果失败走——抛异常导致 ManifoldGate 槽位 + pool 实例泄漏）
+      try {
+        ctx = await step.run(ctx);
+      } catch (err) {
+        const thrownResult: NodeResult = { nodeId: ctx.node.id, success: false, error: `Step ${step.name} threw: ${String(err).slice(0, 200)}` };
+        const lastStep = steps[steps.length - 1];
+        if (lastStep?.name === "Cleanup") {
+          try { await lastStep.run({ ...ctx, result: thrownResult }); } catch { /* cleanup 失败不阻断 */ }
+        }
+        return thrownResult;
+      }
       if (ctx.result && !ctx.result.success && step.name !== "Cleanup") {
         // 失败时仍运行 CleanupStep（最后一步）以确保落盘释放
         // 其内部 guard (!agentType || !instanceId || !result) 保证前置条件不满足时安全 no-op

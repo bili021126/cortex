@@ -46,6 +46,8 @@ export interface ISchedulerAgentPool {
   spawnSubtask(agentType: AgentType, instanceId: string): boolean;
   getStatus(instanceId: string): AgentStatus | undefined;
   setStatus(instanceId: string, status: AgentStatus): boolean;
+  /** R12-B4：检查某类型是否有 Awake 状态的实例（lease 续期判定用 agentType 而非 instanceId——键空间正确） */
+  hasAwake(agentType: AgentType): boolean;
   destroy(agentType: AgentType, instanceId: string): void;
   /** 记录 agent 心跳——更新最后活跃时间戳 */
   heartbeat(agentId: string): void;

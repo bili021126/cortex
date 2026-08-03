@@ -105,7 +105,8 @@ export class AgentTracker {
     const actions: TimeoutAction[] = [];
     for (const [, s] of this.states) {
       if (s.state === AgentExecutionState.Failed || s.state === AgentExecutionState.TimedOut) continue;
-      const elapsed = now - s.dispatchedAt;
+      // R12-B2：超时基线用 lastHeartbeat（心跳续命生效）——此前用 dispatchedAt，心跳不续命，慢任务必被误杀
+      const elapsed = now - s.lastHeartbeat;
 
       if (elapsed > L3_DEAD_MS && s.pingSent) {
         s.state = AgentExecutionState.TimedOut;

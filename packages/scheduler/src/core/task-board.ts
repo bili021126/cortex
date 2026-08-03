@@ -102,8 +102,9 @@ export class TaskBoard implements ITaskBoard {
     if (node.status === "claimed" && node.claimedAt) {
       if (Date.now() - node.claimedAt > CLAIM_LEASE_MS) {
         const claimer = node.claimedBy[0];
+        // R12-B4：活跃判定用 agentType（hasAwake）——此前 getStatus(claimer) 按 instanceId 查但 claimer 是 agentType——键空间错配恒查不到，慢任务被误回收
         const claimerStillActive = claimer !== undefined
-          ? this._pool?.getStatus(claimer) !== undefined
+          ? this._pool?.hasAwake(claimer as AgentType) === true
           : false;
         if (claimerStillActive) {
           // 原 agent 仍活跃 → 续期，不回收（等 agent 完成路径释放）

@@ -29,12 +29,19 @@ function _handleTimeoutActions(actions: TimeoutAction[], ctx: LoopContext): void
 
       case 'ping':
         // 异步探测——不 blocking
-        // P2 fix: ping 失败（探测到死亡或自身异常）时升级处理——failNode + emit NodeFailed，不静默
+        // R12-B2：ping 保守化——agentId 与 pool 的 instanceId 键空间可能错配（查不到≠死亡）——
+        // 不判死 failNode（节点级超时 race 是主兜底）——只发事件，L3 kill 仍由 checkTimeouts 按 lastHeartbeat 触发
         void ctx.pool.ping(a.agentId).then((alive) => {
-          if (!alive) _handlePingDead(ctx, a);
-        }).catch((err) => {
-          _handlePingDead(ctx, a, `Agent ping failed: ${err instanceof Error ? err.message : String(err)}`);
-        });
+          if (!alive) {
+            ctx.observer.emit({
+              type: PipelineEventType.ExecNodeDelayed,
+              priority: PipelinePriority.NORMAL,
+              payload: { nodeId: a.nodeId, agentId: a.agentId, elapsed: a.elapsed, action: 'wait', level: 'warn' },
+              timestamp: Date.now(),
+              notificationType: "WARNING",
+            });
+          }
+        }).catch(() => { /* 键错配/实例已回收——不判死（B1 race 兜底） */ });
         ctx.observer.emit({
           type: PipelineEventType.ExecNodeDelayed,
           priority: PipelinePriority.NORMAL,
@@ -216,14 +223,23 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               if (waitTime > 500) {
                 console.error(`[telemetry] scheduler.node_wait_time_ms value=${waitTime} nodeType=${node.type}`);
               }
-              return ctx.dispatchNode(node).catch((e) => {
-                try { board.failNode(nodeId); } catch (fe) {
-                  if (observer) {
-                    try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "dispatch-node-reject-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { console.error(`[scheduler] dispatch-node-reject observer.emit failed: ${String(fe)}`); }
+              // R12-B1：节点级超时 race——dispatchNode 可能永不 resolve（hang）——全局 deadline 只在轮首检查，层内 allSettled 期间不可达
+              return Promise.race([
+                ctx.dispatchNode(node).catch((e) => {
+                  try { board.failNode(nodeId); } catch (fe) {
+                    if (observer) {
+                      try { observer.emit({ type: PipelineEventType.InfraComponentDegraded, priority: PipelinePriority.NORMAL, payload: { operation: "dispatch-node-reject-fail-best-effort", detail: String(fe) }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { console.error(`[scheduler] dispatch-node-reject observer.emit failed: ${String(fe)}`); }
+                    }
                   }
-                }
-                return { nodeId, success: false, error: `Promise rejected: ${String(e).slice(0, 200)}` } as NodeResult;
-              });
+                  return { nodeId, success: false, error: `Promise rejected: ${String(e).slice(0, 200)}` } as NodeResult;
+                }),
+                new Promise<NodeResult>((resolve) => {
+                  setTimeout(() => {
+                    try { board.failNode(nodeId); } catch { /* 节点已失败 */ }
+                    resolve({ nodeId, success: false, error: `dispatch timeout after ${NODE_DISPATCH_TIMEOUT_MS}ms` });
+                  }, NODE_DISPATCH_TIMEOUT_MS);
+                }),
+              ]);
             }
 
             observer.emit({
