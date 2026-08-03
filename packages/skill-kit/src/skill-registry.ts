@@ -71,6 +71,9 @@ export function deriveStatus(
 // ─── 注册表实现 ─────────────────────────────────────────
 
 export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
+  /** R11-14：序列化版本（toJSON 写入；fromJSON 门控——数据文件历史有 v1） */
+  static readonly SERIALIZATION_VERSION = 2;
+
   // ── 索引定义 ─────────────────────────────────────
 
   protected defineIndexes(): IndexDefinition<SkillTemplate>[] {
@@ -188,7 +191,17 @@ export class SkillRegistry extends IndexedRegistry<SkillTemplate> {
 
   static fromJSON(data: SerializedSkillRegistry): SkillRegistry {
     const registry = new SkillRegistry();
+    // R11-14：版本门控——高于代码的版本拒绝加载（此前 version 写了从不读，盲转换加载）
+    const v = typeof data?.version === "number" ? data.version : 1;
+    if (v > SkillRegistry.SERIALIZATION_VERSION) {
+      process.stderr.write(`[skill-registry] 序列化版本 ${v} 高于代码支持的 ${SkillRegistry.SERIALIZATION_VERSION}——拒绝加载\n`);
+      return registry;
+    }
     for (const tmpl of data.templates) {
+      // R11-14：形状校验——缺关键字段的模板跳过（防盲转换加载 undefined 字段后运行时炸）
+      if (!tmpl || typeof tmpl !== "object" || typeof (tmpl as SkillTemplate).name !== "string") {
+        continue;
+      }
       registry.register(tmpl);
     }
     return registry;

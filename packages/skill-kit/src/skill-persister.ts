@@ -199,7 +199,8 @@ export async function loadSkillsFromMemory(memory: MemoryStore): Promise<SkillTe
       const content = entry.content_blob;
       if (!content || typeof content !== "object") continue;
       const skill = content as unknown as SkillTemplate;
-      if (!skill?.id || !skill?.name || !skill?.triggerTags || !Array.isArray(skill.steps)) continue;
+      // R11-14：形状校验补 triggerTags 数组（此前只查 truthy——非数组也通过）
+      if (!skill?.id || !skill?.name || !Array.isArray(skill.triggerTags) || !Array.isArray(skill.steps)) continue;
       skillTemplates.push(skill);
     }
   } catch (e) {
