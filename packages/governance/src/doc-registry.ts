@@ -57,6 +57,8 @@ export class DocRegistry {
   private index: DocRegistryIndex;
   private pathTemplates: Record<string, string>;
   private _loaded = false;
+  /** R11-13：init 发现 formatVersion 高于代码/索引损坏——保存前备份原文件 */
+  private _unsupportedVersion = false;
 
   constructor(
     fs: IFileSystemAdapter,
@@ -78,12 +80,20 @@ export class DocRegistry {
       try {
         const raw = await this.fs.readFile(indexPath);
         const parsed = JSON.parse(raw);
+        // R11-13：formatVersion 门控——更新版本拒绝静默清空（新版本写、旧代码读——全部文档从注册表“消失”）
         if (parsed.formatVersion === 1 && parsed.entries) {
           this.index = parsed;
+        } else if (typeof parsed.formatVersion === "number" && parsed.formatVersion > 1) {
+          process.stderr.write(
+            `[doc-registry] 索引 formatVersion ${parsed.formatVersion} 高于代码支持的 1——拒绝静默清空（覆盖写入前将备份原文件）\n`,
+          );
+          this.index = { formatVersion: 1, entries: {} };
+          this._unsupportedVersion = true;
         }
       } catch {
         // 索引文件损坏 → 空索引，不阻塞启动
         this.index = { formatVersion: 1, entries: {} };
+        this._unsupportedVersion = true;
       }
     }
     this._loaded = true;
@@ -93,7 +103,15 @@ export class DocRegistry {
   private async _saveIndex(): Promise<void> {
     const indexPath = this._indexPath();
     await this.fs.mkdir(this.fs.resolve(this.workspaceRoot, "doc-govern"));
+    // R11-13：覆盖前备份（读→写 .bak——防损坏/降级时数据永久丢失；首次写或无原文件时跳过）
+    if (this._unsupportedVersion || (await this.fs.exists(indexPath))) {
+      try {
+        const prev = await this.fs.readFile(indexPath);
+        await this.fs.writeFile(`${indexPath}.bak`, prev);
+      } catch { /* 原文件不存在或不可读——无需备份 */ }
+    }
     await this.fs.writeFile(indexPath, JSON.stringify(this.index, null, 2) + "\n");
+    this._unsupportedVersion = false;
   }
 
   private _indexPath(): string {
