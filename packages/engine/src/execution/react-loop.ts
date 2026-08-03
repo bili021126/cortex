@@ -184,6 +184,11 @@ export async function runReActLoop(
         }
       }
 
+      // R12-D3：SSE 半途失败（degraded）——截断的 tool_call 不当完整轮次执行（此前零消费）
+      if (res.degraded && (res.tool_calls ?? []).length > 0) {
+        diagnostic(`⚠️ LLM 响应 degraded（SSE 半途失败）——丢弃截断的工具调用（${res.tool_calls?.length} 个）`);
+        res.tool_calls = [];
+      }
       const toolCallCount = (res.tool_calls ?? []).length;
       // 记录本轮所有工具调用
       if (res.tool_calls) {
