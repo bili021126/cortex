@@ -5,7 +5,7 @@
  * creation. Provides a clean facade for the daemon to access engine components.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, renameSync } from "node:fs";
 import * as path from "node:path";
 import { bootstrapEngine } from "@cortex/engine";
 import type { BootstrapEngineResult } from "@cortex/engine";
@@ -64,8 +64,12 @@ export interface EngineHostOptions {
 }
 
 const readFile: ConfigFileReader = (filePath: string) => readFileSync(filePath, "utf-8");
-const writeFile: ConfigFileWriter = (filePath: string, content: string) =>
-  writeFileSync(filePath, content, "utf-8");
+// R12-G3：config 写路径原子化（tmp+rename）——此前裸 writeFileSync，必需域 eventRouting 半写损坏即 bootstrap 永久崩溃
+const writeFile: ConfigFileWriter = (filePath: string, content: string) => {
+  const tmp = `${filePath}.tmp`;
+  writeFileSync(tmp, content, "utf-8");
+  renameSync(tmp, filePath);
+};
 
 /**
  * EngineHost — wraps the full engine bootstrap lifecycle.

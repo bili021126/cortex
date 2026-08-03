@@ -163,6 +163,18 @@ function matchesAny(filePath: string, patterns: string[]): boolean {
 // ============================================================
 
 /**
+ * R12-E5：全局保护域——任何 Agent 的 allowed 匹配都不豁免（宪法/人设/技能/修正案的完整性底线）。
+ * 此前 code 的 forbidden 为空、analysis 的通配 md 规则覆盖 docs/constitution——最短绕过路径 = 直接写宪法。
+ */
+const GLOBAL_PROTECTED_PATHS = [
+  ".cortex/",
+  "prompts/",
+  "skills/",
+  "docs/constitution/",
+  "docs/amendments/",
+];
+
+/**
  * BoundaryGuardStep —— Agent 边界守卫。
  *
  * 在 Execute/RlmExecute 成功后、Cleanup 之前运行。
@@ -256,6 +268,12 @@ export class BoundaryGuardStep implements IDispatchStep {
         if (mtime < threshold - CLOCK_SKEW_TOLERANCE) continue;
 
         const relPath = relative(this._workspaceRoot, absPath).split(sep).join("/");
+
+        // R12-E5：全局保护域——任何 Agent 不可写（即使 allowed 匹配）——宪法/人设/技能的完整性底线
+        if (GLOBAL_PROTECTED_PATHS.some((p) => relPath.startsWith(p))) {
+          violations.push({ file: relPath, matchedRule: "global-protected" });
+          continue;
+        }
 
         for (const forbidden of rule.forbidden) {
           if (matchesAny(relPath, [forbidden])) {

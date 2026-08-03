@@ -328,16 +328,19 @@ export class Toolkit {
     return this._constraints.get(toolName)?.[agentType];
   }
 
-  /** 获取工具的可逆性等级（JSON 覆盖优先，其次 Tool 内置） */
+  /** 获取工具的可逆性等级（JSON 覆盖优先，其次 Tool 内置）——R12-E5：覆盖只许收紧不许放松 */
   reversibilityOf(toolName: string): ReversibilityLevel {
     const metaLevel = this._toolMeta[toolName]?.level;
-    if (metaLevel !== undefined) return metaLevel;
     const toolLevel = this.tools.get(toolName)?.level;
-    if (toolLevel !== undefined) {
-      // shared 契约字段为字面量联合类型，映射回 config 枚举值（S1-1 单源）
-      return { L0: RL.L0, L1: RL.L1, L2: RL.L2, L3: RL.L3 }[toolLevel];
+    const builtin = toolLevel !== undefined
+      ? { L0: RL.L0, L1: RL.L1, L2: RL.L2, L3: RL.L3 }[toolLevel]
+      : RL.L2;
+    if (metaLevel !== undefined) {
+      const meta = { L0: RL.L0, L1: RL.L1, L2: RL.L2, L3: RL.L3 }[metaLevel];
+      // R12-E5：JSON 覆盖只许收紧（取更高级别——更严格）——防 L2→L0 降级绕过确认门
+      return meta > builtin ? meta : builtin;
     }
-    return RL.L2;
+    return builtin;
   }
 
   // ── 路径安全解析 ────────────────────────────
