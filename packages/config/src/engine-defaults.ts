@@ -159,6 +159,11 @@ export function loadEngineDefaults(overrides?: Partial<EngineDefaults>): EngineD
 /** 缓存——避免重复文件 I/O */
 let _cachedTuningDefaults: Partial<EngineDefaults> | null = null;
 
+/** R11-18：失效 tuning 模块缓存——TuningStore 写入后调用，热更新生效（此前写文件但运行中引擎保留陈旧值） */
+export function invalidateTuningCache(): void {
+  _cachedTuningDefaults = null;
+}
+
 /**
  * 从 tuning.json 读取调参域，映射为 Partial<EngineDefaults>。
  * fail-open：文件缺失或解析失败时返回 {}。

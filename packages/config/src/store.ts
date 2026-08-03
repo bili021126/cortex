@@ -15,6 +15,8 @@
 
 import * as path from "node:path";
 import { CONFIG_DOMAINS, loadConfigDomain, validateDomainWithSchema, type ConfigFileReader } from "./loader.js";
+// R11-18：TuningStore 写入后失效 tuning 模块缓存（热更新）
+import { invalidateTuningCache } from "./engine-defaults.js";
 import type { ModelEntry } from "./interfaces/model.js";
 import type { KeyEntry, ContextLimitEntry, KeysContextConfig } from "./interfaces/key-context.js";
 import type { AgentProfile, AgentManifestConfig } from "./interfaces/agent-manifest.js";
@@ -490,6 +492,8 @@ export class TuningStore extends ConfigStore<TuningConfig> {
     const data = this.read();
     this._setByPath(data.tuning as unknown as Record<string, unknown>, path, value);
     this.write(data);
+    // R11-18：失效 tuning 模块缓存（loadEngineDefaults 热更新生效）
+    invalidateTuningCache();
   }
 
   /** 获取整个调参分组 */

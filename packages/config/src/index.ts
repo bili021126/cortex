@@ -310,6 +310,8 @@ export {
   MONITOR_THRESHOLD,
   ENGINE_DEFAULTS,
   loadEngineDefaults,
+  // R11-18：TuningStore 写入后失效 tuning 缓存（热更新）
+  invalidateTuningCache,
 } from "./engine-defaults.js";
 export type { EngineDefaults } from "./engine-defaults.js";
 
