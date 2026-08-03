@@ -56,6 +56,8 @@ export class CortexDaemon {
   private statusTimer: ReturnType<typeof setInterval> | null = null;
   /** S2-11: 通知→WS 桥接的解除订阅函数（stop 时调用防泄漏） */
   private _unbridgeNotifications: (() => void) | null = null;
+  /** R11-25：observer 三个优先级处理器的卸载函数（stop 时移除防泄漏/重复累积） */
+  private _unregisterObservers: (() => void) | null = null;
 
   constructor(options: DaemonOptions) {
     this.options = {
@@ -124,6 +126,12 @@ export class CortexDaemon {
       observer.on(PipelinePriority.CRITICAL, handler);
       observer.on(PipelinePriority.HIGH, handler);
       observer.on(PipelinePriority.NORMAL, handler);
+      // R11-25：保留三个优先级处理器的卸载函数——stop 时移除（此前仅解除通知桥，处理器闭包保留已 dispose 对象，重启累积重复处理器）
+      this._unregisterObservers = () => {
+        observer.off(PipelinePriority.CRITICAL, handler);
+        observer.off(PipelinePriority.HIGH, handler);
+        observer.off(PipelinePriority.NORMAL, handler);
+      };
     }
 
     // S2-11: 通知消费端接线——Urgent/Important 通道通知经 WS 推送（落地可查）
@@ -244,6 +252,10 @@ export class CortexDaemon {
     // S2-11: 解除通知→WS 订阅（防 handler 累积泄漏）
     this._unbridgeNotifications?.();
     this._unbridgeNotifications = null;
+
+    // R11-25：移除三个 observer 优先级处理器（此前 stop 仅解除通知桥——处理器闭包保留已 dispose 对象，重启累积重复处理器）
+    this._unregisterObservers?.();
+    this._unregisterObservers = null;
 
     // Close WS gateway
     await this.wsGateway?.stop();
