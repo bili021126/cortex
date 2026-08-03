@@ -160,6 +160,10 @@ export function getEmbeddingProvider(
 }
 
 export function resetEmbeddingProvider(): void {
+  // R11-24：真正释放 onnxruntime 会话（此前仅清 Map 引用——模型占用不释放）
+  for (const pipe of localPipelines.values()) {
+    try { (pipe as any)?.dispose?.() } catch { /* 释放失败不阻断 */ }
+  }
   cachedProvider = null
   localPipelines.clear()
   currentModelKey = DEFAULT_MODEL_KEY

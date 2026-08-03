@@ -102,6 +102,15 @@ export class EmbeddingService implements IEmbeddingService {
   // ── 公开 API ────────────────────────────────
 
   /**
+   * R11-24：释放 pipeline 引用（进程内引擎重启场景——让 GC 回收 onnxruntime 会话）。
+   * 完整 dispose 需暴露底层 extractor（当前封装在闭包）——共享单例不可由单实例释放，调用点应在引擎级 shutdown。
+   */
+  unload(): void {
+    this._pipeline = null;
+    this._loading = null;
+  }
+
+  /**
    * 为单条文本生成 384d 语义嵌入向量。
    *
    * 首次调用时自动下载 ONNX 模型（~80MB），
