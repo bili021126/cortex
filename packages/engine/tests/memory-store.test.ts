@@ -118,7 +118,7 @@ describe("MemoryStore", () => {
   // ── 30 天 TTL ──────────────────────────────────
 
   it("30 天窗口外记忆自动过滤", async () => {
-    // 写入一条记忆，createdAt 设为 31 天前
+    // 写入一条记忆，createdAt 设为 31 天前（R12-C3：TTL 基于 lastAccessedAt——同步设超窗）
     const id = await store.write({
       kind: "TaskLog",
       content_blob: {},
@@ -126,6 +126,7 @@ describe("MemoryStore", () => {
       semantic_gist: "过期记忆",
       source: { agentType: AgentType.Code, taskId: "" },
       createdAt: Date.now() - 31 * 24 * 60 * 60 * 1000,
+      lastAccessedAt: Date.now() - 31 * 24 * 60 * 60 * 1000,
     });
 
     const results = await store.read({});
