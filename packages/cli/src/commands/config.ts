@@ -10,6 +10,8 @@
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import { isHelpRequest } from "../utils.js";
 import { ConfigManager } from "../services/config-manager.js";
+// R11-07：测试环境跳过持久化落盘（防跨测试污染）
+import { isTestEnv } from "@cortex/config";
 import * as path from "node:path";
 import * as os from "node:os";
 
@@ -127,10 +129,13 @@ function handleConfigSet(
   config.set(key, parsedValue);
 
   // R11-07：持久化到本地配置（此前只改内存——下次进程读旧值）
-  try {
-    config.persist(path.resolve(process.cwd(), ".cortex", "config"));
-  } catch (e) {
-    return { success: false, error: `持久化失败: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 };
+  // 测试环境跳过落盘——避免污染 cwd/.cortex/config 造成跨测试顺序依赖
+  if (!isTestEnv()) {
+    try {
+      config.persist(path.resolve(process.cwd(), ".cortex", "config"));
+    } catch (e) {
+      return { success: false, error: `持久化失败: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 };
+    }
   }
 
   return {

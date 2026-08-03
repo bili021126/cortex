@@ -75,6 +75,7 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   }
   let dot = 0;
   for (let i = 0; i < a.length; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     dot += a[i]! * b[i]!;
   }
   return dot; // 假设已归一化，dot ∈ [-1, 1]

@@ -153,8 +153,7 @@ class FileBackend implements MemoryStoreBackend {
     let count = 0;
     // 重建时自维护 entries map（load 中 store.getAllEntries() 会触发 _ei() 未初始化断言）
     const recovered = new Map<string, MemoryEntry>();
-    let files: string[] = [];
-    try { files = await fs.readdir(this._entriesDir); } catch { return 0; }
+    const files = await fs.readdir(this._entriesDir).catch(() => [] as string[]);
     for (const f of files) {
       if (!f.endsWith(".json")) continue;
       try {
