@@ -396,8 +396,12 @@ async function main() {
     const status = r.ok ? "\u2705" : "\u274C";
     console.log(`   ${status} ${pkgLabel} \u2014 ${passed}/${total} passed`);
     if (!r.ok) {
-      // 打印失败详情供诊断
-      const failLines = clean.split("\n").filter(l => /FAIL|AssertionError|Error:|expected|timed out/i.test(l)).slice(0, 20);
+      // 打印失败详情供诊断——强信号（FAIL/断言行）优先：telemetry 的 Error: 日志量大，
+      // 旧 filter 先匹配它们会把真正的 FAIL 行挤出 slice(0,20)
+      const allLines = clean.split("\n");
+      const strong = allLines.filter((l) => /FAIL|AssertionError|expected|timed out/i.test(l));
+      const weak = allLines.filter((l) => /Error:|Exception/i.test(l) && !strong.includes(l));
+      const failLines = [...strong, ...weak].slice(0, 20);
       for (const fl of failLines) console.log(`      ${fl.trim()}`);
     }
   }
