@@ -76,8 +76,18 @@ export class ClaimStep implements IDispatchStep {
     // 3. 认领节点
     const claimed = board.claim(node.id, agentType as AgentType);
     if (!claimed) {
-      // R12-B3：claim 撞 lease（未过期——崩溃残留节点等回收）——跳过本轮，不 failNode（此前直接打死崩溃残留）
-      return { ...ctx };
+      // 回滚 R12-B3：claim 失败恢复 failNode（B3 的跳过导致节点悬置 claimed——completed/failed 计数为 0；
+      // 且跳过不触发 replan 配额，多轮空转。failNode 后 replan 配额正常拦截（B3 前 CI 绿、无 OOM 风暴）
+      board.failNode(node.id);
+      return {
+        ...ctx,
+        result: {
+          nodeId: node.id,
+          agentType: agentType as AgentType,
+          success: false,
+          error: `Failed to claim node ${node.id} for ${agentType}`,
+        },
+      };
     }
 
     return {
