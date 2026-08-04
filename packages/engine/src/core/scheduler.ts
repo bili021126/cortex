@@ -249,24 +249,30 @@ export class Scheduler implements IScheduler {
     }
 
     if (!result.success) {
-      const reason = result.output ?? result.error ?? "unknown";
-      const agentType = (node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type;
-      void recordTelemetry("scheduler.replan", this.replanManager.getReplanCount(node.id) + 1, [
-        { key: "agent", value: String(agentType) },
-        { key: "nodeType", value: node.type },
-        { key: "reason", value: reason.slice(0, 80) },
-      ]);
-      this.replanManager.enqueue(node, reason);
+      // R12-B3 配套：claim-skipped（lease 撞——跳过本轮等回收）——不 replan 不 emit NodeFailed（节点保持 claimed 等回收，避免失败→replan→再 claim→再失败→风暴）
+      const isClaimSkipped = (result.error ?? "").includes("claim-skipped");
+      if (!isClaimSkipped) {
+        const reason = result.output ?? result.error ?? "unknown";
+        const agentType = (node as { claimedBy?: string[] }).claimedBy?.[0] ?? node.type;
+        void recordTelemetry("scheduler.replan", this.replanManager.getReplanCount(node.id) + 1, [
+          { key: "agent", value: String(agentType) },
+          { key: "nodeType", value: node.type },
+          { key: "reason", value: reason.slice(0, 80) },
+        ]);
+        this.replanManager.enqueue(node, reason);
+      }
     }
 
     if (!result.success) {
-      this.observer.emit({
-        type: PipelineEventType.NodeFailed,
-        priority: PipelinePriority.CRITICAL,
-        payload: { nodeId, error: result.error ?? "unknown" },
-        timestamp: Date.now(),
-        notificationType: "WARNING",
-      });
+      if (!(result.error ?? "").includes("claim-skipped")) {
+        this.observer.emit({
+          type: PipelineEventType.NodeFailed,
+          priority: PipelinePriority.CRITICAL,
+          payload: { nodeId, error: result.error ?? "unknown" },
+          timestamp: Date.now(),
+          notificationType: "WARNING",
+        });
+      }
     }
 
     return result;
@@ -281,6 +287,11 @@ export class Scheduler implements IScheduler {
    */
   private async _runDispatchPipeline(ctx: DispatchCtx, steps: IDispatchStep[]): Promise<NodeResult> {
     for (const step of steps) {
+      // R12-B3 配套：claim 未成功（agentType 未设）时中断管线——后续 Spawn/Execute/RlmExecute 的
+      // agent 守卫都会失败→replan→再 claim→再失败→无限循环（CI OOM）
+      if (ctx.agentType === undefined && step.name !== "Claim" && step.name !== "Cleanup") {
+        return { nodeId: ctx.node.id, success: false, error: "claim-skipped: lease 撞，跳过本轮等回收" };
+      }
       // R12-B5：步骤 throw 也走 Cleanup（此前只有结果失败走——抛异常导致 ManifoldGate 槽位 + pool 实例泄漏）
       try {
         ctx = await step.run(ctx);
