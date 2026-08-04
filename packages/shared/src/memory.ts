@@ -115,6 +115,8 @@ export interface MemoryWriteInput {
   // §3 生命周期（可选，MemoryStore 填默认值）
   weight?: number;
   createdAt?: number;
+  /** R12-C3 配套：最近访问时间——显式提供时被尊重（TTL 基于它）；默认写入时设 now */
+  lastAccessedAt?: number;
 
   // §4 工程
   embedding?: number[];

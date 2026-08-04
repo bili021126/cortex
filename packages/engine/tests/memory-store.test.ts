@@ -129,7 +129,8 @@ describe("MemoryStore", () => {
       lastAccessedAt: Date.now() - 31 * 24 * 60 * 60 * 1000,
     });
 
-    const results = await store.read({});
+    // R12-C3：TTL 基于 lastAccessedAt——用 HCA 读（CSA 会刷新 lastAccessedAt 续命，测不出过期过滤）
+    const results = await store.read({}, "HCA");
     expect(results).toHaveLength(0);
   });
 

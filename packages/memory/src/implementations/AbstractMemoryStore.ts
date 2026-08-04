@@ -575,7 +575,8 @@ export abstract class AbstractMemoryStore implements IMemoryStore, Transactional
       semantic_state: "Active",
       weight: f.weight ?? 1,
       accessCount: 0,
-      lastAccessedAt: n,
+      // R12-C3 配套：lastAccessedAt 尊重调用方显式值（TTL 基于它——测试/导入旧条目可设旧值）
+      lastAccessedAt: f.lastAccessedAt ?? n,
       createdAt: f.createdAt ?? n,
       content_hash: f.content_hash ?? "",
       embedding: f.embedding,
