@@ -135,6 +135,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
     observer.on(PipelinePriority.HIGH, boundaryHandler);
 
     while (true) {
+                round++;
       if (Date.now() >= deadline) {
         const remaining = board.getPendingNodes();
         for (const n of remaining) {
@@ -153,7 +154,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
       }
 
       try {
-        round++;
+                round++;
         // ── 遥测：AgentPool 空闲率（S2-6：直接入 telemetryController，
         //    value 为真实 idleRate——此前 console.error 间接路径解析到 total，数据错位）
         const poolStats = ctx.pool.getPoolStats();
@@ -237,7 +238,7 @@ export class TopologicalLayeredDriver implements ILoopDriver {
                   setTimeout(() => {
                     try { board.failNode(nodeId); } catch { /* 节点已失败 */ }
                     resolve({ nodeId, success: false, error: `dispatch timeout after ${NODE_DISPATCH_TIMEOUT_MS}ms` });
-                  }, NODE_DISPATCH_TIMEOUT_MS);
+                  }, CFG_NODE_DISPATCH_TIMEOUT);
                 }),
               ]);
             }
@@ -341,10 +342,10 @@ export class TopologicalLayeredDriver implements ILoopDriver {
           });
 
           const settled = await Promise.allSettled(layerPromises);
-          for (const r of settled) {
+                    for (const r of settled) {
             if (r.status === "fulfilled") {
               allResults.push(r.value);
-              if (r.value.success) completed++;
+                            if (r.value.success) completed++;
               else failed++;
             }
           }
@@ -811,7 +812,7 @@ export class WaveDriver implements ILoopDriver {
           for (const r of settled) {
             if (r.status === "fulfilled") {
               allResults.push(r.value);
-              if (r.value.success) completed++;
+                            if (r.value.success) completed++;
               else failed++;
             }
           }
