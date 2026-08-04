@@ -14,7 +14,6 @@ import type {
   ModelEntryDTO,
   KeyEntryMaskedDTO,
   TuningConfigDTO,
-  AgentManifestDTO,
   CreateModelRequest,
   PatchModelRequest,
   CreateKeyRequest,
@@ -103,11 +102,6 @@ export class CortexHttpClient {
 
   async deleteModel(id: string): Promise<void> {
     await this.request("DELETE", `/api/v1/models/${encodeURIComponent(id)}`);
-  }
-
-  async getAgentsConfig(): Promise<Record<string, AgentManifestDTO>> {
-    const res = await this.request<SingleResponse<Record<string, AgentManifestDTO>>>("GET", "/api/v1/agents");
-    return res.data;
   }
 
   async patchAgentConfig(id: string, patch: Record<string, unknown>): Promise<void> {

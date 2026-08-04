@@ -92,6 +92,12 @@ export class HttpRouter {
       return true;
     }
 
+    // R12-H3：GET /api/v1/nodes/:id——单节点查询（此前 client getNode 404——路由不存在）
+    if (method === "GET" && path.startsWith("/api/v1/nodes/")) {
+      this.handleNode(res, path.slice("/api/v1/nodes/".length));
+      return true;
+    }
+
     // GET /api/v1/agents
     if (method === "GET" && path === "/api/v1/agents") {
       this.handleAgents(res);
@@ -259,6 +265,29 @@ export class HttpRouter {
           limit,
           total,
           totalPages: Math.ceil(total / limit),
+        },
+      });
+    } catch (err) {
+      sendProblem(res, 500, "Internal Error", err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // R12-H3：单节点快照（与 handleNodes 同一映射）——此前 client getNode 404（路由不存在）
+  private handleNode(res: ServerResponse, id: string): void {
+    try {
+      const n = this.engine.board.getNode(decodeURIComponent(id));
+      if (!n) {
+        sendJson(res, 404, { error: `Node ${id} not found` });
+        return;
+      }
+      sendJson(res, 200, {
+        data: {
+          id: n.id,
+          nodeType: n.type ?? "unknown",
+          agent: n.claimedBy?.[0] ?? "",
+          description: n.payload ?? "",
+          status: n.status === "done" ? "complete" : n.status === "claimed" ? "pending" : n.status,
+          parentId: n.parentId,
         },
       });
     } catch (err) {
