@@ -202,7 +202,8 @@ describe("WeightAger.obliterateFrozen", () => {
     const ager = new WeightAger(0.95, 30, 7);
     const entry = makeEntry({
       semantic_state: "Archived",
-      lastAccessedAt: NOW,
+      // R12-C2 适配：最近访问过（未超湮灭阈值）保留——测试需设超阈值才能测 expires_at 分支
+      lastAccessedAt: NOW - 10 * DAY_MS,
       expires_at: NOW - 1 * DAY_MS,
     });
     expect(ager.obliterateFrozen([entry], NOW)).toHaveLength(1);
