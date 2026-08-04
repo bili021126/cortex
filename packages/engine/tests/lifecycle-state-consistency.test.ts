@@ -71,9 +71,9 @@ describe("Lifecycle vs StateMachine consistency", () => {
 
     tracker.markDispatched("agent-5", "node-5");
 
-    // 修改内部时间为过去，模拟超时
+    // 修改内部时间为过去，模拟超时（R12-B2：超时基线用 lastHeartbeat——心跳续命；dispatchedAt 不再参与超时判断）
     const entry = (tracker as any).states.get("agent-5");
-    entry.dispatchedAt = now - 200_000;
+    entry.lastHeartbeat = now - 200_000;
     entry.pingSent = true;
 
     const actions = tracker.checkTimeouts(now);
