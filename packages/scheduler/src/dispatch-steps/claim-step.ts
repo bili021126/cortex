@@ -1,7 +1,7 @@
 import { AgentType as AT, AGENT_TAGS, PipelinePriority, PipelineEventType, type AgentType } from "@cortex/shared";
 import type { DispatchCtx, IDispatchStep } from "./types.js";
 import { findMatchingAgent } from "../core/agent-matcher.js";
-import { isTestEnv as checkTestEnv } from "@cortex/config";
+import { isTestEnv as checkTestEnv, CLAIM_RETRY_LIMIT } from "@cortex/config";
 
 /**
  * ClaimStep —— 认领节点。
@@ -76,19 +76,27 @@ export class ClaimStep implements IDispatchStep {
     // 3. 认领节点
     const claimed = board.claim(node.id, agentType as AgentType);
     if (!claimed) {
-      // 回滚 R12-B3：claim 失败恢复 failNode（B3 的跳过导致节点悬置 claimed——completed/failed 计数为 0；
-      // 且跳过不触发 replan 配额，多轮空转。failNode 后 replan 配额正常拦截（B3 前 CI 绿、无 OOM 风暴）
-      board.failNode(node.id);
-      return {
-        ...ctx,
-        result: {
-          nodeId: node.id,
-          agentType: agentType as AgentType,
-          success: false,
-          error: `Failed to claim node ${node.id} for ${agentType}`,
-        },
-      };
+      // R12-B3 替代（重试上限）：claim 撞 lease（崩溃残留/活跃续期——临时状态）——上限内跳过本轮等回收
+      // （claim-skipped 豁免——不 replan 不 NodeFailed——管线中断），超上限（疑似永久卡死）才 failNode
+      const retries = board.getClaimRetries(node.id);
+      if (retries >= CLAIM_RETRY_LIMIT) {
+        board.failNode(node.id);
+        board.resetClaimRetries(node.id);
+        return {
+          ...ctx,
+          result: {
+            nodeId: node.id,
+            agentType: agentType as AgentType,
+            success: false,
+            error: `Failed to claim node ${node.id} for ${agentType}（重试 ${retries} 次仍撞 lease）`,
+          },
+        };
+      }
+      board.incrementClaimRetry(node.id);
+      return { ...ctx };
     }
+    // claim 成功——重置重试计数（下次撞 lease 重新计数）
+    board.resetClaimRetries(node.id);
 
     return {
       ...ctx,

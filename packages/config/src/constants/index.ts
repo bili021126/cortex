@@ -197,6 +197,7 @@ export {
   WORKER_POOL_MAX_QUEUE,
   CLAIM_LEASE_MS,
   NODE_DISPATCH_TIMEOUT_MS,
+  CLAIM_RETRY_LIMIT,
   EXECUTE_ALL_TIMEOUT_MS,
 } from "./scheduler-params.js";
 

@@ -31,6 +31,10 @@ export interface ITaskBoard {
   getPendingNodes(): TaskNode[];
   removeNode(nodeId: string): void;
   removeSubtree(nodeId: string): void;
+  /** R12-B3 替代：claim 撞 lease 的重试计数（上限内跳过等回收，超限才 failNode） */
+  getClaimRetries(nodeId: string): number;
+  incrementClaimRetry(nodeId: string): number;
+  resetClaimRetries(nodeId: string): void;
   /** 清空所有节点（新 plan 执行前调用，防止旧任务残留） */
   clear(): void;
 }

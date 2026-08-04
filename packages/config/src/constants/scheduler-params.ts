@@ -14,5 +14,8 @@ export const CLAIM_LEASE_MS = 120_000;
 /** 单节点 dispatch 超时——与 reactLoopTimeoutMs 取 min */
 export const NODE_DISPATCH_TIMEOUT_MS = 120_000;
 
+/** R12-B3：claim 撞 lease 的重试上限——上限内跳过本轮等回收（崩溃残留不打死），超上限才 failNode（防永久悬置） */
+export const CLAIM_RETRY_LIMIT = 3;
+
 /** executeAll 全局超时默认值（A1：与 defaults/engine.json 单源对齐 600s） */
 export const EXECUTE_ALL_TIMEOUT_MS = 600_000;

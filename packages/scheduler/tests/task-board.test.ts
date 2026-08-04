@@ -170,4 +170,17 @@ describe('TaskBoard', () => {
       expect(board.getNode('mp')!.status).toBe('done');
     });
   });
+
+  // R12-B3 替代：claim 重试计数（撞 lease 的跳过次数——上限内等回收，超限才 failNode）
+  describe('claim retry 计数', () => {
+    it('increment/get/reset 循环', () => {
+      board.addNode(makeNode('retry-1'));
+      expect(board.getClaimRetries('retry-1')).toBe(0);
+      expect(board.incrementClaimRetry('retry-1')).toBe(1);
+      expect(board.incrementClaimRetry('retry-1')).toBe(2);
+      expect(board.getClaimRetries('retry-1')).toBe(2);
+      board.resetClaimRetries('retry-1');
+      expect(board.getClaimRetries('retry-1')).toBe(0);
+    });
+  });
 });
