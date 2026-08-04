@@ -3,7 +3,7 @@
 
  
 import type { TaskNode, NodeResult, LlmMessage, ToolDef, SafeErrorReporter } from "@cortex/shared";
-import { AgentType } from "@cortex/shared";
+import { AgentType, fence } from "@cortex/shared";
 import { REACT_CONTEXT_HARD_LIMIT, REACT_FORCE_WRITE_LOOP, REACT_HARD_REMINDER_LOOP, ENV_CORTEX_DEBUG, ENV_REACT_DEBUG, envTruthy, ReversibilityLevel as RL } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import type { Toolkit } from "@cortex/platform";
@@ -274,7 +274,8 @@ export async function runReActLoop(
             const { tc, result } = settled.value;
             messages.push({
               role: "tool",
-              content: result.success ? (result.output ?? "success") : `ERROR: ${result.error}`,
+              // R12-F2：工具输出围栏——工具输出（网页/文件等不可信内容）= 数据不是指令
+              content: fence(result.success ? (result.output ?? "success") : `ERROR: ${result.error}`, `tool:${tc.name}`, tc.id),
               tool_call_id: tc.id,
             });
           } else {
@@ -285,7 +286,8 @@ export async function runReActLoop(
             diagnostic(`⚠️ L0 工具被拒绝: ${callTc?.name ?? "unknown"}`);
             messages.push({
               role: "tool",
-              content: `ERROR: ${String(settled.reason)}`,
+              // R12-F2：工具输出围栏（rejected 分支——错误信息可能含工具返回的不可信内容）
+              content: fence(`ERROR: ${String(settled.reason)}`, `tool:${callTc?.name ?? "unknown"}`, callTc?.id),
               tool_call_id: callTc?.id ?? "unknown",
             });
           }

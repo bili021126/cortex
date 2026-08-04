@@ -454,6 +454,7 @@ export class MetaAgent {
           ? this._resolveByScope(this._skillRegistry.getAll(), scope)
           : [];
         const matched = skills.filter((s) =>
+          !s.trial &&
           existingTags.some((t) => (s.triggerTags as readonly string[]).includes(t)),
         );
         if (matched.length > 0) {

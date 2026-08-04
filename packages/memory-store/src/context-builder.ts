@@ -18,6 +18,7 @@
 import type { ContextPolicy, MemoryEntry, MemoryLink, MemoryQuery, ReadMode, TaskNode } from "@cortex/shared";
 import type { MemoryStore } from "./memory-store.js";
 import { CognitiveEngine, type CognitiveConfig } from "./cognitive-engine.js";
+import { fence } from "@cortex/shared";
 
 // ─── 上下文构建结果 ──────────────────────────────────
 
@@ -304,7 +305,8 @@ export class ContextBuilder {
     const summary = entry.summary.length > maxChars
       ? entry.summary.slice(0, maxChars) + "…"
       : entry.summary;
-    return `- [w:${entry.weight}] ${summary}`;
+    // R12-F1：不可信内容围栏标记——记忆内容 = 数据不是指令（模型侧 system prompt 约定）
+    return `- [w:${entry.weight}] ${fence(summary, "rag-memory", entry.id)}`;
   }
 
   // ── 内部：关键词提取 ────────────────────────

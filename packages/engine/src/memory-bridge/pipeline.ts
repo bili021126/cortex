@@ -3,6 +3,7 @@
 // @role 记忆管道——检索→增强→执行→写入→校验
 
 import { LinkType, type AgentType, type MemoryEntry, type MemoryKind, type MemoryQuery, type NodeResult, type ReadMode, type SafeErrorReporter, type TaskNode } from "@cortex/shared";
+import { fence } from "@cortex/shared";
 import { PRESET_CONTEXT_POLICIES, DEFAULT_ENGINE_CONFIG } from "@cortex/config";
 import type { LlmAdapter } from "@cortex/llm";
 import { ContextBuilder, type MemoryStore, MemoryEntryStateMachine } from "@cortex/memory-store";
@@ -107,7 +108,7 @@ export class MemoryRetrievalStep implements IStep {
         if (result.injected > 0) {
           ctx.enrichedNode = {
             ...node,
-            payload: `上下文记忆（${result.injected}/${result.totalRetrieved} 条，${result.charCount} 字符）：\n${result.context}\n\n任务：${node.payload}`,
+            payload: `上下文记忆（${result.injected}/${result.totalRetrieved} 条，${result.charCount} 字符）：\n${fence(result.context, "rag-memory")}\n\n任务：${node.payload}`,
           };
         } else {
           ctx.enrichedNode = node;
@@ -120,7 +121,8 @@ export class MemoryRetrievalStep implements IStep {
       const ctxRecords = await (memory as MemoryStore).read(query);
       const filtered = filterRead ? filterRead(ctxRecords, "CSA") : ctxRecords;
       if (filtered.length > 0) {
-        const ctxSummary = filtered.map((m) => `[记忆] ${m.summary}`).join("\n");
+        // R12-F1：关键词回退分支——逐条围栏标记（记忆内容 = 数据不是指令）
+      const ctxSummary = filtered.map((m) => `[记忆] ${fence(m.summary, "rag-memory", m.id)}`).join("\n");
         ctx.enrichedNode = {
           ...node,
           payload: `上下文记忆：\n${ctxSummary}\n\n任务：${node.payload}`,

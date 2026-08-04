@@ -114,6 +114,9 @@ export function extractAndPersistSkills(
   const registered: SkillTemplate[] = [];
   for (const skill of skills) {
     try {
+      // R12-F4：自增殖技能 trial 标记——未经人工审核不注入 prompt（meta-agent 过滤 trial，等待人工批准）
+      skill.trial = true;
+      process.stderr.write(`[skill-pipeline] 技能候选待审核（trial）: ${skill.name}(${skill.id})\n`);
       skillRegistry.register(skill);
       registered.push(skill);
     } catch (e) {

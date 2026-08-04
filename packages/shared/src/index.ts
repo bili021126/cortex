@@ -97,6 +97,9 @@ export type {
   MaintainReport,
 } from "./memory.js";
 
+// ── Fence 域（R12-F：不可信内容围栏标记）──
+export { fence } from "./fence.js";
+
 // ── Toolkit 域 ──
 // 注：工具枚举值（ToolCategory/ReversibilityLevel/TrustLevel 及
 // toReversibilityClass/toolNameToRiskDomain/RiskDomain）已单源化至

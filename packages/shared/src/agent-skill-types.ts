@@ -29,6 +29,9 @@ export type SkillKind = "action" | "thought" | "workflow";
 export interface SkillTemplate {
   /** 唯一标识 */
   id: string;
+  /** R12-F4：自增殖技能的 trial 状态——未经人工审核不注入 prompt */
+  trial?: boolean;
+
   /** 经验种类：行动的、思考的、流程的 */
   kind: SkillKind;
   /** 人类可读名称 */
