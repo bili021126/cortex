@@ -52,10 +52,9 @@ export class SpawnStep implements IDispatchStep {
     const { agentType, agent, pool, observer, node } = ctx;
 
     if (!agentType || !agent) {
-      return {
-        ...ctx,
-        result: { nodeId: node.id, success: false, error: "SpawnStep: agentType or agent not set" },
-      };
+      // R12-B3 配套：claim 未成功（lease 撞——跳过本轮等回收）——不失败不 replan
+      // （此前失败→failNode→replan→再 claim→再失败→无限循环→OOM）
+      return { ...ctx };
     }
 
     const instanceId = `${agentType}-${node.id}`;
