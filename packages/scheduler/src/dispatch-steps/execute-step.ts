@@ -36,9 +36,13 @@ export class ExecuteStep implements IDispatchStep {
     // 发送心跳——agent 开始执行
     ctx.pool.heartbeat(ctx.instanceId ?? agentType);
 
+    // R12-D2：模型调用结果回传——连续失败触发 EnvironmentAwareRouter 熔断降级（此前 reportSuccess/reportFailure 零调用——机制接线断裂）
+    const router = ctx.modelRouter;
+    const t0 = Date.now();
     let result;
     try {
       result = await agent.execute(node, model);
+      router?.reportSuccess?.(model, Date.now() - t0);
       // 执行完成后发送心跳——仍在活跃
       ctx.pool.heartbeat(ctx.instanceId ?? agentType);
     } catch (e) {
@@ -48,6 +52,7 @@ export class ExecuteStep implements IDispatchStep {
         success: false,
         error: String(e),
       };
+      router?.reportFailure?.(model);
     }
 
     return { ...ctx, result };

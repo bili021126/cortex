@@ -109,7 +109,16 @@ export class RlmExecuteStep implements IDispatchStep {
     if (!ctx.llmChat) {
       return { subTasks: [], confidence: 0, rationale: "未注入 LLM 调用入口" };
     }
-    return await decompose(ctx.llmChat, model, node.payload);
+    // R12-D2：RLM 拆解 LLM 调用结果回传（连续失败触发熔断降级）
+    const t0 = Date.now();
+    try {
+      const result = await decompose(ctx.llmChat, model, node.payload);
+      ctx.modelRouter?.reportSuccess?.(model, Date.now() - t0);
+      return result;
+    } catch (e) {
+      ctx.modelRouter?.reportFailure?.(model);
+      throw e;
+    }
   }
 
   /** 直接执行 */
@@ -121,8 +130,12 @@ export class RlmExecuteStep implements IDispatchStep {
     model: string,
   ): Promise<DispatchCtx> {
     let result: NodeResult;
+    // R12-D2：模型调用结果回传（连续失败触发熔断降级）
+    const router = ctx.modelRouter;
+    const t0 = Date.now();
     try {
       result = await agent.execute(node, model);
+      router?.reportSuccess?.(model, Date.now() - t0);
     } catch (e) {
       result = {
         nodeId: node.id,
@@ -130,6 +143,7 @@ export class RlmExecuteStep implements IDispatchStep {
         success: false,
         error: String(e),
       };
+      router?.reportFailure?.(model);
     }
     return { ...ctx, result };
   }

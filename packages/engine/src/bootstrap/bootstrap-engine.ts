@@ -382,6 +382,9 @@ export async function bootstrapEngine(
         const decision = await taskRouter.route(node as TaskNode, agentType as string);
         return await envRouter.resolve(decision.model, node as TaskNode);
       },
+      // R12-D2：模型调用结果回传——执行层（ExecuteStep/RlmExecuteStep）调用——转发 EnvironmentAwareRouter 熔断降级
+      reportSuccess: (model, latencyMs) => envRouter.reportSuccess(model, latencyMs),
+      reportFailure: (model) => envRouter.reportFailure(model),
     };
     scheduler.setModelRouter(compositeRouter);
   }

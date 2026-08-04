@@ -181,6 +181,10 @@ export interface IModelRouter {
    * @returns 选中的模型标识符
    */
   route(node: TaskNode, agentType: string, defaultModel: string): Promise<string>;
+
+  /** R12-D2：模型调用结果回传（可选——EnvironmentAwareRouter 等健康感知路由实现）——连续失败触发熔断降级 */
+  reportSuccess?(model: string, latencyMs: number): void;
+  reportFailure?(model: string): void;
 }
 
 // ══════════════════════════════════════════════
