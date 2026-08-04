@@ -139,6 +139,8 @@ export class MemoryStoreManager {
         }
         const needsMigration = parsed.schemaVersion !== CURRENT_SCHEMA_VERSION
         this.cache = repairMigrations(parsed)
+      // R11-23：跨存储引用完整性——读取时过滤悬空 evidenceIds（引用不存在的 evidence——湮灭/迁移后残留）
+      this._filterDanglingEvidence(this.cache)
         if (needsMigration) {
           backupMemoryFile(this.filePath)
           await this.save(this.cache)
@@ -195,9 +197,20 @@ export class MemoryStoreManager {
     this.cache = store
   }
 
+  /** R11-23：过滤悬空 evidenceIds——引用不存在的 evidence 的引用在读取时剔除（不落盘——仅在内存视图） */
+  private _filterDanglingEvidence(store: MemoryStoreData): void {
+    if (!Array.isArray(store.evidence)) return
+    const evidenceIds = new Set(store.evidence.map((e: { id: string }) => e.id))
+    for (const m of store.l2 ?? []) {
+      if (Array.isArray(m.evidenceIds)) {
+        m.evidenceIds = m.evidenceIds.filter((id) => evidenceIds.has(id))
+      }
+    }
+  }
+
   async getL0(): Promise<L0Profile> {
     const store = await this.load()
-    // 深拷贝：避免调用方绕过 save 直接改缓存（P2）
+    // 深拷贝：避免调用方绕过 save 直接改缓存（P2 fix）
     return structuredClone(store.l0)
   }
 
