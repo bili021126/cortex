@@ -206,9 +206,13 @@ export class HybridRetriever {
       const cutoff = this._adaptiveThreshold;
       const filtered = fine.filter((r) => r.hybridScore >= cutoff);
 
-      // R13-P0-2：空裁切返回空——全 0 分 = 无相关（此前兜底返回 0 分 top-1，调用方不按 hybridScore 过滤会拿到无关记忆）
+      // R13-P0-2：多候选全 0 = 无相关 → 空（0 分条目不再兜底）；单候选（写入即检索场景）或非全 0 → 兜底 top-1
       if (filtered.length === 0) {
-        return [];
+        if (fine.length > 1 && fine.every((r) => r.hybridScore === 0)) {
+          return [];
+        }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        return [fine[0]!];
       }
 
       // 更新自适应阈值
