@@ -13,7 +13,12 @@ export const CLAIM_LEASE_MS = 120_000;
 
 /** 单节点 dispatch 超时——与 reactLoopTimeoutMs 取 min */
 // R13-harness：env 覆写口（活性用例触发超时路径的前置条件——race 被 120s 下限锁死无法测）
-export const NODE_DISPATCH_TIMEOUT_MS = Number(process.env["CORTEX_NODE_DISPATCH_TIMEOUT_MS"]) || 120_000;
+export const NODE_DISPATCH_TIMEOUT_MS = 120_000;
+
+// R13-harness：懒求值覆写口（模块期冻结的 env 对运行期无效——用例 setupEnv 晚于模块加载）
+export function nodeDispatchTimeoutMs(): number {
+  return Number(process.env["CORTEX_NODE_DISPATCH_TIMEOUT_MS"]) || NODE_DISPATCH_TIMEOUT_MS;
+}
 
 /** R12-B3：claim 撞 lease 的重试上限——上限内跳过本轮等回收（崩溃残留不打死），超上限才 failNode（防永久悬置） */
 export const CLAIM_RETRY_LIMIT = 3;

@@ -8,7 +8,7 @@ import { PipelineEventType, PipelinePriority, type NodeResult, type PipelineHand
 import type { ILoopDriver, LoopContext, LoopResult, ExecutionContext } from "./scheduling-types.js";
 import type { TimeoutAction } from "./agent-tracker.js";
 import { topologicalSort } from "./topological-sort.js";
-import { NODE_DISPATCH_TIMEOUT_MS as CFG_NODE_DISPATCH_TIMEOUT, EXECUTE_ALL_TIMEOUT_MS } from "@cortex/config";
+import { NODE_DISPATCH_TIMEOUT_MS as CFG_NODE_DISPATCH_TIMEOUT, EXECUTE_ALL_TIMEOUT_MS, nodeDispatchTimeoutMs } from "@cortex/config";
 import type { DispatchCtx, IDispatchStep } from "../dispatch-steps/types.js";
 import { isTestEnv } from "../utils/internal.js";
 import { computeCompensation } from "./compensation.js";
@@ -226,7 +226,8 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               }
               // R12-B1：节点级超时 race——dispatchNode 可能永不 resolve（hang）——全局 deadline 只在轮首检查，层内 allSettled 期间不可达
               // R13：数值倒挂修复——race 超时 ≥ reactLoop（慢执行不误杀）
-              const effectiveDispatchTimeout = Math.max(CFG_NODE_DISPATCH_TIMEOUT, config.reactLoopTimeoutMs);
+              // R13-harness：懒求值覆写口（CFG 是模块期冻结——运行期 env 无效）
+              const effectiveDispatchTimeout = Math.max(nodeDispatchTimeoutMs(), config.reactLoopTimeoutMs);
               // R13-N1：模板串 TDZ 修复（原引用 269 行局部 const——dispatchNode 分支提前 return 永不初始化→ReferenceError）
               //        + clearTimeout（原无——每次 dispatch 后 120s 定时器必触发——生产定时炸弹）
               let raceTid: ReturnType<typeof setTimeout> | undefined;
