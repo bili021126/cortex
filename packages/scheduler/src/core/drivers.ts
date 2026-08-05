@@ -225,6 +225,15 @@ export class TopologicalLayeredDriver implements ILoopDriver {
                 console.error(`[telemetry] scheduler.node_wait_time_ms value=${waitTime} nodeType=${node.type}`);
               }
               // R12-B1：节点级超时 race——dispatchNode 可能永不 resolve（hang）——全局 deadline 只在轮首检查，层内 allSettled 期间不可达
+              // R13-N1：模板串 TDZ 修复（原引用 269 行局部 const——dispatchNode 分支提前 return 永不初始化→ReferenceError）
+              //        + clearTimeout（原无——每次 dispatch 后 120s 定时器必触发——生产定时炸弹）
+              let raceTid: ReturnType<typeof setTimeout> | undefined;
+              const raceTimeout = new Promise<NodeResult>((resolve) => {
+                raceTid = setTimeout(() => {
+                  try { board.failNode(nodeId); } catch { /* 节点已失败 */ }
+                  resolve({ nodeId, success: false, error: `dispatch timeout after ${CFG_NODE_DISPATCH_TIMEOUT}ms` });
+                }, CFG_NODE_DISPATCH_TIMEOUT);
+              });
               return Promise.race([
                 ctx.dispatchNode(node).catch((e) => {
                   try { board.failNode(nodeId); } catch (fe) {
@@ -234,13 +243,8 @@ export class TopologicalLayeredDriver implements ILoopDriver {
                   }
                   return { nodeId, success: false, error: `Promise rejected: ${String(e).slice(0, 200)}` } as NodeResult;
                 }),
-                new Promise<NodeResult>((resolve) => {
-                  setTimeout(() => {
-                    try { board.failNode(nodeId); } catch { /* 节点已失败 */ }
-                    resolve({ nodeId, success: false, error: `dispatch timeout after ${NODE_DISPATCH_TIMEOUT_MS}ms` });
-                  }, CFG_NODE_DISPATCH_TIMEOUT);
-                }),
-              ]);
+                raceTimeout,
+              ]).then((r) => { clearTimeout(raceTid); return r; });
             }
 
             observer.emit({

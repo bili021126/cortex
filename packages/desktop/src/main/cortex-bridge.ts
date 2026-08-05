@@ -9,6 +9,8 @@
  * @since 0.3.0 — 从直连 LlmAdapter → daemon 客户端模式
  */
 import { CortexConnection, streamChat } from "@cortex/client";
+import * as fs from "node:fs";
+import { join } from "node:path";
 
 export class CortexBridge {
   private conn: CortexConnection | null = null;
@@ -20,7 +22,12 @@ export class CortexBridge {
    */
   async init(daemonPort?: number): Promise<void> {
     if (this.initialized) return;
-    this.conn = new CortexConnection({ port: daemonPort ?? 3210 });
+    // R13-N3：读取 daemon 令牌文件（P0-3 后 WS 需鉴权——随机令牌同步）
+    let wsToken: string | undefined;
+    try {
+      wsToken = fs.readFileSync(join(process.cwd(), ".cortex-daemon.ws-token"), "utf-8").trim();
+    } catch { /* daemon 未写令牌文件（env 配置时）——连接层回退 */ }
+    this.conn = new CortexConnection({ port: daemonPort ?? 3210, authToken: wsToken });
     this.conn.connect();
     this.initialized = true;
     console.log(`[CortexBridge] Connected to daemon on port ${daemonPort ?? 3210}`);

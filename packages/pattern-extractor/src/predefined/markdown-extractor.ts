@@ -487,11 +487,12 @@ export class MarkdownPatternExtractor
   ): SkillTemplateCandidate[] {
     const candidates: SkillTemplateCandidate[] = [];
 
-    // 重置 lastIndex（getter 已创建新实例，此行保留防御性重置）
-    MarkdownPatternExtractor.JSON_BLOCK_RE.lastIndex = 0;
+    // R13-N2：一次取正则实例——每轮 getter 返回 lastIndex=0 的新正则→while(exec) 永远匹配第一个 json 块→死循环冻结事件循环
+    const jsonBlockRe = MarkdownPatternExtractor.JSON_BLOCK_RE;
+    jsonBlockRe.lastIndex = 0;
 
     let match: RegExpExecArray | null;
-    while ((match = MarkdownPatternExtractor.JSON_BLOCK_RE.exec(input)) !== null) {
+    while ((match = jsonBlockRe.exec(input)) !== null) {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const jsonText = match[1]!;
 

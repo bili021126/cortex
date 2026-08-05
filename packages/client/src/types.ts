@@ -47,5 +47,7 @@ export interface CortexConnectionConfig {
   reconnect?: WSClientConfig["reconnect"];
   sendQueueLimit?: number;
   timeoutMs?: number;
+  // R13-N3：WS 鉴权令牌（daemon P0-3 后必填——否则 WS 401）
+  authToken?: string;
   WebSocketImpl?: typeof WebSocket;
 }

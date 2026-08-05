@@ -147,6 +147,8 @@ export class CortexDaemon {
     const wsToken = process.env["CORTEX_DAEMON_WS_TOKEN"] ?? crypto.randomUUID();
     if (!process.env["CORTEX_DAEMON_WS_TOKEN"]) {
       process.stderr.write(`[daemon] WS 鉴权令牌未配置——已随机生成（需同步给 desktop 客户端）: ${wsToken}\n`);
+      // R13-N3：令牌写文件同步（desktop 启动后读取——env 未配置时也能连接）
+      try { fs.writeFileSync(path.join(process.cwd(), ".cortex-daemon.ws-token"), wsToken, "utf-8"); } catch { /* 写令牌文件失败不阻断 */ }
     }
     this.wsGateway = new WSGateway({
       authToken: wsToken,

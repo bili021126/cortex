@@ -30,6 +30,8 @@ export class CortexConnection {
       channels: config?.channels,
       reconnect: config?.reconnect,
       sendQueueLimit: config?.sendQueueLimit,
+      // R13-N3：WS 鉴权令牌透传（daemon P0-3 后必填——否则 401）
+      authToken: config?.authToken,
       WebSocketImpl: config?.WebSocketImpl,
     });
   }
