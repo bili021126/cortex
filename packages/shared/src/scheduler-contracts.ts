@@ -33,6 +33,8 @@ export interface ITaskBoard {
   removeSubtree(nodeId: string): void;
   /** R12-B3 替代：claim 撞 lease 的重试计数（上限内跳过等回收，超限才 failNode） */
   getClaimRetries(nodeId: string): number;
+  /** R13-B3：首次撞 lease 的时间（时间基判定） */
+  getClaimFirstAt(nodeId: string): number;
   incrementClaimRetry(nodeId: string): number;
   resetClaimRetries(nodeId: string): void;
   /** R13-B4：注入 AgentPool 引用（lease 续期判定交叉验证原 agent 是否仍活跃） */

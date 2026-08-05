@@ -43,7 +43,7 @@ export class TaskBoard implements ITaskBoard {
   private nodes = new Map<string, TaskNode>();
   private _observer?: IPipelineObserver;
   /** R12-B3 替代：claim 重试计数（节点级——撞 lease 的重试次数，超 CLAIM_RETRY_LIMIT 才 failNode） */
-  private readonly claimRetries = new Map<string, number>();
+  private readonly claimRetries = new Map<string, { count: number; firstAt: number }>();
   /** AgentPool 引用——claim lease 回收前交叉验证原 agent 是否仍活跃 */
   private _pool?: ISchedulerAgentPool;
 
@@ -129,12 +129,18 @@ export class TaskBoard implements ITaskBoard {
 
   /** R12-B3 替代：claim 重试计数（撞 lease 的跳过次数） */
   getClaimRetries(nodeId: string): number {
-    return this.claimRetries.get(nodeId) ?? 0;
+    return this.claimRetries.get(nodeId)?.count ?? 0;
+  }
+
+  // R13-B3：首次撞 lease 的时间（时间基判定——计轮次在崩溃残留场景每轮毫秒级，3 轮即越限，120s lease 等不到）
+  getClaimFirstAt(nodeId: string): number {
+    return this.claimRetries.get(nodeId)?.firstAt ?? 0;
   }
 
   incrementClaimRetry(nodeId: string): number {
-    const next = (this.claimRetries.get(nodeId) ?? 0) + 1;
-    this.claimRetries.set(nodeId, next);
+    const cur = this.claimRetries.get(nodeId);
+    const next = cur ? cur.count + 1 : 1;
+    this.claimRetries.set(nodeId, { count: next, firstAt: cur?.firstAt ?? Date.now() });
     return next;
   }
 

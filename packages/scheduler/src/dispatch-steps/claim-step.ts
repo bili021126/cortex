@@ -1,7 +1,7 @@
 import { AgentType as AT, AGENT_TAGS, PipelinePriority, PipelineEventType, type AgentType } from "@cortex/shared";
 import type { DispatchCtx, IDispatchStep } from "./types.js";
 import { findMatchingAgent } from "../core/agent-matcher.js";
-import { isTestEnv as checkTestEnv, CLAIM_RETRY_LIMIT } from "@cortex/config";
+import { isTestEnv as checkTestEnv, CLAIM_RETRY_LIMIT, CLAIM_LEASE_MS } from "@cortex/config";
 
 /**
  * ClaimStep —— 认领节点。
@@ -79,7 +79,11 @@ export class ClaimStep implements IDispatchStep {
       // R12-B3 替代（重试上限）：claim 撞 lease（崩溃残留/活跃续期——临时状态）——上限内跳过本轮等回收
       // （claim-skipped 豁免——不 replan 不 NodeFailed——管线中断），超上限（疑似永久卡死）才 failNode
       const retries = board.getClaimRetries(node.id);
-      if (retries >= CLAIM_RETRY_LIMIT) {
+      // R13-B3：时间基判定——撞 lease 超过 CLAIM_LEASE_MS（等不到回收）或轮次超上限（保险）才 failNode；
+      // 此前计轮次——崩溃残留场景每轮毫秒级，3 轮即越限，120s lease 回收窗口名存实亡
+      const firstAt = board.getClaimFirstAt(node.id);
+      const leaseElapsed = firstAt > 0 ? Date.now() - firstAt : 0;
+      if (leaseElapsed > CLAIM_LEASE_MS || retries >= CLAIM_RETRY_LIMIT) {
         board.failNode(node.id);
         board.resetClaimRetries(node.id);
         return {
