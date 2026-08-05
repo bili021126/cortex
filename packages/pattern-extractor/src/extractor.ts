@@ -38,14 +38,9 @@
  * // → "structural"
  * ```
  */
-export enum PatternKind {
-  Structural     = "structural",
-  Behavioral     = "behavioral",
-  Architectural  = "architectural",
-  Dataflow       = "dataflow",
-  Documentation  = "documentation",
-  Naming         = "naming",
-}
+// R13-P1-8：PatternKind 统一由 ./pattern.js 定义（此前双定义名义类型——类型不互通）
+import { PatternKind } from "./pattern.js";
+export { PatternKind };
 
 // ─── PatternBody — 模式体 ──────────────────────────────────
 

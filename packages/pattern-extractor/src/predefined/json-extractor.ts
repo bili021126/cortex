@@ -311,13 +311,13 @@ function detectNamingStyle(key: string): NamingStyle {
     return "other";
   }
 
-  // kebab-case: 仅含小写字母、数字和连字符，且含连字符
-  if (/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$/.test(key)) {
+  // R13-P1-7：kebab-case 要求至少一个连字符（此前组 * 可选——name/id/status 裸小写键误判 kebab，置信度 0.95 流入技能结晶）
+  if (/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)+$/.test(key)) {
     return "kebab-case";
   }
 
-  // snake_case: 仅含小写字母、数字和下划线，且含下划线
-  if (/^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)*$/.test(key)) {
+  // R13-P1-7：snake_case 同样要求至少一个下划线
+  if (/^[a-z][a-z0-9]*(_[a-z][a-z0-9]*)+$/.test(key)) {
     return "snake_case";
   }
 
@@ -672,7 +672,8 @@ function buildNamingPattern(
     extractor: "json-extractor",
     extractedAt: now,
     usageCount: 0,
-    weight: Math.round(confidence * 10),
+    // R13-P1-8：权重归一为 0-1（此前 0-10 整数——与 markdown 的 0.2-0.85 浮点量纲混乱，markdown 产出的技能初始权重≈0）
+      weight: confidence,
   };
 }
 

@@ -88,56 +88,62 @@ export class SpawnStep implements IDispatchStep {
       }
     }
 
-    // 1. Spawn——子任务走独立通道，不占主配额
-    const spawned = isSubtask
-      ? pool.spawnSubtask(agentType as AgentType, instanceId)
-      : pool.spawn(agentType as AgentType, instanceId);
-    if (!spawned) {
-      if (slotAcquired) ManifoldGate.release(agentType as AgentType);
-      this._settlePerspectiveFailure(ctx);
-      observer.emit({
-        type: PipelineEventType.NodeSpawnFailed,
-        priority: PipelinePriority.HIGH,
-        payload: { nodeId: node.id, agentType: agentType as AgentType, reason: "pool_exhausted" },
-        timestamp: Date.now(),
-      });
-      return {
+    // R13-P1-9：acquire 后到返回 instanceId 之间的 throw 会跳过 release（CleanupStep 守卫 !instanceId 直接 return）——包 try 确保槽位释放
+    try {
+        // 1. Spawn——子任务走独立通道，不占主配额
+        const spawned = isSubtask
+          ? pool.spawnSubtask(agentType as AgentType, instanceId)
+          : pool.spawn(agentType as AgentType, instanceId);
+        if (!spawned) {
+          if (slotAcquired) ManifoldGate.release(agentType as AgentType);
+          this._settlePerspectiveFailure(ctx);
+          observer.emit({
+            type: PipelineEventType.NodeSpawnFailed,
+            priority: PipelinePriority.HIGH,
+            payload: { nodeId: node.id, agentType: agentType as AgentType, reason: "pool_exhausted" },
+            timestamp: Date.now(),
+          });
+          return {
+            ...ctx,
+            result: {
+              nodeId: node.id,
+              agentType: agentType as AgentType,
+              success: false,
+              error: `Agent pool exhausted for ${agentType}`,
+            },
+          };
+        }
+
+        // 2. 方案 B：Agent 状态所有权归一——spawn 后注入 Pool
+        agent.setPool?.(pool, instanceId);
+
+        // 3. 唤醒 Agent：Created → Awake
+        if (pool.getStatus(instanceId) === AgentStatus.Created) {
+          pool.setStatus(instanceId, AgentStatus.Awake);
+        }
+
+        // 4. 状态校验
+        if (agent.status !== AgentStatus.Awake && agent.status !== AgentStatus.Active) {
+          if (slotAcquired) ManifoldGate.release(agentType as AgentType);
+          this._settlePerspectiveFailure(ctx);
+          return {
+            ...ctx,
+            result: {
+              nodeId: node.id,
+              agentType: agentType as AgentType,
+              success: false,
+              error: `Agent ${agentType} is ${agent.status}, cannot execute`,
+            },
+          };
+        }
+
+          return {
         ...ctx,
-        result: {
-          nodeId: node.id,
-          agentType: agentType as AgentType,
-          success: false,
-          error: `Agent pool exhausted for ${agentType}`,
-        },
+        instanceId,
       };
-    }
-
-    // 2. 方案 B：Agent 状态所有权归一——spawn 后注入 Pool
-    agent.setPool?.(pool, instanceId);
-
-    // 3. 唤醒 Agent：Created → Awake
-    if (pool.getStatus(instanceId) === AgentStatus.Created) {
-      pool.setStatus(instanceId, AgentStatus.Awake);
-    }
-
-    // 4. 状态校验
-    if (agent.status !== AgentStatus.Awake && agent.status !== AgentStatus.Active) {
+    } catch (e) {
       if (slotAcquired) ManifoldGate.release(agentType as AgentType);
-      this._settlePerspectiveFailure(ctx);
-      return {
-        ...ctx,
-        result: {
-          nodeId: node.id,
-          agentType: agentType as AgentType,
-          success: false,
-          error: `Agent ${agentType} is ${agent.status}, cannot execute`,
-        },
-      };
+      throw e;
     }
-
-    return {
-      ...ctx,
-      instanceId,
-    };
   }
 }
