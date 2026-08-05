@@ -178,3 +178,4 @@ memory-trace.log
 # 测试输出误提交防护
 review-test.txt
 *.test-output.txt
+r13-verify-*.txt
