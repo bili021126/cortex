@@ -210,6 +210,58 @@ export interface EvalResult {
 - **不做**：线上 guardrail 化（评测不进 live 路径——那是 ConfirmGate 的活）
 - **不做**：全自动评测闭环（评测结果自动改代码）——先出报告，人工决策
 
+--
+
+## 6. 实际 benchmark 对标（2026 调研补充）
+
+### 6.1 关键事实：内部 eval > 公共 benchmark
+
+Statix 2026 实测：同一个 coding agent 在两个评估上的表现——**SWE-Bench Verified 73% vs 内部 eval 81%**——而另一个 agent **SWE-Bench 89% 但内部 eval 仅 38%**。
+
+**结论**：公共 benchmark 高分 ≠ 实际场景好用（公共集是 GitHub 通用 issue，不匹配你的具体工作流）。
+
+**对 Cortex 评测层的直接指导**：
+- **内部 golden 为主**（用户的实际任务：B 站台词提取/审核表生成/记忆检索）——公共 benchmark 为辅（只做 sanity）
+- golden 必须是**真实任务**（不是合成玩具任务）——合成任务测不出真实失败模式
+- 评测的最终目标是**内部回归**（每次改动后行为不退化）——不是排行榜分数
+
+### 6.2 SWE-bench Verified 的任务设计（500 实例）
+
+| 要素 | SWE-bench Verified | Cortex golden 的对应 |
+|---|---|---|
+| 任务来源 | 真实 GitHub issue | 真实用户任务（昔涟对话/记忆域/调度路径） |
+| 通过标准 | 测试套件通过（patch 后的 FAIL_TO_PASS 测试） | deterministic 断言（产物存在/字段值） |
+| 环境 | 统一 harness（mini-SWE-agent）+ 沙箱 | eval-runner（临时工作区隔离） |
+| 判定 | 自动化（无人工） | 自动化为主 + LLM-judge 辅 |
+| 成本控制 | 单任务限时/限预算 | trials=3 + timeoutMs |
+
+**通过标准的启示**：SWE-bench 的 FAIL_TO_PASS（失败→通过）比单纯"输出正确"更严格——**Cortex 的 golden 断言也可用 FAIL_TO_PASS 模式**（如"任务前不存在审核表 → 任务后存在且内容正确"）。
+
+### 6.3 Terminal-Bench 2.0（终端 agent 评测——Cortex CLI 相关）
+
+- 面向**终端 agent**（Bash 交互）——评测的是**命令序列 + 输出正确性**
+- 与 Cortex CLI/TUI 的评测直接相关：
+  - golden 可以是"终端命令序列"（如 `cortex mem export` → 输出断言）
+  - 通过标准 = 命令成功 + 输出包含关键字段
+  - 评测时记录完整命令轨迹（复用 eval-runner 的轨迹捕获）
+
+### 6.4 EDD（Eval-Driven Development）三步闭环
+
+DeepEval 的 EDD 框架（3 步）：
+
+```
+1. Curate（收集）——golden 数据集（真实任务 + 预期产物）
+2. Iterate（迭代）——跑评测 → 修失败 → 再跑（开发循环）
+3. Regress（回归）——CI 门禁（改动后行为不退化）
+```
+
+**映射到 Cortex 评测层**：
+- Curate → golden/*.json（真实任务用例集）
+- Iterate → `pnpm eval:gate --gate=report`（开发时跑+看失败）
+- Regress → `--gate=L1/L2`（发版/周 CI）
+
+**judge 校准**（Galtea 2026）：LLM-judge 会漂移——rubric 固定 + 定期人工抽检（trace inspect）是必需品；judge 的通过阈值也要随数据校准（不是拍脑袋定）。
+
 ---
 
-*深化完成——P0-1 实施时按 §3 直接落地（目录/接口/评分/CI 节奏均已定）。*
+*深化补充完成——benchmark 对标确认内部 golden 为主的方向，EDD 三步直接映射评测层节奏。*
