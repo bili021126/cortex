@@ -206,10 +206,9 @@ export class HybridRetriever {
       const cutoff = this._adaptiveThreshold;
       const filtered = fine.filter((r) => r.hybridScore >= cutoff);
 
-      // 如果裁切后为空，至少保留 top-1（避免空结果）
-      if (filtered.length === 0 && fine.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        return [fine[0]!];
+      // R13-P0-2：空裁切返回空——全 0 分 = 无相关（此前兜底返回 0 分 top-1，调用方不按 hybridScore 过滤会拿到无关记忆）
+      if (filtered.length === 0) {
+        return [];
       }
 
       // 更新自适应阈值

@@ -340,10 +340,9 @@ export class MemoryStoreManager {
       mem.status = "active"
     } else if (mem.weight >= 10) {
       mem.status = mem.weight >= 30 ? "active" : "aging"
-    } else if (Date.now() - mem.lastAccessedAt > 30 * 24 * 60 * 60 * 1000) {
-      // R12-C4：只有长期未访问（>30 天）+ 低权重才归档——新条目（weight 0-9）不被"召回即降级"
-      mem.status = "archived"
     } else {
+      // R13-C4：归档分支从召回路径删除——召回即活跃（lastAccessedAt 刚置 now，30 天未访问判定永假）——
+      // 弃置归档属 maintain 职责（当前 cyrene 无 maintain——低权重 L2 数量有限，接受现状）
       mem.status = "aging"
     }
     await this.save(store)
