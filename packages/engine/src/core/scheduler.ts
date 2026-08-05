@@ -294,10 +294,8 @@ export class Scheduler implements IScheduler {
       }
       // R12-B5：步骤 throw 也走 Cleanup（此前只有结果失败走——抛异常导致 ManifoldGate 槽位 + pool 实例泄漏）
       try {
-        console.error(`[DBG-PIPE] step=${step.name} agentType=${ctx.agentType} hasAgent=${!!ctx.agent} hasResult=${!!ctx.result}`);
-        ctx = await step.run(ctx);
-        console.error(`[DBG-PIPE] step=${step.name} 完成 result=${ctx.result ? JSON.stringify({ success: ctx.result.success, error: String(ctx.result.error ?? "").slice(0, 60) }) : "无"}`);
-      } catch (err) {
+                ctx = await step.run(ctx);
+              } catch (err) {
         const thrownResult: NodeResult = { nodeId: ctx.node.id, success: false, error: `Step ${step.name} threw: ${String(err).slice(0, 200)}` };
         const lastStep = steps[steps.length - 1];
         if (lastStep?.name === "Cleanup") {

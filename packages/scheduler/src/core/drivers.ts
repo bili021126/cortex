@@ -225,14 +225,16 @@ export class TopologicalLayeredDriver implements ILoopDriver {
                 console.error(`[telemetry] scheduler.node_wait_time_ms value=${waitTime} nodeType=${node.type}`);
               }
               // R12-B1：节点级超时 race——dispatchNode 可能永不 resolve（hang）——全局 deadline 只在轮首检查，层内 allSettled 期间不可达
+              // R13：数值倒挂修复——race 超时 ≥ reactLoop（慢执行不误杀）
+              const effectiveDispatchTimeout = Math.max(CFG_NODE_DISPATCH_TIMEOUT, config.reactLoopTimeoutMs);
               // R13-N1：模板串 TDZ 修复（原引用 269 行局部 const——dispatchNode 分支提前 return 永不初始化→ReferenceError）
               //        + clearTimeout（原无——每次 dispatch 后 120s 定时器必触发——生产定时炸弹）
               let raceTid: ReturnType<typeof setTimeout> | undefined;
               const raceTimeout = new Promise<NodeResult>((resolve) => {
                 raceTid = setTimeout(() => {
                   try { board.failNode(nodeId); } catch { /* 节点已失败 */ }
-                  resolve({ nodeId, success: false, error: `dispatch timeout after ${CFG_NODE_DISPATCH_TIMEOUT}ms` });
-                }, CFG_NODE_DISPATCH_TIMEOUT);
+                  resolve({ nodeId, success: false, error: `dispatch timeout after ${effectiveDispatchTimeout}ms` });
+                }, effectiveDispatchTimeout);
               });
               return Promise.race([
                 ctx.dispatchNode(node).catch((e) => {
@@ -270,7 +272,8 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               : executionModel.dispatchSingle(execCtx);
 
             // 单个节点超时兜底——防止 dispatch hang 住拖死 Promise.allSettled
-            const NODE_DISPATCH_TIMEOUT_MS = Math.min(config.reactLoopTimeoutMs, CFG_NODE_DISPATCH_TIMEOUT);
+            // R13：数值倒挂修复——race 超时 ≥ reactLoop（120s < 300s 会误杀合法慢执行）
+            const NODE_DISPATCH_TIMEOUT_MS = Math.max(config.reactLoopTimeoutMs, CFG_NODE_DISPATCH_TIMEOUT);
             let tid: ReturnType<typeof setTimeout>;
             const timeoutPromise = new Promise<NodeResult>((resolve) => {
               tid = setTimeout(() => {
