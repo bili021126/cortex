@@ -117,4 +117,49 @@ P3：M2/M3/L2/L3（低风险——随迭代）
 
 ---
 
-*审计完成——数据均来自全包扫描与深挖验证；修复按 P0-P3 顺序执行。*
+## §2 深度审计追加（依赖图 / 跨层 / 契约）
+
+> 第二轮：依赖声明 vs 实际引用、包间 import 图、契约路由对齐、配置集中度
+
+### 2.1 依赖审计（28 包）
+
+| 发现 | 判定 | 详情 |
+|---|---|---|
+| 架构分层 | 🟢 干净 | shared 无任何 engine 反向引用（3 处"@cortex/engine"均为注释说明）——依赖方向单向向下 |
+| 死依赖 | ⚠️ 2 个 | engine 声明 @cortex/testing/@cortex/tools 但 src 未引用——**确认为 devDep 测试用**（tests 目录引用）——非真死依赖，可移入 devDependencies 明确（若已在则无需动） |
+| 自引用 | 🟢 误报 | client/config/doctor 等的"引用未声明"是脚本把包自身 import 计入——排除后无真实缺失 |
+
+### 2.2 跨层 import 图（关键路径）
+
+```
+shared ← 全部（底层）
+config ← cli/engine/server/scheduler/memory-store/governance/platform 等（配置唯一真相源——引用集中）
+engine → shared/llm/platform/memory-store/scheduler/config/skill-kit/governance/telemetry/notification/plugin-runner/logging/context-manager/memory/prompt-kit/resilience（16 个——hub 但全部向下）
+server → engine/protocol/shared/config/llm/platform/telemetry/notification/scheduler（服务端聚合——合理）
+```
+
+**结论**：无循环依赖（此前 CI 修的 cli→engine 循环未复发）——分层单向，hub 模式（engine 聚合）是设计选择——无违规。
+
+### 2.3 契约路由对齐（client 28 条 vs server）
+
+- client 的 28 条 REST 路由（state/nodes/agents/health/execute/events/models/keys/tuning/config/chat/memory/sessions/daemon/capabilities）
+- server 路由逐一对应（getNode 单节点路由已在 H3 轮补齐——此前唯一缺口）
+- **结论**：🟢 契约对齐——client 无孤儿路由（指向不存在的服务端路径）
+
+### 2.4 配置集中度
+
+- config 包承担全部常量/环境变量解析（12 处 process.env 集中在 config）——唯一真相源成立
+- cli（25）/server（16）的 process.env 访问多为**转发**（读取后传 config 或直接透传运行时参数）——抽查未见绕过 config 的新增硬编码
+- **结论**：🟢 配置治理达标（此前硬编码禁令的存量已清）
+
+### 2.5 深度审计新增结论
+
+```
+新增 High：0
+新增 Medium：1（M5——engine devDep 的 testing/tools 应明确用途或移除——低优先级）
+新增 Low：0
+```
+
+---
+
+*深度审计完成——依赖图/契约/配置三维度达标，无新增高危。*
