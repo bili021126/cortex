@@ -8,6 +8,7 @@
 import * as http from "node:http";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import * as crypto from "node:crypto";
 import { EngineHost } from "./engine-host.js";
 import { SessionManager } from "./session-manager.js";
@@ -149,7 +150,7 @@ export class CortexDaemon {
       process.stderr.write(`[daemon] WS 鉴权令牌未配置——已随机生成（需同步给 desktop 客户端）: ${wsToken}\n`);
       // R13-N3：令牌写文件同步（desktop 启动后读取——env 未配置时也能连接）
       try {
-        fs.writeFileSync(path.join(process.cwd(), ".cortex-daemon.ws-token"), wsToken, { encoding: "utf-8", mode: 0o600 });
+        fs.writeFileSync(path.join(os.homedir(), ".cortex", "ws-token"), wsToken, { encoding: "utf-8", mode: 0o600 })
       } catch { /* 写令牌文件失败不阻断 */ }
     }
     this.wsGateway = new WSGateway({

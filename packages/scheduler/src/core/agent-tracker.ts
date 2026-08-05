@@ -68,6 +68,8 @@ export class AgentTracker {
   }
 
   /**
+   * @planned 设计性弃用（R13-B2 复核确认）：生产零接线——看门狗职责已由 dispatch race（300s 主）+
+   * L3_DEAD（360s 二道兜底）承担——一个看门狗比两个打架的强。保留实现供未来接线，勿再报断线。
    * 记录心跳——agent 仍在执行。
    * 重置计时基线（lastHeartbeat），但不改变 dispatchedAt。
    */

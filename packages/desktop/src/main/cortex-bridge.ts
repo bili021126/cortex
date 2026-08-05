@@ -10,6 +10,7 @@
  */
 import { CortexConnection, streamChat } from "@cortex/client";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { join } from "node:path";
 
 export class CortexBridge {
@@ -25,7 +26,7 @@ export class CortexBridge {
     // R13-N3：读取 daemon 令牌文件（P0-3 后 WS 需鉴权——随机令牌同步）
     let wsToken: string | undefined;
     try {
-      wsToken = fs.readFileSync(join(process.cwd(), ".cortex-daemon.ws-token"), "utf-8").trim();
+      wsToken = fs.readFileSync(join(os.homedir(), ".cortex", "ws-token"), "utf-8").trim();
     } catch { /* daemon 未写令牌文件（env 配置时）——连接层回退 */ }
     this.conn = new CortexConnection({ port: daemonPort ?? 3210, authToken: wsToken });
     this.conn.connect();
