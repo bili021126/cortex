@@ -262,6 +262,34 @@ DeepEval 的 EDD 框架（3 步）：
 
 **judge 校准**（Galtea 2026）：LLM-judge 会漂移——rubric 固定 + 定期人工抽检（trace inspect）是必需品；judge 的通过阈值也要随数据校准（不是拍脑袋定）。
 
+--
+
+## 7. 评测工具生态广度调研（2026-08-06 补充）
+
+### 7.1 主流工具定位（按用途分——不混为一谈）
+
+| 工具 | 定位 | 适合场景 | 对 Cortex 的启示 |
+|---|---|---|---|
+| **Promptfoo** | 配置驱动评测 + CI 集成 | 提示/回归门禁（YAML 用例集） | eval-gate 的 CLI 形态可参照（配置即用例） |
+| **DeepEval** | agent 评测框架（50+ 指标） | 端到端 + LLM-judge | 已有对标（§1-3）——不重复 |
+| **Braintrust** | prompt 回归 + 观测 | 团队协作的回归工作流 | 报告格式/阈值门禁可参照 |
+| **LangSmith** | LangChain 原生评测 + 轨迹 | 轨迹级调试 | trace 捕获的 UI 呈现可参照 |
+| **Arize Phoenix** | 生产监控 + 回归 | 模型输出回归检测 | 生产侧（guardrail 域——Cortex 的 ConfirmGate 已覆盖） |
+| **Langfuse** | 开源观测（轨迹/成本） | 自托管观测 | 低成本轨迹查看器参照 |
+
+### 7.2 关键结论（2026 共识）
+
+1. **评测与观测分离**：离线评测（eval）与生产观测（observability）是两套——Cortex 的 eval-gate（离线）与 telemetry（观测）正好对应——不需要第三套
+2. **CI 集成是标配**：所有主流工具都有 CI 回归门禁——Cortex 的 ci-gate 4.5/5 已对齐
+3. **配置驱动**：Promptfoo 的 YAML 用例集是低成本起点——Cortex 的 golden JSON 同模式（eval-types 已定义）
+4. **轨迹是第一需求**：LangSmith/Langfuse 的核心价值是轨迹可视化——Cortex 的 observer 事件数组已是轨迹（v1 打表够用，v2 可加树形视图）
+
+### 7.3 Cortex 的差异化（不强求对标）
+
+- **决策台账（byDesign）**：主流工具没有"故意不接线"的断言槽位——这是 Cortex 的原创（审计不再翻旧账）
+- **机制活性优先**：主流工具重输出质量（LLM-judge），Cortex v1 重机制活性（deterministic）——v2 再加质量层
+- **零外部依赖**：eval-gate 纯 node 实现（无平台依赖）——Promptfoo 等的托管/云形态不适合单机项目
+
 ---
 
-*深化补充完成——benchmark 对标确认内部 golden 为主的方向，EDD 三步直接映射评测层节奏。*
+*广度补充完成——工具生态对齐确认 Cortex 方向正确（CI 集成/配置驱动/轨迹优先），byDesign 台账是差异化。*

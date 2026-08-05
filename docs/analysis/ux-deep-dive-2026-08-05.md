@@ -198,6 +198,34 @@ AI 聊天 UI 2026 的标配：**产物预览**（文档/表格/代码的渲染�
 | complete 态携带 sources/artifacts 元数据 | 6.2 + 6.4 | U1 的 DTO 扩展 |
 | 点踩→修正回填（非纯评分） | 6.3 | U2 输入区 + FSA 反馈链路 |
 
+--
+
+## 7. AI 桌面应用广度调研（2026-08-06 补充）
+
+### 7.1 2026 桌面 agent 的形态（三款对标）
+
+| 产品 | 核心交互 | 对 Cortex desktop 的启示 |
+|---|---|---|
+| **Claude Code Desktop** | 多 agent 项目管理（会话树 + 任务状态） | 会话树（父子层级）值得抄——Cortex 的会话列表可升级为树 |
+| **Cursor Agent Mode** | 计划模式（plan→act 切换）+ 多文件工作流 | "计划确认门"（plan 模式先出方案再动手）——与 ConfirmGate 呼应 |
+| **Codex Desktop** | 多项目并行 agent 管理 | 项目级隔离视图——Cortex 的 daemon 多会话可参照 |
+
+### 7.2 三个值得抄的模式
+
+1. **Mission Control 界面**（Cursor）：agent 任务的"指挥中心"视图——任务/进度/工具调用一屏总览——Cortex desktop 的主视图可选此形态（替代纯聊天流）
+2. **streaming-artifact 循环**（open-design）：流式产物与聊天并排（左聊右产物）——Cortex 的 artifacts 字段（§6.4）落地时的布局参照
+3. **live agent panel**：agent 活动面板（实时显示 agent 在做什么）——Cortex 的 observer 事件流可直接喂这个面板（轨迹可视化）
+
+### 7.3 对 U1 的最终修正（桌面版）
+
+- U1 状态机不变（10 态）——但桌面版增加**任务视图层**（独立于聊天流）：任务卡片（进度/工具序列/产物）与消息流并行——不是替换消息流，是补充
+- **计划模式入口**（Cursor 的 plan 模式）：L2/L3 操作前先出计划确认（ConfirmGate 的 UI 化）——desktop 是唯一适合做确认 UI 的端
+
+### 7.4 不做（边界）
+
+- 多项目并行（Codex 形态——Cortex 单机单 daemon，会话树够用）
+- 浏览器内嵌 IDE（Cursor 形态——Cortex 是桌宠/陪伴定位，不是 IDE）
+
 ---
 
-*深化补充完成——U1 的 DTO 需扩展 sources/artifacts 字段（协议层），U4 的 thinking 折叠改为分步披露。*
+*广度补充完成——桌面 agent 三款对标确认：任务视图层（Mission Control）+ 计划确认门是值得抄的两件事，U1 状态机不变。*
