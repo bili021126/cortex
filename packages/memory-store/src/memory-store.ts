@@ -698,14 +698,16 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
 
       // 刷新生效——将 read() 中的老化 weight 异步回写到后端
       for (const e of all) {
-        const daysSinceAccess = (Date.now() - (e.lastAccessedAt ?? e.createdAt)) / 86400000;
+        // R13-C1：aging 锚点用独立 lastAgedAt（此前刷新 lastAccessedAt——TTL/湮灭以它为钟被续命——记忆只进不出）
+        const agingBase = e.lastAgedAt ?? e.lastAccessedAt ?? e.createdAt;
+        const daysSinceAccess = (Date.now() - agingBase) / 86400000;
         if (daysSinceAccess > 7) {
           const aged = e.weight * Math.pow(WEIGHT_AGING_FACTOR, daysSinceAccess / 7);
           if (aged < e.weight * 0.9) {
             try {
               // 读-改-写：传完整条目仅更新 weight，避免整体替换抹掉其他字段。
               // R12-C1：aging 锚点——同步刷新 lastAccessedAt 阻止重复施加（无锚点时衰减速率与 maintain 频率成正比）
-              const p = this._backend.set(e.id, { ...e, weight: aged, lastAccessedAt: Date.now() });
+              const p = this._backend.set(e.id, { ...e, weight: aged, lastAgedAt: Date.now() });
               if (p) p.catch((err) => this._safeAgingError(err, e.id, "set"));
             } catch (e) {
               // best-effort: 非关键降级路径

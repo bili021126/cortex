@@ -83,6 +83,8 @@ export interface MemoryEntry {
   weight: number;
   accessCount: number;
   lastAccessedAt: number;
+  /** R13-C1：上次 aging 时间——aging 锚点用独立字段（不刷新 lastAccessedAt——防 TTL/湮灭被续命失效） */
+  lastAgedAt?: number;
   createdAt: number;
 
   // §4 工程层（不参与检索语义）
