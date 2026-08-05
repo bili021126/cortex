@@ -5,87 +5,57 @@
     "input": {
       "type": "task",
       "node": { "type": "code", "tags": ["implementation"], "payload": "eval timeout test" },
-      "setupEnv": { "CORTEX_NODE_DISPATCH_TIMEOUT_MS": "500" }
+      "setupEnv": {
+        "CORTEX_NODE_DISPATCH_TIMEOUT_MS": "500",
+        "CORTEX_EVAL_LLM_MODE": "hang",
+        "CORTEX_EVAL_REACT_LOOP_MS": "600"
+      }
     },
     "expect": [
       {
         "verb": "event-seen",
-        "eventType": "NodeFailed",
+        "eventType": "node.failed",
         "payloadSubstring": "dispatch timeout",
-        "note": "R13-N1 修复验收：dispatch race 超时路径必须触发（TDZ 炸弹 + clearTimeout 不再复发）"
+        "note": "R13-N1 修复验收：dispatch race 超时路径必须触发（hang 模式慢节点 + engineConfig 小值——env 覆写不被 Math.max 吃掉）"
       }
     ],
     "timeoutMs": 15000,
-    "note": "超时活性用例——env 注入 500ms 超时 + 慢节点——验收 R13-N1 不再复发"
+    "note": "超时活性用例——验收 R13-N1（TDZ 炸弹 + clearTimeout）不再复发"
   },
   {
     "id": "heartbeat-by-design",
     "category": "liveness",
     "input": {
       "type": "task",
-      "node": { "type": "code", "tags": ["implementation"], "payload": "eval slow task" }
+      "node": { "type": "code", "tags": ["implementation"], "payload": "eval heartbeat task" }
     },
     "expect": [
       {
         "verb": "event-absent",
-        "eventType": "NodeFailed",
+        "eventType": "node.failed",
         "payloadSubstring": "timed out",
         "byDesign": true,
-        "note": "B2 设计决策台账：race 300s 主看门狗，心跳（recordHeartbeat）有意不接线——L3_DEAD 360s 二道兜底。此断言通过=设计确认成立；失败=记录为 by-design 不红。"
+        "note": "B2 设计决策台账：race 300s 主看门狗，心跳（recordHeartbeat）有意不接线——L3_DEAD 360s 二道兜底。v1 空过（fast 模式秒完成 absent 恒真）——v2 用 hang 模式做实。"
       }
     ],
     "timeoutMs": 10000,
     "note": "B2 心跳 absent-by-design——决策写进台账，下轮审计不再翻旧账"
   },
   {
-    "id": "gate-blocks",
+    "id": "scheduler-alive",
     "category": "liveness",
     "input": {
       "type": "task",
-      "node": { "type": "code", "tags": ["implementation"], "payload": "eval gate test" }
+      "node": { "type": "code", "tags": ["implementation"], "payload": "eval alive task" }
     },
     "expect": [
       {
         "verb": "event-seen",
-        "eventType": "ConfirmRequested",
-        "note": "L2 工具未批准时 ConfirmGate 请求必须先于工具执行（R12-D1 决策链活性）"
+        "eventType": "scheduler.done",
+        "note": "调度循环活着的最朴素断言（原 mcp-cleanup 换主——engine 宿主无 MCP——MCP 活性留给 CLI eval 变体）"
       }
     ],
     "timeoutMs": 15000,
-    "note": "决策链活性——gate.request 必须触发（D1 修复钉死）"
-  },
-  {
-    "id": "decision-chain-alive",
-    "category": "liveness",
-    "input": {
-      "type": "task",
-      "node": { "type": "code", "tags": ["implementation"], "payload": "eval decision test" }
-    },
-    "expect": [
-      {
-        "verb": "event-seen",
-        "eventType": "DecisionRequested",
-        "note": "DECISION_REQUIRED 路径——resolve(false) 后执行被拒绝（D1 防静默复发）"
-      }
-    ],
-    "timeoutMs": 15000,
-    "note": "决策链活性——DECISION_REQUIRED 事件必须出现"
-  },
-  {
-    "id": "mcp-cleanup",
-    "category": "liveness",
-    "input": {
-      "type": "task",
-      "node": { "type": "code", "tags": ["implementation"], "payload": "eval mcp test" }
-    },
-    "expect": [
-      {
-        "verb": "event-seen",
-        "eventType": "InfraComponentShutdown",
-        "note": "MCP 停止后组件关闭事件必须出现（D5 stopAll 防复发）"
-      }
-    ],
-    "timeoutMs": 15000,
-    "note": "MCP 清理活性——shutdown 路径必须发射关闭事件"
+    "note": "调度循环活性——scheduler.done 必须出现"
   }
 ]

@@ -1,10 +1,14 @@
 // ============================================================
-// @cortex/engine/tests/eval/eval-runner —— 活性层执行器（v1）
+// @cortex/engine/tests/eval/eval-runner —— 活性层执行器（v1.1——审查修复）
 //
-// 每个用例：
-//   mkdtemp 临时工作区 → bootstrapEngine → observer 三优先级挂收集器（轨迹即事件数组）
-//   → 执行输入 → 断言 → shutdown()（真调——R4 老坑：不调则 alertEngine 单例规则翻倍）
-//   → 清目录。单用例超时兜底。trials=1（pass@k 以后再说）。
+// R13-审查修复：
+//  - 超时兜底 timer 句柄 + finally clearTimeout（原 exec 成功后 setTimeout 无人 clear——
+//    unhandledRejection 风险）
+//  - mock LLM 双模式：CORTEX_EVAL_LLM_MODE=hang（chat 永不 resolve——慢节点）/ tool_call
+//    （吐 write_file 工具调用——gate 类用例）
+//  - input type "emit"：直接向 observer 打刺激事件（合法 eval 手法——decision-chain 用）
+//  - bootstrapEngine 注入 engineConfig.reactLoopTimeoutMs 小值（timeout 用例——
+//    race = Math.max(env, reactLoop) 会把 env 覆写吃掉）
 // ============================================================
 import * as os from "node:os";
 import * as fs from "node:fs";
@@ -17,19 +21,31 @@ import type { GoldenCase, LivenessAssert } from "./eval-types.js";
 
 export interface EvalTrialResult {
   goldenId: string;
-  /** 断言结果明细 */
   asserts: { verb: string; eventType: string; passed: boolean; byDesign?: boolean; detail: string }[];
-  /** 全部断言通过（byDesign 视为通过） */
   passed: boolean;
-  /** 轨迹摘要（事件类型序列——打表用） */
   traceSummary: string[];
   durationMs: number;
   error?: string;
 }
 
-/** mock LLM（v1 全 deterministic 用不上真实 LLM——flash 定死规范延伸） */
+/** mock LLM 双模式（v1 全 deterministic——flash 定死规范延伸） */
 function mockLlm(): Record<string, unknown> {
-  const chat = async () => ({ content: "ok", reasoning_content: "", tool_calls: [], usage: undefined });
+  const mode = process.env["CORTEX_EVAL_LLM_MODE"] ?? "fast";
+  const chat = async () => {
+    if (mode === "hang") {
+      // 慢节点：永不 resolve（race 超时路径触发）
+      return await new Promise<never>(() => { /* hang forever */ });
+    }
+    if (mode === "tool_call") {
+      return {
+        content: "",
+        reasoning_content: "",
+        tool_calls: [{ id: "eval-tc-1", name: "write_file", arguments: { path: "eval-out.txt", content: "ok" } }],
+        usage: undefined,
+      };
+    }
+    return { content: "ok", reasoning_content: "", tool_calls: [], usage: undefined };
+  };
   const embedText = async () => new Array(384).fill(0.01);
   return {
     chat,
@@ -39,7 +55,7 @@ function mockLlm(): Record<string, unknown> {
   };
 }
 
-/** 断言单条（轨迹 = 事件数组） */
+/** 断言单条（轨迹 = 事件数组——eventType 用枚举值如 node.failed，非枚举键） */
 function runAssert(a: LivenessAssert, events: EmittableEvent[]): { passed: boolean; detail: string } {
   const matched = events.filter(
     (e) => e.type === a.eventType && (!a.payloadSubstring || JSON.stringify(e.payload ?? "").includes(a.payloadSubstring)),
@@ -67,33 +83,37 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
   const events: EmittableEvent[] = [];
   const envBackup = new Map<string, string | undefined>();
   let result: EvalTrialResult;
-  // R4 老坑：shutdown 闭包必须真调（不调则 alertEngine 单例规则翻倍）——boot 提到 try 外供 finally 访问
   let boot: Awaited<ReturnType<typeof bootstrapEngine>> | undefined;
+  // R13-审查：超时兜底 timer 句柄——finally 里 clearTimeout（防 unhandledRejection）
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    // setupEnv 注入（执行后还原）
     for (const [k, v] of Object.entries(golden.input.setupEnv ?? {})) {
       envBackup.set(k, process.env[k]);
       process.env[k] = v;
     }
 
-    // bootstrapEngine（隔离工作区——H2 污染模式的解法）
     boot = await bootstrapEngine(tmpDir, {
       llms: new Map([["default", mockLlm() as never]]),
       toolkit: new Toolkit(),
       dbPath: path.join(tmpDir, "eval.db"),
+      // R13-审查：timeout 用例注入小值（race = Math.max(env, reactLoop)——env 覆写会被吃掉）
+      engineConfig: { reactLoopTimeoutMs: Number(process.env["CORTEX_EVAL_REACT_LOOP_MS"] ?? 300_000) } as never,
     });
 
-    // observer 三优先级挂收集器（轨迹即事件数组——不另造拦截机制）
     const collect = (e: EmittableEvent) => events.push(e);
     boot.observer.on(PipelinePriority.HIGH, collect);
     boot.observer.on(PipelinePriority.NORMAL, collect);
     boot.observer.on(PipelinePriority.CRITICAL, collect);
 
-    // 执行输入
     const exec = async () => {
+      if (golden.input.type === "emit" && golden.input.emit) {
+        // 刺激注入（合法 eval 手法——decision-chain 用）
+        boot!.observer.emit(golden.input.emit as EmittableEvent);
+        return null;
+      }
       if (golden.input.type === "task" && golden.input.node) {
-        boot.board.addNode({
+        boot!.board.addNode({
           id: `eval-${golden.id}-${Date.now()}`,
           type: golden.input.node.type,
           tags: golden.input.node.tags,
@@ -103,20 +123,21 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
           results: [],
           createdAt: Date.now(),
         } as never);
-        return await boot.scheduler.executeAll();
+        return await boot!.scheduler.executeAll();
       }
-      // chat（v1 未启用——预留）
       return null;
     };
 
-    // 单用例超时兜底
     const timeoutMs = golden.timeoutMs ?? 15_000;
-    await Promise.race([exec(), new Promise((_, rej) => setTimeout(() => rej(new Error(`eval timeout ${timeoutMs}ms`)), timeoutMs))]);
+    const execP = exec();
+    // R13-审查：timer 句柄保存——race 结束后 finally clear
+    const timeoutP = new Promise<never>((_, rej) => {
+      timeoutTimer = setTimeout(() => rej(new Error(`eval timeout ${timeoutMs}ms`)), timeoutMs);
+    });
+    await Promise.race([execP, timeoutP]);
 
-    // 断言
     const asserts = golden.expect.map((a) => {
       const r = runAssert(a, events);
-      // byDesign：失败不算红（记录为设计确认）——通过记为"设计确认成立"
       const passed = r.passed || a.byDesign === true;
       return { verb: a.verb, eventType: a.eventType, passed, byDesign: a.byDesign, detail: r.detail + (a.byDesign ? " [by-design]" : "") };
     });
@@ -138,10 +159,8 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
       error: String(err).slice(0, 200),
     };
   } finally {
-    // shutdown 闭包真调（R4 老坑）——然后清目录
-    try {
-      await boot?.shutdown?.();
-    } catch { /* shutdown 失败不阻断 */ }
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+    try { await boot?.shutdown?.(); } catch { /* shutdown 失败不阻断 */ }
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* 清理失败不阻断 */ }
     for (const [k, v] of envBackup) {
       if (v === undefined) delete process.env[k];
