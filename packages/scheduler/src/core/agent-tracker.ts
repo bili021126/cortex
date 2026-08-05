@@ -15,8 +15,8 @@
 const L1_WARN_MS = 60_000;
 /** L2：探测阈值（90s）——ping agent + emit Exec:NodeDelayed (extend) */
 const L2_PING_MS = 90_000;
-/** L3：判定死亡阈值（120s）——标记 TimedOut + emit NodeFailed */
-const L3_DEAD_MS = 120_000;
+/** L3：判定死亡阈值（360s——R13：此前 120s < race 300s，执行中 120s+ 被 kill 误杀合法慢执行；recordHeartbeat 未接线时 lastHeartbeat 不更新，此值须 > race 由 race 先兜底） */
+const L3_DEAD_MS = 360_000;
 
 // ── 类型 ────────────────────────────────────────────────────
 
