@@ -175,3 +175,6 @@ memory-trace.log
 .qoder/skills/rspress-api-docs/
 .qoder/skills/typescript-refactoring-patterns/
 .qoder/skills/typescript-style-guide/
+# 测试输出误提交防护
+review-test.txt
+*.test-output.txt
