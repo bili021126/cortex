@@ -410,6 +410,14 @@ async function main() {
   console.log(allOk ? "✅ 门禁通过" : "❌ 门禁未通过");
   console.log(`   Tests: ${totalPassed}/${totalTests} passed` + (skipped.length > 0 ? ` | ${skipped.length} skipped` : ""));
 
+  // ── 活性层评测（report 模式——exit 恒 0，防 pattern-extractor 化：机制要有消费者）──
+  if (allOk) {
+    console.log("\n🔒 [门禁 4.5/5] 活性层评测（eval report）...");
+    const evalRun = run("pnpm", ["exec", "tsx", "packages/engine/tests/eval/eval-gate.ts"], ROOT);
+    const evalPassed = /通过/.test(evalRun.stdout);
+    console.log(`   ${evalPassed ? "✅" : "⚠️"} 活性层: ${evalPassed ? "已执行（report 落盘）" : "执行异常——见上方输出"}`);
+  }
+
   // ── 门禁 5/5：覆盖率阈值（可选，--coverage）──
   if (withCoverage && allOk) {
     console.log("\n🔒 [门禁 5/5] 覆盖率阈值检查...");
