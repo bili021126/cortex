@@ -29,6 +29,10 @@ npx tsx packages/engine/tests/eval/eval-gate.ts
 | heartbeat-by-design | event-absent node.failed（byDesign） | B2 心跳不接线是设计决策（台账） |
 | scheduler-alive | event-seen scheduler.done | 调度循环活着（最朴素活性） |
 
+## 已知限制
+
+- **race 超时只记账，不取消底层执行**：全链路无 AbortSignal——hang 模式的 LLM promise 会泄漏到用例结束之后——v1 接受，v2 若上取消信号再回收。
+
 ## v2 待办（砍掉的用例——事件不存在或需桩）
 
 - gate-blocks：ConfirmGate 请求不走 observer（经 PlatformBridge→WS）——需桩 bridge 注入（捕获 confirm 调用为轨迹）

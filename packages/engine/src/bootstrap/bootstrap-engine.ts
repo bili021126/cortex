@@ -30,6 +30,7 @@ import { DecisionGateBridge } from "../execution/decision-gate-bridge.js";
 import { resilienceFactory } from "../execution/resilience-integration.js";
 import { NotificationRuntime } from "../planning/notification-runtime.js";
 import { ZeroTokenValidator } from "../execution/zero-token-validator.js";
+import { ManifoldGate } from "@cortex/scheduler";
 import { NotificationPipe, NotificationPersistence } from "@cortex/notification";
 import type { IModelRouter, PipelineObserver } from "@cortex/scheduler";
 // 集中注册：触发全部插件注册至 PluginLoader
@@ -629,6 +630,9 @@ export async function bootstrapEngine(
       } catch (err) { logger.error("shutdownTelemetry failed", {}, err instanceof Error ? err : undefined); }
       // 最后卸载 ConsoleBridge，恢复原始 console
       uninstallConsoleBridge();
+      // R13-harness：ManifoldGate 静态门控清理（此前 reset 零调用——rebootstrap 继承幽灵槽位——
+      // eval 用例间污染 + 生产重启泄漏。reset 清 waiters/定时器/静态 Map）
+      try { ManifoldGate.reset(); } catch { /* reset 失败不阻断 */ }
     },
   };
 }

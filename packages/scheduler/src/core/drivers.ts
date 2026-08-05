@@ -233,6 +233,8 @@ export class TopologicalLayeredDriver implements ILoopDriver {
               const raceTimeout = new Promise<NodeResult>((resolve) => {
                 raceTid = setTimeout(() => {
                   try { board.failNode(nodeId); } catch { /* 节点已失败 */ }
+                  // R13-harness：race 超时补发 NodeFailed（此前超时路径不 emit——哨兵盲视——eval 活性用例 timeout-fires 的断言依据）
+                  try { observer.emit({ type: PipelineEventType.NodeFailed, priority: PipelinePriority.CRITICAL, payload: { nodeId, error: `dispatch timeout after ${effectiveDispatchTimeout}ms` }, timestamp: Date.now(), notificationType: "WARNING" }); } catch { /* emit 失败不阻断 */ }
                   resolve({ nodeId, success: false, error: `dispatch timeout after ${effectiveDispatchTimeout}ms` });
                 }, effectiveDispatchTimeout);
               });
