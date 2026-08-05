@@ -35,6 +35,8 @@ export interface ITaskBoard {
   getClaimRetries(nodeId: string): number;
   incrementClaimRetry(nodeId: string): number;
   resetClaimRetries(nodeId: string): void;
+  /** R13-B4：注入 AgentPool 引用（lease 续期判定交叉验证原 agent 是否仍活跃） */
+  setPool(pool: ISchedulerAgentPool): void;
   /** 清空所有节点（新 plan 执行前调用，防止旧任务残留） */
   clear(): void;
 }

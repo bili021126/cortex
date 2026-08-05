@@ -145,7 +145,11 @@ export class AgentPool implements IAgentPool {
   hasAwake(agentType: AgentType): boolean {
     const instances = this.active.get(agentType);
     if (!instances) return false;
-    return [...instances].some((id) => this.statuses.get(id) === AgentStatus.Awake);
+    // R13-B4：hasAwake 认 Awake 或 Active（执行中实例是 Active——只认 Awake 会把在跑的慢任务判死）
+    return [...instances].some((id) => {
+      const st = this.statuses.get(id);
+      return st === AgentStatus.Awake || st === AgentStatus.Active;
+    });
   }
 
   /** 回收 Agent 实例 */

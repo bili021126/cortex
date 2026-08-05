@@ -104,6 +104,8 @@ export class Scheduler implements IScheduler {
     schedulerConfig?: CompositeSchedulerConfig,
   ) {
     this.config = resolveConfig(engineConfig);
+    // R13-B4：setPool 接线（此前零调用——_pool 恒 undefined——lease 续期判定恒 false，慢任务被误回收）
+    board.setPool(this.pool);
     this.replanManager = new ReplanManager(board, observer, metaAgent ? new MetaAgentReplanAdapter(metaAgent) : undefined, this.config);
     this.strategy = schedulerConfig?.strategy ?? new TagMatchingStrategy();
     this.loopDriver = schedulerConfig?.loopDriver ?? new TopologicalLayeredDriver();
