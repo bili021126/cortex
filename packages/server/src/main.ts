@@ -8,11 +8,32 @@
  */
 
 import { CortexDaemon } from "./daemon.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 const VERSION = "0.1.0";
 const projectRoot = process.env["CORTEX_PROJECT_ROOT"] ?? process.cwd();
 const port = Number(process.env["CORTEX_DAEMON_PORT"]) || 3210;
 const host = process.env["CORTEX_DAEMON_HOST"] ?? "127.0.0.1";
+
+// 启动前加载 .env（与 CLI 的 loadEnv 同模式——否则 llms 映射为空无法创建 Agent）
+(function loadEnv(root: string): void {
+  const envPath = path.join(root, ".env");
+  if (!fs.existsSync(envPath)) return;
+  const content = fs.readFileSync(envPath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let value = trimmed.slice(eqIdx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = value;
+  }
+})(projectRoot);
 
 const daemon = new CortexDaemon({
   projectRoot,
