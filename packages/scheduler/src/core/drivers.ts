@@ -654,7 +654,9 @@ const DEFAULT_WAVE_DEFINITIONS: WaveDefinition[] = [
  * @param waveDefinitions 可选自定义波浪定义，不传则使用默认 4 波分组。
  *   支持从 agents 配置域或外部配置读取后注入。
  */
-export class WaveDriver implements ILoopDriver {
+export // R13-WaveDriver 标注：无节点级超时 race（与 TopologicalLayeredDriver 的 B1 race 不一致）——
+// 若启用 WaveDriver 需补 race（dispatch hang 时 allSettled 永久等待）——当前默认 TopologicalLayeredDriver 不受影响
+class WaveDriver implements ILoopDriver {
   readonly name = "wave";
 
   private readonly _waveDefs: WaveDefinition[];
