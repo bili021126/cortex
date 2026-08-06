@@ -40,6 +40,8 @@ export interface GoldenCase {
     text?: string;
     /** 执行前注入的 process.env（超时用例前置——如 CORTEX_NODE_DISPATCH_TIMEOUT_MS） */
     setupEnv?: Record<string, string>;
+    /** gate-blocks：bootstrap 后替换 gate 的 bridge 为桩（confirm 调用记录为轨迹） */
+    stubConfirm?: boolean;
   };
   /** 期望断言集合 */
   expect: LivenessAssert[];

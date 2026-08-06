@@ -54,6 +54,11 @@ export class ConfirmGatePlugin implements EnginePlugin {
   getCliAdapter(): CLIAdapter {
     return this.cliAdapter;
   }
+
+  // R13-harness：eval 桩注入（gate-blocks 用例——替换 bridge 为桩记录 confirm 调用）
+  setBridgeOverride(bridge: { confirm: (req: never) => Promise<never> }): void {
+    this.instance.setBridge(bridge as never);
+  }
 }
 
 import type { TrustModelPlugin } from "./trust-model.plugin.js";

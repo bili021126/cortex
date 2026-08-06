@@ -93,10 +93,23 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
       process.env[k] = v;
     }
 
+    // gate-blocks 桩（层 2）：stub 提升到 bootstrap 前——经 options.platformBridge 注入
+    // 归因：waitFor 的 !process.stdin.isTTY 分支（eval 管道进程非 TTY）→ L2/L3 自动拒绝——bridge 不被调
+    // 修复：stubConfirm 时模拟 TTY——走 bridge 分支
+    if (golden.input.stubConfirm) {
+      (process.stdin as { isTTY?: boolean }).isTTY = true;
+    }
+    const stubBridge = golden.input.stubConfirm ? {
+      confirm: async (req: { id?: string; toolName?: string }) => {
+        events.push({ type: "eval.confirm_called", priority: PipelinePriority.HIGH, payload: { toolName: req.toolName, id: req.id } } as never);
+        return { approved: false, reason: "eval-stub-reject", id: req.id ?? "eval" };
+      },
+    } : undefined;
     boot = await bootstrapEngine(tmpDir, {
       llms: new Map([["default", mockLlm() as never]]),
       toolkit: new Toolkit(),
       dbPath: path.join(tmpDir, "eval.db"),
+      platformBridge: stubBridge as never,
       // R13-审查：timeout 用例注入小值（race = Math.max(env, reactLoop)——env 覆写会被吃掉）
       engineConfig: { reactLoopTimeoutMs: Number(process.env["CORTEX_EVAL_REACT_LOOP_MS"] ?? 300_000) } as never,
     });
@@ -105,6 +118,7 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
     boot.observer.on(PipelinePriority.HIGH, collect);
     boot.observer.on(PipelinePriority.NORMAL, collect);
     boot.observer.on(PipelinePriority.CRITICAL, collect);
+
 
     const exec = async () => {
       if (golden.input.type === "emit" && golden.input.emit) {

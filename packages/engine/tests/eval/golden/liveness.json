@@ -71,4 +71,19 @@
     "timeoutMs": 10000,
     "note": "决策链活性——emit 刺激模式消费（审查的 v2 待办）"
   }
+,  {
+    "id": "gate-blocks",
+    "category": "liveness",
+    "input": {
+      "type": "task",
+      "node": { "type": "code", "tags": ["implementation"], "payload": "eval gate test" },
+      "setupEnv": { "CORTEX_EVAL_LLM_MODE": "tool_call" },
+      "stubConfirm": true
+    },
+    "expect": [
+      { "verb": "event-seen", "eventType": "eval.confirm_called", "note": "L2 工具未批准时 ConfirmGate 的 confirm 必须被调（桩 bridge 捕获——R12-D1 决策链活性的机器证明）" }
+    ],
+    "timeoutMs": 15000,
+    "note": "gate-blocks 活性——桩 bridge 注入（审查的 v2 打法）"
+  }
 ]

@@ -137,6 +137,7 @@ function setupAlertEngine(auditTrail: AuditTrail, observer: PipelineObserver): N
 export interface BootstrapEngineOptions {
   llms: Map<string, LlmAdapter>;
   toolkit: Toolkit;
+  platformBridge?: { confirm: (req: never) => Promise<never> };
   memory?: IMemoryStore;
   dbPath?: string;
   engineConfig?: EngineConfig;
@@ -254,6 +255,9 @@ export async function bootstrapEngine(
   const pool = container.get<AgentPoolPlugin>("agentPool").getInstance();
   const gate = container.get<ConfirmGatePlugin>("confirmGate").getInstance();
   const cliAdapter = container.get<ConfirmGatePlugin>("confirmGate").getCliAdapter();
+  if (options.platformBridge) {
+    container.get<ConfirmGatePlugin>("confirmGate").setBridgeOverride(options.platformBridge as never);
+  }
   // 信任模型可选注入——不在插件清单中时静默跳过
   if (container.has("trustModel")) {
     const trustModel = container.get<TrustModelPlugin>("trustModel").getInstance();
