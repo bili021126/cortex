@@ -109,6 +109,13 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
     const exec = async () => {
       if (golden.input.type === "emit" && golden.input.emit) {
         // 刺激注入（合法 eval 手法——decision-chain 用）
+        // 归因修复：golden 的 priority 是字符串（可读）——PipelinePriority 是数字枚举（HIGH=1）——
+        // 不转换则 handler 分发按数字 key 查不到——collect 不被调——事件 0 次
+        const p = golden.input.emit as { priority?: unknown; type?: unknown };
+        const prioMap: Record<string, number> = { CRITICAL: 0, HIGH: 1, NORMAL: 2 };
+        if (typeof p.priority === "string" && p.priority in prioMap) {
+          (p as { priority?: number }).priority = prioMap[p.priority];
+        }
         boot!.observer.emit(golden.input.emit as EmittableEvent);
         return null;
       }
