@@ -49,6 +49,7 @@ function mockLlm(): Record<string, unknown> {
   const embedText = async () => new Array(384).fill(0.01);
   return {
     chat,
+    // 自审：streamChat 方法未被 chat-loop 消费（其内部调 chatStream）——保留兼容 mock 接口
     streamChat: async () => ({ content: "ok" }),
     // 归因：streamChat 内部调 llm.chatStream + 读 usage（undefined 报 length）
     chatStream: async function* () {
