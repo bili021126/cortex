@@ -58,4 +58,17 @@
     "timeoutMs": 15000,
     "note": "调度循环活性——scheduler.done 必须出现"
   }
+,  {
+    "id": "decision-chain-alive",
+    "category": "liveness",
+    "input": {
+      "type": "emit",
+      "emit": { "type": "governance.amendment_proposed", "priority": "HIGH", "payload": { "severity": "DECISION_REQUIRED", "proposalId": "eval-d1" } }
+    },
+    "expect": [
+      { "verb": "event-seen", "eventType": "governance.amendment_proposed", "payloadSubstring": "DECISION_REQUIRED", "note": "D1 决策链活性：emit 刺激经 observer 通路——DECISION_REQUIRED 载荷到达（治理呈报链的机器证明）" }
+    ],
+    "timeoutMs": 10000,
+    "note": "决策链活性——emit 刺激模式消费（审查的 v2 待办）"
+  }
 ]
