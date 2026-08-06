@@ -95,14 +95,16 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
 
     // gate-blocks 桩（层 2）：stub 提升到 bootstrap 前——经 options.platformBridge 注入
     // 归因：waitFor 的 !process.stdin.isTTY 分支（eval 管道进程非 TTY）→ L2/L3 自动拒绝——bridge 不被调
-    // 修复：stubConfirm 时模拟 TTY——走 bridge 分支
+    // 修复：stubConfirm 时模拟 TTY——走 bridge 分支（自审：原值备份——finally 还原——防后续用例走真实 CLIAdapter 读 stdin 挂起）
+    const ttyBackup = (process.stdin as { isTTY?: boolean }).isTTY;
     if (golden.input.stubConfirm) {
       (process.stdin as { isTTY?: boolean }).isTTY = true;
     }
     const stubBridge = golden.input.stubConfirm ? {
       confirm: async (req: { id?: string; toolName?: string }) => {
         events.push({ type: "eval.confirm_called", priority: PipelinePriority.HIGH, payload: { toolName: req.toolName, id: req.id } } as never);
-        return { approved: false, reason: "eval-stub-reject", id: req.id ?? "eval" };
+        // 自审：返回值对齐 ConfirmationResponse（requestId/approved）
+        return { requestId: req.id ?? "eval", approved: false, reason: "eval-stub-reject" };
       },
     } : undefined;
     boot = await bootstrapEngine(tmpDir, {
@@ -181,6 +183,8 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
     };
   } finally {
     if (timeoutTimer) clearTimeout(timeoutTimer);
+    // 自审：TTY 还原（备份值）——防副作用泄漏到后续用例
+    (process.stdin as { isTTY?: boolean }).isTTY = ttyBackup;
     try { await boot?.shutdown?.(); } catch { /* shutdown 失败不阻断 */ }
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* 清理失败不阻断 */ }
     for (const [k, v] of envBackup) {
