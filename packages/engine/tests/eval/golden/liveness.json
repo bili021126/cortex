@@ -116,10 +116,10 @@
       }
     },
     "expect": [
-      { "verb": "event-seen", "eventType": "eval.memory_hit", "payloadSubstring": "翁法罗斯之心", "note": "BEAM 方向：记忆更新后新值可检索（持续学习活性）" }
+      { "verb": "event-seen", "eventType": "eval.memory_hit", "payloadSubstring": "翁法罗斯之心", "note": "BEAM 方向：新内容写入后可检索（深度自审修正：writePending 去重只挡完全相同内容——v1/v2 不同内容并存是追加不是替换——断言证明新值可检索）" }
     ],
     "timeoutMs": 10000,
-    "note": "层 3 记忆评测——持续学习（更新语义）"
+    "note": "层 3 记忆评测——持续学习（深度自审：追加语义——非替换）"
   }
 ,  {
     "id": "chat-alive",
