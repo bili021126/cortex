@@ -86,4 +86,39 @@
     "timeoutMs": 15000,
     "note": "gate-blocks 活性——桩 bridge 注入（审查的 v2 打法）"
   }
+,  {
+    "id": "persona-consistency",
+    "category": "liveness",
+    "input": {
+      "type": "memory",
+      "memory": {
+        "writes": [{ "kind": "persona", "summary": "昔涟：爱开拓者，无论哪一个形态" }],
+        "query": { "kind": "persona", "limit": 5 }
+      }
+    },
+    "expect": [
+      { "verb": "event-seen", "eventType": "eval.memory_hit", "payloadSubstring": "爱开拓者", "note": "PersonaMem 方向：人格记忆写入后可检索（昔涟人格一致性的机器证明）" }
+    ],
+    "timeoutMs": 10000,
+    "note": "层 3 记忆评测——人格一致性"
+  },
+  {
+    "id": "memory-update",
+    "category": "liveness",
+    "input": {
+      "type": "memory",
+      "memory": {
+        "writes": [
+          { "kind": "persona", "summary": "昔涟版本 v1：头为心" },
+          { "kind": "persona", "summary": "昔涟版本 v2：翁法罗斯之心" }
+        ],
+        "query": { "kind": "persona", "limit": 5 }
+      }
+    },
+    "expect": [
+      { "verb": "event-seen", "eventType": "eval.memory_hit", "payloadSubstring": "翁法罗斯之心", "note": "BEAM 方向：记忆更新后新值可检索（持续学习活性）" }
+    ],
+    "timeoutMs": 10000,
+    "note": "层 3 记忆评测——持续学习（更新语义）"
+  }
 ]

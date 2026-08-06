@@ -33,7 +33,7 @@ export interface GoldenCase {
   category: "liveness";
   /** 输入：执行什么（v1 支持 task 节点注入 / chat 输入） */
   input: {
-    type: "task" | "chat";
+    type: "task" | "chat" | "memory";
     /** task：注入调度器的节点（payload/tags/type） */
     node?: { type: string; tags: string[]; payload: string };
     /** chat：对话输入 */
@@ -42,6 +42,11 @@ export interface GoldenCase {
     setupEnv?: Record<string, string>;
     /** gate-blocks：bootstrap 后替换 gate 的 bridge 为桩（confirm 调用记录为轨迹） */
     stubConfirm?: boolean;
+    /** 层 3 记忆评测：写入序列 + 检索查询（结果经 eval.memory_hit 事件入轨迹） */
+    memory?: {
+      writes: Array<{ kind: string; summary: string; weight?: number }>;
+      query: { metadataFilter: Record<string, string>; limit?: number };
+    };
   };
   /** 期望断言集合 */
   expect: LivenessAssert[];

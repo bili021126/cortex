@@ -86,6 +86,8 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
   let boot: Awaited<ReturnType<typeof bootstrapEngine>> | undefined;
   // R13-审查：超时兜底 timer 句柄——finally 里 clearTimeout（防 unhandledRejection）
   let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  // 自审：TTY 原值备份（try 块外声明——块作用域问题：try 内 const 在 finally 不可见）
+  const ttyBackup = (process.stdin as { isTTY?: boolean }).isTTY;
 
   try {
     for (const [k, v] of Object.entries(golden.input.setupEnv ?? {})) {
@@ -96,7 +98,6 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
     // gate-blocks 桩（层 2）：stub 提升到 bootstrap 前——经 options.platformBridge 注入
     // 归因：waitFor 的 !process.stdin.isTTY 分支（eval 管道进程非 TTY）→ L2/L3 自动拒绝——bridge 不被调
     // 修复：stubConfirm 时模拟 TTY——走 bridge 分支（自审：原值备份——finally 还原——防后续用例走真实 CLIAdapter 读 stdin 挂起）
-    const ttyBackup = (process.stdin as { isTTY?: boolean }).isTTY;
     if (golden.input.stubConfirm) {
       (process.stdin as { isTTY?: boolean }).isTTY = true;
     }
@@ -133,6 +134,24 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
           (p as { priority?: number }).priority = prioMap[p.priority];
         }
         boot!.observer.emit(golden.input.emit as EmittableEvent);
+        return null;
+      }
+      if (golden.input.type === "memory" && golden.input.memory) {
+        // 层 3 记忆评测（PersonaMem/BEAM 方向）：写入 → 检索 → 命中经事件入轨迹
+        const mem = boot!.memory as unknown as {
+          writePending: (input: { source: { agentType: string }; kind: string; summary: string; semantic_gist?: string; content_blob?: Record<string, unknown>; content_hash?: string; weight?: number }) => string;
+          commitMemory: (memoryId: string) => boolean;
+          read: (q: { kind?: string; metadataFilter?: Record<string, string>; limit?: number }) => Promise<Array<{ summary?: string; kind?: string }>>;
+        };
+        for (const w of golden.input.memory.writes) {
+          // 归因链：ConsistencyLayer 校验（content_blob 必须对象 + source.agentType）→ Pending 态需 commitMemory 才可读
+          const id = mem.writePending({ source: { agentType: "eval" }, kind: w.kind, summary: w.summary, semantic_gist: w.summary.slice(0, 200), content_blob: { text: w.summary }, weight: w.weight ?? 5 });
+          mem.commitMemory(id);
+        }
+        const hits = await mem.read(golden.input.memory.query);
+        for (const h of hits) {
+          events.push({ type: "eval.memory_hit", priority: PipelinePriority.HIGH, payload: { summary: h.summary, kind: h.kind } } as never);
+        }
         return null;
       }
       if (golden.input.type === "task" && golden.input.node) {
