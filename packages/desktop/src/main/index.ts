@@ -123,24 +123,22 @@ void app.whenReady().then(async () => {
     }
   });
 
-  // ── 外部截图触发（harness 视觉闭环：轮询请求文件——外部写文件即触发截图）──
-  const shotRequestPath = path.join(app.getPath("userData"), "desktop-shot-request");
+  // ── 定时自动截图（harness 视觉闭环：每 5 秒截一张窗口渲染到固定路径——遮挡免疫）──
+  const shotOutPath = path.join(app.getPath("userData"), "desktop-shot.png");
+  console.error(`[main] screenshot timer armed → ${shotOutPath}`);
   const shotTimer = setInterval(() => {
     const fs = require("fs") as typeof import("fs");
-    if (!fs.existsSync(shotRequestPath)) return;
-    try {
-      fs.rmSync(shotRequestPath);
-      const win = mainWindow ?? chatWindow;
-      if (!win || win.isDestroyed()) return;
-      void win.capturePage().then((image) => {
-        const outPath = path.join(app.getPath("userData"), "desktop-shot.png");
-        fs.writeFileSync(outPath, image.toPNG());
-        console.error(`[main] screenshot captured → ${outPath}`);
-      });
-    } catch (e) {
-      console.error("[main] screenshot poll error:", e);
+    const win = mainWindow ?? chatWindow;
+    if (!win || win.isDestroyed()) {
+      console.error(`[main] screenshot skip——窗口不可用 main=${!!mainWindow} chat=${!!chatWindow}`);
+      return;
     }
-  }, 500);
+    void win.capturePage().then((image) => {
+      fs.writeFileSync(shotOutPath, image.toPNG());
+    }).catch((e) => {
+      console.error("[main] screenshot error:", e);
+    });
+  }, 5000);
   if (shotTimer.unref) shotTimer.unref();
   app.on("before-quit", () => clearInterval(shotTimer));
   ipcMain.handle("window:get-cursor-position", () => {
