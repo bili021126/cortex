@@ -38,6 +38,16 @@ function resolveAsset(assetPath: string): string {
   return new URL(clean, document.baseURI).href;
 }
 
+// ── 定时 canvas 截图（harness 视觉闭环：renderer 自渲染 toDataURL → IPC 落盘——绕开 capturePage 透明窗口挂起）──
+setInterval(() => {
+  try {
+    const shotCanvas = document.getElementById("live2d-canvas") as HTMLCanvasElement | null;
+    if (!shotCanvas) return;
+    const dataUrl = shotCanvas.toDataURL("image/png");
+    window.cyrene?.saveShot?.(dataUrl);
+  } catch { /* 截图失败不阻断 */ }
+}, 5000);
+
 let focus: MouseFocusController | null = null;
 let clickThrough: ClickThroughController | null = null;
 

@@ -141,6 +141,19 @@ void app.whenReady().then(async () => {
   }, 5000);
   if (shotTimer.unref) shotTimer.unref();
   app.on("before-quit", () => clearInterval(shotTimer));
+  // ── 渲染进程 canvas 截图落盘（绕开透明窗口 capturePage 挂起——renderer 自渲染 toDataURL）──
+  ipcMain.handle("window:save-shot", async (_e, dataUrl: string) => {
+    try {
+      const b64 = dataUrl.split(",")[1] ?? "";
+      const buf = Buffer.from(b64, "base64");
+      const outPath = path.join(app.getPath("userData"), "desktop-shot.png");
+      const fs = await import("fs");
+      fs.writeFileSync(outPath, buf);
+      return { ok: true, data: outPath };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
   ipcMain.handle("window:get-cursor-position", () => {
     const pt = screen.getCursorScreenPoint();
     return { x: pt.x, y: pt.y };

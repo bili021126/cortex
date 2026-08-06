@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld("cyrene", {
   moveTo: (x: number, y: number) => ipcRenderer.send("window:move-to", x, y),
   setDragging: (v: boolean) => ipcRenderer.send("window:set-dragging", v),
   captureFrame: () => ipcRenderer.invoke("window:capture-frame"),
+  saveShot: (dataUrl: string) => ipcRenderer.invoke("window:save-shot", dataUrl),
   getCursorPosition: () => ipcRenderer.invoke("window:get-cursor-position"),
   onPetZoom: (cb: (zoom: number) => void) => {
     const listener = (_e: unknown, zoom: number) => cb(zoom);
