@@ -50,6 +50,10 @@ function mockLlm(): Record<string, unknown> {
   return {
     chat,
     streamChat: async () => ({ content: "ok" }),
+    // 归因：streamChat 内部调 llm.chatStream + 读 usage（undefined 报 length）
+    chatStream: async function* () {
+      yield { content: "ok", reasoning_content: "", tool_calls: [], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } };
+    },
     embedText,
     embedBatch: async (t: string[]) => t.map(() => new Array(384).fill(0.01)),
   };
@@ -136,8 +140,21 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
         boot!.observer.emit(golden.input.emit as EmittableEvent);
         return null;
       }
-      if (golden.input.type === "memory" && golden.input.memory) {
-        // 层 3 记忆评测（PersonaMem/BEAM 方向）：写入 → 检索 → 命中经事件入轨迹
+      if (golden.input.type === "chat" && golden.input.text) {
+        // 层 4 chat 输入模式：streamChat 走通（mock LLM fast 模式）——结果非空则活性成立
+        try {
+          const { streamChat } = await import("../../src/execution/chat-loop.js");
+          const chatToolkit = new Toolkit();
+          // 归因：ChatLoopOptions 是 messages（必填）不是 input——messages undefined 则 77 行 .length 报错
+          const res = await streamChat({ llm: mockLlm() as never, toolkit: chatToolkit, agentType: "code", messages: [{ role: "user", content: golden.input.text }] as never, onChunk: () => {} } as never);
+          events.push({ type: "eval.chat_ok", priority: PipelinePriority.HIGH, payload: { outputLen: String(res).length } } as never);
+        } catch (e) {
+          console.error("[eval-chat-stack]", e instanceof Error ? e.stack?.split("\n").slice(0, 8).join(" | ") : String(e));
+          throw e;
+        }
+        return null;
+      }
+      if (golden.input.type === "memory" && golden.input.memory) {        // 层 3 记忆评测（PersonaMem/BEAM 方向）：写入 → 检索 → 命中经事件入轨迹
         const mem = boot!.memory as unknown as {
           writePending: (input: { source: { agentType: string }; kind: string; summary: string; semantic_gist?: string; content_blob?: Record<string, unknown>; content_hash?: string; weight?: number }) => string;
           commitMemory: (memoryId: string) => boolean;

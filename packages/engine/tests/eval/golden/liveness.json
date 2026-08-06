@@ -121,4 +121,17 @@
     "timeoutMs": 10000,
     "note": "层 3 记忆评测——持续学习（更新语义）"
   }
+,  {
+    "id": "chat-alive",
+    "category": "liveness",
+    "input": {
+      "type": "chat",
+      "text": "你好昔涟"
+    },
+    "expect": [
+      { "verb": "event-seen", "eventType": "eval.chat_ok", "note": "chat 输入模式活性：streamChat 走通（mock LLM——结果非空）" }
+    ],
+    "timeoutMs": 10000,
+    "note": "层 4 chat 输入模式"
+  }
 ]
