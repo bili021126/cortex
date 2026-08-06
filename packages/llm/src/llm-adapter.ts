@@ -444,7 +444,7 @@ export class LlmAdapter {
       const degradeTarget = this.config.capabilities?.degradesTo;
       if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
         void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]);
-        return await this.chat(degradeTarget, messages, tools, reasoningEffort, toolChoice, true, maxTokensOverride);
+        return await this.chat(degradeTarget, messages, tools, reasoningEffort, toolChoice, true, maxTokensOverride, signal);
       }
       throw e;
     }
