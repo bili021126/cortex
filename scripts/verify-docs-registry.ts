@@ -9,8 +9,8 @@
  *   npx tsx scripts/verify-docs-registry.ts
  */
 
-import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
+import { resolve, join, relative } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 
@@ -96,9 +96,6 @@ function main(): void {
 
   const registeredPaths = new Set(registry.docRegistry.map(e => e.path.replace(/\\/g, "/")));
   registeredPaths.add(registry.constitutionPath.replace(/\\/g, "/"));
-
-  const { readdirSync, statSync } = await import("node:fs");
-  const { join, relative } = await import("node:path");
 
   function walkDir(dir: string, depth: number = 0): string[] {
     if (depth > 4) return [];  // 防止无限递归

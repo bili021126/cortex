@@ -30,7 +30,7 @@
  *   // @ci: benchmark    性能基准，CI 跳过（结果非断言，不做门禁）
  */
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, relative, resolve, dirname } from "node:path";
 

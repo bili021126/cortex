@@ -1,0 +1,14 @@
+{
+  "constitutionPath": "docs/constitution/constitution.md",
+  "docRegistry": [
+    { "path": "docs/constitution/constitution.md", "type": "constitution", "version": "1.0", "canonical": true },
+    { "path": "docs/analysis/harness-deep-dive-2026-08-05.md", "type": "design", "version": "1.0", "canonical": false },
+    { "path": "docs/analysis/ux-deep-dive-2026-08-05.md", "type": "design", "version": "1.0", "canonical": false },
+    { "path": "docs/analysis/audit-full-2026-08-05.md", "type": "audit", "version": "1.0", "canonical": false },
+    { "path": "DESIGN.md", "type": "architecture", "version": "1.0", "canonical": false },
+    { "path": "README.md", "type": "entry", "version": "1.0", "canonical": false },
+    { "path": "USAGE.md", "type": "entry", "version": "1.0", "canonical": false },
+    { "path": "PACKAGE_POSITIONING.md", "type": "architecture", "version": "1.0", "canonical": false },
+    { "path": "packages/engine/tests/eval/README.md", "type": "spec", "version": "1.0", "canonical": false }
+  ]
+}
