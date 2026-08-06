@@ -290,6 +290,31 @@ DeepEval 的 EDD 框架（3 步）：
 - **机制活性优先**：主流工具重输出质量（LLM-judge），Cortex v1 重机制活性（deterministic）——v2 再加质量层
 - **零外部依赖**：eval-gate 纯 node 实现（无平台依赖）——Promptfoo 等的托管/云形态不适合单机项目
 
+--
+
+## 8. 记忆系统评测广度调研（2026-08-06 补充）
+
+### 8.1 记忆评测基准（2026 主流）
+
+| 基准 | 测什么 | 与 Cortex 记忆系统的对应 |
+|---|---|---|
+| **MemoryAgentBench** | 四能力：事实召回/证据/事件/长上下文 | cyrene 的 L0-L2 + evidence 链（R11-23 修复的引用完整性） |
+| **LoCoMo** | 长对话记忆（跨会话） | 会话记忆（sessionId 关联） |
+| **LongMemEval** | 长上下文回忆 | RAG 检索（hybrid） |
+| **PersonaMem** | 人格一致性（记忆中的 persona） | **昔涟人格记忆**（persona 锚定） |
+| **BEAM / LifeBench** | 持续学习（记忆更新） | aging/湮灭（C1 修复后的生命周期） |
+
+### 8.2 对 Cortex 记忆评测的启示
+
+1. **人格一致性可测**（PersonaMem）：golden 可加"昔涟人格一致性"用例（跨会话检索后断言 persona 关键事实仍在）——但 v1 的 LLM-judge 未建——v2 用 deterministic 近似（记忆域过滤 + 关键字段存在）
+2. **持续学习可测**（BEAM）：golden 可加"记忆更新"用例（写入→更新→断言旧值被替换）——deterministic 可做
+3. **四能力映射**（MemoryAgentBench）：Cortex 的 golden 分类可按"事实/证据/事件/上下文"扩展（当前 liveness 只有活性类）
+
+### 8.3 记忆评测的差异化注意
+
+- 记忆评测**依赖状态**（同输入不同记忆历史结果不同）——golden 需要**每用例独立记忆**（eval-runner 的 mkdtemp 隔离天然满足——每个用例全新记忆库）
+- 与 harness 活性层的互补：活性层验"机制跑没跑"，记忆评测验"记忆对不对"——v2 的 golden 分类扩展方向
+
 ---
 
-*广度补充完成——工具生态对齐确认 Cortex 方向正确（CI 集成/配置驱动/轨迹优先），byDesign 台账是差异化。*
+*记忆评测广度补充完成——PersonaMem/持续学习可测，eval-runner 的 mkdtemp 隔离天然适配记忆评测。*
