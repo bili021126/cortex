@@ -108,7 +108,41 @@ void app.whenReady().then(async () => {
   ipcMain.on("window:minimize", () => mainWindow?.minimize());
   ipcMain.on("window:hide", () => mainWindow?.hide());
   ipcMain.on("app:quit", () => app.quit());
-  ipcMain.handle("window:capture-frame", () => null);
+  ipcMain.handle("window:capture-frame", async (event) => {
+    // harness 视觉闭环：窗口级截图导出（capturePage 捕获窗口自身渲染——遮挡免疫）
+    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    if (!win) return { ok: false, error: "窗口不可用" };
+    try {
+      const image = await win.capturePage();
+      const outPath = path.join(app.getPath("userData"), "desktop-shot.png");
+      const fs = await import("fs");
+      fs.writeFileSync(outPath, image.toPNG());
+      return { ok: true, data: outPath };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  // ── 外部截图触发（harness 视觉闭环：轮询请求文件——外部写文件即触发截图）──
+  const shotRequestPath = path.join(app.getPath("userData"), "desktop-shot-request");
+  const shotTimer = setInterval(() => {
+    const fs = require("fs") as typeof import("fs");
+    if (!fs.existsSync(shotRequestPath)) return;
+    try {
+      fs.rmSync(shotRequestPath);
+      const win = mainWindow ?? chatWindow;
+      if (!win || win.isDestroyed()) return;
+      void win.capturePage().then((image) => {
+        const outPath = path.join(app.getPath("userData"), "desktop-shot.png");
+        fs.writeFileSync(outPath, image.toPNG());
+        console.error(`[main] screenshot captured → ${outPath}`);
+      });
+    } catch (e) {
+      console.error("[main] screenshot poll error:", e);
+    }
+  }, 500);
+  if (shotTimer.unref) shotTimer.unref();
+  app.on("before-quit", () => clearInterval(shotTimer));
   ipcMain.handle("window:get-cursor-position", () => {
     const pt = screen.getCursorScreenPoint();
     return { x: pt.x, y: pt.y };

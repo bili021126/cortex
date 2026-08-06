@@ -5,7 +5,7 @@
  * 渲染进程通过 preload 暴露的 API 调用这些 handler。
  */
 import type { IpcMain } from "electron";
-import { app } from "electron";
+import { app, BrowserWindow } from "electron";
 import type { CortexBridge } from "./cortex-bridge.js";
 import * as path from "path";
 import * as fs from "fs";
@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   LIVE2D_EXPRESSION: "live2d:expression",
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
+  SCREENSHOT: "desktop:screenshot",
 } as const;
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
@@ -66,6 +67,20 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
   ipcMain.handle(IPC_CHANNELS.LIVE2D_EXPRESSION, async (_event, expression: string) => {
     // 透传给渲染进程的 Live2D 控制器
     return { ok: true, expression };
+  });
+
+  // desktop:screenshot — 窗口级截图导出（harness 视觉闭环：capturePage 捕获窗口自身渲染——遮挡免疫）
+  ipcMain.handle(IPC_CHANNELS.SCREENSHOT, async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win) return { ok: false, error: "窗口不可用" };
+    try {
+      const image = await win.capturePage();
+      const outPath = path.join(app.getPath("userData"), "desktop-shot.png");
+      fs.writeFileSync(outPath, image.toPNG());
+      return { ok: true, data: outPath };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
   });
 
   // settings:get — 读取设置
