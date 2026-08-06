@@ -26,6 +26,8 @@ export interface ReActContext {
   reactLoopTimeoutMs: number;
   memory?: MemoryStore;
   safeReporter?: SafeErrorReporter;
+  /** 取消信号（harness 迭代①——LLM 调用可被真正中断） */
+  signal?: AbortSignal;
 }
 
 /**
@@ -157,7 +159,7 @@ export async function runReActLoop(
       // reasoning_effort 和 tool_choice 均不发送——DeepSeek Flash 不支持，Pro 需 extra_body 配套
       // FIX-02: forceWrite 仅对支持 tool_choice 的模型发送（由 capabilities.supportsToolChoice 声明）
       const shouldForce = forceWrite && (llm.capabilities?.supportsToolChoice === true);
-      const res = await resilienceFactory.execute("llm-call", async () => await llm.chat(model, messages, toolDefs, undefined, shouldForce ? forceWrite : undefined));
+      const res = await resilienceFactory.execute("llm-call", async () => await llm.chat(model, messages, toolDefs, undefined, shouldForce ? forceWrite : undefined, undefined, undefined, ctx.signal));
       const callElapsed = Date.now() - callStart;
 
       // ── 遥测：Token 消耗记录 ──

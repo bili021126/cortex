@@ -122,6 +122,8 @@ export interface ExecutionContext {
   strategy: IScheduleStrategy;
   /** 是否为测试环境（绕过确认门） */
   isTestEnv: boolean;
+  /** 取消信号（harness 迭代①——全链路 AbortSignal：race 超时可真正中断底层执行） */
+  signal?: AbortSignal;
 }
 
 /**

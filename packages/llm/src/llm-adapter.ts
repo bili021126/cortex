@@ -212,6 +212,7 @@ export class LlmAdapter {
     toolChoice?: "auto" | "required" | "none" | string,
     _degradeAttempted = false,
     maxTokensOverride?: number,
+    signal?: AbortSignal,
   ): Promise<LlmResponse> {
     if (this._mockRespond) {
       return await this._mockRespond(messages, tools);
@@ -305,7 +306,7 @@ export class LlmAdapter {
                 Authorization: `Bearer ${this.config.apiKey}`,
               },
               body: JSON.stringify(body),
-            }),
+            }, 1, signal),
           );
           status = res.status;
           reqId = res.headers.get("x-request-id") ?? res.headers.get("x-ds-request-id") ?? undefined;
