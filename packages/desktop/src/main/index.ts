@@ -208,11 +208,17 @@ void app.whenReady().then(async () => {
         return 'injected';
       })()`).then((r) => console.error(`[main] inject result: ${String(r)}`)).catch((e) => console.error(`[main] inject error: ${String(e)}`));
     };
-    // 窗口就绪后注入（did-finish-load——比定时更可靠）
-    const w = chatWindow;
-    if (w && !w.isDestroyed()) {
-      w.webContents.once("did-finish-load", () => setTimeout(tryInject, 1500));
-    }
+    // 轮询等窗口就绪（did-finish-load 可能已错过——用轮询兜底）
+    const poll = setInterval(() => {
+      const w = chatWindow;
+      if (!w || w.isDestroyed()) return;
+      try {
+        void w.webContents.executeJavaScript("!!document.getElementById('input')").then((ok) => {
+          if (ok) { clearInterval(poll); setTimeout(tryInject, 800); }
+        }).catch(() => {});
+      } catch { /* 窗口未就绪 */ }
+    }, 800);
+    setTimeout(() => clearInterval(poll), 20000);
   }, 1500);
 
   // ── 系统托盘：应用生命周期入口（桌宠 skipTaskbar，无托盘则无法退出）──
