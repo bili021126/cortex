@@ -1,3 +1,4 @@
+// @ci: contract
 /**
  * U1 错误分类契约测试——classifyChatError（timeout/fatal/network 映射）
  */
