@@ -140,7 +140,7 @@ void app.whenReady().then(async () => {
   const shotOutPath = path.join(app.getPath("userData"), "desktop-shot.png");
   console.error(`[main] screenshot timer armed → ${shotOutPath}`);
   const shotTimer = setInterval(() => {
-    const win = mainWindow ?? chatWindow;
+    const win = chatWindow ?? mainWindow;
     if (!win || win.isDestroyed()) {
       console.error(`[main] screenshot skip——窗口不可用 main=${!!mainWindow} chat=${!!chatWindow}`);
       return;
@@ -179,6 +179,23 @@ void app.whenReady().then(async () => {
 
   // ── 聊天窗口 ────────────────────────────────────
   ipcMain.on("chat:open", () => openChatWindow());
+  // U1 运行验证（临时）：自动开聊天 + 注入消息触发发送（手脚——验证完移除）
+  setTimeout(() => {
+    openChatWindow();
+    setTimeout(() => {
+      const w = chatWindow;
+      if (!w || w.isDestroyed()) return;
+      void w.webContents.executeJavaScript(`(function(){
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        const ta = document.getElementById('input');
+        if (!ta) return 'no-input';
+        setter.call(ta, '你好，昔涟');
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        document.getElementById('composer').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        return 'injected';
+      })()`);
+    }, 2000);
+  }, 1500);
 
   // ── 系统托盘：应用生命周期入口（桌宠 skipTaskbar，无托盘则无法退出）──
   tray = createTray({
