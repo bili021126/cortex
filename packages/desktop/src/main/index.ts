@@ -47,7 +47,7 @@ function openChatWindow(): void {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false // R13 归因：type:module 的 preload 是 ESM——sandbox preload 不支持 ESM（只能 require）——contextIsolation 仍在,
     },
   });
   void chatWindow.loadFile(path.join(rendererDir, "chat/index.html"));
@@ -72,7 +72,7 @@ void app.whenReady().then(async () => {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false // R13 归因：type:module 的 preload 是 ESM——sandbox preload 不支持 ESM（只能 require）——contextIsolation 仍在,
     },
   });
 
