@@ -190,36 +190,8 @@ void app.whenReady().then(async () => {
 
   // ── 聊天窗口 ────────────────────────────────────
   ipcMain.on("chat:open", () => openChatWindow());
-  // U1 运行验证（临时）：自动开聊天 + 注入消息触发发送（手脚——验证完移除）
-  setTimeout(() => {
-    openChatWindow();
-    let injected = false;
-    const tryInject = () => {
-      const w = chatWindow;
-      if (!w || w.isDestroyed() || injected) return;
-      injected = true;
-      void w.webContents.executeJavaScript(`(function(){
-        const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
-        const ta = document.getElementById('input');
-        if (!ta) return 'no-input';
-        setter.call(ta, '你好，昔涟');
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
-        document.getElementById('composer').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        return 'injected';
-      })()`).then((r) => console.error(`[main] inject result: ${String(r)}`)).catch((e) => console.error(`[main] inject error: ${String(e)}`));
-    };
-    // 轮询等窗口就绪（did-finish-load 可能已错过——用轮询兜底）
-    const poll = setInterval(() => {
-      const w = chatWindow;
-      if (!w || w.isDestroyed()) return;
-      try {
-        void w.webContents.executeJavaScript("!!document.getElementById('input')").then((ok) => {
-          if (ok) { clearInterval(poll); setTimeout(tryInject, 800); }
-        }).catch(() => {});
-      } catch { /* 窗口未就绪 */ }
-    }, 800);
-    setTimeout(() => clearInterval(poll), 20000);
-  }, 1500);
+  // 自审：注入验证临时代码已移除（U1 运行验证完成——8a8cbc30 后）
+  void (() => {});
 
   // ── 系统托盘：应用生命周期入口（桌宠 skipTaskbar，无托盘则无法退出）──
   tray = createTray({
