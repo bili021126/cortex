@@ -179,3 +179,5 @@ memory-trace.log
 review-test.txt
 *.test-output.txt
 r13-verify-*.txt
+
+.cortex-daemon.pid
