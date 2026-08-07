@@ -61,12 +61,30 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     dispatch("ack");
 
     try {
-      const res = await window.cortexDesktop.chat(text);
-      // 自审：完成经 reducer（sending --complete--> complete——不绕过转换表校验）
-      setMessages((prev) => prev.map((m) => {
-        if (m.id !== aiId) return m;
-        try { return { ...m, content: res.data ?? "", state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
-      }));
+      // U1 十态：WS 流式接线（streamChat——first chunk → streaming 态真正触发）
+      let firstChunk = true;
+      await window.cortexDesktop.streamChat(
+        text,
+        undefined,
+        (chunk) => {
+          // first-token → streaming（状态机核心态实战）
+          if (firstChunk) {
+            firstChunk = false;
+            setMessages((prev) => prev.map((m) => {
+              if (m.id !== aiId) return m;
+              try { return { ...m, state: messageReducer(m.state ?? "idle", { type: "first-token" }) }; } catch { return m; }
+            }));
+          }
+          setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: m.content + chunk } : m)));
+        },
+        (full) => {
+          // 完成经 reducer（sending/streaming --complete--> complete）
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiId) return m;
+            try { return { ...m, content: full, state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
+          }));
+        },
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const kind = localErrorKind(msg);
