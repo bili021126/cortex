@@ -43,21 +43,9 @@ export class CortexBridge {
     if (!this.initialized || !this.conn) {
       throw new Error("CortexBridge not initialized");
     }
-    // 归因：conn.http.chat 挂起（opts 无 timeoutMs）——fetch 直连 + 30s 超时（HTTP 直连验证过 200）
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000);
-    try {
-      const res = await fetch(`http://127.0.0.1:${this._port ?? 3210}/api/v1/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input, agent }),
-        signal: controller.signal,
-      });
-      const json = await res.json() as { data?: { output?: string } };
-      return json.data?.output ?? "";
-    } finally {
-      clearTimeout(timer);
-    }
+    // 归因修复：conn.http.chat 挂起根因 = 未传 timeoutMs（http-client 无默认超时——fetch 无 signal 挂起）
+    // 验证：带 timeoutMs 直连 30s 内回复成功——改回 SDK（移除 fetch 直连 hack）
+    return await this.conn.http.chat(input, { agent, timeoutMs: 30_000 });
   }
 
   /**
