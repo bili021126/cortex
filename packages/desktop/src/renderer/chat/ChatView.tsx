@@ -88,11 +88,11 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const kind = localErrorKind(msg);
-      // 自审：错误经 reducer（sending --timeout/net-error/fatal--> error_*）
+      // 自审：错误经 reducer（sending --timeout/net-error/fatal--> error_*）+ 错误消息上屏（视觉验证可读）
       const ev = kind === "timeout" ? "timeout" : kind === "network" ? "net-error" : "fatal";
       setMessages((prev) => prev.map((m) => {
         if (m.id !== aiId) return m;
-        try { return { ...m, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
+        try { return { ...m, content: msg, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
       }));
     } finally {
       inputRef.current?.focus();
