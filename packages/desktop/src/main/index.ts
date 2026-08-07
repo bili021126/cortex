@@ -193,9 +193,11 @@ void app.whenReady().then(async () => {
   // U1 运行验证（临时）：自动开聊天 + 注入消息触发发送（手脚——验证完移除）
   setTimeout(() => {
     openChatWindow();
-    setTimeout(() => {
+    let injected = false;
+    const tryInject = () => {
       const w = chatWindow;
-      if (!w || w.isDestroyed()) return;
+      if (!w || w.isDestroyed() || injected) return;
+      injected = true;
       void w.webContents.executeJavaScript(`(function(){
         const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
         const ta = document.getElementById('input');
@@ -204,8 +206,13 @@ void app.whenReady().then(async () => {
         ta.dispatchEvent(new Event('input', { bubbles: true }));
         document.getElementById('composer').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         return 'injected';
-      })()`);
-    }, 2000);
+      })()`).then((r) => console.error(`[main] inject result: ${String(r)}`)).catch((e) => console.error(`[main] inject error: ${String(e)}`));
+    };
+    // 窗口就绪后注入（did-finish-load——比定时更可靠）
+    const w = chatWindow;
+    if (w && !w.isDestroyed()) {
+      w.webContents.once("did-finish-load", () => setTimeout(tryInject, 1500));
+    }
   }, 1500);
 
   // ── 系统托盘：应用生命周期入口（桌宠 skipTaskbar，无托盘则无法退出）──
