@@ -6,6 +6,7 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./chat.css";
+import { messageReducer, type MessageState } from "./message-state-machine";
 
 type Role = "user" | "assistant";
 
@@ -15,15 +16,26 @@ interface Message {
   content: string;
   at: number;
   thinking?: boolean;
+  /** U1 状态机（assistant 消息）——驱动气泡/按钮/辅助 */
+  state?: MessageState;
+}
+
+/** 前端错误分类（与 server 的 classifyChatError 同规则——WS 未接线时的本地兜底） */
+function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
+  const t = msg.toLowerCase();
+  if (/timeout|timed out|超时/.test(t)) return "timeout";
+  if (/fetch failed|econn|enet|network|socket|连接|网络/.test(t)) return "network";
+  return "fatal";
 }
 
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [sending, setSending] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // U1：busy = 任一消息在 queued/sending/streaming（驱动输入禁用与状态提示）
+  const busy = messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming" || m.state === "regenerating");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,29 +43,38 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || sending) return;
+    if (!text || messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming")) return;
     setInput("");
-    setSending(true);
 
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text, at: Date.now() };
-    setMessages((prev) => [...prev, userMsg]);
+    const aiId = crypto.randomUUID();
+    const aiMsg: Message = { id: aiId, role: "assistant", content: "", at: Date.now(), state: "queued" };
+    setMessages((prev) => [...prev, userMsg, aiMsg]);
+
+    // U1 状态推进：queued → sending（ack 由 chat 调用隐含——非流式无 first-token 边界）
+    const dispatch = (ev: Parameters<typeof messageReducer>[1]["type"] | "complete" | "timeout" | "fatal" | "net-error" | "ack") => {
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== aiId) return m;
+        try { return { ...m, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
+      }));
+    };
+    dispatch("ack");
 
     try {
       const res = await window.cortexDesktop.chat(text);
-      const reply = res.data ?? "";
-      const aiMsg: Message = { id: crypto.randomUUID(), role: "assistant", content: reply, at: Date.now() };
-      setMessages((prev) => [...prev, aiMsg]);
+      setMessages((prev) => prev.map((m) =>
+        m.id === aiId ? { ...m, content: res.data ?? "", state: "complete" } : m,
+      ));
     } catch (e) {
-      const errMsg: Message = {
-        id: crypto.randomUUID(), role: "assistant",
-        content: `[错误] ${e instanceof Error ? e.message : String(e)}`, at: Date.now(),
-      };
-      setMessages((prev) => [...prev, errMsg]);
+      const msg = e instanceof Error ? e.message : String(e);
+      const kind = localErrorKind(msg);
+      setMessages((prev) => prev.map((m) =>
+        m.id === aiId ? { ...m, state: kind === "timeout" ? "error_timeout" : kind === "network" ? "interrupted" : "error_fatal" } : m,
+      ));
     } finally {
-      setSending(false);
       inputRef.current?.focus();
     }
-  }, [input, sending]);
+  }, [input, messages]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -91,7 +112,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 <span className="chat__name">昔涟</span>
                 <span className="chat__name-sep" aria-hidden="true">·</span>
                 <span className="chat__hint" id="chat-hint">
-                  {sending ? "思考中…" : "在线"}
+                  {busy ? "思考中…" : "在线"}
                 </span>
               </span>
             </div>
@@ -157,10 +178,10 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         <textarea ref={inputRef} id="input" rows={1} value={input}
           onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
           placeholder="说点什么…  Enter 发送 / Shift+Enter 换行"
-          autoComplete="off" spellCheck={false} disabled={sending}
+          autoComplete="off" spellCheck={false} disabled={busy}
         />
-        <button type="submit" className="chat__send" id="send" aria-label="发送" disabled={sending || !input.trim()}>
-          {sending ? "…" : "↵"}
+        <button type="submit" className="chat__send" id="send" aria-label="发送" disabled={busy || !input.trim()}>
+          {busy ? "…" : "↵"}
         </button>
       </form>
     </div>
