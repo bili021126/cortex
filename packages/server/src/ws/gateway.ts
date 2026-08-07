@@ -355,6 +355,7 @@ export class WSGateway {
 
     // Forward non-subscribe/unsubscribe commands to the onCommand callback
     if (this.onCommand) {
+      console.error(`[WSGateway] forward cmd: ${String((msg as { type?: unknown }).type ?? "?")}`);
       this.onCommand(conn.id, msg);
     }
   }
