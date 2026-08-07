@@ -87,6 +87,25 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     try { await navigator.clipboard.writeText(content); } catch { /* 剪贴板写入可能被拒，忽略 */ }
   }, []);
 
+  // U1 动作：retry（interrupted/error_timeout → queued 重发）/ regenerate（stopped/complete → regenerating）/ stop（→ stopped）
+  const resendMessage = useCallback((msg: Message) => {
+    setMessages((prev) => prev.map((m) => {
+      if (m.id !== msg.id) return m;
+      try {
+        const from = m.state ?? "idle";
+        const ev = (from === "interrupted" || from === "error_timeout" ? "retry" : "regenerate") as never;
+        return { ...m, state: messageReducer(from, { type: ev }) };
+      } catch { return m; }
+    }));
+  }, []);
+
+  const stopMessage = useCallback((msg: Message) => {
+    setMessages((prev) => prev.map((m) => {
+      if (m.id !== msg.id) return m;
+      try { return { ...m, state: messageReducer(m.state ?? "idle", { type: "stop" }) }; } catch { return m; }
+    }));
+  }, []);
+
   const speakMessage = useCallback(async (content: string, msgId: string) => {
     if (speakingMsgId === msgId) { setSpeakingMsgId(null); return; }
     setSpeakingMsgId(msgId);
@@ -162,7 +181,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                   <span className="msg__time">
                     {formatTime(msg.at)}
                     {msg.role === "assistant" && (
-                      <>{" · "}
+                      <>{` · `}
+                        {/* U1 状态动作：retry/regenerate/stop 按状态可见 */}
+                        {(msg.state === "interrupted" || msg.state === "error_timeout") && (
+                          <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重试">🔄</button>
+                        )}
+                        {(msg.state === "complete" || msg.state === "stopped") && (
+                          <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重新生成">♻️</button>
+                        )}
+                        {msg.state === "regenerating" && (
+                          <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止">⏹️</button>
+                        )}
                         <button className="msg__action-btn" onClick={() => void copyMessage(msg.content, msg.id)} title="复制">📋</button>
                         <button className="msg__action-btn" onClick={() => void speakMessage(msg.content, msg.id)} title="朗读">
                           {speakingMsgId === msg.id ? "🔊" : "🔈"}
