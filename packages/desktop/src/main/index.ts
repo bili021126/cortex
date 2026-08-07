@@ -76,6 +76,18 @@ void app.whenReady().then(async () => {
   });
 
   void mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  mainWindow.webContents.on("did-fail-load", (_e, code, desc) => {
+    console.error(`[main] renderer load FAILED ${code}: ${desc}`);
+  });
+  mainWindow.webContents.on("did-finish-load", () => {
+    console.error("[main] renderer loaded OK");
+  });
+  mainWindow.webContents.on("render-process-gone", (_e, details) => {
+    console.error(`[main] renderer GONE: ${details.reason}`);
+  });
+  mainWindow.webContents.on("console-message", (_e, level, message) => {
+    console.error(`[renderer:${level}] ${message.slice(0, 200)}`);
+  });
 
   // 注册 IPC 处理器
   registerIpcHandlers(ipcMain, cortex);
@@ -133,10 +145,14 @@ void app.whenReady().then(async () => {
       console.error(`[main] screenshot skip——窗口不可用 main=${!!mainWindow} chat=${!!chatWindow}`);
       return;
     }
-    void win.capturePage().then((image) => {
-      fs.writeFileSync(shotOutPath, image.toPNG());
+    // main 直接取 canvas（绕开 renderer 模块链——Live2D 失败不阻断）
+    void win.webContents.executeJavaScript(`(function(){var c=document.getElementById('live2d-canvas');if(!c)return null;try{return c.toDataURL('image/png');}catch(e){return null;}})()`).then((dataUrl: string | null) => {
+      if (!dataUrl || dataUrl.length < 100) return;
+      const b64 = dataUrl.split(",")[1] ?? "";
+      fs.writeFileSync(shotOutPath, Buffer.from(b64, "base64"));
+      console.error(`[main] shot saved ${b64.length}b`);
     }).catch((e) => {
-      console.error("[main] screenshot error:", e);
+      console.error("[main] shot exec error:", e);
     });
   }, 5000);
   if (shotTimer.unref) shotTimer.unref();
@@ -149,8 +165,10 @@ void app.whenReady().then(async () => {
       const outPath = path.join(app.getPath("userData"), "desktop-shot.png");
       const fs = await import("fs");
       fs.writeFileSync(outPath, buf);
+      console.error(`[main] save-shot wrote ${buf.length}b → ${outPath}`);
       return { ok: true, data: outPath };
     } catch (e) {
+      console.error(`[main] save-shot error: ${String(e)}`);
       return { ok: false, error: String(e) };
     }
   });

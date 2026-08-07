@@ -27,6 +27,7 @@ if (!window.cyrene) {
     moveTo: (_x: number, _y: number) => {},
     setDragging: (_isDragging: boolean) => {},
     captureFrame: () => Promise.resolve(null),
+    saveShot: () => Promise.resolve({ ok: false }),
     getCursorPosition: () => Promise.resolve(null),
     onPetZoom: (_cb: (zoom: number) => void) => () => {},
   };
@@ -42,10 +43,20 @@ function resolveAsset(assetPath: string): string {
 setInterval(() => {
   try {
     const shotCanvas = document.getElementById("live2d-canvas") as HTMLCanvasElement | null;
-    if (!shotCanvas) return;
+    if (!shotCanvas) {
+      console.error("[shot] canvas not found");
+      return;
+    }
+    if (!window.cyrene?.saveShot) {
+      console.error("[shot] saveShot missing");
+      return;
+    }
     const dataUrl = shotCanvas.toDataURL("image/png");
-    window.cyrene?.saveShot?.(dataUrl);
-  } catch { /* 截图失败不阻断 */ }
+    window.cyrene.saveShot(dataUrl);
+    console.error(`[shot] sent ${dataUrl.length}b`);
+  } catch (e) {
+    console.error("[shot] error:", e);
+  }
 }, 5000);
 
 let focus: MouseFocusController | null = null;
