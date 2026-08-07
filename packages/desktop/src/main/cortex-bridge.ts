@@ -16,6 +16,7 @@ import { join } from "node:path";
 export class CortexBridge {
   private conn: CortexConnection | null = null;
   private initialized = false;
+  private _port = 3210;
 
   /**
    * 初始化连接至 cortex daemon。
@@ -29,6 +30,7 @@ export class CortexBridge {
       wsToken = fs.readFileSync(join(os.homedir(), ".cortex", "ws-token"), "utf-8").trim();
     } catch { /* daemon 未写令牌文件（env 配置时）——连接层回退 */ }
     this.conn = new CortexConnection({ port: daemonPort ?? 3210, authToken: wsToken });
+    this._port = daemonPort ?? 3210;
     this.conn.connect();
     this.initialized = true;
     console.log(`[CortexBridge] Connected to daemon on port ${daemonPort ?? 3210}`);
@@ -41,7 +43,21 @@ export class CortexBridge {
     if (!this.initialized || !this.conn) {
       throw new Error("CortexBridge not initialized");
     }
-    return await this.conn.http.chat(input, { agent });
+    // 归因：conn.http.chat 挂起（opts 无 timeoutMs）——fetch 直连 + 30s 超时（HTTP 直连验证过 200）
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const res = await fetch(`http://127.0.0.1:${this._port ?? 3210}/api/v1/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input, agent }),
+        signal: controller.signal,
+      });
+      const json = await res.json() as { data?: { output?: string } };
+      return json.data?.output ?? "";
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /**
