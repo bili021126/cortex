@@ -145,7 +145,18 @@ void app.whenReady().then(async () => {
       console.error(`[main] screenshot skip——窗口不可用 main=${!!mainWindow} chat=${!!chatWindow}`);
       return;
     }
-    // main 直接取 canvas（绕开 renderer 模块链——Live2D 失败不阻断）
+    // chat 窗口：capturePage（非透明——可用）；桌宠：executeJavaScript 取 canvas（透明——capturePage 挂起）
+    if (win === chatWindow) {
+      void win.capturePage().then((image) => {
+        if (image.isEmpty()) return;
+        fs.writeFileSync(shotOutPath, image.toPNG());
+        console.error(`[main] chat shot saved ${image.getSize().width}x${image.getSize().height}`);
+      }).catch((e) => {
+        console.error("[main] chat shot error:", e);
+      });
+      return;
+    }
+    // 桌宠：main 直接取 canvas（绕开 renderer 模块链——Live2D 失败不阻断）
     void win.webContents.executeJavaScript(`(function(){var c=document.getElementById('live2d-canvas');if(!c)return null;try{return c.toDataURL('image/png');}catch(e){return null;}})()`).then((dataUrl: string | null) => {
       if (!dataUrl || dataUrl.length < 100) return;
       const b64 = dataUrl.split(",")[1] ?? "";
