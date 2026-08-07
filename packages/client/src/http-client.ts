@@ -143,8 +143,8 @@ export class CortexHttpClient {
   // ─── Chat / Memory / Session API ───────────────────
 
   /** 非流式对话 */
-  async chat(input: string, opts?: { agent?: string; mode?: string }): Promise<string> {
-    const res = await this.request<SingleResponse<ChatResponseData>>("POST", "/api/v1/chat", { input, ...opts });
+  async chat(input: string, opts?: { agent?: string; mode?: string; timeoutMs?: number }): Promise<string> {
+    const res = await this.request<SingleResponse<ChatResponseData>>("POST", "/api/v1/chat", { input, agent: opts?.agent, mode: opts?.mode }, { timeoutMs: opts?.timeoutMs });
     return res.data.output;
   }
 
