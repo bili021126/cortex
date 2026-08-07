@@ -62,15 +62,20 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
     try {
       const res = await window.cortexDesktop.chat(text);
-      setMessages((prev) => prev.map((m) =>
-        m.id === aiId ? { ...m, content: res.data ?? "", state: "complete" } : m,
-      ));
+      // 自审：完成经 reducer（sending --complete--> complete——不绕过转换表校验）
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== aiId) return m;
+        try { return { ...m, content: res.data ?? "", state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
+      }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const kind = localErrorKind(msg);
-      setMessages((prev) => prev.map((m) =>
-        m.id === aiId ? { ...m, state: kind === "timeout" ? "error_timeout" : kind === "network" ? "interrupted" : "error_fatal" } : m,
-      ));
+      // 自审：错误经 reducer（sending --timeout/net-error/fatal--> error_*）
+      const ev = kind === "timeout" ? "timeout" : kind === "network" ? "net-error" : "fatal";
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== aiId) return m;
+        try { return { ...m, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
+      }));
     } finally {
       inputRef.current?.focus();
     }
