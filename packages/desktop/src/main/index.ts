@@ -7,6 +7,7 @@
  */
 import { app, BrowserWindow, ipcMain, screen } from "electron";
 import * as path from "path";
+import * as fs from "fs";
 import { fileURLToPath } from "url";
 import { CortexBridge } from "./cortex-bridge.js";
 import { registerIpcHandlers } from "./ipc-handlers.js";
@@ -139,7 +140,6 @@ void app.whenReady().then(async () => {
   const shotOutPath = path.join(app.getPath("userData"), "desktop-shot.png");
   console.error(`[main] screenshot timer armed → ${shotOutPath}`);
   const shotTimer = setInterval(() => {
-    const fs = require("fs") as typeof import("fs");
     const win = mainWindow ?? chatWindow;
     if (!win || win.isDestroyed()) {
       console.error(`[main] screenshot skip——窗口不可用 main=${!!mainWindow} chat=${!!chatWindow}`);
