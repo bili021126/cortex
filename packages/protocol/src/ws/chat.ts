@@ -90,6 +90,8 @@ export interface WSChatErrorEvent {
     type: "chat.error";
     sessionId: string;
     error: string;
+    /** U1 状态机错误分类（timeout 可重试/fatal 不可/network 续传/cancelled 用户停） */
+    errorKind?: "timeout" | "fatal" | "network" | "cancelled";
   };
 }
 

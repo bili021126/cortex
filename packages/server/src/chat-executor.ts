@@ -98,7 +98,7 @@ export class ChatExecutor {
       if (result.cancelled) {
         session.send({
           channel: "chat",
-          data: { type: "chat.error", sessionId: session.id, error: "cancelled" },
+          data: { type: "chat.error", sessionId: session.id, error: "cancelled", errorKind: "cancelled" },
         } satisfies WSChatErrorEvent);
         return;
       }
@@ -114,9 +114,10 @@ export class ChatExecutor {
         },
       } satisfies WSChatCompleteEvent);
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       session.send({
         channel: "chat",
-        data: { type: "chat.error", sessionId: session.id, error: err instanceof Error ? err.message : String(err) },
+        data: { type: "chat.error", sessionId: session.id, error: msg, errorKind: classifyChatError(msg) },
       } satisfies WSChatErrorEvent);
     }
   }
@@ -124,4 +125,15 @@ export class ChatExecutor {
   getToolDefs(agent: string): { name: string; description: string; parameters?: Record<string, unknown> }[] {
     return this.engine.toolkitInstance.listDefinitions(agent as never).map((d) => ({ name: d.name, description: d.description, parameters: d.parameters }));
   }
+}
+
+/**
+ * U1 错误分类：错误消息 → 状态机 kind（timeout 可重试/fatal 不可/network 续传）
+ * 规则：超时类 → timeout；网络/连接类 → network；其余 → fatal（保守——认证/模型等）
+ */
+export function classifyChatError(msg: string): "timeout" | "fatal" | "network" {
+  const t = msg.toLowerCase();
+  if (/timeout|timed out|超时/.test(t)) return "timeout";
+  if (/fetch failed|econn|enet|network|socket|连接|网络/.test(t)) return "network";
+  return "fatal";
 }
