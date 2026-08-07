@@ -148,11 +148,16 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
                 {/* 正文 — .msg__body > .msg__bubble + .msg__time */}
                 <div className="msg__body">
-                  <div className="msg__bubble">
+                  <div className={`msg__bubble${msg.state ? ` msg__bubble--${msg.state}` : ""}`}>
                     {msg.thinking && <span className="msg__thinking-badge">💭 思考中…</span>}
                     {msg.content.split("\n").map((line, i) => (
                       <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>
                     ))}
+                    {/* U1 状态角标（stopped/interrupted/error 的语义提示） */}
+                    {msg.state === "stopped" && <span className="msg__state-badge">已停止</span>}
+                    {msg.state === "interrupted" && <span className="msg__state-badge">连接中断</span>}
+                    {msg.state === "error_timeout" && <span className="msg__state-badge">超时</span>}
+                    {msg.state === "error_fatal" && <span className="msg__state-badge">出错了</span>}
                   </div>
                   <span className="msg__time">
                     {formatTime(msg.at)}

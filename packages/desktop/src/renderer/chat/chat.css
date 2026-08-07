@@ -1943,3 +1943,15 @@ body {
 [data-ui-theme="pearl-white"] .approval-card--denied {
   border-color: rgba(220,40,80,0.36);
 }
+
+/* ── U1 状态机气泡样式（queued/streaming/stopped/interrupted/error）── */
+.msg__bubble--queued { background: rgba(255,255,255,0.04); border-style: dashed; opacity: 0.75; }
+.msg__bubble--sending { animation: u1-pulse 1.2s ease-in-out infinite; }
+.msg__bubble--streaming { border-left: 3px solid var(--rb-grad-pink, #ff9ecb); }
+.msg__bubble--stopped { opacity: 0.85; }
+.msg__bubble--interrupted { opacity: 0.55; border-style: dashed; }
+.msg__bubble--error_timeout { border: 1px solid rgba(255,90,90,0.6); }
+.msg__bubble--error_fatal { border: 1px solid rgba(255,60,60,0.8); background: rgba(255,60,60,0.08); }
+.msg__bubble--regenerating { opacity: 0.5; }
+.msg__state-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75); vertical-align: middle; }
+@keyframes u1-pulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
