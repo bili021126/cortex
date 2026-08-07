@@ -50,7 +50,7 @@ export class InvalidTransitionError extends Error {
 const TRANSITIONS: Record<MessageState, Partial<Record<MessageEvent["type"], MessageState>>> = {
   idle: { submit: "queued" },
   queued: { ack: "sending", stop: "idle" },
-  sending: { "first-token": "streaming", stop: "stopped", "net-error": "interrupted", timeout: "error_timeout", fatal: "error_fatal" },
+  sending: { "first-token": "streaming", complete: "complete", stop: "stopped", "net-error": "interrupted", timeout: "error_timeout", fatal: "error_fatal" },
   streaming: { complete: "complete", stop: "stopped", "net-error": "interrupted", timeout: "error_timeout", fatal: "error_fatal" },
   complete: { "edit-and-resubmit": "queued", regenerate: "regenerating" },
   stopped: { regenerate: "regenerating", "edit-and-resubmit": "queued" },

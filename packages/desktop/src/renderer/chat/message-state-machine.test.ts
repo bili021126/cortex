@@ -27,6 +27,7 @@ describe("U1 消息状态机——转换表全边", () => {
   it("sending --net-error--> interrupted", () => expect(step("sending", "net-error")).toBe("interrupted"));
   it("sending --timeout--> error_timeout", () => expect(step("sending", "timeout")).toBe("error_timeout"));
   it("sending --fatal--> error_fatal", () => expect(step("sending", "fatal")).toBe("error_fatal"));
+  it("sending --complete--> complete（HTTP 非流式——R13 归因修复）", () => expect(step("sending", "complete")).toBe("complete"));
   it("streaming --complete--> complete", () => expect(step("streaming", "complete")).toBe("complete"));
   it("streaming --stop--> stopped", () => expect(step("streaming", "stop")).toBe("stopped"));
   it("streaming --net-error--> interrupted", () => expect(step("streaming", "net-error")).toBe("interrupted"));

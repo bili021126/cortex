@@ -188,9 +188,11 @@ void app.whenReady().then(async () => {
     return { x: pt.x, y: pt.y };
   });
 
+  // 诊断（临时）：bridge 直测（验证完移除）
+  void (() => {});
+
   // ── 聊天窗口 ────────────────────────────────────
   ipcMain.on("chat:open", () => openChatWindow());
-  // 自审：注入验证临时代码已移除（U1 运行验证完成——8a8cbc30 后）
   void (() => {});
 
   // ── 系统托盘：应用生命周期入口（桌宠 skipTaskbar，无托盘则无法退出）──
