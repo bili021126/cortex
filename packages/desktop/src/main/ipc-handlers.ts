@@ -27,6 +27,8 @@ export const IPC_CHANNELS = {
 } as const;
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
+  // 语音播放锁（防重复点击叠加）
+  let ttsPlaying = false;
   // cortex:init — 连接 daemon
   ipcMain.handle(IPC_CHANNELS.CORTEX_INIT, async (_event, daemonPort?: number) => {
     await cortex.init(daemonPort);
@@ -69,6 +71,7 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
   // live2d:speak — 昔涟声线 TTS（GPT-SoVITS 本地推理——GPTSOVITS_* 环境变量或 .env 兜底）
 ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
     if (!text?.trim()) return { ok: true, data: null };
+    if (ttsPlaying) return { ok: false, error: "正在播放中——请稍候" };
     const env = readEnvSafe();
     const baseUrl = process.env.GPTSOVITS_URL ?? env.GPTSOVITS_URL ?? "http://localhost:9880";
     const refAudio = process.env.GPTSOVITS_REF ?? env.GPTSOVITS_REF ?? "";

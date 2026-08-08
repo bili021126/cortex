@@ -1,14 +1,11 @@
 /**
- * ChatView — 完整聊天界面（UX 完成版 2026-08-08）
+ * ChatView — 完整聊天界面（布局 v2：左侧任务栏 + 好友/群聊侧边栏 + 聊天主区）
  *
- * 照搬 cyrene-agent chat.css 的 DOM 结构：
- * .msg > .msg__avatar(.msg__avatar-img) + .msg__body > .msg__bubble + .msg__time
- *
- * UX 设计（显示 + 交互）：
- * - 显示：打字指示器（sending/queued/regenerating 空内容）/ busy 标题呼吸点 /
- *         消息进入动画 / 呼吸气泡 / 错误强调（CSS 同文件）
- * - 交互：sendRequest 单一执行路径（handleSend/retry/regenerate 复用——真正重发）
- *         状态机全边（含 sending → complete）/ 动作按钮按状态可见
+ * 结构：
+ * div.chat
+ * ├── aside.chat__taskbar        最左窄栏（图标导航：聊天/好友/群聊/任务/设置）
+ * ├── aside.chat__rail           侧边栏（好友 Tab + 群聊 Tab + 列表）
+ * └── div.chat__main             聊天主区（标题栏 + 消息 + 输入）
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./chat.css";
@@ -22,11 +19,20 @@ interface Message {
   content: string;
   at: number;
   thinking?: boolean;
-  /** U1 状态机（assistant 消息）——驱动气泡/按钮/辅助 */
   state?: MessageState;
 }
 
-/** 前端错误分类（与 server 的 classifyChatError 同规则——WS 未接线时的本地兜底） */
+/** 好友/群聊项 */
+interface Contact {
+  id: string;
+  name: string;
+  type: "friend" | "group";
+  avatar: string;   // emoji 或路径
+  desc: string;
+  online?: boolean;
+}
+
+/** 前端错误分类（与 server 的 classifyChatError 同规则） */
 function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   const t = msg.toLowerCase();
   if (/timeout|timed out|超时/.test(t)) return "timeout";
@@ -34,39 +40,48 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   return "fatal";
 }
 
+/** 预设联系人（好友 + 群聊） */
+const PRESET_CONTACTS: Contact[] = [
+  { id: "cyrene", name: "昔涟", type: "friend", avatar: "🌸", desc: "在线——陪你说话", online: true },
+  { id: "work", name: "Cortex 工程助手", type: "friend", avatar: "🛠️", desc: "Work 模式 · 工具调用", online: true },
+  { id: "learn", name: "学习伙伴", type: "friend", avatar: "📚", desc: "陪伴学习", online: false },
+  { id: "daily", name: "日常助手", type: "friend", avatar: "📅", desc: "日常事务", online: true },
+  { id: "group-proj", name: "Cortex 项目组", type: "group", avatar: "🏗️", desc: "工程协作 · 3 人" },
+  { id: "group-life", name: "翁法罗斯", type: "group", avatar: "🌙", desc: "日常闲聊 · 5 人" },
+];
+
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>(() => {
-    // UX 完全体：历史持久化（重开窗口不丢对话——localStorage）
     try {
       const raw = localStorage.getItem("cyrene-chat-history");
       if (raw) {
         const parsed = JSON.parse(raw) as Message[];
-        return parsed.filter((m) => m && typeof m.id === "string" && m.role === "user" || (m && typeof m.id === "string" && m.role === "assistant"));
+        return parsed.filter((m) => m && typeof m.id === "string" && (m.role === "user" || m.role === "assistant"));
       }
-    } catch { /* 无历史或损坏——空对话 */ }
+    } catch { /* 无历史 */ }
     return [];
   });
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  // 布局 v2：任务栏选中项（chat/contacts/tasks/settings）+ 侧边栏 Tab（friends/groups）+ 选中联系人
+  const [taskbarTab, setTaskbarTab] = useState<"chat" | "contacts" | "tasks" | "settings">("chat");
+  const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
+  const [activeContact, setActiveContact] = useState<Contact | null>(PRESET_CONTACTS[0]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  // U1：busy = 任一消息在 queued/sending/streaming（驱动输入禁用与状态提示）
   const busy = messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming" || m.state === "regenerating");
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // UX 完全体：历史自动保存（每次消息变化）
   useEffect(() => {
     try {
-      // 进行中的消息不持久化（状态类字段会过时）——只存完成的对话
       const stable = messages.filter((m) => !m.state || m.state === "complete" || m.state === "stopped" || m.state === "interrupted" || m.state === "error_timeout" || m.state === "error_fatal");
       localStorage.setItem("cyrene-chat-history", JSON.stringify(stable));
     } catch { /* 存储失败不阻断 */ }
   }, [messages]);
 
-  // UX：状态推进 dispatch（按 aiId 定位——retry/regenerate 复用）
   const dispatch = useCallback((aiId: string, ev: Parameters<typeof messageReducer>[1]["type"] | "complete" | "timeout" | "fatal" | "net-error" | "ack") => {
     setMessages((prev) => prev.map((m) => {
       if (m.id !== aiId) return m;
@@ -74,12 +89,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     }));
   }, []);
 
-  // UX 核心：发送的单一执行路径（ack → streamChat 流式 → complete/error）——handleSend/retry/regenerate 复用
-  // 完全体：WS 流式打通（sessionId 修复）——真实打字机效果（chunk 逐字累积）+ 多轮上下文（history）
   const sendRequest = useCallback(async (aiId: string, text: string) => {
     dispatch(aiId, "ack");
     let first = true;
-    // 多轮上下文：收集历史（该 ai 消息之前的完整对话——user/assistant 交替）
     const history: Array<{ role: "user" | "assistant"; content: string }> = [];
     const idx = messages.findIndex((m) => m.id === aiId);
     for (let i = 0; i < idx; i++) {
@@ -91,12 +103,10 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         text,
         undefined,
         (chunk) => {
-          // 首 chunk → streaming 态（打字机开始）
           if (first) { first = false; dispatch(aiId, "first-token"); }
           setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: m.content + chunk } : m)));
         },
         (full) => {
-          // 完成 → complete 态（内容以完整版为准）
           setMessages((prev) => prev.map((m) => {
             if (m.id !== aiId) return m;
             try { return { ...m, content: full, state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
@@ -107,7 +117,6 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const kind = localErrorKind(msg);
-      // 错误经 reducer（sending --timeout/net-error/fatal--> error_*）+ 错误消息上屏
       const ev = kind === "timeout" ? "timeout" : kind === "network" ? "net-error" : "fatal";
       setMessages((prev) => prev.map((m) => {
         if (m.id !== aiId) return m;
@@ -116,13 +125,12 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     } finally {
       inputRef.current?.focus();
     }
-  }, [dispatch]);
+  }, [dispatch, messages]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming")) return;
     setInput("");
-
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text, at: Date.now() };
     const aiId = crypto.randomUUID();
     const aiMsg: Message = { id: aiId, role: "assistant", content: "", at: Date.now(), state: "queued" };
@@ -137,16 +145,13 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     [handleSend],
   );
 
-  const copyMessage = useCallback(async (content: string, _msgId: string) => {
-    try { await navigator.clipboard.writeText(content); } catch { /* 剪贴板写入可能被拒，忽略 */ }
+  const copyMessage = useCallback(async (content: string) => {
+    try { await navigator.clipboard.writeText(content); } catch { /* 忽略 */ }
   }, []);
 
-  // U1 动作：retry（interrupted/error_timeout → 重发）/ regenerate（stopped/complete → 重新生成）/ stop（→ stopped）
-  // UX 完整化：重发/重新生成真正调用 chat（不再只改状态——否则 regenerating 永卡）
   const resendMessage = useCallback((msg: Message) => {
     const from = msg.state ?? "idle";
     if (from !== "interrupted" && from !== "error_timeout" && from !== "complete" && from !== "stopped") return;
-    // 找对应的用户消息（该 assistant 消息之前的最后一条 user——重发的输入）
     let prompt = "";
     const idx = messages.findIndex((m) => m.id === msg.id);
     for (let i = idx - 1; i >= 0; i--) {
@@ -162,7 +167,6 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   }, [messages, sendRequest]);
 
   const stopMessage = useCallback((msg: Message) => {
-    // UX 停止：流式中断（chat.cancel——daemon 侧 abort LLM）+ 状态机推进
     void window.cortexDesktop.cancelStreamChat();
     setMessages((prev) => prev.map((m) => {
       if (m.id !== msg.id) return m;
@@ -175,30 +179,28 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     if (!content.trim()) return;
     setSpeakingMsgId(msgId);
     try {
-      // 昔涟声线 TTS：GPT-SoVITS 合成 → base64 → atob+Blob+createObjectURL 播放（对齐 Cyrene-Agent——data URL 大音频播放失败）
       const res = await window.cortexDesktop.speak(content) as { ok: boolean; data?: string; error?: string };
       if (res?.ok && res.data) {
-        // data 形如 data:audio/wav;base64,xxx——拆分出 base64 部分
         const b64 = res.data.includes(",") ? res.data.split(",").pop() ?? "" : res.data;
         const mime = res.data.startsWith("data:") ? res.data.slice(5, res.data.indexOf(";")) : "audio/wav";
         const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
         const blob = new Blob([bytes], { type: mime });
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
-        audio.volume = 1.5; // 合成音量偏小（mean -29dB）——放大播放
+        audio.volume = 1.5;
         await new Promise<void>((resolve) => {
           audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
           audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
           void audio.play().catch((err) => {
-            console.error("[speak] Audio.play 失败，回退 AudioContext:", String(err));
+            console.error("[speak] Audio.play 失败:", String(err));
             URL.revokeObjectURL(url);
-            void playViaAudioContext(res.data).finally(resolve);
+            resolve();
           });
         });
       } else if (res?.error) {
         console.error("[speak] TTS 错误:", res.error);
       }
-    } catch { /* TTS 播放失败，忽略 */ }
+    } catch { /* 忽略 */ }
     setSpeakingMsgId(null);
   }, [speakingMsgId]);
 
@@ -207,20 +209,58 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
+  // 侧边栏可见：contacts tab（聊天/联系人）或 tasks 时显示
+  const railVisible = taskbarTab === "chat" || taskbarTab === "contacts";
+  const railList = railTab === "friends"
+    ? PRESET_CONTACTS.filter((c) => c.type === "friend")
+    : PRESET_CONTACTS.filter((c) => c.type === "group");
+
   return (
     <div className="chat">
       <canvas className="chat__particles" id="particles" aria-hidden="true" />
 
+      {/* 左侧任务栏（图标导航） */}
+      <aside className="chat__taskbar" aria-label="任务栏">
+        <button type="button" className={`chat__taskbar-btn${taskbarTab === "chat" ? " is-active" : ""}`} onClick={() => setTaskbarTab("chat")} title="聊天" aria-label="聊天">💬</button>
+        <button type="button" className={`chat__taskbar-btn${taskbarTab === "contacts" ? " is-active" : ""}`} onClick={() => setTaskbarTab("contacts")} title="好友与群聊" aria-label="好友与群聊">👥</button>
+        <button type="button" className={`chat__taskbar-btn${taskbarTab === "tasks" ? " is-active" : ""}`} onClick={() => setTaskbarTab("tasks")} title="任务" aria-label="任务">✅</button>
+        <button type="button" className={`chat__taskbar-btn${taskbarTab === "settings" ? " is-active" : ""}`} onClick={() => setTaskbarTab("settings")} title="设置" aria-label="设置">⚙️</button>
+        <div className="chat__taskbar-spacer" />
+        <button type="button" className="chat__taskbar-btn" onClick={onClose} title="关闭" aria-label="关闭">✕</button>
+      </aside>
+
+      {/* 好友 + 群聊侧边栏 */}
+      {railVisible && (
+        <aside className="chat__rail" id="chat-rail">
+          <div className="chat__rail-tabs">
+            <button type="button" className={`chat__rail-tab${railTab === "friends" ? " is-active" : ""}`} onClick={() => setRailTab("friends")}>好友</button>
+            <button type="button" className={`chat__rail-tab${railTab === "groups" ? " is-active" : ""}`} onClick={() => setRailTab("groups")}>群聊</button>
+          </div>
+          <div className="chat__rail-list" role="list">
+            {railList.map((c) => (
+              <button key={c.id} type="button" className={`chat__rail-item${activeContact?.id === c.id ? " is-active" : ""}`} onClick={() => setActiveContact(c)}>
+                <span className="chat__rail-avatar" aria-hidden="true">{c.avatar}</span>
+                <span className="chat__rail-meta">
+                  <span className="chat__rail-name">{c.name}</span>
+                  <span className="chat__rail-desc">{c.desc}</span>
+                </span>
+                {c.online && <span className="chat__rail-dot" aria-label="在线" />}
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
+
       <div className="chat__body">
         <div className="chat__main">
-          {/* 标题栏 — UX：busy 时粉色呼吸点（chat__hint--busy） */}
+          {/* 标题栏 */}
           <header className="chat__titlebar">
             <div className="chat__titlebar-drag">
               <span className="chat__title-meta">
-                <span className="chat__name">昔涟</span>
+                <span className="chat__name">{activeContact?.name ?? "昔涟"}</span>
                 <span className="chat__name-sep" aria-hidden="true">·</span>
                 <span className={`chat__hint${busy ? " chat__hint--busy" : ""}`} id="chat-hint">
-                  {busy ? "思考中…" : "在线"}
+                  {busy ? "思考中…" : (activeContact?.online ? "在线" : "离线")}
                 </span>
               </span>
             </div>
@@ -234,89 +274,105 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </div>
           </header>
 
-          {/* 消息列表 — UX：消息进入动画（.msg chatFadeSlideIn） */}
-          <main className="chat__messages" id="messages" aria-live="polite">
-            {messages.length === 0 && (
-              <div className="chat__empty-state" id="chat-empty">
-                <div className="chat__empty-icon">💬</div>
-                <p className="chat__empty-text">昔涟期待与你聊天哦 ✨</p>
+          {/* 任务面板（占位——后续实现） */}
+          {taskbarTab === "tasks" && (
+            <div className="chat__panel">
+              <div className="chat__empty-state">
+                <div className="chat__empty-icon">✅</div>
+                <p className="chat__empty-text">任务面板——待实现</p>
               </div>
-            )}
+            </div>
+          )}
+          {/* 设置面板（占位） */}
+          {taskbarTab === "settings" && (
+            <div className="chat__panel">
+              <div className="chat__empty-state">
+                <div className="chat__empty-icon">⚙️</div>
+                <p className="chat__empty-text">设置面板——待实现</p>
+              </div>
+            </div>
+          )}
 
-            {messages.map((msg) => (
-              <div key={msg.id} className={`msg msg--${msg.role === "user" ? "user" : "model"}`}>
-                {/* 头像 — 对齐 chat.css: .msg__avatar > .msg__avatar-img */}
-                <div className="msg__avatar">
-                  {msg.role === "assistant" ? (
-                    <img className="msg__avatar-img" src={resolveAsset("../avatars/cyrene-avatar.png")} alt="昔涟" />
-                  ) : (
-                    <span style={{ fontSize: 18, lineHeight: "46px" }}>⭐</span>
-                  )}
+          {/* 消息列表 */}
+          {(taskbarTab === "chat" || taskbarTab === "contacts") && (
+            <main className="chat__messages" id="messages" aria-live="polite">
+              {messages.length === 0 && (
+                <div className="chat__empty-state" id="chat-empty">
+                  <div className="chat__empty-icon">💬</div>
+                  <p className="chat__empty-text">和 {activeContact?.name ?? "昔涟"} 说点什么吧 ✨</p>
                 </div>
+              )}
 
-                {/* 正文 — .msg__body > .msg__bubble + .msg__time */}
-                <div className="msg__body">
-                  <div className={`msg__bubble${msg.state ? ` msg__bubble--${msg.state}` : ""}`}>
-                    {msg.thinking && <span className="msg__thinking-badge">💭 思考中…</span>}
-                    {/* UX：发送/再生成中的打字指示器（内容空时——三跳动点——chat.css 动画） */}
-                    {(msg.state === "sending" || msg.state === "queued" || msg.state === "regenerating") && !msg.content && (
-                      <span className="msg__typing" aria-label="昔涟正在输入">
-                        <span /><span /><span />
-                      </span>
+              {messages.map((msg) => (
+                <div key={msg.id} className={`msg msg--${msg.role === "user" ? "user" : "model"}`}>
+                  <div className="msg__avatar">
+                    {msg.role === "assistant" ? (
+                      <img className="msg__avatar-img" src={resolveAsset("../avatars/cyrene-avatar.png")} alt="昔涟" />
+                    ) : (
+                      <span style={{ fontSize: 18, lineHeight: "46px" }}>⭐</span>
                     )}
-                    {msg.content.split("\n").map((line, i) => (
-                      <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>
-                    ))}
-                    {/* U1 状态角标（stopped/interrupted/error 的语义提示） */}
-                    {msg.state === "stopped" && <span className="msg__state-badge">已停止</span>}
-                    {msg.state === "interrupted" && <span className="msg__state-badge">连接中断</span>}
-                    {msg.state === "error_timeout" && <span className="msg__state-badge">超时</span>}
-                    {msg.state === "error_fatal" && <span className="msg__state-badge">出错了</span>}
                   </div>
-                  <span className="msg__time">
-                    {formatTime(msg.at)}
-                    {msg.role === "assistant" && (
-                      <>{` · `}
-                        {/* U1 状态动作：retry/regenerate/stop 按状态可见 */}
-                        {(msg.state === "interrupted" || msg.state === "error_timeout") && (
-                          <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重试">🔄</button>
-                        )}
-                        {(msg.state === "complete" || msg.state === "stopped") && (
-                          <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重新生成">♻️</button>
-                        )}
-                        {msg.state === "regenerating" && (
-                          <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止">⏹️</button>
-                        )}
-                        {/* UX 停止：流式进行中可中断（sending/streaming） */}
-                        {(msg.state === "sending" || msg.state === "streaming") && (
-                          <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止生成">⏹️</button>
-                        )}
-                        <button className="msg__action-btn" onClick={() => void copyMessage(msg.content, msg.id)} title="复制">📋</button>
-                        <button className="msg__action-btn" onClick={() => void speakMessage(msg.content, msg.id)} title="朗读">
-                          {speakingMsgId === msg.id ? "🔊" : "🔈"}
-                        </button>
-                      </>
-                    )}
-                  </span>
+                  <div className="msg__body">
+                    <div className={`msg__bubble${msg.state ? ` msg__bubble--${msg.state}` : ""}`}>
+                      {msg.thinking && <span className="msg__thinking-badge">💭 思考中…</span>}
+                      {(msg.state === "sending" || msg.state === "queued" || msg.state === "regenerating") && !msg.content && (
+                        <span className="msg__typing" aria-label="昔涟正在输入">
+                          <span /><span /><span />
+                        </span>
+                      )}
+                      {msg.content.split("\n").map((line, i) => (
+                        <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>
+                      ))}
+                      {msg.state === "stopped" && <span className="msg__state-badge">已停止</span>}
+                      {msg.state === "interrupted" && <span className="msg__state-badge">连接中断</span>}
+                      {msg.state === "error_timeout" && <span className="msg__state-badge">超时</span>}
+                      {msg.state === "error_fatal" && <span className="msg__state-badge">出错了</span>}
+                    </div>
+                    <span className="msg__time">
+                      {formatTime(msg.at)}
+                      {msg.role === "assistant" && (
+                        <>{` · `}
+                          {(msg.state === "interrupted" || msg.state === "error_timeout") && (
+                            <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重试">🔄</button>
+                          )}
+                          {(msg.state === "complete" || msg.state === "stopped") && (
+                            <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重新生成">♻️</button>
+                          )}
+                          {msg.state === "regenerating" && (
+                            <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止">⏹️</button>
+                          )}
+                          {(msg.state === "sending" || msg.state === "streaming") && (
+                            <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止生成">⏹️</button>
+                          )}
+                          <button className="msg__action-btn" onClick={() => void copyMessage(msg.content)} title="复制">📋</button>
+                          <button className="msg__action-btn" onClick={() => void speakMessage(msg.content, msg.id)} title="朗读">
+                            {speakingMsgId === msg.id ? "🔊" : "🔈"}
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </main>
+              ))}
+              <div ref={messagesEndRef} />
+            </main>
+          )}
         </div>
       </div>
 
-      {/* 输入区 — UX：busy 时发送按钮 … */}
-      <form className="chat__input" id="composer" onSubmit={(e) => { e.preventDefault(); void handleSend(); }}>
-        <textarea ref={inputRef} id="input" rows={1} value={input}
-          onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-          placeholder="说点什么…  Enter 发送 / Shift+Enter 换行"
-          autoComplete="off" spellCheck={false} disabled={busy}
-        />
-        <button type="submit" className="chat__send" id="send" aria-label="发送" disabled={busy || !input.trim()}>
-          {busy ? "…" : "↵"}
-        </button>
-      </form>
+      {/* 输入区（任务/设置面板时不显示） */}
+      {(taskbarTab === "chat" || taskbarTab === "contacts") && (
+        <form className="chat__input" id="composer" onSubmit={(e) => { e.preventDefault(); void handleSend(); }}>
+          <textarea ref={inputRef} id="input" rows={1} value={input}
+            onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+            placeholder={`和 ${activeContact?.name ?? "昔涟"} 说点什么…  Enter 发送 / Shift+Enter 换行`}
+            autoComplete="off" spellCheck={false} disabled={busy}
+          />
+          <button type="submit" className="chat__send" id="send" aria-label="发送" disabled={busy || !input.trim()}>
+            {busy ? "…" : "↵"}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
@@ -324,26 +380,4 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 function resolveAsset(assetPath: string): string {
   const clean = assetPath.replace(/^\/+/, "");
   return new URL(clean, document.baseURI).href;
-}
-
-/** AudioContext 回退播放（data URL decode + gain 放大——Audio.play 失败时） */
-async function playViaAudioContext(dataUrl: string): Promise<void> {
-  try {
-    const ctx = new AudioContext();
-    const buf = await (await fetch(dataUrl)).arrayBuffer();
-    const decoded = await ctx.decodeAudioData(buf);
-    const src = ctx.createBufferSource();
-    src.buffer = decoded;
-    const gain = ctx.createGain();
-    gain.gain.value = 1.6;
-    src.connect(gain);
-    gain.connect(ctx.destination);
-    await new Promise<void>((resolve) => {
-      src.onended = () => resolve();
-      src.start();
-    });
-    void ctx.close();
-  } catch (e) {
-    console.error("[speak] AudioContext 回退失败:", String(e));
-  }
 }
