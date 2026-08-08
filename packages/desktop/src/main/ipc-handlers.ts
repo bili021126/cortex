@@ -153,17 +153,28 @@ function getSettingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
 }
 
-/** 读取项目根 .env（GPTSOVITS_* 兜底——electron 不自动加载 .env） */
+/** 读取项目根 .env（GPTSOVITS_* 兑底——electron 不自动加载 .env；多路径探测：appPath → cwd → 逐级向上） */
 function readEnvSafe(): Record<string, string> {
   try {
-    const raw = fs.readFileSync(path.join(app.getAppPath(), ".env"), "utf-8");
-    const out: Record<string, string> = {};
-    for (const line of raw.split(/\r?\n/)) {
-      const t = line.trim();
-      if (!t || t.startsWith("#")) continue;
-      const i = t.indexOf("=");
-      if (i > 0) out[t.slice(0, i).trim()] = t.slice(i + 1).trim();
+    const candidates = [
+      path.join(app.getAppPath(), ".env"),
+      path.join(process.cwd(), ".env"),
+      path.join(process.cwd(), "..", ".env"),
+      path.join(process.cwd(), "..", "..", ".env"),
+      path.join(process.cwd(), "..", "..", "..", ".env"),
+    ];
+    for (const envPath of candidates) {
+      if (!fs.existsSync(envPath)) continue;
+      const raw = fs.readFileSync(envPath, "utf-8");
+      const out: Record<string, string> = {};
+      for (const line of raw.split(/\r?\n/)) {
+        const t = line.trim();
+        if (!t || t.startsWith("#")) continue;
+        const i = t.indexOf("=");
+        if (i > 0) out[t.slice(0, i).trim()] = t.slice(i + 1).trim();
+      }
+      return out;
     }
-    return out;
+    return {};
   } catch { return {}; }
 }
