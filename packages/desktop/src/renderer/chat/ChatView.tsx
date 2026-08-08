@@ -32,11 +32,7 @@ interface Contact {
   online?: boolean;
 }
 
-const PRESET_CONTACTS: Contact[] = [
-  { id: "cyrene", name: "昔涟", type: "friend", avatar: "🌸", desc: "在线——陪你说话", online: true },
-  { id: "work", name: "Cortex 工程助手", type: "friend", avatar: "🛠️", desc: "Work 模式 · 工具调用", online: true },
-  { id: "learn", name: "学习伙伴", type: "friend", avatar: "📚", desc: "陪伴学习", online: false },
-  { id: "daily", name: "日常助手", type: "friend", avatar: "📅", desc: "日常事务", online: true },
+const PRESET_GROUPS: Contact[] = [
   { id: "group-proj", name: "Cortex 项目组", type: "group", avatar: "🏗️", desc: "工程协作 · 3 人" },
   { id: "group-life", name: "翁法罗斯", type: "group", avatar: "🌙", desc: "日常闲聊 · 5 人" },
 ];
@@ -47,6 +43,8 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   if (/fetch failed|econn|enet|network|socket|连接|网络/.test(t)) return "network";
   return "fatal";
 }
+
+const AGENT_AVATARS = ["🤖", "🛠️", "🔍", "📊", "🧪", "⚙️", "💻", "📚"];
 
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
@@ -63,8 +61,29 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [tab, setTab] = useState<"chat" | "tasks" | "settings">("chat");
   const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
-  const [active, setActive] = useState<Contact | null>(PRESET_CONTACTS[0]);
+  const [active, setActive] = useState<Contact | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
+  // 好友 = Cortex agents（动态拉取）；群聊 = 预设
+  const [friends, setFriends] = useState<Contact[]>([]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await window.cortexDesktop.getAgents() as { ok: boolean; data?: string[] };
+        if (res?.ok && Array.isArray(res.data) && res.data.length > 0) {
+          setFriends(res.data.map((name, i) => ({
+            id: "agent-" + name,
+            name,
+            type: "friend" as const,
+            avatar: AGENT_AVATARS[i % AGENT_AVATARS.length],
+            desc: "Cortex Agent",
+            online: true,
+          })));
+          setActive((prev) => prev ?? { id: "agent-" + res.data[0], name: res.data[0], type: "friend", avatar: AGENT_AVATARS[0], desc: "Cortex Agent", online: true });
+        }
+      } catch { /* daemon 未起时保持空 */ }
+    })();
+  }, []);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const busy = messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming" || m.state === "regenerating");
@@ -208,8 +227,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   };
 
   const railList = railTab === "friends"
-    ? PRESET_CONTACTS.filter((c) => c.type === "friend")
-    : PRESET_CONTACTS.filter((c) => c.type === "group");
+    ? friends
+    : PRESET_GROUPS.filter((c) => c.type === "group");
 
   return (
     <div className="chat">
