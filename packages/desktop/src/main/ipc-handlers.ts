@@ -84,12 +84,21 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
         text,
         format: "wav",
         timeoutMs: 120_000, // CPU 推理慢——长文本可能超 60s（服务排队时）
+        // 长文本按标点切分（防漏字）+ 情绪参数（top_k 提升表现力）
+        textSplitMethod: "cut5",
+        topK: 20,
+        temperature: 1.0,
       });
       console.error(`[speak] 合成成功: ${audio.length} 字节`);
       // 最稳播放：写临时 wav → 系统播放器（SoundPlayer——已验证系统播放 100% 能响；绕开 renderer Audio 问题）
+      ttsPlaying = true;
       const tmpWav = path.join(app.getPath("userData"), "tts-temp.wav");
       fs.writeFileSync(tmpWav, audio);
-      await playViaSystemPlayer(tmpWav);
+      try {
+        await playViaSystemPlayer(tmpWav);
+      } finally {
+        ttsPlaying = false;
+      }
       return { ok: true };
     } catch (err) {
       console.error(`[speak] 合成失败: ${err instanceof Error ? err.message : String(err)}`);

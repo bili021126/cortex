@@ -11,6 +11,9 @@ export interface GptsovitsSynthesizeOptions {
   speed?: number;           // 0.5~2，默认 1
   format?: "wav" | "mp3";   // 默认 wav
   timeoutMs?: number;      // 默认 60000（本地推理可能较慢）
+  textSplitMethod?: string; // 长文本切分（cut5 按标点）
+  topK?: number;            // 采样参数（提升表现力）
+  temperature?: number;     // 采样温度
   debugLog?: (entry: Record<string, unknown>) => void;
 }
 
@@ -59,6 +62,9 @@ export async function synthesize(opts: GptsovitsSynthesizeOptions): Promise<Gpts
     speed_factor: opts.speed ?? 1,
     streaming_mode: false,
     media_type: format,
+    ...(opts.textSplitMethod ? { text_split_method: opts.textSplitMethod } : {}),
+    ...(opts.topK ? { top_k: opts.topK } : {}),
+    ...(opts.temperature ? { temperature: opts.temperature } : {}),
   });
 
   // baseUrl 去掉尾部斜杠，拼 /api/tts
