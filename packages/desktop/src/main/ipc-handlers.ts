@@ -72,8 +72,10 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
     const baseUrl = process.env.GPTSOVITS_URL ?? env.GPTSOVITS_URL ?? "http://localhost:9880";
     const refAudio = process.env.GPTSOVITS_REF ?? env.GPTSOVITS_REF ?? "";
     const prompt = process.env.GPTSOVITS_PROMPT ?? env.GPTSOVITS_PROMPT ?? "";
+    console.error(`[speak] 配置 baseUrl=${baseUrl} ref=${refAudio ? "有" : "无"}`);
     if (!refAudio) return { ok: false, error: "未配置 GPTSOVITS_REF（参考音频路径）" };
     try {
+      console.error(`[speak] 合成开始: ${text.slice(0, 20)}`);
       const { audio, format } = await synthesize({
         baseUrl,
         refAudioPath: refAudio,
@@ -81,9 +83,11 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
         text,
         format: "wav",
       });
+      console.error(`[speak] 合成成功: ${audio.length} 字节`);
       // 返回 base64——渲染端 Audio 播放（昔涟声线）
       return { ok: true, data: `data:audio/${format};base64,${audio.toString("base64")}` };
     } catch (err) {
+      console.error(`[speak] 合成失败: ${err instanceof Error ? err.message : String(err)}`);
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   });

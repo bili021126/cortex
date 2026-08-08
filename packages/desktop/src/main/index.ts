@@ -51,9 +51,18 @@ function openChatWindow(): void {
     },
   });
   void chatWindow.loadFile(path.join(rendererDir, "chat/index.html"));
+  // 调试：renderer console 转发到主进程（speak/播放错误可查）
+  chatWindow.webContents.on("console-message", (_e, level, message) => {
+    if (message.includes("speak") || message.includes("Audio") || level >= 2) {
+      console.error(`[renderer:${level}] ${message}`);
+    }
+  });
   chatWindow.once("ready-to-show", () => chatWindow?.show());
   chatWindow.on("closed", () => { chatWindow = null; });
 }
+
+// 音频播放：允许无手势自动播放（TTS 朗读——昔涟声线）
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 
 void app.whenReady().then(async () => {
   // 初始化 CortexBridge（连接 cortex daemon）

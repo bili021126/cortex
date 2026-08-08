@@ -175,15 +175,22 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     if (!content.trim()) return;
     setSpeakingMsgId(msgId);
     try {
-      // 昔涟声线 TTS：GPT-SoVITS 合成 → base64 → Audio 播放
+      // 昔涟声线 TTS：GPT-SoVITS 合成 → base64 → AudioContext 播放（增益放大——合成音量偏小）
       const res = await window.cortexDesktop.speak(content) as { ok: boolean; data?: string; error?: string };
       if (res?.ok && res.data) {
         const audio = new Audio(res.data);
+        audio.volume = 1.5; // 合成音量偏小（mean -29dB）——放大播放
         await new Promise<void>((resolve) => {
           audio.onended = () => resolve();
           audio.onerror = () => resolve();
-          void audio.play().catch(() => resolve());
+          void audio.play().catch((err) => {
+            // data URL 播放失败回退：AudioContext decode + gain
+            console.error("[speak] Audio.play 失败，回退 AudioContext:", String(err));
+            void playViaAudioContext(res.data).finally(resolve);
+          });
         });
+      } else if (res?.error) {
+        console.error("[speak] TTS 错误:", res.error);
       }
     } catch { /* TTS 播放失败，忽略 */ }
     setSpeakingMsgId(null);
@@ -311,4 +318,26 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 function resolveAsset(assetPath: string): string {
   const clean = assetPath.replace(/^\/+/, "");
   return new URL(clean, document.baseURI).href;
+}
+
+/** AudioContext 回退播放（data URL decode + gain 放大——Audio.play 失败时） */
+async function playViaAudioContext(dataUrl: string): Promise<void> {
+  try {
+    const ctx = new AudioContext();
+    const buf = await (await fetch(dataUrl)).arrayBuffer();
+    const decoded = await ctx.decodeAudioData(buf);
+    const src = ctx.createBufferSource();
+    src.buffer = decoded;
+    const gain = ctx.createGain();
+    gain.gain.value = 1.6;
+    src.connect(gain);
+    gain.connect(ctx.destination);
+    await new Promise<void>((resolve) => {
+      src.onended = () => resolve();
+      src.start();
+    });
+    void ctx.close();
+  } catch (e) {
+    console.error("[speak] AudioContext 回退失败:", String(e));
+  }
 }
