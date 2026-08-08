@@ -2273,3 +2273,28 @@ html, body { height: 100%; margin: 0; padding: 0; }
 /* 空状态 */
 .chat__empty-text { color: #c9a3b8; }
 .chat__empty-icon { filter: saturate(0.9); }
+/* ═══════════ 浅蓝过渡 + 薄荷绿点缀（2026-08-09）═══════════ */
+.chat {
+  background:
+    radial-gradient(circle at 15% 12%, rgba(255, 214, 231, 0.55) 0%, transparent 38%),
+    radial-gradient(circle at 85% 20%, rgba(196, 228, 255, 0.55) 0%, transparent 42%),
+    radial-gradient(circle at 30% 80%, rgba(214, 246, 236, 0.4) 0%, transparent 40%),
+    radial-gradient(circle at 70% 95%, rgba(255, 238, 246, 0.6) 0%, transparent 38%),
+    linear-gradient(160deg, #fff5f9 0%, #f7f2ff 30%, #eef6ff 62%, #f3ecff 100%);
+}
+/* 薄荷绿点缀：激活态/悬停/发送 */
+.chat__taskbar-btn.is-active {
+  background: linear-gradient(135deg, rgba(255, 182, 213, 0.55), rgba(168, 224, 205, 0.55));
+}
+.chat__rail-tab.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.45), rgba(168, 224, 205, 0.45)); }
+.chat__rail-item:hover { background: rgba(168, 224, 205, 0.2); }
+.chat__rail-item.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.35), rgba(168, 224, 205, 0.35)); }
+.chat__send {
+  background: linear-gradient(135deg, #f9a8c8, #7ed6b8);
+}
+.chat__side-status.is-online { background: rgba(126, 214, 184, 0.2); color: #4db896; }
+.chat__rail-dot { background: #7ed6b8; box-shadow: 0 0 6px rgba(126, 214, 184, 0.6); }
+/* 标题栏/输入区细边带一点蓝 */
+.chat__titlebar { border-bottom: 1px solid rgba(126, 190, 232, 0.14); }
+.chat__input { border-top: 1px solid rgba(126, 190, 232, 0.12); }
+.chat__input textarea:focus { border-color: rgba(126, 190, 232, 0.5); box-shadow: 0 0 0 3px rgba(126, 190, 232, 0.12); }
