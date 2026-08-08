@@ -293,9 +293,11 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {/* 消息列表 */}
+          {/* 消息 + 右侧信息栏（stage：聊天界面 + 右侧单独栏） */}
           {(taskbarTab === "chat" || taskbarTab === "contacts") && (
-            <main className="chat__messages" id="messages" aria-live="polite">
+            <div className="chat__stage">
+              <div className="chat__stage-main">
+              <main className="chat__messages" id="messages" aria-live="polite">
               {messages.length === 0 && (
                 <div className="chat__empty-state" id="chat-empty">
                   <div className="chat__empty-icon">💬</div>
@@ -355,24 +357,37 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 </div>
               ))}
               <div ref={messagesEndRef} />
-            </main>
+              </main>
+
+              {/* 输入区（聊天界面底部——与消息一体） */}
+              <form className="chat__input" id="composer" onSubmit={(e) => { e.preventDefault(); void handleSend(); }}>
+                <textarea ref={inputRef} id="input" rows={1} value={input}
+                  onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+                  placeholder={`和 ${activeContact?.name ?? "昔涟"} 说点什么…  Enter 发送 / Shift+Enter 换行`}
+                  autoComplete="off" spellCheck={false} disabled={busy}
+                />
+                <button type="submit" className="chat__send" id="send" aria-label="发送" disabled={busy || !input.trim()}>
+                  {busy ? "…" : "↵"}
+                </button>
+              </form>
+              </div>
+
+              {/* 右侧单独栏（当前联系人信息面板） */}
+              <aside className="chat__side" aria-label="联系人信息">
+                <div className="chat__side-avatar">{activeContact?.avatar ?? "🌸"}</div>
+                <div className="chat__side-name">{activeContact?.name ?? "昔涟"}</div>
+                <div className="chat__side-desc">{activeContact?.desc ?? ""}</div>
+                <div className={`chat__side-status${activeContact?.online ? " is-online" : ""}`}>
+                  {activeContact?.online ? "在线" : "离线"}
+                </div>
+                <div className="chat__side-divider" />
+                <div className="chat__side-label">会话信息</div>
+                <div className="chat__side-info">消息 {messages.length} 条</div>
+              </aside>
+            </div>
           )}
         </div>
       </div>
-
-      {/* 输入区（任务/设置面板时不显示） */}
-      {(taskbarTab === "chat" || taskbarTab === "contacts") && (
-        <form className="chat__input" id="composer" onSubmit={(e) => { e.preventDefault(); void handleSend(); }}>
-          <textarea ref={inputRef} id="input" rows={1} value={input}
-            onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-            placeholder={`和 ${activeContact?.name ?? "昔涟"} 说点什么…  Enter 发送 / Shift+Enter 换行`}
-            autoComplete="off" spellCheck={false} disabled={busy}
-          />
-          <button type="submit" className="chat__send" id="send" aria-label="发送" disabled={busy || !input.trim()}>
-            {busy ? "…" : "↵"}
-          </button>
-        </form>
-      )}
     </div>
   );
 }
