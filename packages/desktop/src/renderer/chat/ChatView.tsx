@@ -11,6 +11,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./chat.css";
 import { messageReducer, type MessageState } from "./message-state-machine";
+import { IconChat, IconUsers, IconTasks, IconSettings, IconClose, IconInfo } from "./icons";
 
 type Role = "user" | "assistant";
 
@@ -44,8 +45,6 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   return "fatal";
 }
 
-const AGENT_AVATARS = ["🤖", "🛠️", "🔍", "📊", "🧪", "⚙️", "💻", "📚"];
-
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -75,11 +74,11 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             id: "agent-" + name,
             name,
             type: "friend" as const,
-            avatar: AGENT_AVATARS[i % AGENT_AVATARS.length],
+            avatar: name.slice(0, 1).toUpperCase(),
             desc: "Cortex Agent",
             online: true,
           })));
-          setActive((prev) => prev ?? { id: "agent-" + res.data[0], name: res.data[0], type: "friend", avatar: AGENT_AVATARS[0], desc: "Cortex Agent", online: true });
+          setActive((prev) => prev ?? { id: "agent-" + res.data[0], name: res.data[0], type: "friend", avatar: res.data[0].slice(0, 1).toUpperCase(), desc: "Cortex Agent", online: true });
         }
       } catch { /* daemon 未起时保持空 */ }
     })();
@@ -234,12 +233,12 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     <div className="chat">
       {/* ① 任务栏 */}
       <aside className="chat__taskbar" aria-label="任务栏">
-        <button type="button" className={`chat__taskbar-btn${tab === "chat" ? " is-active" : ""}`} onClick={() => setTab("chat")} title="聊天" aria-label="聊天">💬</button>
-        <button type="button" className={`chat__taskbar-btn${railTab === "friends" || railTab === "groups" ? " is-active" : ""}`} onClick={() => setRailTab(railTab === "friends" ? "groups" : "friends")} title="好友与群聊" aria-label="好友与群聊">👥</button>
-        <button type="button" className={`chat__taskbar-btn${tab === "tasks" ? " is-active" : ""}`} onClick={() => setTab("tasks")} title="任务" aria-label="任务">✅</button>
-        <button type="button" className={`chat__taskbar-btn${tab === "settings" ? " is-active" : ""}`} onClick={() => setTab("settings")} title="设置" aria-label="设置">⚙️</button>
+        <button type="button" className={`chat__taskbar-btn${tab === "chat" ? " is-active" : ""}`} onClick={() => setTab("chat")} title="聊天" aria-label="聊天"><IconChat /></button>
+        <button type="button" className={`chat__taskbar-btn${railTab === "friends" || railTab === "groups" ? " is-active" : ""}`} onClick={() => setRailTab(railTab === "friends" ? "groups" : "friends")} title="好友与群聊" aria-label="好友与群聊"><IconUsers /></button>
+        <button type="button" className={`chat__taskbar-btn${tab === "tasks" ? " is-active" : ""}`} onClick={() => setTab("tasks")} title="任务" aria-label="任务"><IconTasks /></button>
+        <button type="button" className={`chat__taskbar-btn${tab === "settings" ? " is-active" : ""}`} onClick={() => setTab("settings")} title="设置" aria-label="设置"><IconSettings /></button>
         <div className="chat__taskbar-spacer" />
-        <button type="button" className="chat__taskbar-btn" onClick={onClose} title="关闭" aria-label="关闭">✕</button>
+        <button type="button" className="chat__taskbar-btn" onClick={onClose} title="关闭" aria-label="关闭"><IconClose /></button>
       </aside>
 
       {/* ② 好友/群聊侧边栏 */}
@@ -275,7 +274,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           <div className="chat__titlebar-actions">
-            <button type="button" className={`chat__winbtn${sideOpen ? " is-active" : ""}`} onClick={() => setSideOpen((v) => !v)} aria-label="联系人信息" title="联系人信息">ℹ️</button>
+            <button type="button" className={`chat__winbtn${sideOpen ? " is-active" : ""}`} onClick={() => setSideOpen((v) => !v)} aria-label="联系人信息" title="联系人信息"><IconInfo size={16} /></button>
             <button type="button" className="chat__winbtn chat__winbtn--close" onClick={onClose} aria-label="关闭" title="关闭">
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                 <line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />

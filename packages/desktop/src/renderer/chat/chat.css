@@ -2212,3 +2212,64 @@ html, body { height: 100%; margin: 0; padding: 0; }
   .chat__input { padding-left: 16px; padding-right: 16px; }
   .msg { max-width: 88%; }
 }
+/* ═══════════ 粉白温柔系（2026-08-09 昔涟风换肤）═══════════ */
+.chat {
+  background:
+    radial-gradient(circle at 15% 12%, rgba(255, 214, 231, 0.55) 0%, transparent 38%),
+    radial-gradient(circle at 85% 20%, rgba(219, 210, 255, 0.5) 0%, transparent 40%),
+    radial-gradient(circle at 50% 110%, rgba(255, 238, 246, 0.7) 0%, transparent 42%),
+    linear-gradient(160deg, #fff5f9 0%, #fdeef7 55%, #f3ecff 100%);
+}
+/* 任务栏 */
+.chat__taskbar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.85), rgba(250, 240, 248, 0.9));
+  border-right: 1px solid rgba(236, 72, 153, 0.14);
+}
+.chat__taskbar-btn { color: #c98ab0; }
+.chat__taskbar-btn:hover { background: rgba(236, 72, 153, 0.1); color: #d94685; }
+.chat__taskbar-btn.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.55), rgba(214, 195, 255, 0.55)); color: #d94685; box-shadow: 0 2px 10px rgba(236, 72, 153, 0.15); }
+/* 侧边栏 */
+.chat__rail { background: rgba(255, 255, 255, 0.7); border-right: 1px solid rgba(236, 72, 153, 0.12); backdrop-filter: blur(10px); }
+.chat__rail-tab { color: #c98ab0; }
+.chat__rail-tab.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.45), rgba(214, 195, 255, 0.45)); color: #d94685; }
+.chat__rail-item { color: #5c4a5c; }
+.chat__rail-item:hover { background: rgba(255, 182, 213, 0.18); }
+.chat__rail-item.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.35), rgba(214, 195, 255, 0.35)); }
+.chat__rail-avatar { background: linear-gradient(135deg, #ffe3ef, #efe3ff); }
+.chat__rail-name { color: #6b4a5e; }
+.chat__rail-desc { color: #c9a3b8; }
+/* 标题栏 */
+.chat__titlebar { background: rgba(255, 255, 255, 0.6); border-bottom: 1px solid rgba(236, 72, 153, 0.1); backdrop-filter: blur(8px); }
+.chat__name { color: #6b4a5e; }
+.chat__hint { color: #c98ab0; }
+/* 消息气泡 */
+.msg--model .msg__bubble {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(236, 72, 153, 0.12);
+  color: #5c4a5c;
+  box-shadow: 0 2px 12px rgba(236, 72, 153, 0.08);
+}
+.msg--user .msg__bubble {
+  background: linear-gradient(135deg, #ffb6d5, #d6c3ff);
+  border: none; color: #fff;
+  box-shadow: 0 4px 16px rgba(236, 72, 153, 0.22);
+}
+.msg__time { color: #d9aec4; }
+.msg__avatar { background: linear-gradient(135deg, #ffe3ef, #efe3ff); box-shadow: 0 2px 8px rgba(236, 72, 153, 0.12); }
+/* 输入区 */
+.chat__input { background: rgba(255, 255, 255, 0.55); border-top: 1px solid rgba(236, 72, 153, 0.1); backdrop-filter: blur(8px); }
+.chat__input textarea {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(236, 72, 153, 0.18);
+  color: #5c4a5c;
+}
+.chat__input textarea::placeholder { color: #d9aec4; }
+.chat__input textarea:focus { border-color: rgba(236, 72, 153, 0.5); box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1); }
+/* 右侧信息栏 */
+.chat__side { background: rgba(255, 255, 255, 0.7); border-left: 1px solid rgba(236, 72, 153, 0.12); backdrop-filter: blur(10px); }
+.chat__side-name { color: #6b4a5e; }
+.chat__side-desc { color: #c9a3b8; }
+.chat__side-info { color: #a57895; }
+/* 空状态 */
+.chat__empty-text { color: #c9a3b8; }
+.chat__empty-icon { filter: saturate(0.9); }
