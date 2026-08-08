@@ -10,6 +10,7 @@ import type { CortexBridge } from "./cortex-bridge.js";
 import { synthesize } from "./tts/gptsovits-engine.js";
 import * as path from "path";
 import * as fs from "fs";
+import { execFile } from "child_process";
 
 // ── IPC 通道名 ────────────────────────────────────────
 export const IPC_CHANNELS = {
@@ -76,7 +77,7 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
     if (!refAudio) return { ok: false, error: "未配置 GPTSOVITS_REF（参考音频路径）" };
     try {
       console.error(`[speak] 合成开始: ${text.slice(0, 20)}`);
-      const { audio, format } = await synthesize({
+      const { audio } = await synthesize({
         baseUrl,
         refAudioPath: refAudio,
         promptText: prompt,
@@ -85,8 +86,11 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
         timeoutMs: 120_000, // CPU 推理慢——长文本可能超 60s（服务排队时）
       });
       console.error(`[speak] 合成成功: ${audio.length} 字节`);
-      // 返回 base64——渲染端 Audio 播放（昔涟声线）
-      return { ok: true, data: `data:audio/${format};base64,${audio.toString("base64")}` };
+      // 最稳播放：写临时 wav → 系统播放器（SoundPlayer——已验证系统播放 100% 能响；绕开 renderer Audio 问题）
+      const tmpWav = path.join(app.getPath("userData"), "tts-temp.wav");
+      fs.writeFileSync(tmpWav, audio);
+      await playViaSystemPlayer(tmpWav);
+      return { ok: true };
     } catch (err) {
       console.error(`[speak] 合成失败: ${err instanceof Error ? err.message : String(err)}`);
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -156,6 +160,15 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
 
 function getSettingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
+}
+
+/** 系统播放器播放 wav（PowerShell SoundPlayer——已验证系统播放 100% 能响） */
+async function playViaSystemPlayer(wavPath: string): Promise<void> {
+  return await new Promise<void>((resolve) => {
+    const script = `Add-Type -AssemblyName System.Windows.Forms; $p = New-Object System.Media.SoundPlayer('${wavPath.replace(/'/g, "''")}'); $p.PlaySync()`;
+    const cmd = Buffer.from(script, "utf-16le").toString("base64");
+    execFile("powershell", ["-NoProfile", "-NonInteractive", "-EncodedCommand", cmd], { timeout: 120_000 }, () => resolve());
+  });
 }
 
 /** 读取项目根 .env（GPTSOVITS_* 兑底——electron 不自动加载 .env；多路径探测：appPath → cwd → 逐级向上） */
