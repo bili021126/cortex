@@ -1,8 +1,14 @@
 /**
- * ChatView — 完整聊天界面
+ * ChatView — 完整聊天界面（UX 完成版 2026-08-08）
  *
  * 照搬 cyrene-agent chat.css 的 DOM 结构：
  * .msg > .msg__avatar(.msg__avatar-img) + .msg__body > .msg__bubble + .msg__time
+ *
+ * UX 设计（显示 + 交互）：
+ * - 显示：打字指示器（sending/queued/regenerating 空内容）/ busy 标题呼吸点 /
+ *         消息进入动画 / 呼吸气泡 / 错误强调（CSS 同文件）
+ * - 交互：sendRequest 单一执行路径（handleSend/retry/regenerate 复用——真正重发）
+ *         状态机全边（含 sending → complete）/ 动作按钮按状态可见
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./chat.css";
@@ -41,6 +47,50 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // UX：状态推进 dispatch（按 aiId 定位——retry/regenerate 复用）
+  const dispatch = useCallback((aiId: string, ev: Parameters<typeof messageReducer>[1]["type"] | "complete" | "timeout" | "fatal" | "net-error" | "ack") => {
+    setMessages((prev) => prev.map((m) => {
+      if (m.id !== aiId) return m;
+      try { return { ...m, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
+    }));
+  }, []);
+
+  // UX 核心：发送的单一执行路径（ack → streamChat 流式 → complete/error）——handleSend/retry/regenerate 复用
+  // 完全体：WS 流式打通（sessionId 修复）——真实打字机效果（chunk 逐字累积）
+  const sendRequest = useCallback(async (aiId: string, text: string) => {
+    dispatch(aiId, "ack");
+    let first = true;
+    try {
+      await window.cortexDesktop.streamChat(
+        text,
+        undefined,
+        (chunk) => {
+          // 首 chunk → streaming 态（打字机开始）
+          if (first) { first = false; dispatch(aiId, "first-token"); }
+          setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: m.content + chunk } : m)));
+        },
+        (full) => {
+          // 完成 → complete 态（内容以完整版为准）
+          setMessages((prev) => prev.map((m) => {
+            if (m.id !== aiId) return m;
+            try { return { ...m, content: full, state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
+          }));
+        },
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const kind = localErrorKind(msg);
+      // 错误经 reducer（sending --timeout/net-error/fatal--> error_*）+ 错误消息上屏
+      const ev = kind === "timeout" ? "timeout" : kind === "network" ? "net-error" : "fatal";
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== aiId) return m;
+        try { return { ...m, content: msg, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
+      }));
+    } finally {
+      inputRef.current?.focus();
+    }
+  }, [dispatch]);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming")) return;
@@ -50,36 +100,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     const aiId = crypto.randomUUID();
     const aiMsg: Message = { id: aiId, role: "assistant", content: "", at: Date.now(), state: "queued" };
     setMessages((prev) => [...prev, userMsg, aiMsg]);
-
-    // U1 状态推进：queued → sending（ack 由 chat 调用隐含——非流式无 first-token 边界）
-    const dispatch = (ev: Parameters<typeof messageReducer>[1]["type"] | "complete" | "timeout" | "fatal" | "net-error" | "ack") => {
-      setMessages((prev) => prev.map((m) => {
-        if (m.id !== aiId) return m;
-        try { return { ...m, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
-      }));
-    };
-    dispatch("ack");
-
-    try {
-      // U1：HTTP chat（WS 流式断点待修——HTTP 已验证通——complete 态实战）
-      const res = await window.cortexDesktop.chat(text);
-      setMessages((prev) => prev.map((m) => {
-        if (m.id !== aiId) return m;
-        try { return { ...m, content: res.data ?? "", state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
-      }));
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const kind = localErrorKind(msg);
-      // 自审：错误经 reducer（sending --timeout/net-error/fatal--> error_*）+ 错误消息上屏（视觉验证可读）
-      const ev = kind === "timeout" ? "timeout" : kind === "network" ? "net-error" : "fatal";
-      setMessages((prev) => prev.map((m) => {
-        if (m.id !== aiId) return m;
-        try { return { ...m, content: msg, state: messageReducer(m.state ?? "idle", { type: ev as never }) }; } catch { return m; }
-      }));
-    } finally {
-      inputRef.current?.focus();
-    }
-  }, [input, messages]);
+    void sendRequest(aiId, text);
+  }, [input, messages, sendRequest]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -92,17 +114,25 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     try { await navigator.clipboard.writeText(content); } catch { /* 剪贴板写入可能被拒，忽略 */ }
   }, []);
 
-  // U1 动作：retry（interrupted/error_timeout → queued 重发）/ regenerate（stopped/complete → regenerating）/ stop（→ stopped）
+  // U1 动作：retry（interrupted/error_timeout → 重发）/ regenerate（stopped/complete → 重新生成）/ stop（→ stopped）
+  // UX 完整化：重发/重新生成真正调用 chat（不再只改状态——否则 regenerating 永卡）
   const resendMessage = useCallback((msg: Message) => {
+    const from = msg.state ?? "idle";
+    if (from !== "interrupted" && from !== "error_timeout" && from !== "complete" && from !== "stopped") return;
+    // 找对应的用户消息（该 assistant 消息之前的最后一条 user——重发的输入）
+    let prompt = "";
+    const idx = messages.findIndex((m) => m.id === msg.id);
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === "user") { prompt = messages[i].content; break; }
+    }
+    if (!prompt) return;
+    const ev = (from === "interrupted" || from === "error_timeout" ? "retry" : "regenerate") as never;
     setMessages((prev) => prev.map((m) => {
       if (m.id !== msg.id) return m;
-      try {
-        const from = m.state ?? "idle";
-        const ev = (from === "interrupted" || from === "error_timeout" ? "retry" : "regenerate") as never;
-        return { ...m, state: messageReducer(from, { type: ev }) };
-      } catch { return m; }
+      try { return { ...m, content: "", state: messageReducer(from, { type: ev }) }; } catch { return m; }
     }));
-  }, []);
+    void sendRequest(msg.id, prompt);
+  }, [messages, sendRequest]);
 
   const stopMessage = useCallback((msg: Message) => {
     setMessages((prev) => prev.map((m) => {
@@ -129,13 +159,13 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
       <div className="chat__body">
         <div className="chat__main">
-          {/* 标题栏 */}
+          {/* 标题栏 — UX：busy 时粉色呼吸点（chat__hint--busy） */}
           <header className="chat__titlebar">
             <div className="chat__titlebar-drag">
               <span className="chat__title-meta">
                 <span className="chat__name">昔涟</span>
                 <span className="chat__name-sep" aria-hidden="true">·</span>
-                <span className="chat__hint" id="chat-hint">
+                <span className={`chat__hint${busy ? " chat__hint--busy" : ""}`} id="chat-hint">
                   {busy ? "思考中…" : "在线"}
                 </span>
               </span>
@@ -150,7 +180,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </div>
           </header>
 
-          {/* 消息列表 */}
+          {/* 消息列表 — UX：消息进入动画（.msg chatFadeSlideIn） */}
           <main className="chat__messages" id="messages" aria-live="polite">
             {messages.length === 0 && (
               <div className="chat__empty-state" id="chat-empty">
@@ -174,6 +204,12 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 <div className="msg__body">
                   <div className={`msg__bubble${msg.state ? ` msg__bubble--${msg.state}` : ""}`}>
                     {msg.thinking && <span className="msg__thinking-badge">💭 思考中…</span>}
+                    {/* UX：发送/再生成中的打字指示器（内容空时——三跳动点——chat.css 动画） */}
+                    {(msg.state === "sending" || msg.state === "queued" || msg.state === "regenerating") && !msg.content && (
+                      <span className="msg__typing" aria-label="昔涟正在输入">
+                        <span /><span /><span />
+                      </span>
+                    )}
                     {msg.content.split("\n").map((line, i) => (
                       <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>
                     ))}
@@ -212,7 +248,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* 输入区 */}
+      {/* 输入区 — UX：busy 时发送按钮 … */}
       <form className="chat__input" id="composer" onSubmit={(e) => { e.preventDefault(); void handleSend(); }}>
         <textarea ref={inputRef} id="input" rows={1} value={input}
           onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}

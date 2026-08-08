@@ -27,13 +27,14 @@ export function handleChatCommand(
       // Try to reuse existing session or create new one
       let session = sessionManager.get(sessionId);
       if (!session) {
+        // WS 修复：create 沿用客户端 sessionId（此前 randomUUID——client 过滤事件永不匹配）
         session = sessionManager.create(agent ?? "cyrene", mode ?? "chat", (msg) => {
           // Route session send through the targeted sendFn
           if (typeof msg === "object" && msg !== null && "channel" in msg && "data" in msg) {
             const { channel, data } = msg as { channel: string; data: unknown };
             sendFn(channel, data);
           }
-        });
+        }, sessionId);
       } else {
         // R12-H5：WS 复用会话时更新 send（REST 创建的 session send 是 no-op——流式事件静默消失）
         session.send = (msg) => {

@@ -34,11 +34,12 @@ export class SessionManager {
   /**
    * Create a new chat session.
    */
-  create(agent: string, mode: string, sendFn: SendFn): ChatSession {
-    const id = crypto.randomUUID();
+  create(agent: string, mode: string, sendFn: SendFn, id?: string): ChatSession {
+    // WS 修复：沿用客户端传入的 sessionId（此前 randomUUID——client 按传入 id 过滤事件——永不匹配）
+    const sid = id ?? crypto.randomUUID();
     const now = Date.now();
     const session: ChatSession = {
-      id,
+      id: sid,
       agent,
       mode,
       createdAt: now,
@@ -48,7 +49,7 @@ export class SessionManager {
       abortController: new AbortController(),
       send: sendFn,
     };
-    this.sessions.set(id, session);
+    this.sessions.set(sid, session);
     return session;
   }
 

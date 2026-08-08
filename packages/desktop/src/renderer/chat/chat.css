@@ -1955,3 +1955,17 @@ body {
 .msg__bubble--regenerating { opacity: 0.5; }
 .msg__state-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75); vertical-align: middle; }
 @keyframes u1-pulse { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+/* ── UX 优化（2026-08-08）：打字指示器 / 消息进入 / busy 标题 / 呼吸 ── */
+@keyframes chatFadeSlideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.msg { animation: chatFadeSlideIn 0.25s ease-out; }
+.msg__typing { display: inline-flex; gap: 5px; align-items: center; padding: 4px 2px; }
+.msg__typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--rb-pink, #f9a8c8); animation: chatTypingDot 1.2s infinite ease-in-out; }
+.msg__typing span:nth-child(2) { animation-delay: 0.18s; }
+.msg__typing span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes chatTypingDot { 0%, 60%, 100% { opacity: 0.35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-4px); } }
+.chat__hint--busy { color: var(--rb-pink, #f9a8c8); }
+.chat__hint--busy::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: currentColor; animation: chatPulse 1s infinite; vertical-align: 2px; }
+@keyframes chatPulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+.msg__bubble--error_timeout, .msg__bubble--error_fatal, .msg__bubble--interrupted { border-color: rgba(255, 110, 110, 0.45) !important; }
+.msg__bubble--sending, .msg__bubble--queued, .msg__bubble--regenerating { animation: chatBreathing 1.8s ease-in-out infinite; }
+@keyframes chatBreathing { 0%, 100% { box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08); } 50% { box-shadow: 0 10px 34px rgba(249, 168, 200, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08); } }
