@@ -362,14 +362,16 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               </main>
 
               <form className="chat__input" onSubmit={(e) => { e.preventDefault(); void handleSend(); }}>
-                <textarea ref={inputRef} rows={1} value={input}
-                  onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-                  placeholder={`和 ${active?.name ?? "昔涟"} 说点什么…  Enter 发送 / Shift+Enter 换行`}
-                  autoComplete="off" spellCheck={false} disabled={busy}
-                />
-                <button type="submit" className="chat__send" aria-label="发送" disabled={busy || !input.trim()}>
-                  {busy ? "…" : "↵"}
-                </button>
+                <div className="chat__input-row">
+                  <textarea ref={inputRef} rows={1} value={input}
+                    onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+                    placeholder={`和 ${active?.name ?? "昔涟"} 说点什么…  Enter 发送 / Shift+Enter 换行`}
+                    autoComplete="off" spellCheck={false} disabled={busy}
+                  />
+                  <button type="submit" className="chat__send" aria-label="发送" disabled={busy || !input.trim()}>
+                    {busy ? "…" : "↵"}
+                  </button>
+                </div>
               </form>
             </div>
 

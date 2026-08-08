@@ -2298,3 +2298,84 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__titlebar { border-bottom: 1px solid rgba(126, 190, 232, 0.14); }
 .chat__input { border-top: 1px solid rgba(126, 190, 232, 0.12); }
 .chat__input textarea:focus { border-color: rgba(126, 190, 232, 0.5); box-shadow: 0 0 0 3px rgba(126, 190, 232, 0.12); }
+/* ═══════════ Quest 风格消息区（2026-08-09）═══════════ */
+/* 消息区背景：白底（对话面板） */
+.chat__stage-main { background: #ffffff; }
+/* 用户消息：白底无气泡、左对齐、绿色小徽章 */
+.msg { max-width: 100%; gap: 10px; margin-top: 24px; }
+.msg--user { align-self: flex-start; flex-direction: row; }
+.msg--user .msg__bubble {
+  background: transparent; border: none; box-shadow: none;
+  color: #0d0d0d; padding: 0;
+}
+.msg--user .msg__avatar { display: none; }
+/* 用户消息的绿色徽章 */
+.msg--user .msg__bubble::before {
+  content: "你";
+  display: inline-block;
+  background: #71d29c; color: #fff;
+  font-size: 11px; padding: 2px 8px; border-radius: 4px;
+  margin-right: 8px; vertical-align: middle;
+}
+/* AI 消息：缩进 + 无头像 + 浅灰装饰竖条 */
+.msg--model { align-self: flex-start; padding-left: 20px; }
+.msg--model .msg__avatar { display: none; }
+.msg--model .msg__bubble {
+  background: transparent; border: none; box-shadow: none;
+  color: #0d0d0d; padding: 0; font-size: 14px; line-height: 1.7;
+}
+/* AI 消息左侧浅灰装饰条 */
+.msg--model { position: relative; }
+.msg--model::before {
+  content: "";
+  position: absolute; left: 4px; top: 2px; bottom: 2px;
+  width: 2px; border-radius: 2px;
+  background: #e4e4e4;
+}
+/* 代码卡片（Quest 风格 #F9F9F9 圆角 4px） */
+.msg__bubble pre, .msg__bubble code {
+  background: #f9f9f9 !important;
+  border-radius: 4px;
+  font-size: 12px; font-family: ui-monospace, Consolas, monospace;
+  padding: 2px 5px;
+}
+.msg__bubble pre { padding: 10px; overflow-x: auto; }
+/* 列表项目符号：绿色 */
+.msg__bubble li::marker { color: #58d58d; }
+/* 时间戳：右对齐灰色小字 */
+.msg__time {
+  display: block; text-align: right;
+  color: #a3a3a3; font-size: 11px;
+  margin-top: 2px;
+}
+.msg__action-btn { color: #a3a3a3; }
+/* 状态徽章 */
+.msg__state-badge { background: #f9f9f9; color: #a3a3a3; border-radius: 4px; font-size: 11px; padding: 1px 6px; margin-left: 6px; }
+/* 输入区：Quest 风格（白色、顶部工具行、深色发送） */
+.chat__input {
+  background: #ffffff;
+  border-top: 1px solid #f0f0f0;
+  padding: 12px 20px 16px;
+  flex-direction: column; align-items: stretch; gap: 8px;
+}
+.chat__input::before {
+  content: "追加说明";
+  color: #a0a0a0; font-size: 12px;
+}
+.chat__input-row { display: flex; align-items: center; gap: 10px; }
+.chat__input textarea {
+  background: #ffffff; border: 1px solid #e8e8e8;
+  border-radius: 4px; color: #0d0d0d;
+  font-size: 14px; min-height: 40px;
+}
+.chat__input textarea::placeholder { color: #bdbdbd; }
+.chat__input textarea:focus { border-color: #58d58d; box-shadow: none; }
+.chat__send {
+  width: auto; height: 30px; padding: 0 16px;
+  border-radius: 4px;
+  background: #3e3e3e; color: #fff; font-size: 13px;
+}
+.chat__send:hover:not(:disabled) { background: #2e2e2e; transform: none; }
+/* 空状态 */
+.chat__empty-text { color: #a3a3a3; }
+.chat__empty-icon { filter: grayscale(0.2); }
