@@ -65,12 +65,13 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
     return { ok: true, data: agents };
   });
 
-  // live2d:speak — 昔涟声线 TTS（GPT-SoVITS 本地推理——GPTSOVITS_* 环境变量配置）
+  // live2d:speak — 昔涟声线 TTS（GPT-SoVITS 本地推理——GPTSOVITS_* 环境变量或 .env 兜底）
 ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
     if (!text?.trim()) return { ok: true, data: null };
-    const baseUrl = process.env.GPTSOVITS_URL ?? "http://localhost:9880";
-    const refAudio = process.env.GPTSOVITS_REF ?? "";
-    const prompt = process.env.GPTSOVITS_PROMPT ?? "";
+    const env = readEnvSafe();
+    const baseUrl = process.env.GPTSOVITS_URL ?? env.GPTSOVITS_URL ?? "http://localhost:9880";
+    const refAudio = process.env.GPTSOVITS_REF ?? env.GPTSOVITS_REF ?? "";
+    const prompt = process.env.GPTSOVITS_PROMPT ?? env.GPTSOVITS_PROMPT ?? "";
     if (!refAudio) return { ok: false, error: "未配置 GPTSOVITS_REF（参考音频路径）" };
     try {
       const { audio, format } = await synthesize({
@@ -150,4 +151,19 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
 
 function getSettingsPath(): string {
   return path.join(app.getPath("userData"), "settings.json");
+}
+
+/** 读取项目根 .env（GPTSOVITS_* 兜底——electron 不自动加载 .env） */
+function readEnvSafe(): Record<string, string> {
+  try {
+    const raw = fs.readFileSync(path.join(app.getAppPath(), ".env"), "utf-8");
+    const out: Record<string, string> = {};
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const i = t.indexOf("=");
+      if (i > 0) out[t.slice(0, i).trim()] = t.slice(i + 1).trim();
+    }
+    return out;
+  } catch { return {}; }
 }
