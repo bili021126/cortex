@@ -7,6 +7,7 @@
 import type { IpcMain } from "electron";
 import { app, BrowserWindow } from "electron";
 import type { CortexBridge } from "./cortex-bridge.js";
+import { synthesize } from "./tts/gptsovits-engine.js";
 import * as path from "path";
 import * as fs from "fs";
 
@@ -15,6 +16,7 @@ export const IPC_CHANNELS = {
   CORTEX_INIT: "cortex:init",
   CORTEX_CHAT: "cortex:chat",
   CORTEX_STREAM_CHAT: "cortex:stream-chat",
+  CORTEX_STREAM_CANCEL: "cortex:stream-cancel",
   CORTEX_GET_AGENTS: "cortex:get-agents",
   LIVE2D_SPEAK: "live2d:speak",
   LIVE2D_EXPRESSION: "live2d:expression",
@@ -51,16 +53,38 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
     },
   );
 
+  // cortex:stream-cancel — UX 停止：中断当前流式会话
+  ipcMain.handle(IPC_CHANNELS.CORTEX_STREAM_CANCEL, async () => {
+    cortex.cancelActiveStream();
+    return { ok: true };
+  });
+
   // cortex:get-agents — 获取 Agent 列表
   ipcMain.handle(IPC_CHANNELS.CORTEX_GET_AGENTS, async () => {
     const agents = await cortex.getAgents();
     return { ok: true, data: agents };
   });
 
-  // live2d:speak — TTS 语音（Cortex 尚无 TTS 管道，返回空音频）
-  ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, _text: string) => {
-    // TTS 管道未就绪，返回空音频避免阻塞渲染进程
-    return { ok: true, data: null };
+  // live2d:speak — 昔涟声线 TTS（GPT-SoVITS 本地推理——GPTSOVITS_* 环境变量配置）
+ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
+    if (!text?.trim()) return { ok: true, data: null };
+    const baseUrl = process.env.GPTSOVITS_URL ?? "http://localhost:9880";
+    const refAudio = process.env.GPTSOVITS_REF ?? "";
+    const prompt = process.env.GPTSOVITS_PROMPT ?? "";
+    if (!refAudio) return { ok: false, error: "未配置 GPTSOVITS_REF（参考音频路径）" };
+    try {
+      const { audio, format } = await synthesize({
+        baseUrl,
+        refAudioPath: refAudio,
+        promptText: prompt,
+        text,
+        format: "wav",
+      });
+      // 返回 base64——渲染端 Audio 播放（昔涟声线）
+      return { ok: true, data: `data:audio/${format};base64,${audio.toString("base64")}` };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   // live2d:expression — 表情切换

@@ -162,6 +162,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   }, [messages, sendRequest]);
 
   const stopMessage = useCallback((msg: Message) => {
+    // UX 停止：流式中断（chat.cancel——daemon 侧 abort LLM）+ 状态机推进
+    void window.cortexDesktop.cancelStreamChat();
     setMessages((prev) => prev.map((m) => {
       if (m.id !== msg.id) return m;
       try { return { ...m, state: messageReducer(m.state ?? "idle", { type: "stop" }) }; } catch { return m; }
@@ -170,8 +172,20 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
   const speakMessage = useCallback(async (content: string, msgId: string) => {
     if (speakingMsgId === msgId) { setSpeakingMsgId(null); return; }
+    if (!content.trim()) return;
     setSpeakingMsgId(msgId);
-    try { await window.cortexDesktop.speak(content); } catch { /* TTS 播放可能失败，忽略 */ }
+    try {
+      // 昔涟声线 TTS：GPT-SoVITS 合成 → base64 → Audio 播放
+      const res = await window.cortexDesktop.speak(content) as { ok: boolean; data?: string; error?: string };
+      if (res?.ok && res.data) {
+        const audio = new Audio(res.data);
+        await new Promise<void>((resolve) => {
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+          void audio.play().catch(() => resolve());
+        });
+      }
+    } catch { /* TTS 播放失败，忽略 */ }
     setSpeakingMsgId(null);
   }, [speakingMsgId]);
 
@@ -259,6 +273,10 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                         )}
                         {msg.state === "regenerating" && (
                           <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止">⏹️</button>
+                        )}
+                        {/* UX 停止：流式进行中可中断（sending/streaming） */}
+                        {(msg.state === "sending" || msg.state === "streaming") && (
+                          <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止生成">⏹️</button>
                         )}
                         <button className="msg__action-btn" onClick={() => void copyMessage(msg.content, msg.id)} title="复制">📋</button>
                         <button className="msg__action-btn" onClick={() => void speakMessage(msg.content, msg.id)} title="朗读">

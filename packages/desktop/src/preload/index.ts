@@ -11,6 +11,7 @@ const IPC_CHANNELS = {
   CORTEX_INIT: "cortex:init",
   CORTEX_CHAT: "cortex:chat",
   CORTEX_STREAM_CHAT: "cortex:stream-chat",
+  CORTEX_STREAM_CANCEL: "cortex:stream-cancel",
   CORTEX_GET_AGENTS: "cortex:get-agents",
   LIVE2D_SPEAK: "live2d:speak",
   LIVE2D_EXPRESSION: "live2d:expression",
@@ -27,7 +28,10 @@ export interface CortexDesktopAPI {
     agent: string | undefined,
     onChunk: (chunk: string) => void,
     onDone: (full: string) => void,
+    history?: Array<{ role: "user" | "assistant"; content: string }>,
   ) => Promise<{ ok: boolean }>;
+  /** UX 停止：中断当前流式会话 */
+  cancelStreamChat: () => Promise<{ ok: boolean }>;
   getAgents: () => Promise<{ ok: boolean; data?: string[] }>;
   speak: (text: string) => Promise<{ ok: boolean; error?: string }>;
   expression: (name: string) => Promise<{ ok: boolean }>;
@@ -86,6 +90,9 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     ipcRenderer.on(IPC_CHANNELS.CORTEX_STREAM_CHAT, handler);
     return ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STREAM_CHAT, input, agent, history);
   },
+
+  cancelStreamChat: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STREAM_CANCEL),
 
   getAgents: () =>
     ipcRenderer.invoke(IPC_CHANNELS.CORTEX_GET_AGENTS),

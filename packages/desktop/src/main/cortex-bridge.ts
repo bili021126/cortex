@@ -17,6 +17,8 @@ export class CortexBridge {
   private conn: CortexConnection | null = null;
   private initialized = false;
   private _port = 3210;
+  /** UX 停止：当前活动流式会话（cancel 用） */
+  private activeSessionId: string | null = null;
 
   /**
    * 初始化连接至 cortex daemon。
@@ -64,7 +66,7 @@ export class CortexBridge {
     const conn = this.conn;
     return await new Promise<string>((resolve, reject) => {
       let full = "";
-      streamChat(conn, input, {
+      const handle = streamChat(conn, input, {
         onChunk: (content) => {
           full += content;
           onChunk?.(content);
@@ -72,7 +74,16 @@ export class CortexBridge {
         onComplete: (output) => resolve(output || full),
         onError: (error) => reject(new Error(error)),
       }, { agent, history });
+      this.activeSessionId = handle.sessionId;
     });
+  }
+
+  /** UX 停止：中断当前流式会话（chat.cancel——daemon 侧 abort LLM） */
+  cancelActiveStream(): void {
+    if (this.activeSessionId && this.conn) {
+      this.conn.ws.cancelChat(this.activeSessionId);
+      this.activeSessionId = null;
+    }
   }
 
   /**
