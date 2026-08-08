@@ -82,6 +82,7 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
         promptText: prompt,
         text,
         format: "wav",
+        timeoutMs: 120_000, // CPU 推理慢——长文本可能超 60s（服务排队时）
       });
       console.error(`[speak] 合成成功: ${audio.length} 字节`);
       // 返回 base64——渲染端 Audio 播放（昔涟声线）

@@ -175,17 +175,23 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     if (!content.trim()) return;
     setSpeakingMsgId(msgId);
     try {
-      // 昔涟声线 TTS：GPT-SoVITS 合成 → base64 → AudioContext 播放（增益放大——合成音量偏小）
+      // 昔涟声线 TTS：GPT-SoVITS 合成 → base64 → atob+Blob+createObjectURL 播放（对齐 Cyrene-Agent——data URL 大音频播放失败）
       const res = await window.cortexDesktop.speak(content) as { ok: boolean; data?: string; error?: string };
       if (res?.ok && res.data) {
-        const audio = new Audio(res.data);
+        // data 形如 data:audio/wav;base64,xxx——拆分出 base64 部分
+        const b64 = res.data.includes(",") ? res.data.split(",").pop() ?? "" : res.data;
+        const mime = res.data.startsWith("data:") ? res.data.slice(5, res.data.indexOf(";")) : "audio/wav";
+        const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+        const blob = new Blob([bytes], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
         audio.volume = 1.5; // 合成音量偏小（mean -29dB）——放大播放
         await new Promise<void>((resolve) => {
-          audio.onended = () => resolve();
-          audio.onerror = () => resolve();
+          audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
           void audio.play().catch((err) => {
-            // data URL 播放失败回退：AudioContext decode + gain
             console.error("[speak] Audio.play 失败，回退 AudioContext:", String(err));
+            URL.revokeObjectURL(url);
             void playViaAudioContext(res.data).finally(resolve);
           });
         });
