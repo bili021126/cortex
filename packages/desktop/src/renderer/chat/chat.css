@@ -18,11 +18,13 @@ body {
   overflow: hidden;
 }
 
+html, body { height: 100%; margin: 0; padding: 0; }
 .chat {
   position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-height: 100vh;
   width: 100vw;
   margin: 0;
   border-radius: 32px;
@@ -2116,3 +2118,7 @@ body {
 .msg { max-width: 64%; }
 .chat__input textarea::placeholder { color: rgba(255, 255, 255, 0.28); font-size: 13px; }
 .chat__input textarea { font-size: 14px; }
+/* ── 右侧信息栏收起（2026-08-09）── */
+.chat__side { transition: width 0.25s ease, min-width 0.25s ease, padding 0.25s ease, opacity 0.2s ease; overflow: hidden; }
+.chat__side.is-collapsed { width: 0; min-width: 0; padding-left: 0; padding-right: 0; opacity: 0; border-left: none; }
+.chat__winbtn.is-active { background: rgba(249, 168, 200, 0.2); }

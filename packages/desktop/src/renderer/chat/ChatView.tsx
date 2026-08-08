@@ -67,6 +67,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [taskbarTab, setTaskbarTab] = useState<"chat" | "contacts" | "tasks" | "settings">("chat");
   const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
   const [activeContact, setActiveContact] = useState<Contact | null>(PRESET_CONTACTS[0]);
+  // 右侧信息栏默认收起
+  const [sideOpen, setSideOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const busy = messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming" || m.state === "regenerating");
@@ -265,6 +267,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               </span>
             </div>
             <div className="chat__titlebar-actions">
+              <button type="button" className={`chat__winbtn${sideOpen ? " is-active" : ""}`} onClick={() => setSideOpen((v) => !v)} aria-label="联系人信息" title="联系人信息">ℹ️</button>
               <button type="button" className="chat__winbtn chat__winbtn--close" onClick={onClose} aria-label="关闭" title="关闭">
                 <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                   <line x1="2" y1="2" x2="8" y2="8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -372,8 +375,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               </form>
               </div>
 
-              {/* 右侧单独栏（当前联系人信息面板） */}
-              <aside className="chat__side" aria-label="联系人信息">
+              {/* 右侧信息栏（默认收起——点击标题栏 ℹ️ 展开） */}
+              <aside className={`chat__side${sideOpen ? "" : " is-collapsed"}`} aria-label="联系人信息">
                 <div className="chat__side-avatar">{activeContact?.avatar ?? "🌸"}</div>
                 <div className="chat__side-name">{activeContact?.name ?? "昔涟"}</div>
                 <div className="chat__side-desc">{activeContact?.desc ?? ""}</div>
