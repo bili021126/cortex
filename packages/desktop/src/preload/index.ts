@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     agent: string | undefined,
     onChunk: (chunk: string) => void,
     onDone: (full: string) => void,
+    history?: Array<{ role: "user" | "assistant"; content: string }>,
   ) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
@@ -83,7 +84,7 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
       }
     };
     ipcRenderer.on(IPC_CHANNELS.CORTEX_STREAM_CHAT, handler);
-    return ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STREAM_CHAT, input, agent);
+    return ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STREAM_CHAT, input, agent, history);
   },
 
   getAgents: () =>

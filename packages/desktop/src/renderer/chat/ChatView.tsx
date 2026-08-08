@@ -36,7 +36,17 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
 
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    // UX 完全体：历史持久化（重开窗口不丢对话——localStorage）
+    try {
+      const raw = localStorage.getItem("cyrene-chat-history");
+      if (raw) {
+        const parsed = JSON.parse(raw) as Message[];
+        return parsed.filter((m) => m && typeof m.id === "string" && m.role === "user" || (m && typeof m.id === "string" && m.role === "assistant"));
+      }
+    } catch { /* 无历史或损坏——空对话 */ }
+    return [];
+  });
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -45,6 +55,15 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // UX 完全体：历史自动保存（每次消息变化）
+  useEffect(() => {
+    try {
+      // 进行中的消息不持久化（状态类字段会过时）——只存完成的对话
+      const stable = messages.filter((m) => !m.state || m.state === "complete" || m.state === "stopped" || m.state === "interrupted" || m.state === "error_timeout" || m.state === "error_fatal");
+      localStorage.setItem("cyrene-chat-history", JSON.stringify(stable));
+    } catch { /* 存储失败不阻断 */ }
   }, [messages]);
 
   // UX：状态推进 dispatch（按 aiId 定位——retry/regenerate 复用）
@@ -56,10 +75,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   }, []);
 
   // UX 核心：发送的单一执行路径（ack → streamChat 流式 → complete/error）——handleSend/retry/regenerate 复用
-  // 完全体：WS 流式打通（sessionId 修复）——真实打字机效果（chunk 逐字累积）
+  // 完全体：WS 流式打通（sessionId 修复）——真实打字机效果（chunk 逐字累积）+ 多轮上下文（history）
   const sendRequest = useCallback(async (aiId: string, text: string) => {
     dispatch(aiId, "ack");
     let first = true;
+    // 多轮上下文：收集历史（该 ai 消息之前的完整对话——user/assistant 交替）
+    const history: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const idx = messages.findIndex((m) => m.id === aiId);
+    for (let i = 0; i < idx; i++) {
+      const m = messages[i];
+      if (m.role === "user" || m.role === "assistant") history.push({ role: m.role, content: m.content || "" });
+    }
     try {
       await window.cortexDesktop.streamChat(
         text,
@@ -76,6 +102,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             try { return { ...m, content: full, state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
           }));
         },
+        history,
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

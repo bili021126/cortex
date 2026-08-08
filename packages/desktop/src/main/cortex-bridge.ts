@@ -55,6 +55,7 @@ export class CortexBridge {
     input: string,
     agent?: string,
     onChunk?: (chunk: string) => void,
+    history?: Array<{ role: "user" | "assistant"; content: string }>,
   ): Promise<string> {
     if (!this.initialized || !this.conn) {
       throw new Error("CortexBridge not initialized");
@@ -70,7 +71,7 @@ export class CortexBridge {
         },
         onComplete: (output) => resolve(output || full),
         onError: (error) => reject(new Error(error)),
-      }, { agent });
+      }, { agent, history });
     });
   }
 

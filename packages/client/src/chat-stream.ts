@@ -9,6 +9,7 @@ import type { CortexConnection } from "./connection.js";
 import type {
   WSGateRequestEvent,
   WSChatCompleteEvent,
+  LlmMessageDTO,
 } from "@cortex/protocol";
 
 /** 流式对话回调集合 */
@@ -51,9 +52,10 @@ export function streamChat(
   conn: CortexConnection,
   input: string,
   callbacks: ChatStreamCallbacks,
-  opts?: { agent?: string; mode?: "chat" | "talk" | "plan" | "party" | "command" },
+  opts?: { agent?: string; mode?: "chat" | "talk" | "plan" | "party" | "command"; history?: LlmMessageDTO[] },
 ): ChatStreamHandle {
-  const sessionId = conn.ws.startChat({ input, agent: opts?.agent, mode: opts?.mode });
+  // UX 完全体：多轮上下文——history 透传（daemon 侧 chat.start 恢复会话历史）
+  const sessionId = conn.ws.startChat({ input, agent: opts?.agent, mode: opts?.mode, history: opts?.history });
 
   const unsubChat = conn.ws.on("chat", (msg) => {
     // B1：data 类型已按通道收窄为 WSChatServerEvent["data"]，无需 as cast

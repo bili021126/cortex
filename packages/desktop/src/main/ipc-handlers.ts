@@ -39,13 +39,13 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
     },
   );
 
-  // cortex:stream-chat — 流式对话
+  // cortex:stream-chat — 流式对话（UX 完全体：history 多轮上下文透传）
   ipcMain.handle(
     IPC_CHANNELS.CORTEX_STREAM_CHAT,
-    async (event, input: string, agent?: string) => {
+    async (event, input: string, agent: string | undefined, history?: Array<{ role: "user" | "assistant"; content: string }>) => {
       const result = await cortex.streamChat(input, agent, (chunk) => {
         event.sender.send(IPC_CHANNELS.CORTEX_STREAM_CHAT, { chunk, done: false });
-      });
+      }, history);
       event.sender.send(IPC_CHANNELS.CORTEX_STREAM_CHAT, { chunk: "", done: true, full: result });
       return { ok: true };
     },
