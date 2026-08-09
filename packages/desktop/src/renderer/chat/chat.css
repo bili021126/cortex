@@ -2518,6 +2518,9 @@ html, body { height: 100%; margin: 0; padding: 0; }
 }
 /* ═══════════ 模式状态（2026-08-09 标题栏 dropdown）═══════════ */
 .chat__mode-wrap { position: relative; display: inline-block; margin-left: 10px; }
+/* 模式按钮 no-drag——标题栏 drag 区域吞点击修复（最终验收发现） */
+.chat__mode-btn { -webkit-app-region: no-drag; }
+.chat__titlebar-actions { -webkit-app-region: no-drag; }
 .chat__mode-btn {
   border: 1px solid rgba(236, 72, 153, 0.25);
   background: linear-gradient(135deg, rgba(255, 182, 213, 0.3), rgba(214, 195, 255, 0.3));
