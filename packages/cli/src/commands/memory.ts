@@ -55,10 +55,13 @@ export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
     }
 
     const subcommand = args[0];
+    // audit 不依赖 engine store（纯文件审计）——在 getMemoryStore 前独立处理（否则 bridge 未初始化时 audit 被拖累）
+    if (subcommand === "audit") {
+      return await handleMemoryAudit(args[1]);
+    }
     try {
       const memory = await bridge.getMemoryStore();
       switch (subcommand) {
-        case "audit":      return await handleMemoryAudit(args[1]);
         case "write":      return await handleMemoryWrite(memory, { rawKey: args[1], rawValue: args.slice(2).join(" "), options });
         case "read":       return await handleMemoryRead(memory, args[1], options);
         case "search":     return await handleMemorySearch(memory, args.slice(1).join(" "), options);
@@ -265,7 +268,7 @@ async function handleMemoryStats(
 /** 记忆审计——读记忆 JSON 文件，跑悬空引用/孤儿检查（M1 接入：auditMemoryStore 零调用修复） */
 async function handleMemoryAudit(filePath: string | undefined): Promise<CommandResult> {
   if (!filePath) {
-    return { success: false, output: "用法: cortex memory audit <file.json>——请指定记忆文件路径", exitCode: 1 };
+    return { success: false, error: "请指定记忆 JSON 文件路径（cortex memory audit <file.json>）", output: "用法: cortex memory audit <file.json>——请指定记忆 JSON 文件路径（SQLite db 不支持，需 JSON 导出）", exitCode: 1 };
   }
   try {
     const { auditMemoryFile, summarizeMemoryAudit } = await import("@cortex/memory");
@@ -281,6 +284,7 @@ async function handleMemoryAudit(filePath: string | undefined): Promise<CommandR
     }
     return { success: true, output: lines.join("\n"), exitCode: 0 };
   } catch (e) {
-    return { success: false, output: `审计失败: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 };
+    const msg = e instanceof Error ? e.message : String(e);
+    return { success: false, error: `审计失败: ${msg}`, output: `审计失败: ${msg}`, exitCode: 1 };
   }
 }

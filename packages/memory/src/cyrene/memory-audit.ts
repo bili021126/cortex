@@ -91,7 +91,7 @@ export function auditMemoryStore(store: MemoryStoreData): MemoryAuditFinding[] {
     }
 
     const overclaimedTerms = ABSOLUTE_TERMS.filter((term) => (
-      memory.content.includes(term) && !hasEvidenceForTerm(term, linkedEvidence)
+      (memory.content ?? "").includes(term) && !hasEvidenceForTerm(term, linkedEvidence)
     ))
     if (overclaimedTerms.length > 0) {
       findings.push({
