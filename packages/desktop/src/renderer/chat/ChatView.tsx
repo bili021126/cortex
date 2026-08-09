@@ -45,6 +45,67 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   return "fatal";
 }
 
+/** 设置域列表（对应 config/constants 的域） */
+const SETTINGS_DOMAINS = [
+  { id: "llm", name: "模型", icon: "🧠", desc: "LLM 配置" },
+  { id: "memory", name: "记忆", icon: "💭", desc: "记忆策略" },
+  { id: "skills", name: "技能", icon: "🎯", desc: "技能系统" },
+  { id: "scheduler", name: "调度", icon: "⏱️", desc: "调度参数" },
+  { id: "timeouts", name: "超时", icon: "⏳", desc: "超时配置" },
+  { id: "governance", name: "治理", icon: "⚖️", desc: "治理规则" },
+  { id: "env", name: "环境", icon: "🌐", desc: "环境变量" },
+  { id: "file-paths", name: "路径", icon: "📁", desc: "文件路径" },
+  { id: "agent-quota", name: "配额", icon: "📊", desc: "Agent 配额" },
+  { id: "version", name: "版本", icon: "🏷️", desc: "版本信息" },
+];
+
+/** 各域配置项（静态示例） */
+const SETTINGS_ITEMS: Record<string, Array<{ label: string; key: string; value: string }>> = {
+  llm: [
+    { label: "默认模型", key: "llm.defaultModel", value: "DeepSeek-V4" },
+    { label: "推理档位", key: "llm.reasoning", value: "Auto" },
+    { label: "最大 Token", key: "llm.maxTokens", value: "8192" },
+    { label: "温度", key: "llm.temperature", value: "0.7" },
+  ],
+  memory: [
+    { label: "记忆分层", key: "memory.tiers", value: "L0/L1/L2" },
+    { label: "检索条数", key: "memory.topK", value: "8" },
+    { label: "持久化", key: "memory.persist", value: "开启" },
+  ],
+  skills: [
+    { label: "技能注册", key: "skills.registry", value: "内置 + 自定义" },
+    { label: "技能上限", key: "skills.maxCount", value: "64" },
+  ],
+  scheduler: [
+    { label: "轮询间隔", key: "scheduler.intervalMs", value: "1000" },
+    { label: "并发上限", key: "scheduler.concurrency", value: "4" },
+  ],
+  timeouts: [
+    { label: "请求超时", key: "timeouts.requestMs", value: "60000" },
+    { label: "会话空闲", key: "timeouts.idleMs", value: "300000" },
+  ],
+  governance: [
+    { label: "宪法版本", key: "governance.constitution", value: "v2.5" },
+    { label: "门禁等级", key: "governance.gateLevel", value: "五层" },
+  ],
+  env: [
+    { label: "运行环境", key: "env.nodeEnv", value: "production" },
+    { label: "日志级别", key: "env.logLevel", value: "info" },
+  ],
+  "file-paths": [
+    { label: "工作区", key: "paths.workspace", value: "D:/cortex" },
+    { label: "数据目录", key: "paths.data", value: ".cortex" },
+  ],
+  "agent-quota": [
+    { label: "Agent 上限", key: "quota.agents", value: "8" },
+    { label: "并行会话", key: "quota.sessions", value: "3" },
+  ],
+  version: [
+    { label: "Cortex", key: "version.cortex", value: "2.5.28" },
+    { label: "桌面端", key: "version.desktop", value: "0.1.0" },
+  ],
+};
+
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -68,6 +129,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState("Chat");
   const [modeOpen, setModeOpen] = useState(false);
   const MODES = ["Chat", "Work", "Code", "Learn", "Daily"];
+  // 设置面板：当前域
+  const [settingsDomain, setSettingsDomain] = useState("llm");
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
 
@@ -354,17 +417,35 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
-        {/* 设置面板（静态——布局理顺） */}
+        {/* 设置面板（域列表 + 配置项双栏） */}
         {tab === "settings" && (
           <div className="chat__panel chat__panel--settings">
-            <div className="chat__panel-head">
-              <span className="chat__panel-title">设置</span>
-            </div>
-            <div className="chat__settings-grid">
-              <SettingCard icon="🧠" title="模型" items={["默认模型：DeepSeek-V4", "推理档位：Auto"]} />
-              <SettingCard icon="🔊" title="语音" items={["TTS 引擎：GPT-SoVITS", "参考音频：3.5 review"]} />
-              <SettingCard icon="🎨" title="主题" items={["粉白温柔系", "浅蓝过渡 + 薄荷绿"]} />
-              <SettingCard icon="🛠️" title="Agent" items={["思考模式：开", "上下文长度：32"]} />
+            <div className="chat__settings-layout">
+              {/* 左：域列表 */}
+              <aside className="chat__settings-domains">
+                {SETTINGS_DOMAINS.map((d) => (
+                  <button key={d.id} type="button" className={`chat__settings-domain${settingsDomain === d.id ? " is-active" : ""}`} onClick={() => setSettingsDomain(d.id)}>
+                    <span aria-hidden="true">{d.icon}</span>
+                    <span>{d.name}</span>
+                  </button>
+                ))}
+              </aside>
+              {/* 右：配置项 */}
+              <div className="chat__settings-config">
+                <div className="chat__panel-head">
+                  <span className="chat__panel-title">{SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.name ?? "设置"}</span>
+                  <span className="chat__settings-domain-desc">{SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.desc ?? ""}</span>
+                </div>
+                <div className="chat__settings-items">
+                  {(SETTINGS_ITEMS[settingsDomain] ?? []).map((it) => (
+                    <div key={it.key} className="chat__setting-item">
+                      <span className="chat__setting-item-label">{it.label}</span>
+                      <span className="chat__setting-item-key">{it.key}</span>
+                      <span className="chat__setting-item-value">{it.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}

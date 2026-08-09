@@ -2583,3 +2583,33 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__setting-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b4a5e; margin-bottom: 10px; }
 .chat__setting-row { font-size: 12px; color: #a57895; padding: 5px 0; border-bottom: 1px dashed rgba(236, 72, 153, 0.08); }
 .chat__setting-row:last-child { border-bottom: none; }
+/* ═══════════ 设置面板双栏（2026-08-09 域列表 + 配置项）═══════════ */
+.chat__settings-layout { display: flex; flex: 1; min-height: 0; gap: 16px; }
+.chat__settings-domains {
+  width: 168px; min-width: 168px;
+  display: flex; flex-direction: column; gap: 4px;
+  padding-right: 10px; border-right: 1px solid rgba(236, 72, 153, 0.1);
+  overflow-y: auto;
+}
+.chat__settings-domain {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border: none; border-radius: 10px;
+  background: transparent; color: #6b4a5e; font-size: 13px;
+  cursor: pointer; text-align: left;
+  transition: background 0.15s;
+}
+.chat__settings-domain:hover { background: rgba(236, 72, 153, 0.06); }
+.chat__settings-domain.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.35), rgba(214, 195, 255, 0.35)); color: #d94685; font-weight: 600; }
+.chat__settings-config { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chat__settings-domain-desc { font-size: 11px; color: #c9a3b8; }
+.chat__settings-items { display: flex; flex-direction: column; gap: 8px; }
+.chat__setting-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(236, 72, 153, 0.1);
+  border-radius: 10px;
+}
+.chat__setting-item-label { font-size: 13px; color: #5c4a5c; min-width: 90px; }
+.chat__setting-item-key { flex: 1; font-size: 11px; color: #c9a3b8; font-family: ui-monospace, Consolas, monospace; }
+.chat__setting-item-value { font-size: 12px; color: #d94685; font-weight: 500; padding: 2px 10px; background: rgba(236, 72, 153, 0.08); border-radius: 999px; }
