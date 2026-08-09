@@ -2628,3 +2628,40 @@ html, body { height: 100%; margin: 0; padding: 0; }
 }
 .chat__settings-group:hover { background: rgba(236, 72, 153, 0.06); }
 .chat__settings-group.is-active { background: rgba(236, 72, 153, 0.12); color: #d94685; font-weight: 600; }
+/* ═══════════ 任务面板三栏（2026-08-09 渐进式披露）═══════════ */
+.chat__tasks-layout { display: flex; flex: 1; min-height: 0; gap: 14px; }
+.chat__tasks-filters {
+  width: 120px; min-width: 120px;
+  display: flex; flex-direction: column; gap: 4px;
+  padding-right: 10px; border-right: 1px solid rgba(236, 72, 153, 0.1);
+  overflow-y: auto;
+}
+.chat__tasks-filter {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border: none; border-radius: 10px;
+  background: transparent; color: #6b4a5e; font-size: 13px;
+  cursor: pointer; text-align: left;
+  transition: background 0.15s;
+}
+.chat__tasks-filter:hover { background: rgba(236, 72, 153, 0.06); }
+.chat__tasks-filter.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.35), rgba(214, 195, 255, 0.35)); color: #d94685; font-weight: 600; }
+.chat__tasks-list {
+  width: 260px; min-width: 260px;
+  display: flex; flex-direction: column; gap: 8px;
+  padding-right: 10px; border-right: 1px solid rgba(236, 72, 153, 0.1);
+  overflow-y: auto;
+}
+.chat__task-item.is-active { border-color: rgba(236, 72, 153, 0.35); background: rgba(255, 182, 213, 0.12); }
+.chat__tasks-detail { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.chat__tasks-detail-meta { display: flex; gap: 14px; font-size: 12px; color: #a57895; }
+.chat__tasks-steps { display: flex; flex-direction: column; gap: 6px; background: rgba(255, 255, 255, 0.6); border-radius: 12px; padding: 12px 14px; }
+.chat__task-step { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #6b4a5e; }
+.chat__task-step-mark { width: 18px; text-align: center; font-size: 12px; }
+.chat__task-step--done .chat__task-step-mark { color: #4db896; }
+.chat__task-step--doing .chat__task-step-mark { color: #d94685; animation: u1-pulse 1.2s ease-in-out infinite; }
+.chat__task-step--failed .chat__task-step-mark { color: #e5484d; }
+.chat__task-step--todo { color: #c9a3b8; }
+.chat__task-step--failed .chat__task-step-name { color: #e5484d; }
+.chat__tasks-events { display: flex; flex-direction: column; gap: 4px; background: rgba(255, 255, 255, 0.6); border-radius: 12px; padding: 12px 14px; }
+.chat__task-event { font-size: 11px; color: #a57895; font-family: ui-monospace, Consolas, monospace; }
+.chat__tasks-actions { display: flex; gap: 8px; }
