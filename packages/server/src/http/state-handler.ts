@@ -104,6 +104,8 @@ export class StateAggregator {
   private startHeartbeat(): void {
     if (this.heartbeatTimer) return;
     this.heartbeatTimer = setInterval(() => {
+    // M2：进程强杀时 timer 兜底清理
+    process.once("exit", () => { if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); });
       const state = this.getSnapshot();
       for (const cb of this.subscribers) {
         try {

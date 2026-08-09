@@ -225,6 +225,8 @@ export class CortexDaemon {
     // 首次状态快照 + 定期心跳
     this.broadcastStatus();
     this.statusTimer = setInterval(() => this.broadcastStatus(), STATUS_HEARTBEAT_MS);
+    // M2：进程强杀（SIGKILL）时 timer 兜底清理——stop() 未被调用也不泄漏
+    process.once("exit", () => { if (this.statusTimer) clearInterval(this.statusTimer); });
 
     // 配置变更 → 广播 config.changed
     this.engine.onConfigChange((domain) => this.broadcastConfigChanged(domain));

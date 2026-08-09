@@ -105,6 +105,8 @@ export class SessionManager {
   startGC(intervalMs: number = DEFAULT_GC_INTERVAL_MS): void {
     if (this.gcTimer) return;
     this.gcTimer = setInterval(() => {
+    // M2：进程强杀时 timer 兜底清理
+    process.once("exit", () => { if (this.gcTimer) clearInterval(this.gcTimer); });
       const now = Date.now();
       for (const [id, session] of this.sessions) {
         if (now - session.lastActiveAt > SESSION_IDLE_TIMEOUT_MS) {
