@@ -21,7 +21,8 @@
     "build:config": "npx tsx scripts/build-config.ts",
     "cortex": "node packages/cli/dist/main.js",
     "daemon": "node packages/server/dist/main.js",
-    "daemon:dev": "npx tsx packages/server/src/main.ts"
+    "daemon:dev": "npx tsx packages/server/src/main.ts",
+    "eval:gate": "tsx packages/engine/tests/eval/eval-gate.ts"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0",
