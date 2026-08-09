@@ -14,6 +14,8 @@
  * @since v3 — CLI TUI Daemon 模式
  */
 
+import * as fs from "node:fs";
+import * as os from "node:os";
 import {
   type AgentType,
   type ITuiEngineBridge,
@@ -57,9 +59,21 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
     const port = opts?.port ?? 3210;
     const host = opts?.host ?? "localhost";
 
+    // WS 鉴权令牌：优先 env，其次读 daemon 写的 ws-token 文件（daemon 随机生成时 TUI 也能连）
+    let authToken: string | undefined;
+    const envToken = process.env["CORTEX_DAEMON_WS_TOKEN"];
+    if (envToken) {
+      authToken = envToken;
+    } else {
+      try {
+        authToken = fs.readFileSync(join(os.homedir(), ".cortex", "ws-token"), "utf-8").trim();
+      } catch { /* daemon 未写令牌文件——连接层回退 */ }
+    }
+
     this.conn = new CortexConnection({
       host,
       port,
+      authToken,
       channels: ["chat", "gate", "tui", "pipeline"],
     });
   }
