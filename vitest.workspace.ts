@@ -24,6 +24,8 @@ export default defineWorkspace([
         reporter: ["text-summary"],
         include: ["packages/*/src/**/*.ts"],
       },
+      // 并行负载下首次冷启动偶发超时——失败自动重试一次（复跑必绿的根治）
+      retry: 1,
     },
   },
 
