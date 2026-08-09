@@ -287,6 +287,23 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [sideOpen, setSideOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  // Agent 配置接真：思考模式/上下文/档位（settings:get 拉 + settings:set 写）
+  const [thinkingOn, setThinkingOn] = useState(true);
+  const [ctxLen, setCtxLen] = useState(32);
+  const [reasoningLevel, setReasoningLevel] = useState("Auto");
+  useEffect(() => {
+    if (!configOpen) return;
+    void (async () => {
+      try {
+        const res = await window.cortexDesktop.settings.get() as { ok: boolean; data?: Record<string, unknown> };
+        if (res?.ok && res.data) {
+          if (typeof res.data.thinking === "boolean") setThinkingOn(res.data.thinking);
+          if (typeof res.data.contextLength === "number") setCtxLen(res.data.contextLength);
+          if (typeof res.data.reasoning === "string") setReasoningLevel(res.data.reasoning);
+        }
+      } catch { /* 保持默认 */ }
+    })();
+  }, [configOpen]);
   // 模式状态（Chat/Work/Code/Learn/Daily——UI 先装，功能后接）
   const [mode, setMode] = useState("Chat");
   const [modeOpen, setModeOpen] = useState(false);
@@ -868,17 +885,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               <div className="chat__cfg-row">
                 <span className="chat__cfg-label">思考模式</span>
                 <span className="chat__cfg-desc">是否开启深度思考</span>
-                <span className="chat__cfg-toggle" aria-hidden="true"><span /></span>
+                <span className={`chat__cfg-toggle${thinkingOn ? " is-on" : ""}`} onClick={() => { setThinkingOn((v) => !v); void window.cortexDesktop.settings.set({ thinking: !thinkingOn }); }} aria-hidden="true"><span /></span>
               </div>
               <div className="chat__cfg-row">
                 <span className="chat__cfg-label">上下文长度</span>
                 <span className="chat__cfg-desc">单次会话携带的历史消息数</span>
-                <span className="chat__cfg-value">32</span>
+                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const n = ctxLen >= 64 ? 16 : ctxLen * 2; setCtxLen(n); void window.cortexDesktop.settings.set({ contextLength: n }); }}>{ctxLen}</button>
               </div>
               <div className="chat__cfg-row">
                 <span className="chat__cfg-label">思考档位</span>
                 <span className="chat__cfg-desc">推理强度（低/中/高）</span>
-                <span className="chat__cfg-value">Auto</span>
+                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const next = reasoningLevel === "Auto" ? "Low" : reasoningLevel === "Low" ? "Medium" : reasoningLevel === "Medium" ? "High" : "Auto"; setReasoningLevel(next); void window.cortexDesktop.settings.set({ reasoning: next }); }}>{reasoningLevel}</button>
               </div>
             </div>
             <div className="chat__modal-footer">

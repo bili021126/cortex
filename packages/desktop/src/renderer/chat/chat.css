@@ -2723,3 +2723,9 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__toolcall-item--doing .chat__toolcall-status { color: #d94685; }
 .chat__toolcall-item--failed { border-color: rgba(229, 72, 77, 0.3); }
 .chat__toolcall-item--failed .chat__toolcall-status { color: #e5484d; }
+/* 配置弹窗交互（接真） */
+.chat__cfg-toggle { transition: background 0.2s; }
+.chat__cfg-toggle.is-on { background: linear-gradient(135deg, #7ed6b8, #58d58d); }
+.chat__cfg-toggle.is-on span { left: 2px; right: auto; }
+.chat__cfg-value--btn { cursor: pointer; border: none; transition: transform 0.12s, box-shadow 0.12s; }
+.chat__cfg-value--btn:hover { transform: scale(1.06); box-shadow: 0 2px 8px rgba(236, 72, 153, 0.25); }
