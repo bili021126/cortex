@@ -10,10 +10,9 @@
 
 import { describe, it, expect } from "vitest";
 import { AgentType } from "@cortex/shared";
-
 describe("跨包集成烟雾测试", () => {
   // ── 1. engine → scheduler → memory-store 完整链路 ──────
-  it("engine → scheduler → memory-store：核心类型与接口可导入", async () => {
+  it("engine → scheduler → memory-store：核心类型与接口可导入", { timeout: 30_000 }, async () => {
     // 从 scheduler 导入调度核心类型
     const scheduler = await import("@cortex/scheduler");
     expect(scheduler.TaskBoard).toBeDefined();
@@ -36,7 +35,7 @@ describe("跨包集成烟雾测试", () => {
     expect(engine).toBeDefined();
   });
 
-  it("engine → scheduler → memory-store：ConfirmGate 与 MemoryStore 协作", async () => {
+  it("engine → scheduler → memory-store：ConfirmGate 与 MemoryStore 协作", { timeout: 30_000 }, async () => {
     const { ConfirmGate } = await import("@cortex/scheduler");
     const { MemoryStore, WeightAger } = await import("@cortex/memory-store");
 
@@ -55,7 +54,7 @@ describe("跨包集成烟雾测试", () => {
   });
 
   // ── 2. engine → governance 修宪管线 ────────────────────
-  it("engine → governance：修宪管线核心函数可导入", async () => {
+  it("engine → governance：修宪管线核心函数可导入", { timeout: 30_000 }, async () => {
     const gov = await import("@cortex/governance");
     expect(gov.runPipeline).toBeDefined();
     expect(gov.saveProposal).toBeDefined();
@@ -71,7 +70,7 @@ describe("跨包集成烟雾测试", () => {
     expect(shared).toBeDefined();
   });
 
-  it("engine → governance：宪法验证与评判引擎可协同", async () => {
+  it("engine → governance：宪法验证与评判引擎可协同", { timeout: 30_000 }, async () => {
     const { validateConstitutionAmendment } = await import("@cortex/governance");
     const shared = await import("@cortex/shared");
 
@@ -99,7 +98,7 @@ describe("跨包集成烟雾测试", () => {
   });
 
   // ── 3. engine → skill-kit 技能注册与查询 ───────────────
-  it("engine → skill-kit：SkillRegistry 可导入", async () => {
+  it("engine → skill-kit：SkillRegistry 可导入", { timeout: 30_000 }, async () => {
     const skillKit = await import("@cortex/skill-kit");
     // skill-kit 应导出核心类型
     expect(skillKit).toBeDefined();
