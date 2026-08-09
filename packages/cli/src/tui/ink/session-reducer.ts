@@ -112,6 +112,7 @@ export type SessionAction =
   | { type: "CLEAR_MESSAGES" }
   | { type: "ADD_MESSAGE"; payload: SessionMessage }
   | { type: "STREAM_CHUNK"; payload: string }
+  | { type: "STREAM_SET"; payload: string }
   | { type: "STREAM_END" }
   | { type: "TOOL_START"; payload: TuiToolStartEvent }
   | { type: "TOOL_RESULT"; payload: TuiToolResultEvent }
@@ -214,6 +215,10 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
 
     case "STREAM_CHUNK":
       return { ...state, streamingContent: state.streamingContent + action.payload, visibleOffset: 0 };
+
+    case "STREAM_SET":
+      // 完整性修正：流式 chunk 可能丢字——用 LLM 完整输出覆盖 streamingContent（防 STREAM_END 转出缺字消息）
+      return { ...state, streamingContent: action.payload, visibleOffset: 0 };
 
     case "STREAM_END": {
       if (!state.streamingContent) return state;
