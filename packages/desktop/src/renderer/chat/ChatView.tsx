@@ -308,6 +308,16 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   // 设置面板：当前域 + 子组
   const [settingsDomain, setSettingsDomain] = useState("llm");
   const [settingsGroup, setSettingsGroup] = useState("主模型");
+  // 设置接真：settings:get 拉真值（覆盖静态默认）
+  const [settingsData, setSettingsData] = useState<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await window.cortexDesktop.settings.get() as { ok: boolean; data?: Record<string, unknown> };
+        if (res?.ok && res.data && Object.keys(res.data).length > 0) setSettingsData(res.data);
+      } catch { /* 保持静态默认 */ }
+    })();
+  }, []);
   // 任务面板：筛选 + 选中
   const [taskFilter, setTaskFilter] = useState("全部");
   const [taskSelected, setTaskSelected] = useState(0);
@@ -700,13 +710,18 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                   <span className="chat__settings-domain-desc">{SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.desc ?? ""}</span>
                 </div>
                 <div className="chat__settings-items">
-                  {(SETTINGS_ITEMS[settingsDomain]?.[settingsGroup] ?? []).map((it) => (
-                    <div key={it.key} className="chat__setting-item">
-                      <span className="chat__setting-item-label">{it.label}</span>
-                      <span className="chat__setting-item-key">{it.key}</span>
-                      <span className="chat__setting-item-value">{it.value}</span>
-                    </div>
-                  ))}
+                  {(SETTINGS_ITEMS[settingsDomain]?.[settingsGroup] ?? []).map((it) => {
+                    // 真值优先：settingsData 里有对应 key 时覆盖静态值
+                    const real = settingsData?.[it.key] ?? settingsData?.[it.key.split(".")[0]];
+                    const display = real !== undefined && real !== null ? String(real) : it.value;
+                    return (
+                      <div key={it.key} className="chat__setting-item">
+                        <span className="chat__setting-item-label">{it.label}</span>
+                        <span className="chat__setting-item-key">{it.key}</span>
+                        <span className="chat__setting-item-value">{display}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
