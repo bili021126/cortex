@@ -291,6 +291,20 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState("Chat");
   const [modeOpen, setModeOpen] = useState(false);
   const MODES = ["Chat", "Work", "Code", "Learn", "Daily"];
+  // Agent 类型 → 默认模式映射（选中好友时联动）
+  const AGENT_MODE_MAP: Record<string, string> = {
+    cyrene: "Chat", fix: "Code", review: "Code", analysis: "Work",
+    code: "Code", scheduler: "Daily", inspector: "Learn", strategist: "Work",
+  };
+  // 选中联系人：agent 类型 → 默认模式
+  const selectContact = useCallback((c: Contact) => {
+    setActive(c);
+    if (c.type === "friend") {
+      const agentName = c.name.toLowerCase();
+      const m = AGENT_MODE_MAP[agentName] ?? AGENT_MODE_MAP[agentName.split("-")[0] ?? ""] ?? "Chat";
+      setMode(m);
+    }
+  }, []);
   // 设置面板：当前域 + 子组
   const [settingsDomain, setSettingsDomain] = useState("llm");
   const [settingsGroup, setSettingsGroup] = useState("主模型");
@@ -527,7 +541,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
           <div className="chat__rail-list" role="list">
             {railList.map((c) => (
-              <button key={c.id} type="button" className={`chat__rail-item${active?.id === c.id ? " is-active" : ""}`} onClick={() => setActive(c)}>
+              <button key={c.id} type="button" className={`chat__rail-item${active?.id === c.id ? " is-active" : ""}`} onClick={() => selectContact(c)}>
                 <span className="chat__rail-avatar" aria-hidden="true">{c.avatar}</span>
                 <span className="chat__rail-meta">
                   <span className="chat__rail-name">{c.name}</span>
