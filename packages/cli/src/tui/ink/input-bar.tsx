@@ -39,7 +39,7 @@ export function InputBar({ agent, onSubmit, processing = false, hint, focused = 
   const placeholder = processing ? "回合进行中——回车排队，Esc 中断" : (hint ?? "");
 
   return (
-    <Box flexDirection="column" paddingX={tokens.spacing.xs}>
+    <Box flexDirection="column" paddingX={tokens.spacing.xs} flexShrink={0}>
       {queuedCount > 0 && (
         <Text color={t.textMuted.color}>⏳ 已排队 {queuedCount} 条 · 当前回合结束后依次发送</Text>
       )}

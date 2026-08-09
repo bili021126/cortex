@@ -452,13 +452,13 @@ export function App({
         {/* 顶部状态栏 */}
         <StatusBar agent={state.agent} mode={state.mode} tokenUsage={state.tokenUsage} isProcessing={state.isProcessing} />
 
-        {/* 主内容区 */}
-        <Box flexDirection="row" flexGrow={1}>
+        {/* 主内容区（flexShrink+minHeight 防溢出挤压 InputBar——布局修复） */}
+        <Box flexDirection="row" flexGrow={1} flexShrink={1} minHeight={0}>
           {/* 侧边栏（Lazygit 风格） */}
           {showSidebar && (
             <Box
               flexDirection="column"
-              width={Math.min(28, Math.floor(columns * 0.25))}
+              width={Math.max(24, Math.min(28, Math.floor(columns * 0.25)))}
               borderStyle="round"
               borderColor={currentFocus === "sidebar" ? tokens.color.border.focus : tokens.color.border.default}
               paddingX={1}
@@ -484,7 +484,7 @@ export function App({
           )}
 
           {/* 主聊天区 */}
-          <Box flexDirection="column" flexGrow={1} paddingTop={1}>
+          <Box flexDirection="column" flexGrow={1} paddingTop={1} flexShrink={1} minHeight={0}>
             <ChatView
               messages={state.messages}
               streamingContent={state.streamingContent}
