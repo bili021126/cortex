@@ -88,33 +88,33 @@ export function StatusBar({ agent, mode, tokenUsage, isProcessing = false }: Sta
   const modeLabel = tokens.typography.modeLabels[mode] ?? mode;
 
   return (
-    <Box
-      borderStyle={tokens.border.defaultStyle === "rounded" ? "round" : "single"}
-      borderColor={t.borderDefault.borderColor}
-      paddingX={tokens.spacing.xs}
-    >
-      <Text color={t.primary.color} bold>
-        {display.emoji} {display.name}
-      </Text>
-      <Text color={t.textMuted.color}> [{agent}] </Text>
-      <Text color={t.separator.color}> {"━".repeat(16)} </Text>
-      <Text color={t.info.color}>{modeLabel}</Text>
-      <Text color={t.separator.color}> │ </Text>
-      <TokenBar pct={pct} color={tokenColor} />
-      <Text color={t.textMuted.color}> {tokenStr}/{windowStr}</Text>
-      {cacheHitRate !== null && (
-        <>
-          <Text color={t.separator.color}> │ </Text>
-          <Text color={t.textMuted.color}>⚡{cacheHitRate}%</Text>
-        </>
-      )}
-      {isProcessing && (
-        <>
-          <Text color={t.separator.color}> │ </Text>
-          <Text color={tokens.color.status.thinking}>⏱ {elapsed}s</Text>
-          <Text color={t.textMuted.color}> · Esc 中断</Text>
-        </>
-      )}
+    <Box flexDirection="column" flexShrink={0}>
+      <Box paddingX={tokens.spacing.xs}>
+        <Text color={t.primary.color} bold>
+          {display.emoji} {display.name}
+        </Text>
+        <Text color={t.textMuted.color}> [{agent}] </Text>
+        <Text color={t.separator.color}> {"━".repeat(16)} </Text>
+        <Text color={t.info.color}>{modeLabel}</Text>
+        <Text color={t.separator.color}> │ </Text>
+        <TokenBar pct={pct} color={tokenColor} />
+        <Text color={t.textMuted.color}> {tokenStr}/{windowStr}</Text>
+        {cacheHitRate !== null && (
+          <>
+            <Text color={t.separator.color}> │ </Text>
+            <Text color={t.textMuted.color}>⚡{cacheHitRate}%</Text>
+          </>
+        )}
+        {isProcessing && (
+          <>
+            <Text color={t.separator.color}> │ </Text>
+            <Text color={tokens.color.status.thinking}>⏱ {elapsed}s</Text>
+            <Text color={t.textMuted.color}> · Esc 中断</Text>
+          </>
+        )}
+      </Box>
+      {/* 底部分隔线（替代 border——避免终端边框渲染错乱） */}
+      <Text color={t.separator.color}>{"─".repeat(80)}</Text>
     </Box>
   );
 }

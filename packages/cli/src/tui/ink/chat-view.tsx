@@ -104,10 +104,10 @@ function StreamingLine({ content, agent }: { content: string; agent: AgentType }
 
 /** 渲染分隔线（每轮对话之间） */
 function Separator() {
-  const t = inkTheme;
+  // 空行分隔（横线在部分终端渲染错位——与消息同行重叠——空行任何终端安全）
   return (
     <Box>
-      <Text color={t.separator.color}>{"─".repeat(40)}</Text>
+      <Text> </Text>
     </Box>
   );
 }
