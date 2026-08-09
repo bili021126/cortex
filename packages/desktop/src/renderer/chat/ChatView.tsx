@@ -281,7 +281,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     return [];
   });
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"chat" | "tasks" | "settings" | "design">("chat");
+  const [tab, setTab] = useState<"chat" | "tasks" | "settings" | "design" | "memory">("chat");
   const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
   const [active, setActive] = useState<Contact | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
@@ -578,6 +578,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         <button type="button" className={`chat__taskbar-btn${tab === "chat" ? " is-active" : ""}`} onClick={() => setTab("chat")} title="聊天" aria-label="聊天"><IconChat /></button>
         <button type="button" className={`chat__taskbar-btn${railTab === "friends" || railTab === "groups" ? " is-active" : ""}`} onClick={() => setRailTab(railTab === "friends" ? "groups" : "friends")} title="好友与群聊" aria-label="好友与群聊"><IconUsers /></button>
         <button type="button" className={`chat__taskbar-btn${tab === "tasks" ? " is-active" : ""}`} onClick={() => setTab("tasks")} title="任务" aria-label="任务"><IconTasks /></button>
+        <button type="button" className={`chat__taskbar-btn${tab === "memory" ? " is-active" : ""}`} onClick={() => setTab("memory")} title="记忆" aria-label="记忆">💭</button>
         <button type="button" className={`chat__taskbar-btn${tab === "settings" ? " is-active" : ""}`} onClick={() => setTab("settings")} title="设置" aria-label="设置"><IconSettings /></button>
         <button type="button" className={`chat__taskbar-btn${tab === "design" ? " is-active" : ""}`} onClick={() => setTab("design")} title="设计预览" aria-label="设计预览">🎨</button>
         <div className="chat__taskbar-spacer" />
@@ -655,6 +656,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </header>
+
+        {/* 记忆面板（接真：GET /api/v1/memory） */}
+        {tab === "memory" && <MemoryPanel />}
 
         {/* 设计预览（全状态静态展示） */}
         {tab === "design" && <DesignPreview />}
@@ -926,6 +930,53 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 function resolveAsset(assetPath: string): string {
   const clean = assetPath.replace(/^\/+/, "");
   return new URL(clean, document.baseURI).href;
+}
+
+/* ── 记忆面板：接真（GET /api/v1/memory） ── */
+interface MemItem { id: string; summary: string; kind: string; domain: string; semanticState: string; agentType: string; createdAt: number; weight: number; accessCount: number; }
+function MemoryPanel() {
+  const [items, setItems] = useState<MemItem[] | null>(null);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const load = useCallback(async (q: string) => {
+    setLoading(true);
+    try {
+      const url = `http://127.0.0.1:3210/api/v1/memory?limit=50${q ? `&query=${encodeURIComponent(q)}` : ""}`;
+      const j = await (await fetch(url)).json() as { data?: MemItem[] };
+      setItems(j.data ?? []);
+    } catch { setItems([]); }
+    setLoading(false);
+  }, []);
+  useEffect(() => { void load(""); }, [load]);
+  const kindColor = (k: string) => ({
+    episodic: "#f9a8c8", knowledge: "#c3b8f5", conceptual: "#7ed6b8",
+  } as Record<string, string>)[k] ?? "#c9a3b8";
+  return (
+    <div className="chat__panel chat__panel--memory">
+      <div className="chat__panel-head">
+        <span className="chat__panel-title">💭 记忆</span>
+        <span className="chat__settings-domain-desc">{items ? `${items.length} 条` : "加载中…"}</span>
+      </div>
+      <div className="chat__memory-search">
+        <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void load(query); }} placeholder="搜索记忆… Enter 查询" style={{ flex: 1, padding: "8px 12px", borderRadius: 10, border: "1px solid rgba(236,72,153,0.18)", background: "rgba(255,255,255,0.8)", color: "#5c4a5c", fontSize: 13 }} />
+        <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => void load(query)}>查询</button>
+      </div>
+      <div className="chat__memory-list">
+        {loading && <div style={{ fontSize: 12, color: "#c9a3b8", padding: 12 }}>加载中…</div>}
+        {!loading && items?.length === 0 && <div style={{ fontSize: 12, color: "#c9a3b8", padding: 12 }}>暂无记忆</div>}
+        {!loading && (items ?? []).map((m) => (
+          <div key={m.id} className="chat__memory-item">
+            <span className="chat__memory-dot" style={{ background: kindColor(m.kind) }} aria-hidden="true" />
+            <span className="chat__memory-meta">
+              <span className="chat__memory-summary">{m.summary}</span>
+              <span className="chat__memory-sub">{m.kind} · {m.domain} · {m.agentType} · w{m.weight}</span>
+            </span>
+            <span className="chat__memory-state">{m.semanticState}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 /* ── 设计预览：全状态静态展示 ── */

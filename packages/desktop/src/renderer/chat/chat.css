@@ -2757,3 +2757,19 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__notif-item--unread { background: rgba(249, 168, 200, 0.1); }
 .chat__notif-item > span:nth-child(2) { flex: 1; }
 .chat__notif-time { font-size: 10px; color: #c9a3b8; }
+/* 记忆面板 */
+.chat__panel--memory { display: flex; flex-direction: column; align-items: stretch; padding: 20px 28px; overflow-y: auto; justify-content: flex-start; flex: 1; min-height: 0; }
+.chat__memory-search { display: flex; gap: 8px; margin-bottom: 12px; max-width: 560px; }
+.chat__memory-list { display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.chat__memory-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(236, 72, 153, 0.1);
+  border-radius: 12px;
+}
+.chat__memory-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.chat__memory-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chat__memory-summary { font-size: 13px; color: #5c4a5c; }
+.chat__memory-sub { font-size: 11px; color: #c9a3b8; }
+.chat__memory-state { font-size: 11px; color: #a57895; padding: 2px 10px; background: rgba(236, 72, 153, 0.06); border-radius: 999px; }
