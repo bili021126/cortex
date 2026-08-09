@@ -171,6 +171,14 @@ export function useInputHandler(
             tuiEventBus.emit(result.value);
           }
           dispatch({ type: "STREAM_END" });
+          // 兜底：STREAM_END 仅依赖 streamingContent——若回复未走 llm_chunk（空回复/一次性返回），直接补挂 assistant 消息（已显示则跳过——防重复）
+          if (result.value) {
+            const lastMsg = stateRef.current.messages[stateRef.current.messages.length - 1];
+            const alreadyShown = lastMsg?.role === "assistant" && lastMsg.content === result.value;
+            if (!alreadyShown) {
+              dispatch({ type: "ADD_MESSAGE", payload: { role: "assistant", content: result.value, agent: targetAgent } });
+            }
+          }
         } else {
           const gen = queryLoop({ input, bridge, mode: "chat", agent: targetAgent, history, hooks: externalHooks, signal: controller.signal });
           let result: IteratorResult<TuiEvent, string>;
@@ -178,6 +186,14 @@ export function useInputHandler(
             tuiEventBus.emit(result.value);
           }
           dispatch({ type: "STREAM_END" });
+          // 兜底：同上——chat 回复未走 llm_chunk 时补挂（已显示则跳过——防重复）
+          if (result.value) {
+            const lastMsg = stateRef.current.messages[stateRef.current.messages.length - 1];
+            const alreadyShown = lastMsg?.role === "assistant" && lastMsg.content === result.value;
+            if (!alreadyShown) {
+              dispatch({ type: "ADD_MESSAGE", payload: { role: "assistant", content: result.value, agent: targetAgent } });
+            }
+          }
         }
       } catch (err) {
         dispatch({
