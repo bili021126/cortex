@@ -41,3 +41,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ""
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      - name: "依赖环检查（架构治理）"
+        run: pnpm dep:cycle
+      - name: "文档漂移报告（非阻塞留档）"
+        run: pnpm tsx scripts/doc-drift-check.ts --report || true

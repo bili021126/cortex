@@ -53,6 +53,9 @@ for (const [id, refs] of [...identifiers.entries()].sort((a, b) => b[1] - a[1]))
   if (!new RegExp(`\\b${id.toLowerCase()}\\b`).test(allSrc)) drift.push({ id, refs });
 }
 
+// --report 模式：不阻塞（exit 0）——只输出报告（CI 每周/提交时留档）
+const reportOnly = process.argv.includes("--report");
+
 console.log(`\n[doc-drift] docs identifiers=${identifiers.size} checked\n`);
 if (drift.length === 0) {
   console.log("[doc-drift] OK - no drift\n");
@@ -61,6 +64,10 @@ if (drift.length === 0) {
 console.log(`[doc-drift] ${drift.length} drift identifiers (refs>=3, missing in code):\n`);
 for (const d of drift) {
   console.log(`  MISS ${d.id.padEnd(40)} refs=${d.refs}`);
+}
+if (reportOnly) {
+  console.log("\n(report mode - non-blocking)\n");
+  process.exit(0);
 }
 console.log("\n(note: may be forward-design or deprecated symbols - manual check)\n");
 process.exit(1);
