@@ -122,10 +122,10 @@ export async function runGoldenCase(golden: GoldenCase): Promise<EvalTrialResult
       engineConfig: { reactLoopTimeoutMs: Number(process.env["CORTEX_EVAL_REACT_LOOP_MS"] ?? 300_000) } as never,
     });
 
-    const collect = (e: EmittableEvent) => events.push(e);
-    boot.observer.on(PipelinePriority.HIGH, collect);
-    boot.observer.on(PipelinePriority.NORMAL, collect);
-    boot.observer.on(PipelinePriority.CRITICAL, collect);
+    const collect = (e: EmittableEvent) => { events.push(e); };
+    boot.observer.on(PipelinePriority.HIGH, collect as never);
+    boot.observer.on(PipelinePriority.NORMAL, collect as never);
+    boot.observer.on(PipelinePriority.CRITICAL, collect as never);
 
 
     const exec = async () => {

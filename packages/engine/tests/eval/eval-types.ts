@@ -33,11 +33,13 @@ export interface GoldenCase {
   category: "liveness";
   /** 输入：执行什么（v1 支持 task 节点注入 / chat 输入） */
   input: {
-    type: "task" | "chat" | "memory";
+    type: "task" | "chat" | "memory" | "emit";
     /** task：注入调度器的节点（payload/tags/type） */
     node?: { type: string; tags: string[]; payload: string };
     /** chat：对话输入 */
     text?: string;
+    /** emit：直接向 observer 打刺激事件（decision-chain 用例） */
+    emit?: { priority?: unknown; type?: unknown; payload?: unknown };
     /** 执行前注入的 process.env（超时用例前置——如 CORTEX_NODE_DISPATCH_TIMEOUT_MS） */
     setupEnv?: Record<string, string>;
     /** gate-blocks：bootstrap 后替换 gate 的 bridge 为桩（confirm 调用记录为轨迹） */

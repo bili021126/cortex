@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { bootstrapEngine } from "../../src/bootstrap/bootstrap-engine.js";
 import { Toolkit } from "@cortex/platform";
-import { InMemoryMemoryStore } from "../../../memory/src/implementations/InMemoryMemoryStore.js";
+import { InMemoryMemoryStore } from "@cortex/memory";
 
 const mkLlm = () => ({ chat: async () => ({ content: "ok", reasoning_content: "", tool_calls: [], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }) } as never);
 

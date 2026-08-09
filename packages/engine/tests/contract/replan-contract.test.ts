@@ -104,6 +104,11 @@ function createMockBoard() {
     removeNode: vi.fn() as any,
     removeSubtree: vi.fn() as any,
     clear: vi.fn() as any,
+    getClaimRetries: vi.fn(() => 0) as any,
+    getClaimFirstAt: vi.fn(() => 0) as any,
+    incrementClaimRetry: vi.fn() as any,
+    resetClaimRetries: vi.fn() as any,
+    setPool: vi.fn() as any,
     addedNodes,
   };
   return mock;
