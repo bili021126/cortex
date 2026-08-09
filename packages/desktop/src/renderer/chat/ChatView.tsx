@@ -211,6 +211,53 @@ const SETTINGS_ITEMS: Record<string, Record<string, Array<{ label: string; key: 
   },
 };
 
+/** 任务面板：分组 + 任务数据（静态） */
+const TASK_FILTERS = [
+  { id: "全部", name: "全部", icon: "📋" },
+  { id: "doing", name: "进行中", icon: "⏳" },
+  { id: "done", name: "已完成", icon: "✅" },
+  { id: "failed", name: "失败", icon: "❌" },
+];
+
+const TASKS = [
+  {
+    id: 1, icon: "🔍", title: "调研接口全景", agent: "analysis", duration: "3min",
+    status: "doing", statusCls: "doing", statusText: "● 进行中",
+    stepDone: 3, stepTotal: 5,
+    steps: [
+      { name: "盘点 HTTP 路由", state: "done" },
+      { name: "盘点 IPC 通道", state: "done" },
+      { name: "盘点 WS 事件", state: "doing" },
+      { name: "统计包导出", state: "todo" },
+      { name: "汇总报告", state: "todo" },
+    ],
+    events: ["10:32:01 开始", "10:32:04 读取 router.ts", "10:32:09 匹配 WS 事件", "10:32:15 统计导出符号"],
+  },
+  {
+    id: 2, icon: "🛠️", title: "修复 daemon 僵死", agent: "fix", duration: "2min",
+    status: "done", statusCls: "done", statusText: "✓ 完成",
+    stepDone: 4, stepTotal: 4,
+    steps: [
+      { name: "定位僵死进程", state: "done" },
+      { name: "清理 PID", state: "done" },
+      { name: "重启 daemon", state: "done" },
+      { name: "验证 3210", state: "done" },
+    ],
+    events: ["09:15:02 开始", "09:15:10 定位 20920", "09:15:30 重启完成", "09:16:00 验证通过"],
+  },
+  {
+    id: 3, icon: "⚙️", title: "Agent 配置接入", agent: "core", duration: "0s",
+    status: "failed", statusCls: "failed", statusText: "✕ 失败",
+    stepDone: 1, stepTotal: 3,
+    steps: [
+      { name: "读取配置域", state: "done" },
+      { name: "映射 UI 配置项", state: "failed" },
+      { name: "写入生效", state: "todo" },
+    ],
+    events: ["11:02:00 开始", "11:02:05 读取配置域", "11:02:11 映射失败——key 不匹配"],
+  },
+];
+
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>(() => {
@@ -237,6 +284,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   // 设置面板：当前域 + 子组
   const [settingsDomain, setSettingsDomain] = useState("llm");
   const [settingsGroup, setSettingsGroup] = useState("主模型");
+  // 任务面板：筛选 + 选中
+  const [taskFilter, setTaskFilter] = useState("全部");
+  const [taskSelected, setTaskSelected] = useState(0);
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
 
@@ -508,18 +558,70 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
         </header>
 
-        {/* 任务面板（静态——布局理顺） */}
+        {/* 任务面板（三栏：分组 → 列表 → 详情——渐进式披露） */}
         {tab === "tasks" && (
           <div className="chat__panel chat__panel--tasks">
-            <div className="chat__panel-head">
-              <span className="chat__panel-title">任务</span>
-              <button type="button" className="chat__session-btn" onClick={() => setToast("新建任务——待实现")}>✚ 新建</button>
-            </div>
-            <div className="chat__task-list">
-              <TaskItem icon="🔍" title="调研接口全景" desc="HTTP/IPC/WS 盘点" status="done" tag="analysis" />
-              <TaskItem icon="🛠️" title="修复 daemon 僵死" desc="进程清理 + 重启" status="done" tag="fix" />
-              <TaskItem icon="🎨" title="布局静态化" desc="任务/设置面板铺开" status="doing" tag="ui" />
-              <TaskItem icon="⚙️" title="Agent 配置接入" desc="思考模式/上下文/档位" status="todo" tag="core" />
+            <div className="chat__tasks-layout">
+              {/* 左：分组（简） */}
+              <aside className="chat__tasks-filters">
+                {TASK_FILTERS.map((f) => (
+                  <button key={f.id} type="button" className={`chat__tasks-filter${taskFilter === f.id ? " is-active" : ""}`} onClick={() => setTaskFilter(f.id)}>
+                    <span aria-hidden="true">{f.icon}</span>
+                    <span>{f.name}</span>
+                  </button>
+                ))}
+              </aside>
+              {/* 中：任务列表（中） */}
+              <aside className="chat__tasks-list">
+                {TASKS.filter((t) => taskFilter === "全部" || t.status === taskFilter).map((t, i) => (
+                  <button key={t.id} type="button" className={`chat__task-item${taskSelected === i ? " is-active" : ""}`} onClick={() => setTaskSelected(i)}>
+                    <span className="chat__task-icon" aria-hidden="true">{t.icon}</span>
+                    <span className="chat__task-meta">
+                      <span className="chat__task-title">{t.title}</span>
+                      <span className="chat__task-desc">{t.agent} · {t.duration}</span>
+                    </span>
+                    <span className={`chat__task-status chat__task-status--${t.statusCls}"`}>{t.statusText}</span>
+                  </button>
+                ))}
+              </aside>
+              {/* 右：任务详情（复——渐进披露） */}
+              <div className="chat__tasks-detail">
+                {(() => {
+                  const t = TASKS[taskSelected];
+                  return (
+                    <>
+                      <div className="chat__panel-head">
+                        <span className="chat__panel-title">{t.icon} {t.title}</span>
+                        <span className={`chat__task-status chat__task-status--${t.statusCls}"`}>{t.statusText}</span>
+                      </div>
+                      <div className="chat__tasks-detail-meta">
+                        <span>Agent：{t.agent}</span>
+                        <span>耗时：{t.duration}</span>
+                        <span>进度：{t.stepDone}/{t.stepTotal} 步</span>
+                      </div>
+                      {/* 步骤流 */}
+                      <div className="chat__tasks-steps">
+                        {t.steps.map((st) => (
+                          <div key={st.name} className={`chat__task-step chat__task-step--${st.state}"`}>
+                            <span className="chat__task-step-mark">{st.state === "done" ? "✓" : st.state === "doing" ? "●" : "○"}</span>
+                            <span className="chat__task-step-name">{st.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {/* 事件流 */}
+                      <div className="chat__tasks-events">
+                        {t.events.map((ev) => (
+                          <div key={ev} className="chat__task-event">{ev}</div>
+                        ))}
+                      </div>
+                      <div className="chat__tasks-actions">
+                        <button type="button" className="chat__session-btn" onClick={() => setToast("取消任务——待实现")}>⏹ 取消</button>
+                        <button type="button" className="chat__session-btn" onClick={() => setToast("重试任务——待实现")}>↻ 重试</button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           </div>
         )}
@@ -697,32 +799,4 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 function resolveAsset(assetPath: string): string {
   const clean = assetPath.replace(/^\/+/, "");
   return new URL(clean, document.baseURI).href;
-}
-
-/** 任务项（静态） */
-function TaskItem({ icon, title, desc, status, tag }: { icon: string; title: string; desc: string; status: "done" | "doing" | "todo"; tag: string }) {
-  const statusMap = { done: "✓ 完成", doing: "● 进行中", todo: "○ 待办" } as const;
-  return (
-    <div className="chat__task-item">
-      <span className="chat__task-icon" aria-hidden="true">{icon}</span>
-      <span className="chat__task-meta">
-        <span className="chat__task-title">{title}</span>
-        <span className="chat__task-desc">{desc}</span>
-      </span>
-      <span className={`chat__task-tag chat__task-tag--${tag}`}>{tag}</span>
-      <span className={`chat__task-status chat__task-status--${status}`}>{statusMap[status]}</span>
-    </div>
-  );
-}
-
-/** 设置卡片（静态） */
-function SettingCard({ icon, title, items }: { icon: string; title: string; items: string[] }) {
-  return (
-    <div className="chat__setting-card">
-      <div className="chat__setting-head"><span aria-hidden="true">{icon}</span><b>{title}</b></div>
-      {items.map((it) => (
-        <div key={it} className="chat__setting-row">{it}</div>
-      ))}
-    </div>
-  );
 }
