@@ -145,9 +145,10 @@ export function useInputHandler(
         dispatch({ type: "SWITCH_AGENT", payload: targetAgent });
       }
 
-      // 4. 构建 LLM 历史
+      // 4. 构建 LLM 历史（排除中断消息——残缺内容会污染 LLM 上下文导致回复拼接/混乱）
       const history: LlmMessage[] = currentState.messages
         .filter((m) => m.role === "user" || m.role === "assistant")
+        .filter((m) => !(m.role === "assistant" && m.content.includes("⎇ 已中断")))
         .map((m) => ({ role: m.role, content: m.content }));
 
       // 5. 标记处理中
