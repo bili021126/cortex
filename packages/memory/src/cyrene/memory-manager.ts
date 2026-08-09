@@ -7,6 +7,11 @@
 // ============================================================
 
 import { memoryStore } from "./memory-store.js"
+/** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map(String).join(" ") + "\n");
+}
+
 import type { L0WritableField } from "./memory-store.js"
 import type { MemoryCandidate, L2Memory} from "./memory-types.js";
 import { L0_FIELD_DESCRIPTIONS } from "./memory-types.js"
@@ -69,20 +74,20 @@ export class MemoryManager {
     for (const candidate of candidates) {
       if (shouldSkipCandidate(candidate)) {
         // eslint-disable-next-line no-console
-        console.log("[MemoryManager] 候选标记为不写入或存在过度概括，跳过")
+        diag("[MemoryManager] 候选标记为不写入或存在过度概括，跳过")
         continue
       }
 
       if (candidate.layer === "L0") {
         if (!canWriteCoreProfile(candidate)) {
           // eslint-disable-next-line no-console
-          console.log("[MemoryManager] L0 候选不是用户明确事实，跳过自动写核心画像")
+          diag("[MemoryManager] L0 候选不是用户明确事实，跳过自动写核心画像")
           continue
         }
         const l0 = await memoryStore.getL0()
         if (l0.isPinned) {
           // eslint-disable-next-line no-console
-          console.log("[MemoryManager] L0 已锁定，跳过自动更新")
+          diag("[MemoryManager] L0 已锁定，跳过自动更新")
           continue
         }
         const validFields = Object.keys(L0_FIELD_DESCRIPTIONS)
@@ -96,12 +101,12 @@ export class MemoryManager {
         }
         await memoryStore.upsertL0Field(candidate.field as L0WritableField, candidate.content)
         // eslint-disable-next-line no-console
-        console.log(`[MemoryManager] L0 更新字段: ${candidate.field} = "${candidate.content.slice(0, 20)}"`)
+        diag(`[MemoryManager] L0 更新字段: ${candidate.field} = "${candidate.content.slice(0, 20)}"`)
       } else if (candidate.layer === "L1") {
         const field = getL1Field(candidate.content)
         await memoryStore.replaceL1Field(field, candidate.content)
         // eslint-disable-next-line no-console
-        console.log(`[MemoryManager] L1 更新字段: ${field}`)
+        diag(`[MemoryManager] L1 更新字段: ${field}`)
       } else if (candidate.layer === "L2") {
         await this.writeL2(candidate)
       }
@@ -135,7 +140,7 @@ export class MemoryManager {
     }
 
     // eslint-disable-next-line no-console
-    console.log(`[MemoryManager] L2 写入: "${preview(candidate.content, 30)}"（l2Id: ${l2.id}, ragId: ${ragId}）`)
+    diag(`[MemoryManager] L2 写入: "${preview(candidate.content, 30)}"（l2Id: ${l2.id}, ragId: ${ragId}）`)
 
     try {
       await this.detectAndMarkConflicts(candidate.content, l2.id, ragId, candidate.triggerText)
@@ -193,7 +198,7 @@ export class MemoryManager {
           })
           await memoryStore.scoreConflictLog(log.id, score)
           // eslint-disable-next-line no-console
-          console.log(`[MemoryManager] ⚠️ 发现疑似记忆冲突候选: "${preview(existing.content, 30)}" ↔ "${preview(content, 30)}"`)
+          diag(`[MemoryManager] ⚠️ 发现疑似记忆冲突候选: "${preview(existing.content, 30)}" ↔ "${preview(content, 30)}"`)
         }
       }
     }
@@ -212,7 +217,7 @@ export class MemoryManager {
   async runDecay(): Promise<void> {
     const changed = await memoryStore.decayL2Weights()
     // eslint-disable-next-line no-console
-    console.log(`[MemoryManager] L2 权重衰减完成，更新 ${changed} 条`)
+    diag(`[MemoryManager] L2 权重衰减完成，更新 ${changed} 条`)
   }
 
   async onL2Recalled(ids: string[]): Promise<void> {

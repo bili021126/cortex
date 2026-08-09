@@ -1,6 +1,11 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck — Cyrene-Agent 移植模块，Core-3 阶段严格类型化
 import * as fs from "fs";
+/** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map(String).join(" ") + "\n");
+}
+
 import * as path from "path";
 import type { EmbeddingProvider } from "./embedding.js";
 import { getEmbeddingProvider } from "./embedding.js";
@@ -220,7 +225,7 @@ export class JsonVectorStore {
     const t0 = Date.now();
     this.ivf = buildIvfIndex(this.entries, K);
     // eslint-disable-next-line no-console
-    console.log(`[RAG] IVF index rebuilt: K=${K}, entries=${n}, took ${Date.now() - t0}ms`);
+    diag(`[RAG] IVF index rebuilt: K=${K}, entries=${n}, took ${Date.now() - t0}ms`);
   }
   /** 检查是否需重建索引，每次数据库变化后调用 */
   private markIndexDirty(): void {

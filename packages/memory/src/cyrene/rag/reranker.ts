@@ -7,6 +7,11 @@
 // ============================================================
 
 import * as path from "path"
+/** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map(String).join(" ") + "\n");
+}
+
 import * as os from "os"
 import { existsSync } from "node:fs"
 
@@ -48,7 +53,7 @@ async function loadRerankerPipeline(modelDir: string): Promise<any> {
       cache_dir: path.join(os.homedir(), ".cache", "huggingface"),
     })
     // eslint-disable-next-line no-console
-    console.log(`[Reranker] pipeline "${modelDir}" loaded OK`)
+    diag(`[Reranker] pipeline "${modelDir}" loaded OK`)
     return pipe
   } finally {
     env.localModelPath = originalPath
@@ -67,7 +72,7 @@ export async function createLightReranker(): Promise<RerankerProvider> {
       const results = documents.map((text, i) => ({ text, score: outputs[i]?.score ?? 0 }))
       results.sort((a, b) => b.score - a.score)
       // eslint-disable-next-line no-console
-      console.log(`[Reranker] light: ${documents.length} docs reranked in ${Date.now() - start}ms`)
+      diag(`[Reranker] light: ${documents.length} docs reranked in ${Date.now() - start}ms`)
       return results
     },
   }
@@ -85,7 +90,7 @@ export async function createStandardReranker(): Promise<RerankerProvider> {
       const results = documents.map((text, i) => ({ text, score: outputs[i]?.score ?? 0 }))
       results.sort((a, b) => b.score - a.score)
       // eslint-disable-next-line no-console
-      console.log(`[Reranker] standard: ${documents.length} docs reranked in ${Date.now() - start}ms`)
+      diag(`[Reranker] standard: ${documents.length} docs reranked in ${Date.now() - start}ms`)
       return results
     },
   }
@@ -112,7 +117,7 @@ export function getRerankerInstallStatus(): { light: boolean; standard: boolean 
 export async function initReranker(mode: "light" | "standard" | "none"): Promise<void> {
   currentRerankerMode = mode
   // eslint-disable-next-line no-console
-  if (mode === "none") { currentReranker = null; console.log("[Reranker] disabled"); return }
+  if (mode === "none") { currentReranker = null; diag("[Reranker] disabled"); return }
 
   if (!checkRerankerModelInstalled(mode)) {
     const modelDir = mode === "light" ? "ms-marco-MiniLM-L-6-v2" : "bge-reranker-base"
@@ -123,11 +128,11 @@ export async function initReranker(mode: "light" | "standard" | "none"): Promise
   }
 
   // eslint-disable-next-line no-console
-  console.log(`[Reranker] initializing ${mode} mode...`)
+  diag(`[Reranker] initializing ${mode} mode...`)
   if (mode === "light") currentReranker = await createLightReranker()
   else currentReranker = await createStandardReranker()
   // eslint-disable-next-line no-console
-  console.log(`[Reranker] ${mode} mode ready: ${currentReranker.name}`)
+  diag(`[Reranker] ${mode} mode ready: ${currentReranker.name}`)
 }
 
 export function getReranker(): RerankerProvider | null {

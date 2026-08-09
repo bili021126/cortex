@@ -6,6 +6,11 @@
 // ============================================================
 
 import type { MemoryManager } from "./memory-manager.js"
+/** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map(String).join(" ") + "\n");
+}
+
 import type { L1Profile, MemoryCandidate, MemoryJudgeTurn } from "./memory-types.js"
 
 const MEMORY_JUDGE_INTERVAL = 6
@@ -90,7 +95,7 @@ export class MemoryScheduler {
 
     if (newCount % 20 === 0) {
       // eslint-disable-next-line no-console
-      console.log("[Memory] 达到 20 轮，触发 Reflection + 记忆压缩")
+      diag("[Memory] 达到 20 轮，触发 Reflection + 记忆压缩")
       await this.deps.runReflectionAndCompression()
     }
   }

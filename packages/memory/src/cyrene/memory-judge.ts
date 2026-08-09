@@ -7,6 +7,11 @@
 // ============================================================
 
 import * as fs from "fs"
+/** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map(String).join(" ") + "\n");
+}
+
 import * as path from "path"
 import type { ILlmService, ILlmServiceMessage } from "@cortex/shared";
 import type { LLMConfig } from "./llm-adapter.js";
@@ -111,7 +116,7 @@ export class MemoryJudge {
     conversationId: string,
   ): Promise<MemoryCandidate[]> {
     // eslint-disable-next-line no-console
-    console.log(`[MemoryJudge] 分析最近 ${turns.length} 轮对话...`)
+    diag(`[MemoryJudge] 分析最近 ${turns.length} 轮对话...`)
     try {
       const settings = loadSettings()
       if (!settings.apiKey) {
@@ -219,12 +224,12 @@ export class MemoryJudge {
 
       if (candidates.length === 0) {
         // eslint-disable-next-line no-console
-        console.log("[MemoryJudge] 本轮无值得记录的信息")
+        diag("[MemoryJudge] 本轮无值得记录的信息")
         return []
       }
 
       // eslint-disable-next-line no-console
-      console.log(`[MemoryJudge] 提取候选: ${candidates.length} 条（过滤后）`)
+      diag(`[MemoryJudge] 提取候选: ${candidates.length} 条（过滤后）`)
       return candidates
     } catch (error) {
       console.error("[MemoryJudge] LLM 调用失败:", error)
