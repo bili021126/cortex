@@ -345,10 +345,12 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [realTasks, setRealTasks] = useState<Array<{ id: string; title: string; status: string; agent: string }> | null>(null);
   useEffect(() => {
     if (tab !== "tasks") return;
-    void (async () => {
+    let alive = true;
+    const load = async () => {
       try {
         const res = await fetch("http://127.0.0.1:3210/api/v1/nodes?limit=50");
         const j = await res.json() as { data?: Array<{ id: string; task?: string; status?: string; claimedBy?: string[] }> };
+        if (!alive) return;
         const nodes = j.data ?? [];
         if (nodes.length > 0) {
           setRealTasks(nodes.map((n) => ({
@@ -359,7 +361,11 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           })));
         }
       } catch { /* 无 daemon——静态 */ }
-    })();
+    };
+    void load();
+    // 轮询刷新（瞬态化——任务状态实时可见）
+    const t = setInterval(() => void load(), 5000);
+    return () => { alive = false; clearInterval(t); };
   }, [tab]);
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
