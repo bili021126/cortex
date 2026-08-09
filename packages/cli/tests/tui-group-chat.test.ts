@@ -80,4 +80,33 @@ describe("GroupChatManager", () => {
     // 最旧的归档群被淘汰
     expect(mgr.groups.has(ids[0] ?? "")).toBe(false);
   });
+
+  it("restoreGroup 从快照恢复群聊（消息完整）", () => {
+    const id = mgr.createGroup("任务", ["fix"] as never);
+    mgr.addMessage(id, { agent: "fix", type: "chat", content: "开始" } as never);
+    const snap = mgr.getActiveSnapshot();
+    expect(snap).not.toBeNull();
+
+    // 新 manager 恢复
+    const mgr2 = new GroupChatManager();
+    mgr2.restoreGroup(snap as never);
+    const restored = mgr2.groups.get(id);
+    expect(restored?.task).toBe("任务");
+    expect(restored?.messages.length).toBe(1);
+    expect(restored?.messages[0]?.content).toBe("开始");
+    expect(restored?.status).toBe("active");
+    expect(mgr2.activeGroupId).toBe(id);
+  });
+
+  it("restoreGroup 恢复非活跃群不设为 activeGroupId", () => {
+    const id = mgr.createGroup("任务", ["fix"] as never);
+    mgr.dissolveGroup(id, "done");
+    const snap = mgr.getActiveSnapshot();
+    // dissolve 后 activeGroupId 可能变化——直接构造 done 快照
+    const doneSnap = { id: "gc-done-1", task: "旧任务", agents: ["fix"], messages: [], status: "done" };
+    const mgr2 = new GroupChatManager();
+    mgr2.restoreGroup(doneSnap as never);
+    expect(mgr2.groups.get("gc-done-1")?.status).toBe("done");
+    expect(mgr2.activeGroupId).not.toBe("gc-done-1");
+  });
 });
