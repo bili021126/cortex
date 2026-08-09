@@ -999,12 +999,26 @@ function CodeEditor() {
     }
   }, [fileName, content]);
 
+  // 另存为：dialog 选路径
+  const saveAs = useCallback(async () => {
+    try {
+      const monaco = await import("monaco-editor");
+      const model = monaco.editor.getModels()[0];
+      const text = model?.getValue() ?? content;
+      const res = await window.cortexDesktop.editorSaveAs(text) as { ok: boolean; path?: string; error?: string };
+      setToast(res?.ok ? `已另存为: ${res.path ?? ""}` : `另存为失败: ${res?.error ?? ""}`);
+    } catch (e) {
+      setToast(`另存为失败: ${String(e)}`);
+    }
+  }, [content]);
+
   return (
     <div className="chat__panel chat__panel--editor">
       <div className="chat__panel-head">
         <span className="chat__panel-title">📝 编辑器 · {fileName}</span>
         <span style={{ display: "flex", gap: 8 }}>
           <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => void saveFile()}>保存</button>
+          <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => void saveAs()}>另存为</button>
           <button type="button" className="chat__session-btn chat__session-btn--config" onClick={openFile}>打开文件</button>
         </span>
       </div>

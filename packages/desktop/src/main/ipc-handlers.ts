@@ -26,6 +26,7 @@ export const IPC_CHANNELS = {
   SCREENSHOT: "desktop:screenshot",
   DESKTOP_RESTART: "desktop:restart",
   EDITOR_SAVE: "editor:save",
+  EDITOR_SAVE_AS: "editor:save-as",
 } as const;
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
@@ -43,6 +44,23 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
       const file = path.join(dir, safe);
       fs.writeFileSync(file, content, "utf-8");
       return { ok: true, path: file };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
+  // editor:save-as — 另存为（dialog 选路径 + 写文件）
+  ipcMain.handle(IPC_CHANNELS.EDITOR_SAVE_AS, async (event, content: string) => {
+    try {
+      const win = event.sender as unknown as { getOwnerBrowserWindow: () => Electron.BrowserWindow | null };
+      const owner = win.getOwnerBrowserWindow?.() ?? null;
+      const { dialog } = await import("electron");
+      const result = owner
+        ? await dialog.showSaveDialog(owner, { defaultPath: "untitled.ts", filters: [{ name: "代码", extensions: ["ts", "tsx", "js", "json", "md", "css", "html", "py", "rs"] }] })
+        : await dialog.showSaveDialog({ defaultPath: "untitled.ts" });
+      if (result.canceled || !result.filePath) return { ok: false, error: "已取消" };
+      fs.writeFileSync(result.filePath, content, "utf-8");
+      return { ok: true, path: result.filePath };
     } catch (e) {
       return { ok: false, error: String(e) };
     }

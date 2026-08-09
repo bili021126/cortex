@@ -20,6 +20,7 @@ const IPC_CHANNELS = {
   PRESENCE_EVENT: "presence:event",
   DESKTOP_RESTART: "desktop:restart",
   EDITOR_SAVE: "editor:save",
+  EDITOR_SAVE_AS: "editor:save-as",
 } as const;
 
 export interface CortexDesktopAPI {
@@ -108,6 +109,8 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
 
   editorSave: (fileName: string, content: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.EDITOR_SAVE, fileName, content),
+  /** 另存为：dialog 选路径 */
+  editorSaveAs: (content: string) => ipcRenderer.invoke(IPC_CHANNELS.EDITOR_SAVE_AS, content),
 
   speak: (text: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.LIVE2D_SPEAK, text),
