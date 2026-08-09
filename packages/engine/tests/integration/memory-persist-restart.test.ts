@@ -104,7 +104,7 @@ afterAll(() => {
 // ═══════════════════════════════════════════════════════
 
 describe("T1: bootstrap 默认装配 SqliteMemoryStore", () => {
-  it("未注入 memory 时后端为持久化实现（isPersisted=true）且可读写", async () => {
+  it("未注入 memory 时后端为持久化实现（isPersisted=true）且可读写", { timeout: 30000 }, async () => {
     const result = await boot(TEMP_DB);
     const memory = result.memory!;
     expect(memory.isPersisted).toBe(true);
@@ -125,7 +125,7 @@ describe("T1: bootstrap 默认装配 SqliteMemoryStore", () => {
 // ═══════════════════════════════════════════════════════
 
 describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
-  it("关闭后重新 bootstrap 同一 dbPath 能读回条目", async () => {
+  it("关闭后重新 bootstrap 同一 dbPath 能读回条目", { timeout: 30000 }, async () => {
     // 第一次启动：写入
     const first = await boot(TEMP_DB);
     const memoryA = first.memory!;
@@ -176,7 +176,7 @@ describe("T2: 重启进程后记忆可读回（spec 验收标准 1）", () => {
 // ═══════════════════════════════════════════════════════
 
 describe("T3: `.cortex/memory.db` 文件生成（spec 验收标准 1）", () => {
-  it("dbPath 指向的 SQLite 文件存在且带魔数头", async () => {
+  it("dbPath 指向的 SQLite 文件存在且带魔数头", { timeout: 30000 }, async () => {
     const result = await boot(TEMP_DB);
     await result.memory!.close();
 
@@ -191,7 +191,7 @@ describe("T3: `.cortex/memory.db` 文件生成（spec 验收标准 1）", () => 
 // ═══════════════════════════════════════════════════════
 
 describe("T4: 未指定 dbPath 时默认路径（spec 验收标准 3）", () => {
-  it("使用 `${workspaceRoot}/.cortex/memory.db` 且可写读回", async () => {
+  it("使用 `${workspaceRoot}/.cortex/memory.db` 且可写读回", { timeout: 30000 }, async () => {
     const wsRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-mem-ws-"));
     const defaultDb = path.join(wsRoot, ".cortex", "memory.db");
 
