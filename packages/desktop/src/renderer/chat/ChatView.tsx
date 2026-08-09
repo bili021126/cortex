@@ -1010,7 +1010,12 @@ function CodeEditor() {
         setContent(text);
         const monaco = await import("monaco-editor");
         const model = monaco.editor.getModels()[0];
-        if (model) model.setValue(text);
+        if (model) {
+          model.setValue(text);
+          // 按扩展名自动切换语言（高亮）
+          const lang = ({ ".ts": "typescript", ".tsx": "typescript", ".js": "javascript", ".json": "json", ".md": "markdown", ".css": "css", ".html": "html", ".py": "python", ".rs": "rust" } as Record<string, string>)[file.name.split(".").pop()?.toLowerCase() ? `.${file.name.split(".").pop()?.toLowerCase()}` : ""];
+          if (lang) monaco.editor.setModelLanguage(model, lang);
+        }
       })();
     };
     input.click();
