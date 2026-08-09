@@ -17,14 +17,15 @@ import { bootstrapEngine } from "@cortex/engine";
 import { Toolkit } from "@cortex/platform";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import { randomInt } from "node:crypto";
 
 // ── 辅助 ────────────────────────────────────────
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
-// bootstrapEngine 的 AuditTrail 默认目录：process.cwd()/.cortex/logs
-// engine 包测试 cwd = packages/engine
+// bootstrapEngine 的 AuditTrail 默认目录：process.cwd()/.cortex/logs（共享——marker 过滤并发）
 const AUDIT_FILE = path.join(process.cwd(), ".cortex", "logs", "audit.jsonl");
+const AUDIT_DIR = path.dirname(AUDIT_FILE);
 
 function makeMockLLM() {
   const adapter = mockLlmAdapter("Task completed successfully.");
@@ -48,9 +49,17 @@ function readAuditEntries(): Array<Record<string, unknown>> {
 }
 
 async function boot(engineConfig?: Record<string, unknown>) {
-  const result = await bootstrapEngine(REPO_ROOT, {
+  // H2 修复：db/工作区独立临时目录（audit 保持 cwd 共享——marker 过滤并发）
+  const ws = fs.mkdtempSync(path.join(process.env.TEMP ?? os.tmpdir(), "cortex-audit-ws-"));
+  for (const rel of ["agents.json", "cortex-agents.json"]) {
+    const src = path.join(REPO_ROOT, rel);
+    if (fs.existsSync(src)) { fs.copyFileSync(src, path.join(ws, rel)); break; }
+  }
+  const result = await bootstrapEngine(ws, {
     llms: makeMockLLM(),
     toolkit: new Toolkit(),
+    workspaceRoot: ws,
+    dbPath: path.join(ws, ".cortex", "memory.db"),
     engineConfig: engineConfig as never,
   });
   await result.shutdown();
@@ -61,7 +70,7 @@ async function boot(engineConfig?: Record<string, unknown>) {
 
 beforeAll(() => {
   if (!fs.existsSync(path.dirname(AUDIT_FILE))) {
-    fs.mkdirSync(path.dirname(AUDIT_FILE), { recursive: true });
+    fs.mkdirSync(AUDIT_DIR, { recursive: true });
   }
 });
 

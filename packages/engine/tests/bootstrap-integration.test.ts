@@ -35,9 +35,18 @@ import { AgentType } from "@cortex/shared";
 
 // ── 辅助 ────────────────────────────────────────
 
-const WORKSPACE_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+// H2 修复：独立临时工作区（避免并行测试共享 .cortex 目录污染）
+const os = await import("node:os");
+const WORKSPACE_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "cortex-boot-"));
 const TEMP_DB_DIR = path.join(WORKSPACE_ROOT, ".cortex", "test");
 const TEMP_DB = path.join(TEMP_DB_DIR, "memory-bootstrap-integration.db");
+fs.mkdirSync(TEMP_DB_DIR, { recursive: true });
+// 复制最小配置（bootstrapEngine 需要 agents.json）
+const SRC_WS = path.resolve(import.meta.dirname, "..", "..", "..");
+for (const rel of ["agents.json", "cortex-agents.json"]) {
+  const src = path.join(SRC_WS, rel);
+  if (fs.existsSync(src)) { fs.copyFileSync(src, path.join(WORKSPACE_ROOT, rel)); break; }
+}
 
 function makeMockLLM(output?: string): Map<string, LlmAdapter> {
   const adapter = mockLlmAdapter(output ?? "Task completed successfully.");
@@ -58,6 +67,7 @@ function cleanup(): void {
   if (fs.existsSync(TEMP_DB)) {
     try { fs.unlinkSync(TEMP_DB); } catch { /* ok */ }
   }
+  try { fs.rmSync(WORKSPACE_ROOT, { recursive: true, force: true }); } catch { /* ok */ }
 }
 
 /** mock embedder: 生成伪向量，避免 real ONNX 下载和超时 */

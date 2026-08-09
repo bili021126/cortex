@@ -24,7 +24,7 @@ import * as path from "node:path";
 // ── 辅助 ────────────────────────────────────────
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
-const TEMP_DB_DIR = path.join(REPO_ROOT, ".cortex", "test");
+const TEMP_DB_DIR = path.join(process.env.TEMP ?? os.tmpdir(), "cortex-persist-" + process.pid);
 const TEMP_DB = path.join(TEMP_DB_DIR, "memory-persist-restart.db");
 
 /** SQLite 文件魔数头（16 字节） */
