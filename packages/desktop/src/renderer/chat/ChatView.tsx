@@ -64,6 +64,10 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [sideOpen, setSideOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  // 模式状态（Chat/Work/Code/Learn/Daily——UI 先装，功能后接）
+  const [mode, setMode] = useState("Chat");
+  const [modeOpen, setModeOpen] = useState(false);
+  const MODES = ["Chat", "Work", "Code", "Learn", "Daily"];
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
 
@@ -287,6 +291,21 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               <span className="chat__name">{active?.name ?? "昔涟"}</span>
               <span className="chat__name-sep" aria-hidden="true">·</span>
               <span className={`chat__hint${busy ? " chat__hint--busy" : ""}`}>{busy ? "思考中…" : (active?.online ? "在线" : "离线")}</span>
+              {/* 模式状态 */}
+              <span className="chat__mode-wrap">
+                <button type="button" className={`chat__mode-btn${modeOpen ? " is-open" : ""}`} onClick={() => setModeOpen((v) => !v)} title="切换模式">
+                  {mode} <span className="chat__mode-caret">▾</span>
+                </button>
+                {modeOpen && (
+                  <div className="chat__mode-menu">
+                    {MODES.map((m) => (
+                      <button key={m} type="button" className={`chat__mode-opt${m === mode ? " is-active" : ""}`} onClick={() => { setMode(m); setModeOpen(false); }}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </span>
             </span>
           </div>
           <div className="chat__titlebar-actions">
