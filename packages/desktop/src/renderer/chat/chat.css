@@ -2551,3 +2551,35 @@ html, body { height: 100%; margin: 0; padding: 0; }
 }
 .chat__mode-opt:hover { background: rgba(236, 72, 153, 0.08); }
 .chat__mode-opt.is-active { background: linear-gradient(135deg, rgba(255, 182, 213, 0.4), rgba(214, 195, 255, 0.4)); color: #d94685; font-weight: 600; }
+/* ═══════════ 任务/设置面板静态（2026-08-09 布局理顺）═══════════ */
+.chat__panel--tasks, .chat__panel--settings {
+  display: flex; flex-direction: column; align-items: stretch;
+  padding: 20px 28px; overflow-y: auto;
+}
+.chat__panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.chat__panel-title { font-size: 16px; font-weight: 600; color: #6b4a5e; }
+.chat__task-list { display: flex; flex-direction: column; gap: 8px; max-width: 640px; }
+.chat__task-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(236, 72, 153, 0.1);
+  border-radius: 12px;
+}
+.chat__task-icon { font-size: 18px; width: 32px; height: 32px; border-radius: 10px; background: linear-gradient(135deg, #ffe3ef, #efe3ff); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.chat__task-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chat__task-title { font-size: 13px; color: #5c4a5c; font-weight: 500; }
+.chat__task-desc { font-size: 11px; color: #c9a3b8; }
+.chat__task-tag { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: rgba(236, 72, 153, 0.08); color: #d94685; }
+.chat__task-status { font-size: 11px; color: #a57895; min-width: 58px; text-align: right; }
+.chat__task-status--done { color: #4db896; }
+.chat__task-status--doing { color: #d94685; }
+.chat__settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; max-width: 860px; }
+.chat__setting-card {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(236, 72, 153, 0.1);
+  border-radius: 12px; padding: 14px 16px;
+}
+.chat__setting-head { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6b4a5e; margin-bottom: 10px; }
+.chat__setting-row { font-size: 12px; color: #a57895; padding: 5px 0; border-bottom: 1px dashed rgba(236, 72, 153, 0.08); }
+.chat__setting-row:last-child { border-bottom: none; }

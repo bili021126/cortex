@@ -339,20 +339,32 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
         </header>
 
-        {/* 任务/设置面板 */}
+        {/* 任务面板（静态——布局理顺） */}
         {tab === "tasks" && (
-          <div className="chat__panel">
-            <div className="chat__empty-state">
-              <div className="chat__empty-icon">✅</div>
-              <p className="chat__empty-text">任务面板——待实现</p>
+          <div className="chat__panel chat__panel--tasks">
+            <div className="chat__panel-head">
+              <span className="chat__panel-title">任务</span>
+              <button type="button" className="chat__session-btn" onClick={() => setToast("新建任务——待实现")}>✚ 新建</button>
+            </div>
+            <div className="chat__task-list">
+              <TaskItem icon="🔍" title="调研接口全景" desc="HTTP/IPC/WS 盘点" status="done" tag="analysis" />
+              <TaskItem icon="🛠️" title="修复 daemon 僵死" desc="进程清理 + 重启" status="done" tag="fix" />
+              <TaskItem icon="🎨" title="布局静态化" desc="任务/设置面板铺开" status="doing" tag="ui" />
+              <TaskItem icon="⚙️" title="Agent 配置接入" desc="思考模式/上下文/档位" status="todo" tag="core" />
             </div>
           </div>
         )}
+        {/* 设置面板（静态——布局理顺） */}
         {tab === "settings" && (
-          <div className="chat__panel">
-            <div className="chat__empty-state">
-              <div className="chat__empty-icon">⚙️</div>
-              <p className="chat__empty-text">设置面板——待实现</p>
+          <div className="chat__panel chat__panel--settings">
+            <div className="chat__panel-head">
+              <span className="chat__panel-title">设置</span>
+            </div>
+            <div className="chat__settings-grid">
+              <SettingCard icon="🧠" title="模型" items={["默认模型：DeepSeek-V4", "推理档位：Auto"]} />
+              <SettingCard icon="🔊" title="语音" items={["TTS 引擎：GPT-SoVITS", "参考音频：3.5 review"]} />
+              <SettingCard icon="🎨" title="主题" items={["粉白温柔系", "浅蓝过渡 + 薄荷绿"]} />
+              <SettingCard icon="🛠️" title="Agent" items={["思考模式：开", "上下文长度：32"]} />
             </div>
           </div>
         )}
@@ -490,4 +502,32 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 function resolveAsset(assetPath: string): string {
   const clean = assetPath.replace(/^\/+/, "");
   return new URL(clean, document.baseURI).href;
+}
+
+/** 任务项（静态） */
+function TaskItem({ icon, title, desc, status, tag }: { icon: string; title: string; desc: string; status: "done" | "doing" | "todo"; tag: string }) {
+  const statusMap = { done: "✓ 完成", doing: "● 进行中", todo: "○ 待办" } as const;
+  return (
+    <div className="chat__task-item">
+      <span className="chat__task-icon" aria-hidden="true">{icon}</span>
+      <span className="chat__task-meta">
+        <span className="chat__task-title">{title}</span>
+        <span className="chat__task-desc">{desc}</span>
+      </span>
+      <span className={`chat__task-tag chat__task-tag--${tag}`}>{tag}</span>
+      <span className={`chat__task-status chat__task-status--${status}`}>{statusMap[status]}</span>
+    </div>
+  );
+}
+
+/** 设置卡片（静态） */
+function SettingCard({ icon, title, items }: { icon: string; title: string; items: string[] }) {
+  return (
+    <div className="chat__setting-card">
+      <div className="chat__setting-head"><span aria-hidden="true">{icon}</span><b>{title}</b></div>
+      {items.map((it) => (
+        <div key={it} className="chat__setting-row">{it}</div>
+      ))}
+    </div>
+  );
 }
