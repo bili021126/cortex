@@ -281,7 +281,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     return [];
   });
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"chat" | "tasks" | "settings">("chat");
+  const [tab, setTab] = useState<"chat" | "tasks" | "settings" | "design">("chat");
   const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
   const [active, setActive] = useState<Contact | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
@@ -494,6 +494,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         <button type="button" className={`chat__taskbar-btn${railTab === "friends" || railTab === "groups" ? " is-active" : ""}`} onClick={() => setRailTab(railTab === "friends" ? "groups" : "friends")} title="好友与群聊" aria-label="好友与群聊"><IconUsers /></button>
         <button type="button" className={`chat__taskbar-btn${tab === "tasks" ? " is-active" : ""}`} onClick={() => setTab("tasks")} title="任务" aria-label="任务"><IconTasks /></button>
         <button type="button" className={`chat__taskbar-btn${tab === "settings" ? " is-active" : ""}`} onClick={() => setTab("settings")} title="设置" aria-label="设置"><IconSettings /></button>
+        <button type="button" className={`chat__taskbar-btn${tab === "design" ? " is-active" : ""}`} onClick={() => setTab("design")} title="设计预览" aria-label="设计预览">🎨</button>
         <div className="chat__taskbar-spacer" />
         <button type="button" className="chat__taskbar-btn" onClick={onClose} title="关闭" aria-label="关闭"><IconClose /></button>
       </aside>
@@ -567,6 +568,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </header>
+
+        {/* 设计预览（全状态静态展示） */}
+        {tab === "design" && <DesignPreview />}
 
         {/* 任务面板（三栏：分组 → 列表 → 详情——渐进式披露） */}
         {tab === "tasks" && (
@@ -809,4 +813,164 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 function resolveAsset(assetPath: string): string {
   const clean = assetPath.replace(/^\/+/, "");
   return new URL(clean, document.baseURI).href;
+}
+
+/* ── 设计预览：全状态静态展示 ── */
+
+const MSG_STATES = [
+  { state: "queued", text: "排队中——等待发送", badge: null },
+  { state: "sending", text: "发送中——正在请求", badge: null },
+  { state: "streaming", text: "流式——逐字输出中…", badge: null },
+  { state: "complete", text: "完成——回复正常落地", badge: null },
+  { state: "stopped", text: "停止——用户中断生成", badge: "已停止" },
+  { state: "interrupted", text: "中断——连接断开", badge: "连接中断" },
+  { state: "error_timeout", text: "超时——请求超时", badge: "超时" },
+  { state: "error_fatal", text: "出错——致命错误", badge: "出错了" },
+  { state: "regenerating", text: "重新生成——♻️ 触发", badge: null },
+  { state: "retry", text: "重试——🔄 恢复发送", badge: null },
+];
+
+const TASK_STATES = [
+  { cls: "todo", text: "排队", icon: "○" },
+  { cls: "doing", text: "执行中", icon: "●" },
+  { cls: "done", text: "完成", icon: "✓" },
+  { cls: "failed", text: "失败", icon: "✕" },
+  { cls: "cancelled", text: "取消", icon: "—" },
+  { cls: "timeout", text: "超时", icon: "⏳" },
+];
+
+const CONTACT_STATES = [
+  { cls: "online", text: "在线", color: "#7ed6b8" },
+  { cls: "offline", text: "离线", color: "#c9c2d6" },
+  { cls: "busy", text: "忙碌", color: "#f0a35e" },
+  { cls: "thinking", text: "思考中", color: "#f9a8c8" },
+];
+
+const PANEL_STATES = [
+  { icon: "📭", text: "空状态——暂无数据", cls: "empty" },
+  { icon: "⏳", text: "加载中——请求中…", cls: "loading" },
+  { icon: "📊", text: "有数据——正常展示", cls: "data" },
+  { icon: "⚠️", text: "错误——加载失败", cls: "error" },
+];
+
+const INPUT_STATES = [
+  { text: "空闲——可输入", cls: "idle" },
+  { text: "输入中——有内容", cls: "typing" },
+  { text: "发送中——busy", cls: "busy" },
+  { text: "禁用——不可用", cls: "disabled" },
+];
+
+function DesignPreview() {
+  return (
+    <div className="chat__panel chat__panel--design">
+      <div className="chat__panel-head"><span className="chat__panel-title">🎨 设计预览 · 全状态展示</span></div>
+
+      {/* ① 消息十态 */}
+      <PreviewSection title="① 消息状态（状态机十态）">
+        {MSG_STATES.map((m) => (
+          <div key={m.state} className="msg msg--model">
+            <div className="msg__avatar"><img className="msg__avatar-img" src={resolveAsset("../avatars/cyrene-avatar.png")} alt="昔涟" /></div>
+            <div className="msg__body">
+              <div className={`msg__bubble msg__bubble--${m.state}`}>
+                {m.text}
+                {m.badge && <span className="msg__state-badge">{m.badge}</span>}
+              </div>
+              <span className="msg__time">{m.state} · 00:00</span>
+            </div>
+          </div>
+        ))}
+      </PreviewSection>
+
+      {/* ② 任务六态 */}
+      <PreviewSection title="② 任务状态（六态）">
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {TASK_STATES.map((t) => (
+            <span key={t.text} className={`chat__task-status chat__task-status--${t.cls}`} style={{ fontSize: 13, minWidth: "auto" }}>{t.icon} {t.text}</span>
+          ))}
+        </div>
+      </PreviewSection>
+
+      {/* ③ 好友四态 */}
+      <PreviewSection title="③ 好友/Agent 状态（四态）">
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {CONTACT_STATES.map((c) => (
+            <span key={c.text} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: "#6b4a5e" }}>
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: c.color, boxShadow: `0 0 6px ${c.color}` }} />
+              {c.text}
+            </span>
+          ))}
+        </div>
+      </PreviewSection>
+
+      {/* ④ 模式五态 */}
+      <PreviewSection title="④ 模式（五态）">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {["Chat", "Work", "Code", "Learn", "Daily"].map((m, i) => (
+            <span key={m} className={`chat__mode-btn${i === 0 ? "" : ""}`} style={{ cursor: "default", opacity: i === 0 ? 1 : 0.65 }}>{m} ▾</span>
+          ))}
+        </div>
+      </PreviewSection>
+
+      {/* ⑤ 面板四态 */}
+      <PreviewSection title="⑤ 面板状态（四态）">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+          {PANEL_STATES.map((p) => (
+            <div key={p.cls} style={{ background: "rgba(255,255,255,0.7)", border: "1px solid rgba(236,72,153,0.12)", borderRadius: 12, padding: "14px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, marginBottom: 6 }}>{p.icon}</div>
+              <div style={{ fontSize: 12, color: "#a57895" }}>{p.text}</div>
+            </div>
+          ))}
+        </div>
+      </PreviewSection>
+
+      {/* ⑥ 输入区四态 */}
+      <PreviewSection title="⑥ 输入区状态（四态）">
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {INPUT_STATES.map((s) => (
+            <div key={s.cls} style={{ flex: 1, minWidth: 180, background: "rgba(255,255,255,0.75)", border: "1px solid rgba(236,72,153,0.15)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#6b4a5e" }}>
+              {s.text}
+            </div>
+          ))}
+        </div>
+      </PreviewSection>
+
+      {/* ⑦ 会话操作 */}
+      <PreviewSection title="⑦ 会话操作状态">
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <span className="chat__session-btn">✚ 创建会话</span>
+          <span className="chat__session-btn">⧉ 合并会话（待实现）</span>
+          <span className="chat__session-btn">🗜 压缩会话（待实现）</span>
+          <span className="chat__session-btn chat__session-btn--config">⚙ Agent 配置</span>
+        </div>
+      </PreviewSection>
+
+      {/* ⑧ 布局变体 */}
+      <PreviewSection title="⑧ 窗口布局变体（宽/中/窄）">
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+          {[
+            { w: 220, label: "宽 ≥1000px" },
+            { w: 160, label: "中 820-1000px" },
+            { w: 90, label: "窄 <820px" },
+          ].map((v) => (
+            <div key={v.label} style={{ textAlign: "center" }}>
+              <div style={{ width: v.w, height: 60, background: "rgba(255,255,255,0.7)", border: "1px solid rgba(236,72,153,0.2)", borderRadius: 8, display: "flex" }}>
+                <div style={{ width: 14, background: "rgba(236,72,153,0.15)", borderRadius: "8px 0 0 8px" }} />
+                <div style={{ flex: 1 }} />
+              </div>
+              <div style={{ fontSize: 11, color: "#c9a3b8", marginTop: 4 }}>{v.label}</div>
+            </div>
+          ))}
+        </div>
+      </PreviewSection>
+    </div>
+  );
+}
+
+function PreviewSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "#6b4a5e", marginBottom: 10 }}>{title}</div>
+      {children}
+    </div>
+  );
 }
