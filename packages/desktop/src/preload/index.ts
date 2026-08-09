@@ -18,6 +18,7 @@ const IPC_CHANNELS = {
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
   PRESENCE_EVENT: "presence:event",
+  DESKTOP_RESTART: "desktop:restart",
 } as const;
 
 export interface CortexDesktopAPI {
@@ -33,6 +34,8 @@ export interface CortexDesktopAPI {
   /** UX 停止：中断当前流式会话 */
   cancelStreamChat: () => Promise<{ ok: boolean }>;
   getAgents: () => Promise<{ ok: boolean; data?: string[] }>;
+  /** 重启桌面：自动编译并重启应用 */
+  restartDesktop: () => Promise<{ ok: boolean; error?: string }>;
   speak: (text: string) => Promise<{ ok: boolean; error?: string }>;
   expression: (name: string) => Promise<{ ok: boolean }>;
   settings: {
@@ -96,6 +99,9 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
 
   getAgents: () =>
     ipcRenderer.invoke(IPC_CHANNELS.CORTEX_GET_AGENTS),
+
+  restartDesktop: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.DESKTOP_RESTART),
 
   speak: (text: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.LIVE2D_SPEAK, text),

@@ -103,6 +103,14 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     }
   }, [messages]);
 
+  // 重启桌面：自动编译并重启
+  const handleRestart = useCallback(() => {
+    setToast("正在编译并重启桌面…");
+    void window.cortexDesktop.restartDesktop()
+      .then((res) => { if (!res?.ok) setToast(res?.error ?? "重启失败"); })
+      .catch(() => setToast("重启失败"));
+  }, []);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const busy = messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming" || m.state === "regenerating");
@@ -317,9 +325,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           <div className="chat__titlebar-actions">
-            {/* 重启按钮（仅聊天界面——重启当前 agent） */}
+            {/* 重启按钮（自动编译并重启桌面） */}
             {tab === "chat" && (
-              <button type="button" className="chat__winbtn" onClick={() => setToast("重启 agent——待实现")} aria-label="重启" title="重启">↻</button>
+              <button type="button" className="chat__winbtn" onClick={handleRestart} aria-label="重启桌面" title="重启桌面（自动编译）">↻</button>
             )}
             <button type="button" className={`chat__winbtn${sideOpen ? " is-active" : ""}`} onClick={() => setSideOpen((v) => !v)} aria-label="联系人信息" title="联系人信息"><IconInfo size={16} /></button>
             <button type="button" className="chat__winbtn chat__winbtn--close" onClick={onClose} aria-label="关闭" title="关闭">

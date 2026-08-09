@@ -24,11 +24,39 @@ export const IPC_CHANNELS = {
   SETTINGS_GET: "settings:get",
   SETTINGS_SET: "settings:set",
   SCREENSHOT: "desktop:screenshot",
+  DESKTOP_RESTART: "desktop:restart",
 } as const;
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
   // 语音播放锁（防重复点击叠加）
   let ttsPlaying = false;
+  // 桌面重启锁（防重复触发编译）
+  let restarting = false;
+
+  // desktop:restart — 自动编译并重启桌面端
+  ipcMain.handle(IPC_CHANNELS.DESKTOP_RESTART, async () => {
+    if (restarting) return { ok: false, error: "正在重启中" };
+    restarting = true;
+    try {
+      const { exec } = await import("node:child_process");
+      const desktopDir = path.join(app.getAppPath(), "..");
+      console.error("[desktop] 开始编译...");
+      await new Promise<void>((resolve, reject) => {
+        const child = exec("pnpm run build", { cwd: desktopDir, windowsHide: true });
+        child.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`build exit ${code}`))));
+        child.on("error", reject);
+      });
+      console.error("[desktop] 编译完成，重启中...");
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 300);
+      return { ok: true };
+    } catch (e) {
+      restarting = false;
+      return { ok: false, error: String(e) };
+    }
+  });
   // cortex:init — 连接 daemon
   ipcMain.handle(IPC_CHANNELS.CORTEX_INIT, async (_event, daemonPort?: number) => {
     await cortex.init(daemonPort);
