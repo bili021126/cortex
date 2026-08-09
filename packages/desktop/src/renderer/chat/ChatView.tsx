@@ -411,9 +411,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+      {/* Toast */}
+      {toast && <div className="chat__toast">{toast}</div>}
     </div>
-    {/* Toast */}
-    {toast && <div className="chat__toast">{toast}</div>}
   );
 }
 
