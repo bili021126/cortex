@@ -9,7 +9,7 @@
  * @since v5 — Ink 重构 Phase 1 → v6 Token + 动画整合
  */
 
-import { Box, Text, useStdout } from "ink";
+import { Box, Text, useStdout, Static } from "ink";
 import { AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK } from "@cortex/shared";
 import type { AgentType } from "@cortex/shared";
 import type { SessionMessage, ToolCallRecord, TaskNodeView, PlanState } from "./session-reducer.js";
@@ -210,13 +210,16 @@ export function ChatView({
   }
 
   // ── 流式输出 ──────────────────────────────
+  // （动态区——Static 稳定区之外——每次重绘小范围不抖动）
+  const dynamicRows: React.ReactNode[] = [];
+
   if (streamingContent) {
-    rows.push(<StreamingLine key="streaming" content={streamingContent} agent={agent} />);
+    dynamicRows.push(<StreamingLine key="streaming" content={streamingContent} agent={agent} />);
   }
 
   // ── 处理中指示 ────────────────────────────
   if (isProcessing && !streamingContent && recentTools.length === 0 && messages.length > 0) {
-    rows.push(
+    dynamicRows.push(
       <Box key="processing" marginBottom={1}>
         <Spinner style="dots" color={tokens.color.status.thinking} />
         <Text color={t.textMuted.color}> 处理中...</Text>
@@ -224,14 +227,14 @@ export function ChatView({
     );
   }
 
-  // ── Plan 任务树 ───────────────────────────
+  // ─ Plan 任务树（静态——节点追加时 Static diff 渲染新增） ─
   if (planNodes && planNodes.length > 0) {
     rows.push(<TaskTree key="task-tree" nodes={planNodes} />);
   }
 
-  // ─ Plan 审批提示 ─────────────────────────
+  // ─ Plan 审批提示（动态区） ─
   if (planState === "reviewing") {
-    rows.push(
+    dynamicRows.push(
       <Box key="plan-prompt" marginTop={1}>
         <Text color={tokens.color.semantic.warning}>💡 说"好的"执行计划，或继续对话修改方案</Text>
       </Box>,
@@ -252,12 +255,15 @@ export function ChatView({
 
   return (
     <Box flexDirection="column" paddingX={tokens.spacing.xs} flexShrink={1} minHeight={0}>
+      {/* 根治：历史消息用 Static 稳定区——已渲染不重绘（终端原生滚动——不再有增量重绘行错位） */}
+      <Static items={capped}>{(row) => row}</Static>
+      {/* 动态区：流式/处理中/裁剪提示/plan 审批——小范围重绘不抖动 */}
       {hiddenCount > 0 && (
         <Box marginBottom={1}>
           <Text color={t.textMuted.color}>↑ {hiddenCount} 条更早的消息（Ctrl+U/D 翻页）</Text>
         </Box>
       )}
-      {capped}
+      {dynamicRows}
     </Box>
   );
 }
