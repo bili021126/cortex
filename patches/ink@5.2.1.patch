@@ -1,0 +1,18 @@
+diff --git a/build/log-update.js b/build/log-update.js
+index 547421e47903fbdce8ecab87e4fbdce901663f03..3dd4bd505f1d35be6807516120deb2ab3bb0aaff 100644
+--- a/build/log-update.js
++++ b/build/log-update.js
+@@ -14,11 +14,11 @@ const create = (stream, { showCursor = false } = {}) => {
+             return;
+         }
+         previousOutput = output;
+-        stream.write(ansiEscapes.eraseLines(previousLineCount) + output);
++        stream.write(ansiEscapes.cursorUp(previousLineCount) + ansiEscapes.eraseDown() + output);
+         previousLineCount = output.split('\n').length;
+     };
+     render.clear = () => {
+-        stream.write(ansiEscapes.eraseLines(previousLineCount));
++        stream.write(ansiEscapes.cursorUp(previousLineCount) + ansiEscapes.eraseDown());
+         previousOutput = '';
+         previousLineCount = 0;
+     };
