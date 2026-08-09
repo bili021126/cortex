@@ -321,6 +321,26 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   // 任务面板：筛选 + 选中
   const [taskFilter, setTaskFilter] = useState("全部");
   const [taskSelected, setTaskSelected] = useState(0);
+  // 任务接真：打开任务面板时拉真实节点（GET /api/v1/nodes——无节点时静态）
+  const [realTasks, setRealTasks] = useState<Array<{ id: string; title: string; status: string; agent: string }> | null>(null);
+  useEffect(() => {
+    if (tab !== "tasks") return;
+    void (async () => {
+      try {
+        const res = await fetch("http://127.0.0.1:3210/api/v1/nodes?limit=50");
+        const j = await res.json() as { data?: Array<{ id: string; task?: string; status?: string; claimedBy?: string[] }> };
+        const nodes = j.data ?? [];
+        if (nodes.length > 0) {
+          setRealTasks(nodes.map((n) => ({
+            id: n.id,
+            title: n.task ?? n.id.slice(0, 12),
+            status: n.status ?? "pending",
+            agent: n.claimedBy?.[0] ?? "—",
+          })));
+        }
+      } catch { /* 无 daemon——静态 */ }
+    })();
+  }, [tab]);
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
 
@@ -628,9 +648,19 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                   </button>
                 ))}
               </aside>
-              {/* 中：任务列表（中） */}
+              {/* 中：任务列表（中）——真实节点优先 */}
               <aside className="chat__tasks-list">
-                {TASKS.filter((t) => taskFilter === "全部" || t.status === taskFilter).map((t, i) => (
+                {(realTasks ?? []).map((t, i) => (
+                  <button key={t.id} type="button" className={`chat__task-item${taskSelected === i ? " is-active" : ""}`} onClick={() => setTaskSelected(i)}>
+                    <span className="chat__task-icon" aria-hidden="true">📌</span>
+                    <span className="chat__task-meta">
+                      <span className="chat__task-title">{t.title}</span>
+                      <span className="chat__task-desc">{t.agent} · {t.id.slice(0, 8)}</span>
+                    </span>
+                    <span className={`chat__task-status chat__task-status--${t.status === "done" ? "done" : t.status === "failed" ? "failed" : "doing"}`}>{t.status}</span>
+                  </button>
+                ))}
+                {realTasks === null && TASKS.filter((t) => taskFilter === "全部" || t.status === taskFilter).map((t, i) => (
                   <button key={t.id} type="button" className={`chat__task-item${taskSelected === i ? " is-active" : ""}`} onClick={() => setTaskSelected(i)}>
                     <span className="chat__task-icon" aria-hidden="true">{t.icon}</span>
                     <span className="chat__task-meta">
@@ -640,6 +670,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                     <span className={`chat__task-status chat__task-status--${t.statusCls}`}>{t.statusText}</span>
                   </button>
                 ))}
+                {realTasks !== null && realTasks.length === 0 && (
+                  <div style={{ fontSize: 12, color: "#c9a3b8", padding: "12px", textAlign: "center" }}>暂无任务节点</div>
+                )}
               </aside>
               {/* 右：任务详情（复——渐进披露） */}
               <div className="chat__tasks-detail">
