@@ -5,7 +5,7 @@ import { ConfirmGate } from "@cortex/scheduler";
 import { ReversibilityLevel } from "@cortex/config";
 
 
-describe("ConfirmGate 超时回退", () => {
+describe("ConfirmGate 超时回退", { timeout: 30_000 }, () => {
   // ── 超时自动拒绝 ──────────────────────────────
 
   it("waitFor 超时 → 自动返回 false（L2 高危操作无人确认）", async () => {

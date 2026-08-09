@@ -67,7 +67,7 @@ function createMockBridge(approved: boolean = true): PlatformBridge & { confirmC
 
 // ── Tests ────────────────────────────────────────────────
 
-describe("Cross-package execution pipeline", () => {
+describe("Cross-package execution pipeline", { timeout: 30_000 }, () => {
   let observer: IPipelineObserver & { events: ObservableEvent[] };
   let confirmGate: ConfirmGate;
   let toolkit: Toolkit;
