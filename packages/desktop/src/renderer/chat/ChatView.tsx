@@ -45,124 +45,170 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   return "fatal";
 }
 
-/** 设置域列表（对应 config/constants 的域） */
+/** 设置域列表 + 子组（左中右三栏：域 → 子组 → 配置项） */
 const SETTINGS_DOMAINS = [
-  { id: "llm", name: "模型", icon: "🧠", desc: "LLM 配置" },
-  { id: "memory", name: "记忆", icon: "💭", desc: "记忆策略" },
-  { id: "skills", name: "技能", icon: "🎯", desc: "技能系统" },
-  { id: "scheduler", name: "调度", icon: "⏱️", desc: "调度参数" },
-  { id: "timeouts", name: "超时", icon: "⏳", desc: "超时配置" },
-  { id: "governance", name: "治理", icon: "⚖️", desc: "治理规则" },
-  { id: "env", name: "环境", icon: "🌐", desc: "环境变量" },
-  { id: "file-paths", name: "路径", icon: "📁", desc: "文件路径" },
-  { id: "agent-quota", name: "配额", icon: "📊", desc: "Agent 配额" },
-  { id: "version", name: "版本", icon: "🏷️", desc: "版本信息" },
+  { id: "llm", name: "模型", icon: "🧠", desc: "LLM 配置", groups: ["主模型", "推理", "输出"] },
+  { id: "memory", name: "记忆", icon: "💭", desc: "记忆策略", groups: ["分层", "检索", "生命周期"] },
+  { id: "skills", name: "技能", icon: "🎯", desc: "技能系统", groups: ["注册", "行为"] },
+  { id: "scheduler", name: "调度", icon: "⏱️", desc: "调度参数", groups: ["执行", "限制"] },
+  { id: "timeouts", name: "超时", icon: "⏳", desc: "超时配置", groups: ["请求", "会话"] },
+  { id: "governance", name: "治理", icon: "⚖️", desc: "治理规则", groups: ["宪法", "流程", "记录"] },
+  { id: "env", name: "环境", icon: "🌐", desc: "环境变量", groups: ["运行", "服务"] },
+  { id: "file-paths", name: "路径", icon: "📁", desc: "文件路径", groups: ["项目", "数据"] },
+  { id: "agent-quota", name: "配额", icon: "📊", desc: "Agent 配额", groups: ["数量", "资源"] },
+  { id: "version", name: "版本", icon: "🏷️", desc: "版本信息", groups: ["产品", "运行环境"] },
 ];
 
-/** 各域配置项（静态——完整清单） */
-const SETTINGS_ITEMS: Record<string, Array<{ label: string; key: string; value: string }>> = {
-  llm: [
-    { label: "默认模型", key: "llm.defaultModel", value: "DeepSeek-V4" },
-    { label: "备用模型", key: "llm.fallbackModel", value: "Qwen-Max" },
-    { label: "推理档位", key: "llm.reasoning", value: "Auto" },
-    { label: "最大 Token", key: "llm.maxTokens", value: "8192" },
-    { label: "温度", key: "llm.temperature", value: "0.7" },
-    { label: "Top-P", key: "llm.topP", value: "0.95" },
-    { label: "流式输出", key: "llm.streaming", value: "开启" },
-    { label: "超时", key: "llm.timeoutMs", value: "60000" },
-    { label: "重试次数", key: "llm.maxRetries", value: "3" },
-    { label: "供应商", key: "llm.provider", value: "DeepSeek" },
-  ],
-  memory: [
-    { label: "记忆分层", key: "memory.tiers", value: "L0/L1/L2" },
-    { label: "检索条数", key: "memory.topK", value: "8" },
-    { label: "召回阈值", key: "memory.similarityThreshold", value: "0.72" },
-    { label: "持久化", key: "memory.persist", value: "开启" },
-    { label: "自动沉淀", key: "memory.autoConsolidate", value: "开启" },
-    { label: "冲突检测", key: "memory.conflictDetection", value: "开启" },
-    { label: "过期天数", key: "memory.ttlDays", value: "180" },
-    { label: "检索方式", key: "memory.retrieval", value: "BFS+权重" },
-    { label: "Worldbook", key: "memory.worldbook", value: "开启" },
-  ],
-  skills: [
-    { label: "技能注册", key: "skills.registry", value: "内置 + 自定义" },
-    { label: "技能上限", key: "skills.maxCount", value: "64" },
-    { label: "Slash 命令", key: "skills.slashCommands", value: "开启" },
-    { label: "技能校验", key: "skills.validateOnLoad", value: "开启" },
-    { label: "技能缓存", key: "skills.cache", value: "开启" },
-    { label: "失败降级", key: "skills.degradeOnError", value: "开启" },
-    { label: "参考资料", key: "skills.references", value: "可注入" },
-    { label: "技能目录", key: "skills.dir", value: ".qoder/skills" },
-  ],
-  scheduler: [
-    { label: "轮询间隔", key: "scheduler.intervalMs", value: "1000" },
-    { label: "并发上限", key: "scheduler.concurrency", value: "4" },
-    { label: "队列上限", key: "scheduler.queueLimit", value: "64" },
-    { label: "任务超时", key: "scheduler.taskTimeoutMs", value: "300000" },
-    { label: "优先级", key: "scheduler.priority", value: "P0-P3" },
-    { label: "重试策略", key: "scheduler.retry", value: "指数退避" },
-    { label: "定时任务", key: "scheduler.cron", value: "开启" },
-    { label: "调度窗口", key: "scheduler.windowMs", value: "60000" },
-  ],
-  timeouts: [
-    { label: "请求超时", key: "timeouts.requestMs", value: "60000" },
-    { label: "会话空闲", key: "timeouts.idleMs", value: "300000" },
-    { label: "工具超时", key: "timeouts.toolMs", value: "120000" },
-    { label: "编译超时", key: "timeouts.buildMs", value: "600000" },
-    { label: "确认门超时", key: "timeouts.confirmMs", value: "30000" },
-    { label: "连接超时", key: "timeouts.connectMs", value: "10000" },
-    { label: "流式空闲", key: "timeouts.streamIdleMs", value: "15000" },
-  ],
-  governance: [
-    { label: "宪法版本", key: "governance.constitution", value: "v2.5" },
-    { label: "门禁等级", key: "governance.gateLevel", value: "五层" },
-    { label: "确认门", key: "governance.confirmGate", value: "开启" },
-    { label: "修订流程", key: "governance.amendment", value: "委员会" },
-    { label: "事件路由", key: "governance.eventRouting", value: "声明式" },
-    { label: "审计日志", key: "governance.audit", value: "开启" },
-    { label: "共识机制", key: "governance.consensus", value: "圆桌" },
-    { label: "决策记录", key: "governance.decisionLog", value: "ADR" },
-  ],
-  env: [
-    { label: "运行环境", key: "env.nodeEnv", value: "production" },
-    { label: "日志级别", key: "env.logLevel", value: "info" },
-    { label: "数据目录", key: "env.dataDir", value: ".cortex" },
-    { label: "daemon 端口", key: "env.daemonPort", value: "3210" },
-    { label: "TTS 服务", key: "env.gptsovitsUrl", value: "9880" },
-    { label: "LLM API", key: "env.llmBaseUrl", value: "配置中" },
-    { label: "遥测上报", key: "env.telemetry", value: "开启" },
-    { label: "调试模式", key: "env.debug", value: "关闭" },
-  ],
-  "file-paths": [
-    { label: "工作区", key: "paths.workspace", value: "D:/cortex" },
-    { label: "数据目录", key: "paths.data", value: ".cortex" },
-    { label: "日志目录", key: "paths.logs", value: ".cortex/logs" },
-    { label: "配置目录", key: "paths.config", value: ".cortex/config" },
-    { label: "临时目录", key: "paths.tmp", value: ".tmp" },
-    { label: "记忆库", key: "paths.memoryDb", value: ".cortex/memory.db" },
-    { label: "技能目录", key: "paths.skills", value: ".qoder/skills" },
-    { label: "画布目录", key: "paths.canvases", value: "~/.qoder/projects" },
-  ],
-  "agent-quota": [
-    { label: "Agent 上限", key: "quota.agents", value: "8" },
-    { label: "并行会话", key: "quota.sessions", value: "3" },
-    { label: "每会话消息", key: "quota.messagesPerSession", value: "200" },
-    { label: "工具调用上限", key: "quota.toolCalls", value: "50" },
-    { label: "token 日配额", key: "quota.dailyTokens", value: "1M" },
-    { label: "子任务上限", key: "quota.subTasks", value: "8" },
-    { label: "重试上限", key: "quota.retries", value: "3" },
-    { label: "内存上限", key: "quota.memoryMb", value: "512" },
-  ],
-  version: [
-    { label: "Cortex", key: "version.cortex", value: "2.5.28" },
-    { label: "桌面端", key: "version.desktop", value: "0.1.0" },
-    { label: "引擎", key: "version.engine", value: "Core-2" },
-    { label: "宪法", key: "version.constitution", value: "v2.5" },
-    { label: "Node.js", key: "version.node", value: "24 LTS" },
-    { label: "Electron", key: "version.electron", value: "43" },
-    { label: "构建时间", key: "version.buildAt", value: "2026-08-09" },
-    { label: "Git", key: "version.gitHead", value: "21863f02" },
-  ],
+/** 各子组配置项（静态——完整清单） */
+const SETTINGS_ITEMS: Record<string, Record<string, Array<{ label: string; key: string; value: string }>>> = {
+  llm: {
+    "主模型": [
+      { label: "默认模型", key: "llm.defaultModel", value: "DeepSeek-V4" },
+      { label: "备用模型", key: "llm.fallbackModel", value: "Qwen-Max" },
+      { label: "供应商", key: "llm.provider", value: "DeepSeek" },
+    ],
+    "推理": [
+      { label: "推理档位", key: "llm.reasoning", value: "Auto" },
+      { label: "温度", key: "llm.temperature", value: "0.7" },
+      { label: "Top-P", key: "llm.topP", value: "0.95" },
+    ],
+    "输出": [
+      { label: "最大 Token", key: "llm.maxTokens", value: "8192" },
+      { label: "流式输出", key: "llm.streaming", value: "开启" },
+      { label: "超时", key: "llm.timeoutMs", value: "60000" },
+      { label: "重试次数", key: "llm.maxRetries", value: "3" },
+    ],
+  },
+  memory: {
+    "分层": [
+      { label: "记忆分层", key: "memory.tiers", value: "L0/L1/L2" },
+      { label: "自动沉淀", key: "memory.autoConsolidate", value: "开启" },
+      { label: "Worldbook", key: "memory.worldbook", value: "开启" },
+    ],
+    "检索": [
+      { label: "检索条数", key: "memory.topK", value: "8" },
+      { label: "召回阈值", key: "memory.similarityThreshold", value: "0.72" },
+      { label: "检索方式", key: "memory.retrieval", value: "BFS+权重" },
+    ],
+    "生命周期": [
+      { label: "持久化", key: "memory.persist", value: "开启" },
+      { label: "冲突检测", key: "memory.conflictDetection", value: "开启" },
+      { label: "过期天数", key: "memory.ttlDays", value: "180" },
+    ],
+  },
+  skills: {
+    "注册": [
+      { label: "技能注册", key: "skills.registry", value: "内置 + 自定义" },
+      { label: "技能上限", key: "skills.maxCount", value: "64" },
+      { label: "技能目录", key: "skills.dir", value: ".qoder/skills" },
+    ],
+    "行为": [
+      { label: "Slash 命令", key: "skills.slashCommands", value: "开启" },
+      { label: "技能校验", key: "skills.validateOnLoad", value: "开启" },
+      { label: "技能缓存", key: "skills.cache", value: "开启" },
+      { label: "失败降级", key: "skills.degradeOnError", value: "开启" },
+      { label: "参考资料", key: "skills.references", value: "可注入" },
+    ],
+  },
+  scheduler: {
+    "执行": [
+      { label: "轮询间隔", key: "scheduler.intervalMs", value: "1000" },
+      { label: "任务超时", key: "scheduler.taskTimeoutMs", value: "300000" },
+      { label: "重试策略", key: "scheduler.retry", value: "指数退避" },
+      { label: "定时任务", key: "scheduler.cron", value: "开启" },
+    ],
+    "限制": [
+      { label: "并发上限", key: "scheduler.concurrency", value: "4" },
+      { label: "队列上限", key: "scheduler.queueLimit", value: "64" },
+      { label: "优先级", key: "scheduler.priority", value: "P0-P3" },
+      { label: "调度窗口", key: "scheduler.windowMs", value: "60000" },
+    ],
+  },
+  timeouts: {
+    "请求": [
+      { label: "请求超时", key: "timeouts.requestMs", value: "60000" },
+      { label: "工具超时", key: "timeouts.toolMs", value: "120000" },
+      { label: "编译超时", key: "timeouts.buildMs", value: "600000" },
+      { label: "连接超时", key: "timeouts.connectMs", value: "10000" },
+    ],
+    "会话": [
+      { label: "会话空闲", key: "timeouts.idleMs", value: "300000" },
+      { label: "确认门超时", key: "timeouts.confirmMs", value: "30000" },
+      { label: "流式空闲", key: "timeouts.streamIdleMs", value: "15000" },
+    ],
+  },
+  governance: {
+    "宪法": [
+      { label: "宪法版本", key: "governance.constitution", value: "v2.5" },
+      { label: "门禁等级", key: "governance.gateLevel", value: "五层" },
+      { label: "确认门", key: "governance.confirmGate", value: "开启" },
+    ],
+    "流程": [
+      { label: "修订流程", key: "governance.amendment", value: "委员会" },
+      { label: "事件路由", key: "governance.eventRouting", value: "声明式" },
+      { label: "共识机制", key: "governance.consensus", value: "圆桌" },
+    ],
+    "记录": [
+      { label: "审计日志", key: "governance.audit", value: "开启" },
+      { label: "决策记录", key: "governance.decisionLog", value: "ADR" },
+    ],
+  },
+  env: {
+    "运行": [
+      { label: "运行环境", key: "env.nodeEnv", value: "production" },
+      { label: "日志级别", key: "env.logLevel", value: "info" },
+      { label: "数据目录", key: "env.dataDir", value: ".cortex" },
+      { label: "调试模式", key: "env.debug", value: "关闭" },
+    ],
+    "服务": [
+      { label: "daemon 端口", key: "env.daemonPort", value: "3210" },
+      { label: "TTS 服务", key: "env.gptsovitsUrl", value: "9880" },
+      { label: "LLM API", key: "env.llmBaseUrl", value: "配置中" },
+      { label: "遥测上报", key: "env.telemetry", value: "开启" },
+    ],
+  },
+  "file-paths": {
+    "项目": [
+      { label: "工作区", key: "paths.workspace", value: "D:/cortex" },
+      { label: "技能目录", key: "paths.skills", value: ".qoder/skills" },
+      { label: "画布目录", key: "paths.canvases", value: "~/.qoder/projects" },
+    ],
+    "数据": [
+      { label: "数据目录", key: "paths.data", value: ".cortex" },
+      { label: "日志目录", key: "paths.logs", value: ".cortex/logs" },
+      { label: "配置目录", key: "paths.config", value: ".cortex/config" },
+      { label: "临时目录", key: "paths.tmp", value: ".tmp" },
+      { label: "记忆库", key: "paths.memoryDb", value: ".cortex/memory.db" },
+    ],
+  },
+  "agent-quota": {
+    "数量": [
+      { label: "Agent 上限", key: "quota.agents", value: "8" },
+      { label: "并行会话", key: "quota.sessions", value: "3" },
+      { label: "子任务上限", key: "quota.subTasks", value: "8" },
+    ],
+    "资源": [
+      { label: "每会话消息", key: "quota.messagesPerSession", value: "200" },
+      { label: "工具调用上限", key: "quota.toolCalls", value: "50" },
+      { label: "token 日配额", key: "quota.dailyTokens", value: "1M" },
+      { label: "重试上限", key: "quota.retries", value: "3" },
+      { label: "内存上限", key: "quota.memoryMb", value: "512" },
+    ],
+  },
+  version: {
+    "产品": [
+      { label: "Cortex", key: "version.cortex", value: "2.5.28" },
+      { label: "桌面端", key: "version.desktop", value: "0.1.0" },
+      { label: "引擎", key: "version.engine", value: "Core-2" },
+      { label: "宪法", key: "version.constitution", value: "v2.5" },
+    ],
+    "运行环境": [
+      { label: "Node.js", key: "version.node", value: "24 LTS" },
+      { label: "Electron", key: "version.electron", value: "43" },
+      { label: "构建时间", key: "version.buildAt", value: "2026-08-09" },
+      { label: "Git", key: "version.gitHead", value: "21863f02" },
+    ],
+  },
 };
 
 export function ChatView({ onClose }: { onClose: () => void }) {
