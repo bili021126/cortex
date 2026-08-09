@@ -222,7 +222,7 @@ const TASK_FILTERS = [
 const TASKS = [
   {
     id: 1, icon: "🔍", title: "调研接口全景", agent: "analysis", duration: "3min",
-    status: "doing", statusCls: "doing", statusText: "● 进行中",
+    status: "doing", statusCls: "doing", statusText: "● 进行中", source: "cmd",
     stepDone: 3, stepTotal: 5,
     steps: [
       { name: "盘点 HTTP 路由", state: "done" },
@@ -235,7 +235,7 @@ const TASKS = [
   },
   {
     id: 2, icon: "🛠️", title: "修复 daemon 僵死", agent: "fix", duration: "2min",
-    status: "done", statusCls: "done", statusText: "✓ 完成",
+    status: "done", statusCls: "done", statusText: "✓ 完成", source: "cmd",
     stepDone: 4, stepTotal: 4,
     steps: [
       { name: "定位僵死进程", state: "done" },
@@ -246,8 +246,18 @@ const TASKS = [
     events: ["09:15:02 开始", "09:15:10 定位 20920", "09:15:30 重启完成", "09:16:00 验证通过"],
   },
   {
-    id: 3, icon: "⚙️", title: "Agent 配置接入", agent: "core", duration: "0s",
-    status: "failed", statusCls: "failed", statusText: "✕ 失败",
+    id: 3, icon: "🌤️", title: "查询天气", agent: "daily", duration: "8s",
+    status: "done", statusCls: "done", statusText: "✓ 完成", source: "tool",
+    stepDone: 2, stepTotal: 2,
+    steps: [
+      { name: "调用天气工具", state: "done" },
+      { name: "返回结果", state: "done" },
+    ],
+    events: ["11:20:00 工具调用", "11:20:08 返回结果"],
+  },
+  {
+    id: 4, icon: "⚙️", title: "Agent 配置接入", agent: "core", duration: "0s",
+    status: "failed", statusCls: "failed", statusText: "✕ 失败", source: "cmd",
     stepDone: 1, stepTotal: 3,
     steps: [
       { name: "读取配置域", state: "done" },
@@ -577,7 +587,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                   <button key={t.id} type="button" className={`chat__task-item${taskSelected === i ? " is-active" : ""}`} onClick={() => setTaskSelected(i)}>
                     <span className="chat__task-icon" aria-hidden="true">{t.icon}</span>
                     <span className="chat__task-meta">
-                      <span className="chat__task-title">{t.title}</span>
+                      <span className="chat__task-title">{t.title} <span className={`chat__task-source chat__task-source--${t.source}`}>{t.source === "cmd" ? "命令" : "工具"}</span></span>
                       <span className="chat__task-desc">{t.agent} · {t.duration}</span>
                     </span>
                     <span className={`chat__task-status chat__task-status--${t.statusCls}"`}>{t.statusText}</span>

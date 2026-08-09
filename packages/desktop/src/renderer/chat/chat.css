@@ -2665,3 +2665,10 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__tasks-events { display: flex; flex-direction: column; gap: 4px; background: rgba(255, 255, 255, 0.6); border-radius: 12px; padding: 12px 14px; }
 .chat__task-event { font-size: 11px; color: #a57895; font-family: ui-monospace, Consolas, monospace; }
 .chat__tasks-actions { display: flex; gap: 8px; }
+/* 任务来源徽章（命令/工具） */
+.chat__task-source {
+  font-size: 9px; padding: 1px 6px; border-radius: 999px;
+  vertical-align: middle; margin-left: 4px;
+}
+.chat__task-source--cmd { background: rgba(236, 72, 153, 0.12); color: #d94685; }
+.chat__task-source--tool { background: rgba(126, 214, 184, 0.18); color: #4db896; }
