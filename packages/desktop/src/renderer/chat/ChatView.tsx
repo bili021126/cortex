@@ -288,27 +288,39 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         <header className="chat__titlebar">
           <div className="chat__titlebar-drag">
             <span className="chat__title-meta">
-              <span className="chat__name">{active?.name ?? "昔涟"}</span>
-              <span className="chat__name-sep" aria-hidden="true">·</span>
-              <span className={`chat__hint${busy ? " chat__hint--busy" : ""}`}>{busy ? "思考中…" : (active?.online ? "在线" : "离线")}</span>
-              {/* 模式状态 */}
-              <span className="chat__mode-wrap">
-                <button type="button" className={`chat__mode-btn${modeOpen ? " is-open" : ""}`} onClick={() => setModeOpen((v) => !v)} title="切换模式">
-                  {mode} <span className="chat__mode-caret">▾</span>
-                </button>
-                {modeOpen && (
-                  <div className="chat__mode-menu">
-                    {MODES.map((m) => (
-                      <button key={m} type="button" className={`chat__mode-opt${m === mode ? " is-active" : ""}`} onClick={() => { setMode(m); setModeOpen(false); }}>
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </span>
+              {/* agent 站位：仅聊天界面显示 */}
+              {tab === "chat" && (
+                <>
+                  <span className="chat__name">{active?.name ?? "昔涟"}</span>
+                  <span className="chat__name-sep" aria-hidden="true">·</span>
+                  <span className={`chat__hint${busy ? " chat__hint--busy" : ""}`}>{busy ? "思考中…" : (active?.online ? "在线" : "离线")}</span>
+                  {/* 模式状态 */}
+                  <span className="chat__mode-wrap">
+                    <button type="button" className={`chat__mode-btn${modeOpen ? " is-open" : ""}`} onClick={() => setModeOpen((v) => !v)} title="切换模式">
+                      {mode} <span className="chat__mode-caret">▾</span>
+                    </button>
+                    {modeOpen && (
+                      <div className="chat__mode-menu">
+                        {MODES.map((m) => (
+                          <button key={m} type="button" className={`chat__mode-opt${m === mode ? " is-active" : ""}`} onClick={() => { setMode(m); setModeOpen(false); }}>
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </span>
+                </>
+              )}
+              {/* 非聊天界面：显示面板名 */}
+              {tab === "tasks" && <span className="chat__name">任务面板</span>}
+              {tab === "settings" && <span className="chat__name">设置</span>}
             </span>
           </div>
           <div className="chat__titlebar-actions">
+            {/* 重启按钮（仅聊天界面——重启当前 agent） */}
+            {tab === "chat" && (
+              <button type="button" className="chat__winbtn" onClick={() => setToast("重启 agent——待实现")} aria-label="重启" title="重启">↻</button>
+            )}
             <button type="button" className={`chat__winbtn${sideOpen ? " is-active" : ""}`} onClick={() => setSideOpen((v) => !v)} aria-label="联系人信息" title="联系人信息"><IconInfo size={16} /></button>
             <button type="button" className="chat__winbtn chat__winbtn--close" onClick={onClose} aria-label="关闭" title="关闭">
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
