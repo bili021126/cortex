@@ -32,10 +32,10 @@ function openChatWindow(): void {
     return;
   }
   chatWindow = new BrowserWindow({
-    width: 960,
-    height: 680,
-    minWidth: 680,
-    minHeight: 480,
+    width: 1180,
+    height: 800,
+    minWidth: 720,
+    minHeight: 520,
     title: "Cyrene · 聊天",
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
