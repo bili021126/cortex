@@ -21,6 +21,7 @@ const IPC_CHANNELS = {
   DESKTOP_RESTART: "desktop:restart",
   EDITOR_SAVE: "editor:save",
   EDITOR_SAVE_AS: "editor:save-as",
+  NOTIFICATION_EVENT: "notification:event",
 } as const;
 
 export interface CortexDesktopAPI {
@@ -42,6 +43,8 @@ export interface CortexDesktopAPI {
   editorSave: (fileName: string, content: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
   /** 另存为：dialog 选路径 */
   editorSaveAs: (content: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
+  /** 通知订阅（通知铃接真——pipeline/notification 事件） */
+  onNotification: (cb: (e: { channel: string; data: unknown }) => void) => () => void;
   speak: (text: string) => Promise<{ ok: boolean; error?: string }>;
   expression: (name: string) => Promise<{ ok: boolean }>;
   settings: {
@@ -113,6 +116,12 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     ipcRenderer.invoke(IPC_CHANNELS.EDITOR_SAVE, fileName, content),
   /** 另存为：dialog 选路径 */
   editorSaveAs: (content: string) => ipcRenderer.invoke(IPC_CHANNELS.EDITOR_SAVE_AS, content),
+
+  onNotification: (cb: (e: { channel: string; data: unknown }) => void) => {
+    const listener = (_: unknown, e: { channel: string; data: unknown }) => cb(e);
+    ipcRenderer.on(IPC_CHANNELS.NOTIFICATION_EVENT, listener);
+    return () => { ipcRenderer.removeListener(IPC_CHANNELS.NOTIFICATION_EVENT, listener); };
+  },
 
   speak: (text: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.LIVE2D_SPEAK, text),

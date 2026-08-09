@@ -10,8 +10,9 @@ import * as path from "path";
 import * as fs from "fs";
 import { fileURLToPath } from "url";
 import { CortexBridge } from "./cortex-bridge.js";
-import { registerIpcHandlers } from "./ipc-handlers.js";
+import { registerIpcHandlers, IPC_CHANNELS } from "./ipc-handlers.js";
 import { PresenceBridge } from "./presence-bridge.js";
+import { DaemonWsClient } from "./ws-client.js";
 import { createTray } from "./tray.js";
 import type { Tray } from "electron";
 
@@ -23,6 +24,7 @@ const rendererDir = path.join(__dirname, "../renderer");
 let mainWindow: BrowserWindow | null = null;
 let chatWindow: BrowserWindow | null = null;
 let presenceBridge: PresenceBridge | null = null;
+let daemonWs: DaemonWsClient | null = null;
 let tray: Tray | null = null;
 const cortex = new CortexBridge();
 
@@ -107,6 +109,16 @@ void app.whenReady().then(async () => {
     presenceBridge = new PresenceBridge(mainWindow, cortex.connection);
     presenceBridge.start();
   }
+
+  // 通知铃接真：daemon WS 客户端——pipeline/notification 事件 → renderer（未读 +1）
+  daemonWs = new DaemonWsClient((channel, data) => {
+    for (const win of [chatWindow, mainWindow]) {
+      if (win && !win.isDestroyed()) {
+        win.webContents.send(IPC_CHANNELS.NOTIFICATION_EVENT, { channel, data });
+      }
+    }
+  });
+  daemonWs.start();
 
   // ── 窗口拖拽 IPC ────────────────────────────────
   ipcMain.on("window:move", (_e, dx: number, dy: number) => {

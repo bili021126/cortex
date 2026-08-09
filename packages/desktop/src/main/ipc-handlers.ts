@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
   DESKTOP_RESTART: "desktop:restart",
   EDITOR_SAVE: "editor:save",
   EDITOR_SAVE_AS: "editor:save-as",
+  NOTIFICATION_EVENT: "notification:event",
 } as const;
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {

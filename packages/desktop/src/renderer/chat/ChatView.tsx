@@ -290,6 +290,23 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   // 通知铃（设计历史唯一持久三项之一——四通道路由小红点）
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(3);
+  // 通知接真：daemon WS 事件 → 未读 +1（pipeline/notification 频道）
+  const [notifItems, setNotifItems] = useState<Array<{ icon: string; text: string; time: string }>>([]);
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    try {
+      off = window.cortexDesktop.onNotification((e) => {
+        const ch = e.channel;
+        const d = (e.data ?? {}) as { type?: string; priority?: string; payload?: { task?: string } };
+        const icon = ch === "notification" ? "🔔" : d.priority === "critical" ? "🚨" : d.priority === "high" ? "⚠️" : "📡";
+        const text = d.payload?.task ? `${ch}: ${d.payload.task}` : d.type ? `${ch}: ${d.type}` : `${ch}: 新事件`;
+        const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        setNotifItems((prev) => [{ icon, text, time }, ...prev].slice(0, 8));
+        setNotifCount((c) => c + 1);
+      });
+    } catch { /* 旧版 preload */ }
+    return () => { try { off?.(); } catch { /* 已卸载 */ } };
+  }, []);
   // Agent 配置接真：思考模式/上下文/档位（settings:get 拉 + settings:set 写）
   const [thinkingOn, setThinkingOn] = useState(true);
   const [ctxLen, setCtxLen] = useState(32);
@@ -895,12 +912,19 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
-      {/* 通知面板（持久锚点——四通道） */}
+      {/* 通知面板（持久锚点——四通道 + 实时事件） */}
       {notifOpen && (
         <div className="chat__notif-panel">
-          <div className="chat__notif-item chat__notif-item--unread"><span>💬</span><span>聊天：新消息</span><span className="chat__notif-time">10:32</span></div>
-          <div className="chat__notif-item chat__notif-item--unread"><span>📋</span><span>任务：布局静态化完成</span><span className="chat__notif-time">10:15</span></div>
-          <div className="chat__notif-item"><span>📝</span><span>文档：审计报告更新</span><span className="chat__notif-time">09:48</span></div>
+          {notifItems.map((n, i) => (
+            <div key={i} className="chat__notif-item chat__notif-item--unread"><span>{n.icon}</span><span>{n.text}</span><span className="chat__notif-time">{n.time}</span></div>
+          ))}
+          {notifItems.length === 0 && (
+            <>
+              <div className="chat__notif-item chat__notif-item--unread"><span>💬</span><span>聊天：新消息</span><span className="chat__notif-time">10:32</span></div>
+              <div className="chat__notif-item chat__notif-item--unread"><span>📋</span><span>任务：布局静态化完成</span><span className="chat__notif-time">10:15</span></div>
+              <div className="chat__notif-item"><span>📝</span><span>文档：审计报告更新</span><span className="chat__notif-time">09:48</span></div>
+            </>
+          )}
         </div>
       )}
       {/* Toast */}
