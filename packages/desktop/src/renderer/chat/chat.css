@@ -2388,3 +2388,25 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__input { background: rgba(255, 255, 255, 0.55); border-top: 1px solid rgba(236, 72, 153, 0.1); }
 .chat__input textarea { background: rgba(255, 255, 255, 0.85); border: 1px solid rgba(236, 72, 153, 0.18); color: #5c4a5c; }
 .chat__input textarea::placeholder { color: #d9aec4; }
+/* ═══════════ 会话管理操作栏（2026-08-09 Quest 底部样式）═══════════ */
+.chat__session-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding-top: 4px;
+}
+.chat__session-btn {
+  border: none; background: transparent;
+  color: #a0a0a0; font-size: 12px;
+  padding: 3px 10px; border-radius: 4px;
+  cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.chat__session-btn:hover { background: rgba(236, 72, 153, 0.08); color: #d94685; }
+/* Toast */
+.chat__toast {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+  background: rgba(90, 60, 80, 0.92); color: #fff;
+  font-size: 13px; padding: 8px 18px; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 99; pointer-events: none;
+  animation: u1-toast-in 0.2s ease;
+}
+@keyframes u1-toast-in { from { opacity: 0; transform: translateX(-50%) translateY(6px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }

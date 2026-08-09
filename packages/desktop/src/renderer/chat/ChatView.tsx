@@ -62,6 +62,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
   const [active, setActive] = useState<Contact | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
 
@@ -83,6 +84,20 @@ export function ChatView({ onClose }: { onClose: () => void }) {
       } catch { /* daemon 未起时保持空 */ }
     })();
   }, []);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const handleNewSession = useCallback(() => {
+    if (messages.length === 0) { setToast("已经是新会话"); return; }
+    if (window.confirm("创建新会话？当前会话记录将保留在本地历史。")) {
+      setMessages([]);
+      setToast("已创建新会话 ✨");
+    }
+  }, [messages]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const busy = messages.some((m) => m.state === "queued" || m.state === "sending" || m.state === "streaming" || m.state === "regenerating");
@@ -372,6 +387,12 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                     {busy ? "…" : "↵"}
                   </button>
                 </div>
+                {/* 会话管理操作栏（Quest 底部样式——无模型选择器） */}
+                <div className="chat__session-bar">
+                  <button type="button" className="chat__session-btn" onClick={handleNewSession} title="创建新会话">✚ 创建会话</button>
+                  <button type="button" className="chat__session-btn" onClick={() => setToast("合并会话——待实现")} title="合并会话">⧉ 合并会话</button>
+                  <button type="button" className="chat__session-btn" onClick={() => setToast("压缩会话——待实现")} title="压缩会话">🗜 压缩会话</button>
+                </div>
               </form>
             </div>
 
@@ -391,6 +412,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
+    {/* Toast */}
+    {toast && <div className="chat__toast">{toast}</div>}
   );
 }
 
