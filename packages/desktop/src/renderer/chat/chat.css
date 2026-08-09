@@ -2778,3 +2778,14 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__memory-state { font-size: 11px; color: #a57895; padding: 2px 10px; background: rgba(236, 72, 153, 0.06); border-radius: 999px; }
 /* 编辑器层（Monaco） */
 .chat__panel--editor { display: flex; flex-direction: column; align-items: stretch; padding: 16px 20px; overflow: hidden; justify-content: flex-start; flex: 1; min-height: 0; }
+/* 设置项可编辑 */
+.chat__setting-item-value--editable { cursor: pointer; transition: color 0.12s; }
+.chat__setting-item-value--editable:hover { color: #d94685; }
+.chat__setting-item-input {
+  width: 180px; padding: 4px 8px;
+  border: 1px solid rgba(236, 72, 153, 0.3);
+  border-radius: 8px; font-size: 12px;
+  background: rgba(255, 255, 255, 0.95); color: #5c4a5c;
+  outline: none;
+}
+.chat__setting-item-input:focus { border-color: #d94685; box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.15); }

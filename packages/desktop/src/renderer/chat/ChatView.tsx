@@ -347,6 +347,19 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [settingsGroup, setSettingsGroup] = useState("主模型");
   // 设置接真：settings:get 拉真值（覆盖静态默认）
   const [settingsData, setSettingsData] = useState<Record<string, unknown> | null>(null);
+  // 设置编辑：正在编辑的配置项 key（点击值 → 输入框 → Enter 保存）
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingVal, setEditingVal] = useState("");
+  const saveSetting = useCallback(async (key: string, val: string) => {
+    try {
+      await window.cortexDesktop.settings.set({ [key]: val });
+      setSettingsData((prev) => ({ ...(prev ?? {}), [key]: val }));
+      setToast(`已保存: ${key} = ${val}`);
+    } catch (e) {
+      setToast(`保存失败: ${String(e)}`);
+    }
+    setEditingKey(null);
+  }, []);
   useEffect(() => {
     void (async () => {
       try {
@@ -806,7 +819,18 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                       <div key={it.key} className="chat__setting-item">
                         <span className="chat__setting-item-label">{it.label}</span>
                         <span className="chat__setting-item-key">{it.key}</span>
-                        <span className="chat__setting-item-value">{display}</span>
+                        {editingKey === it.key ? (
+                          <input
+                            className="chat__setting-item-input"
+                            value={editingVal}
+                            autoFocus
+                            onChange={(e) => setEditingVal(e.target.value)}
+                            onBlur={() => setEditingKey(null)}
+                            onKeyDown={(e) => { if (e.key === "Enter") void saveSetting(it.key, editingVal); if (e.key === "Escape") setEditingKey(null); }}
+                          />
+                        ) : (
+                          <span className="chat__setting-item-value chat__setting-item-value--editable" title="点击编辑" onClick={() => { setEditingKey(it.key); setEditingVal(display); }}>{display} ✎</span>
+                        )}
                       </div>
                     );
                   })}
