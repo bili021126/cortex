@@ -63,6 +63,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [active, setActive] = useState<Contact | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
 
@@ -387,11 +388,13 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                     {busy ? "…" : "↵"}
                   </button>
                 </div>
-                {/* 会话管理操作栏（Quest 底部样式——无模型选择器） */}
+                {/* 会话管理 + Agent 配置（独立子菜单） */}
                 <div className="chat__session-bar">
                   <button type="button" className="chat__session-btn" onClick={handleNewSession} title="创建新会话">✚ 创建会话</button>
                   <button type="button" className="chat__session-btn" onClick={() => setToast("合并会话——待实现")} title="合并会话">⧉ 合并会话</button>
                   <button type="button" className="chat__session-btn" onClick={() => setToast("压缩会话——待实现")} title="压缩会话">🗜 压缩会话</button>
+                  <span className="chat__session-sep" />
+                  <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => setConfigOpen(true)} title="Agent 配置">⚙ Agent 配置</button>
                 </div>
               </form>
             </div>
@@ -413,6 +416,34 @@ export function ChatView({ onClose }: { onClose: () => void }) {
       </div>
       {/* Toast */}
       {toast && <div className="chat__toast">{toast}</div>}
+      {/* Agent 配置弹窗（独立子菜单） */}
+      {configOpen && (
+        <div className="chat__modal-mask" onClick={() => setConfigOpen(false)}>
+          <div className="chat__modal" onClick={(e) => e.stopPropagation()}>
+            <div className="chat__modal-title">⚙ Agent 配置 · {active?.name ?? "昔涟"}</div>
+            <div className="chat__modal-body">
+              <div className="chat__cfg-row">
+                <span className="chat__cfg-label">思考模式</span>
+                <span className="chat__cfg-desc">是否开启深度思考</span>
+                <span className="chat__cfg-toggle" aria-hidden="true"><span /></span>
+              </div>
+              <div className="chat__cfg-row">
+                <span className="chat__cfg-label">上下文长度</span>
+                <span className="chat__cfg-desc">单次会话携带的历史消息数</span>
+                <span className="chat__cfg-value">32</span>
+              </div>
+              <div className="chat__cfg-row">
+                <span className="chat__cfg-label">思考档位</span>
+                <span className="chat__cfg-desc">推理强度（低/中/高）</span>
+                <span className="chat__cfg-value">Auto</span>
+              </div>
+            </div>
+            <div className="chat__modal-footer">
+              <button type="button" className="chat__modal-btn" onClick={() => setConfigOpen(false)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2442,3 +2442,53 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .msg--model::before { background: linear-gradient(180deg, #f9a8c8, #c3b8f5); width: 3px; border-radius: 3px; opacity: 0.7; }
 /* 时间戳颜色微调（粉系） */
 .msg__time { color: #c9a3b8; }
+/* ═══════════ Agent 配置弹窗（2026-08-09 独立子菜单）═══════════ */
+.chat__session-sep { width: 1px; height: 14px; background: rgba(236, 72, 153, 0.2); margin: 0 6px; }
+.chat__session-btn--config { color: #d94685; font-weight: 500; }
+.chat__modal-mask {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(60, 40, 55, 0.25);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  animation: u1-modal-in 0.18s ease;
+}
+.chat__modal {
+  width: 320px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(255, 245, 250, 0.96));
+  border: 1px solid rgba(236, 72, 153, 0.18);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(160, 90, 130, 0.25), 0 2px 8px rgba(160, 90, 130, 0.1);
+  padding: 18px 20px;
+  animation: u1-modal-pop 0.2s ease;
+}
+.chat__modal-title { font-size: 15px; font-weight: 600; color: #6b4a5e; margin-bottom: 14px; }
+.chat__modal-body { display: flex; flex-direction: column; gap: 12px; }
+.chat__cfg-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(236, 72, 153, 0.1);
+  border-radius: 10px;
+}
+.chat__cfg-label { font-size: 13px; font-weight: 500; color: #5c4a5c; min-width: 64px; }
+.chat__cfg-desc { flex: 1; font-size: 11px; color: #c9a3b8; }
+.chat__cfg-value { font-size: 12px; color: #d94685; font-weight: 600; padding: 2px 10px; background: rgba(236, 72, 153, 0.08); border-radius: 999px; }
+.chat__cfg-toggle {
+  width: 34px; height: 20px; border-radius: 999px;
+  background: linear-gradient(135deg, #f9a8c8, #c3b8f5);
+  position: relative; cursor: pointer; flex-shrink: 0;
+}
+.chat__cfg-toggle span {
+  position: absolute; top: 2px; right: 2px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+.chat__modal-footer { display: flex; justify-content: flex-end; margin-top: 16px; }
+.chat__modal-btn {
+  border: none; background: linear-gradient(135deg, #f9a8c8, #c3b8f5);
+  color: #fff; font-size: 13px; padding: 6px 18px; border-radius: 8px;
+  cursor: pointer; transition: transform 0.15s, opacity 0.15s;
+}
+.chat__modal-btn:hover { transform: scale(1.04); }
+@keyframes u1-modal-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes u1-modal-pop { from { opacity: 0; transform: translateY(8px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
