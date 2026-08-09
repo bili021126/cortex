@@ -144,16 +144,8 @@ export function ChatView({
   const t = inkTheme;
   const tokens = defaultTokens;
 
-  // ── 空状态 ────────────────────────────────
-  if (messages.length === 0 && !streamingContent && recentTools.length === 0 && (!planNodes || planNodes.length === 0)) {
-    return (
-      <Box paddingX={tokens.spacing.xs}>
-        <Text color={t.textMuted.color}>
-          {display.emoji} {display.name} — 输入 .help 查看命令
-        </Text>
-      </Box>
-    );
-  }
+  // ── 空状态提示（动态区——不卸载 Static——Static 重挂会全量重复渲染） ──
+  const showEmpty = messages.length === 0 && !streamingContent && recentTools.length === 0 && (!planNodes || planNodes.length === 0);
 
   // ── 构建渲染行 ────────────────────────────
   const rows: React.ReactNode[] = [];
@@ -249,7 +241,12 @@ export function ChatView({
     <Box flexDirection="column" paddingX={tokens.spacing.xs} flexShrink={1} minHeight={0}>
       {/* 根治：历史消息用 Static 稳定区——全量渲染不裁剪（终端原生滚动——旧消息自然滚出——光标/输入行始终在屏幕底部） */}
       <Static items={offsetRows}>{(row) => row}</Static>
-      {/* 动态区：流式/处理中/裁剪提示/plan 审批——小范围重绘不抖动 */}
+      {/* 动态区：空状态/流式/处理中/裁剪提示/plan 审批——小范围重绘不抖动 */}
+      {showEmpty && (
+        <Box>
+          <Text color={t.textMuted.color}>{display.emoji} {display.name} — 输入 .help 查看命令</Text>
+        </Box>
+      )}
       {hiddenCount > 0 && (
         <Box marginBottom={1}>
           <Text color={t.textMuted.color}>↑ {hiddenCount} 条更早的消息（Ctrl+U/D 翻页）</Text>
