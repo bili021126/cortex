@@ -40,6 +40,8 @@ export interface CortexDesktopAPI {
   restartDesktop: () => Promise<{ ok: boolean; error?: string }>;
   /** 编辑器保存：写回 userData/editor-files/ */
   editorSave: (fileName: string, content: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
+  /** 另存为：dialog 选路径 */
+  editorSaveAs: (content: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
   speak: (text: string) => Promise<{ ok: boolean; error?: string }>;
   expression: (name: string) => Promise<{ ok: boolean }>;
   settings: {
