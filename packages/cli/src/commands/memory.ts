@@ -37,6 +37,7 @@ const MEMORY_HELP = [
   "  obliterate <id>      湮灭记忆",
   "  flush                强制刷新持久化",
   "  stats                记忆系统统计",
+  "  audit <file>         审计记忆文件（悬空引用/孤儿检查）",
   "",
   "选项:",
   "  --type <t>           记忆类型 (episodic/knowledge/conceptual)",
@@ -57,6 +58,7 @@ export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
     try {
       const memory = await bridge.getMemoryStore();
       switch (subcommand) {
+        case "audit":      return await handleMemoryAudit(args[1]);
         case "write":      return await handleMemoryWrite(memory, { rawKey: args[1], rawValue: args.slice(2).join(" "), options });
         case "read":       return await handleMemoryRead(memory, args[1], options);
         case "search":     return await handleMemorySearch(memory, args.slice(1).join(" "), options);
@@ -258,4 +260,27 @@ async function handleMemoryStats(
     ].join("\n"),
     exitCode: 0,
   };
+}
+
+/** 记忆审计——读记忆 JSON 文件，跑悬空引用/孤儿检查（M1 接入：auditMemoryStore 零调用修复） */
+async function handleMemoryAudit(filePath: string | undefined): Promise<CommandResult> {
+  if (!filePath) {
+    return { success: false, output: "用法: cortex memory audit <file.json>——请指定记忆文件路径", exitCode: 1 };
+  }
+  try {
+    const { auditMemoryFile, summarizeMemoryAudit } = await import("@cortex/memory");
+    const fsMod = await import("node:fs");
+    const report = auditMemoryFile(filePath, fsMod as never);
+    const summary = summarizeMemoryAudit(report.findings);
+    const lines = [
+      `记忆审计: ${filePath}`,
+      `  发现: ${summary.total} 条（info=${summary.bySeverity.info} warning=${summary.bySeverity.warning} error=${summary.bySeverity.error}）`,
+    ];
+    for (const f of report.findings) {
+      lines.push(`  [${f.severity}] ${f.message}`);
+    }
+    return { success: true, output: lines.join("\n"), exitCode: 0 };
+  } catch (e) {
+    return { success: false, output: `审计失败: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 };
+  }
 }

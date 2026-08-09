@@ -62,6 +62,9 @@ export type { WorldbookEntry, EntryState, DmaeState, DmaeParams, KnowledgeEntity
 // re-export 核心类型——完整子路径请用 @cortex/memory/cyrene
 export { MemoryManager, MemoryStoreManager, memoryStore, setJudgeLlmService, setCompressorLlmService, setResolverLlmService } from "./cyrene/index.js";
 export type { MemoryManagerDeps } from "./cyrene/index.js";
+// M1：记忆审计工具（悬空引用/孤儿检查——CLI cortex memory audit 接入）
+export { auditMemoryStore, auditMemoryFile, summarizeMemoryAudit } from "./cyrene/memory-audit.js";
+export type { MemoryAuditFinding, MemoryAuditReport, MemoryAuditSummary, MemoryAuditSeverity } from "./cyrene/memory-audit.js";
 
 // ─── Cyrene RAG 桥接 ──────────────────────────────
 export { initRAG, addMemory as ragAddMemory, searchMemoryEntries as ragSearchMemoryEntries, searchMemory as ragSearchMemory, setRagDataDir, setRagModelsDir } from "./cyrene/index.js";
