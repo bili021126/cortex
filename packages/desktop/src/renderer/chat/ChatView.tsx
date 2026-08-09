@@ -1049,6 +1049,11 @@ function MemoryPanel() {
     setLoading(false);
   }, []);
   useEffect(() => { void load(""); }, [load]);
+  // 轮询刷新（与任务面板一致——5s）
+  useEffect(() => {
+    const t = setInterval(() => { void load(query); }, 5000);
+    return () => clearInterval(t);
+  }, [load, query]);
   const kindColor = (k: string) => ({
     episodic: "#f9a8c8", knowledge: "#c3b8f5", conceptual: "#7ed6b8",
   } as Record<string, string>)[k] ?? "#c9a3b8";
