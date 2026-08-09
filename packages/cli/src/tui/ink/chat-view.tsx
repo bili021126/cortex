@@ -102,6 +102,18 @@ function StreamingLine({ content, agent }: { content: string; agent: AgentType }
   );
 }
 
+/** 多行安全渲染：content 按 \n 拆独立行（防止多行文本在终端渲染错位/与相邻元素同行） */
+function MultiLineText({ text, color }: { text: string; color?: string }) {
+  const lines = text.split("\n");
+  return (
+    <Box flexDirection="column">
+      {lines.map((line, i) => (
+        <Text key={i} color={color}>{line}</Text>
+      ))}
+    </Box>
+  );
+}
+
 /** 渲染分隔线（每轮对话之间） */
 function Separator() {
   // 空行分隔（横线在部分终端渲染错位——与消息同行重叠——空行任何终端安全）
@@ -164,13 +176,13 @@ export function ChatView({
       rows.push(
         <Box key={`msg-${i}`} marginBottom={1}>
           <Text bold color={t.textPrimary.color}>{tokens.typography.messagePrefix.user}: </Text>
-          <Text>{msg.content}</Text>
+          <MultiLineText text={msg.content} />
         </Box>,
       );
     } else if (msg.role === "system") {
       rows.push(
         <Box key={`msg-${i}`} marginBottom={1}>
-          <Text color={t.textMuted.color}>{msg.content}</Text>
+          <MultiLineText text={msg.content} color={t.textMuted.color} />
         </Box>,
       );
     } else {
@@ -186,7 +198,7 @@ export function ChatView({
           <Text color={nameColor} bold>
             {agentDisplay.emoji} {agentDisplay.name}:{" "}
           </Text>
-          <Text>{msg.content}</Text>
+          <MultiLineText text={msg.content} />
         </Box>,
       );
     }

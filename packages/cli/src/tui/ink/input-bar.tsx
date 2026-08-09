@@ -40,6 +40,10 @@ export function InputBar({ agent, onSubmit, processing = false, hint, focused = 
 
   return (
     <Box flexDirection="column" paddingX={tokens.spacing.xs} flexShrink={0}>
+      {/* 输入区与消息区视觉分隔（独立一行——光标位置清晰） */}
+      <Box>
+        <Text color={t.separator.color}> </Text>
+      </Box>
       {queuedCount > 0 && (
         <Text color={t.textMuted.color}>⏳ 已排队 {queuedCount} 条 · 当前回合结束后依次发送</Text>
       )}
