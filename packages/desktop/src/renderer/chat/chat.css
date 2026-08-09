@@ -2379,3 +2379,12 @@ html, body { height: 100%; margin: 0; padding: 0; }
 /* 空状态 */
 .chat__empty-text { color: #a3a3a3; }
 .chat__empty-icon { filter: grayscale(0.2); }
+/* ═══════════ Quest 修正（2026-08-09：头像恢复 + 背景保留粉白）═══════════ */
+.chat__stage-main { background: transparent; }
+.msg--user .msg__avatar { display: flex; }
+.msg--model .msg__avatar { display: flex; }
+.msg--user .msg__bubble { color: #6b4a5e; }
+.msg--model .msg__bubble { color: #5c4a5c; }
+.chat__input { background: rgba(255, 255, 255, 0.55); border-top: 1px solid rgba(236, 72, 153, 0.1); }
+.chat__input textarea { background: rgba(255, 255, 255, 0.85); border: 1px solid rgba(236, 72, 153, 0.18); color: #5c4a5c; }
+.chat__input textarea::placeholder { color: #d9aec4; }
