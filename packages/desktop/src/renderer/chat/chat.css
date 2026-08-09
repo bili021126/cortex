@@ -2674,3 +2674,28 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__task-source--tool { background: rgba(126, 214, 184, 0.18); color: #4db896; }
 /* 设计预览面板 */
 .chat__panel--design { display: flex; flex-direction: column; align-items: stretch; padding: 20px 28px; overflow-y: auto; }
+/* ═══════════ 状态样式修复（2026-08-09 设计预览瑕疵）═══════════ */
+/* 面板滚动修复：覆盖基类 justify-content: center */
+.chat__panel--design { justify-content: flex-start; flex: 1; min-height: 0; }
+.chat__panel--tasks, .chat__panel--settings { justify-content: flex-start; flex: 1; min-height: 0; }
+/* 消息状态：提高特异性覆盖主题（.msg--model .msg__bubble） */
+.msg--model .msg__bubble--queued {
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px dashed rgba(160, 120, 140, 0.4);
+  color: #a57895;
+}
+.msg--model .msg__bubble--sending { opacity: 0.55; border: 1px solid rgba(236, 72, 153, 0.3); }
+.msg--model .msg__bubble--streaming {
+  background: linear-gradient(90deg, rgba(249, 168, 200, 0.15), rgba(255, 255, 255, 0.9));
+  border-left: 3px solid #f9a8c8;
+}
+.msg--model .msg__bubble--stopped { opacity: 0.6; }
+.msg--model .msg__bubble--interrupted { border: 1px solid rgba(229, 72, 77, 0.5); color: #b0484c; }
+.msg--model .msg__bubble--error_timeout { border: 1px solid rgba(229, 72, 77, 0.5); color: #b0484c; }
+.msg--model .msg__bubble--error_fatal {
+  background: rgba(229, 72, 77, 0.12);
+  border: 1px solid rgba(229, 72, 77, 0.6);
+  color: #b0484c;
+}
+.msg--model .msg__bubble--regenerating { opacity: 0.5; border: 1px dashed rgba(236, 72, 153, 0.35); }
+.msg--model .msg__bubble--retry { border: 1px solid rgba(126, 190, 232, 0.5); }
