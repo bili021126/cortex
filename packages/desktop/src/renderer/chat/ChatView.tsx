@@ -287,6 +287,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [sideOpen, setSideOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  // 通知铃（设计历史唯一持久三项之一——四通道路由小红点）
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifCount, setNotifCount] = useState(3);
   // Agent 配置接真：思考模式/上下文/档位（settings:get 拉 + settings:set 写）
   const [thinkingOn, setThinkingOn] = useState(true);
   const [ctxLen, setCtxLen] = useState(32);
@@ -635,6 +638,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </span>
           </div>
           <div className="chat__titlebar-actions">
+            {/* 通知铃（未读小红点——点击展开通知面板） */}
+            <button type="button" className={`chat__winbtn${notifOpen ? " is-active" : ""}`} onClick={() => { setNotifOpen((v) => !v); if (!notifOpen) setNotifCount(0); }} aria-label="通知" title="通知">🔔{notifCount > 0 && <span className="chat__notif-badge">{notifCount}</span>}</button>
             {/* 重启按钮（自动编译并重启桌面） */}
             {tab === "chat" && (
               <button type="button" className="chat__winbtn" onClick={handleRestart} aria-label="重启桌面" title="重启桌面（自动编译）">↻</button>
@@ -874,6 +879,14 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+      {/* 通知面板（持久锚点——四通道） */}
+      {notifOpen && (
+        <div className="chat__notif-panel">
+          <div className="chat__notif-item chat__notif-item--unread"><span>💬</span><span>聊天：新消息</span><span className="chat__notif-time">10:32</span></div>
+          <div className="chat__notif-item chat__notif-item--unread"><span>📋</span><span>任务：布局静态化完成</span><span className="chat__notif-time">10:15</span></div>
+          <div className="chat__notif-item"><span>📝</span><span>文档：审计报告更新</span><span className="chat__notif-time">09:48</span></div>
+        </div>
+      )}
       {/* Toast */}
       {toast && <div className="chat__toast">{toast}</div>}
       {/* Agent 配置弹窗（独立子菜单） */}
