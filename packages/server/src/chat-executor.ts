@@ -6,6 +6,8 @@
  */
 
 import * as crypto from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { EngineHost } from "./engine-host.js";
 import type { RemoteGateBridge } from "./gate-bridge.js";
 import type { ChatSession } from "./session-manager.js";
@@ -17,10 +19,31 @@ import type {
   WSChatCompleteEvent,
   WSChatErrorEvent,
 } from "@cortex/protocol";
-import type { LlmMessage } from "@cortex/shared";
+import { AGENT_TYPE_TO_DIR, AGENT_ALIAS_TO_TYPE, type LlmMessage } from "@cortex/shared";
 import type { ReversibilityLevel } from "@cortex/config";
 
 const SYSTEM_PROMPT = "[系统指令] 你是 Cortex 工程助手。";
+
+// Agent persona 缓存（按 agent type——prompts/<dir>/system.md）
+const personaCache = new Map<string, string | null>();
+
+/** 按 agent 加载 prompts/<dir>/system.md（daemon 与 TUI 同源——甘雨加载甘雨 persona，不再混入昔涟） */
+function loadAgentSystemPrompt(agent: string, projectRoot: string): string {
+  const cached = personaCache.get(agent);
+  if (cached !== undefined) return cached ?? SYSTEM_PROMPT;
+  // 别名解析：ganyu → meta → 目录 ganyu（AGENT_TYPE_TO_DIR 的 key 是 type）
+  const type = AGENT_TYPE_TO_DIR[agent] ? agent : (AGENT_ALIAS_TO_TYPE[agent] ?? agent);
+  const dir = AGENT_TYPE_TO_DIR[type] ?? type;
+  let loaded: string | null = null;
+  if (dir) {
+    try {
+      const p = path.join(projectRoot, "prompts", dir, "system.md");
+      if (fs.existsSync(p)) loaded = fs.readFileSync(p, "utf-8");
+    } catch { /* 读取失败回退默认 */ }
+  }
+  personaCache.set(agent, loaded);
+  return loaded ?? SYSTEM_PROMPT;
+}
 const READ_ONLY = new Set([
   "read_file", "search_code", "list_files", "parse_ast", "search_symbol",
   "grep_files", "glob_find", "file_info", "resolve_import", "json_query", "web_search",
@@ -30,10 +53,12 @@ const READ_ONLY = new Set([
 export class ChatExecutor {
   private readonly engine: EngineHost;
   private readonly gateBridge: RemoteGateBridge;
+  private readonly projectRoot: string;
 
-  constructor(engine: EngineHost, gateBridge: RemoteGateBridge) {
+  constructor(engine: EngineHost, gateBridge: RemoteGateBridge, projectRoot?: string) {
     this.engine = engine;
     this.gateBridge = gateBridge;
+    this.projectRoot = projectRoot ?? process.cwd();
   }
 
   async execute(session: ChatSession, input: string): Promise<void> {
@@ -46,8 +71,9 @@ export class ChatExecutor {
       session.lastActiveAt = Date.now();
 
       // Build messages
+      const systemPrompt = loadAgentSystemPrompt(session.agent, this.projectRoot);
       const messages: LlmMessage[] = [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         ...session.history,
       ];
 
@@ -60,7 +86,7 @@ export class ChatExecutor {
         toolkit: this.engine.toolkitInstance,
         agentType: session.agent,
         model: this.engine.llm.chatModel,
-        systemPrompt: SYSTEM_PROMPT,
+        systemPrompt,
         messages,
         maxRounds: 20,
         signal,

@@ -95,7 +95,7 @@ export class CortexDaemon {
     this.gateBridge = new RemoteGateBridge((channel, data) => {
       this.wsGateway?.broadcast(channel, data);
     });
-    this.chatExecutor = new ChatExecutor(this.engine, this.gateBridge);
+    this.chatExecutor = new ChatExecutor(this.engine, this.gateBridge, this.options.projectRoot);
 
     // Wire gate bridge into ConfirmGate
     const gate = this.engine.gate;
