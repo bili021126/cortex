@@ -962,6 +962,61 @@ function DesignPreview() {
           ))}
         </div>
       </PreviewSection>
+
+      {/* ⑨ 消息类型：todo-list 消息 */}
+      <PreviewSection title="⑨ 消息类型 A · Todo-List 消息">
+        <div className="msg msg--model">
+          <div className="msg__avatar"><img className="msg__avatar-img" src={resolveAsset("../avatars/cyrene-avatar.png")} alt="昔涟" /></div>
+          <div className="msg__body">
+            <div className="msg__bubble msg__bubble--complete">
+              <div style={{ marginBottom: 6 }}>布局落地计划：</div>
+              <div className="chat__todo">
+                <div className="chat__todo-item chat__todo-item--done"><span>✓</span><span>任务栏 + 侧边栏</span></div>
+                <div className="chat__todo-item chat__todo-item--done"><span>✓</span><span>聊天界面 + 输入区</span></div>
+                <div className="chat__todo-item chat__todo-item--doing"><span>●</span><span>设置面板三栏</span></div>
+                <div className="chat__todo-item chat__todo-item--todo"><span>○</span><span>通知铃 + 瞬态层</span></div>
+                <div className="chat__todo-item chat__todo-item--todo"><span>○</span><span>Monaco 编辑器层</span></div>
+              </div>
+            </div>
+            <span className="msg__time">todo-list · 00:00</span>
+          </div>
+        </div>
+      </PreviewSection>
+
+      {/* ⑩ 消息类型：agent 操作/工具调用卡片 */}
+      <PreviewSection title="⑩ 消息类型 B · Agent 操作 / 工具调用">
+        <div className="msg msg--model">
+          <div className="msg__avatar"><img className="msg__avatar-img" src={resolveAsset("../avatars/cyrene-avatar.png")} alt="昔涟" /></div>
+          <div className="msg__body">
+            <div className="msg__bubble msg__bubble--complete">
+              <div style={{ marginBottom: 8 }}>开始执行——共 3 步：</div>
+              <div className="chat__toolcall">
+                <div className="chat__toolcall-item chat__toolcall-item--done">
+                  <span className="chat__toolcall-icon">🔍</span>
+                  <span className="chat__toolcall-name">搜索接口文档</span>
+                  <span className="chat__toolcall-status">✓ 完成 · 1.2s</span>
+                </div>
+                <div className="chat__toolcall-item chat__toolcall-item--doing">
+                  <span className="chat__toolcall-icon">📖</span>
+                  <span className="chat__toolcall-name">读取 router.ts</span>
+                  <span className="chat__toolcall-status">● 运行中…</span>
+                </div>
+                <div className="chat__toolcall-item chat__toolcall-item--todo">
+                  <span className="chat__toolcall-icon">📝</span>
+                  <span className="chat__toolcall-name">汇总报告</span>
+                  <span className="chat__toolcall-status">○ 等待</span>
+                </div>
+              </div>
+              <div className="chat__toolcall-item chat__toolcall-item--failed" style={{ marginTop: 8 }}>
+                <span className="chat__toolcall-icon">⚠️</span>
+                <span className="chat__toolcall-name">调用天气 API</span>
+                <span className="chat__toolcall-status">✕ 失败 · 重试中</span>
+              </div>
+            </div>
+            <span className="msg__time">tool-call · 00:00</span>
+          </div>
+        </div>
+      </PreviewSection>
     </div>
   );
 }

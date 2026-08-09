@@ -2699,3 +2699,27 @@ html, body { height: 100%; margin: 0; padding: 0; }
 }
 .msg--model .msg__bubble--regenerating { opacity: 0.5; border: 1px dashed rgba(236, 72, 153, 0.35); }
 .msg--model .msg__bubble--retry { border: 1px solid rgba(126, 190, 232, 0.5); }
+/* ═══════════ 消息类型：Todo-List + 工具调用（2026-08-09 设计预览）═══════════ */
+.chat__todo { display: flex; flex-direction: column; gap: 5px; }
+.chat__todo-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.chat__todo-item > span:first-child { width: 16px; text-align: center; font-size: 12px; }
+.chat__todo-item--done { color: #4db896; }
+.chat__todo-item--doing { color: #d94685; }
+.chat__todo-item--doing > span:first-child { animation: u1-pulse 1.2s ease-in-out infinite; }
+.chat__todo-item--todo { color: #a57895; }
+.chat__toolcall { display: flex; flex-direction: column; gap: 6px; }
+.chat__toolcall-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(236, 72, 153, 0.08);
+  font-size: 12px;
+}
+.chat__toolcall-icon { font-size: 14px; }
+.chat__toolcall-name { flex: 1; color: #5c4a5c; }
+.chat__toolcall-status { font-size: 11px; color: #a57895; }
+.chat__toolcall-item--done .chat__toolcall-status { color: #4db896; }
+.chat__toolcall-item--doing { border-color: rgba(236, 72, 153, 0.25); }
+.chat__toolcall-item--doing .chat__toolcall-status { color: #d94685; }
+.chat__toolcall-item--failed { border-color: rgba(229, 72, 77, 0.3); }
+.chat__toolcall-item--failed .chat__toolcall-status { color: #e5484d; }
