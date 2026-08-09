@@ -43,6 +43,47 @@ export interface UseInputHandlerParams {
 }
 
 /**
+ * 流式 chunk 节流：50ms 合并 llm_chunk 再 emit——减少 Ink 重绘频率（Windows 终端高频重绘抖动）
+ * 非 chunk 事件立即 emit（先 flush 缓冲）；flush() 在循环结束后调用（不丢尾部 chunk）
+ */
+function createChunkThrottle(emit: (ev: TuiEvent) => void): {
+  emit: (ev: TuiEvent) => void;
+  flush: () => void;
+} {
+  let buf = "";
+  let last = 0;
+  let timer: NodeJS.Timeout | null = null;
+  const flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    if (buf) {
+      emit({ type: "llm_chunk", content: buf } as TuiEvent);
+      buf = "";
+    }
+  };
+  return {
+    emit: (ev) => {
+      if (ev.type === "llm_chunk") {
+        buf += (ev as { content?: string }).content ?? "";
+        const now = Date.now();
+        if (now - last >= 50) {
+          last = now;
+          flush();
+        } else if (!timer) {
+          timer = setTimeout(flush, 50 - (now - last));
+        }
+      } else {
+        flush();
+        emit(ev);
+      }
+    },
+    flush,
+  };
+}
+
+/**
  * 构建输入分发回调。
  * @returns 处理单次用户输入的异步函数
  */
@@ -109,9 +150,11 @@ export function useInputHandler(
             };
             const gen = planMode("execute", bridge, currentState.agent, planState, undefined, createExternalHooks(), controller.signal);
             let result: IteratorResult<TuiEvent, string>;
+            const emitT = createChunkThrottle((ev) => tuiEventBus.emit(ev));
             while (!(result = await gen.next()).done) {
-              tuiEventBus.emit(result.value);
+              emitT.emit(result.value);
             }
+            emitT.flush();
             dispatch({ type: "PLAN_EXECUTED" });
             if (result.value) {
               dispatch({
@@ -168,18 +211,22 @@ export function useInputHandler(
           };
           const gen = planMode(input, bridge, targetAgent, planState, history, externalHooks, controller.signal);
           let result: IteratorResult<TuiEvent, string>;
+          const emitT = createChunkThrottle((ev) => tuiEventBus.emit(ev));
           while (!(result = await gen.next()).done) {
-            tuiEventBus.emit(result.value);
+            emitT.emit(result.value);
           }
+          emitT.flush();
           // 完整性修正：流式 chunk 可能丢字——用 LLM 完整输出覆盖 streamingContent 再 STREAM_END（防缺字消息）
           if (result.value) dispatch({ type: "STREAM_SET", payload: result.value });
           dispatch({ type: "STREAM_END" });
         } else {
           const gen = queryLoop({ input, bridge, mode: "chat", agent: targetAgent, history, hooks: externalHooks, signal: controller.signal });
           let result: IteratorResult<TuiEvent, string>;
+          const emitT = createChunkThrottle((ev) => tuiEventBus.emit(ev));
           while (!(result = await gen.next()).done) {
-            tuiEventBus.emit(result.value);
+            emitT.emit(result.value);
           }
+          emitT.flush();
           // 完整性修正：同上——chat 回复用 LLM 完整输出覆盖（防 chunk 丢字）
           if (result.value) dispatch({ type: "STREAM_SET", payload: result.value });
           dispatch({ type: "STREAM_END" });
