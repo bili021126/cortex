@@ -320,7 +320,8 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
     // 中断优先于错误——fetch abort 会以 AbortError 形式落入 streamError，视为中断而非报错
     // eslint-disable-next-line @typescript-eslint/prefer-optional-chain -- streamError 在 .catch 闭包内赋值，TS 同步流误判类型，?. 形式会报 never
     if (signal?.aborted || (streamError && streamError.name === "AbortError")) {
-      process.stderr.write(`[query-loop] interrupted@stream abort=${signal?.aborted} streamError=${streamError?.name ?? ""} msg=${(streamError as Error | null)?.message?.slice(0, 120) ?? ""}\n`);
+      const errMsg = streamError instanceof Error ? streamError.message.slice(0, 120) : String(streamError);
+      process.stderr.write(`[query-loop] interrupted@stream abort=${signal?.aborted ?? false} streamError=${(streamError as Error | null)?.name ?? ""} msg=${errMsg}\n`);
       yield { type: "interrupted", agent } as TuiEvent;
       return finalOutput;
     }
