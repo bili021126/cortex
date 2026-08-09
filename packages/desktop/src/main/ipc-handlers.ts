@@ -25,6 +25,7 @@ export const IPC_CHANNELS = {
   SETTINGS_SET: "settings:set",
   SCREENSHOT: "desktop:screenshot",
   DESKTOP_RESTART: "desktop:restart",
+  EDITOR_SAVE: "editor:save",
 } as const;
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
@@ -33,7 +34,20 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
   // 桌面重启锁（防重复触发编译）
   let restarting = false;
 
-  // desktop:restart — 自动编译并重启桌面端
+  // editor:save — Monaco 编辑器保存（写回 userData/editor-files/）
+  ipcMain.handle(IPC_CHANNELS.EDITOR_SAVE, async (_event, fileName: string, content: string) => {
+    try {
+      const dir = path.join(app.getPath("userData"), "editor-files");
+      fs.mkdirSync(dir, { recursive: true });
+      const safe = fileName.replace(/[^\w.-]/g, "_");
+      const file = path.join(dir, safe);
+      fs.writeFileSync(file, content, "utf-8");
+      return { ok: true, path: file };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DESKTOP_RESTART, async () => {
     if (restarting) return { ok: false, error: "正在重启中" };
     restarting = true;

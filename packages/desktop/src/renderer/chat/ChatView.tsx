@@ -986,11 +986,27 @@ function CodeEditor() {
     input.click();
   }, []);
 
+  // 保存：读编辑器当前内容 → IPC 写回 userData/editor-files/
+  const saveFile = useCallback(async () => {
+    try {
+      const monaco = await import("monaco-editor");
+      const model = monaco.editor.getModels()[0];
+      const text = model?.getValue() ?? content;
+      const res = await window.cortexDesktop.editorSave(fileName === "未打开文件" ? "untitled.ts" : fileName, text) as { ok: boolean; path?: string; error?: string };
+      setToast(res?.ok ? `已保存: ${res.path ?? ""}` : `保存失败: ${res?.error ?? ""}`);
+    } catch (e) {
+      setToast(`保存失败: ${String(e)}`);
+    }
+  }, [fileName, content]);
+
   return (
     <div className="chat__panel chat__panel--editor">
       <div className="chat__panel-head">
         <span className="chat__panel-title">📝 编辑器 · {fileName}</span>
-        <button type="button" className="chat__session-btn chat__session-btn--config" onClick={openFile}>打开文件</button>
+        <span style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => void saveFile()}>保存</button>
+          <button type="button" className="chat__session-btn chat__session-btn--config" onClick={openFile}>打开文件</button>
+        </span>
       </div>
       <div ref={containerRef} style={{ flex: 1, minHeight: 0, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(236,72,153,0.12)" }} />
     </div>

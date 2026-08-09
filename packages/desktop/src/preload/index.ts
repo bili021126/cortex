@@ -19,6 +19,7 @@ const IPC_CHANNELS = {
   SETTINGS_SET: "settings:set",
   PRESENCE_EVENT: "presence:event",
   DESKTOP_RESTART: "desktop:restart",
+  EDITOR_SAVE: "editor:save",
 } as const;
 
 export interface CortexDesktopAPI {
@@ -36,6 +37,8 @@ export interface CortexDesktopAPI {
   getAgents: () => Promise<{ ok: boolean; data?: string[] }>;
   /** 重启桌面：自动编译并重启应用 */
   restartDesktop: () => Promise<{ ok: boolean; error?: string }>;
+  /** 编辑器保存：写回 userData/editor-files/ */
+  editorSave: (fileName: string, content: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
   speak: (text: string) => Promise<{ ok: boolean; error?: string }>;
   expression: (name: string) => Promise<{ ok: boolean }>;
   settings: {
@@ -102,6 +105,9 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
 
   restartDesktop: () =>
     ipcRenderer.invoke(IPC_CHANNELS.DESKTOP_RESTART),
+
+  editorSave: (fileName: string, content: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.EDITOR_SAVE, fileName, content),
 
   speak: (text: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.LIVE2D_SPEAK, text),
