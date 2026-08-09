@@ -18,6 +18,7 @@ import { createMemoryHandler } from "./memory.js";
 import { createConfigHandler } from "./config.js";
 import { createDocHandler } from "./doc.js";
 import { createVersionHandler } from "./version.js";
+import { createEvalHandler } from "./eval.js";
 import { createHelpHandler } from "./help.js";
 import { createScheduleHandler } from "./schedule.js";
 import { createRoundtableHandler } from "./roundtable.js";
@@ -111,6 +112,11 @@ export const COMMAND_DEFS: readonly CommandDef[] = [
     alias: "h",
     description: "帮助信息",
   },
+  {
+    name: "eval",
+    alias: "ev",
+    description: "评测报告 — 查看/重跑 eval-gate（H3 行为门禁）",
+  },
 ];
 
 /** registerCommands 的聚合服务对象 */
@@ -143,6 +149,7 @@ export function registerCommands(registry: CommandRegistry, ctx: RegisterCtx): v
     setup: createSetupHandler(),
     version: createVersionHandler(),
     help: createHelpHandler(registry),
+    eval: createEvalHandler(),
   };
 
   for (const def of COMMAND_DEFS) {
