@@ -324,13 +324,32 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const handleNewSession = useCallback(() => {
+  const handleNewSession = useCallback(async () => {
     if (messages.length === 0) { setToast("已经是新会话"); return; }
-    if (window.confirm("创建新会话？当前会话记录将保留在本地历史。")) {
-      setMessages([]);
-      setToast("已创建新会话 ✨");
+    try {
+      // 接真：POST /api/v1/sessions（daemon）——创建真实会话
+      const res = await fetch("http://127.0.0.1:3210/api/v1/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `会话 ${new Date().toLocaleTimeString()}`, agent: active?.id ?? "cyrene" }),
+      });
+      if (res.ok) {
+        setMessages([]);
+        setToast("已创建新会话 ✨");
+      } else {
+        // 兜底：本地清空
+        if (window.confirm("创建新会话？当前会话记录将保留在本地历史。")) {
+          setMessages([]);
+          setToast("已创建新会话 ✨（本地）");
+        }
+      }
+    } catch {
+      if (window.confirm("创建新会话？当前会话记录将保留在本地历史。")) {
+        setMessages([]);
+        setToast("已创建新会话 ✨（本地）");
+      }
     }
-  }, [messages]);
+  }, [messages, active]);
 
   // 重启桌面：自动编译并重启
   const handleRestart = useCallback(() => {
