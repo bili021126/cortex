@@ -281,7 +281,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     return [];
   });
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
-  const [tab, setTab] = useState<"chat" | "tasks" | "settings" | "design" | "memory">("chat");
+  const [tab, setTab] = useState<"chat" | "tasks" | "settings" | "design" | "memory" | "editor">("chat");
   const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
   const [active, setActive] = useState<Contact | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
@@ -579,6 +579,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
         <button type="button" className={`chat__taskbar-btn${railTab === "friends" || railTab === "groups" ? " is-active" : ""}`} onClick={() => setRailTab(railTab === "friends" ? "groups" : "friends")} title="好友与群聊" aria-label="好友与群聊"><IconUsers /></button>
         <button type="button" className={`chat__taskbar-btn${tab === "tasks" ? " is-active" : ""}`} onClick={() => setTab("tasks")} title="任务" aria-label="任务"><IconTasks /></button>
         <button type="button" className={`chat__taskbar-btn${tab === "memory" ? " is-active" : ""}`} onClick={() => setTab("memory")} title="记忆" aria-label="记忆">💭</button>
+        <button type="button" className={`chat__taskbar-btn${tab === "editor" ? " is-active" : ""}`} onClick={() => setTab("editor")} title="编辑器" aria-label="编辑器">📝</button>
         <button type="button" className={`chat__taskbar-btn${tab === "settings" ? " is-active" : ""}`} onClick={() => setTab("settings")} title="设置" aria-label="设置"><IconSettings /></button>
         <button type="button" className={`chat__taskbar-btn${tab === "design" ? " is-active" : ""}`} onClick={() => setTab("design")} title="设计预览" aria-label="设计预览">🎨</button>
         <div className="chat__taskbar-spacer" />
@@ -656,6 +657,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </header>
+
+        {/* 编辑器层（Monaco——设计第三层：纯净编码体验） */}
+        {tab === "editor" && <CodeEditor />}
 
         {/* 记忆面板（接真：GET /api/v1/memory） */}
         {tab === "memory" && <MemoryPanel />}
@@ -930,6 +934,67 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 function resolveAsset(assetPath: string): string {
   const clean = assetPath.replace(/^\/+/, "");
   return new URL(clean, document.baseURI).href;
+}
+
+/* ── 编辑器层：Monaco（设计第三层——纯净编码体验） ── */
+function CodeEditor() {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<{ dispose: () => void } | null>(null);
+  const [fileName, setFileName] = useState("未打开文件");
+  const [content, setContent] = useState("// 打开一个文件开始编辑——纯净编码体验\n// Monaco Editor（设计第三层：不与 AI 组件混排）\n");
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const monaco = await import("monaco-editor");
+        if (cancelled || !containerRef.current) return;
+        const ed = monaco.editor.create(containerRef.current, {
+          value: content,
+          language: "typescript",
+          theme: "vs",
+          automaticLayout: true,
+          fontSize: 13,
+          minimap: { enabled: false },
+          scrollBeyondLastLine: false,
+        });
+        editorRef.current = ed;
+      } catch (e) {
+        console.error("[editor] Monaco 加载失败:", String(e));
+      }
+    })();
+    return () => { cancelled = true; editorRef.current?.dispose(); editorRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openFile = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".ts,.tsx,.js,.json,.md,.css,.html,.py,.rs";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      void (async () => {
+        const text = await file.text();
+        setFileName(file.name);
+        setContent(text);
+        const monaco = await import("monaco-editor");
+        const model = monaco.editor.getModels()[0];
+        if (model) model.setValue(text);
+      })();
+    };
+    input.click();
+  }, []);
+
+  return (
+    <div className="chat__panel chat__panel--editor">
+      <div className="chat__panel-head">
+        <span className="chat__panel-title">📝 编辑器 · {fileName}</span>
+        <button type="button" className="chat__session-btn chat__session-btn--config" onClick={openFile}>打开文件</button>
+      </div>
+      <div ref={containerRef} style={{ flex: 1, minHeight: 0, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(236,72,153,0.12)" }} />
+    </div>
+  );
 }
 
 /* ── 记忆面板：接真（GET /api/v1/memory） ── */
