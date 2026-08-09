@@ -234,8 +234,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState("Chat");
   const [modeOpen, setModeOpen] = useState(false);
   const MODES = ["Chat", "Work", "Code", "Learn", "Daily"];
-  // 设置面板：当前域
+  // 设置面板：当前域 + 子组
   const [settingsDomain, setSettingsDomain] = useState("llm");
+  const [settingsGroup, setSettingsGroup] = useState("主模型");
   // 好友 = Cortex agents（动态拉取）；群聊 = 预设
   const [friends, setFriends] = useState<Contact[]>([]);
 
@@ -522,27 +523,35 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
-        {/* 设置面板（域列表 + 配置项双栏） */}
+        {/* 设置面板（左中右三栏：域 → 子组 → 配置项） */}
         {tab === "settings" && (
           <div className="chat__panel chat__panel--settings">
             <div className="chat__settings-layout">
-              {/* 左：域列表 */}
+              {/* 左：域列表（简） */}
               <aside className="chat__settings-domains">
                 {SETTINGS_DOMAINS.map((d) => (
-                  <button key={d.id} type="button" className={`chat__settings-domain${settingsDomain === d.id ? " is-active" : ""}`} onClick={() => setSettingsDomain(d.id)}>
+                  <button key={d.id} type="button" className={`chat__settings-domain${settingsDomain === d.id ? " is-active" : ""}`} onClick={() => { setSettingsDomain(d.id); setSettingsGroup(d.groups[0]); }}>
                     <span aria-hidden="true">{d.icon}</span>
                     <span>{d.name}</span>
                   </button>
                 ))}
               </aside>
-              {/* 右：配置项 */}
+              {/* 中：子组列表（中） */}
+              <aside className="chat__settings-groups">
+                {(SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.groups ?? []).map((g) => (
+                  <button key={g} type="button" className={`chat__settings-group${settingsGroup === g ? " is-active" : ""}`} onClick={() => setSettingsGroup(g)}>
+                    {g}
+                  </button>
+                ))}
+              </aside>
+              {/* 右：配置项（复） */}
               <div className="chat__settings-config">
                 <div className="chat__panel-head">
-                  <span className="chat__panel-title">{SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.name ?? "设置"}</span>
+                  <span className="chat__panel-title">{settingsGroup}</span>
                   <span className="chat__settings-domain-desc">{SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.desc ?? ""}</span>
                 </div>
                 <div className="chat__settings-items">
-                  {(SETTINGS_ITEMS[settingsDomain] ?? []).map((it) => (
+                  {(SETTINGS_ITEMS[settingsDomain]?.[settingsGroup] ?? []).map((it) => (
                     <div key={it.key} className="chat__setting-item">
                       <span className="chat__setting-item-label">{it.label}</span>
                       <span className="chat__setting-item-key">{it.key}</span>
