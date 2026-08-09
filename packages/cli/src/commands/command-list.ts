@@ -19,6 +19,7 @@ import { createConfigHandler } from "./config.js";
 import { createDocHandler } from "./doc.js";
 import { createVersionHandler } from "./version.js";
 import { createEvalHandler } from "./eval.js";
+import { createStatusHandler } from "./status.js";
 import { createHelpHandler } from "./help.js";
 import { createScheduleHandler } from "./schedule.js";
 import { createRoundtableHandler } from "./roundtable.js";
@@ -117,6 +118,11 @@ export const COMMAND_DEFS: readonly CommandDef[] = [
     alias: "ev",
     description: "评测报告 — 查看/重跑 eval-gate（H3 行为门禁）",
   },
+  {
+    name: "status",
+    alias: "st",
+    description: "系统状态 — daemon 健康/评测状态/桌面端进程总览",
+  },
 ];
 
 /** registerCommands 的聚合服务对象 */
@@ -150,6 +156,7 @@ export function registerCommands(registry: CommandRegistry, ctx: RegisterCtx): v
     version: createVersionHandler(),
     help: createHelpHandler(registry),
     eval: createEvalHandler(),
+    status: createStatusHandler(),
   };
 
   for (const def of COMMAND_DEFS) {
