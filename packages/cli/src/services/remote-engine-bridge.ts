@@ -82,7 +82,7 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
   }
 
   getReasonerModelName(): string {
-    return this._reasonerModelName || "deepseek-v4-pro";
+    return this._reasonerModelName || "deepseek-v4-flash";
   }
 
   // ─── 工具定义 ────────────────────────────────────────

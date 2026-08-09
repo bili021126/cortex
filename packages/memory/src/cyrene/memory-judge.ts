@@ -22,7 +22,7 @@ import { L0_FIELD_DESCRIPTIONS } from "./memory-types.js"
 const DEFAULT_MODEL_SETTINGS: LLMConfig = {
   provider: "DeepSeek（深度求索）",
   baseUrl: "https://api.deepseek.com",
-  model: "deepseek-v4-pro",
+  model: "deepseek-v4-flash",
   apiKey: "",
 }
 
