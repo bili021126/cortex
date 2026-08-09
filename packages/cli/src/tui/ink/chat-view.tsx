@@ -9,7 +9,7 @@
  * @since v5 — Ink 重构 Phase 1 → v6 Token + 动画整合
  */
 
-import { Box, Text, useStdout, Static } from "ink";
+import { Box, Text, Static } from "ink";
 import { AGENT_DISPLAY_BY_TYPE, AGENT_DISPLAY_FALLBACK } from "@cortex/shared";
 import type { AgentType } from "@cortex/shared";
 import type { SessionMessage, ToolCallRecord, TaskNodeView, PlanState } from "./session-reducer.js";
@@ -143,10 +143,6 @@ export function ChatView({
   const display = AGENT_DISPLAY_BY_TYPE[agent] ?? AGENT_DISPLAY_FALLBACK;
   const t = inkTheme;
   const tokens = defaultTokens;
-  // 高度自适应：终端行数 - 固定开销（StatusBar 1 + InputBar 3 + 安全边距 2）——消息超出时向上滚出（滚动语义）
-  const { stdout } = useStdout();
-  const termRows = stdout.rows || 24;
-  const MAX_MSG_ROWS = Math.max(6, termRows - 6);
 
   // ── 空状态 ────────────────────────────────
   if (messages.length === 0 && !streamingContent && recentTools.length === 0 && (!planNodes || planNodes.length === 0)) {
@@ -241,22 +237,18 @@ export function ChatView({
     );
   }
 
-  // ── 滚动裁剪 ──────────────────────────────
+  // ── 滚动语义 ──────────────────────────────
+  // Static 全量渲染（终端原生滚动——旧消息自然滚出屏幕——无需高度裁剪）
   // visibleOffset = 0 显示全部；> 0 时从底部向上偏移（隐藏最新 N 行，露出更早的消息）
   const offsetRows = visibleOffset > 0 && rows.length > visibleOffset
     ? rows.slice(0, rows.length - visibleOffset)
     : rows;
-
-  // 高度自适应裁剪：保留最新 MAX_MSG_ROWS 行（终端行数不足时旧消息向上滚出——防止溢出挤压 InputBar）
-  const capped = offsetRows.length > MAX_MSG_ROWS
-    ? offsetRows.slice(offsetRows.length - MAX_MSG_ROWS)
-    : offsetRows;
-  const hiddenCount = rows.length - capped.length;
+  const hiddenCount = rows.length - offsetRows.length;
 
   return (
     <Box flexDirection="column" paddingX={tokens.spacing.xs} flexShrink={1} minHeight={0}>
-      {/* 根治：历史消息用 Static 稳定区——已渲染不重绘（终端原生滚动——不再有增量重绘行错位） */}
-      <Static items={capped}>{(row) => row}</Static>
+      {/* 根治：历史消息用 Static 稳定区——全量渲染不裁剪（终端原生滚动——旧消息自然滚出——光标/输入行始终在屏幕底部） */}
+      <Static items={offsetRows}>{(row) => row}</Static>
       {/* 动态区：流式/处理中/裁剪提示/plan 审批——小范围重绘不抖动 */}
       {hiddenCount > 0 && (
         <Box marginBottom={1}>
