@@ -594,7 +594,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                       <span className="chat__task-title">{t.title} <span className={`chat__task-source chat__task-source--${t.source}`}>{t.source === "cmd" ? "命令" : "工具"}</span></span>
                       <span className="chat__task-desc">{t.agent} · {t.duration}</span>
                     </span>
-                    <span className={`chat__task-status chat__task-status--${t.statusCls}"`}>{t.statusText}</span>
+                    <span className={`chat__task-status chat__task-status--${t.statusCls}`}>{t.statusText}</span>
                   </button>
                 ))}
               </aside>
@@ -606,7 +606,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                     <>
                       <div className="chat__panel-head">
                         <span className="chat__panel-title">{t.icon} {t.title}</span>
-                        <span className={`chat__task-status chat__task-status--${t.statusCls}"`}>{t.statusText}</span>
+                        <span className={`chat__task-status chat__task-status--${t.statusCls}`}>{t.statusText}</span>
                       </div>
                       <div className="chat__tasks-detail-meta">
                         <span>Agent：{t.agent}</span>
@@ -906,7 +906,7 @@ function DesignPreview() {
       <PreviewSection title="④ 模式（五态）">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {["Chat", "Work", "Code", "Learn", "Daily"].map((m, i) => (
-            <span key={m} className={`chat__mode-btn${i === 0 ? "" : ""}`} style={{ cursor: "default", opacity: i === 0 ? 1 : 0.65 }}>{m} ▾</span>
+            <span key={m} className={`chat__mode-btn${i === 0 ? " is-active" : ""}`} style={{ cursor: "default", opacity: i === 0 ? 1 : 0.65 }}>{m} ▾</span>
           ))}
         </div>
       </PreviewSection>
