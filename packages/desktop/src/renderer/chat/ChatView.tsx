@@ -491,6 +491,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     const aiId = crypto.randomUUID();
     const aiMsg: Message = { id: aiId, role: "assistant", content: "", at: Date.now(), state: "queued" };
     setMessages((prev) => [...prev, userMsg, aiMsg]);
+    // 桌宠联动：发送时表情（无表情名兜底）
+    try { void window.cortexDesktop.expression("talk"); } catch { /* 桌宠未就绪 */ }
     void sendRequest(aiId, text);
   }, [input, messages, sendRequest]);
 
