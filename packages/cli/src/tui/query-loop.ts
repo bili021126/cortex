@@ -255,7 +255,11 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
 
   while (toolRound < MAX_TOOL_ROUNDS) {
     // 回合边界中断检查——Esc 后不再发起新一轮
-    if (signal?.aborted) { yield { type: "interrupted", agent } as TuiEvent; return finalOutput; }
+    if (signal?.aborted) {
+      process.stderr.write(`[query-loop] interrupted@turn-boundary toolRound=${toolRound} signal=${signal.reason ?? "aborted"}\n`);
+      yield { type: "interrupted", agent } as TuiEvent;
+      return finalOutput;
+    }
     // ═══ 真流式：Promise.race 即时 yield 每个 chunk ═══
     let resolveNextChunk: ((v: void) => void) | null = null;
     const chunkQueue: TuiEvent[] = [];
@@ -316,6 +320,7 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
     // 中断优先于错误——fetch abort 会以 AbortError 形式落入 streamError，视为中断而非报错
     // eslint-disable-next-line @typescript-eslint/prefer-optional-chain -- streamError 在 .catch 闭包内赋值，TS 同步流误判类型，?. 形式会报 never
     if (signal?.aborted || (streamError && streamError.name === "AbortError")) {
+      process.stderr.write(`[query-loop] interrupted@stream abort=${signal?.aborted} streamError=${streamError?.name ?? ""} msg=${(streamError as Error | null)?.message?.slice(0, 120) ?? ""}\n`);
       yield { type: "interrupted", agent } as TuiEvent;
       return finalOutput;
     }
