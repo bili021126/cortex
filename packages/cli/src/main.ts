@@ -39,6 +39,7 @@ import {
 import { bootstrapLlm, hasAnyLlmKey, enableLlmAudit } from "./bootstrap/llm.js";
 import { bootstrapMcp } from "./bootstrap/mcp.js";
 import { bootstrapConfigStores } from "./bootstrap/config.js";
+import { cliTheme } from "./theme/cli-theme.js";
 
 // ── 命令 ─────────────────────────────────────────
 import { CommandRegistry } from "./commands/index.js";
@@ -199,7 +200,7 @@ try {
   // Ink 模式下 stdout/console.log 已静音、stderr 被导向日志文件；引导失败必须先
   // 恢复真实终端流，再把错误打出来，否则用户只看到进程静默退出（C5 静默崩溃）。
   restoreInkStreams();
-  console.error(`✗ 引导失败: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`);
+  console.error(cliTheme.error(`引导失败: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}`));
   process.exit(CLI_EXIT_INTERNAL_ERROR);
 }
 
@@ -254,10 +255,10 @@ export async function main(): Promise<number> {
       await remoteBridge.connect();
       activeBridge = remoteBridge;
     } else if (!hasAnyLlmKey()) {
-      console.error("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。");
-      console.error("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。");
-      console.error("   或启动 cortex daemon（cortex serve）后重试。");
-      console.error("   直接输入命令名即可（如 ls、git status），无需切换模式。\n");
+      console.error(cliTheme.warn("💡 未检测到任何 DEEPSEEK_*_API_KEY，chat/talk/plan 模式需要 LLM 后端。"));
+      console.error(cliTheme.muted("   在 .env 中配置 DEEPSEEK_API_KEY（或 DEEPSEEK_CYRENE/CHAT/REASONER_API_KEY）后重启即可。"));
+      console.error(cliTheme.muted("   或启动 cortex daemon（cortex serve）后重试。"));
+      console.error(cliTheme.muted("   直接输入命令名即可（如 ls、git status），无需切换模式。\n"));
     }
 
     try {
@@ -322,7 +323,7 @@ export async function main(): Promise<number> {
     }, globalFormat);
     return r.code;
   } catch (err) {
-    console.error(`✗ 未预期错误: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(cliTheme.error(`未预期错误: ${err instanceof Error ? err.message : String(err)}`));
     return CLI_EXIT_INTERNAL_ERROR;
   } finally {
     await engineBridge.shutdown();
@@ -334,13 +335,13 @@ export async function main(): Promise<number> {
 // ═══════════════════════════════════════════════════
 
 if (isDirectRun()) {
-  console.error("⚠️  CLI/TUI 已废弃（2026-07）——Cortex 当前仅作为引擎库使用。");
-  console.error("    直接通过 @cortex/engine API 调用。CLI/TUI 入口保留用于未来重建。");
-  console.error("    如需临时启用：设置 CORTEX_ENABLE_CLI=1 环境变量。");
+  console.error(cliTheme.warn("⚠️  CLI/TUI 已废弃（2026-07）——Cortex 当前仅作为引擎库使用"));
+  console.error(cliTheme.muted("    直接通过 @cortex/engine API 调用。CLI/TUI 入口保留用于未来重建"));
+  console.error(cliTheme.muted("    如需临时启用：设置 CORTEX_ENABLE_CLI=1 环境变量"));
   // R11-16：统一真值词汇（1/true/yes/on）
   if (envTruthy(ENV_CORTEX_ENABLE_CLI) === true) {
     main().then((code) => process.exit(code)).catch((err) => {
-      console.error(`✗ 致命错误: ${err instanceof Error ? err.message : String(err)}`);
+      console.error(cliTheme.error(`致命错误: ${err instanceof Error ? err.message : String(err)}`));
       process.exit(CLI_EXIT_INTERNAL_ERROR);
     });
   } else {

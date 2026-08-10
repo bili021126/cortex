@@ -8,6 +8,7 @@
 
 import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
+import { cliTheme, ttySafe } from "../theme/cli-theme.js";
 import { LinkType, type AgentType, type ICortexApi, type IMemoryStore, type MemoryEntry, type MemoryQuery } from "@cortex/shared";
 
 /** 记忆操作键值参数聚合——消除 write/search 的多参数传递 */
@@ -276,15 +277,16 @@ async function handleMemoryAudit(filePath: string | undefined): Promise<CommandR
     const report = auditMemoryFile(filePath, fsMod as never);
     const summary = summarizeMemoryAudit(report.findings);
     const lines = [
-      `记忆审计: ${filePath}`,
-      `  发现: ${summary.total} 条（info=${summary.bySeverity.info} warning=${summary.bySeverity.warning} error=${summary.bySeverity.error}）`,
+      ttySafe(cliTheme.heading, `✦ 记忆审计: ${filePath}`),
+      `  发现: ${summary.total} 条（info=${summary.bySeverity.info} warning=${ttySafe(cliTheme.warn, String(summary.bySeverity.warning))} error=${ttySafe(cliTheme.error, String(summary.bySeverity.error))}）`,
     ];
     for (const f of report.findings) {
-      lines.push(`  [${f.severity}] ${f.message}`);
+      const sev = f.severity === "error" ? ttySafe(cliTheme.error, `[${f.severity}]`) : f.severity === "warning" ? ttySafe(cliTheme.warn, `[${f.severity}]`) : ttySafe(cliTheme.muted, `[${f.severity}]`);
+      lines.push(`  ${sev} ${f.message}`);
     }
     return { success: true, output: lines.join("\n"), exitCode: 0 };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return { success: false, error: `审计失败: ${msg}`, output: `审计失败: ${msg}`, exitCode: 1 };
+    return { success: false, error: `审计失败: ${msg}`, output: ttySafe(cliTheme.error, `审计失败: ${msg}`), exitCode: 1 };
   }
 }

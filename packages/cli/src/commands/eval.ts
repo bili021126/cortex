@@ -7,6 +7,7 @@
  */
 import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
+import { cliTheme, ttySafe } from "../theme/cli-theme.js";
 
 const EVAL_HELP = [
   "用法: cortex eval [--run]",
@@ -57,25 +58,25 @@ export function createEvalHandler(): CommandHandler {
       const pathMod = await import("node:path");
       const reportPath = pathMod.join(process.cwd(), ".cortex", "eval-report.json");
       if (!fsMod.existsSync(reportPath)) {
-        return { success: false, output: "暂无评测报告——先运行 cortex eval --run 生成", exitCode: 1 };
+        return { success: false, output: ttySafe(cliTheme.warn, "暂无评测报告——先运行 cortex eval --run 生成"), exitCode: 1 };
       }
       const report = JSON.parse(fsMod.readFileSync(reportPath, "utf-8")) as { generatedAt: string; results: EvalReportEntry[] };
       const passed = report.results.filter((r) => r.passed).length;
       const lines = [
-        `评测报告（${report.generatedAt}）:`,
-        `  通过: ${passed}/${report.results.length}`,
+        ttySafe(cliTheme.heading, `✦ 评测报告（${report.generatedAt}）`),
+        ttySafe(cliTheme.success, `  通过: ${passed}/${report.results.length}`),
         "",
         ...report.results.map((r) => {
           const mark = r.passed ? "✅" : "❌";
           const id = r.goldenId ?? r.id ?? "?";
           const fails = (r.asserts ?? []).filter((a) => !a.passed);
           const why = fails.length > 0 ? ` — ${fails[0]?.detail ?? r.error ?? "断言失败"}` : "";
-          return `  ${mark} ${id}${why}`;
+          return `  ${mark} ${ttySafe(cliTheme.muted, id)}${why}`;
         }),
       ];
       return { success: true, output: lines.join("\n"), exitCode: 0 };
     } catch (e) {
-      return { success: false, output: `读取报告失败: ${e instanceof Error ? e.message : String(e)}`, exitCode: 1 };
+      return { success: false, output: ttySafe(cliTheme.error, `读取报告失败: ${e instanceof Error ? e.message : String(e)}`), exitCode: 1 };
     }
   };
   return handler;
