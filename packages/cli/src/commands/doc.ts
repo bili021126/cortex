@@ -9,6 +9,7 @@
  */
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
+import { cliTheme } from "../theme/cli-theme.js";
 import { isHelpRequest, convertMarkdown } from "../utils.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -120,15 +121,15 @@ function handleDocServe(
   const server = createServer(_createDocRequestHandler(rootDir, port));
 
   server.listen(port, () => {
-    console.error(`📖 文档服务器启动: http://localhost:${port}`);
-    console.error(`   根目录: ${rootDir}`);
+    console.error(cliTheme.heading(`📖 文档服务器启动: http://localhost:${port}`));
+    console.error(cliTheme.muted(`   根目录: ${rootDir}`));
   });
 
   let _cleanedUp = false;
   const cleanup = () => {
     if (_cleanedUp) return;
     _cleanedUp = true;
-    server.close(() => { console.error("\n📖 文档服务器已关闭"); process.exit(0); });
+    server.close(() => { console.error(cliTheme.info("\n📖 文档服务器已关闭")); process.exit(0); });
   };
   process.once("SIGINT", cleanup);
   process.once("SIGTERM", cleanup);

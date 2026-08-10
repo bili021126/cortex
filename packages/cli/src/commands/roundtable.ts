@@ -10,6 +10,7 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import { isHelpRequest } from "../utils.js";
+import { cliTheme } from "../theme/cli-theme.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
 import type { DocRegistry } from "@cortex/governance";
 import type { LlmMessage, AgentType } from "@cortex/shared";
@@ -94,7 +95,7 @@ async function _runDebateRounds(
   ];
   let consensusContent = "";
   for (let r = 1; r <= template.rounds; r++) {
-    console.error(`  ⏳ 第 ${r}/${template.rounds} 轮辩论中...`);
+    console.error(cliTheme.info(`  🗣 第 ${r}/${template.rounds} 轮辩论中...`));
     const response = await bridge.directChat(systemPrompt, messages);
     if (response) {
       messages.push({ role: "assistant", content: response });
@@ -211,9 +212,9 @@ async function handleRoundtableStart(
   if (dryRun) return { success: true, output: _buildDryRunOutput(template, topic, outputPath), exitCode: 0 };
 
   const topicText = topic ?? template.description;
-  console.error(`🧠 圆桌会议启动: ${template.name}`);
-  console.error(`   轮次: ${template.rounds}  |  参与: ${template.agents.join(", ")}`);
-  console.error(`   议题: ${topicText.slice(0, 80)}${topicText.length > 80 ? "..." : ""}`);
+  console.error(cliTheme.heading(`✦ 圆桌会议启动: ${template.name}`));
+  console.error(cliTheme.muted(`   轮次: ${template.rounds}  |  参与: ${template.agents.join(", ")}`));
+  console.error(cliTheme.muted(`   议题: ${topicText.slice(0, 80)}${topicText.length > 80 ? "..." : ""}`));
   console.error("");
 
   let consensusContent = "";
@@ -221,7 +222,7 @@ async function handleRoundtableStart(
     consensusContent = await _runDebateRounds(bridge, template, topicText);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  ⚠ 辩论执行异常: ${msg}`);
+    console.error(cliTheme.error(`  💥 辩论执行异常: ${msg}`));
     if (!consensusContent) return { success: false, error: `圆桌会议执行失败: ${msg}`, exitCode: 2 };
   }
 
