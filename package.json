@@ -24,7 +24,8 @@
     "daemon:dev": "npx tsx packages/server/src/main.ts",
     "eval:gate": "tsx packages/engine/tests/eval/eval-gate.ts",
     "doc:drift": "tsx scripts/doc-drift-check.ts",
-    "dep:cycle": "tsx scripts/dep-cycle-check.ts"
+    "dep:cycle": "tsx scripts/dep-cycle-check.ts",
+    "audit:deps": "tsx scripts/audit-deps.ts"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0",
@@ -48,6 +49,11 @@
       "brace-expansion@5.0.6": "patches/brace-expansion@5.0.6.patch",
       "balanced-match@4.0.4": "patches/balanced-match@4.0.4.patch",
       "ink@5.2.1": "patches/ink@5.2.1.patch"
+    },
+    "overrides": {
+      "dompurify": "^3.4.13",
+      "protobufjs": "^7.5.5",
+      "sharp": "^0.35.0"
     }
   },
   "dependencies": {
