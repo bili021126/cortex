@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TUI 核心测试：hooks（生命周期钩子配置——default/talk/party 结构完整性）
  */

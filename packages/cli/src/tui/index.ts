@@ -61,29 +61,15 @@ export {
   bold,
   dim,
   color,
-  Box,
-  StatusLine,
   terminalWidth,
   terminalHeight,
-  write,
-  writeln,
   StyleCode,
   ColorCode,
 } from "./renderer/ansi.js";
 export type { ColorName, StyleName } from "./renderer/ansi.js";
-export { ToolLogRenderer } from "./renderer/tool-log.js";
-export { TokenMonitor } from "./renderer/token-monitor.js";
-export {
-  renderInlinePermission as renderPermissionDialog,
-  clearInlinePermission as clearPermissionDialog,
-  renderInlinePermission,
-  clearInlinePermission,
-  waitForSingleKey,
-  waitForSingleKey as listenForConfirm,
-  ConfirmGateState,
-  reversibilityLevel,
-} from "./renderer/permission-dialog.js";
-export { renderDiff, renderDiffText } from "./renderer/diff-viewer.js";
+// D1 收敛：ToolLogRenderer/TokenMonitor/diff-viewer 等 ANSI 直写死代码已移除；
+// 权限确认 UI 统一走 tui/ink/permission-prompt.tsx（renderInlinePermission 等已删）
+export { reversibilityLevel } from "./renderer/permission-dialog.js";
 
 // ─── 钩子 ──────────────────────────────────────────
 export { defaultHooks, talkHooks, partyHooks } from "./hooks.js";

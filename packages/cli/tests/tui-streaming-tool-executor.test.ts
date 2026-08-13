@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TUI 核心测试：streaming-tool-executor（工具流式执行——空批次/执行/事件/容错）
  */

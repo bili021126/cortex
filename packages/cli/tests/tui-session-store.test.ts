@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TUI 核心测试：session-store（会话持久化——save/load/clear 往返 + 容错）
  */

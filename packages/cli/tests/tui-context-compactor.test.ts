@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TUI 核心测试：context-compactor（上下文压缩——token 估算 + 多层压缩）
  */

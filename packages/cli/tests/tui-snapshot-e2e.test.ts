@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TUI 集成测试：群聊快照持久化端到端（createGroup → saveSession → loadSession → restoreGroup）
  */

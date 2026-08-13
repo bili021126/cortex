@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TUI 核心测试：intent-router（意图判定——TUI 零测试缺口补起）
  */

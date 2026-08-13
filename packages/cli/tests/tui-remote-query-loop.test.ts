@@ -1,3 +1,4 @@
+// @ci: unit
 /**
  * TUI 核心测试：remote-query-loop（远程查询循环——取消函数）
  */
