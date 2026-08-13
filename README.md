@@ -276,7 +276,7 @@ Cortex 内置 16 种角色人格：
 | | `@cortex/memory` | 记忆系统核心 |
 | | `@cortex/memory-store` | 记忆存储与检索 |
 | | `@cortex/pattern-extractor` | 模式提取器 |
-| | `@cortex/parser` | AST 解析 |
+| | `@cortex/parser` | Markdown→HTML 转换解析器 |
 | | `@cortex/testing` | 测试基础设施 |
 | **L4 协议/端** | `@cortex/client` | daemon REST/WS 客户端 SDK |
 | | `@cortex/protocol` | 纯类型协议层（REST/WS 契约，零运行时依赖） |

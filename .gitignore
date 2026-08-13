@@ -122,10 +122,8 @@ packages/skill-validator/
 packages/src/
 packages/test-output/
 packages/tests/.test-data/
-# 废弃包（全量图景审计裁决：DELETE）
+# 注：packages/parser 与 packages/tools 为活跃包（cli 依赖消费），不再标记 DELETE（F9 裁决修正）
 # doctor 为活包（cli 消费 + S2-8 audit 查询）——已从忽略清单移除（2026-06-20）
-packages/parser/
-packages/tools/
 # 非项目内容
 3.*剧情.txt
 nahida-persona.txt
