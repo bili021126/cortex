@@ -161,7 +161,7 @@ export class WorldbookManager {
       if (e.enabled && !e.permanent) this.state.set(e.id, { activation: 0, userSilence: 0, modelSilence: 0 });
     }
 
-    // eslint-disable-next-line no-console
+     
     diag(`[Worldbook] loaded ${allEntries.length} entries from ${files.length} files`);
   }
 
@@ -335,10 +335,10 @@ export class WorldbookManager {
     }
 
     if (this.debug && changed.length > 0) {
-      // eslint-disable-next-line no-console
+       
       diag(`[Worldbook/DMAE] update: ${changed.length} entries changed`);
       for (const c of changed.slice(0, 12)) {
-        // eslint-disable-next-line no-console
+         
         diag(`  ${c.id}: ${c.aOld.toFixed(1)} → ${c.aNew.toFixed(1)}  (${c.reason})`);
       }
     }

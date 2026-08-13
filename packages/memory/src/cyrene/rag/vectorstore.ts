@@ -224,7 +224,7 @@ export class JsonVectorStore {
     const K = Math.max(2, Math.min(512, Math.round(Math.sqrt(n) / 2)));
     const t0 = Date.now();
     this.ivf = buildIvfIndex(this.entries, K);
-    // eslint-disable-next-line no-console
+     
     diag(`[RAG] IVF index rebuilt: K=${K}, entries=${n}, took ${Date.now() - t0}ms`);
   }
   /** 检查是否需重建索引，每次数据库变化后调用 */

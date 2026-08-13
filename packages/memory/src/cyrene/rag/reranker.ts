@@ -52,7 +52,7 @@ async function loadRerankerPipeline(modelDir: string): Promise<any> {
       quantized: true,
       cache_dir: path.join(os.homedir(), ".cache", "huggingface"),
     })
-    // eslint-disable-next-line no-console
+     
     diag(`[Reranker] pipeline "${modelDir}" loaded OK`)
     return pipe
   } finally {
@@ -71,7 +71,7 @@ export async function createLightReranker(): Promise<RerankerProvider> {
       const outputs = await lightPipeline(inputs)
       const results = documents.map((text, i) => ({ text, score: outputs[i]?.score ?? 0 }))
       results.sort((a, b) => b.score - a.score)
-      // eslint-disable-next-line no-console
+       
       diag(`[Reranker] light: ${documents.length} docs reranked in ${Date.now() - start}ms`)
       return results
     },
@@ -89,7 +89,7 @@ export async function createStandardReranker(): Promise<RerankerProvider> {
       const outputs = await standardPipeline(inputs)
       const results = documents.map((text, i) => ({ text, score: outputs[i]?.score ?? 0 }))
       results.sort((a, b) => b.score - a.score)
-      // eslint-disable-next-line no-console
+       
       diag(`[Reranker] standard: ${documents.length} docs reranked in ${Date.now() - start}ms`)
       return results
     },
@@ -116,7 +116,7 @@ export function getRerankerInstallStatus(): { light: boolean; standard: boolean 
 
 export async function initReranker(mode: "light" | "standard" | "none"): Promise<void> {
   currentRerankerMode = mode
-  // eslint-disable-next-line no-console
+   
   if (mode === "none") { currentReranker = null; diag("[Reranker] disabled"); return }
 
   if (!checkRerankerModelInstalled(mode)) {
@@ -127,11 +127,11 @@ export async function initReranker(mode: "light" | "standard" | "none"): Promise
     return
   }
 
-  // eslint-disable-next-line no-console
+   
   diag(`[Reranker] initializing ${mode} mode...`)
   if (mode === "light") currentReranker = await createLightReranker()
   else currentReranker = await createStandardReranker()
-  // eslint-disable-next-line no-console
+   
   diag(`[Reranker] ${mode} mode ready: ${currentReranker.name}`)
 }
 

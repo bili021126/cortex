@@ -115,7 +115,7 @@ export class MemoryJudge {
     turns: MemoryJudgeTurn[],
     conversationId: string,
   ): Promise<MemoryCandidate[]> {
-    // eslint-disable-next-line no-console
+     
     diag(`[MemoryJudge] 分析最近 ${turns.length} 轮对话...`)
     try {
       const settings = loadSettings()
@@ -223,12 +223,12 @@ export class MemoryJudge {
         .filter((item) => item.layer !== "L0" || (item.certainty === "explicit" && item.attribution === "user_explicit"))
 
       if (candidates.length === 0) {
-        // eslint-disable-next-line no-console
+         
         diag("[MemoryJudge] 本轮无值得记录的信息")
         return []
       }
 
-      // eslint-disable-next-line no-console
+       
       diag(`[MemoryJudge] 提取候选: ${candidates.length} 条（过滤后）`)
       return candidates
     } catch (error) {

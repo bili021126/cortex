@@ -94,7 +94,7 @@ export class MemoryScheduler {
     }
 
     if (newCount % 20 === 0) {
-      // eslint-disable-next-line no-console
+       
       diag("[Memory] 达到 20 轮，触发 Reflection + 记忆压缩")
       await this.deps.runReflectionAndCompression()
     }

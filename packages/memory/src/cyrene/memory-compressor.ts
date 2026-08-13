@@ -112,7 +112,7 @@ async function compressMemories(getEntriesBySource: (source: string) => Array<{ 
   const activeL2 = allL2.filter((m) => m.status === "active" && !m.isSummary && m.ragId)
 
   if (activeL2.length < MIN_GROUP_SIZE) {
-    // eslint-disable-next-line no-console
+     
     diag("[MemoryCompressor] 活跃 L2 条目不足，跳过压缩")
     return 0
   }
@@ -132,7 +132,7 @@ async function compressMemories(getEntriesBySource: (source: string) => Array<{ 
   }
 
   if (withEmbedding.length < MIN_GROUP_SIZE) {
-    // eslint-disable-next-line no-console
+     
     diag("[MemoryCompressor] 带 embedding 的条目不足，跳过压缩")
     return 0
   }
@@ -163,12 +163,12 @@ async function compressMemories(getEntriesBySource: (source: string) => Array<{ 
   }
 
   if (groups.length === 0) {
-    // eslint-disable-next-line no-console
+     
     diag("[MemoryCompressor] 未找到可压缩的条目组")
     return 0
   }
 
-  // eslint-disable-next-line no-console
+   
   diag(`[MemoryCompressor] 发现 ${groups.length} 个可压缩组`)
 
   let totalCompressed = 0
@@ -224,7 +224,7 @@ async function compressMemories(getEntriesBySource: (source: string) => Array<{ 
       })
 
       totalCompressed += subEntryIds.length
-      // eslint-disable-next-line no-console
+       
       diag(`[MemoryCompressor] 压缩了 ${subEntryIds.length} 条 → "${cleanSummary.slice(0, 40)}"`)
     } catch (err) {
       console.warn("[MemoryCompressor] 组压缩失败:", err)
@@ -242,7 +242,7 @@ async function runReflection(): Promise<void> {
     const l1 = await memoryStore.getL1()
 
     if (l0.isPinned) {
-      // eslint-disable-next-line no-console
+       
       diag("[Reflection] L0 已锁定，跳过更新建议")
     }
 
@@ -290,7 +290,7 @@ async function runReflection(): Promise<void> {
 
     const parsed = extractJsonArrayLocal(raw)
     if (!parsed || parsed.length === 0) {
-      // eslint-disable-next-line no-console
+       
       diag("[Reflection] 无 L0/L1 更新建议")
       return
     }
@@ -314,7 +314,7 @@ async function runReflection(): Promise<void> {
           summary: `L0.${field} 更新为 "${content.slice(0, 30)}"（置信度 ${confidence.toFixed(2)}）`,
         })
         updateCount++
-        // eslint-disable-next-line no-console
+         
         diag(`[Reflection] L0.${field} 更新: "${content.slice(0, 30)}"`)
       } else if (layer === "L1") {
         const l1Field = /目标|想要|计划|打算/.test(content) ? "recentGoals" : "recentPreferences"
@@ -324,12 +324,12 @@ async function runReflection(): Promise<void> {
           summary: `L1.${l1Field} 更新为 "${content.slice(0, 30)}"（置信度 ${confidence.toFixed(2)}）`,
         })
         updateCount++
-        // eslint-disable-next-line no-console
+         
         diag(`[Reflection] L1.${l1Field} 更新: "${content.slice(0, 30)}"`)
       }
     }
 
-    // eslint-disable-next-line no-console
+     
     diag(`[Reflection] 完成，更新了 ${updateCount} 个字段`)
   } catch (err) {
     console.warn("[Reflection] 执行失败:", err)
@@ -345,17 +345,17 @@ async function runReflection(): Promise<void> {
 export async function runReflectionAndCompression(
   getEntriesBySource?: (source: string) => Array<{ id: string; text: string; embedding: number[]; createdAt: number; weight: number }>
 ): Promise<void> {
-  // eslint-disable-next-line no-console
+   
   diag("[Memory] 开始 20 轮 Reflection + 记忆压缩...")
 
   // 阶段 A：记忆压缩
   const compressed = getEntriesBySource ? await compressMemories(getEntriesBySource) : 0
-  // eslint-disable-next-line no-console
+   
   diag(`[Memory] 压缩完成，共压缩 ${compressed} 条原始记忆`)
 
   // 阶段 B：Reflection
   await runReflection()
 
-  // eslint-disable-next-line no-console
+   
   diag("[Memory] Reflection + 压缩流程完成")
 }
