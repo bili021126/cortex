@@ -35,10 +35,30 @@ import type {
   ServerCapabilities,
 } from "@cortex/protocol";
 import type { HttpClientConfig } from "./types.js";
-import { ProtocolError } from "./errors.js";
+import { ProtocolError, NotSupportedError } from "./errors.js";
 
 export class CortexHttpClient {
   constructor(private readonly config: HttpClientConfig) {}
+
+  // ─── 能力面缓存（D2 契约裂口收敛——capabilities 驱动降级） ──
+  private _capabilities?: ServerCapabilities;
+
+  /** 注入能力面（调用方在 getCapabilities() 后显式注入；getCapabilities 自身也会缓存） */
+  setCapabilities(caps: ServerCapabilities): void {
+    this._capabilities = caps;
+  }
+
+  /** 能力面守卫——已探测时拦截未声明/声明 false 的域（未探测保持向后兼容：旧行为发请求） */
+  private _assertSupported(domain: string): void {
+    const caps = this._capabilities;
+    if (!caps) return;
+    const supported = (caps.api as unknown as Record<string, boolean | undefined>)[domain];
+    if (supported !== true) {
+      throw new NotSupportedError(
+        `daemon 未提供能力域 "${domain}"（capabilities.api.${domain} ${supported === false ? "声明为 false" : "未声明"}）——先调用 getCapabilities() 探测能力面`,
+      );
+    }
+  }
 
   // ─── 状态查询 ──────────────────────────────────────
 
@@ -77,6 +97,7 @@ export class CortexHttpClient {
   }
 
   async getEvents(opts?: { page?: number; limit?: number; type?: string }): Promise<PaginatedResponse<EventRecord>> {
+    this._assertSupported("events");
     const params = new URLSearchParams();
     if (opts?.page) params.set("page", String(opts.page));
     if (opts?.limit) params.set("limit", String(opts.limit));
@@ -88,54 +109,66 @@ export class CortexHttpClient {
   // ─── Config API ────────────────────────────────────
 
   async getModels(): Promise<Record<string, ModelEntryDTO>> {
+    this._assertSupported("models");
     const res = await this.request<SingleResponse<Record<string, ModelEntryDTO>>>("GET", "/api/v1/models");
     return res.data;
   }
 
   async createModel(req: CreateModelRequest): Promise<void> {
+    this._assertSupported("models");
     await this.request("POST", "/api/v1/models", req);
   }
 
   async patchModel(id: string, patch: PatchModelRequest): Promise<void> {
+    this._assertSupported("models");
     await this.request("PATCH", `/api/v1/models/${encodeURIComponent(id)}`, patch);
   }
 
   async deleteModel(id: string): Promise<void> {
+    this._assertSupported("models");
     await this.request("DELETE", `/api/v1/models/${encodeURIComponent(id)}`);
   }
 
   async patchAgentConfig(id: string, patch: Record<string, unknown>): Promise<void> {
+    this._assertSupported("agents-patch");
     await this.request("PATCH", `/api/v1/agents/${encodeURIComponent(id)}`, patch);
   }
 
   async getKeys(): Promise<Record<string, KeyEntryMaskedDTO>> {
+    this._assertSupported("keys");
     const res = await this.request<SingleResponse<Record<string, KeyEntryMaskedDTO>>>("GET", "/api/v1/keys");
     return res.data;
   }
 
   async createKey(req: CreateKeyRequest): Promise<void> {
+    this._assertSupported("keys");
     await this.request("POST", "/api/v1/keys", req);
   }
 
   async deleteKey(id: string): Promise<void> {
+    this._assertSupported("keys");
     await this.request("DELETE", `/api/v1/keys/${encodeURIComponent(id)}`);
   }
 
   async getTuning(): Promise<TuningConfigDTO> {
+    this._assertSupported("tuning");
     const res = await this.request<SingleResponse<TuningConfigDTO>>("GET", "/api/v1/tuning");
     return res.data;
   }
 
   async patchTuning(req: PatchTuningRequest): Promise<void> {
+    this._assertSupported("tuning");
     await this.request("PATCH", "/api/v1/tuning", req);
   }
 
   async validateConfig(req: ConfigValidateRequest): Promise<ConfigValidateResponse> {
+    this._assertSupported("config");
     const res = await this.request<SingleResponse<ConfigValidateResponse>>("POST", "/api/v1/config/validate", req);
     return res.data;
   }
 
   async getConfigVersion(): Promise<ConfigVersionResponse> {
+    this._assertSupported("config");
     const res = await this.request<SingleResponse<ConfigVersionResponse>>("GET", "/api/v1/config/version");
     return res.data;
   }
@@ -194,6 +227,7 @@ export class CortexHttpClient {
   /** 能力发现（C5）——连接任意服务端后先探测能力面（共面 + 专化声明） */
   async getCapabilities(): Promise<ServerCapabilities> {
     const res = await this.request<SingleResponse<ServerCapabilities>>("GET", "/api/v1/capabilities");
+    this._capabilities = res.data; // self-cache——后续方法可用能力面降级
     return res.data;
   }
 

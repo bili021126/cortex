@@ -17,7 +17,7 @@ export { CortexConnection } from "./connection.js";
 export { CortexHttpClient } from "./http-client.js";
 export { CortexWSClient, type WSEventHandler } from "./ws-client.js";
 export { streamChat, type ChatStreamCallbacks, type ChatStreamHandle } from "./chat-stream.js";
-export { ProtocolError, ConnectionError } from "./errors.js";
+export { ProtocolError, ConnectionError, NotSupportedError } from "./errors.js";
 export type {
   HttpClientConfig,
   WSClientConfig,

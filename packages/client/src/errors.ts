@@ -23,3 +23,11 @@ export class ConnectionError extends Error {
     this.name = "ConnectionError";
   }
 }
+
+/** 能力面不支持（capabilities 声明 false 或未声明——替代 404 盲请求） */
+export class NotSupportedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotSupportedError";
+  }
+}
