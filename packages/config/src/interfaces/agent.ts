@@ -69,8 +69,3 @@ export interface AgentRoundtable {
   /** 圆桌标题（B1 兼容：engine 旧字段名，与 title 同值） */
   roundtableTitle?: string;
 }
-
-/** agents.json 顶层结构 */
-export interface AgentsConfig {
-  agents: Record<string, AgentManifest>;
-}

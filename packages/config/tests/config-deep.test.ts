@@ -11,7 +11,7 @@ describe("config deep", () => {
     expect(mod.RETRIEVAL_ALPHA).toBeDefined();
   });
 
-  it("agents.json 所有Agent都有role字段", () => {
+  it("VALID_TIERS 包含预期角色分层", () => {
     // 验证 config 的 VALID_TIERS 包含预期角色
     const tiers = new Set(["fast", "standard", "thinking"]);
     expect(tiers.has("fast")).toBe(true);

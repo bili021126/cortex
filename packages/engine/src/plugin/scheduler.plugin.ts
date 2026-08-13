@@ -118,7 +118,7 @@ export class SchedulerPlugin implements EnginePlugin {
               source: "scheduler.plugin",
               severity: "WARNING",
               error: `Agent ${def.type}: 未知标签 "${tag}" 未在 TagRegistry 中注册`,
-              hint: `如需使用新标签，请在 agents.json 中声明或调用 tagRegistry.register("${tag}")`,
+              hint: `如需使用新标签，请在 agent-manifests.json 中声明或调用 tagRegistry.register("${tag}")`,
             },
             timestamp: Date.now(),
             notificationType: "WARNING",

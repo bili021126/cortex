@@ -1,4 +1,4 @@
-/** ConfirmGate 信任分自动放行阈值——可通过 agents.json 覆写 */
+/** ConfirmGate 信任分自动放行阈值——信任分已迁移至 tuning.json（config 包 tuning 域） */
 export const TRUST_AUTO_APPROVE_L2 = 70;  // L2 操作信任分 ≥ 此值自动放行
 export const TRUST_AUTO_APPROVE_L3 = 85;  // L3 操作信任分 ≥ 此值自动放行
 export const TRUST_BASE_SCORE = 50;        // 新 Agent 初始信任分

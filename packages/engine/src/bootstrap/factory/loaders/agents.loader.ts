@@ -149,7 +149,7 @@ function _validateStructure(config: CortexAgentsConfig): CortexAgentsConfig {
   }
 
   if (!config.agents || typeof config.agents !== "object") {
-    throw new Error("agents.json: 缺少 agents 字段");
+    throw new Error("agent-manifests.json: 缺少 agents 字段");
   }
 
   if (!config.eventRouting || typeof config.eventRouting !== "object") {

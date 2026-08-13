@@ -24,7 +24,6 @@ export type {
   AgentManifest,
   AgentDisplay,
   AgentRoundtable,
-  AgentsConfig,
   // Agent Manifest
   AgentProfile,
   AgentManifestConfig,

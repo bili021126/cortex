@@ -70,8 +70,8 @@ describe("配置域注册表 ↔ data 目录一致性契约", () => {
   // ═══════════════════════════════════════════════
   // 5. 权威源与运行时解析路径一致性（src 模式）
   // ═══════════════════════════════════════════════
-  it("resolveConfigDataDir() 解析到的目录含 agents.json（权威源可达）", () => {
+  it("resolveConfigDataDir() 解析到的目录含 agent-manifests.json（权威源可达）", () => {
     const resolved = resolveConfigDataDir();
-    expect(existsSync(join(resolved, "agents.json")), `解析目录缺少 agents.json: ${resolved}`).toBe(true);
+    expect(existsSync(join(resolved, "agent-manifests.json")), `解析目录缺少 agent-manifests.json: ${resolved}`).toBe(true);
   });
 });

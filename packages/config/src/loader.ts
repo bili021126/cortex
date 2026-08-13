@@ -27,7 +27,6 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 
-import type { AgentsConfig } from "./interfaces/agent.js";
 import type { AgentManifestConfig } from "./interfaces/agent-manifest.js";
 import type { EngineConfig } from "./interfaces/engine.js";
 import type { EventRoutingConfig } from "./interfaces/event-routing.js";
@@ -116,13 +115,6 @@ export interface ConfigDomain {
  * 新增域时只需添加一项，无需修改任何其他代码。
  */
 export const CONFIG_DOMAINS: ConfigDomain[] = [
-  {
-    name: "agents",
-    fileName: "agents.json",
-    required: false,
-    dataKey: "agents",
-    description: "@deprecated Agent 定义集合——使用 agentManifests 域替代。保留仅用于向后兼容。",
-  },
   {
     name: "engine",
     fileName: "engine.json",
@@ -690,8 +682,6 @@ export function validateOrThrow(
 
 /** 全量 Cortex 配置——按域索引 */
 export interface CortexConfig {
-  /** @deprecated 使用 agentManifests 替代 */
-  agents?: AgentsConfig;
   engine?: EngineConfig;
   tools?: ToolRegistry;
   eventRouting?: EventRoutingConfig;

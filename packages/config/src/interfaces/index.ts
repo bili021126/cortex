@@ -22,7 +22,6 @@ export type {
   AgentManifest,
   AgentDisplay,
   AgentRoundtable,
-  AgentsConfig,
 } from "./agent.js";
 
 // ── Agent Manifest ──
