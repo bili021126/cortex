@@ -46,7 +46,7 @@ BING_API_KEY=your-bing-key
 
 ```bash
 # 启动 CLI（昔涟对话模式）
-pnpm cli
+pnpm cortex
 
 # 或直接运行编译产物
 node packages/cli/dist/main.js
@@ -55,8 +55,8 @@ node packages/cli/dist/main.js
 ### CI 门禁
 
 ```bash
-pnpm ci          # 标准门禁（构建 + 类型检查 + 测试 + Lint）
-pnpm ci:all      # 全量门禁（含耗时测试）
+npx tsx scripts/ci-gate.ts   # 标准门禁（pnpm ci 被 pnpm 内置命令占用，勿用）
+npx tsx scripts/ci-gate.ts --all   # 全量门禁（含耗时测试）
 pnpm self-exam   # 软约束自审视
 ```
 
@@ -78,7 +78,7 @@ pnpm test:workspace   # 全工作区测试
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `pnpm cli` | 启动 CLI 对话（昔涟） | `pnpm cli` |
+| `pnpm cortex` | 启动 CLI 对话（昔涟，经 daemon） | `pnpm cortex` |
 | `pnpm cortex` | 直接运行编译产物 | `pnpm cortex` |
 | `node packages/cli/dist/main.js doctor` | 健康诊断 | `pnpm cortex doctor` |
 
@@ -86,15 +86,14 @@ pnpm test:workspace   # 全工作区测试
 
 | 文件 | 用途 |
 |------|------|
-| `cortex-agents.json` | Agent 注册表——14 种 Agent 的完整声明 |
-| `cortex-cognition.json` | 认知配置——激活矩阵 + 注意力策略 |
+| `packages/config/src/data/*.json` | Agent 注册表与认知配置（原根目录 JSON 已迁入） |
 | `cortex-docs.json` | 文档治理注册表 |
 | `packages/config/src/data/*.json` | 各配置域的拆分 JSON 文件 |
 | `.env` | 环境变量（API Key 等） |
 
 ## 常见问题
 
-**Q: `pnpm cli` 启动后没反应？**
+**Q: `pnpm cortex` 启动后没反应？**
 A: 确保 `.env` 中配置了 `DEEPSEEK_API_KEY`。
 
 **Q: `pnpm build` 报错？**

@@ -2,7 +2,7 @@
 
 > **自治理 AI Agent 运行时** — 带宪法、带人格、带 TUI。
 >
-> 26 个包 · 14 种 Agent 类型 · 17 个角色人格 · 22 个预置技能
+> 29 个包 · 16 种角色人格 · 26 个预置技能
 
 [📖 包定位文档](PACKAGE_POSITIONING.md) · [📘 使用指南](USAGE.md) · [🏗️ 架构设计](DESIGN.md) · [📜 宪法](docs/constitution/)
 
@@ -47,11 +47,11 @@ pnpm --version   # 需要 >= 9.0.0
 # 2. 安装依赖
 pnpm install
 
-# 3. 全量构建（26 个包）
+# 3. 全量构建（29 个包）
 pnpm build
 
-# 4. 启动 TUI（与昔涟对话）
-pnpm cli
+# 4. 启动 TUI（与昔涟对话；需先启动 daemon，见 USAGE.md）
+pnpm cortex
 
 # 5. 运行 CI 门禁（构建 + 类型检查 + 测试 + Lint）
 pnpm ci
@@ -66,11 +66,11 @@ pnpm ci
 ```
 cortex/
 │
-├── packages/                     # 26 个 npm 包（pnpm workspace）
+├── packages/                     # 29 个 npm 包（pnpm workspace）
 │   ├── engine/                   # ⭐ 运行时内核（调度、记忆、Agent、工具包）
 │   ├── scheduler/                #   调度执行引擎（三抽象架构）
-│   ├── cli/                      #   命令行入口 + EngineBridge 桥接
-│   ├── tui/                      #   终端渲染层（独立包，被 cli 依赖）
+│   ├── cli/                      #   命令行入口 + EngineBridge + Ink TUI（内嵌）
+│   ├── client/                   #   daemon REST/WS 客户端 SDK
 │   ├── fsm-compiler/             #   有限状态机编译工具链
 │   ├── llm/                      #   DeepSeek API 封装 + 限流
 │   ├── prompt-kit/               #   提示词工程工具包
@@ -85,7 +85,7 @@ cortex/
 │   ├── parser/                   #   AST 解析
 │   ├── testing/                  #   测试基础设施
 │   ├── governance/               #   治理层——制度化制度
-│   ├── consistency/              #   一致性检查
+│   ├── design-tokens/            #   设计令牌（CYRENE_PALETTE）
 │   ├── context-manager/          #   上下文管理
 │   ├── logging/                  #   结构化日志
 │   ├── memory/                   #   记忆系统核心
@@ -93,8 +93,11 @@ cortex/
 │   ├── pattern-extractor/        #   模式提取器
 │   ├── platform/                 #   平台层（Toolkit 等）
 │   ├── resilience/               #   容错与重试
+│   ├── server/                   #   daemon 服务端（engine 唯一宿主）
+│   ├── desktop/                  #   Electron 双窗桌宠 + 聊天 UI
+│   ├── protocol/                 #   纯类型协议层（REST/WS 契约）
 │
-├── prompts/                      # 17 个角色的人格提示词
+├── prompts/                      # 16 个角色的人格提示词
 │   ├── cyrene/                   #   昔涟（但丁，记忆守望者）
 │   ├── ganyu/                    #   甘雨（七星秘书，战术调度）
 │   ├── keqing/                   #   刻晴（玉衡，代码审查）
@@ -102,15 +105,14 @@ cortex/
 │   ├── nahida/                   #   纳西妲（草神，分析）
 │   └── ...                       #   钟离、凝光、莫娜、北斗、安柏...
 │
-├── skills/                       # 22 个预置技能定义（JSON）
+├── skills/                       # 26 个预置技能定义（JSON）
 ├── scripts/                      # 构建 / CI 门禁 / 记忆注入 / 自审视
 ├── docs/                         # 宪法 / 修正案 / 审计 / 设计文档
 │   ├── constitution/             #   宪法体系
 │   ├── amendments/               #   修正案
 │   └── auditing/                 #   审计报告
 │
-├── cortex-agents.json            # Agent 注册表（14 个 Agent 定义）
-├── cortex-cognition.json         # 认知配置（激活矩阵 + 注意力策略）
+├── （cortex-agents.json / cortex-cognition.json 已迁入 packages/config/src/data/）
 ├── cortex-docs.json              # 文档治理注册表
 ├── PACKAGE_POSITIONING.md        # 包定位文档
 ├── USAGE.md                      # 使用指南
@@ -196,7 +198,7 @@ JSON DSL (task-node.fsm.json)  →  FsmParser  →  AST
 
 ### 技能系统
 
-技能以 JSON 定义，存储在 `skills/` 目录。当前预置 22 个技能。
+技能以 JSON 定义，存储在 `skills/` 目录。当前预置 26 个技能。
 
 **技能生命周期**：
 
@@ -223,7 +225,7 @@ Cortex 六条不可变原则：
 
 ## Agent 角色一览
 
-Cortex 内置 14 种 Agent 类型，每种绑定一个角色人格：
+Cortex 内置 16 种角色人格：
 
 | Agent | 角色 | 类型 | 模型 | 核心职责 |
 |-------|------|------|------|---------|
@@ -232,11 +234,13 @@ Cortex 内置 14 种 Agent 类型，每种绑定一个角色人格：
 | 🌿 **纳西妲** | 须弥草神，智慧化身 | `analysis` | flash | 架构分析、模式发现 |
 | 📋 **甘雨** | 璃月七星秘书 | `meta` | **pro** | 任务规划、重规划 |
 | ☄️ **钟离** | 往生堂客卿，契约守护者 | `strategist` | **pro** | 战略评估、契约守护 |
+| ❄️ **霜凝** | 超越者，方向监理 | `strategist` | **pro** | 方向监理、矛盾暴露、一致性验证 |
 | ⚓ **北斗** | 南十字船队大姊 | `ops` | flash | 构建、CI、部署 |
 | 🔮 **莫娜** | 星天水占术士 | `loop` | flash | 模式扫描、技能提取 |
 | 💎 **凝光** | 璃月七星·天权 | `doc-govern` | flash | 文档治理、合规审计 |
 | 💉 **希格雯** | 梅洛彼得堡护士长 | `fix` | flash | Bug 诊断、修复 |
 | 😈 **久岐忍** | 荒泷派外务奉行 | `api` | flash | API 设计、契约验证 |
+| ⚖️ **烟绯** | 璃月港法律顾问（纯计算型） | `confirm-gate` | flash | 确认门决策、信任分裁决 |
 | 📚 **艾尔海森** | 教令院大书记官 | `data` | flash | 数据建模、迁移 |
 | 🐰 **安柏** | 西风骑士团侦察骑士 | `inspector` | flash | 侦察、信息收集 |
 | 🎆 **宵宫** | 长野原烟花店老板 | `browser` | flash | UI 验证、浏览器操作 |
@@ -263,11 +267,9 @@ Cortex 内置 14 种 Agent 类型，每种绑定一个角色人格：
 | | `@cortex/notification` | 事件路由与通知 |
 | | `@cortex/telemetry` | 遥测采集层 |
 | | `@cortex/governance` | 治理层——制度化制度 |
-| | `@cortex/consistency` | 一致性检查 |
 | | `@cortex/logging` | 结构化日志 |
 | | `@cortex/resilience` | 容错与重试 |
-| **L3 交互/技能** | `@cortex/cli` | 命令行入口 + EngineBridge 桥接 |
-| | `@cortex/tui` | 终端渲染层（独立包，被 cli 依赖） |
+| **L3 交互/技能** | `@cortex/cli` | 命令行入口 + EngineBridge 桥接 + Ink 终端 UI（tui/ 内嵌） |
 | | `@cortex/prompt-kit` | 提示词工程工具包 |
 | | `@cortex/skill-kit` | 技能系统 |
 | | `@cortex/context-manager` | 上下文管理 |
@@ -276,6 +278,11 @@ Cortex 内置 14 种 Agent 类型，每种绑定一个角色人格：
 | | `@cortex/pattern-extractor` | 模式提取器 |
 | | `@cortex/parser` | AST 解析 |
 | | `@cortex/testing` | 测试基础设施 |
+| **L4 协议/端** | `@cortex/client` | daemon REST/WS 客户端 SDK |
+| | `@cortex/protocol` | 纯类型协议层（REST/WS 契约，零运行时依赖） |
+| | `@cortex/server` | daemon 服务端（engine 唯一宿主，REST + WS 网关） |
+| | `@cortex/desktop` | Electron 双窗桌宠 + 聊天 UI（Live2D + Presence） |
+| | `@cortex/design-tokens` | 设计令牌（CYRENE_PALETTE 视觉真相源） |
 
 > 完整包定位分析见 [PACKAGE_POSITIONING.md](PACKAGE_POSITIONING.md)（含依赖图、边界原则）。
 
@@ -285,9 +292,9 @@ Cortex 内置 14 种 Agent 类型，每种绑定一个角色人格：
 
 ```bash
 # CI 门禁（每次提交前运行）
-pnpm ci                 # 标准门禁：构建 + 类型检查 + 测试 + Lint
-pnpm ci:all             # 全量门禁（含耗时测试）
-pnpm ci:dry             # 预演模式
+npx tsx scripts/ci-gate.ts   # 标准门禁（pnpm ci 被 pnpm 内置命令占用，勿用）：构建 + 类型检查 + 测试 + Lint
+npx tsx scripts/ci-gate.ts --all   # 全量门禁（含耗时测试）
+npx tsx scripts/ci-gate.ts --dry-run  # 预演模式
 
 # 自审视
 pnpm self-exam          # 软约束自审视（推荐提交前运行）
@@ -300,7 +307,7 @@ node packages/cli/dist/main.js doctor
 npx tsx scripts/show-constitution.ts
 ```
 
-**治理闭环**：`pnpm ci`（门禁）→ `pnpm self-exam`（审视）→ `pnpm roundtable`（共识）→ 文档存档
+**治理闭环**：`npx tsx scripts/ci-gate.ts`（门禁）→ `pnpm self-exam`（审视）→ `pnpm roundtable`（共识）→ 文档存档
 
 所有修改须经 CI 全绿方可合并。宪法修正额外需要圆桌共识 + 修宪文档。
 
@@ -335,7 +342,7 @@ npx tsx scripts/show-constitution.ts
 
 | 文档 | 位置 | 说明 |
 |------|------|------|
-| 📖 包定位文档 | `PACKAGE_POSITIONING.md` | 26 个包的职责边界与依赖关系 |
+| 📖 包定位文档 | `PACKAGE_POSITIONING.md` | 29 个包的职责边界与依赖关系 |
 | 📘 使用指南 | `USAGE.md` | 环境配置、CLI 操作、开发工作流 |
 | 🏗️ 调度器设计 | `DESIGN.md` | 三抽象架构、接口契约、数据流 |
 | 📜 宪法体系 | `docs/constitution/` | 不可变原则与治理规则 |
