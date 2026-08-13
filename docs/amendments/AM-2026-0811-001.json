@@ -1,0 +1,56 @@
+{
+  "id": "AM-2026-0811-001",
+  "version": "v3.8",
+  "section": "版本头 / §一 代码事实 / §3.1 包结构 / §3.2 三层架构 / §四 MetaAgent / §5.1 Agent 类型表 / §六 ButlerAgent / §7.1 ConfirmGate / §7.2 工具权限 / §十 调度引擎 / §11.2-bis / §11.6 配置域注册表 / §十二 技能系统 / §十五 阶段模型 / §十六 演进方法论 / §十七 修正记录 / §十八 CI 门禁 / §十九 测试基线 / §二十 WebUI 观测子系统 / §二十二 自审视机制",
+  "category": "fact-alignment",
+  "supersedes": null,
+  "status": "pending_judgment",
+  "merged_into": null,
+  "summary": "宪法 v3.7→v3.8 事实勘误型修订（8 组对齐，不引入新原则）：① 配置域 17→18（§11.6 清单漏 enginePlugins，§3.1 config 行残留 14）；② 技能模板 41→27（§十二 与 §3.2 双处，skills/ 实测 27 个 JSON——编号 p10–p41 跳跃、p17 双文件重复编号）；③ 行数锚点 6/6 不符去绝对值化（meta-agent 737 vs 665、butler 202 vs 198、confirm-gate 433 vs 254、toolkit 428 vs 328、scheduler 472 vs 368、scheduling-implementations 12 vs 1107——已拆四文件；§四/§六/§7.1/§7.2/§十/§3.1 六处改为活引用）；④ 测试基线 engine 902→1036 passed / 91 文件（2026-08-11 实跑）；⑤ agent-manifests 15→18 条（含 shuangning，模型 deepseek-v4-flash→pro，§5.1 表与核对行）；⑥ CI 口径裁决——正文五段正确、补 eval 活性层 4.5 段（exit 恒 0 report 模式），勘误 AM-2026-0801-001『三段』为修订错误（三段从未存在）；⑦ 版本链与修正记录——仅 v3.0/v2.7.1 有档案其余 8 版无档，§十七 表内 AM-0622/0706/0716/0720 四行 git 无档案，v3.5 日期 06-20 vs 版本头 07-20 矛盾，§11.2-bis『最新 AM-0722-003』vs 版本头『AM-0801-001』自指矛盾；⑧ 引用缺失——§十六 方法论文档实际在 archive/、§二十 WebUI static/ 不存在、§二十二 自审视输出目录不存在。",
+  "rationale": "2026-08-11 第四轮广泛调研（宪法 v3.7 全文审计 674 行 vs 代码/运行态实测）发现：宪法作为『修宪前置条件』与治理闭环的事实锚点，其量化自述大面积失真（8 组 18 处不符），且 AM-2026-0801-001 内部混入一处修订错误（CI『三段』口径——三段从未在 ci-gate 存在）。\n\n原则：代码即真相、测试即实证、CI 即硬防线。本次修订为纯事实勘误——所有 before 值以 2026-08-11 实测为准：CONFIG_DOMAINS（packages/config/src/loader.ts）18 项、skills/ 27 个 JSON、六文件行数（node 复核）、engine vitest 1036 passed / 91 文件、agent-manifests.json agents 对象 18 键（含 shuangning=deepseek-v4-pro）、ci-gate.ts 门禁栈（5 主段 + 门禁 4.5/5 eval 活性层，exit 恒 0 report 模式）、git 全历史（docs/amendments 仅 25 个 AM 档案，无 0622/0706/0716/0720）、目录存在性（docs/core/ 无演进方法论文件、packages/cli/src/tui/web/ 无 static/、test-output/ 无 self-examination-soft/）。\n\n关键设计决策：行数锚点去绝对值化——行数随重构漂移、每轮修订即失真，改为活引用表述（『以 tsc -b 编译与测试基线为准，不锁死行数』），从机制上消除该类自述失真的复发。\n\n本修正案不引入新原则、不改变任何运行时行为、不修改宪法本体文件（草案仅落 docs/amendments/AM-2026-0811-001.json，待圆桌共识裁定后由执行方落笔）。",
+  "before": "【版本头·前置宪法】v1.1（大脑隐喻，已废弃）→ v2.0（工具链隐喻）→ v2.7.1（Core-1 终局）。v3.0 对 v2.x 做全量重写。\n【版本头·修正案】AM-2026-0801-001（v3.6→v3.7）。\n【§一 代码事实】测试规模：全仓 vitest 3982 passed / 13 skipped（2026-08-01 实测）；engine 902 passed（pre-commit 口径）；CI 门禁：五段执行（tsc -b → eslint → critical-fixes → vitest → coverage）。\n【§3.1 包结构】config/ # 配置——EngineConfig/常量集中 + 14 配置域 + agents.json/manifests；scheduler/ # …（scheduling-implementations 1107 行）。\n【§3.2 三层架构·内化层】SkillRegistry — 41 技能模板。\n【§四 MetaAgent】packages/engine/src/core/meta-agent.ts（665 行）。\n【§5.1 核对】agent-manifests.json 15 个条目（无霜凝，L3 差异声明层）；§5.1 表第 15 行霜凝模型 deepseek-v4-flash。\n【§六 ButlerAgent】packages/engine/src/agents/butler-agent.ts（198 行）。\n【§7.1 ConfirmGate】packages/scheduler/src/core/confirm-gate.ts（254 行）。\n【§7.2 工具权限】packages/platform/src/toolkit.ts（328 行）。\n【§十 调度引擎】packages/engine/src/core/scheduler.ts（368 行）+ packages/scheduler/src/core/scheduling-implementations.ts（1107 行）。\n【§11.2-bis】修正案全记录，最新 AM-2026-0722-003。\n【§11.6 配置域】17 个配置域（2026-08-01 实测）：agents/engine/tools/eventRouting/roundtable/searchProviders/mcpServers/selfExamination/crossVerification/seedMemories/governancePipeline/cognition/docs/models/keysContext/agentManifests/tuning。\n【§十二 技能系统】41 技能模板：skills/*.json。\n【§十五 阶段模型】Phase 1 验收标准：…全仓 vitest 3982 passed / 13 skipped（29 包，2026-08-01 实测）。\n【§十六 演进方法论】详见 docs/core/Cortex-演进方法论-九阶段闭环.md。\n【§十七 修正记录表】AM-2026-0622-001 / AM-2026-0706-001 / AM-2026-0716-001 / AM-2026-0720-001 四行；v3.4→v3.5 行日期 2026-06-20；v3.6→v3.7 行『CI 门禁四层→三段（tsc -b → eslint → vitest 三标签合一）』。\n【§十八 CI 门禁】五段执行表（1 tsc -b / 2 eslint / 3 critical-fixes / 4 vitest / 5 coverage），无 eval 段；代码事实：五段顺序执行，process.exit(allOk ? 0 : 1) 真实阻断。\n【§十九 测试基线】engine 测试 902 passed（pre-commit 口径）。\n【§二十 WebUI】前端：packages/cli/src/tui/web/static/src/（React 组件，8 个）。\n【§二十二 自审视】输出：test-output/self-examination-soft/（45 文件）。",
+  "after": "【版本头·前置宪法】追加档案存续说明：『版本档案存续（2026-08-11 实测）：仅 v3.0 与 v2.7.1（经 v2.5.35 文件）有档案，v1.1 / v2.0 / v3.1 / v3.2 / v3.3 / v3.4 / v3.5 / v3.6 共 8 个版本无独立档案——版本治理以 docs/amendments/AM-*.json 与 git 历史为权威源，本行不承诺未归档版本存在。』\n【版本头·修正案】AM-2026-0811-001（v3.7→v3.8，事实勘误型修订）。\n【§一 代码事实】engine 902 passed（pre-commit 口径）→ engine 1036 passed / 91 文件（2026-08-11 实跑）；CI 门禁五段执行后补『+ eval 活性层（门禁 4.5/5，report 模式 exit 恒 0）』。\n【§3.1 包结构】config 行『14 配置域』→『18 配置域（2026-08-11 实测）』；scheduler 行『（scheduling-implementations 1107 行）』→『（scheduling 实现已拆分：strategies / drivers / execution-models / model-routers 四文件，行数以 tsc -b 与测试基线为准）』。\n【§3.2 三层架构·内化层】SkillRegistry — 41 技能模板 → SkillRegistry — 27 技能模板 JSON（2026-08-11 实测）。\n【§四 MetaAgent】packages/engine/src/core/meta-agent.ts（665 行）→（行数锚点已去绝对值化——以 tsc -b 编译与测试基线为准，不锁死行数）。\n【§5.1 核对】agent-manifests.json 15 个条目（无霜凝）→ 18 个条目（含 shuangning，L3 差异声明层；2026-08-11 实测）；§5.1 表第 15 行霜凝模型 deepseek-v4-flash → deepseek-v4-pro。\n【§六 ButlerAgent】（198 行）→（行数锚点已去绝对值化——以 tsc -b 编译与测试基线为准，不锁死行数）。\n【§7.1 ConfirmGate】（254 行）→（行数锚点已去绝对值化——以 tsc -b 编译与测试基线为准，不锁死行数）。\n【§7.2 工具权限】（328 行）→（行数锚点已去绝对值化——以 tsc -b 编译与测试基线为准，不锁死行数）。\n【§十 调度引擎】scheduler.ts（368 行）→（行数锚点已去绝对值化——以 tsc -b 编译与测试基线为准）；scheduling-implementations.ts（1107 行）→（已拆分：原文件退化为 12 行转出层，实现迁至 strategies / drivers / execution-models / model-routers 四文件，行数以 tsc -b 与测试基线为准）。\n【§11.2-bis】最新 AM-2026-0722-003 → 最新 AM-2026-0811-001（v3.8；消除与版本头『AM-0801-001』的自指矛盾）。\n【§11.6 配置域】17 → 18 个配置域（2026-08-11 实测）：清单插入 enginePlugins（位于 engine 之后——引擎插件加载清单域，loader.ts CONFIG_DOMAINS 实测 18 项）。\n【§十二 技能系统】41 技能模板 → 27 技能模板 JSON（2026-08-11 实测）：skills/*.json——编号 p10–p41 跳跃（p18–p24 缺号），p17 双文件重复编号（skill-p17-memorystore-inspection / skill-p17-vitest-hierarchical-test-org），另有 data-2pc-rollback-verify.json 与莫娜归档 md 共存。技能总数以 skills/ 目录实测为准，不设承诺绝对值。\n【§十五 阶段模型】Phase 1 验收标准保留（全仓 3982 口径未变，engine 侧以 2026-08-11 实跑 1036 passed / 91 文件为当前基线）。\n【§十六 演进方法论】详见 docs/core/Cortex-演进方法论-九阶段闭环.md → docs/archive/Cortex-演进方法论-九阶段闭环.md（2026-08-11 实测：docs/core/ 下无此文件，实际存于 archive/）。\n【§十七 修正记录表】① 表内 AM-2026-0622-001 / AM-2026-0706-001 / AM-2026-0716-001 / AM-2026-0720-001 四行标注『档案缺失（git 全历史无对应 AM-*.json）』，处置方式由圆桌共识裁决（补齐档案或降级为 git-only 记录）；② v3.4→v3.5 行日期 2026-06-20 → 2026-07-20（与版本头 v3.5 生成日期一致）；③ v3.6→v3.7 行『CI 门禁四层→三段（tsc -b → eslint → vitest 三标签合一）』→『CI 门禁四层→五段 + eval 活性层（AM-2026-0801-001 所记『三段』为修订错误——三段从未在 ci-gate 存在，以实跑为准）』。\n【§十八 CI 门禁】标题『五段执行』→『五段执行 + eval 活性层』；表后补 4.5 段：『eval 活性层（门禁 4.5/5）：pnpm exec tsx packages/engine/tests/eval/eval-gate.ts，report 模式——exit 恒 0，仅 allOk 时执行，防 pattern-extractor 化：机制要有消费者』；代码事实行补『5 主段 + eval 4.5 段』。\n【§十九 测试基线】engine 测试 902 passed（pre-commit 口径）→ 1036 passed / 91 文件（2026-08-11 实跑）。\n【§二十 WebUI】前端：packages/cli/src/tui/web/static/src/（React 组件，8 个）→ 前端：当前无 static/ 目录（2026-08-11 实测——WebUI 前端组件尚未落地；在编后端 gateway.ts / state-aggregator.ts / api-router.ts / config-api-handler.ts 位于 packages/cli/src/tui/web/）。\n【§二十二 自审视】输出：test-output/self-examination-soft/（45 文件）→ 输出目录 test-output/self-examination-soft/ 当前不存在（2026-08-11 实测，test-output/ 下仅 governance-llm-verify）——自审视产物尚未落盘，输出目录随 scripts/self-exam-soft.ts 运行生成，具体文件数以实际运行为准。",
+  "impact": {
+    "principles": [
+      "原则七——宪法自约束（本修正案经完整闭环：实测 → 提案 → 待圆桌共识 → 裁定 → 落笔；草案未擅动宪法本体）",
+      "原则一·事实为基（§十三 冲突解决规则一：可验证事实优先于 Agent 判断——全部 before/after 以 2026-08-11 实测为准）"
+    ],
+    "contracts": [
+      "§11.6 配置域注册表——17→18（enginePlugins 补录），§3.1 config 行 14→18 同步",
+      "§十二 技能系统 + §3.2 SkillRegistry——41→27（以目录实测为权威，不设承诺绝对值）",
+      "§四 / §六 / §7.1 / §7.2 / §十 / §3.1——六处行数锚点去绝对值化（活引用：以 tsc -b 与测试基线为准）",
+      "§十九 + §一——engine 测试基线 902→1036 passed / 91 文件（2026-08-11 实跑）",
+      "§5.1 Agent 类型表——agent-manifests 15→18 条（含 shuangning），霜凝模型 flash→pro",
+      "§十八 CI 门禁——五段正确，补 eval 活性层 4.5 段；勘误 AM-2026-0801-001『三段』口径",
+      "§十七 修正记录——档案缺失标注 ×4、v3.5 日期订正、v3.6→v3.7 行口径勘误",
+      "§11.2-bis——最新 AM 自指矛盾消除",
+      "§十六 / §二十 / §二十二——三处引用路径订正（archive/ 实存、static/ 未落地、self-examination-soft/ 未生成）"
+    ],
+    "crossReferences": [
+      "docs/amendments/AM-2026-0801-001.json（前序修正案——其『三段』口径被本 AM 勘误，整体不 supersede）",
+      "docs/constitution/archive/Cortex 概念顶层设计 v2.5.35.md（v2.7.1 内容档案）",
+      "packages/config/src/loader.ts（CONFIG_DOMAINS 18 项实测）",
+      "packages/config/src/data/agent-manifests.json（agents 对象 18 键实测）",
+      "scripts/ci-gate.ts（门禁栈 + 门禁 4.5/5 eval 活性层）",
+      "packages/engine/tests/eval/eval-gate.ts（eval 活性层入口）",
+      "packages/scheduler/src/core/{strategies,drivers,execution-models,model-routers}.ts（scheduling 拆分后四文件）",
+      "skills/（27 个技能模板 JSON 实测）",
+      "docs/archive/Cortex-演进方法论-九阶段闭环.md（§十六 引用订正目标）",
+      "packages/cli/src/tui/web/（§二十 static/ 不存在，仅后端在编）",
+      "test-output/（§二十二 self-examination-soft/ 未生成）",
+      "docs/analysis/audit-full-2026-08-11.md（第四轮广泛调研证据源）"
+    ],
+    "agents": [
+      "凝光（宪法审计·事实采集）——8 组 18 处不符的取证",
+      "昔涟（宪法守护·文书）——本修正案起草",
+      "开拓者（用户·最终裁决）——圆桌共识流程的裁定者"
+    ],
+    "breaking": false,
+    "rationale": "本次修宪为纯事实勘误型（category=fact-alignment）——所有变更点均以 2026-08-11 实测为准（CONFIG_DOMAINS / skills 目录 / 六文件行数 / vitest 实跑 / agent-manifests / ci-gate.ts / git 全历史 / 目录存在性），不改变任何运行时行为，不新增约束，不引入新原则。唯一结构性设计是行数锚点去绝对值化（改活引用），为防复发机制而非行为变更。breaking=false。"
+  },
+  "source": {
+    "agent": "凝光（宪法审计·事实采集）+ 昔涟（宪法守护·文书）",
+    "trace": "2026-08-11 第四轮广泛调研实测：① CONFIG_DOMAINS（loader.ts）18 项 name 序列 agents/engine/enginePlugins/tools/…；② skills/ 27 个 JSON（26 skill-p*.json + data-2pc-rollback-verify.json；p10–p41 编号跳跃、p17 双文件重复编号）；③ 六文件行数 node 复核：meta-agent 737 / butler-agent 202 / confirm-gate 433 / toolkit 428 / scheduler 472 / scheduling-implementations 12（原 1107 已拆四文件：strategies.ts 3.8KB / drivers.ts 42.7KB / execution-models.ts 6.4KB / model-routers.ts 11.5KB）；④ engine vitest 1036 passed / 91 文件（2026-08-11 实跑）；⑤ agent-manifests.json agents 对象 18 键（含 shuangning=deepseek-v4-pro）；⑥ ci-gate.ts 门禁栈 5 主段（tsc -b → eslint → critical-fixes → vitest → coverage[可选]）+ 门禁 4.5/5 eval 活性层（exit 恒 0 report 模式）；⑦ git log --all 核验 docs/amendments 仅 25 个 AM 档案，无 AM-2026-0622/0706/0716/0720-001；版本档案仅 v3.0（git 历史）与 v2.5.35（archive/）；⑧ 目录存在性：docs/core/ 无『Cortex-演进方法论-九阶段闭环.md』（实存 docs/archive/）、packages/cli/src/tui/web/ 无 static/、test-output/ 无 self-examination-soft/。验证见 docs/analysis/audit-full-2026-08-11.md（F1/F6）。"
+  },
+  "_ruling": "本修正案为草案，status=pending_judgment——依原则七『修宪须走完整闭环（提案→审计→裁决→落笔），不自改』：需经圆桌共识流程（凝光宪法审计 + 钟离战略评估 + 霜凝监理展望 + 开拓者最终裁决）裁定后方可落笔（宪法 v3.7→v3.8 全量替换上述 before→after + §十七 追加本行 + 版本头更新）。提案方未擅动宪法本体文件。"
+}
