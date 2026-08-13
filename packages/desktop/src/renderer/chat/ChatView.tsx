@@ -352,7 +352,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [editingVal, setEditingVal] = useState("");
   const saveSetting = useCallback(async (key: string, val: string) => {
     try {
-      await window.cortexDesktop.settings.set({ [key]: val });
+      await window.cortexDesktop.settings.set(key, val);
       setSettingsData((prev) => ({ ...(prev ?? {}), [key]: val }));
       setToast(`已保存: ${key} = ${val}`);
     } catch (e) {
@@ -404,8 +404,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     void (async () => {
       try {
         const res = await window.cortexDesktop.getAgents() as { ok: boolean; data?: string[] };
-        if (res?.ok && Array.isArray(res.data) && res.data.length > 0) {
-          setFriends(res.data.map((name, i) => ({
+        const data = res?.data;
+        if (res?.ok && Array.isArray(data) && data.length > 0) {
+          setFriends(data.map((name, i) => ({
             id: "agent-" + name,
             name,
             type: "friend" as const,
@@ -413,7 +414,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             desc: "Cortex Agent",
             online: true,
           })));
-          setActive((prev) => prev ?? { id: "agent-" + res.data[0], name: res.data[0], type: "friend", avatar: res.data[0].slice(0, 1).toUpperCase(), desc: "Cortex Agent", online: true });
+          const first = data[0];
+          setActive((prev) => prev ?? { id: "agent-" + first, name: first ?? "", type: "friend", avatar: (first ?? "").slice(0, 1).toUpperCase(), desc: "Cortex Agent", online: true });
         }
       } catch { /* daemon 未起时保持空 */ }
     })();
@@ -962,17 +964,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               <div className="chat__cfg-row">
                 <span className="chat__cfg-label">思考模式</span>
                 <span className="chat__cfg-desc">是否开启深度思考</span>
-                <span className={`chat__cfg-toggle${thinkingOn ? " is-on" : ""}`} onClick={() => { setThinkingOn((v) => !v); void window.cortexDesktop.settings.set({ thinking: !thinkingOn }); }} aria-hidden="true"><span /></span>
+                <span className={`chat__cfg-toggle${thinkingOn ? " is-on" : ""}`} onClick={() => { setThinkingOn((v) => !v); void window.cortexDesktop.settings.set("thinking", !thinkingOn); }} aria-hidden="true"><span /></span>
               </div>
               <div className="chat__cfg-row">
                 <span className="chat__cfg-label">上下文长度</span>
                 <span className="chat__cfg-desc">单次会话携带的历史消息数</span>
-                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const n = ctxLen >= 64 ? 16 : ctxLen * 2; setCtxLen(n); void window.cortexDesktop.settings.set({ contextLength: n }); }}>{ctxLen}</button>
+                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const n = ctxLen >= 64 ? 16 : ctxLen * 2; setCtxLen(n); void window.cortexDesktop.settings.set("contextLength", n); }}>{ctxLen}</button>
               </div>
               <div className="chat__cfg-row">
                 <span className="chat__cfg-label">思考档位</span>
                 <span className="chat__cfg-desc">推理强度（低/中/高）</span>
-                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const next = reasoningLevel === "Auto" ? "Low" : reasoningLevel === "Low" ? "Medium" : reasoningLevel === "Medium" ? "High" : "Auto"; setReasoningLevel(next); void window.cortexDesktop.settings.set({ reasoning: next }); }}>{reasoningLevel}</button>
+                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const next = reasoningLevel === "Auto" ? "Low" : reasoningLevel === "Low" ? "Medium" : reasoningLevel === "Medium" ? "High" : "Auto"; setReasoningLevel(next); void window.cortexDesktop.settings.set("reasoning", next); }}>{reasoningLevel}</button>
               </div>
             </div>
             <div className="chat__modal-footer">
@@ -996,6 +998,7 @@ function CodeEditor() {
   const editorRef = useRef<{ dispose: () => void } | null>(null);
   const [fileName, setFileName] = useState("未打开文件");
   const [content, setContent] = useState("// 打开一个文件开始编辑——纯净编码体验\n// Monaco Editor（设计第三层：不与 AI 组件混排）\n");
+  const [editorToast, setEditorToast] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1052,9 +1055,9 @@ function CodeEditor() {
       const model = monaco.editor.getModels()[0];
       const text = model?.getValue() ?? content;
       const res = await window.cortexDesktop.editorSave(fileName === "未打开文件" ? "untitled.ts" : fileName, text) as { ok: boolean; path?: string; error?: string };
-      setToast(res?.ok ? `已保存: ${res.path ?? ""}` : `保存失败: ${res?.error ?? ""}`);
+      setEditorToast(res?.ok ? `已保存: ${res.path ?? ""}` : `保存失败: ${res?.error ?? ""}`);
     } catch (e) {
-      setToast(`保存失败: ${String(e)}`);
+      setEditorToast(`保存失败: ${String(e)}`);
     }
   }, [fileName, content]);
 
@@ -1065,9 +1068,9 @@ function CodeEditor() {
       const model = monaco.editor.getModels()[0];
       const text = model?.getValue() ?? content;
       const res = await window.cortexDesktop.editorSaveAs(text) as { ok: boolean; path?: string; error?: string };
-      setToast(res?.ok ? `已另存为: ${res.path ?? ""}` : `另存为失败: ${res?.error ?? ""}`);
+      setEditorToast(res?.ok ? `已另存为: ${res.path ?? ""}` : `另存为失败: ${res?.error ?? ""}`);
     } catch (e) {
-      setToast(`另存为失败: ${String(e)}`);
+      setEditorToast(`另存为失败: ${String(e)}`);
     }
   }, [content]);
 
@@ -1075,6 +1078,7 @@ function CodeEditor() {
     <div className="chat__panel chat__panel--editor">
       <div className="chat__panel-head">
         <span className="chat__panel-title">📝 编辑器 · {fileName}</span>
+        {editorToast && <span className="chat__panel-title" style={{ fontSize: 12, opacity: 0.7 }}>{editorToast}</span>}
         <span style={{ display: "flex", gap: 8 }}>
           <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => void saveFile()}>保存</button>
           <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => void saveAs()}>另存为</button>

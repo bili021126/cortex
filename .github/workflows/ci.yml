@@ -36,11 +36,15 @@ jobs:
       - name: "构建全部包（tsc -b project refs + 非 TS 产物）"
         run: |
           pnpm exec tsc -b tsconfig.json
-          pnpm -r --filter '!@cortex/desktop' build
+          pnpm -r build
+      - name: "桌面端类型检查（F3：桌面包纳入门禁）"
+        run: pnpm --filter @cortex/desktop typecheck
       - run: pnpm tsx scripts/ci-gate.ts
         env:
           DEEPSEEK_API_KEY: ""
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      - name: "依赖漏洞审计（F2：官方 registry）"
+        run: pnpm audit:deps --prod
       - name: "依赖环检查（架构治理）"
         run: pnpm dep:cycle
       - name: "文档漂移报告（非阻塞留档）"
