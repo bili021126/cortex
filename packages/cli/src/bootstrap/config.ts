@@ -22,7 +22,6 @@ import {
 } from "@cortex/config";
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { setAgentRegistry } from "@cortex/shared";
 
 /** 适配 Node.js fs 到 ConfigFileReader */
 const readFile: ConfigFileReader = (filePath: string) =>
@@ -63,30 +62,4 @@ export function bootstrapConfigStores(dataDir?: string): ConfigStores {
 
   _stores = { modelStore, keyStore, agentStore, tuningStore };
   return _stores;
-}
-
-/** 获取已初始化的 ConfigStores（仅当 bootstrapConfigStores() 已调用） */
-export function getConfigStores(): ConfigStores {
-  if (!_stores) {
-    throw new Error(
-      "[bootstrap] ConfigStores 尚未初始化——请在启动早期调用 bootstrapConfigStores()",
-    );
-  }
-  return _stores;
-}
-
-/**
- * 将 agent-manifests.json 的 tags / toolPermissions 注入 shared 层运行时注册表。
- * 应在 engine bootstrap 之后、scheduler dispatch 之前调用。
- */
-export function injectAgentManifestsToRegistry(): void {
-  const stores = getConfigStores();
-  const manifests = stores.agentStore.listAgents();
-  const tags: Record<string, readonly string[]> = {};
-  const toolPermissions: Record<string, readonly string[]> = {};
-  for (const [, m] of Object.entries(manifests)) {
-    if (m.tags) tags[m.type] = [...m.tags];
-    if (m.toolPermissions) toolPermissions[m.type] = [...m.toolPermissions];
-  }
-  setAgentRegistry(tags, toolPermissions);
 }

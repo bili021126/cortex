@@ -86,13 +86,6 @@ export type { CompactionOptions, CompactionResult } from "./context-compactor.js
 export { GroupChatManager, groupChat } from "./group-chat.js";
 export type { GroupMessage, TaskGroup, GroupSnapshot } from "./group-chat.js";
 
-// ─── WebUI ──────────────────────────────────────────
-export { startWebUI } from "./web/index.js";
-export type { StartWebUIOptions, StartWebUIResult } from "./web/index.js";
-export { WSGateway } from "./web/gateway.js";
-export { StateAggregator } from "./web/state-aggregator.js";
-export type { WebUIState, TaskNodeSnapshot, AgentStatusSnapshot, PipelineSnapshot } from "./web/state-aggregator.js";
-export { APIRouter } from "./web/api-router.js";
 
 // ─── Ink TUI (Phase 1) ─────────────────────────────
 export { startInkTui } from "./ink/ink-entry.js";

@@ -10,7 +10,6 @@
 
 import type { AgentType } from "./agent.js";
 import type { LlmMessage, ReasoningEffort } from "./infra.js";
-import type { MemoryEntry, MemoryQuery, MemoryWriteInput } from "./memory.js";
 import type { TaskNode, ExecutionReport } from "./task.js";
 
 export interface ITuiEngineBridge {
@@ -37,13 +36,7 @@ export interface ITuiEngineBridge {
   executeToolCall(name: string, args: Record<string, unknown>): Promise<{ success: boolean; output: string }>;
   /** 非流式 LLM 对话（摘要/压缩） */
   chat(systemPrompt: string, messages: LlmMessage[], opts?: { model?: string; reasoningEffort?: ReasoningEffort }): Promise<string>;
-  /** 初始化昔涟独立记忆 */
-  ensureTalkMemory(): Promise<void>;
-  /** 读取昔涟记忆 */
-  readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
-  /** 写入昔涟记忆 */
-  writeTalkMemory(entry: MemoryWriteInput): Promise<void>;
-  /** 流式执行任务节点（plan mode） */
+ /** 流式执行任务节点（plan mode） */
   executeWithStream(nodes: TaskNode[], onEvent: (event: unknown) => void): Promise<ExecutionReport>;
   /** 获取 MetaAgent（甘雨）——用于 plan mode 生成任务计划 */
   getMetaAgent?(): Promise<IMetaAgent | undefined>;

@@ -73,36 +73,6 @@ describe("EngineBridge edge cases", () => {
 
   // ── 记忆 ──
 
-  it("should handle talk memory read before init", async () => {
-    const { bridge, config, dbPath } = createBridge("talk-read");
-    const dir = path.dirname(dbPath);
-
-    // 未初始化的 talk memory 读取应返回空数组
-    const results = await bridge.readTalkMemory({ keywords: ["test"] });
-    expect(results).toEqual([]);
-
-    cleanupDir(dir);
-  });
-
-  it("should handle talk memory write before init", async () => {
-    const { bridge, config, dbPath } = createBridge("talk-write");
-    const dir = path.dirname(dbPath);
-
-    // 未初始化的 talk memory 写入应静默忽略
-    await expect(
-      bridge.writeTalkMemory({
-        kind: "TaskLog",
-        summary: "pre-init write",
-        semantic_gist: "pre-init write",
-        content_blob: { test: true },
-        content_hash: "",
-        source: { agentType: "Code" as any, taskId: "" },
-        weight: 0.5,
-      }),
-    ).resolves.not.toThrow();
-
-    cleanupDir(dir);
-  });
 
   // ── 调度 ──
 

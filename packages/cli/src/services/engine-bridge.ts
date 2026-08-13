@@ -27,7 +27,7 @@ import { TaskBoard, PipelineObserver, ConfirmGate } from "@cortex/scheduler";
 import { CLIAdapter, type Toolkit } from "@cortex/platform";
 import type { EngineConfig } from "@cortex/config";
 import { MemoryStore } from "@cortex/memory-store";
-import { AgentType, PlatformKind, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type ITuiEngineBridge, type LlmMessage, type MemoryEntry, type MemoryQuery, type MemoryWriteInput, type ReasoningEffort, type TaskNode, type ToolDef } from "@cortex/shared";
+import { AgentType, PlatformKind, type ChatOptions, type ExecutionReport, type IConfirmGate, type ICortexApi, type IMemoryStore, type IPipelineObserver, type ITuiEngineBridge, type LlmMessage, type MemoryEntry, type MemoryQuery, type ReasoningEffort, type TaskNode, type ToolDef } from "@cortex/shared";
 import type { LlmAdapter } from "@cortex/llm";
 
 import type { ConfigManager } from "./config-manager.js";
@@ -81,8 +81,6 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
   private dbPath?: string;
   private engineConfig?: EngineConfig;
   private _bootstrapConfig?: BootstrapConfig;
-  /** 当前执行中的任务 ID（用于 rollback 追踪） */
-  private _currentRollbackTaskId: string | undefined;
 
   constructor(config: ConfigManager, dbPath?: string, engineConfig?: EngineConfig) {
     this.config = config;
@@ -295,8 +293,7 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
       const filePath = (args["file_path"] ?? args["path"] ?? "") as string;
       if (filePath) {
         const absPath = path.resolve(filePath);
-        const currentTaskId = this._currentRollbackTaskId ?? "executeToolCall";
-        toolRollbackRegistry.trackCreate(currentTaskId, absPath);
+        toolRollbackRegistry.trackCreate("executeToolCall", absPath);
       }
     }
 
@@ -430,25 +427,6 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     return report;
   }
 
-  /** 读取 Talk 专属记忆（ICortexApi） */
-  async readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
-    const store = this.ctx.talkMemoryStore;
-    if (!store) {
-      console.warn('[DEGRADED] engine-bridge.readTalkMemory: talkMemoryStore 未初始化');
-      return [];
-    }
-    return await store.read(query);
-  }
-
-  /** 写入 Talk 专属记忆（ICortexApi） */
-  async writeTalkMemory(entry: MemoryWriteInput): Promise<void> {
-    const store = this.ctx.talkMemoryStore;
-    if (!store) {
-      console.warn('[DEGRADED] engine-bridge.writeTalkMemory: talkMemoryStore 未初始化，记忆写入已丢弃');
-      return;
-    }
-    await store.write(entry);
-  }
 
   /** 只读访问主记忆库（ICortexApi，修复原 (bridge as any).ctx hack） */
   async readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
@@ -560,38 +538,12 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     return undefined;
   }
 
-  /**
-   * 初始化昔涟的独立记忆数据库（仅在 talk 模式下调用一次）。
-   * 数据库文件：.cortex/cyrene-memory.db（已 gitignored）。
-   * 与主 MemoryStore（.cortex/memory.db）物理隔离——昔涟的记忆
-   * 不参与 Agent 调度、宪法治理、roundtable 辩论。
-   */
-  async ensureTalkMemory(): Promise<void> {
-    await this._ensureTalkMemory();
-  }
-
-  /** 兼容旧调用方——返回 MemoryStore 的具体实现 */
-  async _ensureTalkMemory(): Promise<MemoryStore> {
-    if (this.ctx.talkMemoryStore) return this.ctx.talkMemoryStore;
-    const dbPath = path.join(process.cwd(), ".cortex", "cyrene-memory.db");
-    // 昔涟的记忆不需要 PipelineObserver——她不参与事件总线
-    const talkStore = new MemoryStore();
-    await talkStore.init(dbPath);
-    this.ctx.talkMemoryStore = talkStore;
-    return talkStore;
-  }
-
-  /** 暴露 talkMemoryStore 给 repl.ts（懒加载，不强制初始化） */
-  private get talkMemoryStore(): MemoryStore | undefined {
-    return this.ctx.talkMemoryStore;
-  }
 
   async shutdown(): Promise<void> {
     if (!this.ctx.initialized) return;
 
     // ── Rollback Registry 重置 ──
     toolRollbackRegistry.reset();
-    this._currentRollbackTaskId = undefined;
 
     // R12-D7：调完整 shutdown（BootstrapEngineResult.shutdown 处理 orchestrator/lifecycle/workerPool/container/telemetry——
     // 此前只调 orchestrator——alertTimer/workerPool/notification/telemetry 全残留；rebootstrap 前也需先关旧引擎）
@@ -603,10 +555,6 @@ export class EngineBridge implements ICortexApi, ITuiEngineBridge {
     if (this.ctx.memoryStore) {
       try { await this.ctx.memoryStore.flush(); } catch (err) { console.error(`[engine-bridge] memoryStore.flush failed:`, err); }
       try { await this.ctx.memoryStore.close(); } catch (err) { console.error(`[engine-bridge] memoryStore.close failed:`, err); }
-    }
-    if (this.ctx.talkMemoryStore) {
-      try { await this.ctx.talkMemoryStore.flush(); } catch (err) { console.error(`[engine-bridge] talkMemoryStore.flush failed:`, err); }
-      try { await this.ctx.talkMemoryStore.close(); } catch (err) { console.error(`[engine-bridge] talkMemoryStore.close failed:`, err); }
     }
     if (this.ctx.cliAdapter) {
       this.ctx.cliAdapter.close();

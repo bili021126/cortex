@@ -7,7 +7,7 @@
 
 import type { AgentType } from "./agent.js";
 import type { TaskNode, ExecutionReport, DensityLevel } from "./task.js";
-import type { MemoryQuery, MemoryEntry, MemoryWriteInput, IMemoryStore } from "./memory.js";
+import type { MemoryQuery, MemoryEntry, IMemoryStore } from "./memory.js";
 import type { IConfirmGate } from "./toolkit.js";
 import type { ITaskBoard, IAgentPool, IScheduler, IStrategistAgent } from "./scheduler-contracts.js";
 import type { IMetaAgent } from "./tui-bridge.js";
@@ -455,10 +455,7 @@ export interface ICortexTask {
 /** Talk 记忆 / 主记忆库
  * @since Core-2 — ICortexApi 拆分为5域接口。新消费方优先使用此接口。 */
 export interface ICortexMemory {
-  ensureTalkMemory(): Promise<void>;
-  readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
-  writeTalkMemory(entry: MemoryWriteInput): Promise<void>;
-  readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
+ readMainMemory(query: MemoryQuery): Promise<MemoryEntry[]>;
 }
 
 /** 引擎组件访问

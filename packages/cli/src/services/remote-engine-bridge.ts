@@ -22,10 +22,7 @@ import {
   type ITuiEngineBridge,
   type IMetaAgent,
   type LlmMessage,
-  type MemoryEntry,
-  type MemoryQuery,
-  type MemoryWriteInput,
-  type TaskNode,
+ type TaskNode,
   type ExecutionReport,
   type ReasoningEffort,
 } from "@cortex/shared";
@@ -109,25 +106,6 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
     return [];
   }
 
-  /**
-   * 异步获取 Agent 工具定义（非 ITuiEngineBridge 接口方法，扩展用）。
-   * 用于需要在 TUI 中展示工具列表的场景。
-   */
-  async fetchToolDefs(agent: AgentType): Promise<{ name: string; description: string; parameters?: Record<string, unknown> }[]> {
-    try {
-      const agents = await this.conn.http.getAgents();
-      const toolNames = agents[agent];
-      if (!toolNames) return [];
-      return toolNames.map((name) => ({ name, description: "" }));
-    } catch {
-      return [];
-    }
-  }
-
-  /** 设置当前活跃 agent——queryLoop 在 streamChat 前调用 */
-  setCurrentAgent(agent: string): void {
-    this._currentAgent = agent;
-  }
 
   // ─── 流式对话 ────────────────────────────────────────
 
@@ -267,31 +245,6 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
 
   // ─── 记忆 ────────────────────────────────────────────
 
-  /** 初始化昔涟独立记忆——远程模式下由 daemon 管理，no-op */
-  async ensureTalkMemory(): Promise<void> {
-    // Daemon 侧在启动时已初始化记忆存储，客户端无需操作
-  }
-
-  /** 读取昔涟记忆——GET /api/v1/memory */
-  async readTalkMemory(query: MemoryQuery): Promise<MemoryEntry[]> {
-    try {
-      // MemoryQuery.keywords → 空格 join → HTTP query string
-      // daemon 侧 handleMemoryGet 会将 query 串 split(\s+) 还原为 keywords
-      const queryStr = query.keywords?.join(" ") ?? "";
-      const results = await this.conn.http.searchMemory(queryStr, {
-        kind: query.kind,
-        limit: query.limit,
-      });
-      return results as unknown as MemoryEntry[];
-    } catch {
-      return [];
-    }
-  }
-
-  /** 写入昔涟记忆——POST /api/v1/memory */
-  async writeTalkMemory(entry: MemoryWriteInput): Promise<void> {
-    await this.conn.http.writeMemory(entry as never);
-  }
 
   // ─── 流式任务执行 ────────────────────────────────────
 

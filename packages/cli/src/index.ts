@@ -65,8 +65,6 @@ export { parseGlobalFormat, createDefaultContext, outputResult, stripGlobalOptio
 // Core-2.5: tui 已合并入 cli，直接从内部子路径导出
 export * from "./tui/index.js";
 
-// ── Platform ───────────────────────────────────────
-export { getPlatformBridge, closePlatformBridge } from "./platform.js";
 
 // ── Core-2: 斜杠命令 ────────────────────────────
 export { SlashCommandParser, type SlashCommandResult } from "./services/slash-command.js";
