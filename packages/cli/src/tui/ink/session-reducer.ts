@@ -292,7 +292,15 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       };
 
     case "SET_MODE":
-      return { ...state, mode: action.payload };
+      // D6：模式切换清理——plan 状态/流式残留/权限浮层复位（对齐 v2 设计 F4/F6）
+      return {
+        ...state,
+        mode: action.payload,
+        planNodes: [],
+        planState: "idle",
+        streamingContent: "",
+        pendingPermission: null,
+      };
 
     case "RESTORE_SESSION":
       return {

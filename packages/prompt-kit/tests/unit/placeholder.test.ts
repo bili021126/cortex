@@ -1,4 +1,4 @@
-// @ci: skip — 占位测试，Phase 1 实施时替换为真实测试
+// @ci: unit — 占位测试（E9：原 skip 非法标签，合法化为 unit）
 /**
  * @cortex/prompt-kit — 占位测试
  *
