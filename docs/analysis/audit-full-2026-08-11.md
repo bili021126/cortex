@@ -363,6 +363,34 @@ USAGE.md 通篇未提桌面端（Electron 聊天 UI/桌宠零文档覆盖）；d
 
 **附注**：F1 修正案与宪法修订属于修宪流程（AM + 圆桌共识），草案已就绪待裁定；E2/E3/D3/D4/D5/D6/D7 等未执行项仍按优先级排队。
 
+### 后续轮次补记（2026-08-24）
+
+历史提交已落地：E2（README/USAGE 对齐 29 包/16 角色/26 技能 + pnpm ci/cli 命令修复）、E3（agents.json 退役，agent-manifests 唯一真相源）、E4（parser 定位纠偏）、F9（parser/tools 误标 DELETE 清理）、CLI 重整化第一波（净删约 2200 行：platform 单例/tui/web 第二 WS 网关/talk 三件套等）、npmrc 损坏文件清理、lint 豁免修复、宪法草案存档。
+
+| 项 | 修复内容 | 验证证据 |
+|---|---|---|
+| R14 补全 ✅ | CLI 降格 daemon 动作路由消费端：client 新增 getSchedulerSnapshot/submitNode/executeScheduler 三方法 + SchedulerSnapshot/NodeSubmitRequest DTO（服务端三条路由由前序提交就绪） | client 71 tests + server 52 tests；契约测试自动覆盖新路径 |
+| E7 ✅ | eval-gate --fail 模式（golden 断言失败 exit 1，默认 report 模式不变）+ ci.yml 行为活性层步骤接入 | eval-gate --fail 8/8 通过 exit 0 |
+| F5 ✅ | 根 cortex-docs.json constitutionPath 死链修复（指向 v3.7 实际文件）+ 注册 08-11 两份报告（该文件由 scripts/verify-docs-registry 与 cortex-cli docs 命令消费——修正早前"死文件"误判） | verify-docs-registry 通过 |
+| E6 ✅ | PACKAGE_POSITIONING notification 描述改为双层结构（物理四通道 Urgent/Important/Routine/Info × 语义三档映射） | 文档已改 |
+| E8 ✅ | scheduler/src/index.ts barrel 头部表述修正（CompositeScheduler 已迁 engine，不再宣称"组合调度入口"） | 文档已改 |
+| D5 ✅ | 桌面端 IPC_CHANNELS 单源化：新建 src/shared/ipc-channels.ts，main/ipc-handlers 与 preload/index 与 main/index 三处统一 import（历史双份已实证漂移：SCREENSHOT/PRESENCE_EVENT 各缺其一）；tsconfig main/renderer 双项目 include 同步 | desktop typecheck exit 0 + vite build 成功 |
+| CI 失效诊断 ℹ️ | 本地模拟 CI 全流程全绿（tsc -b / pnpm -r build / desktop typecheck / ci-gate / audit:deps / dep:cycle / eval-gate --fail）；**本地领先远程 156 提交未推送——远程 CI 从未运行新代码**；推送后若仍红需看 Actions 日志 | 全部本地门禁 exit 0 |
+
+### 优化迭代轮补记（2026-08-24 二轮）
+
+| 项 | 修复内容 | 验证证据 |
+|---|---|---|
+| E9 ✅ | prompt-kit placeholder 非法标签 `@ci: skip` 合法化为 unit；engine path-safety 无冒号标签补正 | ci-gate 标签扫描全绿（293 文件） |
+| D6 ✅ | TUI SET_MODE 增加模式切换清理（planNodes/planState/streamingContent/pendingPermission 复位——对齐 v2 设计 F4/F6） | cli typecheck + 测试待全量 |
+| H2 ✅ 验证 | bootstrap 测试污染根因已修复（bootstrap-integration 等均用 mkdtemp 独立临时工作区） | 源码核验 |
+| M1 ✅ | memory-audit 零调用死代码接线：scripts/mem-audit.ts（JSON 导出格式审计 + 退出码暴露问题信号） | 脚本可执行（错误路径验证） |
+| M2 ✅ 验证 | server 三处 timer（daemon/state-handler/session-manager）exit 兜底均已存在（历史提交） | 源码核验 |
+| D7a ✅ | 桌面端通知 ack 闭环：DaemonWsClient 新增 send + 收到 ackRequired 通知自动回执（S2-12 断链修复） | desktop typecheck exit 0 |
+| F7 ✅ | 双色板单源化：design-tokens 新增 CHAT_PALETTE（62 令牌权威值）+ barrel 导出；desktop 守护测试 chattokens-consistency（键集合 + 值归一化一致性，防双份漂移）；补 desktop vitest.config（此前无配置——状态机测试全靠默认收集） | desktop 37 tests 全绿；design-tokens typecheck + build 通过 |
+| E10 部分 ⏸️ | 测试 lint 纳入与覆盖率默认开启留 Core-3（改动面大：eslint ignores 放开 + 全量 coverage 耗时） | 标注跟踪 |
+| D7b ⏸️ | 确认门 UI（gate.request → ChatView 确认列表 + resolve）留后续（涉及 renderer 大改） | 标注跟踪 |
+
 ---
 
 ## 四、修复优先级建议
