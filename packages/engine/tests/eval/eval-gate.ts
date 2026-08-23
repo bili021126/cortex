@@ -3,8 +3,9 @@
 // @cortex/engine/tests/eval/eval-gate —— 活性层门禁入口（v1）
 //
 // 加载 golden → 逐条执行 → 控制台打表 → 报告写 .cortex/eval-report.json
-// report 模式 exit 恒 0（评分算法/L1-L3 门禁一概不建——以后数据够了再说）
-// 用法：npx tsx packages/engine/tests/eval/eval-gate.ts [--golden=<path>]
+// 默认 report 模式 exit 恒 0（评分算法/L1-L3 门禁一概不建——以后数据够了再说）；
+// --fail 模式：任一 golden 断言失败即 exit 1（E7——行为回归自动拦截）
+// 用法：npx tsx packages/engine/tests/eval/eval-gate.ts [--golden=<path>] [--fail]
 // ============================================================
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -14,6 +15,7 @@ import type { GoldenCase } from "./eval-types.js";
 const GOLDEN_PATH = process.argv.find((a) => a.startsWith("--golden="))?.slice("--golden=".length)
   ?? path.join(import.meta.dirname, "golden", "liveness.json");
 const REPORT_PATH = path.join(process.cwd(), ".cortex", "eval-report.json");
+const FAIL_MODE = process.argv.includes("--fail");
 
 async function main(): Promise<void> {
   const goldens = JSON.parse(fs.readFileSync(GOLDEN_PATH, "utf-8")) as GoldenCase[];
@@ -41,7 +43,13 @@ async function main(): Promise<void> {
   fs.writeFileSync(REPORT_PATH, JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2), "utf-8");
   console.log(`  报告: ${REPORT_PATH}\n`);
 
-  // report 模式 exit 恒 0
+  // 默认 report 模式 exit 恒 0；--fail 模式任一失败即 exit 1（E7）
+  const failed = results.filter((r) => !r.passed);
+  if (FAIL_MODE && failed.length > 0) {
+    console.error(`❌ [eval-gate] ${failed.length} 条 golden 失败（${failed.map((r) => r.id).join(", ")}）——行为回归，门禁拦截`);
+    process.exit(1);
+  }
+  if (FAIL_MODE) console.log("✅ [eval-gate] 活性层全部通过");
   process.exit(0);
 }
 

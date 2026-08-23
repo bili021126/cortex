@@ -43,6 +43,10 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ""
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      - name: "行为活性层（E7：golden 断言失败即红）"
+        run: pnpm tsx packages/engine/tests/eval/eval-gate.ts --fail
+        env:
+          DEEPSEEK_API_KEY: ""
       - name: "依赖漏洞审计（F2：官方 registry）"
         run: pnpm audit:deps --prod
       - name: "依赖环检查（架构治理）"

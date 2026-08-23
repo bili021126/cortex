@@ -6,14 +6,14 @@
 //   · TaskBoard / AgentPool — 任务板与 Agent 池
 //   · PipelineObserver — 事件总线
 //   · IScheduleStrategy / ILoopDriver / IExecutionModel / IModelRouter — 四抽象
-//   · CompositeScheduler — 组合调度入口
+//   组合调度入口（CompositeScheduler）已随 E8 迁至 @cortex/engine/src/core/scheduler.ts
 //   其余为 Internal 实现——外部消费者不应直接依赖。
 //
 // 【Internal — 不从 scheduler 导入】
 //   dispatch-steps/ — 每个 step 的具体实现
 //   task-router.ts — 内部任务路由
 //   scheduling-types.ts — 内部调度类型
-//   以上由 CompositeScheduler 内部组合，外部不直接使用。
+//   以上由 engine 的组合调度器内部组合，外部不直接使用。
 
 // ── 任务板 ──────────────────────────────────────────────────────
 export { TaskBoard } from "./core/task-board.js";
