@@ -34,7 +34,7 @@ import type {
   DaemonHealthSnapshot,
   ServerCapabilities,
 } from "@cortex/protocol";
-import type { HttpClientConfig } from "./types.js";
+import type { HttpClientConfig, NodeSubmitRequest, SchedulerExecutionReport, SchedulerSnapshot } from "./types.js";
 import { ProtocolError, NotSupportedError } from "./errors.js";
 
 export class CortexHttpClient {
@@ -106,7 +106,7 @@ export class CortexHttpClient {
     return await this.request<PaginatedResponse<EventRecord>>("GET", `/api/v1/events${qs ? `?${qs}` : ""}`);
   }
 
-  // ─── Config API ────────────────────────────────────
+  // ─── Scheduler action API（R14 CLI 降格）────────────────────
 
   async getModels(): Promise<Record<string, ModelEntryDTO>> {
     this._assertSupported("models");
@@ -228,6 +228,26 @@ export class CortexHttpClient {
   async getCapabilities(): Promise<ServerCapabilities> {
     const res = await this.request<SingleResponse<ServerCapabilities>>("GET", "/api/v1/capabilities");
     this._capabilities = res.data; // self-cache——后续方法可用能力面降级
+    return res.data;
+  }
+
+  // ─── Scheduler action API（R14 CLI 降格）────────────────────
+
+  /** 调度器统计快照（GET /api/v1/scheduler） */
+  async getSchedulerSnapshot(): Promise<SchedulerSnapshot> {
+    const res = await this.request<SingleResponse<SchedulerSnapshot>>("GET", "/api/v1/scheduler");
+    return res.data;
+  }
+
+  /** 提交任务节点到任务板（POST /api/v1/nodes） */
+  async submitNode(node: NodeSubmitRequest): Promise<{ id: string }> {
+    const res = await this.request<SingleResponse<{ id: string }>>("POST", "/api/v1/nodes", node);
+    return res.data;
+  }
+
+  /** 全量执行调度（POST /api/v1/scheduler/execute） */
+  async executeScheduler(): Promise<SchedulerExecutionReport> {
+    const res = await this.request<SingleResponse<SchedulerExecutionReport>>("POST", "/api/v1/scheduler/execute");
     return res.data;
   }
 

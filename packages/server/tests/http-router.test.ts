@@ -24,6 +24,10 @@ function makeEngine(overrides: Record<string, unknown> = {}): EngineHost {
         { id: "n2", type: "code", claimedBy: [], payload: "task-2", status: "pending", parentId: "n1" },
         { id: "n3", type: "code", claimedBy: [], payload: "task-3", status: "running", parentId: null },
       ],
+      addNode: (_node: unknown) => {},
+    },
+    scheduler: {
+      executeAll: async () => ({ totalNodes: 1, completed: 1, failed: 0, durationMs: 5 }),
     },
     pool: {
       getStatuses: (type: string) => (type === "analysis" ? ["awake", "active"] : ["created"]),
@@ -154,5 +158,48 @@ describe("C5: GET /api/v1/capabilities（能力发现）", () => {
     const router = makeRouter();
     const r = await call(router, "GET", "/api/v1/not-exist");
     expect(r.status).toBe(404);
+  });
+});
+
+
+// ─── R14：调度动作路由（CLI 降格 daemon 面）────────────────────
+
+describe("scheduler action routes (R14)", () => {
+  it("GET /api/v1/scheduler 返回按状态聚合的快照", async () => {
+    const router = makeRouter();
+    const { status, json } = await call(router, "GET", "/api/v1/scheduler");
+    expect(status).toBe(200);
+    const data = (json as { data: Record<string, number> }).data;
+    expect(data).toEqual({ pending: 1, active: 1, completed: 1, failed: 0, total: 3 });
+  });
+
+  it("POST /api/v1/nodes 提交节点返回 201 + id", async () => {
+    const router = makeRouter();
+    const node = { id: "n9", type: "code", status: "pending" };
+    const { status, json } = await call(router, "POST", "/api/v1/nodes", node);
+    expect(status).toBe(201);
+    expect((json as { data: { id: string } }).data.id).toBe("n9");
+  });
+
+  it("POST /api/v1/nodes 缺 id 返回 422", async () => {
+    const router = makeRouter();
+    const { status } = await call(router, "POST", "/api/v1/nodes", { type: "code" });
+    expect(status).toBe(422);
+  });
+
+  it("POST /api/v1/scheduler/execute 透传执行报告", async () => {
+    const router = makeRouter();
+    const { status, json } = await call(router, "POST", "/api/v1/scheduler/execute", {});
+    expect(status).toBe(200);
+    const data = (json as { data: Record<string, number> }).data;
+    expect(data.completed).toBe(1);
+    expect(data.totalNodes).toBe(1);
+  });
+
+  it("GET /api/v1/capabilities 声明 scheduler 域", async () => {
+    const router = makeRouter();
+    const { json } = await call(router, "GET", "/api/v1/capabilities");
+    const api = ((json as { data: { api: Record<string, boolean> } }).data.api);
+    expect(api.scheduler).toBe(true);
   });
 });

@@ -17,6 +17,7 @@ import { handleChat } from "./chat-handler.js";
 import { handleMemoryGet, handleMemoryPost, handleMemoryDelete } from "./memory-handler.js";
 import { handleSessionGet, handleSessionPost, handleSessionDelete } from "./session-handler.js";
 import { StateAggregator } from "./state-handler.js";
+import { handleNodePost, handleSchedulerExecute, handleSchedulerGet } from "./scheduler-handler.js";
 
 export class HttpRouter {
   private readonly engine: EngineHost;
@@ -68,6 +69,28 @@ export class HttpRouter {
     if (method === "POST" && path === "/api/v1/execute") {
       void handleExecute(req, res, this.engine).catch(err =>
         sendProblem(res, 500, "Execute Error", err instanceof Error ? err.message : String(err))
+      );
+      return true;
+    }
+
+    // GET /api/v1/scheduler（R14：CLI 降格动作路由——调度器统计快照）
+    if (method === "GET" && path === "/api/v1/scheduler") {
+      this.handleSchedulerGet(res);
+      return true;
+    }
+
+    // POST /api/v1/nodes（R14：任务节点提交——board.addNode）
+    if (method === "POST" && path === "/api/v1/nodes") {
+      void handleNodePost(req, res, this.engine).catch(err =>
+        sendProblem(res, 500, "Node Error", err instanceof Error ? err.message : String(err))
+      );
+      return true;
+    }
+
+    // POST /api/v1/scheduler/execute（R14：全量执行——scheduler.executeAll）
+    if (method === "POST" && path === "/api/v1/scheduler/execute") {
+      void handleSchedulerExecute(res, this.engine).catch(err =>
+        sendProblem(res, 500, "Scheduler Error", err instanceof Error ? err.message : String(err))
       );
       return true;
     }
@@ -310,6 +333,10 @@ export class HttpRouter {
     }
   }
 
+  private handleSchedulerGet(res: ServerResponse): void {
+    handleSchedulerGet(res, this.engine);
+  }
+
   private handleCapabilities(res: ServerResponse): void {
     // C5：能力发现——daemon 身份 + 共面/专化声明
     sendJson(res, 200, {
@@ -326,6 +353,7 @@ export class HttpRouter {
           sessions: true,
           daemonHealth: true,
           execute: true,
+          scheduler: true,
           events: false,
           config: false,
         },

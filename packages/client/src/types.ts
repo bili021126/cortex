@@ -51,3 +51,33 @@ export interface CortexConnectionConfig {
   authToken?: string;
   WebSocketImpl?: typeof WebSocket;
 }
+
+// ─── 调度动作路由 DTO（R14 CLI 降格）─────────────────────────
+
+/** 调度器统计快照（GET /api/v1/scheduler） */
+export interface SchedulerSnapshot {
+  pending: number;
+  active: number;
+  completed: number;
+  failed: number;
+  total: number;
+}
+
+/** 调度全量执行报告（POST /api/v1/scheduler/execute） */
+export interface SchedulerExecutionReport {
+  totalNodes: number;
+  completed: number;
+  failed: number;
+  durationMs: number;
+}
+
+/** 任务节点提交请求（POST /api/v1/nodes——TaskNode 宽松 DTO，id 必填） */
+export interface NodeSubmitRequest {
+  id: string;
+  type?: string;
+  payload?: string;
+  parentId?: string;
+  agentType?: string;
+  status?: string;
+  [key: string]: unknown;
+}

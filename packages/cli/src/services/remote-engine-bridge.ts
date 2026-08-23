@@ -246,7 +246,7 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
   // ─── 记忆 ────────────────────────────────────────────
 
 
-  // ─── 流式任务执行 ────────────────────────────────────
+  // ─── 调度动作面（R14 CLI 降格——daemon 动作路由直通）───────────
 
   /**
    * 流式执行任务节点——通过 WS pipeline/tui channel 接收事件。
