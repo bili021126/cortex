@@ -10,7 +10,7 @@
     "moduleResolution": "Bundler",
     "noUncheckedIndexedAccess": false
   },
-  "include": ["src/renderer"],
+  "include": ["src/renderer", "src/shared"],
   "exclude": ["node_modules", "dist"],
   "references": [
     { "path": "../shared" }

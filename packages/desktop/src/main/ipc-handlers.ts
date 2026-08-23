@@ -11,24 +11,9 @@ import { synthesize } from "./tts/gptsovits-engine.js";
 import * as path from "path";
 import * as fs from "fs";
 import { execFile } from "child_process";
+import { IPC_CHANNELS } from "../shared/ipc-channels.js"; // D5 单源化
 
-// ── IPC 通道名 ────────────────────────────────────────
-export const IPC_CHANNELS = {
-  CORTEX_INIT: "cortex:init",
-  CORTEX_CHAT: "cortex:chat",
-  CORTEX_STREAM_CHAT: "cortex:stream-chat",
-  CORTEX_STREAM_CANCEL: "cortex:stream-cancel",
-  CORTEX_GET_AGENTS: "cortex:get-agents",
-  LIVE2D_SPEAK: "live2d:speak",
-  LIVE2D_EXPRESSION: "live2d:expression",
-  SETTINGS_GET: "settings:get",
-  SETTINGS_SET: "settings:set",
-  SCREENSHOT: "desktop:screenshot",
-  DESKTOP_RESTART: "desktop:restart",
-  EDITOR_SAVE: "editor:save",
-  EDITOR_SAVE_AS: "editor:save-as",
-  NOTIFICATION_EVENT: "notification:event",
-} as const;
+// ── IPC 通道名（D5：单源化——定义见 src/shared/ipc-channels.ts）──
 
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
   // 语音播放锁（防重复点击叠加）

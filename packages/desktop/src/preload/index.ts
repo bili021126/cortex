@@ -5,24 +5,9 @@
  * 渲染进程通过此 API 与主进程通信，不直接接触 Node.js API。
  */
 import { contextBridge, ipcRenderer } from "electron";
+import { IPC_CHANNELS } from "../shared/ipc-channels.js"; // D5 单源化
 
-// ── IPC 通道名（与 ipc-handlers.ts 同步） ──────────────
-const IPC_CHANNELS = {
-  CORTEX_INIT: "cortex:init",
-  CORTEX_CHAT: "cortex:chat",
-  CORTEX_STREAM_CHAT: "cortex:stream-chat",
-  CORTEX_STREAM_CANCEL: "cortex:stream-cancel",
-  CORTEX_GET_AGENTS: "cortex:get-agents",
-  LIVE2D_SPEAK: "live2d:speak",
-  LIVE2D_EXPRESSION: "live2d:expression",
-  SETTINGS_GET: "settings:get",
-  SETTINGS_SET: "settings:set",
-  PRESENCE_EVENT: "presence:event",
-  DESKTOP_RESTART: "desktop:restart",
-  EDITOR_SAVE: "editor:save",
-  EDITOR_SAVE_AS: "editor:save-as",
-  NOTIFICATION_EVENT: "notification:event",
-} as const;
+// ── IPC 通道名（D5：单源化——定义见 src/shared/ipc-channels.ts）──
 
 export interface CortexDesktopAPI {
   init: (projectRoot: string) => Promise<{ ok: boolean }>;

@@ -14,6 +14,7 @@ export {
   CYRENE_PALETTE,
   GANYU_PALETTE,
   NAHIDA_PALETTE,
+  CHAT_PALETTE,
   DEFAULT_PERSONA,
   spacing,
   radius,

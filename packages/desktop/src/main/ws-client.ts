@@ -31,7 +31,16 @@ export class DaemonWsClient {
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(String(ev.data)) as { channel?: string; data?: unknown };
-          if (msg.channel) this.onEvent(msg.channel, msg.data);
+          if (msg.channel) {
+            // D7a：通知 ack 闭环——ackRequired 的通知立即回执（S2-12 断链修复）
+            if (msg.channel === "notification") {
+              const d = msg.data as { type?: string; requestId?: string; ackRequired?: boolean };
+              if (d?.type === "notification.pushed" && d.ackRequired && d.requestId) {
+                this.send({ type: "notification.ack", requestId: d.requestId, approved: true });
+              }
+            }
+            this.onEvent(msg.channel, msg.data);
+          }
         } catch { /* 非 JSON 帧忽略 */ }
       };
       ws.onclose = () => {
@@ -44,6 +53,11 @@ export class DaemonWsClient {
     } catch {
       // 连接失败——不重试（daemon 未启动）
     }
+  }
+
+  /** 发送 WS 命令（D7a：notification.ack 等回执通道） */
+  send(msg: object): void {
+    try { this.ws?.send(JSON.stringify(msg)); } catch { /* 连接已断——静默 */ }
   }
 
   private scheduleRetry(): void {

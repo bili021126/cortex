@@ -10,7 +10,8 @@ import * as path from "path";
 import * as fs from "fs";
 import { fileURLToPath } from "url";
 import { CortexBridge } from "./cortex-bridge.js";
-import { registerIpcHandlers, IPC_CHANNELS } from "./ipc-handlers.js";
+import { registerIpcHandlers } from "./ipc-handlers.js";
+import { IPC_CHANNELS } from "../shared/ipc-channels.js"; // D5 单源化
 import { PresenceBridge } from "./presence-bridge.js";
 import { DaemonWsClient } from "./ws-client.js";
 import { createTray } from "./tray.js";
