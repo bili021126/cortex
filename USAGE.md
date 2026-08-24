@@ -45,12 +45,27 @@ BING_API_KEY=your-bing-key
 ### CLI 交互模式
 
 ```bash
-# 启动 CLI（昔涟对话模式）
+# 启动 CLI（昔涟对话模式——需 daemon 或 CORTEX_ENABLE_CLI=1）
 pnpm cortex
 
 # 或直接运行编译产物
 node packages/cli/dist/main.js
 ```
+
+### 桌面端（Cyrene）
+
+```bash
+# 开发模式（构建 main + 启动 Vite + Electron 双窗：桌宠窗 + 聊天窗）
+pnpm --filter @cortex/desktop dev
+
+# 生产构建
+pnpm --filter @cortex/desktop build
+
+# 启动（需 daemon 先行：pnpm daemon）
+pnpm --filter @cortex/desktop start
+```
+
+桌面端依赖本地 daemon（`packages/server`，端口 3210）提供 engine 能力——聊天流式、记忆、任务、设置均通过 daemon REST/WS 接通；无 daemon 时 UI 保持静态回退。桌宠为 Live2D（Cubism 4），支持点击穿透与托盘常驻。
 
 ### CI 门禁
 
@@ -79,22 +94,30 @@ pnpm test:workspace   # 全工作区测试
 | 命令 | 说明 | 示例 |
 |------|------|------|
 | `pnpm cortex` | 启动 CLI 对话（昔涟，经 daemon） | `pnpm cortex` |
-| `pnpm cortex` | 直接运行编译产物 | `pnpm cortex` |
-| `node packages/cli/dist/main.js doctor` | 健康诊断 | `pnpm cortex doctor` |
+| `pnpm cortex doctor` | 健康诊断 | `pnpm cortex doctor` |
+| `pnpm daemon` | 启动 daemon（engine 唯一宿主，REST+WS :3210） | `pnpm daemon` |
 
 ## 配置体系
 
 | 文件 | 用途 |
 |------|------|
-| `packages/config/src/data/*.json` | Agent 注册表与认知配置（原根目录 JSON 已迁入） |
+| `packages/config/src/data/agents.json`（@deprecated） | 旧 Agent 注册表（16 Agent——新定义走 agent-manifests） |
+| `packages/config/src/data/agent-manifests.json` | Agent 唯一真相源（18 条目，含双 strategist） |
+| `packages/config/src/data/cognition.json` | 认知配置（激活矩阵 + 注意力策略） |
+| `packages/config/src/data/models.json` | 模型注册（deepseek-v4-flash / pro 能力声明） |
+| `packages/config/src/data/*.json` | 其余配置域（共 18 域） |
 | `cortex-docs.json` | 文档治理注册表 |
-| `packages/config/src/data/*.json` | 各配置域的拆分 JSON 文件 |
+| `prompts/` | 16 个角色人格资产 |
+| `skills/` | 26 个技能模板 JSON |
 | `.env` | 环境变量（API Key 等） |
 
 ## 常见问题
 
 **Q: `pnpm cortex` 启动后没反应？**
-A: 确保 `.env` 中配置了 `DEEPSEEK_API_KEY`。
+A: CLI 已冻结（daemon 唯一宿主）——先启动 `pnpm daemon`；临时启用 CLI 入口需 `CORTEX_ENABLE_CLI=1`。
+
+**Q: 桌面端聊天无响应？**
+A: 确认 daemon 已启动（`pnpm daemon`），且 `.env` 配置了 `DEEPSEEK_API_KEY`。
 
 **Q: `pnpm build` 报错？**
 A: 运行 `pnpm install` 确认依赖已安装，再试 `pnpm build`。

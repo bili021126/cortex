@@ -227,7 +227,7 @@ async function compressMemories(getEntriesBySource: (source: string) => Array<{ 
        
       diag(`[MemoryCompressor] 压缩了 ${subEntryIds.length} 条 → "${cleanSummary.slice(0, 40)}"`)
     } catch (err) {
-      console.warn("[MemoryCompressor] 组压缩失败:", err)
+      diag("[MemoryCompressor] 组压缩失败:", err)
     }
   }
 
@@ -332,7 +332,7 @@ async function runReflection(): Promise<void> {
      
     diag(`[Reflection] 完成，更新了 ${updateCount} 个字段`)
   } catch (err) {
-    console.warn("[Reflection] 执行失败:", err)
+    diag("[Reflection] 执行失败:", err)
   }
 }
 

@@ -44,14 +44,14 @@ export class MemoryScheduler {
       this.deps.ingestEntity(userInput)
       this.deps.ingestEntity(assistantReply)
     } catch (err) {
-      console.warn("[Memory] 实体图谱提取失败:", err)
+      diag("[Memory] 实体图谱提取失败:", err)
     }
 
     this.deps.enqueueTask("MemoryMaintenance", async () => {
       await this.runQueuedMemoryWrite(seq)
     }).catch((e) => {
       // P2: 结构化上报——主流程不受影响，但失败原因必须可见
-      console.error("[Memory] 记忆写入失败，不影响主流程", {
+      diag("[Memory] 记忆写入失败，不影响主流程", {
         phase: "MemoryMaintenance",
         seq,
         error: e instanceof Error ? e.message : String(e),
@@ -75,21 +75,21 @@ export class MemoryScheduler {
           await this.deps.writeMemory(candidates)
         }
       } catch (err) {
-        console.error("[Memory] MemoryJudge/Manager 执行失败，本轮仍会计数", err)
+        diag("[Memory] MemoryJudge/Manager 执行失败，本轮仍会计数", err)
       }
     }
 
     try {
       await this.deps.replaceL1Field("roundCount", newCount)
     } catch (err) {
-      console.error("[Memory] roundCount 更新失败，不影响主流程", err)
+      diag("[Memory] roundCount 更新失败，不影响主流程", err)
     }
 
     if (newCount % 5 === 0) {
       try {
         await this.deps.runResolverQueueOnce()
       } catch (err) {
-        console.warn("[Memory] Resolver 队列处理失败，不影响主流程", err)
+        diag("[Memory] Resolver 队列处理失败，不影响主流程", err)
       }
     }
 

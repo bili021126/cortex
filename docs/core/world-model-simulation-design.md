@@ -1,3 +1,5 @@
+> **状态**：❌ 纸面设计（2026-08-24 审计标注——SimulationShell/simulation-layer 全库 0 命中，无代码支撑）。处置：待决策落地或归档（候选：已坍缩进 context-manager 预测检索）。
+>
 # 世界模型仿真层设计
 
 > 定位：场景检索调度层上游的轻量预测外壳。关联：`docs/core/scene-retrieval-scheduler-design.md`（下游调度层）、`docs/core/memory-world-model-design.md`（RIM 世界模型）。

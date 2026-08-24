@@ -1,8 +1,9 @@
 // ============================================================
 // @cortex/context-manager — ContextEngine 可插拔接口
 //
-// @frozen 2026-07 — 全量图景审计确认：仅 import type 引用，
-// setContextManager() 从未在生产代码中被调用。冻结不维护不评审。
+// @active 2026-08-24（E5 复核）——此前 @frozen 2026-07 标注已过时：
+// bootstrap-engine.ts L276 实际调用 metaAgent.setContextManager(new ContextManager(...))
+// （§6.0a-1 接线——context-policies 域注册后注入 MetaAgent）。包活跃，接口可插拔。
 //
 // 适配 Cortex:
 //   - ContextEngine 接口定义在 @cortex/context-manager

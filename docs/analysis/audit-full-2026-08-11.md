@@ -391,6 +391,23 @@ USAGE.md 通篇未提桌面端（Electron 聊天 UI/桌宠零文档覆盖）；d
 | E10 部分 ⏸️ | 测试 lint 纳入与覆盖率默认开启留 Core-3（改动面大：eslint ignores 放开 + 全量 coverage 耗时） | 标注跟踪 |
 | D7b ⏸️ | 确认门 UI（gate.request → ChatView 确认列表 + resolve）留后续（涉及 renderer 大改） | 标注跟踪 |
 
+### 待办收束轮补记（2026-08-24 三轮）
+
+| 项 | 修复内容 | 验证证据 |
+|---|---|---|
+| F1 ✅ 落笔 | 宪法 v3.8：AM-2026-0811-001 全部 8 组 18 处事实对齐应用（配置域 18/技能 27/行数去绝对值化×6/engine 基线 1036/manifests 18+霜凝 pro/CI eval 段/版本档案说明/引用订正）；文件 git mv v3.7→v3.8；AM status→merged；cortex-docs.json 与 config docs.json 宪法引用同步 | 宪法 676 行修订完成；AM merged |
+| F6 ✅ | §十七 修正记录 4 行档案缺失标注（AM-0622/0706/0716/0720）+ v3.5 日期订正 + v3.6→v3.7 行三段勘误 | 已入宪法 v3.8 |
+| F8 ✅ | world-model-simulation-design.md 状态头标注（纸面设计 0 命中）；意图响应体系设计 canonical 降级（docs.json） | 文档标注 |
+| F11 ✅ | USAGE.md 补桌面端章节 + 命令表去重 + 配置体系 18 域口径；docs/README 补桌面端/UI 条目 + 宪法 v3.8 索引 | 文档更新 |
+| D3 ✅ | CLI 冻结白名单实体化：scripts/verify/cli-frozen.ts（src 变更需 CORTEX_ALLOW_CLI_CHANGES=true 显式授权）+ ci.yml 接入；M3 ✅ 验证 doc-drift-check 已接（--report 留档） | 脚本可执行 |
+| E10b ✅ | coverage-weekly.yml（每周日 ci-gate --coverage 低频实跑——阈值从纸面变实跑）；E10a（测试 lint）留 Core-3 | workflow 新增 |
+| F4 ✅ | 子模块空声明移除（.gitmodules 删除——从未实装）；origin/HEAD → origin/main（remote set-head） | git 状态验证 |
+| E5 ✅ | context-manager @frozen 标注更新为 @active——复核发现 bootstrap-engine L276 实际调用 setContextManager（冻结标注过时） | 源码核验 |
+| D4 ✅ 标注 | config-manager 配置双轨随 CLI 降格自然移除（降格时删除——避免冻结面改动） | 标注跟踪 |
+| D7b ✅ | 确认门 UI 全链路：gate 通道订阅 → main GATE_RESOLVE handler → preload onGateRequest/resolveGate → ChatView 确认浮层（允许/拒绝，resolve 后消隐） | desktop typecheck exit 0 + 37 tests 全绿 |
+| F10 ✅ | ChatView：硬编码版本快照删除（buildAt/gitHead）+ 宪法 v2.5→v3.8 + 待实现按钮禁用态 + Monaco 亮色→vs-dark | desktop typecheck + tests 全绿 |
+| E13 ✅ | memory 包 7 处裸 console → diag()（stderr 统一可观测）：memory-scheduler 5 + memory-compressor 2 | memory typecheck + tests 通过 |
+
 ---
 
 ## 四、修复优先级建议
