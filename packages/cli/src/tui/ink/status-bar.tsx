@@ -86,6 +86,12 @@ export function StatusBar({ agent, mode, tokenUsage, isProcessing = false }: Sta
 
   // 模式标签从 token 读取
   const modeLabel = tokens.typography.modeLabels[mode] ?? mode;
+  // B1 吸收：阶段文案（Cyrene Run 状态机简化——处理中文案随模式切换，对话更有人感）
+  const stageText = isProcessing
+    ? mode === "group"
+      ? "👥 群聊协商中"
+      : "💬 回应中"
+    : null;
 
   return (
     <Box flexDirection="column" flexShrink={0}>
@@ -108,7 +114,8 @@ export function StatusBar({ agent, mode, tokenUsage, isProcessing = false }: Sta
         {isProcessing && (
           <>
             <Text color={t.separator.color}> │ </Text>
-            <Text color={tokens.color.status.thinking}>⏱ {elapsed}s</Text>
+            <Text color={tokens.color.status.thinking}>{stageText}</Text>
+            <Text color={t.textMuted.color}> ⏱ {elapsed}s</Text>
             <Text color={t.textMuted.color}> · Esc 中断</Text>
           </>
         )}

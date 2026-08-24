@@ -20,6 +20,20 @@ import { SlideIn } from "../animation/components/SlideIn.js";
 
 // ─── 类型 ──────────────────────────────────────
 
+// B2 吸收：权限请求一句话化（Cyrene 设计——参数翻译为人话，审批零认知负担）
+export function humanizePermission(tool: string, input?: string): string {
+  const map: Record<string, string> = {
+    read_file: "读取文件", write_file: "写入文件", edit_file: "编辑文件",
+    run_shell: "执行命令", search_codebase: "搜索代码库", search_symbol: "查找符号",
+    web_search: "联网搜索", web_fetch: "抓取网页", search_memory: "搜索记忆",
+    update_memory: "更新记忆", get_problems: "检查代码问题", get_terminal_output: "读取终端输出",
+  };
+  const base = map[tool] ?? tool;
+  const clean = (input ?? "").replace(/\s+/g, " ").trim();
+  return clean ? `${base}：${clean.slice(0, 48)}${clean.length > 48 ? "…" : ""}` : base;
+}
+
+
 export type PermissionResult = "approve_once" | "approve_all" | "deny" | "skip";
 
 export interface PermissionRequest {
@@ -84,9 +98,9 @@ export function PermissionPrompt({ request, onResolve, timeoutMs = 30000 }: Perm
 
   const levelCfg = LEVEL_CONFIG[request.level] ?? LEVEL_2_CFG;
   const riskColor = tokens.color.risk[levelCfg.colorKey];
-  const truncatedInput = request.input.length > 50
-    ? request.input.slice(0, 47) + "..."
-    : request.input;
+  // B2 吸收：一句话化展示（工具名 → 人话，如「读取文件：README.md」）
+  const humanized = humanizePermission(request.tool, request.input);
+  const truncatedInput = humanized.length > 60 ? humanized.slice(0, 57) + "..." : humanized;
 
   return (
     <SlideIn active options={{ from: "bottom", duration: "normal" }}>

@@ -24,6 +24,8 @@ export const IPC_CHANNELS = {
   // D7b：确认门远程确认链路（gate.request → renderer 浮层 → gate.resolve）
   GATE_REQUEST: "gate:request",
   GATE_RESOLVE: "gate:resolve",
+  // 工具调用内联事件（A2 吸收：🔧 调用中 → ✅ 完成）
+  CHAT_TOOL: "chat:tool",
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

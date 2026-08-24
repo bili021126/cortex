@@ -2789,3 +2789,39 @@ html, body { height: 100%; margin: 0; padding: 0; }
   outline: none;
 }
 .chat__setting-item-input:focus { border-color: #d94685; box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.15); }
+
+/* A2 吸收：工具调用内联状态条（Cyrene 4.414 设计吸收） */
+.chat__tool-strip {
+  position: absolute;
+  bottom: 64px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 40;
+}
+.chat__tool-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(236, 72, 153, 0.18);
+  color: var(--rb-text-default, #ebe5f5);
+  animation: char-fade-in 200ms ease;
+}
+.chat__tool-pill.is-running {
+  background: rgba(236, 72, 153, 0.14);
+  border-color: rgba(236, 72, 153, 0.35);
+}
+.chat__tool-pill.is-failed {
+  border-color: rgba(255, 110, 110, 0.45);
+  color: #ff8a8a;
+}
+.chat__tool-pill:not(.is-running) {
+  opacity: 0.55;
+}

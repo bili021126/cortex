@@ -323,6 +323,19 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     void window.cortexDesktop.resolveGate(requestId, approved);
     setGateRequests((prev) => prev.filter((g) => g.requestId !== requestId));
   };
+  // A3 吸收：权限请求一句话化（Cyrene 设计——参数翻译为人话，审批零认知负担）
+  const humanizeTool = (tool: string, input?: string): string => {
+    const map: Record<string, string> = {
+      read_file: "读取文件", write_file: "写入文件", edit_file: "编辑文件",
+      run_shell: "执行命令", search_codebase: "搜索代码库", search_symbol: "查找符号",
+      web_search: "联网搜索", web_fetch: "抓取网页", search_memory: "搜索记忆",
+      update_memory: "更新记忆", get_problems: "检查代码问题", get_terminal_output: "读取终端输出",
+    };
+    const base = map[tool] ?? tool;
+    return input ? `${base}：${input.slice(0, 40)}${input.length > 40 ? "…" : ""}` : base;
+  };
+  // A2 吸收：工具调用内联状态（🔧 调用中 → ✅ 完成 → ❌ 失败）
+  const [toolLogs, setToolLogs] = useState<Array<{ id: string; toolName: string; state: "running" | "done" | "failed" }>>([]);
   // Agent 配置接真：思考模式/上下文/档位（settings:get 拉 + settings:set 写）
   const [thinkingOn, setThinkingOn] = useState(true);
   const [ctxLen, setCtxLen] = useState(32);
@@ -523,6 +536,16 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           }));
         },
         history,
+        // A2 吸收：工具调用内联状态（🔧 调用中 → ✅ 完成 → 淡出保留）
+        (evt) => {
+          const tid = evt.toolCallId || evt.toolName;
+          setToolLogs((prev) => {
+            if (evt.type === "start") {
+              return [{ id: tid, toolName: evt.toolName, state: "running" as const }, ...prev].slice(0, 6);
+            }
+            return prev.map((t) => (t.id === tid ? { ...t, state: evt.success ? ("done" as const) : ("failed" as const) } : t));
+          });
+        },
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -954,6 +977,16 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+      {/* 工具调用内联状态（A2 吸收：🔧 调用中 → ✅/❌ 完成，工具进度融入消息流） */}
+      {toolLogs.length > 0 && (
+        <div className="chat__tool-strip">
+          {toolLogs.map((t) => (
+            <span key={t.id} className={`chat__tool-pill${t.state === "running" ? " is-running" : ""}${t.state === "failed" ? " is-failed" : ""}`}>
+              {t.state === "running" ? "🔧" : t.state === "done" ? "✅" : "❌"} {t.toolName}
+            </span>
+          ))}
+        </div>
+      )}
       {/* 确认门浮层（D7b：L2/L3 工具调用需人工确认——gate.request 驱动，resolve 后消隐） */}
       {gateRequests.length > 0 && (
         <div className="chat__notif-panel" style={{ bottom: 76 }}>
@@ -961,8 +994,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           {gateRequests.map((g) => (
             <div key={g.requestId} className="chat__notif-item">
               <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
-                <span style={{ fontWeight: 600 }}>{g.toolName} · {g.level}</span>
-                <span style={{ fontSize: 12, opacity: 0.75, wordBreak: "break-all" }}>{g.summary || g.detail || "（无摘要）"}</span>
+                <span style={{ fontWeight: 600 }}>{humanizeTool(g.toolName)} · {g.level}</span>
+                <span style={{ fontSize: 12, opacity: 0.75, wordBreak: "break-all" }}>{g.summary || "（无摘要）"}</span>
               </div>
               <span style={{ display: "flex", gap: 6 }}>
                 <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => resolveGate(g.requestId, true)}>允许</button>

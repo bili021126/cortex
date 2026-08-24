@@ -58,6 +58,7 @@ export class CortexBridge {
     agent?: string,
     onChunk?: (chunk: string) => void,
     history?: Array<{ role: "user" | "assistant"; content: string }>,
+    onTool?: (evt: { type: "start" | "result"; toolName: string; input?: string; success?: boolean; toolCallId: string }) => void,
   ): Promise<string> {
     if (!this.initialized || !this.conn) {
       throw new Error("CortexBridge not initialized");
@@ -70,6 +71,12 @@ export class CortexBridge {
         onChunk: (content) => {
           full += content;
           onChunk?.(content);
+        },
+        onToolStart: (toolName, toolInput, toolCallId, agentName) => {
+          onTool?.({ type: "start", toolName, input: toolInput, toolCallId });
+        },
+        onToolResult: (toolName, success, _output, toolCallId, _durationMs) => {
+          onTool?.({ type: "result", toolName, success, toolCallId });
         },
         onComplete: (output) => resolve(output || full),
         onError: (error) => reject(new Error(error)),
