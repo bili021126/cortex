@@ -47,7 +47,6 @@ export default defineWorkspace([
   "./packages/fsm-compiler/vitest.config.ts",
   "./packages/llm/vitest.config.ts",
   "./packages/notification/vitest.config.ts",
-  "./packages/parser/vitest.config.ts",
   "./packages/pattern-extractor/vitest.config.ts",
   "./packages/plugin-runner/vitest.config.ts",
   "./packages/prompt-kit/vitest.config.ts",

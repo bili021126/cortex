@@ -10,25 +10,17 @@
 
 import type { CommandHandler, CommandResult, CommandContext } from "../types.js";
 import { cliTheme } from "../theme/cli-theme.js";
-import { isHelpRequest, convertMarkdown } from "../utils.js";
+import { isHelpRequest } from "../utils.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createServer } from "node:http";
 
 const DOC_HELP = [
   "用法: cortex doc <子命令> [选项]",
   "",
   "子命令:",
-  "  convert <file>       转换 Markdown→HTML",
-  "  serve <dir>          启动文档服务器",
-  "  check <file>         文档合规检查",
+  "  check <file>         文档合规检查（标题层级/外部链接）",
   "",
   "选项:",
-  "  --output, -o <path>  输出文件路径",
-  "  --title, -t <title>  文档标题",
-  "  --document, -d       输出完整 HTML 文档",
-  "  --port <n>           端口号（默认 8080）",
-  "  --watch              文件变更时自动刷新",
   "  --rules <list>       检查规则",
 ].join("\n");
 
@@ -40,101 +32,12 @@ export function createDocHandler(): CommandHandler {
 
     const subcommand = args[0];
     switch (subcommand) {
-      case "convert": return handleDocConvert(args[1], options, context);
-      case "serve":   return handleDocServe(args[1], options, context);
       case "check":   return handleDocCheck(args[1], options, context);
       default:
-        return { success: false, error: `未知子命令: "${subcommand}"。可用子命令: convert, serve, check`, exitCode: 1 };
+        return { success: false, error: `未知子命令: "${subcommand}"。可用子命令: check`, exitCode: 1 };
     }
   };
   return handler;
-}
-
-function handleDocConvert(
-  filePath: string | undefined,
-  options: Record<string, unknown>,
-  _context: CommandContext,
-): CommandResult {
-  if (!filePath) {
-    return { success: false, error: "请指定输入文件。用法: cortex doc convert <file>", exitCode: 1 };
-  }
-
-  const resolvedPath = path.resolve(filePath);
-  if (!fs.existsSync(resolvedPath)) {
-    return { success: false, error: `文件不存在: ${resolvedPath}`, exitCode: 1 };
-  }
-
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext !== ".md" && ext !== ".markdown") {
-    return { success: false, error: `不支持的文件格式: ${ext}（仅支持 .md）`, exitCode: 1 };
-  }
-
-  try {
-    const markdown = fs.readFileSync(resolvedPath, "utf-8");
-    const title = options["title"] as string | undefined;
-    const documentMode = options["document"] as boolean;
-    const outputPath = (options["output"] ?? options["o"]) as string | undefined;
-    return convertMarkdown({ content: markdown, title, documentMode, outputPath });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { success: false, error: `转换失败: ${msg}`, exitCode: 2 };
-  }
-}
-
-/** doc serve 的请求处理器工厂 */
-function _createDocRequestHandler(rootDir: string, port: number) {
-  return (req: { url?: string | undefined }, res: { writeHead: (code: number, headers?: Record<string, string>) => void; end: (data: string) => void }): void => {
-    const url = new URL(req.url ?? "/", `http://localhost:${port}`);
-    const normalizedRoot = path.resolve(rootDir);
-    let filePath = path.resolve(normalizedRoot, "." + url.pathname);
-    if (!filePath.startsWith(normalizedRoot + path.sep) && filePath !== normalizedRoot) {
-      res.writeHead(403); res.end("403 Forbidden"); return;
-    }
-    if (!fs.existsSync(filePath)) {
-      res.writeHead(404, { "Content-Type": "text/plain" }); res.end("404 Not Found"); return;
-    }
-    const stat = fs.statSync(filePath);
-    if (stat.isDirectory()) {
-      filePath = path.join(filePath, "index.html");
-      if (!fs.existsSync(filePath)) { res.writeHead(404); res.end("404 Not Found"); return; }
-    }
-    const content = fs.readFileSync(filePath, "utf-8");
-    const ext = path.extname(filePath);
-    const mime: Record<string, string> = { ".html": "text/html", ".css": "text/css", ".js": "application/javascript", ".json": "application/json" };
-    res.writeHead(200, { "Content-Type": mime[ext] ?? "text/plain" });
-    res.end(content);
-  };
-}
-
-function handleDocServe(
-  dirPath: string | undefined,
-  options: Record<string, unknown>,
-  _context: CommandContext,
-): CommandResult {
-  const rootDir = dirPath ? path.resolve(dirPath) : process.cwd();
-  const port = parseInt(String(options["port"] ?? "8080"), 10);
-
-  if (!fs.existsSync(rootDir)) {
-    return { success: false, error: `目录不存在: ${rootDir}`, exitCode: 1 };
-  }
-
-  const server = createServer(_createDocRequestHandler(rootDir, port));
-
-  server.listen(port, () => {
-    console.error(cliTheme.heading(`📖 文档服务器启动: http://localhost:${port}`));
-    console.error(cliTheme.muted(`   根目录: ${rootDir}`));
-  });
-
-  let _cleanedUp = false;
-  const cleanup = () => {
-    if (_cleanedUp) return;
-    _cleanedUp = true;
-    server.close(() => { console.error(cliTheme.info("\n📖 文档服务器已关闭")); process.exit(0); });
-  };
-  process.once("SIGINT", cleanup);
-  process.once("SIGTERM", cleanup);
-
-  return { success: true, output: `文档服务器运行于 http://localhost:${port}`, exitCode: 0 };
 }
 
 /** 检查 Markdown 标题层级跳跃 */

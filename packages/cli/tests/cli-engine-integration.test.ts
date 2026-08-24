@@ -346,42 +346,7 @@ describe("C. cortex run — 输入→调度→输出", () => {
     }
   });
 
-  it("C3. markdown 输入走文档转换路径", async () => {
-    const { bridge, dbPath } = createBridge("run-md.db");
-    try {
-      const tmpFile = path.join(path.dirname(dbPath), "input.md");
-      fs.writeFileSync(tmpFile, "# Hello\n\nWorld");
-      const { createRunHandler } = await import("@cortex/cli");
-      const handler = createRunHandler(bridge);
-      const result = await handler([tmpFile], {}, ctx);
-      expect(result.success).toBe(true);
-      expect(result.output).toContain("<h1>");
-      expect(result.output).toContain("Hello");
-      // markdown 走 parser 路径，不触发引擎
-    } finally {
-      await bridge.shutdown();
-      cleanupDir(path.dirname(dbPath));
-    }
-  });
-
-  it("C4. markdown 输出到文件", async () => {
-    const { bridge, dbPath } = createBridge("run-md-out.db");
-    try {
-      const tmpFile = path.join(path.dirname(dbPath), "input.md");
-      const outFile = path.join(path.dirname(dbPath), "output.html");
-      fs.writeFileSync(tmpFile, "# Test");
-      const { createRunHandler } = await import("@cortex/cli");
-      const handler = createRunHandler(bridge);
-      const result = await handler([tmpFile], { output: outFile }, ctx);
-      expect(result.success).toBe(true);
-      expect(fs.existsSync(outFile)).toBe(true);
-      const html = fs.readFileSync(outFile, "utf-8");
-      expect(html).toContain("<h1>Test</h1>");
-    } finally {
-      await bridge.shutdown();
-      cleanupDir(path.dirname(dbPath));
-    }
-  });
+  // C3/C4 已随 parser 包砍除（2026-08-25）——markdown 不再走文档转换路径，run 命令统一走引擎调度
 
   it("C5. 纯文本输入走引擎调度路径", async () => {
     const { bridge, dbPath } = createBridge("run-engine.db");

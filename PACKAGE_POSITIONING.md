@@ -39,7 +39,6 @@ L0 基础层      shared · config · tools · logging · resilience · telemetr
 | `@cortex/resilience` | 容错与重试——重试策略、断路器（SimpleCircuitBreaker） | 无 | 不含 LLM/HTTP 语义；纯算法层 |
 | `@cortex/telemetry` | 遥测采集层——结构化事件记录、HealthCollector、PanoramaTracker | shared | 不含业务决策；不修改状态；只读采集 |
 | `@cortex/notification` | 事件路由与通知——物理四通道（Urgent/Important/Routine/Info，各带独立队列/持久化/失败策略）× 语义三档（FYI/WARNING/DECISION_REQUIRED，semantic-layer 映射到物理通道）双层结构 | 无 | 不含 UI 渲染；不依赖 L1+ 包 |
-| `@cortex/parser` | Markdown→HTML 转换解析器（convert/convertToDocument） | 无 | 不含执行逻辑；纯转换 |
 | `@cortex/fsm-compiler` | FSM 编译工具链——JSON DSL → TypeScript → Mermaid | 无 | 不含运行时状态机执行；纯编译 |
 | `@cortex/testing` | 测试基础设施——Mock 工厂、集成测试工具 | shared | 仅 devDependency 使用；不进入生产 bundle |
 | `@cortex/pattern-extractor` | 模式提取器——执行输出 → 技能结晶 | 无 | 不含 LLM 调用；纯文本模式匹配 |

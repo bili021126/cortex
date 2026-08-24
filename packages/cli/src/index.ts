@@ -12,9 +12,6 @@
  * 违反者：导入路径越写越长，终至不可维护。
  */
 
-// ── 文档转换（向后兼容） ────────────────────────────
-export { convert, convertToDocument } from "@cortex/parser";
-
 // ── CLI 入口 ───────────────────────────────────────
 export { main as runCli } from "./main.js";
 export type { CommandContext, CommandResult, OutputFormat } from "./types.js";

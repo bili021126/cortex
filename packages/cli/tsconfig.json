@@ -5,7 +5,9 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
     {
       "path": "../client"
@@ -27,9 +29,6 @@
     },
     {
       "path": "../memory-store/tsconfig.src.json"
-    },
-    {
-      "path": "../parser"
     },
     {
       "path": "../platform/tsconfig.src.json"

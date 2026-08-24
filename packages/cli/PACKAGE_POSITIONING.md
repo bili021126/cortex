@@ -13,7 +13,6 @@
 - @cortex/scheduler
 - @cortex/doctor
 - @cortex/llm
-- @cortex/parser
 - @cortex/prompt-kit
 - @cortex/skill-kit
 - @cortex/tools
@@ -56,7 +55,6 @@
 - @cortex/scheduler
 - @cortex/doctor
 - @cortex/llm
-- @cortex/parser
 - @cortex/prompt-kit
 - @cortex/skill-kit
 - @cortex/tools

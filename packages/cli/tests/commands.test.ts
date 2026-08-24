@@ -453,68 +453,19 @@ describe("cortex doc", () => {
   beforeAll(() => { tmpDir = createTmpDir(); });
   afterAll(() => { cleanupDir(tmpDir); });
 
-  it("无参数 / --help 显示帮助", async () => {
+  it("无参数 / --help 显示帮助（convert/serve 已随 parser 包砍除——仅 check）", async () => {
     const handler = createDocHandler();
     const result = await handler([], {}, ctx);
     expect(result.success).toBe(true);
-    expect(result.output).toContain("convert");
-    expect(result.output).toContain("serve");
     expect(result.output).toContain("check");
+    expect(result.output).not.toContain("convert");
   });
 
-  it("convert 将 markdown 转为 HTML", async () => {
-    const mdFile = path.join(tmpDir, "test.md");
-    fs.writeFileSync(mdFile, "# Hello\n\nWorld");
-    const handler = createDocHandler();
-    const result = await handler(["convert", mdFile], {}, ctx);
-    expect(result.success).toBe(true);
-    expect(result.output).toContain("<h1>");
-    expect(result.output).toContain("Hello");
-  });
-
-  it("convert --output 写入文件", async () => {
-    const mdFile = path.join(tmpDir, "test2.md");
-    const outFile = path.join(tmpDir, "out.html");
-    fs.writeFileSync(mdFile, "## Subtitle");
-    const handler = createDocHandler();
-    const result = await handler(["convert", mdFile], { output: outFile }, ctx);
-    expect(result.success).toBe(true);
-    expect(result.output).toContain("转换完成");
-    const html = fs.readFileSync(outFile, "utf-8");
-    expect(html).toContain("<h2>");
-  });
-
-  it("convert --document 输出完整 HTML", async () => {
-    const mdFile = path.join(tmpDir, "test3.md");
-    fs.writeFileSync(mdFile, "# Title");
-    const handler = createDocHandler();
-    const result = await handler(["convert", mdFile], { document: true, title: "MyDoc" }, ctx);
-    expect(result.success).toBe(true);
-    expect(result.output).toContain("<!DOCTYPE html>");
-    expect(result.output).toContain("<title>MyDoc</title>");
-  });
-
-  it("convert 不支持的文件格式返回错误", async () => {
-    const txtFile = path.join(tmpDir, "test.txt");
-    fs.writeFileSync(txtFile, "plain text");
-    const handler = createDocHandler();
-    const result = await handler(["convert", txtFile], {}, ctx);
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("不支持的文件格式");
-  });
-
-  it("convert 文件不存在返回错误", async () => {
-    const handler = createDocHandler();
-    const result = await handler(["convert", "/nonexistent/file.md"], {}, ctx);
-    expect(result.success).toBe(false);
-    expect(result.exitCode).toBe(1);
-  });
-
-  it("convert 缺少文件参数返回错误", async () => {
+  it("未知子命令返回错误（仅列出 check）", async () => {
     const handler = createDocHandler();
     const result = await handler(["convert"], {}, ctx);
     expect(result.success).toBe(false);
-    expect(result.error).toContain("输入文件");
+    expect(result.error).toContain("check");
   });
 
   it("check 合规检查通过", async () => {

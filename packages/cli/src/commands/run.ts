@@ -8,7 +8,6 @@
  */
 
 import type { CommandHandler, CommandResult } from "../types.js";
-import { convertMarkdown } from "../utils.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
 import type { TaskNode, Tag } from "@cortex/shared";
 import * as fs from "node:fs";
@@ -17,9 +16,6 @@ import * as path from "node:path";
 /** run 命令已解析的选项 */
 interface RunOptions {
   agentType: string | undefined;
-  outputPath: string | undefined;
-  title: string | undefined;
-  documentMode: boolean | undefined;
   watchMode: boolean | undefined;
   dryRun: boolean | undefined;
 }
@@ -27,9 +23,6 @@ interface RunOptions {
 function _parseRunOptions(options: Record<string, unknown>): RunOptions {
   return {
     agentType: (options["agent"] ?? options["a"]) as string | undefined,
-    outputPath: (options["output"] ?? options["o"]) as string | undefined,
-    title: options["title"] as string | undefined,
-    documentMode: options["document"] as boolean | undefined,
     watchMode: options["watch"] as boolean | undefined,
     dryRun: options["dry-run"] as boolean | undefined,
   };
@@ -48,16 +41,8 @@ function _buildRunDryRun(inputSource: string, contentLength: number, opts: RunOp
     `   输入: ${inputSource}`,
     `   内容长度: ${contentLength} 字符`,
     opts.agentType ? `   Agent: ${opts.agentType}` : "   Agent: 自动匹配",
-    opts.outputPath ? `   输出: ${opts.outputPath}` : "   输出: stdout",
     opts.watchMode ? "   监视: 开启" : "   监视: 关闭",
   ].join("\n");
-}
-
-/** 判断是否走文档转换路径 */
-function _isDocConversion(filePath: string | undefined, options: Record<string, unknown>): boolean {
-  if (options["document"] as boolean) return true;
-  const ext = filePath ? path.extname(filePath).toLowerCase() : "";
-  return ext === ".md" || ext === ".markdown";
 }
 
 /** 构建失败节点的错误详情 */
@@ -134,13 +119,6 @@ export function createRunHandler(bridge: EngineBridge): CommandHandler {
 
     if (parsed.dryRun) {
       return { success: true, output: _buildRunDryRun(inputSource, content.length, parsed), exitCode: 0 };
-    }
-
-    if (_isDocConversion(filePath, options)) {
-      try { return convertMarkdown({ content, title: parsed.title, documentMode: parsed.documentMode, outputPath: parsed.outputPath }); }
-      catch (err) {
-        return { success: false, error: `转换失败: ${err instanceof Error ? err.message : String(err)}`, exitCode: 2 };
-      }
     }
 
     try { return await _handleRunExecution(bridge, content, parsed.agentType); }

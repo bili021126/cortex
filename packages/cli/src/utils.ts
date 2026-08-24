@@ -11,7 +11,6 @@ import path from "node:path";
 
 import { detectDefaultFormat, getFormatter } from "./formatters/index.js";
 import type { OutputFormat, CommandContext, CommandResult } from "./types.js";
-import { convert, convertToDocument } from "@cortex/parser";
 
 /** 解析全局 --format / -f 选项 */
 export function parseGlobalFormat(argv: string[]): OutputFormat {
@@ -86,21 +85,3 @@ export function isHelpRequest(args: string[]): boolean {
   return args.length === 0 || args[0] === "--help" || args[0] === "-h";
 }
 
-/** Markdown→HTML 统一转换——消除 run/doc 双写 */
-export function convertMarkdown(opts: {
-  content: string;
-  title?: string;
-  documentMode?: boolean;
-  outputPath?: string;
-}): CommandResult {
-  const html = opts.documentMode
-    ? convertToDocument(opts.content, opts.title)
-    : convert(opts.content);
-
-  if (opts.outputPath) {
-    const outPath = path.resolve(opts.outputPath);
-    fs.writeFileSync(outPath, html, "utf-8");
-    return { success: true, output: `✓ 转换完成: ${path.basename(outPath)}`, data: { outputPath: opts.outputPath, size: html.length }, exitCode: 0 };
-  }
-  return { success: true, output: html, data: { html, size: html.length }, exitCode: 0 };
-}

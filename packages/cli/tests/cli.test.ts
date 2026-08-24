@@ -10,32 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { convert, convertToDocument } from '@cortex/parser';
 import { CommandRegistry, ConfigManager, getFormatter, detectDefaultFormat, CORTEX_VERSION } from "@cortex/cli";
-
-// ── 向后兼容 ──────────────────────────────────────
-
-describe('@cortex/cli — 向后兼容', () => {
-  it('通过 @cortex/parser 正确导入 convert', () => {
-    expect(typeof convert).toBe('function');
-  });
-
-  it('通过 @cortex/parser 正确导入 convertToDocument', () => {
-    expect(typeof convertToDocument).toBe('function');
-  });
-
-  it('convert 基本功能正常', () => {
-    const html = convert('# Hello');
-    expect(html).toContain('<h1>');
-    expect(html).toContain('Hello');
-  });
-
-  it('convertToDocument 生成完整文档', () => {
-    const html = convertToDocument('# Title', 'Test');
-    expect(html).toContain('<!DOCTYPE html>');
-    expect(html).toContain('<title>Test</title>');
-  });
-});
 
 // ── 命令注册表 ─────────────────────────────────────
 

@@ -12,7 +12,6 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { convert, convertToDocument } from "@cortex/parser";
 import { createVersionHandler } from "../../src/commands/version.js";
 import { CORTEX_VERSION } from "@cortex/config";
 import { CommandRegistry } from "../../src/commands/index.js";
@@ -135,23 +134,9 @@ describe("命令注册表完整性", () => {
 });
 
 // ════════════════════════════════════════════════════════
-// doc convert — Markdown→HTML
+// doc check — 文档合规检查（convert/serve 已随 parser 包砍除）
 // ════════════════════════════════════════════════════════
-describe("cortex doc convert", () => {
-  it("convert 基本 Markdown→HTML", () => {
-    const html = convert("# Hello\n\nWorld");
-    expect(html).toContain("<h1>");
-    expect(html).toContain("Hello");
-    expect(html).toContain("<p>World</p>");
-  });
-
-  it("convertToDocument 生成完整 HTML", () => {
-    const html = convertToDocument("# Title\n\nBody", "MyDoc");
-    expect(html).toContain("<!DOCTYPE html>");
-    expect(html).toContain("<title>MyDoc</title>");
-    expect(html).toContain("<h1>Title</h1>");
-  });
-
+describe("cortex doc check", () => {
   it("doc check 子命令可调用", async () => {
     const r = await createDocHandler()(["check"], { rules: "links" }, defaultCtx());
     expect(r).toBeDefined();
@@ -343,7 +328,7 @@ describe("命令注册表边界", () => {
 describe("doc 子命令路由", () => {
   it("未知子命令返回错误并列出可用子命令", async () => {
     const r = await createDocHandler()(["zzz"], {}, defaultCtx());
-    assertUnknownSubcommand(r, ["convert", "serve", "check"]);
+    assertUnknownSubcommand(r, ["check"]);
   });
 
   it("doc 无子命令显示帮助", async () => {
@@ -434,27 +419,6 @@ describe("ConfigManager", () => {
     expect(typeof mgr.getAll).toBe("function");
     expect(typeof mgr.validate).toBe("function");
     expect(typeof mgr.initConfig).toBe("function");
-  });
-});
-
-// ════════════════════════════════════════════════════════
-// L2: doc convert 边界
-// ════════════════════════════════════════════════════════
-describe("doc convert 边界", () => {
-  it("空 Markdown 转换不抛异常", () => {
-    const html = convert("");
-    expect(typeof html).toBe("string");
-  });
-
-  it("纯文本转换返回段落包装", () => {
-    const html = convert("plain text");
-    expect(html).toContain("<p>");
-  });
-
-  it("代码块转换包含 <pre><code>", () => {
-    const html = convert("```ts\nconst x = 1;\n```");
-    expect(html).toContain("<pre>");
-    expect(html).toContain("<code");
   });
 });
 
