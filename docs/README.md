@@ -41,6 +41,17 @@
 | [Agent标签词汇表-v2.0.md](core/Agent标签词汇表-v2.0.md) | 运行时常量参考——16标签×10Agent |
 | [analysis/思考执行体系总纲.md](analysis/思考执行体系总纲.md) | 三层架构spec——群策层→Scheduler层→RLM层 |
 | [analysis/core-2-governance-implementation-gap.md](analysis/core-2-governance-implementation-gap.md) | 纳西妲的代码层缺口分析 |
+| [analysis/audit-full-2026-08-11.md](analysis/audit-full-2026-08-11.md) | 四轮全量审计（D/E/F 三组 40+ 发现 + 修复记录） |
+| [analysis/three-front-external-ecosystem-2026-08-11.md](analysis/three-front-external-ecosystem-2026-08-11.md) | 三端外部生态联网调研 |
+
+### 桌面端 / UI 层
+
+| 文档/代码 | 定位 |
+|------|------|
+| `packages/desktop/` | Electron 双窗（桌宠 + 聊天）+ Live2D + Monaco（F11 登记——此前 UI 层为文档盲区） |
+| `packages/design-tokens/` | 三端共享设计常量（ENGINEERING / PRESENCE / CHAT 三 palette） |
+| [core/desktop-ui-design-history.md](core/desktop-ui-design-history.md) | 画布式 UI 三层架构设计史 |
+| [core/webui-architecture-design.md](core/webui-architecture-design.md) | WebUI 六面板设计（后端在编，前端未落地） |
 
 > **已收敛文档**（内容已整合进〔概念设计全面整合〕，保留为历史参考）：
 > - `概念收敛-2026-06-模型调研与架构三线.md` → 已整合进全面整合 §二
@@ -55,7 +66,7 @@
 
 | 文档 | 定位 |
 |------|------|
-| **Cortex 概念顶层设计 v3.7.md** | **现行宪法**（v3.7，AM-2026-0801-001） |
+| **Cortex 概念顶层设计 v3.8.md** | **现行宪法**（v3.8，AM-2026-0811-001 事实勘误修订） |
 | archive/ | 宪法版本归档（含前代 v2.5.35 / 自动备份，不需要手动阅读） |
 | backup/ | 修宪前备份（2份） |
 
@@ -75,6 +86,7 @@
 | AM-2026-0715-001 | 玉衡全量治理审计——10项缺口修复 |
 | AM-2026-0722-003 | 宪法 v3.6 后续补充修正 |
 | AM-2026-0801-001 | 宪法 v3.7 全面修订——图景盘点实测刷新 + 第二轮审查战果 |
+| AM-2026-0811-001 | 宪法 v3.8 事实勘误修订——8 组 18 处量化自述对齐 |
 
 ---
 

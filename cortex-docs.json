@@ -1,7 +1,7 @@
 {
-  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v3.7.md",
+  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v3.8.md",
   "docRegistry": [
-    { "path": "docs/constitution/Cortex 概念顶层设计 v3.7.md", "type": "constitution", "version": "3.7", "canonical": true },
+    { "path": "docs/constitution/Cortex 概念顶层设计 v3.8.md", "type": "constitution", "version": "3.7", "canonical": true },
     { "path": "docs/analysis/harness-deep-dive-2026-08-05.md", "type": "design", "version": "1.0", "canonical": false },
     { "path": "docs/analysis/ux-deep-dive-2026-08-05.md", "type": "design", "version": "1.0", "canonical": false },
     { "path": "docs/analysis/audit-full-2026-08-05.md", "type": "audit", "version": "1.0", "canonical": false },

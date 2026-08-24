@@ -1,9 +1,9 @@
 {
   "description": "文档配置——宪法路径与文档注册表。docRegistry 登记项目内所有受治理的文档，支持 version、canonical 标记。",
-  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v3.7.md",
+  "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v3.8.md",
   "docRegistry": [
     {
-      "path": "docs/constitution/Cortex 概念顶层设计 v3.7.md",
+      "path": "docs/constitution/Cortex 概念顶层设计 v3.8.md",
       "type": "constitution",
       "version": "3.7",
       "canonical": true
@@ -18,7 +18,8 @@
       "path": "docs/core/意图响应体系设计.md",
       "type": "design",
       "version": "1.0.0",
-      "canonical": true
+      "canonical": false,
+      "note": "2026-08-24 F8：canonical 降级——engine 无 IntentResponse 实现，文档地位与实现不符"
     },
     {
       "path": "docs/core/consistency-design.md",

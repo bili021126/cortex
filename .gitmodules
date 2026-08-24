@@ -1,3 +1,0 @@
-[submodule "tools/filesystem-mcp-server"]
-	path = tools/filesystem-mcp-server
-	url = https://github.com/cyanheads/filesystem-mcp-server.git
