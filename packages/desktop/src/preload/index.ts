@@ -30,6 +30,10 @@ export interface CortexDesktopAPI {
   editorSaveAs: (content: string) => Promise<{ ok: boolean; path?: string; error?: string }>;
   /** 通知订阅（通知铃接真——pipeline/notification 事件） */
   onNotification: (cb: (e: { channel: string; data: unknown }) => void) => () => void;
+  /** D7b：确认门——gate.request 订阅（返回取消订阅函数） */
+  onGateRequest: (cb: (e: { channel: string; data: unknown }) => void) => () => void;
+  /** D7b：确认门——gate.resolve 回执 */
+  resolveGate: (requestId: string, approved: boolean) => Promise<{ ok: boolean }>;
   speak: (text: string) => Promise<{ ok: boolean; error?: string }>;
   expression: (name: string) => Promise<{ ok: boolean }>;
   settings: {
@@ -107,6 +111,15 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     ipcRenderer.on(IPC_CHANNELS.NOTIFICATION_EVENT, listener);
     return () => { ipcRenderer.removeListener(IPC_CHANNELS.NOTIFICATION_EVENT, listener); };
   },
+
+  // D7b：确认门——gate.request 订阅 + gate.resolve 回执
+  onGateRequest: (cb: (e: { channel: string; data: unknown }) => void) => {
+    const listener = (_: unknown, e: { channel: string; data: unknown }) => cb(e);
+    ipcRenderer.on(IPC_CHANNELS.GATE_REQUEST, listener);
+    return () => { ipcRenderer.removeListener(IPC_CHANNELS.GATE_REQUEST, listener); };
+  },
+  resolveGate: (requestId: string, approved: boolean) =>
+    ipcRenderer.invoke(IPC_CHANNELS.GATE_RESOLVE, requestId, approved),
 
   speak: (text: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.LIVE2D_SPEAK, text),

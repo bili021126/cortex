@@ -25,8 +25,8 @@ export class DaemonWsClient {
       const ws = new WebSocket(url);
       this.ws = ws;
       ws.onopen = () => {
-        // 连接成功——订阅 pipeline/notification 频道（显式订阅，广播只发订阅者）
-        ws.send(JSON.stringify({ type: "subscribe", channels: ["pipeline", "notification"] }));
+        // 连接成功——订阅 pipeline/notification/gate 频道（显式订阅，广播只发订阅者）
+        ws.send(JSON.stringify({ type: "subscribe", channels: ["pipeline", "notification", "gate"] }));
       };
       ws.onmessage = (ev) => {
         try {

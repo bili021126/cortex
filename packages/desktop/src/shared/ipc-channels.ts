@@ -21,6 +21,9 @@ export const IPC_CHANNELS = {
   EDITOR_SAVE: "editor:save",
   EDITOR_SAVE_AS: "editor:save-as",
   NOTIFICATION_EVENT: "notification:event",
+  // D7b：确认门远程确认链路（gate.request → renderer 浮层 → gate.resolve）
+  GATE_REQUEST: "gate:request",
+  GATE_RESOLVE: "gate:resolve",
 } as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];

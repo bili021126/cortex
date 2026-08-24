@@ -111,15 +111,23 @@ void app.whenReady().then(async () => {
     presenceBridge.start();
   }
 
-  // 通知铃接真：daemon WS 客户端——pipeline/notification 事件 → renderer（未读 +1）
+  // 通知铃接真：daemon WS 客户端——pipeline/notification 事件 → renderer（未读 +1）；gate → 确认门浮层
   daemonWs = new DaemonWsClient((channel, data) => {
     for (const win of [chatWindow, mainWindow]) {
       if (win && !win.isDestroyed()) {
-        win.webContents.send(IPC_CHANNELS.NOTIFICATION_EVENT, { channel, data });
+        // D7b：gate 通道的 gate.request 走确认门专用 IPC（renderer 浮层消费）
+        const isGate = channel === "gate" && (data as { type?: string })?.type === "gate.request";
+        win.webContents.send(isGate ? IPC_CHANNELS.GATE_REQUEST : IPC_CHANNELS.NOTIFICATION_EVENT, { channel, data });
       }
     }
   });
   daemonWs.start();
+
+  // D7b：确认门远程确认链路——gate.request → renderer 浮层；renderer resolve → gate.resolve
+  ipcMain.handle(IPC_CHANNELS.GATE_RESOLVE, (_e, requestId: string, approved: boolean) => {
+    daemonWs?.send({ type: "gate.resolve", requestId, approved });
+    return { ok: true };
+  });
 
   // ── 窗口拖拽 IPC ────────────────────────────────
   ipcMain.on("window:move", (_e, dx: number, dy: number) => {

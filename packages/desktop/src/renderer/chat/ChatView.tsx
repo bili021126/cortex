@@ -200,13 +200,12 @@ const SETTINGS_ITEMS: Record<string, Record<string, Array<{ label: string; key: 
       { label: "Cortex", key: "version.cortex", value: "2.5.28" },
       { label: "桌面端", key: "version.desktop", value: "0.1.0" },
       { label: "引擎", key: "version.engine", value: "Core-2" },
-      { label: "宪法", key: "version.constitution", value: "v2.5" },
+      { label: "宪法", key: "version.constitution", value: "v3.8" },
     ],
     "运行环境": [
       { label: "Node.js", key: "version.node", value: "24 LTS" },
       { label: "Electron", key: "version.electron", value: "43" },
-      { label: "构建时间", key: "version.buildAt", value: "2026-08-09" },
-      { label: "Git", key: "version.gitHead", value: "21863f02" },
+      // F10：删除硬编码 buildAt/gitHead 快照——静态假数据误导，真实版本以 daemon capabilities 为准
     ],
   },
 };
@@ -307,6 +306,23 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     } catch { /* 旧版 preload */ }
     return () => { try { off?.(); } catch { /* 已卸载 */ } };
   }, []);
+  // D7b：确认门浮层——gate.request 订阅（L2/L3 工具调用需人工确认）
+  const [gateRequests, setGateRequests] = useState<Array<{ requestId: string; toolName: string; level: string; summary: string; detail?: string }>>([]);
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    try {
+      off = window.cortexDesktop.onGateRequest((e) => {
+        const d = (e.data ?? {}) as { type?: string; requestId?: string; toolName?: string; level?: string; summary?: string; detail?: string };
+        if (d.type !== "gate.request" || !d.requestId) return;
+        setGateRequests((prev) => [...prev, { requestId: d.requestId!, toolName: d.toolName ?? "未知工具", level: d.level ?? "L2", summary: d.summary ?? "", detail: d.detail }].slice(-4));
+      });
+    } catch { /* 旧版 preload */ }
+    return () => { try { off?.(); } catch { /* 已卸载 */ } };
+  }, []);
+  const resolveGate = (requestId: string, approved: boolean): void => {
+    void window.cortexDesktop.resolveGate(requestId, approved);
+    setGateRequests((prev) => prev.filter((g) => g.requestId !== requestId));
+  };
   // Agent 配置接真：思考模式/上下文/档位（settings:get 拉 + settings:set 写）
   const [thinkingOn, setThinkingOn] = useState(true);
   const [ctxLen, setCtxLen] = useState(32);
@@ -775,8 +791,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                         ))}
                       </div>
                       <div className="chat__tasks-actions">
-                        <button type="button" className="chat__session-btn" onClick={() => setToast("取消任务——待实现")}>⏹ 取消</button>
-                        <button type="button" className="chat__session-btn" onClick={() => setToast("重试任务——待实现")}>↻ 重试</button>
+                        <button type="button" className="chat__session-btn" onClick={() => setToast("取消任务——待实现")} title="取消任务（F10：功能待接线，暂禁用）" disabled>⏹ 取消</button>
+                        <button type="button" className="chat__session-btn" onClick={() => setToast("重试任务——待实现")} title="重试任务（F10：功能待接线，暂禁用）" disabled>↻ 重试</button>
                       </div>
                     </>
                   );
@@ -915,8 +931,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 {/* 会话管理 + Agent 配置（独立子菜单） */}
                 <div className="chat__session-bar">
                   <button type="button" className="chat__session-btn" onClick={handleNewSession} title="创建新会话">✚ 创建会话</button>
-                  <button type="button" className="chat__session-btn" onClick={() => setToast("合并会话——待实现")} title="合并会话">⧉ 合并会话</button>
-                  <button type="button" className="chat__session-btn" onClick={() => setToast("压缩会话——待实现")} title="压缩会话">🗜 压缩会话</button>
+                  <button type="button" className="chat__session-btn" onClick={() => setToast("合并会话——待实现")} title="合并会话（F10：功能待接线，暂禁用）" disabled>⧉ 合并会话</button>
+                  <button type="button" className="chat__session-btn" onClick={() => setToast("压缩会话——待实现")} title="压缩会话（F10：功能待接线，暂禁用）" disabled>🗜 压缩会话</button>
                   <span className="chat__session-sep" />
                   <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => setConfigOpen(true)} title="Agent 配置">⚙ Agent 配置</button>
                 </div>
@@ -938,6 +954,24 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           </div>
         )}
       </div>
+      {/* 确认门浮层（D7b：L2/L3 工具调用需人工确认——gate.request 驱动，resolve 后消隐） */}
+      {gateRequests.length > 0 && (
+        <div className="chat__notif-panel" style={{ bottom: 76 }}>
+          <div className="chat__panel-title">⚖️ 需要确认（{gateRequests.length}）</div>
+          {gateRequests.map((g) => (
+            <div key={g.requestId} className="chat__notif-item">
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, minWidth: 0 }}>
+                <span style={{ fontWeight: 600 }}>{g.toolName} · {g.level}</span>
+                <span style={{ fontSize: 12, opacity: 0.75, wordBreak: "break-all" }}>{g.summary || g.detail || "（无摘要）"}</span>
+              </div>
+              <span style={{ display: "flex", gap: 6 }}>
+                <button type="button" className="chat__session-btn chat__session-btn--config" onClick={() => resolveGate(g.requestId, true)}>允许</button>
+                <button type="button" className="chat__session-btn" onClick={() => resolveGate(g.requestId, false)}>拒绝</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {/* 通知面板（持久锚点——四通道 + 实时事件） */}
       {notifOpen && (
         <div className="chat__notif-panel">
@@ -1009,7 +1043,7 @@ function CodeEditor() {
         const ed = monaco.editor.create(containerRef.current, {
           value: content,
           language: "typescript",
-          theme: "vs",
+          theme: "vs-dark",
           automaticLayout: true,
           fontSize: 13,
           minimap: { enabled: false },
