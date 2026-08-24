@@ -16,6 +16,11 @@ export { INJECTION_HEADER, INJECTION_PREAMBLE } from "./worldbook-constants.js"
 import { chunkText } from "./chunk.js"
 import { setRerankerModelsDir, initReranker, resetReranker } from "./reranker.js"
 
+/** 诊断输出——统一走 stderr（错误友好序列化：Error 取 message） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
+}
+
 let store: JsonVectorStore | null = null
 let retriever: HybridRetriever | null = null
 let worldbook: WorldbookManager | null = null
@@ -66,7 +71,7 @@ export async function searchMemoryEntries(
 async function recordUserMemoryRecalls(results: Array<{ entry: RagMemoryEntry }>): Promise<void> {
   const l2Ids = results.filter((r) => r.entry.source === "user_memory").map((r) => r.entry.metadata?.l2Id).filter((id): id is string => typeof id === "string" && id.length > 0)
   if (l2Ids.length === 0) return
-  try { const { memoryStore } = await import("../memory-store.js"); for (const l2Id of new Set(l2Ids)) { await memoryStore.updateL2RecallStats(l2Id, 1) } } catch (err) { console.warn("[RAG] failed to record user memory recall:", err) }
+  try { const { memoryStore } = await import("../memory-store.js"); for (const l2Id of new Set(l2Ids)) { await memoryStore.updateL2RecallStats(l2Id, 1) } } catch (err) { diag("[RAG] failed to record user memory recall:", err) }
 }
 
 export async function searchHistoryEntries(query: string, topK = 5): Promise<Array<{ text: string; createdAt: number; score: number; metadata?: Record<string, unknown> }>> {

@@ -9,7 +9,7 @@
 import { memoryStore } from "./memory-store.js"
 /** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
 function diag(...args: unknown[]): void {
-  process.stderr.write(args.map(String).join(" ") + "\n");
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
 }
 
 import type { L0WritableField } from "./memory-store.js"
@@ -92,11 +92,11 @@ export class MemoryManager {
         }
         const validFields = Object.keys(L0_FIELD_DESCRIPTIONS)
         if (!candidate.field) {
-          console.warn("[MemoryManager] L0 候选缺少 field 字段，跳过自动写核心画像")
+          diag("[MemoryManager] L0 候选缺少 field 字段，跳过自动写核心画像")
           continue
         }
         if (!validFields.includes(candidate.field)) {
-          console.warn(`[MemoryManager] AI 返回非法字段 "${candidate.field}"，跳过自动写核心画像`)
+          diag(`[MemoryManager] AI 返回非法字段 "${candidate.field}"，跳过自动写核心画像`)
           continue
         }
         await memoryStore.upsertL0Field(candidate.field as L0WritableField, candidate.content)
@@ -135,7 +135,7 @@ export class MemoryManager {
       await memoryStore.markL2SyncStatus(l2.id, "synced", ragId)
     } catch (err) {
       await memoryStore.markL2SyncStatus(l2.id, "sync_failed", undefined, err)
-      console.warn("[MemoryManager] L2 已写入，但 RAG 同步失败:", err)
+      diag("[MemoryManager] L2 已写入，但 RAG 同步失败:", err)
       return
     }
 
@@ -145,7 +145,7 @@ export class MemoryManager {
     try {
       await this.detectAndMarkConflicts(candidate.content, l2.id, ragId, candidate.triggerText)
     } catch (err) {
-      console.warn("[MemoryManager] 冲突检测失败:", err)
+      diag("[MemoryManager] 冲突检测失败:", err)
     }
   }
 

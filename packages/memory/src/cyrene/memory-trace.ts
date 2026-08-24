@@ -8,6 +8,11 @@
 import * as fs from "fs"
 import * as path from "path"
 
+/** 诊断输出——统一走 stderr（错误友好序列化：Error 取 message） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
+}
+
 export interface MemoryTraceEvent {
   ts?: number
   op: string
@@ -42,6 +47,6 @@ export function appendMemoryTrace(event: MemoryTraceEvent): void {
     }
     fs.appendFileSync(filePath, `${JSON.stringify(entry)}\n`, "utf8")
   } catch (err) {
-    console.warn("[MemoryTrace] 写入失败:", err)
+    diag("[MemoryTrace] 写入失败:", err)
   }
 }

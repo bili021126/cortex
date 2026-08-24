@@ -38,6 +38,11 @@ import {
   StoreAlreadyExistsError,
 } from "../errors/MemoryStoreError.js";
 
+/** 诊断输出——统一走 stderr（错误友好序列化：Error 取 message） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
+}
+
 /**
  * 存储注册项 —— 使用 discriminated union 窄化初始化状态。
  *
@@ -253,7 +258,7 @@ export class MemoryStoreRegistry {
         await registration.store.close();
       } catch (err) {
         // 关闭失败不阻止注销，但必须记录
-        console.warn(`[MemoryStoreRegistry] unregister close failed for "${name}":`, err);
+        diag(`[MemoryStoreRegistry] unregister close failed for "${name}":`, err);
       }
     }
 
@@ -329,7 +334,7 @@ export class MemoryStoreRegistry {
     for (const registration of this._registrations.values()) {
       if (registration.initialized) {
         promises.push(registration.store.close().catch((err) => {
-          console.warn(`[MemoryStoreRegistry] shutdownAll close failed for "${registration.name}":`, err);
+          diag(`[MemoryStoreRegistry] shutdownAll close failed for "${registration.name}":`, err);
         }));
       }
     }

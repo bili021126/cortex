@@ -3,7 +3,7 @@
 import * as fs from "fs";
 /** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
 function diag(...args: unknown[]): void {
-  process.stderr.write(args.map(String).join(" ") + "\n");
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
 }
 
 import * as path from "path";
@@ -30,7 +30,7 @@ let _dimsWarned = false;
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length) {
     if (!_dimsWarned) {
-      console.warn(`[RAG] 向量维度不匹配（${a.length} vs ${b.length}）——embedding 模型更换后旧向量失效，建议重嵌入`);
+      diag(`[RAG] 向量维度不匹配（${a.length} vs ${b.length}）——embedding 模型更换后旧向量失效，建议重嵌入`);
       _dimsWarned = true;
     }
     return 0;
@@ -170,7 +170,7 @@ export class JsonVectorStore {
         const parsed = JSON.parse(raw);
         // R11-04：旧格式（裸数组，无模型标记）→ 包装 + 警告；新格式直接读取
         if (Array.isArray(parsed)) {
-          console.warn("[RAG] 检测到旧版向量库（无 embedding 模型标记）——下次保存将升级为新格式");
+          diag("[RAG] 检测到旧版向量库（无 embedding 模型标记）——下次保存将升级为新格式");
           this.entries = parsed as RagMemoryEntry[];
           this.fileModel = null;
         } else if (parsed && Array.isArray(parsed.entries)) {
@@ -180,7 +180,7 @@ export class JsonVectorStore {
           try {
             const current = getEmbeddingProvider();
             if (this.fileModel?.dims && this.fileModel.dims !== current.dims) {
-              console.warn(
+              diag(
                 `[RAG] 向量库由 ${this.fileModel.name ?? "未知模型"}（${this.fileModel.dims}维）写入，当前是 ${current.name}（${current.dims}维）——维度不匹配，相似度不可靠，建议重嵌入`,
               );
             }
@@ -188,7 +188,7 @@ export class JsonVectorStore {
         }
       }
     } catch (err) {
-      console.warn("[RAG] failed to load vector store:", err);
+      diag("[RAG] failed to load vector store:", err);
       this.entries = [];
     }
   }
@@ -209,7 +209,7 @@ export class JsonVectorStore {
       fs.renameSync(tmpPath, this.filePath);
       this.dirty = false;
     } catch (err) {
-      console.warn("[RAG] failed to save vector store:", err);
+      diag("[RAG] failed to save vector store:", err);
     }
   }
   // ── IVF 索引管理 ──

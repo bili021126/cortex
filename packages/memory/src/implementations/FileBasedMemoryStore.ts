@@ -11,6 +11,11 @@ import type { MemoryEntry, MemoryLink, LinkType } from "@cortex/shared";
 import { PersistenceError } from "../errors/MemoryStoreError.js";
 import { AbstractMemoryStore, type MemoryStoreBackend } from "./AbstractMemoryStore.js";
 
+/** 诊断输出——统一走 stderr（错误友好序列化：Error 取 message） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
+}
+
 // ── 内部类型 ──────────────────────────────────
 
 interface IndexFile {
@@ -88,7 +93,7 @@ class FileBackend implements MemoryStoreBackend {
       // R11-02：版本门控——拒绝比代码新的文件（降级守卫），避免盲转换加载损坏数据。
       // 迁移点：未来 v2 在此分支（if (index.version === 1) 迁移到 2），当前仅 v1。
       if (typeof index.version !== "number" || index.version > STORAGE_VERSION) {
-        console.warn(
+        diag(
           `[memory] 索引版本 ${index.version} 高于当前支持的 ${STORAGE_VERSION}——拒绝加载（降级守卫），尝试重建: ${this._indexPath}`,
         );
         throw new Error(`unsupported index version: ${index.version}`);
@@ -113,7 +118,7 @@ class FileBackend implements MemoryStoreBackend {
         await fs.access(this._indexPath);
         try { await fs.copyFile(this._indexPath, `${this._indexPath}.corrupt.bak`); } catch { /* 备份失败不阻断 */ }
         const rebuilt = await this._rebuildIndexFromEntries(store);
-        console.warn(
+        diag(
           rebuilt > 0
             ? `[memory] 索引损坏，已从 ${rebuilt} 个条目文件重建: ${this._indexPath}`
             : `[memory] 索引损坏且 entries/ 为空——从空存储启动: ${this._indexPath}`,
@@ -129,7 +134,7 @@ class FileBackend implements MemoryStoreBackend {
       const linksFile: LinksFile = JSON.parse(linksData);
       // R11-02：链路文件版本门控（与索引一致）
       if (typeof linksFile.version !== "number" || linksFile.version > STORAGE_VERSION) {
-        console.warn(
+        diag(
           `[memory] 链路文件版本 ${linksFile.version} 高于当前支持的 ${STORAGE_VERSION}——忽略链路（索引不受影响）: ${this._linksPath}`,
         );
         throw new Error(`unsupported links version: ${linksFile.version}`);
@@ -188,7 +193,7 @@ class FileBackend implements MemoryStoreBackend {
       await fs.rename(tmpPath, filePath);
     }).catch((err) => {
       // 失败上报，仍继续向上抛出供调用方处理
-      console.error(`[memory] persist failed: id=${id} err=${err instanceof Error ? err.message : String(err)}`);
+      diag(`[memory] persist failed: id=${id} err=${err instanceof Error ? err.message : String(err)}`);
       throw err;
     });
     this._persistLocks.set(id, next);

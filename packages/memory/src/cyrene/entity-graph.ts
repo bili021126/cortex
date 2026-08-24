@@ -9,6 +9,11 @@
 import * as fs from "fs"
 import * as path from "path"
 
+/** 诊断输出——统一走 stderr（错误友好序列化：Error 取 message） */
+function diag(...args: unknown[]): void {
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
+}
+
 // ── 类型 ──
 
 export interface EntityNode {
@@ -130,9 +135,9 @@ export class EntityGraph {
       try {
         const corruptPath = filePath + ".corrupt"
         fs.copyFileSync(filePath, corruptPath)
-        console.error(`[EntityGraph] 图谱文件损坏，已备份到 ${corruptPath}`, err)
+        diag(`[EntityGraph] 图谱文件损坏，已备份到 ${corruptPath}`, err)
       } catch {
-        console.error(`[EntityGraph] 图谱文件损坏且备份失败: ${err instanceof Error ? err.message : String(err)}`)
+        diag(`[EntityGraph] 图谱文件损坏且备份失败: ${err instanceof Error ? err.message : String(err)}`)
       }
       this.cache = { entities: [], relations: [] }
     }

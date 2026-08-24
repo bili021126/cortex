@@ -8,7 +8,7 @@
 import * as fs from "fs"
 /** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
 function diag(...args: unknown[]): void {
-  process.stderr.write(args.map(String).join(" ") + "\n");
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
 }
 
 import * as path from "path"
@@ -137,13 +137,13 @@ export class WorldbookManager {
 
   async loadFromDirectory(): Promise<void> {
     if (!fs.existsSync(this.worldbookDir)) {
-      console.warn("[Worldbook] directory not found:", this.worldbookDir);
+      diag("[Worldbook] directory not found:", this.worldbookDir);
       return;
     }
 
     const files = fs.readdirSync(this.worldbookDir).filter((f) => f.endsWith(".md"));
     if (files.length === 0) {
-      console.warn("[Worldbook] no .md files found in:", this.worldbookDir);
+      diag("[Worldbook] no .md files found in:", this.worldbookDir);
       return;
     }
 

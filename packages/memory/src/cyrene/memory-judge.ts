@@ -9,7 +9,7 @@
 import * as fs from "fs"
 /** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
 function diag(...args: unknown[]): void {
-  process.stderr.write(args.map(String).join(" ") + "\n");
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
 }
 
 import * as path from "path"
@@ -120,7 +120,7 @@ export class MemoryJudge {
     try {
       const settings = loadSettings()
       if (!settings.apiKey) {
-        console.error("[MemoryJudge] LLM 调用失败: missing api key")
+        diag("[MemoryJudge] LLM 调用失败: missing api key")
         return []
       }
 
@@ -212,7 +212,7 @@ export class MemoryJudge {
       const raw = response.text
       const parsed = extractJsonArray(raw)
       if (!parsed) {
-        console.error("[MemoryJudge] JSON 解析失败，原始内容：\n", raw.slice(0, 200))
+        diag("[MemoryJudge] JSON 解析失败，原始内容：\n", raw.slice(0, 200))
         return []
       }
 
@@ -232,7 +232,7 @@ export class MemoryJudge {
       diag(`[MemoryJudge] 提取候选: ${candidates.length} 条（过滤后）`)
       return candidates
     } catch (error) {
-      console.error("[MemoryJudge] LLM 调用失败:", error)
+      diag("[MemoryJudge] LLM 调用失败:", error)
       return []
     }
   }

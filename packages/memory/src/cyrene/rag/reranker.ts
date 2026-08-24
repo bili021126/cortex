@@ -9,7 +9,7 @@
 import * as path from "path"
 /** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
 function diag(...args: unknown[]): void {
-  process.stderr.write(args.map(String).join(" ") + "\n");
+  process.stderr.write(args.map((a) => (a instanceof Error ? a.message : String(a))).join(" ") + "\n");
 }
 
 import * as os from "os"
@@ -121,7 +121,7 @@ export async function initReranker(mode: "light" | "standard" | "none"): Promise
 
   if (!checkRerankerModelInstalled(mode)) {
     const modelDir = mode === "light" ? "ms-marco-MiniLM-L-6-v2" : "bge-reranker-base"
-    console.warn(`[Reranker] 模型未找到 (models/${modelDir}/onnx/model_quantized.onnx)，自动降级为 none。`)
+    diag(`[Reranker] 模型未找到 (models/${modelDir}/onnx/model_quantized.onnx)，自动降级为 none。`)
     currentRerankerMode = "none"
     currentReranker = null
     return
