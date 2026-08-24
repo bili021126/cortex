@@ -52,7 +52,6 @@ export function createRoundtableHandler(services: RoundtableServices): CommandHa
       "  start <name>          启动圆桌会议",
       "  list                  列出可用会议模板",
       "  status                查看会议状态",
-      "  join <id>             加入进行中的会议",
     ];
     if (templates.length > 0) {
       helpLines.push("", "可用模板:");
@@ -74,9 +73,8 @@ export function createRoundtableHandler(services: RoundtableServices): CommandHa
       case "start":  return await handleRoundtableStart(args[1], options, services);
       case "list":   return await handleRoundtableList(options, context, bridge);
       case "status": return await handleRoundtableStatus(options, context, bridge);
-      case "join":   return handleRoundtableJoin(args[1], options, context);
       default:
-        return { success: false, error: `未知子命令: "${subcommand}"。可用子命令: start, list, status, join`, exitCode: 1 };
+        return { success: false, error: `未知子命令: "${subcommand}"。可用子命令: start, list, status`, exitCode: 1 };
     }
   };
   return handler;
@@ -324,22 +322,6 @@ async function handleRoundtableStatus(
     output: verbose
       ? JSON.stringify(status, null, 2)
       : "当前无活跃会议。上次会议: 无",
-    exitCode: 0,
-  };
-}
-
-function handleRoundtableJoin(
-  sessionId: string | undefined,
-  _options: Record<string, unknown>,
-  _context: CommandContext,
-): CommandResult {
-  if (!sessionId) {
-    return { success: false, error: "请指定会话 ID。用法: cortex roundtable join <id>", exitCode: 1 };
-  }
-
-  return {
-    success: true,
-    output: `⚠️ 加入会议功能在 Core-1 为原型阶段，实际会议接入将在后续版本实现。`,
     exitCode: 0,
   };
 }

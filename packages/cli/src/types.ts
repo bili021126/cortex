@@ -31,19 +31,11 @@ export interface GlobalOptions {
 export interface CommandDefinition {
   /** 命令名（如 "run", "agent", "memory"） */
   name: string;
-  /** 子命令映射（如 { list, inspect, spawn, destroy }） */
-  subcommands?: Record<string, SubcommandDefinition>;
   /** 命令描述（用于 help） */
   description: string;
   /** 短别名（如 "r" → "run"） */
   alias?: string;
   /** 处理器 */
-  handler: CommandHandler;
-}
-
-export interface SubcommandDefinition {
-  description: string;
-  usage: string;
   handler: CommandHandler;
 }
 

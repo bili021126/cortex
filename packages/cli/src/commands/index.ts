@@ -66,21 +66,8 @@ export class CommandRegistry implements ICommandDispatcher {
       return { code: 1, output: `未知命令: "${cmdName}"。输入 'cortex help' 查看可用命令。` };
     }
 
-    // 解析子命令
+    // 解析选项并调用顶级处理器（子命令查表分支已砍——2026-08-25：无命令定义 subcommands 字段）
     const subArgs = args.slice(1);
-    if (cmd.subcommands && subArgs.length > 0) {
-       
-      const subName = subArgs[0]!;
-      const sub = cmd.subcommands[subName];
-      if (sub) {
-        // 解析剩余参数和选项
-        const { options, remaining } = this._parseOptions(subArgs.slice(1));
-        const r = await sub.handler(remaining, options, context as unknown as CommandContext);
-        return { code: r.exitCode, output: r.output ?? r.error ?? "" };
-      }
-    }
-
-    // 解析选项并调用顶级处理器
     const { options: _parsedOptions, remaining: _parsedRemaining } = this._parseOptions(subArgs);
     const r = await cmd.handler(_parsedRemaining, _parsedOptions, context as unknown as CommandContext);
     return { code: r.exitCode, output: r.output ?? r.error ?? "" };

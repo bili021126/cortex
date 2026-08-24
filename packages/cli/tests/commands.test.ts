@@ -701,7 +701,7 @@ describe("cortex roundtable", () => {
       expect(result.output).toContain("start");
       expect(result.output).toContain("list");
       expect(result.output).toContain("status");
-      expect(result.output).toContain("join");
+      // join 子命令已随 stub 砍除（2026-08-25）
     } finally {
       await bridge.shutdown();
     }
@@ -731,17 +731,7 @@ describe("cortex roundtable", () => {
     }
   });
 
-  it("join 缺少会话 ID 返回错误", async () => {
-    const bridge = new EngineBridge(new ConfigManager());
-    try {
-      const handler = createRoundtableHandler({bridge: bridge, docRegistry: docReg});
-      const result = await handler(["join"], {}, ctx);
-      expect(result.success).toBe(false);
-      expect(result.error).toContain("会话 ID");
-    } finally {
-      await bridge.shutdown();
-    }
-  });
+  // join stub 测试已随子命令砍除（2026-08-25）
 });
 
 // ════════════════════════════════════════════════════════════
