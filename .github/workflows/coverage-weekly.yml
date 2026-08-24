@@ -1,0 +1,36 @@
+name: Coverage Weekly
+
+# E10b：覆盖率门禁低频实跑——ci-gate --coverage 全量约 30+ 分钟，不入 push 门禁，
+# 每周日凌晨跑一次，低于阈值的包会在此暴露（阈值文件：scripts/coverage-thresholds.json）
+
+on:
+  schedule:
+    - cron: "0 2 * * 0" # 每周日 02:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: "缓存 pnpm store"
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+      - run: pnpm install --frozen-lockfile
+      - name: "覆盖率门禁（--coverage 全量）"
+        run: pnpm tsx scripts/ci-gate.ts --coverage
+        env:
+          DEEPSEEK_API_KEY: ""
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"

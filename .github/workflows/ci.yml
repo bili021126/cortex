@@ -51,5 +51,7 @@ jobs:
         run: pnpm audit:deps --prod
       - name: "依赖环检查（架构治理）"
         run: pnpm dep:cycle
+      - name: "CLI 冻结边界（D3：src 变更需显式授权）"
+        run: pnpm tsx scripts/verify/cli-frozen.ts
       - name: "文档漂移报告（非阻塞留档）"
         run: pnpm tsx scripts/doc-drift-check.ts --report || true
