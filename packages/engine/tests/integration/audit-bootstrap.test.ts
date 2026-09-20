@@ -1,4 +1,10 @@
-// @ci: contract
+// @ci: integration
+// 说明：本文件依赖「全量 bootstrapEngine + 共享 append-only audit.jsonl + 仓库真实配置态」，
+// 是集成测试而非确定性契约测试——T2/T3 断言 config_violation 存在，前提是「仓库配置有跨字段违规」。
+// 2026-09-20 清理 event-routing 22 条死路由后仓库配置已无违规，干净 CI（空 audit.jsonl）下 T2/T3 必红；
+// 本地仅因历史 audit.jsonl 残留旧 config_violation 才侥幸过。真·自包含化需给 bootstrapEngine/loadConfig
+// 加 configDataDir 注入违规 fixture（引擎侧改动），不成比例，故按仓库约定归为 integration（CI 跳过、本地/手动跑）。
+// config_override 通路仍由 T1（随机 marker 自播种）覆盖。
 // ============================================================
 // @cortex/engine —— AuditTrail 真实调用点集成测试（spec S2-7 验收）
 //
