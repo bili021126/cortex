@@ -89,6 +89,21 @@ export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    name: "add-session-id-column",
+    up(db) {
+      // 修复：session_id 是后加入 v1 建表语句的，但 v1 用 CREATE TABLE IF NOT EXISTS——
+      // 对已存在的老 memories 表不会补列（迁移又 append-only 不可改 v1），
+      // 导致 daemon 写记忆时 INSERT ... session_id 报 "table memories has no column named session_id"。
+      // 这里检测列是否存在，缺失则 ALTER 补上（幂等，新库无副作用）。
+      const cols = db.pragma("table_info(memories)") as Array<{ name?: string }> | undefined;
+      const hasCol = Array.isArray(cols) && cols.some((c) => c?.name === "session_id");
+      if (!hasCol) {
+        db.exec("ALTER TABLE memories ADD COLUMN session_id TEXT");
+      }
+    },
+  },
 ];
 
 /** 当前最新 schema 版本——migrate 目标 */
