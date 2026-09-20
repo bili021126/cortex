@@ -48,12 +48,29 @@ export function handleCommand(
   projectRoot: string,
   requestExit: () => void,
 ): CommandResult {
-  if (!input.startsWith("/")) return { handled: false };
+  // 同时接受 `/` 与 `.` 前缀（用户习惯混用；此前只认 `/`，导致 `.mode`/`.help` 等漏到 LLM 被角色扮演）
+  if (!input.startsWith("/") && !input.startsWith(".")) return { handled: false };
 
   const [cmd, ...args] = input.slice(1).split(/\s+/);
   const arg = args.join(" ");
 
   switch (cmd) {
+    case "mode": {
+      // 模式切换：chat（普通对话）/ plan（计划审批）/ group（群聊）
+      const modeArg = arg.trim().toLowerCase();
+      if (!modeArg) {
+        dispatch({ type: "ADD_MESSAGE", payload: { role: "system", content: `当前模式: ${state.mode}\n可用: /mode chat | /mode plan | /mode group` } });
+        return { handled: true };
+      }
+      if (modeArg === "chat" || modeArg === "plan" || modeArg === "group") {
+        dispatch({ type: "SET_MODE", payload: modeArg });
+        dispatch({ type: "ADD_MESSAGE", payload: { role: "system", content: `已切换到 ${modeArg} 模式` } });
+      } else {
+        dispatch({ type: "ADD_MESSAGE", payload: { role: "system", content: `未知模式: ${modeArg}，可用 chat / plan / group` } });
+      }
+      return { handled: true };
+    }
+
     case "help": {
       dispatch({
         type: "ADD_MESSAGE",
