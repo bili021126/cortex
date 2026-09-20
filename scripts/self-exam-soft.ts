@@ -138,6 +138,9 @@ try { fs.unlinkSync(dbPath); } catch {}
 try { fs.unlinkSync(dbPath + "-wal"); } catch {}
 try { fs.unlinkSync(dbPath + "-shm"); } catch {}
 
+// rate-limiter 落盘 quotas.json 用 rename，.cortex/logs 缺失会每次调用抛 ENOENT——预建目录消除
+try { fs.mkdirSync(path.join(ROOT, ".cortex", "logs"), { recursive: true }); } catch { /* ignore */ }
+
 const engine = await bootstrapEngine(ROOT, { llms, toolkit, dbPath });
 
 // 非交互模式自动批准——自审视无需人工确认
@@ -389,6 +392,17 @@ for (const type of CLAIM_AGENTS) {
   totalClaims += n;
 }
 console.log(`  📊 共 ${totalClaims} 条 claims: ${Object.entries(claimCounts).map(([k, v]) => `${k} ${v}`).join(" | ")}`);
+
+// ── fail-fast：区分「零发现」与「采集失败致空」──
+// 空输入若继续会走完裁决/合成产出误导性「无问题」报告（凝光 P0 建议：入口非空校验）。
+if (totalClaims === 0 && p1Result.failed > 0) {
+  console.error(`\n❌ self-exam 中止：Phase 1 ${p1Result.failed} 个 agent 失败且 0 claims——审查未真正执行（非"零问题"）。请排查 agent 完成/写文件/超时预算后重跑。`);
+  process.exit(2);
+}
+if (totalClaims === 0) {
+  console.error(`\n⚠ self-exam 零发现：Phase 1 全部完成但未产出 claims，无内容可裁决，终止（本轮非故障）。`);
+  process.exit(0);
+}
 
 // ════════════════════════════════════════════════════════
 // §8 Phase 2: 对称攻防（3 对，互相举证推翻）

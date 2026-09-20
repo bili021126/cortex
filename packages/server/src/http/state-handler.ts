@@ -26,6 +26,7 @@ export class StateAggregator {
   private readonly healthCollector: HealthCollector | undefined;
   private subscribers = new Set<StateCallback>();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private exitListener?: () => void;
   private startedAt = Date.now();
 
   // Incremental counters
@@ -103,9 +104,11 @@ export class StateAggregator {
 
   private startHeartbeat(): void {
     if (this.heartbeatTimer) return;
+    // M2：进程强杀时 timer 兜底清理。注册在 interval 外，且存下 handler 引用以便 stop 时回收，
+    // 避免 start→stop→start 重启周期中旧的 once('exit') 永不触发而累积（MaxListeners 泄漏）。
+    this.exitListener = () => { if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); };
+    process.once("exit", this.exitListener);
     this.heartbeatTimer = setInterval(() => {
-    // M2：进程强杀时 timer 兜底清理
-    process.once("exit", () => { if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); });
       const state = this.getSnapshot();
       for (const cb of this.subscribers) {
         try {
@@ -124,6 +127,10 @@ export class StateAggregator {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+    if (this.exitListener) {
+      process.removeListener("exit", this.exitListener);
+      this.exitListener = undefined;
     }
   }
 

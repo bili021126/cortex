@@ -89,7 +89,10 @@ process.on("unhandledRejection", (reason) => {
 daemon
   .start()
   .then(() => {
-    console.error(
+    // 信息性启动横幅用 console.log——console-bridge 有意把所有 console.error 转为
+    // ErrorReported + error 指标（见 telemetry 契约测试），正常启动横幅不应污染错误监控。
+    // eslint-disable-next-line no-console
+    console.log(
       `[cortex-daemon] v${VERSION} ready — pid=${process.pid} listen=${host}:${port} project=${projectRoot}`,
     );
   })

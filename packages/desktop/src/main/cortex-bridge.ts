@@ -72,7 +72,7 @@ export class CortexBridge {
           full += content;
           onChunk?.(content);
         },
-        onToolStart: (toolName, toolInput, toolCallId, agentName) => {
+        onToolStart: (toolName, toolInput, toolCallId, _agentName) => {
           onTool?.({ type: "start", toolName, input: toolInput, toolCallId });
         },
         onToolResult: (toolName, success, _output, toolCallId, _durationMs) => {

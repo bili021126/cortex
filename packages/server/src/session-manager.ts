@@ -30,6 +30,7 @@ const SESSION_IDLE_TIMEOUT_MS = 3_600_000; // 1 hour
 export class SessionManager {
   private sessions = new Map<string, ChatSession>();
   private gcTimer: ReturnType<typeof setInterval> | null = null;
+  private gcExitListener?: () => void;
 
   /**
    * Create a new chat session.
@@ -104,9 +105,11 @@ export class SessionManager {
    */
   startGC(intervalMs: number = DEFAULT_GC_INTERVAL_MS): void {
     if (this.gcTimer) return;
+    // M2：进程强杀时 timer 兜底清理。注册在 interval 外并存下引用，stopGC 时回收，
+    // 避免 start→stop→start 重启周期旧的 once('exit') 永不触发而累积（与 state-handler 同源）。
+    this.gcExitListener = () => { if (this.gcTimer) clearInterval(this.gcTimer); };
+    process.once("exit", this.gcExitListener);
     this.gcTimer = setInterval(() => {
-    // M2：进程强杀时 timer 兜底清理
-    process.once("exit", () => { if (this.gcTimer) clearInterval(this.gcTimer); });
       const now = Date.now();
       for (const [id, session] of this.sessions) {
         if (now - session.lastActiveAt > SESSION_IDLE_TIMEOUT_MS) {
@@ -128,6 +131,10 @@ export class SessionManager {
     if (this.gcTimer) {
       clearInterval(this.gcTimer);
       this.gcTimer = null;
+    }
+    if (this.gcExitListener) {
+      process.removeListener("exit", this.gcExitListener);
+      this.gcExitListener = undefined;
     }
   }
 

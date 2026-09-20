@@ -6,9 +6,6 @@
  * @module utils
  */
 
-import fs from "node:fs";
-import path from "node:path";
-
 import { detectDefaultFormat, getFormatter } from "./formatters/index.js";
 import type { OutputFormat, CommandContext, CommandResult } from "./types.js";
 
