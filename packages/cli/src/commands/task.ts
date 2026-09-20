@@ -10,8 +10,34 @@
 import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
 import type { ICortexApi, TaskNode, Tag, ITaskBoard, IScheduler } from "@cortex/shared";
+import { daemonFetchJson } from "../services/daemon-client.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
+
+/** 熔炼：task list 直连 daemon GET /api/v1/nodes。不可达→null 回落本地 board。 */
+async function tryDaemonTaskList(options: Record<string, unknown>): Promise<CommandResult | null> {
+  const limit = parseInt(String(options["limit"] ?? "20"), 10);
+  const statusFilter = options["status"] as string | undefined;
+  const j = await daemonFetchJson<{
+    data?: Array<{ id: string; type: string; status: string; createdAt: number; results?: unknown[] }>;
+    pagination?: { total: number };
+  }>(`/api/v1/nodes?limit=${limit}`);
+  if (!j || !Array.isArray(j.data)) return null;
+  let nodes = j.data;
+  if (statusFilter) nodes = nodes.filter((n) => n.status === statusFilter);
+  nodes = nodes.slice(0, limit);
+  const total = j.pagination?.total ?? j.data.length;
+  const summaries = nodes.map((n) => ({
+    id: n.id, type: n.type, status: n.status,
+    createdAt: new Date(n.createdAt).toISOString(), results: (n.results ?? []).length,
+  }));
+  return {
+    success: true,
+    data: { total, filtered: nodes.length, tasks: summaries },
+    output: `任务列表（daemon）: ${nodes.length}/${total} 个任务`,
+    exitCode: 0,
+  };
+}
 
 /** 任务操作服务依赖聚合 */
 interface TaskServices {
@@ -68,6 +94,11 @@ export function createTaskHandler(bridge: ICortexApi): CommandHandler {
     }
 
     const subcommand = args[0];
+    // 熔炼：task list 优先走 daemon GET /api/v1/nodes（本地 board 只看到本地引擎新建的空任务图，看不到 daemon 真实任务）
+    if (subcommand === "list") {
+      const daemon = await tryDaemonTaskList(options);
+      if (daemon) return daemon;
+    }
     try {
       const board = await bridge.getTaskBoard();
       const scheduler = await bridge.getScheduler();
