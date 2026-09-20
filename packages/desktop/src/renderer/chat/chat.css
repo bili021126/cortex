@@ -63,7 +63,9 @@ body {
 /* ===== Custom titlebar ===== */
 .chat__titlebar {
   position: relative;
-  z-index: 1;
+  /* 高于 .chat__messages(z-index:1)，否则标题栏内溢出的模式下拉菜单
+     (z-index:50 被困在本 titlebar 的 z-index:1 层叠上下文里)会被消息气泡盖住 */
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: space-between;
