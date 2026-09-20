@@ -10,6 +10,7 @@ import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
 import { cliTheme, ttySafe } from "../theme/cli-theme.js";
 import { LinkType, type AgentType, type ICortexApi, type IMemoryStore, type MemoryEntry, type MemoryQuery } from "@cortex/shared";
+import { daemonFetchJson } from "../services/daemon-client.js";
 
 /** 记忆操作键值参数聚合——消除 write/search 的多参数传递 */
 interface MemoryKeyValArgs {
@@ -60,11 +61,20 @@ export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
     if (subcommand === "audit") {
       return await handleMemoryAudit(args[1]);
     }
-    // 熔炼 P1 首刀：search/read 优先走 daemon（GET /api/v1/memory），daemon 不可达时才回落本地桥。
-    // 目的：让只读命令不再本地起 Engine（消除双宿主），且可端到端验证。
+    // 熔炼 P1：只读+主写路径优先走 daemon（GET/POST/DELETE /api/v1/memory），
+    // daemon 不可达时才回落本地桥。目的：常用命令不再本地起 Engine（消除双宿主）。
+    // link/archive/freeze/flush 尚无 daemon 路由，仍走本地桥。
     if (subcommand === "search" || subcommand === "read") {
       const q = subcommand === "search" ? args.slice(1).join(" ") : args[1];
       const daemon = await tryDaemonMemoryRead(q, options);
+      if (daemon) return daemon;
+    }
+    if (subcommand === "write") {
+      const daemon = await tryDaemonMemoryWrite(args[1], args.slice(2).join(" "), options);
+      if (daemon) return daemon;
+    }
+    if (subcommand === "obliterate") {
+      const daemon = await tryDaemonMemoryObliterate(args[1]);
       if (daemon) return daemon;
     }
     try {
@@ -91,36 +101,61 @@ export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
 }
 
 /**
- * 熔炼 P1 首刀：memory search/read 直连 daemon `GET /api/v1/memory`。
- * daemon 可达 → 返回结果（含"空结果"也是有效答案）；不可达/异常 → 返回 null，让调用方回落本地桥。
- * 目的：只读命令不再本地起 Engine（消除双宿主），行为与本地 read/search 对齐。
+ * 熔炼：memory search/read 直连 daemon GET /api/v1/memory。
+ * daemon 可达 → 返回结果（含"空结果"也是有效答案）；不可达 → null 回落本地桥。
  */
 async function tryDaemonMemoryRead(
   query: string | undefined,
   options: Record<string, unknown>,
 ): Promise<CommandResult | null> {
-  if (!query) return null; // 无关键词交给本地路径产 usage 错误
+  if (!query) return null;
   const limit = parseInt(String(options["limit"] ?? "10"), 10);
-  try {
-    const url = `http://127.0.0.1:3210/api/v1/memory?limit=${limit}&query=${encodeURIComponent(query)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (!res.ok) return null;
-    const j = (await res.json().catch(() => null)) as
-      | { data?: Array<{ id: string; summary: string; kind: string; weight: number }> }
-      | null;
-    if (!j || !Array.isArray(j.data)) return null;
-    const rows = j.data.slice(0, limit);
-    return {
-      success: true,
-      data: rows,
-      output: rows.length > 0
-        ? rows.map((e) => `[${e.id}] ${e.summary} (${e.kind}, w:${e.weight})`).join("\n")
-        : `未找到匹配 "${query}" 的记忆`,
-      exitCode: 0,
-    };
-  } catch {
-    return null; // daemon 不可达 → 回落本地桥
-  }
+  const j = await daemonFetchJson<{ data?: Array<{ id: string; summary: string; kind: string; weight: number }> }>(
+    `/api/v1/memory?limit=${limit}&query=${encodeURIComponent(query)}`,
+  );
+  if (!j || !Array.isArray(j.data)) return null;
+  const rows = j.data.slice(0, limit);
+  return {
+    success: true,
+    data: rows,
+    output: rows.length > 0
+      ? rows.map((e) => `[${e.id}] ${e.summary} (${e.kind}, w:${e.weight})`).join("\n")
+      : `未找到匹配 "${query}" 的记忆`,
+    exitCode: 0,
+  };
+}
+
+/** 熔炼：memory write 直连 daemon POST /api/v1/memory。不可达→null 回落本地。 */
+async function tryDaemonMemoryWrite(
+  key: string | undefined,
+  value: string,
+  options: Record<string, unknown>,
+): Promise<CommandResult | null> {
+  if (!key || !value) return null;
+  const agentType = (options["agent"] as string) ?? "butler";
+  const j = await daemonFetchJson<{ data?: { id?: string } }>("/api/v1/memory", {
+    method: "POST",
+    body: JSON.stringify({ content: `${key}: ${value}`, kind: "TaskLog", metadata: { agentType, key } }),
+    timeoutMs: 5000,
+  });
+  if (!j?.data?.id) return null;
+  return { success: true, output: `✓ 记忆已写入: ${j.data.id}`, data: { id: j.data.id, key }, exitCode: 0 };
+}
+
+/** 熔炼：memory obliterate 直连 daemon DELETE /api/v1/memory/:id。不可达→null 回落本地。 */
+async function tryDaemonMemoryObliterate(id: string | undefined): Promise<CommandResult | null> {
+  if (!id) return null;
+  const j = await daemonFetchJson<{ deleted?: boolean }>(`/api/v1/memory/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    timeoutMs: 5000,
+  });
+  if (j === null) return null; // 不可达→回落本地；有应答（含 deleted:false）则视为已处理
+  return {
+    success: true,
+    output: j.deleted ? `✓ 记忆已湮灭: ${id}` : `⚠ 灭请求已发送（未确认存在）: ${id}`,
+    data: j,
+    exitCode: 0,
+  };
 }
 
 async function handleMemoryWrite(

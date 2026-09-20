@@ -10,6 +10,7 @@
 import type { CommandHandler, CommandResult } from "../types.js";
 import { isHelpRequest } from "../utils.js";
 import { AGENT_CHINESE_ROLE, AgentStatus, AgentType, CHINESE_NAME_TO_TYPE, getAgentTags, getAgentToolPermissions, type AgentConfig, type ICortexComponents, type ICortexLifecycle, type IAgentPool, type IStrategistAgent } from "@cortex/shared";
+import { daemonFetchJson } from "../services/daemon-client.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -119,23 +120,17 @@ async function dispatchAgent(
 
 /** 熔炼：agent list 直连 daemon GET /api/v1/agents。不可达→null，回落本地桥。 */
 async function tryDaemonAgentList(): Promise<CommandResult | null> {
-  try {
-    const res = await fetch("http://127.0.0.1:3210/api/v1/agents", { signal: AbortSignal.timeout(4000) });
-    if (!res.ok) return null;
-    const j = (await res.json().catch(() => null)) as { data?: Record<string, unknown[]> } | null;
-    if (!j?.data) return null;
-    const entries = Object.entries(j.data);
-    const total = entries.reduce((s, [, v]) => s + (Array.isArray(v) ? v.length : 0), 0);
-    const lines = entries.map(([t, v]) => `  ${(t as string).padEnd(14)} ${(Array.isArray(v) ? v.length : 0)} instance(s)`);
-    return {
-      success: true,
-      output: `Agent 池（daemon）— 共 ${total} 实例:\n${lines.join("\n")}`,
-      data: j.data,
-      exitCode: 0,
-    };
-  } catch {
-    return null;
-  }
+  const j = await daemonFetchJson<{ data?: Record<string, unknown[]> }>("/api/v1/agents");
+  if (!j?.data) return null;
+  const entries = Object.entries(j.data);
+  const total = entries.reduce((s, [, v]) => s + (Array.isArray(v) ? v.length : 0), 0);
+  const lines = entries.map(([t, v]) => `  ${(t as string).padEnd(14)} ${(Array.isArray(v) ? v.length : 0)} instance(s)`);
+  return {
+    success: true,
+    output: `Agent 池（daemon）— 共 ${total} 实例:\n${lines.join("\n")}`,
+    data: j.data,
+    exitCode: 0,
+  };
 }
 
 /**
