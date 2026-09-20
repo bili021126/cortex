@@ -2348,7 +2348,33 @@ html, body { height: 100%; margin: 0; padding: 0; }
   color: #a3a3a3; font-size: 11px;
   margin-top: 2px;
 }
-.msg__action-btn { color: #a3a3a3; }
+/* 消息操作按钮（重试/重新生成/停止/复制/朗读）——统一线性 SVG 图标，
+   与 .msg__speak/.msg__copy 同风格：圆角小方块、透明底、软边框、currentColor、hover 加深。
+   取代此前 emoji 直出（emoji 不吃 color、跨平台渲染突兀、与设计体系脱节）。*/
+.msg__action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  vertical-align: middle;
+  border-radius: var(--rb-radius-md);
+  background: transparent;
+  border: 1px solid var(--rb-border-soft);
+  color: #a3a3a3;
+  opacity: 0.7;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.msg__action-btn:hover {
+  opacity: 1;
+  background: var(--rb-border-faint);
+  border-color: var(--rb-border-strong);
+  color: var(--rb-text-default);
+}
+.msg__action-btn:active { transform: translateY(0.5px); }
 /* 状态徽章 */
 .msg__state-badge { background: #f9f9f9; color: #a3a3a3; border-radius: 4px; font-size: 11px; padding: 1px 6px; margin-left: 6px; }
 /* 输入区：Quest 风格（白色、顶部工具行、深色发送） */

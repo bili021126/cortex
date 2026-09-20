@@ -11,7 +11,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./chat.css";
 import { messageReducer, type MessageState } from "./message-state-machine";
-import { IconChat, IconUsers, IconTasks, IconSettings, IconClose, IconInfo } from "./icons";
+import { IconChat, IconUsers, IconTasks, IconSettings, IconClose, IconInfo, IconRefresh, IconStop, IconCopy, IconVolumeLow, IconVolumeHigh } from "./icons";
 
 type Role = "user" | "assistant";
 
@@ -919,17 +919,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                         {msg.role === "assistant" && (
                           <>{` · `}
                             {(msg.state === "interrupted" || msg.state === "error_timeout") && (
-                              <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重试">🔄</button>
+                              <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重试"><IconRefresh size={15} /></button>
                             )}
                             {(msg.state === "complete" || msg.state === "stopped") && (
-                              <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重新生成">♻️</button>
+                              <button className="msg__action-btn" onClick={() => resendMessage(msg)} title="重新生成"><IconRefresh size={15} /></button>
                             )}
                             {(msg.state === "regenerating" || msg.state === "sending" || msg.state === "streaming") && (
-                              <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止">⏹️</button>
+                              <button className="msg__action-btn" onClick={() => stopMessage(msg)} title="停止"><IconStop size={15} /></button>
                             )}
-                            <button className="msg__action-btn" onClick={() => void copyMessage(msg.content)} title="复制">📋</button>
+                            <button className="msg__action-btn" onClick={() => void copyMessage(msg.content)} title="复制"><IconCopy size={15} /></button>
                             <button className="msg__action-btn" onClick={() => void speakMessage(msg.content, msg.id)} title="朗读">
-                              {speakingMsgId === msg.id ? "🔊" : "🔈"}
+                              {speakingMsgId === msg.id ? <IconVolumeHigh size={15} /> : <IconVolumeLow size={15} />}
                             </button>
                           </>
                         )}
