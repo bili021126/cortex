@@ -134,8 +134,6 @@ dist-test/
 
 # 全仓编译产物防回归——src/ 和 tests/ 下的 .js/.d.ts/.map 不应被追踪
 packages/*/src/**/*.js
-# 例外：desktop 的 vendored Live2D Cubism 运行时是构建必需静态资源（public/ 非编译产物），放行入库
-!packages/desktop/src/renderer/public/live2dcubismcore.min.js
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.js.map
 packages/*/src/**/*.d.ts.map
@@ -143,6 +141,11 @@ packages/*/tests/**/*.d.ts
 packages/*/tests/**/*.js
 packages/*/tests/**/*.js.map
 packages/*/tests/**/*.d.ts.map
+# 例外：desktop renderer 手写的 ambient 声明(global/css-modules .d.ts) + vendored Live2D 运行时(public/*.js)
+# 均为构建/类型检查必需输入、非编译产物，须入库（否则 CI 干净检出后桌面 typecheck/build 失败）
+!packages/desktop/src/renderer/global.d.ts
+!packages/desktop/src/renderer/css-modules.d.ts
+!packages/desktop/src/renderer/public/*.js
 scripts/**/*.js
 scripts/**/*.d.ts
 scripts/**/*.js.map
