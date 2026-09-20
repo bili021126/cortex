@@ -134,6 +134,8 @@ dist-test/
 
 # 全仓编译产物防回归——src/ 和 tests/ 下的 .js/.d.ts/.map 不应被追踪
 packages/*/src/**/*.js
+# 例外：desktop 的 vendored Live2D Cubism 运行时是构建必需静态资源（public/ 非编译产物），放行入库
+!packages/desktop/src/renderer/public/live2dcubismcore.min.js
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.js.map
 packages/*/src/**/*.d.ts.map
