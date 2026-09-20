@@ -60,6 +60,13 @@ export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
     if (subcommand === "audit") {
       return await handleMemoryAudit(args[1]);
     }
+    // 熔炼 P1 首刀：search/read 优先走 daemon（GET /api/v1/memory），daemon 不可达时才回落本地桥。
+    // 目的：让只读命令不再本地起 Engine（消除双宿主），且可端到端验证。
+    if (subcommand === "search" || subcommand === "read") {
+      const q = subcommand === "search" ? args.slice(1).join(" ") : args[1];
+      const daemon = await tryDaemonMemoryRead(q, options);
+      if (daemon) return daemon;
+    }
     try {
       const memory = await bridge.getMemoryStore();
       switch (subcommand) {
@@ -81,6 +88,39 @@ export function createMemoryHandler(bridge: ICortexApi): CommandHandler {
     }
   };
   return handler;
+}
+
+/**
+ * 熔炼 P1 首刀：memory search/read 直连 daemon `GET /api/v1/memory`。
+ * daemon 可达 → 返回结果（含"空结果"也是有效答案）；不可达/异常 → 返回 null，让调用方回落本地桥。
+ * 目的：只读命令不再本地起 Engine（消除双宿主），行为与本地 read/search 对齐。
+ */
+async function tryDaemonMemoryRead(
+  query: string | undefined,
+  options: Record<string, unknown>,
+): Promise<CommandResult | null> {
+  if (!query) return null; // 无关键词交给本地路径产 usage 错误
+  const limit = parseInt(String(options["limit"] ?? "10"), 10);
+  try {
+    const url = `http://127.0.0.1:3210/api/v1/memory?limit=${limit}&query=${encodeURIComponent(query)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const j = (await res.json().catch(() => null)) as
+      | { data?: Array<{ id: string; summary: string; kind: string; weight: number }> }
+      | null;
+    if (!j || !Array.isArray(j.data)) return null;
+    const rows = j.data.slice(0, limit);
+    return {
+      success: true,
+      data: rows,
+      output: rows.length > 0
+        ? rows.map((e) => `[${e.id}] ${e.summary} (${e.kind}, w:${e.weight})`).join("\n")
+        : `未找到匹配 "${query}" 的记忆`,
+      exitCode: 0,
+    };
+  } catch {
+    return null; // daemon 不可达 → 回落本地桥
+  }
 }
 
 async function handleMemoryWrite(

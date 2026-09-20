@@ -8,6 +8,7 @@
 
 import type { CommandHandler, CommandResult } from "../types.js";
 import type { CommandRegistry } from "./index.js";
+import { CORTEX_VERSION, CORTEX_PHASE } from "@cortex/config";
 
 /** 构建命令名列表字符串——将命令名+别名映射为格式化行 */
 function _buildCommandList(commands: string[], aliases: Map<string, string>): string[] {
@@ -47,7 +48,7 @@ function _buildOverview(commands: string[], aliases: Map<string, string>): strin
   return [
     "Cortex CLI — 统一命令行前端",
     "",
-    "版本: 0.2.0 (Core-2)",
+    `版本: ${CORTEX_VERSION} (${CORTEX_PHASE})`,
     "",
     "用法:",
     "  cortex <命令> [子命令] [选项]",
