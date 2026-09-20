@@ -84,6 +84,12 @@ async function dispatchAgent(
   options: Record<string, unknown>,
 ): Promise<CommandResult> {
   const subcommand = args[0];
+  // 熔炼：agent list 优先走 daemon GET /api/v1/agents。
+  // （本地引擎分支只会看到自己新起的空池，看不到 daemon 里真实运行的 agent——daemon-first 反而更正确）
+  if (subcommand === "list") {
+    const daemon = await tryDaemonAgentList();
+    if (daemon) return daemon;
+  }
   try {
     const needsBootstrap = subcommand === "spawn" || subcommand === "destroy";
     if (needsBootstrap && bridge.bootstrapped === false) {
@@ -108,6 +114,27 @@ async function dispatchAgent(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return { success: false, error: `Agent 操作失败: ${msg}`, exitCode: 2 };
+  }
+}
+
+/** 熔炼：agent list 直连 daemon GET /api/v1/agents。不可达→null，回落本地桥。 */
+async function tryDaemonAgentList(): Promise<CommandResult | null> {
+  try {
+    const res = await fetch("http://127.0.0.1:3210/api/v1/agents", { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const j = (await res.json().catch(() => null)) as { data?: Record<string, unknown[]> } | null;
+    if (!j?.data) return null;
+    const entries = Object.entries(j.data);
+    const total = entries.reduce((s, [, v]) => s + (Array.isArray(v) ? v.length : 0), 0);
+    const lines = entries.map(([t, v]) => `  ${(t as string).padEnd(14)} ${(Array.isArray(v) ? v.length : 0)} instance(s)`);
+    return {
+      success: true,
+      output: `Agent 池（daemon）— 共 ${total} 实例:\n${lines.join("\n")}`,
+      data: j.data,
+      exitCode: 0,
+    };
+  } catch {
+    return null;
   }
 }
 
