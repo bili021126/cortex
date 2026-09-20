@@ -19,6 +19,9 @@ export async function daemonFetchJson<T = unknown>(
   path: string,
   init: DaemonRequestInit = {},
 ): Promise<T | null> {
+  // 测试环境（vitest）永不走 daemon-first：单测注入的是 mock/local bridge，
+  // 若真连 127.0.0.1:3210 会绕过被测 bridge、污染测试隔离（若有 live daemon 在跑）。
+  if (process.env["VITEST"]) return null;
   try {
     const res = await fetch(DAEMON_BASE + path, {
       method: init.method ?? "GET",
