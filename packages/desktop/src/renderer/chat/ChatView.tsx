@@ -8,7 +8,7 @@
  * ├── div.chat__main        聊天界面（标题栏 + 消息 + 底部输入——一体）
  * └── aside.chat__side      右侧信息栏（默认收起——ℹ️ 展开）
  */
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import "./chat.css";
 import { messageReducer, type MessageState } from "./message-state-machine";
 import { IconChat, IconUsers, IconTasks, IconSettings, IconClose, IconInfo, IconRefresh, IconStop, IconCopy, IconVolumeLow, IconVolumeHigh } from "./icons";
@@ -269,20 +269,46 @@ const TASKS = [
 
 export function ChatView({ onClose }: { onClose: () => void }) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>(() => {
+  const [threads, setThreads] = useState<Record<string, Message[]>>(() => {
+    const ok = (arr: unknown): arr is Message[] =>
+      Array.isArray(arr) && (arr as Message[]).every((m) => m && typeof m.id === "string" && (m.role === "user" || m.role === "assistant"));
     try {
-      const raw = localStorage.getItem("cyrene-chat-history");
+      const raw = localStorage.getItem("cyrene-chat-threads");
       if (raw) {
-        const parsed = JSON.parse(raw) as Message[];
-        return parsed.filter((m) => m && typeof m.id === "string" && (m.role === "user" || m.role === "assistant"));
+        const map = JSON.parse(raw) as Record<string, unknown>;
+        const out: Record<string, Message[]> = {};
+        for (const [k, v] of Object.entries(map)) if (ok(v)) out[k] = v;
+        return out;
+      }
+      // 迁移旧的单线程 key → 归到默认 "cyrene"
+      const legacy = localStorage.getItem("cyrene-chat-history");
+      if (legacy) {
+        const arr = JSON.parse(legacy);
+        if (ok(arr)) return { cyrene: arr };
       }
     } catch { /* 无历史 */ }
-    return [];
+    return {};
   });
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   const [tab, setTab] = useState<"chat" | "tasks" | "settings" | "design" | "memory" | "editor">("chat");
   const [railTab, setRailTab] = useState<"friends" | "groups">("friends");
   const [active, setActive] = useState<Contact | null>(null);
+  // 会话按联系人隔离：messages 派生自当前 active 的线程，setMessages 写回该线程
+  const activeKey = active?.id ?? "cyrene";
+  const activeKeyRef = useRef(activeKey);
+  activeKeyRef.current = activeKey;
+  const messages = useMemo(() => threads[activeKey] ?? [], [threads, activeKey]);
+  const setMessages = useCallback(
+    (action: Message[] | ((prev: Message[]) => Message[])) => {
+      setThreads((prev) => {
+        const k = activeKeyRef.current;
+        const cur = prev[k] ?? [];
+        const next = typeof action === "function" ? (action as (p: Message[]) => Message[])(cur) : action;
+        return { ...prev, [k]: next };
+      });
+    },
+    [],
+  );
   const [sideOpen, setSideOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
@@ -500,10 +526,12 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     try {
-      const stable = messages.filter((m) => !m.state || m.state === "complete" || m.state === "stopped" || m.state === "interrupted" || m.state === "error_timeout" || m.state === "error_fatal");
-      localStorage.setItem("cyrene-chat-history", JSON.stringify(stable));
+      const isStable = (m: Message) => !m.state || m.state === "complete" || m.state === "stopped" || m.state === "interrupted" || m.state === "error_timeout" || m.state === "error_fatal";
+      const stableThreads: Record<string, Message[]> = {};
+      for (const [k, arr] of Object.entries(threads)) stableThreads[k] = arr.filter(isStable);
+      localStorage.setItem("cyrene-chat-threads", JSON.stringify(stableThreads));
     } catch { /* 忽略 */ }
-  }, [messages]);
+  }, [threads]);
 
   const dispatch = useCallback((aiId: string, ev: Parameters<typeof messageReducer>[1]["type"] | "complete" | "timeout" | "fatal" | "net-error" | "ack") => {
     setMessages((prev) => prev.map((m) => {
