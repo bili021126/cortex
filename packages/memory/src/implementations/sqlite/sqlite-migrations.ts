@@ -104,6 +104,34 @@ export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
       }
     },
   },
+  {
+    version: 3,
+    name: "ensure-all-memory-columns",
+    up(db) {
+      // 更彻底的 schema 漂移修复：老库（早于当前 v1 定义）可能缺多列（is_fact/domain/
+      // semantic_state/updated_at/…），逐列检测缺失则 ALTER 补上（可空，代码写入时总会赋值）。
+      // 覆盖 v2 只补 session_id 的不足——修复 daemon POST /memory 报 "no column named is_fact" 等。
+      const cols = new Set(
+        (db.pragma("table_info(memories)") as Array<{ name?: string }> | undefined ?? []).map((c) => c?.name),
+      );
+      const ensure: ReadonlyArray<readonly [string, string]> = [
+        ["domain", "TEXT"],
+        ["session_id", "TEXT"],
+        ["is_fact", "INTEGER"],
+        ["semantic_state", "TEXT"],
+        ["weight", "REAL"],
+        ["access_count", "INTEGER"],
+        ["last_accessed_at", "INTEGER"],
+        ["content_hash", "TEXT"],
+        ["expires_at", "INTEGER"],
+        ["embedding", "TEXT"],
+        ["updated_at", "INTEGER"],
+      ];
+      for (const [name, type] of ensure) {
+        if (!cols.has(name)) db.exec(`ALTER TABLE memories ADD COLUMN ${name} ${type}`);
+      }
+    },
+  },
 ];
 
 /** 当前最新 schema 版本——migrate 目标 */
