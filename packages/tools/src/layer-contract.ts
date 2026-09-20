@@ -43,7 +43,6 @@ export const CORTEX_LAYER_CONTRACT: Record<string, number> = {
   resilience: 0,
   telemetry: 0,
   notification: 0,
-  parser: 0,
   "fsm-compiler": 0,
   testing: 0,
   "pattern-extractor": 0,
