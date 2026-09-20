@@ -132,6 +132,88 @@ export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
       }
     },
   },
+  {
+    version: 4,
+    name: "rebuild-memories-to-canonical-schema",
+    up(db) {
+      // 早期 memory 数据模型（memory_type/content/agent_type/creator_id/state/is_private/sub_type）
+      // 与当前 MemoryEntry 模型不兼容，且 legacy 列 NOT NULL 无默认 → 当前 INSERT 不填 → daemon 写记忆 500。
+      // 检测：若仍存在 legacy `memory_type` 列则重建为规范表并尽力映射历史行（幂等：规范库直接跳过）。
+      const cols = new Set(
+        ((db.pragma("table_info(memories)") as Array<{ name?: string }> | undefined) ?? []).map((c) => c?.name),
+      );
+      if (!cols.has("memory_type")) return; // 已是规范 schema，无需重建
+
+      db.exec(`
+        CREATE TABLE memories__canonical (
+          id TEXT PRIMARY KEY,
+          source TEXT NOT NULL DEFAULT '{}',
+          domain TEXT NOT NULL DEFAULT 'general',
+          session_id TEXT,
+          kind TEXT NOT NULL DEFAULT 'TaskLog',
+          is_fact INTEGER NOT NULL DEFAULT 1,
+          summary TEXT NOT NULL DEFAULT '',
+          semantic_gist TEXT NOT NULL DEFAULT '',
+          content_blob TEXT NOT NULL DEFAULT '',
+          semantic_state TEXT NOT NULL DEFAULT 'Active',
+          weight REAL NOT NULL DEFAULT 0,
+          access_count INTEGER NOT NULL DEFAULT 0,
+          last_accessed_at INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL DEFAULT 0,
+          content_hash TEXT NOT NULL DEFAULT '',
+          expires_at INTEGER,
+          embedding TEXT,
+          updated_at INTEGER NOT NULL DEFAULT 0
+        );
+      `);
+      db.exec(`
+        INSERT INTO memories__canonical
+          (id, source, domain, kind, summary, semantic_gist, content_blob, semantic_state, weight, access_count, last_accessed_at, created_at, embedding, updated_at)
+        SELECT
+          id,
+          json_object('agentType', COALESCE(NULLIF(agent_type,''),'butler'), 'taskId', COALESCE(creator_id,'')),
+          COALESCE(NULLIF(domain,''),'general'),
+          COALESCE(NULLIF(kind,''), NULLIF(memory_type,''), 'TaskLog'),
+          COALESCE(NULLIF(summary,''), substr(COALESCE(content,''),1,200), ''),
+          COALESCE(semantic_gist, ''),
+          CASE WHEN content_blob IS NOT NULL AND content_blob <> '' THEN content_blob
+               ELSE json_object('legacy_content', COALESCE(content, '')) END,
+          COALESCE(NULLIF(semantic_state,''),
+                   CASE WHEN upper(state)='ACTIVE' THEN 'Active' WHEN upper(state)='ARCHIVED' THEN 'Archived' ELSE 'Active' END,
+                   'Active'),
+          COALESCE(weight, 0),
+          COALESCE(access_count, 0),
+          COALESCE(last_accessed_at, 0),
+          COALESCE(created_at, 0),
+          embedding,
+          COALESCE(updated_at, created_at, 0)
+        FROM memories;
+      `);
+      db.exec(`DROP TABLE memories;`);
+      db.exec(`ALTER TABLE memories__canonical RENAME TO memories;`);
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind);
+        CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
+      `);
+    },
+  },
+  {
+    version: 5,
+    name: "rebuild-memories-fts",
+    up(db) {
+      // 承接 v4：老库的 memories_fts（FTS5）也是旧列集（无 content_blob）→ persist 写 FTS 报
+      // "table memories_fts has no column named content_blob"。重建为规范列并从 memories 回填。
+      // 幂等：已是规范（含 content_blob）则跳过。
+      const ftsCols = new Set(
+        ((db.pragma("table_info(memories_fts)") as Array<{ name?: string }> | undefined) ?? []).map((c) => c?.name),
+      );
+      if (ftsCols.has("content_blob")) return;
+      db.exec(`DROP TABLE IF EXISTS memories_fts;`);
+      db.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(summary, semantic_gist, content_blob, tokenize = 'trigram');`);
+      db.exec(`INSERT INTO memories_fts(rowid, summary, semantic_gist, content_blob)
+        SELECT rowid, summary, semantic_gist, content_blob FROM memories;`);
+    },
+  },
 ];
 
 /** 当前最新 schema 版本——migrate 目标 */
