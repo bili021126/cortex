@@ -28,6 +28,7 @@
     "@cortex/engine": "workspace:*",
     "@cortex/governance": "workspace:*",
     "@cortex/llm": "workspace:*",
+    "@cortex/memory": "workspace:*",
     "@cortex/memory-store": "workspace:*",
     "@cortex/platform": "workspace:*",
     "@cortex/protocol": "workspace:*",
