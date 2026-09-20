@@ -6,7 +6,6 @@
  * 用法: cortex status
  */
 import type { CommandHandler, CommandResult } from "../types.js";
-import { isHelpRequest } from "../utils.js";
 import { cliTheme, ttySafe } from "../theme/cli-theme.js";
 
 const STATUS_HELP = [
@@ -17,7 +16,9 @@ const STATUS_HELP = [
 
 export function createStatusHandler(): CommandHandler {
   const handler: CommandHandler = async (args, _options, _context): Promise<CommandResult> => {
-    if (isHelpRequest(args)) {
+    // status 是无参命令——只有显式 --help/-h 才打帮助；不能用 isHelpRequest(空参数=true)，
+    // 否则 `cortex status` 永远只会打印 usage 而不执行。
+    if (args[0] === "--help" || args[0] === "-h") {
       return { success: true, output: STATUS_HELP, exitCode: 0 };
     }
 
