@@ -47,7 +47,10 @@ let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return; // 防止重复触发
   shuttingDown = true;
-  console.error(`[cortex-daemon] received ${signal}, shutting down...`);
+  // 信息性关闭通知——用 console.log 避免 console-bridge 误计为 error 指标/幻影 ErrorReported
+  // （强制超时 line 54、error during shutdown line 62 才是真异常，保留 console.error）
+  // eslint-disable-next-line no-console
+  console.log(`[cortex-daemon] received ${signal}, shutting down...`);
 
   // 强制超时——10s 后无论如何都退出
   const forceTimer = setTimeout(() => {
