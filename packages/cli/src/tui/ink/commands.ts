@@ -77,14 +77,16 @@ export function handleCommand(
         payload: {
           role: "system",
           content: [
-            "📖 可用命令：",
+            "📖 可用命令（/ 或 . 前缀均可）：",
             "  /help          — 显示此帮助",
+            "  /mode <chat|plan|group> — 切换模式",
             "  /agent <名字>   — 切换 Agent（昔涟/甘雨/纳西/钟离/凝光/code/ops/...）",
             "  /save          — 手动保存会话",
             "  /clear         — 清空当前会话消息",
             "  /exit          — 保存并退出",
             "",
-            "CLI 命令（task/memory/schedule/skill/inspect 等）可直接键入执行，或按 Ctrl+K 打开命令面板。",
+            "CLI 命令（须加 / 或 . 前缀）：/task /memory /status /schedule /skill /inspect /doctor /eval /config /roundtable /run /doc /version",
+            "  例：/task list   /memory search 关键词   /status",
           ].join("\n"),
         },
       });
