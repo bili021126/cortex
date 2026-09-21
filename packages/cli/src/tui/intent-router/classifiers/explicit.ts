@@ -11,13 +11,13 @@ import type { Classifier, ClassificationResult, RouterContext } from "../types.j
 
 /**
  * 显式指令分类器
- * 仅识别 /slash-command 格式（. 和 ! 已回收，统一用 /）
+ * 仅识别 / 和 . 前缀的 slash-command（两者等价，兼容用户混用；! 已回收）
  */
 export class ExplicitClassifier implements Classifier {
   name = "explicit";
 
-  /** 命令前缀——仅 / */
-  private readonly commandPrefix = "/";
+  /** 命令前缀——/ 或 . （用户习惯混用；handleCommand 也已同时接受两者） */
+  private readonly commandPrefixes = ["/", "."];
 
   /** Agent 调用前缀 */
   private readonly agentPrefix = "@";
@@ -25,9 +25,10 @@ export class ExplicitClassifier implements Classifier {
   classify(input: string, _context: RouterContext): ClassificationResult {
     const trimmed = input.trim();
 
-    // 检查 / 命令前缀
-    if (trimmed.startsWith(this.commandPrefix)) {
-      const cmdPart = trimmed.slice(this.commandPrefix.length).split(/\s+/);
+    // 检查 / 或 . 命令前缀
+    const matchedPrefix = this.commandPrefixes.find((p) => trimmed.startsWith(p));
+    if (matchedPrefix) {
+      const cmdPart = trimmed.slice(matchedPrefix.length).split(/\s+/);
       const command = cmdPart[0] ?? "";
       const args = cmdPart.slice(1);
 
