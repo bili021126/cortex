@@ -136,7 +136,8 @@ export function handleCommand(
     }
 
     default:
-      dispatch({ type: "ADD_MESSAGE", payload: { role: "system", content: `未知命令: /${cmd}，输入 /help 查看帮助` } });
-      return { handled: true };
+      // 非内部命令（如 /task /memory /status 等 15 个 CLI 命令）→ 放行到调用方的
+      // registry.dispatch 分支处理，不在这里判"未知命令"截胡。
+      return { handled: false };
   }
 }

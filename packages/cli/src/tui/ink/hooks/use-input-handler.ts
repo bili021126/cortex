@@ -122,9 +122,11 @@ export function useInputHandler(
       // 0.5 命令意图 → registry.dispatch（与 ansi dispatchInput 对称，15 个 CLI 命令全通）
       if (classifyIntent(input) === "command") {
         dispatch({ type: "ADD_MESSAGE", payload: { role: "user", content: input } });
+        // 剥掉前导 `/` 或 `.`——registry 命令名不带前缀（registry.find 不剥斜杠）
+        const argv = input.trim().replace(/^[/.]/, "").split(/\s+/);
         const output = await commandMode(
           (args) => registry.dispatch(args, registryCtx),
-          input.trim().split(/\s+/),
+          argv,
         );
         dispatch({ type: "ADD_MESSAGE", payload: { role: "system", content: output } });
         _processingGuard.current = false;
