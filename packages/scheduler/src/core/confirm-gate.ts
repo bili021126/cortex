@@ -97,7 +97,9 @@ export class ConfirmGate implements Disposable {
         { key: "agent", value: trustContext?.agentType ?? "unknown" },
         { key: "risk", value: level },
         { key: "score", value: String(score) },
-      ]).catch(() => {});
+      ]).catch((err) => {
+        console.warn(`[confirm-gate] telemetry failed for gate.trust_auto: ${err.message}`);
+      });
       return { approved: true, reason: "trust auto", score };
     }
     // C1 fix: 非 auto-approve 路径不在此记录信任——由外层 recordDecision() 统一记录最终结果，
@@ -139,7 +141,9 @@ export class ConfirmGate implements Disposable {
         { key: "tool", value: trustContext?.toolName ?? "unknown" },
         { key: "agent", value: trustContext?.agentType ?? "unknown" },
         { key: "risk", value: level },
-      ]).catch(() => {});
+      ]).catch((err) => {
+        console.warn(`[confirm-gate] telemetry failed for gate.verdict (bypass): ${err.message}`);
+      });
       return false;
     }
     if (this._bypass) this._bypass = false; // 过期后自动关闭
@@ -151,7 +155,9 @@ export class ConfirmGate implements Disposable {
         { key: "tool", value: trustContext?.toolName ?? "unknown" },
         { key: "agent", value: trustContext?.agentType ?? "unknown" },
         { key: "risk", value: level },
-      ]).catch(() => {});
+      ]).catch((err) => {
+        console.warn(`[confirm-gate] telemetry failed for gate.verdict (L0): ${err.message}`);
+      });
       return false;
     }
 

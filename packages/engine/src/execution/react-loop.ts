@@ -144,7 +144,10 @@ export async function runReActLoop(
         { key: "loops", value: String(loops) },
         { key: "msgs", value: String(messages.length) },
         { key: "avgPerMsg", value: String(avgPerMsg) },
-      ]).catch(() => {});
+      ]).catch((err) => {
+        // P1 fix: telemetry 失败不阻断主流程，但需记录警告以便调试
+        console.warn(`[react-loop] telemetry failed for context_inflate: ${err.message}`);
+      });
       diagnostic(`🛰️  调用 LLM (${model})——上下文 ${msgCount} 条消息，工具 ${toolDefs.length} 个...`);
       if (REACT_DEBUG) {
         console.error(`  📋 [ReAct-${agentType}#${loops}] 系统消息: ${(messages[0]?.content ?? "(空)").slice(0, 100)}`);
@@ -266,7 +269,9 @@ export async function runReActLoop(
               { key: "agent", value: agentType },
               { key: "tool", value: tc.name },
               { key: "level", value: "L0" },
-            ]).catch(() => {});
+            ]).catch((err) => {
+              console.warn(`[react-loop] telemetry failed for tool_called (L0): ${err.message}`);
+            });
             return { tc, result, toolElapsed };
           })
         );
@@ -317,7 +322,9 @@ export async function runReActLoop(
           { key: "agent", value: agentType },
           { key: "tool", value: tc.name },
           { key: "level", value: "L2" },
-        ]).catch(() => {});
+        ]).catch((err) => {
+          console.warn(`[react-loop] telemetry failed for tool_called (L2): ${err.message}`);
+        });
 
         messages.push({
           role: "tool",
@@ -347,7 +354,9 @@ export async function runReActLoop(
     { key: "agent", value: agentType },
     { key: "promptTokens", value: String(totalPromptTokens) },
     { key: "compTokens", value: String(totalCompTokens) },
-  ]).catch(() => {});
+  ]).catch((err) => {
+    console.warn(`[react-loop] telemetry failed for token_used: ${err.message}`);
+  });
 
   const totalElapsed = Date.now() - startTime;
   diagnostic(`🏁 循环结束——耗时 ${totalElapsed}ms, loops=${loops}/${maxLoops}, success=${finalOutput !== undefined}`);
