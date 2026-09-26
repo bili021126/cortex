@@ -40,7 +40,7 @@ function resolveAsset(assetPath: string): string {
 }
 
 // ── 定时 canvas 截图（harness 视觉闭环：renderer 自渲染 toDataURL → IPC 落盘——绕开 capturePage 透明窗口挂起）──
-setInterval(() => {
+const shotInterval = setInterval(() => {
   try {
     const shotCanvas = document.getElementById("live2d-canvas") as HTMLCanvasElement | null;
     if (!shotCanvas) {
@@ -58,6 +58,9 @@ setInterval(() => {
     console.error("[shot] error:", e);
   }
 }, 5000);
+
+// P1 fix: 添加清理逻辑——页面卸载时清除定时器
+window.addEventListener('beforeunload', () => clearInterval(shotInterval));
 
 let focus: MouseFocusController | null = null;
 let clickThrough: ClickThroughController | null = null;
