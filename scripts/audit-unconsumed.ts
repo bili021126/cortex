@@ -9,7 +9,30 @@
  *   - 导出识别：`export (declare )?(type|interface|class|function|const|enum) Name` 与 `export { A, B }`
  *   - 引用统计：词边界匹配（含注释/字符串误命中，结果偏保守）
  *   - 排除：定义文件自身、dist/、node_modules/
+ *   - **re-export 不算消费**（2026-09-26 修正）
+ *   - **包内引用不算消费**（2026-09-26 修正）——「零消费」= 无包外引用
  *   - 与 v4 审计（DEAD/LEAK/PUB_API_UNCONSUMED）口径不同，不可直接对比
+ *
+ * ── 为什么这两条要改（2026-09-26）────────────────────────────────
+ *
+ * 修正前有两处假阴性，合起来使这个审计**看不到它自己存在要找的东西**：
+ *
+ * ① **barrel 的再导出被当成消费**：`index.ts` 里 `export { foo } from "./foo.js"`
+ *    命中了 `\bfoo\b` → 记为「有引用」。于是任何带 barrel 的包恒报 0% 零消费。
+ * ② **包自己的测试文件被当成消费**：只为被测而存在的符号同样「被引用」，
+ *    于是「测了但没人用」的公开面看起来是活的。
+ *
+ * 实测证据：`design-tokens` 报「导出 25 / 零消费 0 (0.0%)」，而其中
+ * `generateCssVariables` / `generateFullStylesheet` / `DEFAULT_PERSONA`
+ * 的**包外**引用为 0——全仓唯一的引用点就是它自己的 barrel 和它自己的测试。
+ * `--cx-*` 变量一个外部消费方都没有，`css-variables.ts` 却写着「供 WebUI 和
+ * Desktop 使用」。死面之所以长期存活，正是因为这份审计说它被消费了。
+ *
+ * 现在：统计前先剥掉 `export { ... }` 列表，且引用语料**排除被审计包自身**。
+ * 跨包 `import { foo } from "@scope/pkg"` 仍是真实引用，不受影响。
+ *
+ * 含义提醒：本口径下的「零消费」= 无包外引用，**不等于死代码**——
+ * 一个仅在本包内部使用的导出仍可能是有意的内部 API。判定要人工看。
  *
  * 用法:
  *   npx tsx scripts/audit-unconsumed.ts                 # 默认 protocol
@@ -47,6 +70,20 @@ function extractExports(src: string): Set<string> {
   return names;
 }
 
+/**
+ * 剥掉 `export { ... }` / `export type { ... }`（含 `... from "..."`）列表。
+ *
+ * 这些只是包的公开面（barrel 的再导出），不是使用。若不剥掉，
+ * 任何带 `index.ts` 再导出的包都会恒报 0% 零消费——见文件头说明。
+ *
+ * 注意只剥离**列表形式**；`export const foo = ...` 这类声明保留不动
+ * （其定义文件本来就被排除在统计外）。`export type {` 也要剥——
+ * 类型导出同样只是公开面，漏掉它会让类型符号永远显示「包内有引用」。
+ */
+function stripReExportLists(src: string): string {
+  return src.replace(/export\s+(?:type\s+)?\{[^}]*\}/g, "");
+}
+
 // ─── 文件遍历 ─────────────────────────────────────────────
 
 function walkFiles(dir: string, out: string[] = []): string[] {
@@ -68,7 +105,8 @@ interface PkgReport {
   total: number;
   zeroConsumed: number;
   ratio: number;
-  zeroList: { symbol: string; file: string }[];
+  /** insideRefs > 0 = 只在包内被用（非死代码）；0 = 包内外都没人用 */
+  zeroList: { symbol: string; file: string; insideRefs: number }[];
 }
 
 function auditPkg(pkg: string): PkgReport {
@@ -85,11 +123,15 @@ function auditPkg(pkg: string): PkgReport {
     }
   }
 
-  // 全仓引用扫描（packages/ 下所有 src + tests + scripts）
+  // 包**外**引用扫描（packages/ 下其余包的 src + tests + scripts）。
+  // 排除被审计包自身：包内引用（含它自己的测试）不构成「消费」——
+  // 一个只为被测而存在的符号，在包内看来永远是「有引用」的。
+  const selfDir = join(PKG_ROOT, pkg);
   const corpus: string[] = [];
   for (const p of readdirSync(PKG_ROOT)) {
     if (p.startsWith(".") || p === "node_modules") continue;
     const full = join(PKG_ROOT, p);
+    if (full === selfDir) continue;
     if (statSync(full).isDirectory()) {
       corpus.push(...walkFiles(full));
     } else if (p.endsWith(".ts")) {
@@ -97,23 +139,29 @@ function auditPkg(pkg: string): PkgReport {
     }
   }
 
-  const zeroList: { symbol: string; file: string }[] = [];
+  const zeroList: { symbol: string; file: string; insideRefs: number }[] = [];
   for (const [symbol, defFile] of exports) {
     const defName = symbol;
-    // 定义文件自身内的引用不算（声明处必含一次）
-    let refs = 0;
-    for (const file of corpus) {
-      if (file === defFile) continue;
-      const content = readFileSync(file, "utf-8");
-      const re = new RegExp(`\\b${defName}\\b`, "g");
-      const count = content.match(re)?.length ?? 0;
-      if (count > 0) {
-        refs += count;
-        break; // 只要有一处引用即不算零消费
+    const re = new RegExp(`\\b${defName}\\b`, "g");
+    const countRefs = (targets: string[]): number => {
+      let n = 0;
+      for (const file of targets) {
+        if (file === defFile) continue;
+        // 先剥 barrel 再导出列表：只出现在 `export { X }` 里不等于被使用
+        const content = stripReExportLists(readFileSync(file, "utf-8"));
+        n += content.match(re)?.length ?? 0;
       }
-    }
-    if (refs === 0) {
-      zeroList.push({ symbol, file: relative(ROOT, defFile) });
+      return n;
+    };
+
+    // 定义文件自身内的引用不算（声明处必含一次）
+    const outsideRefs = countRefs(corpus);
+    if (outsideRefs === 0) {
+      // 顺带数一下包内引用：区分「谁都没用」与「只在包内用」——
+      // 后者不是死代码（例如 ENGINEERING 被同包的 ink-theme 用来构建 inkTheme，
+      // 而 inkTheme 有包外消费方），读的时候不该混为一谈。
+      const insideRefs = countRefs(walkFiles(join(PKG_ROOT, pkg)));
+      zeroList.push({ symbol, file: relative(ROOT, defFile), insideRefs });
     }
   }
 
@@ -145,12 +193,19 @@ function main(): void {
   }
 
   for (const r of reports) {
-    console.log(`\n📦 ${r.pkg} — 导出 ${r.total} / 零消费 ${r.zeroConsumed} (${(r.ratio * 100).toFixed(1)}%)`);
+    const truly = r.zeroList.filter((z) => z.insideRefs === 0).length;
+    console.log(
+      `\n📦 ${r.pkg} — 导出 ${r.total} / 无包外引用 ${r.zeroConsumed} (${(r.ratio * 100).toFixed(1)}%)` +
+        `  (其中包内外皆无人用 ${truly})`,
+    );
     for (const z of r.zeroList) {
-      console.log(`   ⚪ ${z.symbol.padEnd(32)} ${z.file}`);
+      const tag = z.insideRefs === 0 ? "（包内亦无引用）" : `（仅包内 ${z.insideRefs} 处）`;
+      console.log(`   ⚪ ${z.symbol.padEnd(32)} ${z.file.padEnd(46)} ${tag}`);
     }
   }
-  console.log(`\n合计: 导出 ${total} / 零消费 ${zero} (${((zero / Math.max(total, 1)) * 100).toFixed(1)}%)`);
+  console.log(
+    `\n合计: 导出 ${total} / 无包外引用 ${zero} (${((zero / Math.max(total, 1)) * 100).toFixed(1)}%)`,
+  );
 }
 
 main();
