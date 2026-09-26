@@ -304,6 +304,23 @@ async function main() {
         abort("scriptsTypecheck");
       }
       console.log("   ✅ 类型检查通过（packages + scripts）\n");
+
+      // 2026-09-26 新增：同步 src/data → dist/data。
+      // 门的第 4 步 vitest 里，loader 在 VITEST 下把配置数据目录解析到 packages/config/dist/data
+      // （isTestEnv() 短路，见 loader.ts resolveConfigDataDir），而 dist/ 被 gitignore——
+      // `tsc -b` 不会复制 JSON（复制只发生在包自己的 build 脚本里，门禁从不跑它）。
+      // 后果：干净检出上门禁没有配置数据；本地则拿**陈旧**配置做验证。实测曾因此漏掉
+      // event-routing.json 缺 mergeRules（NotificationPipe 归并静默失效）与
+      // architecture-flows.json 整文件缺失（新配置域读不到）。
+      const dataSync = run("node", ["packages/config/scripts/copy-data.mjs"], ROOT);
+      if (!dataSync.ok) {
+        console.error("❌ 配置数据同步失败（src/data → dist/data），阻断 —— 否则测试会验证陈旧配置");
+        for (const l of dataSync.stdout.split("\n").slice(-20)) {
+          if (l.trim()) console.error(`   ${l.trim()}`);
+        }
+        abort("configDataSync");
+      }
+      if (dataSync.stdout.trim()) console.log(`   ${dataSync.stdout.trim()}`);
     } catch (e) {
       console.error(`❌ tsc 执行异常: ${e}`);
       abort("typecheck");
