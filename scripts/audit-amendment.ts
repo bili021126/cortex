@@ -30,11 +30,13 @@ interface Check {
   name: string;
   ok: boolean;
   evidence: string;
+  /** 提示项：不参与通过/不通过判定，但会被单独列出强制人工确认 */
+  advisory?: boolean;
 }
 
 const checks: Check[] = [];
-const add = (group: string, name: string, ok: boolean, evidence: string): void => {
-  checks.push({ group, name, ok, evidence });
+const add = (group: string, name: string, ok: boolean, evidence: string, advisory = false): void => {
+  checks.push({ group, name, ok, evidence, advisory });
 };
 
 const readText = (rel: string): string => readFileSync(join(ROOT, rel), "utf-8");
@@ -107,6 +109,26 @@ for (const q of quoted) {
     `引文在宪法中原样存在（草稿第 ${q.docLine} 行）`,
     hit,
     hit ? `✓ ${q.line.slice(0, 70)}…` : `✗ 未找到：${q.line.slice(0, 90)}`,
+  );
+}
+
+// ═══ A（续）· after 硬编码读数 —— 提示项，非判定项 ═══════════
+//
+// 本 AM 与 AM-2026-0811-001 都主张「正文不承诺绝对值」。
+// 审计首轮在此抓到 F-4：after 曾写死「3977 passed / 14 skipped」，
+// 而审计时点已变为 3988/3993（起草与审计相隔数小时、新增 14 个测试）。
+//
+// 但这条**做不到既完备又不误判**：合法引用（历史锚点、修订理由、历史门禁证据）
+// 与真缺陷在文本上完全同形。故降级为提示项——列出全部硬编码读数，
+// 由审计人**逐条确认每个数字是引用还是将被写入宪法**。判定不通过它。
+{
+  const hardcoded = [...am.after.matchAll(/\d{2,}\s*passed/g)].map((m) => m[0]);
+  add(
+    "A·需人工确认",
+    `after 中的硬编码测试读数 ${hardcoded.length} 处——须逐条确认是「引用」还是「将写入宪法」`,
+    true,
+    hardcoded.length === 0 ? "无硬编码读数" : `待确认: ${hardcoded.join(", ")}`,
+    true,
   );
 }
 
@@ -346,10 +368,11 @@ add(
 );
 
 // ─── 输出 ───────────────────────────────────────────────
-const failed = checks.filter((c) => !c.ok);
+const failed = checks.filter((c) => !c.ok && !c.advisory);
+const advisories = checks.filter((c) => c.advisory);
 
 if (jsonMode) {
-  console.log(JSON.stringify({ am: am.id, version: am.version, total: checks.length, failed: failed.length, checks }, null, 2));
+  console.log(JSON.stringify({ am: am.id, version: am.version, total: checks.length, failed: failed.length, advisories: advisories.length, checks }, null, 2));
 } else {
   let group = "";
   for (const c of checks) {
@@ -357,11 +380,20 @@ if (jsonMode) {
       group = c.group;
       console.log(`\n${group}`);
     }
-    console.log(`  ${c.ok ? "✅" : "❌"} ${c.name}  —— ${c.evidence}`);
+    const mark = c.advisory ? "ℹ️ " : c.ok ? "✅" : "❌";
+    console.log(`  ${mark} ${c.name}  —— ${c.evidence}`);
   }
   console.log(`\n${"─".repeat(60)}`);
-  console.log(failed.length === 0 ? `✅ 审计通过（${checks.length} 项全绿）` : `❌ 审计发现 ${failed.length} 项不符：`);
-  for (const f of failed) console.log(`   - [${f.group}] ${f.name}: ${f.evidence}`);
+  if (failed.length === 0) {
+    console.log(`✅ 审计通过（${checks.length - advisories.length} 项判定全绿）`);
+  } else {
+    console.log(`❌ 审计发现 ${failed.length} 项不符：`);
+    for (const f of failed) console.log(`   - [${f.group}] ${f.name}: ${f.evidence}`);
+  }
+  if (advisories.length > 0) {
+    console.log(`\nℹ️  ${advisories.length} 项提示——不参与判定，但须人工逐条确认：`);
+    for (const a of advisories) console.log(`   - ${a.name}\n     ${a.evidence}`);
+  }
 }
 
 console.log(`\n宪法本体内容哈希: ${sha(CONST_FILE)}`);
