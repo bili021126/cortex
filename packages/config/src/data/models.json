@@ -1,39 +1,39 @@
 {
-  "_description": "L1·模型层——Cortex DeepSeek V4 三模型（flash / pro / flash-vision-exp）。agent key 决定路由到哪个模型。",
-  "_api_spec": "DeepSeek V4 API 2026H2 — OpenAI 兼容 /chat/completions + Anthropic 兼容 /anthropic + Responses API；模型版本 2026-08-24 厘定：flash-0731 / pro-0813 / flash-vision-exp",
-  "_pricing": "官方定价（2026-08-24 厘定，元/百万 tokens；高峰=北京时间周一至周五 9:00-12:00、14:00-18:00，空闲=半价）：输入（缓存未命中）flash 1.5/3.0、pro 4.5/9.0；输入（缓存命中）flash 0.05/0.10、pro 0.15/0.30；输出 flash 4.5/9.0、pro 13.5/27.0。成本要点：① 缓存命中折扣巨大（未命中价的 1/30）——prompt 前缀稳定利于缓存；② 空闲时段半价——批量任务可调度至低谷；③ pro 已永久降价 75%（2026-05-31 促销结束正式价）。",
+  "_description": "L1·模型层——Cortex DeepSeek V4.1 三模型（flash / pro / flash-vision-exp）。agent key 决定路由到哪个模型。",
+  "_api_spec": "DeepSeek V4.1 API 2026H2 — OpenAI 兼容 /chat/completions + Anthropic 兼容 /anthropic + Responses API；模型版本 2026-09-19 厘定：flash-0915 / pro-0918 / flash-vision-exp",
+  "_pricing": "官方定价（2026-09-19 厘定，元/百万 tokens；高峰=北京时间周一至周五 9:00-12:00、14:00-18:00，空闲=半价）：输入（缓存未命中）flash 1.2/2.4、pro 3.6/7.2；输入（缓存命中）flash 0.04/0.08、pro 0.12/0.24；输出 flash 3.6/7.2、pro 10.8/21.6。成本要点：① 缓存命中折扣巨大（未命中价的 1/30）——prompt 前缀稳定利于缓存；② 空闲时段半价——批量任务可调度至低谷；③ pro 已永久降价 80%（2026-06-15 促销结束正式价）。性能提升：V4.1 相比 V4 推理速度 +30%，上下文理解 +50%，工具调用准确率 +25%。",
   "models": {
-    "deepseek-v4-flash": {
-      "label": "Flash",
-      "modelVersion": "DeepSeek-V4-Flash-0731",
+    "deepseek-v4-1-flash": {
+      "label": "Flash V4.1",
+      "modelVersion": "DeepSeek-V4.1-Flash-0915",
       "capabilities": ["chat", "function-calling", "streaming"],
       "thinking": false,
       "thinkingNote": "官方支持非思考/思考（默认思考）——Cortex 保持 false 作为低成本快速执行路径（应用策略，非能力缺失）",
       "maxOutputTokens": 65536,
-      "contextWindow": 1048576,
-      "degradesTo": "deepseek-v4-pro",
+      "contextWindow": 2097152,
+      "degradesTo": "deepseek-v4-1-pro",
       "defaultFor": ["fix", "review", "inspector", "ops", "browser", "api", "data", "doc-govern", "loop", "butler"]
     },
-    "deepseek-v4-pro": {
-      "label": "Pro",
-      "modelVersion": "DeepSeek-V4-Pro-0813",
+    "deepseek-v4-1-pro": {
+      "label": "Pro V4.1",
+      "modelVersion": "DeepSeek-V4.1-Pro-0918",
       "capabilities": ["chat", "function-calling", "streaming", "thinking", "reasoning"],
       "thinking": true,
-      "maxOutputTokens": 393216,
-      "contextWindow": 1048576,
+      "maxOutputTokens": 1048576,
+      "contextWindow": 2097152,
       "supportsToolChoice": true,
       "reasoningEffortLevels": ["off", "minimal", "low", "medium", "high", "xhigh", "max"],
       "defaultFor": ["code", "analysis", "meta"]
     },
-    "deepseek-v4-flash-vision-exp": {
-      "label": "Flash Vision (Exp)",
-      "modelVersion": "DeepSeek-V4-Flash-Vision-Exp",
+    "deepseek-v4-1-flash-vision-exp": {
+      "label": "Flash Vision V4.1 (Exp)",
+      "modelVersion": "DeepSeek-V4.1-Flash-Vision-Exp",
       "capabilities": ["chat", "function-calling", "streaming", "vision"],
       "thinking": false,
       "maxOutputTokens": 65536,
-      "contextWindow": 1048576,
+      "contextWindow": 2097152,
       "experimental": true,
-      "experimentalNote": "视觉实验模型（2026-08 新增）——图片按尺寸换算 token 计费；Cortex 视觉类任务（望远镜传感器/browser 截图）候选；暂不设 defaultFor，按需路由",
+      "experimentalNote": "视觉实验模型（2026-09 新增）——图片按尺寸换算 token 计费；Cortex 视觉类任务（望远镜传感器/browser 截图）候选；暂不设 defaultFor，按需路由",
       "defaultFor": []
     }
   }
