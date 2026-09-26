@@ -100,6 +100,18 @@ test-tmp.txt
 packages/engine/test-output.txt
 packages/engine/test-tmp.txt
 
+# Cyrene 记忆层的 cwd 相对运行时产物（2026-09-26 补，见 core-3-design-backlog.md N-22）
+# 这几处路径由 packages/memory/src/cyrene/** 的**兜底默认值**决定，落在 process.cwd()
+# 下而不是 .cortex/ 里。而 data/ 是**被跟踪**的目录（含 data/claims/），所以从仓库根
+# 跑一次、记忆层一写，工作树就脏——因此按文件忽略，不是整个 data/。
+#   · data/memory.json —— cyrene/memory-store.ts 单例的默认持久化文件（cwd/data/memory.json）
+#   · data/rag-data/   —— cyrene/rag/index.ts 的 getDataDir() 默认值（向量库落盘处）
+#   · memory-trace.log —— cyrene/memory-trace.ts 的 getTracePath() 默认值（追加写）
+# 注：cwd/models 是 RAG 的模型查找目录，只读不写，故不忽略（免得掩盖将来真要入库的目录）。
+data/memory.json
+data/rag-data/
+memory-trace.log
+
 # 治理会话数据以顶层 doc-govern/ 为权威源
 packages/engine/doc-govern/
 
