@@ -12,7 +12,15 @@
 
 ## 一、6 项 Core-3 设计决策 —— 逐条核验
 
-### 【1】Logger 推广 —— ⚠️ **题名已过时，需重新定义**
+### 【1】Logger 推广 —— ⚠️ **题名已过时，需重新定义**（设计已完成；**实现待 3 项裁决**）
+
+> **2026-09-26 追记**：设计文档已写就并落盘（`observability-dual-channel-design.md`），
+> 含四条不变量式的分工设计与 5 条验收标准。
+> 其中「惰性栈」一条**已实测并决定不改**（8 749 ns/次 vs 前缀检查 15 ns，但 1000 次/秒下
+> 只占事件循环 0.87%；改法会动白名单语义，风险大于收益）——详见该文档 §3.2-bis。
+> 剩余实现项均**卡在 3 项待裁决上**：① `console.log` 要不要进管道（涉及保留策略）
+> ② 基线门禁放哪一层 ③ 是否合并 `LoggingPipelineBridge` 与 `console-bridge`。
+> **裁决未出之前动手会返工**，故本项到此为止。
 
 | 维度 | 实测 |
 |---|---|
@@ -185,7 +193,7 @@
 
 | # | 题 | 证据 | 量级 |
 |---|---|---|---|
-| N-1 | **`scripts/` 不在任何门禁覆盖内** | **部分已修（2026-09-26）**——详见下节 | 余 84 项 |
+| N-1 | **`scripts/` 不在任何门禁覆盖内** | ✅ **已闭合（2026-09-26）**——详见下节 | 0（原 147 项） |
 | N-2 | ~~**`ci-gate` 计数口径无一致定义**~~ **✅ 已修（2026-09-26）** | 成因：打印串把「未运行的测试文件数」与「用例数」摆在同一分母旁。修正后 `3988 + 5 = 3993` 已闭合。**顺带修出两个真缺陷**：① 门禁 1-3 失败时不输出 JSON（消费方永远拿不到结果）→ 已加 `abort(stage)`；② `governance-pipeline.ts` 的 ci_verify 阶段读永不存在的字段（`configValid`/`build`/`testDetails` 等）→ 失败时恒报「全段失败」、成功消息嵌 `undefined/undefined`。**并因此定案：宪法历来的「3982 passed / 13 skipped」那个 3982 是 total，不是 passed** | 已闭合 |
 | N-3 | **文档注册表实质失修** | `docs/README.md` 29 条链接中 11 条失效（7 条目标已归档），且把归档件摆在「当前活跃设计文档」与「⭐从这里开始」；`cortex-docs.json` 宪法条目 version 写 3.7 而文件是 v3.8；`docs/analysis` 实为 48 份而 README 记 15 份 | 已修（2026-09-26） |
 | N-4 | **五流六层坐标系的锚点已漂移** | 45 条文件引用中 12 条搬家、2 条消失、1 条行号越界；只覆盖 16/28 包 | 已机器化（`architecture-flows.json` + `flow-contract` 门禁） |
@@ -217,23 +225,35 @@
 **量化结果**：类型错误 **66 → 63**（死引用类 TS2305/TS2307/TS5097 **清零**）；
 lint **263 → 84**，**fatal 解析错误 0**。
 
-### 未做（需先清 84 项，故 `eslint scripts` / `tsc -p scripts` 尚未进门禁）
+### 未做 → **已闭合（2026-09-26）**
 
-| 规则 | 项数 | 性质 |
+原列「余 84 lint + 63 类型，需先清完再进门禁」。**已全部清完并纳入门禁**：
+
+| 指标 | 前 | 后 |
 |---|---|---|
-| `@typescript-eslint/no-explicit-any` | 31 | 需要逐个判断真实类型 |
-| `@typescript-eslint/no-non-null-assertion` | 20 | 多为 `noUncheckedIndexedAccess` 连带 |
-| `no-empty` | 16 | 空 catch 块——**其中可能有静默吞错，需逐个看** |
-| `@typescript-eslint/no-unused-vars` | 15 | 机械 |
-| `no-useless-assignment` / `prefer-const` | 2 | 机械 |
+| `eslint scripts` | 263 | **0** |
+| `tsc -p scripts/tsconfig.json` | 63 | **0** |
 
-类型错误 63 项中 46 项是 `noUncheckedIndexedAccess` 连带（`!`/`??` 补齐即可），
-11 项 TS2345 + 4 项 TS2322 需逐个判断。
+清理纪律（全批遵守，已 grep 复核）：不新增 `eslint-disable`；不新增 `any`/`as any`；
+不用 `!`；非空断言与 `noUncheckedIndexedAccess` 一律改**显式守卫**（不可达分支保留类型收窄
+并在注释里写明为何不可达）；空 catch 补注释而不扩大吞异常；不改运行时行为。
 
-**判断**：这是一次独立的、有界的清理（约 147 项，绝大多数机械），
-但它**不改运行时行为**，且与门禁策略变更绑定——建议在清完后一次性
-把 `tsc -p scripts` 与 `eslint scripts` 加进门禁，而不是边清边加
-（边清边加会让门禁长期处于红/黄之间，失去信号价值）。
+**门禁自用的脚本也在其中**：`scripts/verify/critical-fixes.ts`（门禁第 3 步执行的东西）
+原有 16 个问题，清理后实跑仍 **14 通过 / 0 失败**。
+
+**纳入门禁**：
+- 门禁 1/5 增补 `tsc --noEmit -p scripts/tsconfig.json`（root tsconfig 只 references `packages/`，
+  `scripts/` 从不在构建图内）
+- 门禁 2/5 作用域：`eslint packages` → `eslint packages scripts`
+- 新失败段名 `scriptsTypecheck`，并**回显末 30 行 tsc 输出**
+  ——此前那句「见上方输出」是空话，`run()` 并不回显，失败时看不到原因
+
+**反向验证**：注入类型错误 → 门禁 exit=1 且 `failedStage="scriptsTypecheck"`。
+
+> ⚠️ **验证手法的一个坑，必须记下**：反向验证时用 `git checkout -- <file>` 撤销注入行，
+> **把该文件里尚未提交的清理成果一并回滚了**——门禁当场变红才发现。
+> `git checkout` 恢复的是 HEAD，不是「注入之前」。
+> **此后一律：先提交，再反向验证；或只做定点回撤，不用整文件 checkout。**
 
 ---
 
