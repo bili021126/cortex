@@ -235,6 +235,8 @@ export {
   loadAllConfig,
   // 路径工具
   resolveConfigDataDir,
+  // 用户数据目录补种（add-only，导出供测试）
+  seedMissingFiles,
   // 错误类型
   ConfigLoadError,
   ConfigValidationError,

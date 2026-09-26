@@ -299,10 +299,13 @@ function isTestEnv(): boolean {
 /**
  * 解析配置数据目录（R11-01：运行时配置不再写入包安装目录）。
  *
- * 优先级：CORTEX_CONFIG_DIR env > 用户数据目录（~/.cortex/config，自动 seed）> 包 dist/data（测试/兜底）。
+ * 优先级：CORTEX_CONFIG_DIR env > 用户数据目录（~/.cortex/config，自动补种缺失文件）> 包 dist/data（测试/兜底）。
  * 此前解析到 <@cortex/config>/dist/data——Electron 打包后只读（app.asar 内 writeFileSync 抛错）、
  * dev 中写入污染 git（src/data 被运行时编辑弄脏工作树）。
  * 测试环境（VITEST）保持包数据——测试隔离，不污染用户目录。
+ *
+ * 用户数据目录是一个**长期存在**的安装态目录：上游改了配置不会自动生效，靠
+ * seedMissingFiles 补缺（add-only，见其文档）+ 人工决定既存文件内部的语义变更要不要迁移。
  */
 export function resolveConfigDataDir(): string {
   if (_cachedDataDir) return _cachedDataDir;
@@ -320,7 +323,7 @@ export function resolveConfigDataDir(): string {
 
     // 生产：CORTEX_CONFIG_DIR 显式覆盖，否则用户数据目录（Electron 主进程可注入 userData）
     const userDataDir = process.env["CORTEX_CONFIG_DIR"] ?? path.join(os.homedir(), ".cortex", "config");
-    seedIfMissing(userDataDir, packageDataDir);
+    seedMissingFiles(userDataDir, packageDataDir);
     _cachedDataDir = userDataDir;
     return userDataDir;
   } catch {
@@ -332,17 +335,36 @@ export function resolveConfigDataDir(): string {
 }
 
 /**
- * 用户数据目录缺失时从包数据 seed（复制全部 json）。
- * 幂等——目录已存在直接返回。seed 失败静默（读取侧仍有包数据兜底）。
+ * 把包数据中**缺失**的配置文件补种到用户数据目录。
+ *
+ * 关键语义：**add-only，绝不覆盖已存在的文件。**
+ * 用户数据目录里可能有用户自己的编辑（models.json 的模型清单、tuning.json 的调参），
+ * 覆盖是不可逆的，因此只补缺。
+ *
+ * 2026-09-26 修正：此前是 `if (fs.existsSync(userDataDir)) return` —— 只在**首次创建**目录时播种。
+ * 后果是上游新增/修改的配置文件**永远到不了已安装的用户目录**：实测 ~/.cortex/config 缺
+ * architecture-flows.json（新域在运行时读不到），且 event-routing.json 缺 mergeRules
+ * （NotificationPipe 归并静默失效——bootstrap-engine 传的是 `mergeRules ?? []`）。
+ * 现在每次解析都补缺文件，新增配置域能自动到位；不覆盖既存文件，用户编辑仍受保护。
+ *
+ * 注意：只处理 .json。dist/data 里还混有 context-policies.ts 编译出的 .js/.d.ts/.map，
+ * 那些是代码产物不是配置域数据，不能种进用户目录。
+ *
+ * seed 失败静默——读取侧仍有包数据兜底。
+ *
+ * 导出供测试直接验证 add-only 语义（走 resolveConfigDataDir 无法测：VITEST 下 isTestEnv() 会短路）。
  */
-function seedIfMissing(userDataDir: string, packageDataDir: string): void {
+export function seedMissingFiles(userDataDir: string, packageDataDir: string): void {
   try {
-    if (fs.existsSync(userDataDir)) return;
-    fs.mkdirSync(userDataDir, { recursive: true });
+    if (!fs.existsSync(userDataDir)) {
+      fs.mkdirSync(userDataDir, { recursive: true });
+    }
+    if (!fs.existsSync(packageDataDir)) return;
     for (const f of fs.readdirSync(packageDataDir)) {
-      if (f.endsWith(".json")) {
-        fs.copyFileSync(path.join(packageDataDir, f), path.join(userDataDir, f));
-      }
+      if (!f.endsWith(".json")) continue;
+      const dest = path.join(userDataDir, f);
+      if (fs.existsSync(dest)) continue;
+      fs.copyFileSync(path.join(packageDataDir, f), dest);
     }
   } catch {
     // seed 失败——后续读取仍有包数据兜底
