@@ -69,7 +69,9 @@ export class SchedulerPlugin implements EnginePlugin {
   }
 
   async stop(): Promise<void> {
-    (this.instance as unknown as Disposable).stop?.();
+    // 2026-09-26：补 await——该 stop 是 async（Disposable 现声明为 void | Promise<void>），
+    // 此前 fire-and-forget 会让关机顺序失效、拒绝变成 unhandled。
+    await (this.instance as unknown as Disposable).stop?.();
   }
 
   health(): PluginHealth {

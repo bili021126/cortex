@@ -487,11 +487,22 @@ export interface ICortexApi extends ICortexLifecycle, ICortexChat, ICortexTask, 
  * @since v3.1 — Plugin 化 stop() 类型安全收敛
  */
 export interface Disposable {
-  stop?: () => void;
-  shutdown?: () => void;
-  destroyAll?: () => void;
-  clear?: () => void;
-  dispose?: () => void;
+  /**
+   * 各方法均可返回 Promise——**真实实现绝大多数是异步的**
+   * （`ILifecycle.dispose(): Promise<void>`、`Transport.dispose(): Promise<void>`、
+   * 各 Plugin 的 `stop(): Promise<void>`）。
+   *
+   * 2026-09-26 修正：此前签名一律写 `() => void`。由于 `() => Promise<void>` 在
+   * TypeScript 中可赋给 `() => void`，异步实现**类型上"满足"此接口**，而调用方
+   * 按 `() => void` 调用时**连 await 都写不出来**——于是异步清理被 fire-and-forget，
+   * 关机顺序形同虚设、拒绝变成 unhandled rejection。
+   * 声明为联合返回类型后：同步实现照旧满足，异步实现可以被 await。
+   */
+  stop?: () => void | Promise<void>;
+  shutdown?: () => void | Promise<void>;
+  destroyAll?: () => void | Promise<void>;
+  clear?: () => void | Promise<void>;
+  dispose?: () => void | Promise<void>;
 }
 
 /** 返回类型声明——插件式注入类型 */

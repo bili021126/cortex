@@ -42,7 +42,8 @@ export class MetaAgentPlugin implements EnginePlugin {
   async start(): Promise<void> {}
 
   async stop(): Promise<void> {
-    (this.instance as unknown as Disposable).shutdown?.();
+    // 2026-09-26：补 await——shutdown 是 async（shared/infra.ts:437），此前 fire-and-forget
+    await (this.instance as unknown as Disposable).shutdown?.();
   }
 
   health(): PluginHealth {

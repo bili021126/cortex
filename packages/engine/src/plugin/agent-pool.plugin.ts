@@ -27,7 +27,8 @@ export class AgentPoolPlugin implements EnginePlugin {
   async start(): Promise<void> {}
 
   async stop(): Promise<void> {
-    (this.instance as unknown as Disposable).destroyAll?.();
+    // 2026-09-26：补 await（async 销毁此前被 fire-and-forget）
+    await (this.instance as unknown as Disposable).destroyAll?.();
   }
 
   health(): PluginHealth {

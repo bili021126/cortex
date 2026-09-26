@@ -26,7 +26,8 @@ export class PipelineObserverPlugin implements EnginePlugin {
   async start(): Promise<void> {}
 
   async stop(): Promise<void> {
-    (this.instance as unknown as Disposable).clear?.();
+    // 2026-09-26：补 await（Disposable 现声明 void | Promise<void>，clear 可能是异步清理）
+    await (this.instance as unknown as Disposable).clear?.();
   }
 
   health(): PluginHealth {

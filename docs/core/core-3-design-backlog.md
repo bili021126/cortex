@@ -89,17 +89,41 @@
 
 **该项可从 Core-3 移除。** 这是清单里唯一一条已经做完但没人划掉的。
 
-### 【5】Disposable 推广 —— ⚠️ **半推广：有实现，无声明**
+### 【5】Disposable 推广 —— ⚠️ **题名被实测推翻；但顺带挖出并修掉一个真缺陷**
 
-| 指标 | 实测 |
-|---|---|
-| `implements Disposable` 的文件 | **1** |
-| 定义了 `dispose()` 方法的文件 | **22** |
-| 接口来源 | `shared/src/infra.ts` |
+**题名的预设**：「22 个类有 `dispose()` 却只 1 个声明 `implements Disposable`，补声明即可」。
+实测推翻了它：
 
-22 个类实现了 `dispose()`，但只有 1 个显式声明 `implements Disposable`。
-**缺口不在实现，在契约声明**——没有声明就无法被类型系统强制调用，
-这正是「Promisify 式」的半推广：机制在，约束不在。
+- `Disposable`（`shared/src/infra.ts:489`）是**全可选、同步**的鸭子类型，专为 Plugin `stop()` 而设。
+- 含 `dispose()` 的类是 **20 个**（不是 22——上一版把文件数当成了类数）。
+- 其中只有 `ConfirmGate` 声明了 `Disposable`，而它的 **`dispose(): void` 确实是同步的**——
+  **那个声明是对的**，不是「唯一的正确样本」。
+- 其余 19 个的 `dispose()` 返回 `Promise<void>`。它们**类型上本就"满足" `Disposable`**
+  （`() => Promise<void>` 可赋给 `() => void`）——所以「补声明」既无必要，还会误导。
+
+**真正的问题在别处，而且是真缺陷**：接口把异步抹成了 `() => void`，
+于是**调用方连 `await` 都写不出来**——8 处清理全部 fire-and-forget：
+
+| 位置 | 调用 | 目标方法 | 后果 |
+|---|---|---|---|
+| `assemble.ts:95` | `scheduler.stop?.()` | async | 未 await |
+| `assemble.ts:96` | `pool.destroyAll?.()` | async | 未 await |
+| `assemble.ts:97` | `observer.clear?.()` | 可能 async | 未 await |
+| `assemble.ts:100` | `cliAdapter.close?.()` | 可能 async | 未 await |
+| `scheduler.plugin.ts:72` | `stop?.()` | async | 未 await |
+| `agent-pool.plugin.ts:30` | `destroyAll?.()` | async | 未 await |
+| `meta-agent.plugin.ts:45` | `shutdown?.()` | async（`shared/infra.ts:437`） | 未 await |
+| `pipeline-observer.plugin.ts:29` | `clear?.()` | 可能 async | 未 await |
+
+而 `assemble.ts` 的注释写着「**逆序**释放资源」——除 `memory.close` 外全都没 await，
+**所谓逆序实际是并发 fire-and-forget，且那些 `try/catch` 根本看不到异步拒绝**。
+
+**已修（2026-09-26）**：
+1. `Disposable` 各成员改为 `() => void | Promise<void>`——严格放宽，向后兼容
+   （同步实现照旧满足，异步实现从此可被 await）
+2. 上表 8 处补 `await`
+
+验证：tsc 零错误、eslint 零问题、engine 91 文件 / 1044 测试全绿。
 
 ### 【6】shared export\* —— ⚠️ **题名与实况不符**
 

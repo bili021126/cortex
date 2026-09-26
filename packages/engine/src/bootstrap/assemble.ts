@@ -91,13 +91,18 @@ export function assemble(input: AssembleInput): BootstrapEngineResult {
   const butler = new ButlerAgent(input.observer);
 
   const shutdown = async (): Promise<void> => {
-    // 逆序释放资源——各组件以 best-effort 关闭，未实现的方法静默跳过
-    try { (input.scheduler as unknown as Disposable).stop?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
-    try { (input.pool as unknown as Disposable).destroyAll?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
-    try { (input.observer as unknown as Disposable).clear?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    // 逆序释放资源——各组件以 best-effort 关闭，未实现的方法静默跳过。
+    //
+    // 2026-09-26 修正：此前除 memory.close 外**全部没有 await**，而这些组件的
+    // stop/destroyAll/clear 实际是 async——于是「逆序释放」只是注释里的一句空话
+    // （真实行为是并发 fire-and-forget），且 try/catch **看不到异步拒绝**。
+    // 现在逐项 await，让顺序与错误处理都真实成立。
+    try { await (input.scheduler as unknown as Disposable).stop?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    try { await (input.pool as unknown as Disposable).destroyAll?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
+    try { await (input.observer as unknown as Disposable).clear?.(); } catch (err) { DegradationBoundary.handle(err, 'assemble', 'trace'); }
     try { await input.memory?.close(); } catch (err) { console.error(`[assemble] memory.close_failed`, err); }
-    try { (input.gate as unknown as Disposable).dispose?.(); } catch (err) { console.error(`[assemble] gate.dispose_failed`, err); }
-    try { input.cliAdapter.close?.(); } catch (err) { console.error(`[assemble] cliAdapter.close_failed`, err); }
+    try { await (input.gate as unknown as Disposable).dispose?.(); } catch (err) { console.error(`[assemble] gate.dispose_failed`, err); }
+    try { await input.cliAdapter.close?.(); } catch (err) { console.error(`[assemble] cliAdapter.close_failed`, err); }
   };
 
   return {
