@@ -1,7 +1,7 @@
 {
   "constitutionPath": "docs/constitution/Cortex 概念顶层设计 v3.8.md",
   "docRegistry": [
-    { "path": "docs/constitution/Cortex 概念顶层设计 v3.8.md", "type": "constitution", "version": "3.7", "canonical": true },
+    { "path": "docs/constitution/Cortex 概念顶层设计 v3.8.md", "type": "constitution", "version": "3.8", "canonical": true },
     { "path": "docs/analysis/harness-deep-dive-2026-08-05.md", "type": "design", "version": "1.0", "canonical": false },
     { "path": "docs/analysis/ux-deep-dive-2026-08-05.md", "type": "design", "version": "1.0", "canonical": false },
     { "path": "docs/analysis/audit-full-2026-08-05.md", "type": "audit", "version": "1.0", "canonical": false },
@@ -11,6 +11,14 @@
     { "path": "README.md", "type": "entry", "version": "1.0", "canonical": false },
     { "path": "USAGE.md", "type": "entry", "version": "1.0", "canonical": false },
     { "path": "PACKAGE_POSITIONING.md", "type": "architecture", "version": "1.0", "canonical": false },
-    { "path": "packages/engine/tests/eval/README.md", "type": "spec", "version": "1.0", "canonical": false }
+    { "path": "packages/engine/tests/eval/README.md", "type": "spec", "version": "1.0", "canonical": false },
+
+    { "path": "docs/README.md", "type": "entry", "version": "2.0", "canonical": false },
+    { "path": "docs/analysis/optimization-report-2026-09-26.md", "type": "audit", "version": "1.0", "canonical": false },
+    { "path": "docs/analysis/capability-system-2026-09-26.md", "type": "design", "version": "1.0", "canonical": false },
+    { "path": "docs/auditing/am-2026-0926-001-audit.md", "type": "audit", "version": "1.0", "canonical": false },
+    { "path": "docs/amendments/AM-2026-0926-001.json", "type": "amendment", "version": "v3.9", "canonical": false },
+    { "path": "docs/core/Cortex-架构映射-五流六层七原则.md", "type": "design", "version": "2.0", "canonical": false },
+    { "path": "packages/config/src/data/architecture-flows.json", "type": "spec", "version": "1.0", "canonical": false }
   ]
 }
