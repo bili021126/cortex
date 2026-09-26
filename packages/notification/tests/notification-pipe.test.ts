@@ -119,6 +119,59 @@ function makeEvent(overrides?: Partial<NotificationEvent>): NotificationEvent {
   };
 }
 
+/** 假持久化层——只记录调用，供通道侧断言用 */
+function fakePersistence(loadResult: NotificationEvent[] = []) {
+  return {
+    isAvailable: () => true,
+    ready: () => Promise.resolve(),
+    persist: vi.fn(),
+    loadPending: vi.fn(() => loadResult),
+    markAcked: vi.fn(),
+    cleanup: vi.fn(),
+    close: vi.fn(),
+  } as any;
+}
+
+// ── R13-D2：消费路径与恢复边界 ──────────────────────────
+describe("通道持久化接线（R13-D2）", () => {
+  it("ImportantChannel.dequeue → 出队即落盘标记消费", () => {
+    const p = fakePersistence();
+    const ch = new ImportantChannel(p);
+
+    ch.push(makeEvent({ requestId: "consumed-1" }));
+    const ev = ch.dequeue();
+
+    expect(ev?.requestId).toBe("consumed-1");
+    // 修复前：本通道没有任何 ack 路径，恢复出的积压永远不被标记，
+    // 每次重启都读回同一批最旧的 N 条
+    expect(p.markAcked).toHaveBeenCalledWith("consumed-1");
+  });
+
+  it("ImportantChannel 恢复量 = maxQueueSize（不再硬编码 500）", async () => {
+    const p = fakePersistence();
+    new ImportantChannel(p);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(p.loadPending).toHaveBeenCalledWith(NotificationChannel.Important, {
+      ttlMs: DEFAULT_CHANNEL_CONFIGS[NotificationChannel.Important].persistTtlMs,
+      limit: DEFAULT_CHANNEL_CONFIGS[NotificationChannel.Important].maxQueueSize,
+    });
+  });
+
+  it("UrgentChannel 恢复量 = 自己的 maxQueueSize（100，而非硬编码 500）", async () => {
+    const p = fakePersistence();
+    new UrgentChannel(p);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(p.loadPending).toHaveBeenCalledWith(NotificationChannel.Urgent, {
+      ttlMs: DEFAULT_CHANNEL_CONFIGS[NotificationChannel.Urgent].persistTtlMs,
+      limit: DEFAULT_CHANNEL_CONFIGS[NotificationChannel.Urgent].maxQueueSize,
+    });
+    // 修复前 loadPending 硬编码 500 条，本通道声明 100 却会被灌进 500 条
+    expect(DEFAULT_CHANNEL_CONFIGS[NotificationChannel.Urgent].maxQueueSize).toBeLessThan(500);
+  });
+});
+
 describe("UrgentChannel（紧急通道）", () => {
   it("push → 插队到队首 + 立即通知", () => {
     const ch = new UrgentChannel();
@@ -463,6 +516,31 @@ describe("NotificationPipe", () => {
       expect(handler).toHaveBeenCalled();
       const mergedEvent = handler.mock.calls[0][0] as NotificationEvent;
       expect(mergedEvent.summary).toContain("归并");
+    });
+
+    // R13-D2：去重缓冲自身必须有界——否则「键足够离散的高频事件」
+    // 会让缓冲变成新的无界增长（与 notification_queue 同一个形状）。
+    it("归并键数超上限 → 全量 flush，缓冲回到有界", () => {
+      pipe.loadRoutes({
+        code_changed: {
+          channel: NotificationChannel.Routine,
+          ackRequired: false,
+          mergeKey: "commitHash",
+        },
+      });
+      pipe.setMergeRules([{ groupBy: "mergeKey", windowMs: 3_600_000, maxBatch: 1_000_000 }]);
+
+      const handler = vi.fn();
+      pipe.on(NotificationChannel.Routine, handler);
+
+      // 灌进 1,001 个互不相同的键；windowMs 与 maxBatch 都设得极大，
+      // 唯一可能触发 flush 的只有键数上限
+      for (let i = 0; i <= 1_000; i++) {
+        pipe.push({ type: "code_changed", summary: `v${i}`, mergeKey: `key-${i}` });
+      }
+
+      // 超过上限时全量 flush——事件以 1:1 被投递，但缓冲不再增长
+      expect(handler).toHaveBeenCalledTimes(1_001);
     });
   });
 

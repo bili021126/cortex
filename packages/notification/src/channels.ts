@@ -142,7 +142,13 @@ export class UrgentChannel extends BaseChannel {
     // R3 fix: 等待异步初始化完成后再恢复，消除同步 isAvailable() 永远返回 false 的竞态
     const doRestore = () => {
       if (!p.isAvailable()) return;
-      const pending = p.loadPending(NotificationChannel.Urgent);
+      // R13-D2：限额与保留期改由通道配置驱动
+      //   （此前 loadPending 硬编码 500 条，本通道声明 maxQueueSize = 100，
+      //    恢复时却会灌进 500 条——自己突破自己声明的容量上限）
+      const pending = p.loadPending(NotificationChannel.Urgent, {
+        ttlMs: this.config.persistTtlMs,
+        limit: this.config.maxQueueSize,
+      });
       for (const event of pending) {
         this.queue.push(event);
         this.notify(event);
@@ -201,7 +207,15 @@ export class ImportantChannel extends BaseChannel {
 
   /** 消费队列头部事件 */
   dequeue(): NotificationEvent | undefined {
-    return this.queue.shift();
+    const event = this.queue.shift();
+    if (event) {
+      // R13-D2：出队即消费，落盘标记。
+      //   本通道此前没有任何 ack 路径（markAcked 只从 UrgentChannel.ack() 调用），
+      //   恢复出的积压永远不会被标记 → 每次重启都重新读回同一批最旧的 N 条，
+      //   更新的积压永远轮不到。标记后该行按 TTL 清理，恢复窗口才会向前推进。
+      this.persistence?.markAcked(event.requestId);
+    }
+    return event;
   }
 
   private _restoreFromDisk(): void {
@@ -210,7 +224,11 @@ export class ImportantChannel extends BaseChannel {
     // R7-H12 fix: 等待异步 init 完成后再恢复（与 UrgentChannel R3 fix 一致）
     const doRestore = () => {
       if (!p.isAvailable()) return;
-      const pending = p.loadPending(NotificationChannel.Important);
+      // R13-D2：限额与保留期改由通道配置驱动（同 UrgentChannel）
+      const pending = p.loadPending(NotificationChannel.Important, {
+        ttlMs: this.config.persistTtlMs,
+        limit: this.config.maxQueueSize,
+      });
       for (const event of pending) {
         this.queue.push(event);
       }

@@ -290,6 +290,31 @@ describe("NotificationPersistence —— 保留策略（R13-D1）", () => {
     expect(rawRowCount(dbPath)).toBeLessThan(100);
   }, 60_000);
 
+  it("loadPending 遵守 limit 选项——不越过调用方声明的队列容量（R13-D2）", async () => {
+    const dbPath = makeDbPath();
+    const p = new NotificationPersistence(dbPath);
+    await p.ready();
+
+    for (let i = 0; i < 10; i++) {
+      p.persist(
+        makeEvent({
+          requestId: `n-${i}`,
+          channel: NotificationChannel.Important,
+          ackRequired: false,
+          timestamp: Date.now() + i,
+        }),
+      );
+    }
+
+    // 显式 limit → 只取最旧的 N 条
+    expect(
+      p.loadPending(NotificationChannel.Important, { limit: 3 }).map((e) => e.requestId),
+    ).toEqual(["n-0", "n-1", "n-2"]);
+
+    // 不传 → 落到缺省 500，全部取回
+    expect(p.loadPending(NotificationChannel.Important)).toHaveLength(10);
+  });
+
   it("schema 迁移 v1 → v2：补复合索引并删除被取代的单列索引", async () => {
     const dbPath = makeDbPath();
     mkdirSync(dirname(dbPath), { recursive: true });

@@ -103,6 +103,12 @@ export class NotificationPersistence {
   /** 写入路径自清理阈值——风暴期间不必等节流窗口到期 */
   private static readonly PERSIST_CLEANUP_THRESHOLD = 10_000;
 
+  /**
+   * loadPending 的缺省取回条数。
+   * 调用方应传自己的 `maxQueueSize`——恢复量超过队列容量只会被立刻挤掉。
+   */
+  private static readonly DEFAULT_PENDING_LIMIT = 500;
+
   constructor(dbPath: string) {
     this.dbPath = dbPath;
     // _init 异步执行——构造函数不阻塞，持久化可用性异步确定
@@ -148,23 +154,43 @@ export class NotificationPersistence {
     }
   }
 
-  /** 从磁盘加载指定通道的未确认事件 */
-  loadPending(channel: NotificationChannel): NotificationEvent[] {
+  /**
+   * 从磁盘加载指定通道的未确认事件。
+   *
+   * @param channel 目标通道
+   * @param options.ttlMs 已确认行的保留期——由调用方的 `ChannelConfig.persistTtlMs` 驱动
+   *                      （R13-D2：此前该配置字段全仓零消费，保留期是硬编码的 7 天）
+   * @param options.limit 取回条数——由调用方的 `ChannelConfig.maxQueueSize` 驱动
+   *                      （R13-D2：此前硬编码 500，与队列容量脱钩：Important 声明 500
+   *                       恰好对上，Urgent 声明 100 却会被灌进 500 条，突破自己声明的容量上限）
+   */
+  loadPending(
+    channel: NotificationChannel,
+    options?: { ttlMs?: number; limit?: number },
+  ): NotificationEvent[] {
     if (!this.available || !this.db) return [];
+    const ttlMs =
+      options?.ttlMs && options.ttlMs > 0
+        ? options.ttlMs
+        : NotificationPersistence.DEFAULT_RETENTION_MS;
+    const limit =
+      options?.limit && options.limit > 0
+        ? options.limit
+        : NotificationPersistence.DEFAULT_PENDING_LIMIT;
     // R12-D4：读取前清理过期行。
     // R13-D1：改为节流调用——此前每次 loadPending 都无条件清理，
     //   在大表上跑统计与删除会拖慢读取；cleanup() 自身记录清理时刻。
     if (Date.now() - this._lastCleanupAt >= NotificationPersistence.CLEANUP_THROTTLE_MS) {
-      try { this.cleanup(NotificationPersistence.DEFAULT_RETENTION_MS); } catch { /* 清理失败不阻断读取 */ }
+      try { this.cleanup(ttlMs); } catch { /* 清理失败不阻断读取 */ }
     }
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM notification_queue
         WHERE channel = ? AND acked = 0
         ORDER BY timestamp ASC
-        LIMIT 500
+        LIMIT ?
       `);
-      const rows = stmt.all(channel) as PersistedRow[];
+      const rows = stmt.all(channel, limit) as PersistedRow[];
       return rows.map((r) => this._rowToEvent(r));
     } catch {
       return [];

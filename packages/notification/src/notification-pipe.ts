@@ -44,6 +44,14 @@ export class NotificationPipe {
   private mergeTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
   /** 归并超时阈值（毫秒） */
   private static readonly MERGE_TIMEOUT_MS = 5_000;
+  /**
+   * 归并缓冲区键数上限（R13-D2）。
+   *
+   * 去重缓冲本身也必须是有界的——否则「同源高频事件」只要键足够离散，
+   * 缓冲就会变成新的无界增长（带上一个 bug 的形状）。超出即全量 flush：
+   * 此时投递量与事件量是 1:1，与不做归并等价，但内存回到有界。
+   */
+  private static readonly MERGE_BUFFER_MAX_KEYS = 1_000;
   /** 归并规则 */
   private mergeRules: MergeRule[] = [];
 
@@ -260,6 +268,20 @@ export class NotificationPipe {
 
     // 达到批大小阈值，立即 flush
     if (batch.length >= rule.maxBatch) {
+      this._flushMergeKey(key);
+      return;
+    }
+
+    // R13-D2：键数上限兜底——超出即全量 flush，缓冲不无界增长
+    if (this.mergeBuffer.size > NotificationPipe.MERGE_BUFFER_MAX_KEYS) {
+      this._flushAllMerged();
+    }
+  }
+
+  /** flush 所有归并键（键数超上限时的兜底出口） */
+  private _flushAllMerged(): void {
+    // 先快照键——_flushMergeKey 会删键，不能边遍历边改
+    for (const key of [...this.mergeBuffer.keys()]) {
       this._flushMergeKey(key);
     }
   }
