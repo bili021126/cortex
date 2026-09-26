@@ -1,8 +1,9 @@
 # Cortex 概念顶层设计 v3.8
 
 **版本**：v3.8（事实勘误型修订——8 组 18 处量化自述对齐，AM-2026-0811-001）
+**最新修订**：v3.10（2026-09-19，DeepSeek V4.1 模型迁移 + 上下文翻倍）
 
-**状态**：Core-2 深度治理推进中。七轮审查 ~170+ 发现，十轮修复闭合 55 项 + 本轮 P0×4（obliterate 湮灭不落盘 / cyrene load 损坏覆盖 / 通知路由链断裂含 bootstrap 无 loadRoutes / governance-events as EmittableEvent 类型逃逸）+ P1×23 + P2×42+；23 处 skip 恢复 20 处。6 项设计决策排入 Core-3。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。
+**状态**：Core-2 深度治理推进中。七轮审查 ~170+ 发现，十轮修复闭合 55 项 + 本轮 P0×4（obliterate 湮灭不落盘 / cyrene load 损坏覆盖 / 通知路由链断裂含 bootstrap 无 loadRoutes / governance-events as EmittableEvent 类型逃逸）+ P1×23 + P2×42+；23 处 skip 恢复 20 处。6 项设计决策排入 Core-3。**2026-09-19 新增修复**：P0×1（recordHeartbeat 未接线导致慢任务误杀）、P1×7（Promise.catch(() => {}) 空 catch 滥用 + setInterval/setTimeout 未清理）、P2×4（Promise.all→allSettled 重构 + 静态状态重置 + any 类型泄漏检查）。**2026-09-19 新增升级**：DeepSeek V4 → V4.1 模型迁移（flash/pro/vision），上下文窗口 1M→2M，推理速度 +30%，工具调用准确率 +25%。铁三角未就位（Electron ❌ / MCP ⚠️ 已接入无鉴权 / Committee ❌）。**2026-09-26 新增修复**：P0×1（notification_queue 无界增长——Important 通道无 ack 路径，其行永远进不了 `acked = 1` 清理条件；实测 969 万行 / 1.97 GB，已加三段式保留 + 复合索引，库已回收至 0.7 MB）、P2×1（lint 阻断门禁 2/5 步的未使用 import）。
 
 **性质**：智能体治理框架——不对模型提要求，对架构下约束。核心手段是"暴露不可靠，内化可靠"。
 
