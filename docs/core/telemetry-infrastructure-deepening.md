@@ -119,6 +119,40 @@ class AuditTrail {
 }
 ```
 
+#### 实施现状（2026-09-26 实测回填）
+
+上面的接口是提案形状，落地时不同，且本段新增两条实测结论：
+
+**接口出入**（以 `packages/telemetry/src/audit-trail.ts` 为准）
+
+- 判型字段是 `type`（`"config_override" | "config_reload" | "config_violation" | "domain_filter" | "degradation"`），不是 `category`
+- `flush()` / `close()` 是**同步** `void`（内部 `fs.fsyncSync` / `fs.closeSync`）
+- `recordDomainFilter` 的 stats 是 `{ total, allowedCount, blockedCount }`
+- 另有读取端 `queryBySpan(spanId)`（提案里没有，后来按 NP-6 的化解方案补的）
+
+**`config_violation` 是幂等的**（`type: config_violation` 与其他 record* 语义不同）
+
+`config_violation` 描述的是**配置的当前状态**，不是「发生了一件事」。同一 `(schemaName, errors)`
+在同一个日志世代内只落盘一次——首次调用时从 `audit.jsonl` 播种签名集，之后走内存缓存；后到的重复观测不追加。
+
+这是被实测逼出来的：`recordBootstrapAudit` 每次 `bootstrapEngine` 都无条件记录 `config.warnings`，
+而跨字段校验警告是**仓库配置的静态属性**、不随运行变化。实测 `audit.jsonl` 里同一签名累积 **882 条**
+（单条约 1966 字节 ≈ 1.73 MB），占该文件 2.55 MB 的 **68%**；`engine/tests/integration/audit-bootstrap.test.ts`
+的 T2/T3 当时正是靠这堆残留才「通过」的——**假绿**。
+
+去重必须在磁盘上完成：每次 bootstrap 都是新进程、新实例，进程内 Set 挡不住。签名用 NUL/SOH 分隔且
+**不做排序**——不同顺序视为不同状态。`errors` 变化即签名变化，仍记新条目，不会掩盖真实的配置修复。
+**幂等只适用于 `config_violation`**：其余 record* 是事件，逐次追加。并发写入者为尽力而为语义（不做锁，最坏各记一次）。
+
+**容量：`定期 rotate` 至今未实现，且比提案担心的宽松得多**
+
+`AuditTrail` 构造函数以 `"a"` 打开 `<logDir>/audit.jsonl`，`_append` 走 `fs.writeSync`，
+**没有大小上限也没有轮转**。但剔除上述重复后实测真实体量是：删掉 881 条重复后该文件从 2,603,117 字节
+降到 **92,267 字节**（443 条，跨度 56 天，约 0.6 MB/年）。所以轮转不是当下的痛点——
+真正的教训是**先看数据再定紧迫度**：此前按未去重的文件估算出「约 16 MB/年」，那个数字是错的。
+
+`FileTransport` 同样没有轮转（当前未接线，属潜在陷阱：若按 observability 双通道案把 Logger 提上来，需要一并考虑）。
+
 ### 2.4 降级计数器（MetricCounter）
 
 ```typescript

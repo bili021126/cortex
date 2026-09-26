@@ -148,3 +148,53 @@ class ConfigRegistry {
 - 环境变量 `CORTEX_COGNITION_WEIGHT_HYBRID=0.6` 覆盖 defaults 中的 `weightHybrid`
 - 缺失字段时 Zod 报错，错误信息包含字段名和期望类型
 - `tsc --noEmit` 全局零报错
+
+---
+
+## 段五：实施现状（2026-09-26 实测回填）
+
+> 本段是**回填**，不是新设计。段二～段四写于提案期，落地时形状有出入；此处记录实际建成的东西，
+> 以免下次有人按提案去找不存在的文件。
+
+### 实际落地与提案的差异
+
+| 提案 | 实际 |
+|------|------|
+| `ConfigRegistry`（Zod schema + `register/get/onChange/reload/list`） | **未按此形状建**。实际是 `CONFIG_DOMAINS` 数组 + `loadConfigDomain(name, readFile, dataDir)` 门面，schema 用**自研 JSON Schema 校验器**（`validateDomainWithSchema`），不是 Zod |
+| `ConfigResolver` 三级覆盖（env > user > project > defaults） | **只有两级**：`CORTEX_CONFIG_DIR` env > 用户数据目录 > 包 `dist/data` 兜底。**没有项目级 `.cortex/config` 层**，也没有逐域 `envPrefix` |
+| `ConfigWatcher` 热加载 | **未建**（改配置仍需重启） |
+| `scripts/check-config-drift.ts` | 未建；相关守护落在 `domains-data-consistency.test.ts`（src/data 每个 .json 必须注册域） |
+| `config/data/` 14 个 JSON | 18 个配置域（`CONFIG_DOMAINS` 长度即权威，勿抄散文里的数字） |
+
+### 新增：用户数据目录的补种语义（本节对应 2026-09-26 修复）
+
+`resolveConfigDataDir()` 的解析链里，用户数据目录（默认 `~/.cortex/config`，可被 `CORTEX_CONFIG_DIR` 覆盖）
+是一个**长期存在的安装态目录**——它一旦建成，上游改配置不会自动生效。
+
+原实现 `seedIfMissing` 是 `if (fs.existsSync(userDataDir)) return`，**只在首次创建目录时播种**。
+后果实测（2026-09-26 对照 src / dist / 用户目录三处）：
+
+- `architecture-flows.json` **整文件缺失** → 新配置域 `architectureFlows`（`required: false`）静默返回 `undefined`
+- `event-routing.json` 缺 `mergeRules` → `bootstrap-engine` 执行 `setMergeRules(config.eventRouting.mergeRules ?? [])`，
+  **NotificationPipe 的事件归并子系统从未生效**（窗口/批次/指纹那套全被 `?? []` 吞掉）
+
+改为 `seedMissingFiles`：**每次解析都补缺，且 add-only，绝不覆盖已存在文件。**
+不覆盖是刻意的——用户目录里可能有用户自己的编辑（`models.json` 的模型清单、`tuning.json` 的调参），
+覆盖不可逆。另外只处理 `.json`：`dist/data` 里混着 `context-policies.ts` 编译出的 `.js/.d.ts/.map`，
+那些是代码产物不是配置数据。
+
+残留的已知不一致（**需要人决定，不由代码自行处置**）：
+`~/.cortex/config/models.json` 是 `deepseek-v4-flash` / `deepseek-v4-pro` 且无 `_pricing`，
+而 `src/data/models.json` 是 `deepseek-v4-1-flash` / `-pro` / `-flash-vision-exp`。
+可能是用户定制，也可能只是旧版——语义变更不自动迁移。
+
+### 新增：`dist/data` 的同步（`packages/config/scripts/copy-data.mjs`）
+
+`src/data` 里混着两类东西：配置域数据（`*.json`）与编译型 TS 模块（`context-policies.ts` → `dist/data/*.js`）。
+tsc 只负责后者，前者靠 `copy-data.mjs` 镜像（**含孤儿清理**——`dist` 里 src 已没有的 `.json` 会被删掉）。
+
+为什么门禁必须跑它：loader 在 `VITEST` 下把数据目录解析到 `packages/config/dist/data`
+（`isTestEnv()` 短路），而 `dist/` 被 gitignore——**`tsc -b` 不复制 JSON**（复制只发生在包自己的 `build` 脚本里，
+而门禁从不跑包 build）。所以干净检出上门禁没有配置数据，本地则可能拿**陈旧**配置做验证。
+2026-09-26 实测该路径下 `mergeRules` 与 `architecture-flows.json` 双双缺失，而测试全绿。
+现在门禁第 1 步（类型检查）之后增加同步步骤，失败以 `failedStage: "configDataSync"` 阻断。
