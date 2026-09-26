@@ -34,6 +34,8 @@ interface SqliteDb {
 interface SqliteStatement {
   run(...params: unknown[]): void;
   all(...params: unknown[]): unknown[];
+  /** 单行查询——行数统计使用（R13-D1） */
+  get(...params: unknown[]): unknown;
 }
 
 /** 持久化行——SQLite 表行映射 */
@@ -62,6 +64,44 @@ export class NotificationPersistence {
   private dbPath: string;
   /** 初始化完成 Promise——消费方可 await ready() 确保异步 init 完成后再操作 */
   private _ready: Promise<void>;
+  /** 上次清理时间——读路径自清理节流（R13-D1） */
+  private _lastCleanupAt = 0;
+  /** 自上次清理以来写入的行数——写入路径自清理阈值触发（R13-D1） */
+  private _persistSinceCleanup = 0;
+
+  // ── 保留策略常量（R13-D1）─────────────────────────
+  //
+  // 背景：此前 cleanup 仅删 `acked = 1` 的行，而 Important 通道 push() 恒写 acked=0
+  // 且该通道没有任何 ack 路径（markAcked 只从 UrgentChannel.ack() 调用）——
+  // 其行永远进不了清理条件，notification_queue 无界增长
+  // （实测 2026-08-03/04 一次事件风暴留下 9,693,221 行 / 1.97 GB，全部 acked=0）。
+  //
+  // 三段式保留：已确认行按 TTL、未确认行按硬上限、总量按行数兜底。
+
+  /**
+   * 内部自清理默认保留期。
+   * 与重构前 loadPending 内硬编码的 7 天一致，保持已确认行的保留行为不变。
+   * 注意：ChannelConfig.persistTtlMs 尚未接入此处（该字段目前全仓库零消费）。
+   */
+  private static readonly DEFAULT_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+  /**
+   * 未确认行的保留硬上限——未确认不等于永久有效。
+   * 未确认超过此期限的事件已失去「重启恢复」的意义，保留只会撑大磁盘。
+   */
+  private static readonly UNACKED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+  /**
+   * 表行数硬上限——兜底防线，防止事件风暴（如单日 700 万条 error.reported）
+   * 在两次清理之间把库撑爆。超出部分按 timestamp 从旧到新裁掉。
+   */
+  private static readonly MAX_ROWS = 50_000;
+
+  /** 读路径自清理最小间隔——避免每次 loadPending 都在大表上做统计与删除 */
+  private static readonly CLEANUP_THROTTLE_MS = 5 * 60 * 1000;
+
+  /** 写入路径自清理阈值——风暴期间不必等节流窗口到期 */
+  private static readonly PERSIST_CLEANUP_THRESHOLD = 10_000;
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -99,14 +139,24 @@ export class NotificationPersistence {
     } catch (err) {
       // R11-05：不再空吞——上报 stderr（可观测）——持久化失败不阻塞通知管线
       process.stderr.write(`[NotificationPersistence] persist 失败: ${String(err).slice(0, 200)}\n`);
+      return;
+    }
+    // R13-D1：写入路径自清理——风暴期间不必等节流窗口到期才回收
+    if (++this._persistSinceCleanup >= NotificationPersistence.PERSIST_CLEANUP_THRESHOLD) {
+      this._persistSinceCleanup = 0;
+      this.cleanup(NotificationPersistence.DEFAULT_RETENTION_MS);
     }
   }
 
   /** 从磁盘加载指定通道的未确认事件 */
   loadPending(channel: NotificationChannel): NotificationEvent[] {
     if (!this.available || !this.db) return [];
-    // R12-D4：读取前清理过期 acked 行（cleanup 此前零调用——acked 行永不清理，notification_queue 无界增长）
-    try { this.cleanup(7 * 24 * 60 * 60 * 1000); } catch { /* 清理失败不阻断读取 */ }
+    // R12-D4：读取前清理过期行。
+    // R13-D1：改为节流调用——此前每次 loadPending 都无条件清理，
+    //   在大表上跑统计与删除会拖慢读取；cleanup() 自身记录清理时刻。
+    if (Date.now() - this._lastCleanupAt >= NotificationPersistence.CLEANUP_THROTTLE_MS) {
+      try { this.cleanup(NotificationPersistence.DEFAULT_RETENTION_MS); } catch { /* 清理失败不阻断读取 */ }
+    }
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM notification_queue
@@ -134,15 +184,47 @@ export class NotificationPersistence {
     }
   }
 
-  /** 清理过期事件（TTL 过期） */
+  /**
+   * 清理过期事件。
+   *
+   * R13-D1：从「仅删已确认行」扩展为三段式保留——
+   *   1. 已确认行：按调用方传入的 TTL 清理。
+   *   2. 未确认行：按 `UNACKED_RETENTION_MS` 硬上限清理。
+   *      此前只删 `acked = 1`，而 Important 通道无 ack 路径（push 恒写 acked=0），
+   *      其行永远进不了清理条件 → 无界增长。
+   *   3. 行数硬上限：超出 `MAX_ROWS` 的部分按 timestamp 从旧到新裁掉（风暴兜底）。
+   *
+   * @param ttlMs 已确认行的保留期（ms）
+   */
   cleanup(ttlMs: number): void {
     if (!this.available || !this.db) return;
+    this._lastCleanupAt = Date.now();
+    this._persistSinceCleanup = 0;
+    const now = this._lastCleanupAt;
     try {
-      const cutoff = Date.now() - ttlMs;
-      const stmt = this.db.prepare(`
-        DELETE FROM notification_queue WHERE timestamp < ? AND acked = 1
-      `);
-      stmt.run(cutoff);
+      // 1) 已确认行：按 TTL 清理
+      this.db
+        .prepare(`DELETE FROM notification_queue WHERE acked = 1 AND timestamp < ?`)
+        .run(now - ttlMs);
+      // 2) 未确认行：按保留硬上限清理（不小于已确认行的 TTL）
+      const unackedTtl = Math.max(ttlMs, NotificationPersistence.UNACKED_RETENTION_MS);
+      this.db
+        .prepare(`DELETE FROM notification_queue WHERE acked = 0 AND timestamp < ?`)
+        .run(now - unackedTtl);
+      // 3) 行数硬上限兜底
+      const countRow = this.db
+        .prepare(`SELECT count(*) AS n FROM notification_queue`)
+        .get() as { n: number } | undefined;
+      const total = countRow?.n ?? 0;
+      if (total > NotificationPersistence.MAX_ROWS) {
+        this.db
+          .prepare(
+            `DELETE FROM notification_queue WHERE rowid IN (
+               SELECT rowid FROM notification_queue ORDER BY timestamp ASC LIMIT ?
+             )`,
+          )
+          .run(total - NotificationPersistence.MAX_ROWS);
+      }
     } catch {
       // 静默降级
     }
@@ -184,14 +266,22 @@ export class NotificationPersistence {
       this.db.pragma("journal_mode = WAL");
       // R12-A1：_createTable 返回可用性——降级守卫置 false 后不被无条件覆盖（R11-05 回归修复）
       this.available = this._createTable();
+      // R13-D1：启动即做一次保留清理——把上次运行遗留的过期行（含未确认积压）收回，
+      // 且让迁移新建的索引立刻在一张已收敛的表上生效。
+      if (this.available) {
+        this.cleanup(NotificationPersistence.DEFAULT_RETENTION_MS);
+      }
     } catch {
       // better-sqlite3 不可用——降级为纯内存模式
       this.available = false;
     }
   }
 
-  /** R11-05：数据库 schema 版本（PRAGMA user_version 门控——此前 CREATE IF NOT EXISTS 无迁移，schema 变更静默杀死持久化） */
-  private static readonly SCHEMA_VERSION = 1;
+  /**
+   * R11-05：数据库 schema 版本（PRAGMA user_version 门控——此前 CREATE IF NOT EXISTS 无迁移，schema 变更静默杀死持久化）。
+   * R13-D1：1 → 2，新增 loadPending / cleanup 的复合索引。
+   */
+  private static readonly SCHEMA_VERSION = 2;
 
   private _createTable(): boolean {
     if (!this.db) return false;
@@ -204,7 +294,8 @@ export class NotificationPersistence {
       this.available = false;
       return false;
     }
-    // 迁移链：v0 → v1（建表）。未来 v2 在此追加步骤（如 ADD COLUMN priority）。
+    // 迁移链：每一步把 user_version 推进到该步版本，新增步骤追加在末尾。
+    // v0 → v1：建表（保真记录 v1 当时实际创建的索引，含随后被 v2 取代的 idx_nq_channel）
     if (current < 1) {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS notification_queue (
@@ -222,7 +313,19 @@ export class NotificationPersistence {
         CREATE INDEX IF NOT EXISTS idx_nq_channel ON notification_queue(channel);
         CREATE INDEX IF NOT EXISTS idx_nq_timestamp ON notification_queue(timestamp);
       `);
-      this.db.pragma(`user_version = ${NotificationPersistence.SCHEMA_VERSION}`);
+      this.db.pragma(`user_version = 1`);
+    }
+    // v1 → v2：补复合索引。loadPending 的 `channel = ? AND acked = 0 ORDER BY timestamp`
+    // 此前只能靠单列 idx_nq_channel 过滤后在内存排序；cleanup 的两个 DELETE
+    // （acked = ? AND timestamp < ?）此前无可用索引。
+    // idx_nq_channel 是 idx_nq_load 的最左前缀——任何能用它的查询都能用后者，故予删除以免白付写入代价。
+    if (current < 2) {
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_nq_load ON notification_queue(channel, acked, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_nq_cleanup ON notification_queue(acked, timestamp);
+        DROP INDEX IF EXISTS idx_nq_channel;
+      `);
+      this.db.pragma(`user_version = 2`);
     }
     return true;
   }
