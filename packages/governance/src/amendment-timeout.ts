@@ -10,6 +10,7 @@
 // ============================================================
 
 import type { AmendmentProposal } from "@cortex/shared";
+import { FILE_TIMEOUT_COUNTERS } from "@cortex/config";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -134,7 +135,7 @@ function getDaysSinceModified(filePath: string, now: number): number {
  * 存储格式：每行 "proposalId:count"
  */
 function getStaleCount(proposalId: string, amendmentsDir: string): number {
-  const counterPath = path.join(amendmentsDir, ".timeout-counters.json");
+  const counterPath = path.join(amendmentsDir, FILE_TIMEOUT_COUNTERS);
   try {
     const raw = fs.readFileSync(counterPath, "utf-8");
     const counters = JSON.parse(raw) as Record<string, number>;
@@ -150,7 +151,7 @@ export function updateStaleCount(
   proposalId: string,
   amendmentsDir: string,
 ): void {
-  const counterPath = path.join(amendmentsDir, ".timeout-counters.json");
+  const counterPath = path.join(amendmentsDir, FILE_TIMEOUT_COUNTERS);
   // H17 fix: 读-改-写三步非原子，加 retry 循环防并发漂移
   for (let retry = 0; retry < 3; retry++) {
     let counters: Record<string, number> = {};

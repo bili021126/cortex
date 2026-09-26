@@ -30,7 +30,13 @@ import {
 import type { TuiEvent, TuiHooks, ReplMode } from "./types.js";
 import { compactMessages } from "./context-compactor.js";
 import { streamExecuteTools } from "./streaming-tool-executor.js";
-import { DEFAULT_MAX_TOOL_ROUNDS, ENV_MAX_TOOL_ROUNDS } from "@cortex/config";
+import {
+  DIR_CORTEX,
+  DIR_LORE,
+  FILE_PERSONA_TALK_TXT,
+  DEFAULT_MAX_TOOL_ROUNDS,
+  ENV_MAX_TOOL_ROUNDS,
+} from "@cortex/config";
 import { PLANNING_SYSTEM } from "@cortex/config";
 import fs from "fs";
 import path from "path";
@@ -52,7 +58,7 @@ let _cyrenePersona: string | null = null;
 function cyrenePersona(): string {
   if (_cyrenePersona !== null) return _cyrenePersona;
   try {
-    const personaPath = path.join(process.cwd(), ".cortex", "lore", "cyrene", "persona-talk.txt");
+    const personaPath = path.join(process.cwd(), DIR_CORTEX, DIR_LORE, "cyrene", FILE_PERSONA_TALK_TXT);
     _cyrenePersona = fs.readFileSync(personaPath, "utf-8");
   } catch (err) { console.warn('[DEGRADED:tui-query-loop]', String(err));
     _cyrenePersona = "你是昔涟，用轻松自然的语气和用户聊天。";
@@ -115,7 +121,7 @@ export function agentTalkPersona(agent: string): string {
     if (dir === "cyrene") return cyrenePersona();
 
     try {
-      const personaPath = path.join(process.cwd(), ".cortex", "lore", dir, "persona-talk.txt");
+      const personaPath = path.join(process.cwd(), DIR_CORTEX, DIR_LORE, dir, FILE_PERSONA_TALK_TXT);
       const cached = cachedPersona(personaPath);
       if (cached) return cached;
     } catch { /* fall through */ }

@@ -9,6 +9,7 @@
 
 import { LlmAdapter } from "@cortex/llm";
 import {
+  ENV_CORTEX_API_AUDIT,
   ENV_DEEPSEEK_BASE_URL,
   ENV_DEEPSEEK_CHAT_MODEL,
   ENV_DEEPSEEK_CYRENE_CHAT_MODEL,
@@ -163,7 +164,7 @@ function resolveModelCaps(modelStore?: ModelStore): Map<string, ModelCapabilitie
 
 /** 启用 API 审计日志 */
 export function enableLlmAudit(): void {
-  if (process.env["CORTEX_API_AUDIT"] !== "0") {
+  if (process.env[ENV_CORTEX_API_AUDIT] !== "0") {
     LlmAdapter.enableAudit();
   }
 }

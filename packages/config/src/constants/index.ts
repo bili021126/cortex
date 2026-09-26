@@ -72,6 +72,9 @@ export {
   DIR_CONSTITUTION,
   FILE_REPL_HISTORY,
   DIR_CORTEX,
+  // 2026-09-26 补：DIR_LORE 定义了却漏在导出名单外，导致调用点只能手写 "lore"
+  // （子约束8 硬编码禁令的违反面）。它与 DIR_CORTEX 是同一段路径的两截。
+  DIR_LORE,
   FILE_CYRENE_MEMORY_DB,
   FILE_SKILL_REGISTRY_JSON,
   FILE_CODING_STANDARDS,
