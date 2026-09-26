@@ -117,6 +117,61 @@ export class NotificationRuntime {
     PipelineEventType.GovernanceRoundtableConsensus,
   ];
 
+  // ── 归并策略（R13-D2）──────────────────────────────
+  //
+  // 归并的「窗口 / 批次」是运营参数，配在 config 的 event-routing.json.mergeRules；
+  // 而「哪些事件参与归并」是语义判断——它和 defaultSemantics 是同一类知识，
+  // 所以留在运行时里，两处不重复配置。
+  //
+  // 判据：故障期会以「同源、同类」形式每秒重复数百至数千次的事件。
+  // 逐条投递没有信息增量，只会把持久化层撑爆（实测 963 万条 / 1.97 GB）。
+  // 决策类事件（DECISION_REQUIRED）永不在此列——每一条都必须单独可见。
+
+  /** 参与归并的高频告警事件类型 */
+  private static readonly MERGEABLE_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
+    PipelineEventType.ErrorReported,
+    PipelineEventType.ErrorSilentUpgraded,
+    PipelineEventType.NodeFailed,
+    PipelineEventType.AgentPoolInvariantViolation,
+  ]);
+
+  /** 错误指纹的最大保留长度——只需区分错误类别，不需要完整正文 */
+  private static readonly FINGERPRINT_MAX_LENGTH = 120;
+
+  /**
+   * 错误指纹——抹掉每次都会变的部分，只留**消息形状**。
+   *
+   * 崩溃循环里同一条错误每次携带的行号 / 计数 / 请求 id 都不同，
+   * 只有抹掉它们，归并键才会收敛。
+   *
+   * 边界（刻意如此）：这是形状归一化，不是语义分类器。同一条故障换了措辞
+   * 就会被算作两个键——宁可少合并，也不把不同故障揉成一条。真正兜底的是
+   * NotificationPipe 的缓冲键数上限，不是这里的智能程度。
+   */
+  private static fingerprint(text: string): string {
+    return text
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>")
+      .replace(/\b[0-9a-f]{7,}\b/gi, "<hex>")
+      .replace(/\d+/g, "<n>")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, NotificationRuntime.FINGERPRINT_MAX_LENGTH);
+  }
+
+  /**
+   * 计算归并键——不参与归并的事件返回 undefined（逐条投递）。
+   *
+   * 键 = 事件类型 + 来源标识 + 错误指纹。这样：
+   *   - 同一个源反复报同一类错 → 归并成一条「[归并] N 条 … 事件」
+   *   - 不同源、或同类源的不同错误 → 保持独立，不丢信息
+   */
+  private _mergeKeyFor(eventType: string, payload: Record<string, unknown>): string | undefined {
+    if (!NotificationRuntime.MERGEABLE_EVENT_TYPES.has(eventType)) return undefined;
+    const source = String(payload.nodeId ?? payload.source ?? payload.sourceAgent ?? "unknown");
+    const detail = String(payload.error ?? payload.reason ?? payload.message ?? "");
+    return `${eventType}|${source}|${NotificationRuntime.fingerprint(detail)}`;
+  }
+
   /**
    * 处理事件——转换为通知并发送到 NotificationPipe。
    *
@@ -209,6 +264,8 @@ export class NotificationRuntime {
       detail: this._extractDetail(payload),
       sourceAgent: payload.sourceAgent as string | undefined,
       timestamp: event.timestamp ?? Date.now(),
+      // R13-D2：此前从不设置 mergeKey，NotificationPipe 的归并分支永不进入
+      mergeKey: this._mergeKeyFor(event.type as string, payload),
     };
 
     // 附加语义标注

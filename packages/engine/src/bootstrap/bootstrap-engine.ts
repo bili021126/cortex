@@ -428,6 +428,10 @@ export async function bootstrapEngine(
   // P0-1: 加载事件路由表——factory 已加载 event-routing.json（routeTable key 为 snake_case，
   //       resolve() 对 dotted 事件名取点号最后一段映射，如 "governance.amendment_proposed" → "amendment_proposed"）
   notificationPipe.loadRoutes(config.eventRouting.routeTable);
+  // R13-D2：归并规则同源加载——此前 setMergeRules 全仓零调用（只有测试调它），
+  //   NotificationRuntime 也从不设置 mergeKey，导致整套归并子系统在上线路径上是死代码：
+  //   2026-08-03/04 一次调度崩溃循环把 963 万条 error.reported / node.failed 逐条落盘。
+  notificationPipe.setMergeRules(config.eventRouting.mergeRules ?? []);
   const govValidator = new ZeroTokenValidator();
   const notificationRuntime = new NotificationRuntime(observer, notificationPipe, {
     enableTelemetry: true,
