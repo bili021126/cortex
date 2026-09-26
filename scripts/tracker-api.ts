@@ -1,5 +1,4 @@
 #!/usr/bin/env npx tsx
-/* eslint-disable no-console */
 
 /**
  * tracker-api.ts — Cortex API Key 长期追踪与入侵检测

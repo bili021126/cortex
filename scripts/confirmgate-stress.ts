@@ -17,7 +17,12 @@ import { bootstrapEngine } from "@cortex/engine";
 import { ConfirmGate } from "@cortex/scheduler";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "@cortex/platform";
-import { ReversibilityLevel as RL, AgentType } from "@cortex/shared";
+// 2026-09-26 修正：ReversibilityLevel 的单一真相源是 @cortex/config。
+// 此前与 AgentType 一起从 @cortex/shared 导入——那违反
+// packages/shared/tests/toolkit-single-source.test.ts 明文守护的单源约束
+// （该守护的扫描范围不含 scripts/，所以这处违规一直没被发现）。
+import { ReversibilityLevel as RL } from "@cortex/config";
+import { AgentType } from "@cortex/shared";
 
 // ════════════════════════════════════════════════════════
 // §0 准备

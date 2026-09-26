@@ -1,5 +1,4 @@
 #!/usr/bin/env npx tsx
-/* eslint-disable no-console */
 
 /**
  * monitor-api.ts — Cortex API 密钥调用监控

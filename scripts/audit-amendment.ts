@@ -1,5 +1,4 @@
 #!/usr/bin/env npx tsx
-/* eslint-disable no-console -- 终端工具：本脚本的产出就是 stdout 报告，与 eslint.config.mjs 中 packages/cli 的具名豁免同类场景 */
 /**
  * scripts/audit-amendment.ts — 修正案事实审计（凝光角色，可复用）
  *

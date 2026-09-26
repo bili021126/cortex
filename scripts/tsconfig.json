@@ -6,16 +6,21 @@
     "tsBuildInfoFile": "../.tsbuildinfo/scripts.tsbuildinfo",
     "types": ["node"],
     "lib": ["ES2022"],
+    "composite": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "paths": {
       "@cortex/llm": ["../packages/llm/src/index.ts"],
       "@cortex/engine": ["../packages/engine/src/index.ts"],
       "@cortex/shared": ["../packages/shared/src/index.ts"],
       "@cortex/platform": ["../packages/platform/src/index.ts"],
       "@cortex/governance": ["../packages/governance/src/index.ts"],
-      "@cortex/scheduler": ["../packages/scheduler/src/index.ts"]
+      "@cortex/scheduler": ["../packages/scheduler/src/index.ts"],
+      "@cortex/memory-store": ["../packages/memory-store/src/index.ts"],
+      "@cortex/config": ["../packages/config/src/index.ts"]
     }
   },
-  "include": ["*.ts"],
+  "include": ["**/*.ts"],
   "references": [
     { "path": "../packages/llm" },
     { "path": "../packages/engine/tsconfig.src.json" },

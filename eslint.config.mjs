@@ -105,8 +105,12 @@ export default tseslint.config(
     },
   },
   // ── CLI / Desktop 源码豁免（终端 & GUI 交互工具允许裸 console.log，但必须标注 @justification） ──
+  // 2026-09-26：加入 scripts/**——它们是同一类「终端工具」，stdout 就是产出。
+  //   此前 scripts/ 既不在 ignores 里、也没有门禁跑它，处于「配置上应该管、流程上没人管」的悬空态。
+  //   本豁免只放行 console.log；any / 非空断言等仍按全局规则计（那部分债尚未清，见
+  //   docs/core/core-3-design-backlog.md N-1）。
   {
-    files: ["packages/cli/src/**/*.ts", "packages/fsm-compiler/src/cli/**/*.ts", "packages/desktop/src/**/*.ts", "packages/desktop/src/**/*.tsx"],
+    files: ["packages/cli/src/**/*.ts", "packages/fsm-compiler/src/cli/**/*.ts", "packages/desktop/src/**/*.ts", "packages/desktop/src/**/*.tsx", "scripts/**/*.ts"],
     rules: {
       "no-console": ["error", { allow: ["warn", "error", "log"] }],
     },

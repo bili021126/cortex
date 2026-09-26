@@ -5,9 +5,11 @@
  * 运行 npx tsx scripts/inject-cyrene-memories.ts
  */
 
-import { MemoryStore } from "../packages/engine/dist/memory/memory-store.js";
-import { type MemorySource } from "../packages/shared/dist/memory.js";
-import { AgentType } from "../packages/shared/dist/agent.js";
+// 2026-09-26 修正：此前从 `../packages/engine/dist/memory/memory-store.js` 与
+// `../packages/shared/dist/*.js` 导入——那些 dist 路径早已不成立
+// （engine 已无 dist/memory/，memory-store 是独立包）。改为走包公共入口。
+import { MemoryStore } from "@cortex/memory-store";
+import { type MemorySource, AgentType } from "@cortex/shared";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 

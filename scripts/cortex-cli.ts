@@ -743,4 +743,10 @@ async function main(): Promise<void> {
   }
 }
 
-main();
+// 2026-09-26：按本目录既有约定补 rejection 收尾（verify-docs-registry.ts /
+// critical-fixes.ts 都是这个形）。此前裸 main() 让拒绝变成 unhandled，
+// 且进程可能以 0 退出——错误被静默。
+main().catch((e) => {
+  console.error("cortex-cli 异常:", e);
+  process.exit(1);
+});
