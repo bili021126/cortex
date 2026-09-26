@@ -263,8 +263,12 @@ expect(Object.keys(CORTEX_LAYER_CONTRACT).length).toBe(28);
    | 4 | 词汇闭合 | layer / principles 用了名单外的词 |
 
    一个**顺带查实的事实**：源码里其实**已经有 `// @layer <名>` 注解**，但覆盖率只有
-   **116 / 651 = 17.8%**，且词汇不统一（混用「规划-执行层」「L0」「L1」「platform」「治理层→交互层」）。
+   **115 / 667 = 17.2%**，且词汇不统一（混用「规划-执行层」「L0」「L1」「platform」「治理层→交互层」）。
    所以注解当不了契约源——这正是需要数据文件的原因。注解统一化列为后续独立议题。
+
+   > 口径：`packages/**/src` 下的 `.ts`，排除 `node_modules`/`dist`/`coverage`/`tests`，只看文件头 12 行。
+   > 本版初稿曾写「116/651 = 17.8%」——那是带 IO 报错的 PowerShell 粗扫值，经
+   > `scripts/audit-amendment.ts` 复算后更正（见 `docs/auditing/am-2026-0926-001-audit.md` F-1）。
 
 2. **宪法里那批过时计数怎么处置？（已按修宪流程起草）**
    `docs/amendments/AM-2026-0926-001.json`，`status: pending_judgment`，**未落笔宪法本体**，
