@@ -236,28 +236,48 @@ expect(Object.keys(CORTEX_LAYER_CONTRACT).length).toBe(28);
 
 | 现象 | 事实 | 影响 |
 |---|---|---|
-| `packages/parser/` 残留目录 | `src/` 与 `tests/` 已空，只剩 `dist/` + `node_modules/` + `tsbuildinfo`；**git 跟踪 0 文件** | 它是「29 个目录 vs 28 个包」这个数差的来源。三个非包目录：`parser`（残留）、`tests`（测试数据）、`.cortex` |
-| `packages/tests/.test-data/` | **33 个文件被提交进 git**，全是 `noflush-<时间戳>/` 形式的测试产物 | 测试产物进了版本库 |
+| `packages/parser/` 残留目录 **（已清除，见 §7-3）** | `src/` 与 `tests/` 已空，只剩 `dist/` + `node_modules/` + `tsbuildinfo`；**git 跟踪 0 文件** | 它是「29 个目录 vs 28 个包」这个数差的来源。三个非包目录：`parser`（残留）、`tests`（测试数据）、`.cortex` |
+| `packages/tests/.test-data/` **（已取消跟踪，见 §7-3）** | **33 个文件被提交进 git**，全是 `noflush-<时间戳>/` 形式的测试产物 | 测试产物进了版本库 |
 | `skills/` 的 27 vs 26 | 26 个 `skill-p*.json` + 1 个 `data-2pc-rollback-verify.json`（形状相同，无编号） | 「预置技能数」取哪个口径需要定 |
 | `design-tokens` 无测试 | 28 包中唯一不在门禁测试矩阵内的 | 它的正确性靠什么保证？ |
 | `desktop` 无 `src/index.ts` | 它是 Electron 应用（main/preload/renderer 三入口），不是库 | PACKAGE_POSITIONING 把它列在 L4「入口」，与实际形态吻合；但它的「公开导出」概念不适用 |
 
 ---
 
-## 7 · 下一步（需要开拓者裁决）
+## 7 · 下一步
 
-1. **五流六层七原则这张图，由谁持有？**
-   - (a) 保持文档形态，加一个「锚点自动校验」脚本进 CI——漂了就红
-   - (b) 降级为概念说明（去掉行号锚点），把代码位置交给 layer-contract
-   - (c) 机器化：把「流 ↔ 目录」映射写成 `packages/config/src/data/` 下的数据文件，与 layer-contract 同源
+> **2026-09-26 追记**：本节四项已在下述同日工作处置完毕，原始裁决问题保留在括注中以便追溯。
 
-   **人家倾向 (c)**：它把两套坐标系并到同一个可校验的平面上，且与现有的配置域机制一致。但这是一次结构变更，不是修补。
+1. **五流六层七原则这张图，由谁持有？（裁决为 (c)，已落地）**
+   实现：`packages/config/src/data/architecture-flows.json`（数据，已注册为 `architectureFlows` 配置域）
+   + `packages/tools/src/flow-contract.ts`（契约逻辑，与 `layer-contract.ts` 同源）
+   + `packages/tools/tests/flow-contract.test.ts`（`@ci: contract` 门禁）。
 
-2. **宪法里那批过时计数怎么处置？** 走一份 AM（推荐，保留治理流程的完整性），还是回退我上一轮的直接改动？
+   **四条不变量**（新增包 / 新模块不归类即门禁红）：
 
-3. **`packages/parser/` 残留与 `packages/tests/.test-data/` 的 33 个提交产物**——清理还是保留？（两者都不影响门禁，所以无人发现。）
+   | # | 不变量 | 防的是什么 |
+   |---|---|---|
+   | 1 | 路径真实 | 声明了不存在的目录——正是五流六层文档 45 条引用里 12 条搬家、2 条消失的那个病 |
+   | 2 | 包全覆盖（双向） | 新增包不归流；流认领已删包 |
+   | 3 | 模块全归类（双向） | 新增 src 子模块不声明归属 |
+   | 4 | 词汇闭合 | layer / principles 用了名单外的词 |
 
-4. **L0–L4 与五流是否需要一个正式对照文档？** 本版 §4 是第一版，是人工映射；若要长期维护，建议随 (1) 一起机器化。
+   一个**顺带查实的事实**：源码里其实**已经有 `// @layer <名>` 注解**，但覆盖率只有
+   **116 / 651 = 17.8%**，且词汇不统一（混用「规划-执行层」「L0」「L1」「platform」「治理层→交互层」）。
+   所以注解当不了契约源——这正是需要数据文件的原因。注解统一化列为后续独立议题。
+
+2. **宪法里那批过时计数怎么处置？（已按修宪流程起草）**
+   `docs/amendments/AM-2026-0926-001.json`，`status: pending_judgment`，**未落笔宪法本体**，
+   含 8 组事实勘误与起草人对自身越权的主动披露。待审计（凝光）→ 裁决（开拓者）→ 落笔。
+
+3. **`packages/parser/` 残留与 `packages/tests/.test-data/` 的 33 个提交产物（已清理）**
+   残留目录删除；测试产物取消跟踪（磁盘保留）；并修掉一处指向已删包的
+   `packages/cli/tsconfig.test.json` project reference（全仓 45 份 tsconfig 扫描下来唯一一处真悬空）。
+   **未动 `.tmp-lingxu/`（18.5 MB）**——那是第三方项目 CommonTrustProtocol 的解包副本，
+   属参考资料而非垃圾，不在「该清除」之列。
+
+4. **L0–L4 与五流的正式对照（已由第 1 项接手）**
+   本版 §4 保留为人工可读的导览；机器可读形态归 `architecture-flows.json`。二者若不一致，以数据文件为准。
 
 ---
 
