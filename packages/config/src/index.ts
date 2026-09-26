@@ -255,21 +255,23 @@ export type {
 
 export { validateJsonSchema, validateDomainWithSchema, validateSafe, validateOrThrow } from "./loader.js";
 
-// ── 域级独立校验器 ───────────────────────────────
-export {
-  validates_models,
-  safeValidates_models,
-  validates_keysContext,
-  safeValidates_keysContext,
-  validates_agentManifests,
-  safeValidates_agentManifests,
-  validates_tuning,
-  safeValidates_tuning,
-  validates_tools,
-  safeValidates_tools,
-  validates_eventRouting,
-  safeValidates_eventRouting,
-} from "./schemas/validators.js";
+// ── 域级独立校验器：已删除（2026-09-26）──────────────────────────
+// 这里曾导出 `validates_<域>` / `safeValidates_<域>` 一族（models / keysContext /
+// agentManifests / tuning / tools / eventRouting 共 6 域 12 个函数），文件
+// `schemas/validators.ts` 已整体删除，因为它与上面 loader 的通用机制**完全重复**：
+//   validates_models(d)      ≡ validateDomainWithSchema("models", d)
+//   safeValidates_models(d)  ≡ validateSafe("models", d)
+// 两者用的是**同一批 schema 对象**（loader 把那 6 个 schema 注册进 CONFIG_DOMAINS，
+// validators.ts 又各自 import 了一遍），同一套 validateJsonSchema 引擎。
+//
+// 删它的三个理由：
+//   ① 零调用、零测试——全仓只出现在它自己的定义与前一个导出名单里；
+//   ② **只覆盖 6 个域，而通用机制覆盖全部 18 个**——这是「被放弃的平行实现」的签名，
+//      不是有意的校验入口（若为入口，应当覆盖全）；
+//   ③ 它是个**静默同步陷阱**：新增第 7 个域时通用机制自动覆盖，它却要手工补，
+//      缺了不会有任何测试报警。
+// 域校验的正路是 `validateDomainWithSchema(domainName, data)`；而正常加载路径上
+// `loadConfigDomain` 本来就会调它（硬阻断），所以业务代码通常什么都不用做。
 
 // ── models.json → ModelCapabilities 解析 ─────────
 export { resolveModelCapabilities } from "./models-capability.js";
