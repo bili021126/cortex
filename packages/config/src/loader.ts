@@ -49,6 +49,7 @@ import {
   TUNING_SCHEMA,
   TOOLS_SCHEMA,
   EVENT_ROUTING_SCHEMA,
+  ARCHITECTURE_FLOWS_SCHEMA,
   ENGINE_SCHEMA,
   ENGINE_PLUGINS_SCHEMA,
   ROUNDTABLE_SCHEMA,
@@ -196,6 +197,13 @@ export const CONFIG_DOMAINS: ConfigDomain[] = [
     required: false,
     schema: GOVERNANCE_PIPELINE_SCHEMA,
     description: "治理管线配置——制度制度化的运行引擎",
+  },
+  {
+    name: "architectureFlows",
+    fileName: "architecture-flows.json",
+    required: false,
+    schema: ARCHITECTURE_FLOWS_SCHEMA,
+    description: "架构流映射——五流六层 ↔ 代码落点（与 layer-contract 正交：前者切行为，后者切依赖）",
   },
   {
     name: "cognition",

@@ -19,6 +19,7 @@ import {
   SEED_MEMORIES_SCHEMA,
   GOVERNANCE_PIPELINE_SCHEMA,
   EVENT_ROUTING_SCHEMA,
+  ARCHITECTURE_FLOWS_SCHEMA,
 } from "../src/schemas/index.js";
 
 /** 读 data/engine.json（import.meta.url 基准，不依赖 cwd） */
@@ -142,6 +143,43 @@ describe("R13-D2: event-routing.json 通过 EVENT_ROUTING_SCHEMA", () => {
   it("坏数据被拒：mergeRule 缺 groupBy 必须报错", () => {
     const bad = { routeTable: {}, mergeRules: [{ windowMs: 5000, maxBatch: 100 }] };
     const errors = validateJsonSchema(bad, EVENT_ROUTING_SCHEMA);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// 架构流映射（五流六层 ↔ 代码落点）
+//
+// 语义由 packages/tools/tests/flow-contract.test.ts（@ci: contract）强制；
+// 此处只守数据文件的形状，确保 schema 声明的必填字段真实存在。
+// ═══════════════════════════════════════════════════════
+
+describe("架构流映射数据文件通过 ARCHITECTURE_FLOWS_SCHEMA", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const raw = JSON.parse(
+    readFileSync(join(here, "..", "src", "data", "architecture-flows.json"), "utf-8"),
+  ) as Record<string, unknown>;
+
+  it("默认数据文件整份通过校验", () => {
+    expect(validateJsonSchema(raw, ARCHITECTURE_FLOWS_SCHEMA)).toEqual([]);
+  });
+
+  it("必备的四个键都在（flows / principles / layers / knownUnassigned）", () => {
+    expect(Array.isArray(raw.flows)).toBe(true);
+    expect(Array.isArray(raw.principles)).toBe(true);
+    expect(Array.isArray(raw.layers)).toBe(true);
+    // knownUnassigned 允许为空数组，但必须存在——它是双向契约的一半
+    expect(Array.isArray(raw.knownUnassigned)).toBe(true);
+  });
+
+  it("坏数据被拒：flow 缺 directories 必须报错", () => {
+    const bad = {
+      flows: [{ id: "x", name: "X", layer: "交互层", question: "?", principles: [] }],
+      principles: [],
+      layers: [],
+      knownUnassigned: [],
+    };
+    const errors = validateJsonSchema(bad, ARCHITECTURE_FLOWS_SCHEMA);
     expect(errors.length).toBeGreaterThan(0);
   });
 });

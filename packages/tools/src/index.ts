@@ -51,3 +51,15 @@ export type {
 
 // ── 依赖分层契约（Cortex 专用真相源） ──
 export { CORTEX_LAYER_CONTRACT, LAYER_NAMES } from './layer-contract.js';
+
+// ── 架构流契约（与分层契约正交：行为归属 vs 依赖层级） ──
+export {
+  FLOW_MAP_RELATIVE_PATH,
+  loadFlowMap,
+  packageOfPath,
+  detectMissingPaths,
+  detectPackageCoverage,
+  collectUnassignedModules,
+  detectVocabularyViolations,
+} from './flow-contract.js';
+export type { FlowEntry, FlowMap } from './flow-contract.js';

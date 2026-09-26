@@ -10,6 +10,7 @@ import { AGENT_MANIFEST_SCHEMA } from "./agent-manifests.schema.js";
 import { TUNING_SCHEMA } from "./tuning.schema.js";
 import { TOOLS_SCHEMA } from "./tools.schema.js";
 import { EVENT_ROUTING_SCHEMA } from "./event-routing.schema.js";
+import { ARCHITECTURE_FLOWS_SCHEMA } from "./architecture-flows.schema.js";
 import { ENGINE_SCHEMA, ENGINE_PLUGINS_SCHEMA, ROUNDTABLE_SCHEMA, COGNITION_SCHEMA, DOCS_SCHEMA } from "./engine-domains.schema.js";
 import { MCP_SERVERS_SCHEMA, SELF_EXAMINATION_SCHEMA, CROSS_VERIFICATION_SCHEMA, SEED_MEMORIES_SCHEMA, GOVERNANCE_PIPELINE_SCHEMA } from "./governance-domains.schema.js";
 
@@ -20,6 +21,7 @@ export {
   TUNING_SCHEMA,
   TOOLS_SCHEMA,
   EVENT_ROUTING_SCHEMA,
+  ARCHITECTURE_FLOWS_SCHEMA,
   ENGINE_SCHEMA,
   ENGINE_PLUGINS_SCHEMA,
   ROUNDTABLE_SCHEMA,

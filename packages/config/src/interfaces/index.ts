@@ -65,6 +65,12 @@ export type {
   EventRoutingConfig,
 } from "./event-routing.js";
 
+// ── 架构流映射 ──
+export type {
+  ArchitectureFlow,
+  ArchitectureFlowsConfig,
+} from "./architecture-flows.js";
+
 // ── 工具 ──
 export type {
   ToolParameterDef,

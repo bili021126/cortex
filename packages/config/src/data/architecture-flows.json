@@ -1,0 +1,128 @@
+{
+  "_description": "五流六层 ↔ 代码落点映射（单一真相源）。与 packages/tools/src/layer-contract.ts 同源：layer-contract 管「包在依赖 DAG 的哪一层」，本文件管「代码属于哪条行为流」——两个正交切面，合起来才是完整的功能体系。由 packages/tools/tests/flow-contract.test.ts（@ci: contract）门禁强制：目录必须真实存在、每个包必须被至少一条流认领、模块必须全部归类。",
+  "_generatedAt": "2026-09-26",
+  "_sources": {
+    "flowFramework": "docs/core/Cortex-架构映射-五流六层七原则.md（概念坐标系，2026-06-23；本文件是其机器可读落地）",
+    "layerContract": "packages/tools/src/layer-contract.ts（依赖 DAG 坐标系）",
+    "analysis": "docs/analysis/capability-system-2026-09-26.md（两套坐标系的实测诊断）"
+  },
+  "_knownGaps": [
+    "源码内已有 `// @layer <名>` 注解，但覆盖率仅 116/651 = 17.8%，且词汇不统一（混用『规划-执行层』/『L0』/『L1』/包名/箭头）。因此注解暂不作为契约源，本文件为准；注解统一化是后续独立议题。",
+    "五流回答『做什么』，L0–L4 回答『代码放哪』，二者正交。本文件承载前者，但不重述后者——包的层级归属一律以 layer-contract 为准。"
+  ],
+  "flows": [
+    {
+      "id": "interaction",
+      "name": "交互流",
+      "layer": "交互层",
+      "question": "人 ↔ 系统的边界：用户如何输入、系统如何呈现、确认如何回到人手里",
+      "directories": [
+        "packages/cli/src/commands",
+        "packages/cli/src/tui",
+        "packages/cli/src/bootstrap",
+        "packages/cli/src/services",
+        "packages/cli/src/formatters",
+        "packages/cli/src/theme",
+        "packages/server/src/http",
+        "packages/server/src/ws",
+        "packages/desktop/src",
+        "packages/client/src",
+        "packages/protocol/src"
+      ],
+      "principles": ["确认锚定", "统一可观测", "用户终裁"]
+    },
+    {
+      "id": "governance",
+      "name": "治理流",
+      "layer": "治理层",
+      "question": "制度如何被执行：宪法约束、一致性校验、修宪管线、确认门的决策记录",
+      "directories": [
+        "packages/governance/src",
+        "packages/governance/src/consistency",
+        "packages/scheduler/src/core/confirm-gate.ts",
+        "packages/engine/src/planning/governance-events.ts",
+        "packages/engine/src/agents"
+      ],
+      "principles": ["可追溯性", "统一可观测", "用户终裁", "宪法自约束"]
+    },
+    {
+      "id": "planning-execution",
+      "name": "规划-执行流",
+      "layer": "规划-执行层",
+      "question": "任务如何被拆解、派发、执行与收束：规划层局部中心化，执行层整体去中心化",
+      "directories": [
+        "packages/engine/src/planning",
+        "packages/engine/src/execution",
+        "packages/engine/src/core",
+        "packages/engine/src/bootstrap",
+        "packages/engine/src/lifecycle",
+        "packages/engine/src/components",
+        "packages/scheduler/src/dispatch-steps",
+        "packages/scheduler/src/core"
+      ],
+      "principles": ["规划-执行非对称均衡", "统一可观测"]
+    },
+    {
+      "id": "skill-tool",
+      "name": "技能-工具流",
+      "layer": "技能-工具层",
+      "question": "能力如何被调用与被沉淀：工具入口、权限校验、技能结晶",
+      "directories": [
+        "packages/platform/src",
+        "packages/tools/src",
+        "packages/skill-kit/src",
+        "packages/pattern-extractor/src"
+      ],
+      "principles": ["确认锚定", "边界集中", "可追溯性", "统一可观测"]
+    },
+    {
+      "id": "memory",
+      "name": "记忆流",
+      "layer": "记忆层",
+      "question": "经验如何被记住、检索与遗忘：记忆类型、生命周期、向量与图谱",
+      "directories": [
+        "packages/memory/src",
+        "packages/memory-store/src",
+        "packages/engine/src/memory-bridge"
+      ],
+      "principles": ["统一可观测"]
+    },
+    {
+      "id": "infrastructure",
+      "name": "基础设施",
+      "layer": "基础设施层",
+      "question": "不构成行为流、被各流共同依赖的支撑：类型协议、配置、日志、韧性、遥测、通知、模型接入",
+      "directories": [
+        "packages/shared/src",
+        "packages/config/src",
+        "packages/logging/src",
+        "packages/resilience/src",
+        "packages/telemetry/src",
+        "packages/notification/src",
+        "packages/fsm-compiler/src",
+        "packages/testing/src",
+        "packages/design-tokens/src",
+        "packages/llm/src",
+        "packages/context-manager/src",
+        "packages/prompt-kit/src",
+        "packages/plugin-runner/src",
+        "packages/doctor/src",
+        "packages/engine/src/registry",
+        "packages/engine/src/plugin",
+        "packages/scheduler/src/utils"
+      ],
+      "principles": ["统一可观测"]
+    }
+  ],
+  "principles": [
+    "确认锚定",
+    "规划-执行非对称均衡",
+    "边界集中",
+    "可追溯性",
+    "统一可观测",
+    "用户终裁",
+    "宪法自约束"
+  ],
+  "layers": ["交互层", "治理层", "规划-执行层", "技能-工具层", "记忆层", "基础设施层"],
+  "knownUnassigned": []
+}
