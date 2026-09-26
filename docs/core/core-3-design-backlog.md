@@ -115,7 +115,7 @@
 | # | 题 | 证据 | 量级 |
 |---|---|---|---|
 | N-1 | **`scripts/` 不在任何 lint 门禁覆盖内** | `eslint.config.mjs` 未忽略它，但门禁只跑 `eslint packages`；实跑 `eslint scripts` 有 **243 个问题**，其中 2 个是**解析错误**（不在任何 tsconfig 内）。而 `scripts/verify/critical-fixes.ts` **正是门禁第 3 步执行的东西** | 243 项 |
-| N-2 | **`ci-gate` 计数口径无一致定义** | `total` 与 `passed+skipped` 在两个时点都不相等且方向相反：2026-07-20 为 `3593/3631 passed \| 22 skipped`（3615≠3631）、2026-09-26 为 `3988/3993 passed \| 14 skipped`（4002≠3993） | 影响所有基线的可信度 |
+| N-2 | ~~**`ci-gate` 计数口径无一致定义**~~ **✅ 已修（2026-09-26）** | 成因：打印串把「未运行的测试文件数」与「用例数」摆在同一分母旁。修正后 `3988 + 5 = 3993` 已闭合。**顺带修出两个真缺陷**：① 门禁 1-3 失败时不输出 JSON（消费方永远拿不到结果）→ 已加 `abort(stage)`；② `governance-pipeline.ts` 的 ci_verify 阶段读永不存在的字段（`configValid`/`build`/`testDetails` 等）→ 失败时恒报「全段失败」、成功消息嵌 `undefined/undefined`。**并因此定案：宪法历来的「3982 passed / 13 skipped」那个 3982 是 total，不是 passed** | 已闭合 |
 | N-3 | **文档注册表实质失修** | `docs/README.md` 29 条链接中 11 条失效（7 条目标已归档），且把归档件摆在「当前活跃设计文档」与「⭐从这里开始」；`cortex-docs.json` 宪法条目 version 写 3.7 而文件是 v3.8；`docs/analysis` 实为 48 份而 README 记 15 份 | 已修（2026-09-26） |
 | N-4 | **五流六层坐标系的锚点已漂移** | 45 条文件引用中 12 条搬家、2 条消失、1 条行号越界；只覆盖 16/28 包 | 已机器化（`architecture-flows.json` + `flow-contract` 门禁） |
 | N-5 | **`design-tokens` 无测试** | 28 包中唯一不在门禁测试矩阵内 | — |

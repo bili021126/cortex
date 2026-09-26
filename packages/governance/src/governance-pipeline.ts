@@ -334,9 +334,20 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
       };
     }
 
+    // 与 ci-gate.ts 的实际 --json 输出对齐（2026-09-26 修正）。
+    // 此前的类型声明里有 configValid / build / typecheck / lint / test / testDetails——
+    // **ci-gate 从未输出过这些字段**。旧代码在失败分支里逐个取 !ciResult.build 之类，
+    // 而它们恒为 undefined → !undefined === true → 会把五段全报成失败；
+    // 成功分支则嵌进 `test undefined/undefined`。两边的细节都是错的，只有 allPassed 对。
+    // 口径说明：total 已含包内 skip 的用例；skippedTests = total − passed；
+    // skippedFiles 是整个文件未运行的数量（与用例不同一个分母）。
     const ciResult = JSON.parse(jsonLine) as {
-      configValid: boolean; build: boolean; typecheck: boolean; lint: boolean; test: boolean;
-      testDetails: { total: number; passed: number; skipped: number }; allPassed: boolean;
+      allPassed: boolean;
+      failedStage: string | null;
+      total: number;
+      passed: number;
+      skippedTests: number;
+      skippedFiles: number;
     };
 
     // 回写 CI 结果到 artifacts，供下游阶段（认知闭环、摘要生成）消费
@@ -362,16 +373,23 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
     });
 
     if (!passed) {
-      const failures: string[] = [];
-      if (!ciResult.configValid) failures.push("配置校验");
-      if (!ciResult.build) failures.push("构建");
-      if (!ciResult.typecheck) failures.push("类型检查");
-      if (!ciResult.lint) failures.push("Lint");
-      if (!ciResult.test) failures.push(`测试(${ciResult.testDetails.passed}/${ciResult.testDetails.total})`);
+      // failedStage 由门禁自己在提前退出/测试阶段失败时给出；
+      // 旧代码靠读永不存在的字段拼失败清单，恒报「全段失败」。
+      const stageLabel: Record<string, string> = {
+        typecheck: "类型检查",
+        lint: "Lint",
+        criticalFixes: "L混沌校验",
+        tests: "测试",
+      };
+      const stage = ciResult.failedStage ?? "unknown";
+      const detail =
+        stage === "tests"
+          ? `测试(${ciResult.passed}/${ciResult.total} passed，${ciResult.skippedTests} skipped)`
+          : (stageLabel[stage] ?? stage);
       return {
         stage: "ci_verify",
         success: false,
-        message: `CI 门禁失败: ${failures.join("、")}`,
+        message: `CI 门禁失败: ${detail}`,
         data: ciResult,
         blocking: false,
       };
@@ -380,7 +398,7 @@ async function stageCiVerify(ctx: PipelineContext): Promise<StageResult> {
     return {
       stage: "ci_verify",
       success: true,
-      message: `CI 门禁通过 ✅ (build ✅ typecheck ✅ test ${ciResult.testDetails.passed}/${ciResult.testDetails.total} ✅ lint ✅)`,
+      message: `CI 门禁通过 ✅ (test ${ciResult.passed}/${ciResult.total} passed，${ciResult.skippedTests} skipped，${ciResult.skippedFiles} 个文件未运行)`,
       data: ciResult,
       blocking: false,
     };

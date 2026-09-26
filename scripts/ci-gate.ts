@@ -249,6 +249,30 @@ async function main() {
   const jsonMode = args.includes("--json");
   const withCoverage = args.includes("--coverage");
 
+  // ── 失败退出（2026-09-26 新增）────────────────────────────────
+  // 此前门禁 1-3 失败时直接 process.exit(1)，**JSON 从不输出**，
+  // 于是 --json 的消费方（governance-pipeline 的 ci_verify 阶段）只能拿到
+  // 「未找到 JSON 结果」，而它声明的 configValid/build/typecheck/lint/test 字段
+  // 从未被本脚本产出过——那两条分支的细节要么不可达，要么全 undefined。
+  // 现在：任何一段失败都输出带 failedStage 的 JSON。
+  let failedStage: string | null = null;
+  const abort = (stage: string): never => {
+    failedStage = stage;
+    if (jsonMode) {
+      console.log(
+        JSON.stringify({
+          allPassed: false,
+          failedStage: stage,
+          total: 0,
+          passed: 0,
+          skippedTests: 0,
+          skippedFiles: 0,
+        }),
+      );
+    }
+    process.exit(1);
+  };
+
   // ── 门禁 1/5：类型检查 ──
   if (!dryRun) {
     console.log("\n🔒 [门禁 1/5] tsc -b 全量增量编译检查...");
@@ -256,12 +280,12 @@ async function main() {
       const tscResult = run("pnpm", ["exec", "tsc", "-b", "tsconfig.json"], ROOT);
       if (!tscResult.ok) {
         console.error("❌ tsc -b 失败，阻断");
-        process.exit(1);
+        abort("typecheck");
       }
       console.log("   ✅ 类型检查通过\n");
     } catch (e) {
       console.error(`❌ tsc 执行异常: ${e}`);
-      process.exit(1);
+      abort("typecheck");
     }
 
     // ── 门禁 2/5：ESLint ──
@@ -271,12 +295,12 @@ async function main() {
       if (!eslintResult.ok) {
         const problems = eslintResult.stdout.match(/✖ \d+ problems?/);
         console.error(`❌ eslint 失败${problems ? " — " + problems[0] : ""}`);
-        process.exit(1);
+        abort("lint");
       }
       console.log("   ✅ lint 通过\n");
     } catch (e) {
       console.error(`❌ eslint 执行异常: ${e}`);
-      process.exit(1);
+      abort("lint");
     }
 
     // ── 门禁 3/5：L5 混沌校验（critical-fixes）──
@@ -286,12 +310,12 @@ async function main() {
       const cfResult = run("pnpm", ["exec", "tsx", "scripts/verify/critical-fixes.ts"], ROOT);
       if (!cfResult.ok) {
         console.error("❌ critical-fixes 混沌校验失败，阻断");
-        process.exit(1);
+        abort("criticalFixes");
       }
       console.log("   ✅ 混沌校验通过\n");
     } catch (e) {
       console.error(`❌ critical-fixes 执行异常: ${e}`);
-      process.exit(1);
+      abort("criticalFixes");
     }
   }
 
@@ -408,7 +432,23 @@ async function main() {
 
   console.log("");
   console.log(allOk ? "✅ 门禁通过" : "❌ 门禁未通过");
-  console.log(`   Tests: ${totalPassed}/${totalTests} passed` + (skipped.length > 0 ? ` | ${skipped.length} skipped` : ""));
+  // ── 计数口径（2026-09-26 修正）────────────────────────────────
+  // 此前打印 `${totalPassed}/${totalTests} passed | ${skipped.length} skipped`，
+  // 其中 skipped 数是**未运行的测试文件数**（@ci: llm/integration/e2e/manual），
+  // 却被摆在与用例同一个分母旁，读起来像"跳过的用例"——于是
+  // passed + skipped ≠ total，历次基线因此不可核验（宪法曾记「3982 passed / 13 skipped」，
+  // 那个 3982 实为 total 而非 passed）。
+  //
+  // 正确口径：
+  //   totalTests  —— vitest 报的 (N)，**已包含包内 skip 的用例**
+  //   totalPassed —— 通过的用例
+  //   notPassed   —— total − passed，即包内 skip 的用例（allOk 为真时不可能有 failed）
+  //   skipped     —— 整个文件未运行（不是用例）
+  const notPassed = totalTests - totalPassed;
+  console.log(
+    `   Tests: ${totalPassed} passed | ${notPassed} ${allOk ? "skipped" : "not-passed"} | ${totalTests} total` +
+      (skipped.length > 0 ? ` | ${skipped.length} 个测试文件未运行（@ci: llm/integration/e2e/manual）` : ""),
+  );
 
   // ── 活性层评测（report 模式——exit 恒 0，防 pattern-extractor 化：机制要有消费者）──
   if (allOk) {
@@ -430,9 +470,14 @@ async function main() {
     console.log(
       JSON.stringify({
         allPassed: allOk,
+        // null = 全段通过；否则为失败段名（typecheck / lint / criticalFixes / tests）
+        failedStage: allOk ? null : "tests",
         total: totalTests,
         passed: totalPassed,
-        skipped: skipped.length,
+        // 包内 skip 的用例数（total − passed）。allOk 为真时其中不可能含 failed。
+        skippedTests: notPassed,
+        // 整个文件未运行的数量——此前该值被错标为 `skipped`，与用例计数混为一谈
+        skippedFiles: skipped.length,
       }),
     );
   }
