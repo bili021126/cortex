@@ -36,17 +36,38 @@
 
 → **已另立设计文档**：[observability-dual-channel-design.md](observability-dual-channel-design.md)
 
-### 【2】execSync → async —— ✅ 面很小，位置明确，可直接做
+### 【2】execSync → async —— ⚠️ **题名不准；已拆成「去重（已完成）」与「接口改造（待决策）」**
 
-| 文件 | 次数 |
-|---|---|
-| `packages/engine/src/execution/zero-token-validator.ts` | 3 |
-| `packages/cli/src/main.ts` | 2 |
-| `packages/engine/src/agents/inspector-agent.ts` | 1 |
-| `packages/shared/src/fs-adapter.ts` | 1 |
-| **合计** | **4 文件 / 7 次** |
+**实测**（TS 解析器口径，注释不计）：
 
-无新增，量级与立项时一致。**这是清单里最容易先做完的一项。**
+| 范围 | 处数 | 文件 |
+|---|---|---|
+| 全仓同步子进程调用 | 24 | 15 |
+| 其中 `src/` | **7** | 4（`execSync` 3 + `execFileSync` 4） |
+| 其中 `tests/manual/` | 17 | （`@ci: manual`，CI 不跑，不在范围） |
+
+**题名不准**：宪法写「execSync」，而实际只有 3 处是 `execSync`，另 4 处是 `execFileSync`。
+且上一版把**注释**计了进来——`inspector-agent.ts` 与 `fs-adapter.ts` 里的「execSync」只是注释。
+
+**本轮已做（去重，2026-09-26）**：
+
+`execution/zero-token-validator.ts` 与 `planning/hard-verification-gate.ts`
+**各写了一遍** `git diff` / `eslint --format compact` 的同步查询——命令、超时、解析正则完全相同，
+即同一关切的两处实现、也就是**两处事件循环阻塞点**，且任何调整都要改两遍。
+
+已收成单一来源 `packages/engine/src/core/subprocess-sync.ts`：
+`src/` 内调用点 **7 处 / 4 文件 → 5 处 / 3 文件**（engine 1044 测试全绿）。
+
+**未做（需接口决策，不属机械修正）**：
+
+- `cli/src/main.ts:233` 的 `chcp 65001`——启动时设控制台码页，**必须早于任何输出**，
+  同步是正确取舍。**明确不改**，已在此记录理由。
+- 剩下 2 处（`subprocess-sync.ts` 内部）要转 async，需先把
+  `ZeroTokenRule.validate(event, ctx): RuleResult` 改为 `Promise<RuleResult>`。
+  该接口变更会波及 `SentinelSignalFilter` / `GovernanceEventEmitter` / `NotificationRuntime`
+  的**事件处理器路径**（`notification-runtime.ts` 在同步 `_handleEvent` 里直接调它）。
+  这是设计决策，需单独立项；**收成单一来源后，届时只改那一个模块**——
+  这正是本次去重的目的。
 
 ### 【3】WebUI 鉴权 —— ⚠️ **前提已消失，需重新界定**
 

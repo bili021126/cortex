@@ -15,9 +15,9 @@
 //   以 FYI 优先级回写给发射方（DocGovernAgent），模型在下一轮自我修正。
 // ============================================================
 
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { runGitDiffNameOnly, runEslintCompact } from "../core/subprocess-sync.js";
 import { MEMORY_VALID_TRANSITIONS, PipelineEventType, PipelinePriority, type GovernanceEventPayload, type IPipelineObserver } from "@cortex/shared";
 import { DegradationBoundary } from "../core/degradation-boundary.js";
 import { VERIFICATION_CACHE_TTL_MS, BARREL_MAX_SIZE, TSFILE_MAX_SIZE } from "@cortex/config";
@@ -234,9 +234,9 @@ export class HardVerificationGate {
   private _getChangedFiles(): string[] {
     const now = Date.now();
     if (this._gitDiffCache && now - this._gitDiffTime < HardVerificationGate.CACHE_TTL) return this._gitDiffCache;
+    // 命令 / 超时收在 core/subprocess-sync.ts（单一来源）
     try {
-      const out = execFileSync("git", ["diff", "--name-only", "HEAD~1"], { encoding: "utf-8", timeout: 5000, cwd: process.cwd() });
-      this._gitDiffCache = out.split("\n").filter(Boolean);
+      this._gitDiffCache = runGitDiffNameOnly(process.cwd());
       this._gitDiffTime = now;
       return this._gitDiffCache;
     } catch (err) { DegradationBoundary.handle(err, 'hard-verification-gate', 'trace'); return []; }
@@ -246,19 +246,12 @@ export class HardVerificationGate {
     const now = Date.now();
     if (this._eslintCache && now - this._eslintTime < HardVerificationGate.CACHE_TTL) return this._eslintCache;
     try {
-      // P2 fix: timeout 30s→10s（与 zero-token-validator 对齐），降低同步 eslint 对事件循环的阻塞
-      const out = execFileSync("pnpm", ["exec", "eslint", "--quiet", "--format", "compact", "packages/"], {
-        encoding: "utf-8", timeout: 10_000, cwd: process.cwd(),
-      });
-      const errors: Array<{ file: string; rule: string }> = [];
-      for (const line of out.split("\n")) {
-        const m = line.match(/^(.+)\(\d+,\d+\):\s+error\s+.+?\s+(\S+)$/);
-        if (m) errors.push({ file: m[1] ?? "", rule: m[2] ?? "" });
-      }
-      this._eslintCache = errors;
+      // P2 fix 的取舍（timeout 30s→10s，降低同步 eslint 对事件循环的阻塞）
+      // 现收在 core/subprocess-sync.ts 的 ESLINT_COMPACT_TIMEOUT_MS，与 zero-token-validator 共用一处。
+      this._eslintCache = runEslintCompact(process.cwd()).map((e) => ({ file: e.file, rule: e.rule }));
       this._eslintTime = now;
       this._eslintDegraded = false;
-      return errors;
+      return this._eslintCache;
     } catch (err) {
       // P2 fix: 退化标记——eslint 检查失败/超时时结果不可信
       this._eslintDegraded = true;

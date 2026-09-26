@@ -13,7 +13,7 @@
 //   这样假阳性在进入 NotificationPipe 之前就被标记了。
 // ============================================================
 
-import { execSync } from "node:child_process";
+import { runGitDiffNameOnly, runEslintCompact } from "../core/subprocess-sync.js";
 import fs from "node:fs";
 import path from "node:path";
 import { MEMORY_VALID_TRANSITIONS } from "@cortex/shared";
@@ -80,13 +80,10 @@ export class GitDiffRule implements ZeroTokenRule {
       return this._cachedDiff;
     }
     try {
-      // H5 fix: 缩减 timeout 5s→3s，添加退化标记避免重复阻塞
-      const out = execSync("git diff --name-only HEAD~1", {
-        encoding: "utf-8",
-        timeout: 3000,
-        cwd: process.cwd(),
-      });
-      this._cachedDiff = out.split("\n").filter(Boolean);
+      // H5 fix: 缩减 timeout 5s→3s（现收在 core/subprocess-sync.ts 的 GIT_DIFF_TIMEOUT_MS），
+      // 添加退化标记避免重复阻塞
+      const files = runGitDiffNameOnly(process.cwd());
+      this._cachedDiff = files;
       this._cacheTime = now;
       return this._cachedDiff;
     } catch (err) { DegradationBoundary.handle(err, 'zero-token-validator', 'trace');
@@ -129,17 +126,9 @@ export class EslintRule implements ZeroTokenRule {
       return this._cachedErrors;
     }
     try {
-      // H5 fix: 缩减 timeout 30s→10s，eslint 在 CI 已跑过，gate 仅做交叉验证
-      const out = execSync("pnpm exec eslint --quiet --format compact packages/", {
-        encoding: "utf-8",
-        timeout: 10_000,
-        cwd: process.cwd(),
-      });
-      const errors: Array<{ file: string; line: number; rule: string }> = [];
-      for (const line of out.split("\n")) {
-        const m = line.match(/^(.+)\((\d+),\d+\):\s+error\s+.+?\s+(\S+)$/);
-        if (m) errors.push({ file: m[1] ?? "", line: parseInt(m[2] ?? "0"), rule: m[3] ?? "" });
-      }
+      // 命令 / 超时 / 解析正则收在 core/subprocess-sync.ts（单一来源）——
+      // 此前与 planning/hard-verification-gate.ts 各写一遍，是同一件事的两处实现。
+      const errors = runEslintCompact(process.cwd());
       this._cachedErrors = errors;
       this._cacheTime = now;
       return errors;
