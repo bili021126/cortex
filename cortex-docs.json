@@ -19,6 +19,8 @@
     { "path": "docs/auditing/am-2026-0926-001-audit.md", "type": "audit", "version": "1.0", "canonical": false },
     { "path": "docs/amendments/AM-2026-0926-001.json", "type": "amendment", "version": "v3.9", "canonical": false },
     { "path": "docs/core/Cortex-架构映射-五流六层七原则.md", "type": "design", "version": "2.0", "canonical": false },
-    { "path": "packages/config/src/data/architecture-flows.json", "type": "spec", "version": "1.0", "canonical": false }
+    { "path": "packages/config/src/data/architecture-flows.json", "type": "spec", "version": "1.0", "canonical": false },
+    { "path": "docs/core/core-3-design-backlog.md", "type": "design", "version": "1.0", "canonical": false },
+    { "path": "docs/core/observability-dual-channel-design.md", "type": "design", "version": "1.0", "canonical": false }
   ]
 }

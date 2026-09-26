@@ -43,6 +43,8 @@
 
 | 文档 | 定位 |
 |------|------|
+| [**core-3-design-backlog.md**](core/core-3-design-backlog.md) | **设计债清单（2026-09-26 挖题核验）**——宪法「6 项 Core-3 设计决策」逐条回代码核实：**1 项已完成、1 项前提已消失、2 项题名与实况不符**。含 7 条本轮新挖出的题 |
+| [**observability-dual-channel-design.md**](core/observability-dual-channel-design.md) | **可观测双通道设计与边界**（原「Logger 推广」题的重新定义）——运行时 `console-bridge` 与编译期 `@cortex/logging` 两条通道并存且无边界定义 |
 | [治理层设计-v3.0-全量整合版.md](core/治理层设计-v3.0-全量整合版.md) | 政府运行方式——已落地/设计锚点/超前设计 三部分结构 |
 | [consistency-design.md](core/consistency-design.md) | 六层防御完整spec（IntentFactWall/InitVerifier/SchemaEnforcer等） |
 | [技能沉淀机制设计.md](core/技能沉淀机制设计.md) | 技能闭环——提取→注册→持久化→冷启动加载 |
