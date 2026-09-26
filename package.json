@@ -24,6 +24,7 @@
     "daemon:dev": "npx tsx packages/server/src/main.ts",
     "eval:gate": "tsx packages/engine/tests/eval/eval-gate.ts",
     "doc:drift": "tsx scripts/doc-drift-check.ts",
+    "doc:drift:strict": "tsx scripts/doc-drift-check.ts --strict",
     "dep:cycle": "tsx scripts/dep-cycle-check.ts",
     "audit:deps": "tsx scripts/audit-deps.ts"
   },
