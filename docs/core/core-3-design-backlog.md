@@ -125,18 +125,44 @@
 
 验证：tsc 零错误、eslint 零问题、engine 91 文件 / 1044 测试全绿。
 
-### 【6】shared export\* —— ⚠️ **题名与实况不符**
+### 【6】shared export\* —— ✅ **原题已满足；剩余 35 处经评估不动；另补了一处真缺口**
 
-| 指标 | 实测 |
+**原题的预设**：`shared` 里的 `export *` 需要收敛。实测：**`shared/src/index.ts` 已 0 处
+`export *`**（12 个具名导出块）——**这条题在它被记录的那个范围内早已完成**。
+
+**剩余 35 处的实测分布**：
+
+| 包 | 处数 |
 |---|---|
-| `shared/src/index.ts` 的 `export *` | **0**（全部 12 处为具名导出） |
-| 各包 `index.ts` 中 `export *` 总数 | **35** |
+| protocol | **22** |
+| fsm-compiler | **10** |
+| cli / governance / memory | 各 1 |
 
-**`shared` 自己已经零 `export *` 了**——这一项在 `shared` 范围内已完成。
-真实范围是**全仓 35 处**，集中在其他包。
+**关键实测**：35 处**全部位于 barrel（`index.ts`）内**，非 barrel 文件 **0 处**。
+所以「`export *` 绕过 barrel 完整性检查」这个顾虑**不成立**——恰恰相反，它们就是 barrel 本身。
 
-→ **建议重命名为「全仓 35 处 export \* 收敛」**，并逐包评估（`export *` 会隐式扩大公共面、
-绕过 barrel 完整性检查）。
+**为什么不动它们**：`protocol` 是**纯类型契约包**（67 interface + 15 type + 7 function，零运行时依赖），
+`fsm-compiler` 的 10 处是子 barrel 聚合。把 32 处惯用的 barrel 再导出展开成显式命名清单，
+是**纯 churn**：维护面剧增、功能零收益，而且会让 barrel 文件**更臃肿**——而项目自己的
+`BarrelExportRule` 唯一的结构性顾虑正是 barrel **体积**（`barrelMaxSize` 实配 10 MB，
+实际永不触发）。
+
+**但评估中发现一处真缺口，已补**：
+
+> 全仓 35 处 `export *` 里 22 处集中在 `protocol`——**而 `protocol` 此前没有任何 barrel 守护**
+> （只有 `envelope.test.ts` 与 `validation.test.ts`）。对比之下 `fsm-compiler` 有 **3 组**
+> 「barrel re-exports」测试。而 `protocol` 是**三端与 daemon 之间的唯一契约**。
+
+已新增 `packages/protocol/tests/barrel.test.ts`（32 项），守三类失效：
+
+| 失效 | 守护 |
+|---|---|
+| barrel 指向的子模块不存在 | 悬空聚合检查 |
+| 传递闭包内重名（`export *` 会**静默取其一**，契约语义不确定） | 重名检查 |
+| 契约符号静默消失 | **29 个核心跨端符号**逐个断言 + 表面规模下限 |
+
+**反向验证已做**：临时把 `ProtocolEnvelope` 改名 → 测试立即变红并报出符号名；文件已还原。
+`protocol` 测试数 21 → **53**。
 
 ---
 
