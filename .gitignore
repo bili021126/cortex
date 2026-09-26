@@ -184,3 +184,6 @@ review-test.txt
 r13-verify-*.txt
 
 .cortex-daemon.pid
+
+# 私人文档产出（法律文书等）——不进库、不随 git 外流
+法律文书-输出/
