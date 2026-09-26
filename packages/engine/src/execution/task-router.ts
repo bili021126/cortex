@@ -110,12 +110,23 @@ export class TaskRouter {
    */
   async routeBatch(nodes: TaskNode[], agentType: string): Promise<Map<string, RouteDecision>> {
     const decisions = new Map<string, RouteDecision>();
-    await Promise.all(
+    const settled = await Promise.allSettled(
       nodes.map(async (node) => {
         const decision = await this.route(node, agentType);
         decisions.set(node.id, decision);
       }),
     );
+    
+    // 记录失败的路由（但不阻断其他路由）
+    for (const [i, s] of settled.entries()) {
+      if (s.status === 'rejected') {
+        const node = nodes[i];
+        if (node) {
+          console.warn(`[task-router] route failed for node ${node.id}:`, s.reason);
+        }
+      }
+    }
+    
     return decisions;
   }
 }

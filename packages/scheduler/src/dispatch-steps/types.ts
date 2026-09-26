@@ -3,6 +3,7 @@ import type { ITaskBoard } from "../core/task-board.js";
 import type { ISchedulerAgentPool } from "../core/agent-pool.js";
 import type { LlmCallable } from "../core/rlm-decompose.js";
 import type { IModelRouter } from "../core/scheduling-types.js";
+import type { AgentTracker } from "../core/agent-tracker.js";
 
 /**
  * DispatchCtx —— 调度分发管道的共享上下文。
@@ -24,6 +25,8 @@ export interface DispatchCtx {
   readonly llmChat?: LlmCallable;
   /** 可选——模型路由器。RlmExecuteStep 使用此路由动态选择 LLM 模型，不提供时回退到 Agent 注册时的默认模型 */
   readonly modelRouter?: IModelRouter;
+  /** 可选——Agent 执行跟踪器。提供时 ExecuteStep 会记录心跳以更新 lastHeartbeat */
+  readonly agentTracker?: AgentTracker;
 
   // ── 分发起点 ──
   node: TaskNode;

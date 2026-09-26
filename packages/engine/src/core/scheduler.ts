@@ -400,9 +400,17 @@ export class Scheduler implements IScheduler {
       return await this._runDispatchPipeline(innerCtx, steps);
     });
 
-    // R4-C1 fix: Promise.all 必须在 try 块内，否则 reject 时跳过 finally，claimingLocks 永久泄漏
+    // R4-C1 fix: Promise.allSettled 替代 Promise.all——确保所有 cleanup 都能执行，避免 claim 锁永久泄漏
     try {
-      const results = (await Promise.all(promises)).filter((r): r is NonNullable<typeof r> => r !== null);
+      const settled = await Promise.allSettled(promises);
+      const results: NonNullable<Awaited<typeof promises[number]>>[] = [];
+      
+      for (const s of settled) {
+        if (s.status === 'fulfilled' && s.value !== null) {
+          results.push(s.value);
+        }
+        // 无论成功失败，CleanupStep 都会执行（在_runDispatchPipeline 内部）
+      }
 
       // 清理节点锁——无论成功失败都释放，防止永久卡住
       if (results.length > 0) {
