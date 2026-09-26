@@ -18,6 +18,7 @@ import {
   CROSS_VERIFICATION_SCHEMA,
   SEED_MEMORIES_SCHEMA,
   GOVERNANCE_PIPELINE_SCHEMA,
+  EVENT_ROUTING_SCHEMA,
 } from "../src/schemas/index.js";
 
 /** 读 data/engine.json（import.meta.url 基准，不依赖 cwd） */
@@ -102,6 +103,45 @@ describe("C2: 第二批 schema 对默认数据文件校验（mcpServers/selfExam
   it("坏数据被拒：mcpServers 的 server 缺 transport 必须报错", () => {
     const bad = { bing: { command: "npx", args: [] } };
     const errors = validateJsonSchema(bad, MCP_SERVERS_SCHEMA);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// R13-D2：event-routing.json 的 mergeRules
+//
+// 此前 EVENT_ROUTING_SCHEMA 没有声明 mergeRules，配置文件里也从未出现过它——
+// 而 engine 侧 cross-field.validator 维度三早就在按 mergeRules 做校验，
+// NotificationPipe.setMergeRules 也早就存在但零调用。
+// 现在 schema / 数据 / 消费方三处对齐，由本测试守住。
+// ═══════════════════════════════════════════════════════
+
+describe("R13-D2: event-routing.json 通过 EVENT_ROUTING_SCHEMA", () => {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const raw = JSON.parse(
+    readFileSync(join(here, "..", "src", "data", "event-routing.json"), "utf-8"),
+  ) as Record<string, unknown>;
+
+  it("默认数据文件整份通过校验", () => {
+    expect(validateJsonSchema(raw, EVENT_ROUTING_SCHEMA)).toEqual([]);
+  });
+
+  it('mergeRules 已声明且含 groupBy = "mergeKey"（NotificationPipe 只认这个）', () => {
+    const rules = raw.mergeRules as Array<Record<string, unknown>>;
+    expect(Array.isArray(rules)).toBe(true);
+    expect(rules.length).toBeGreaterThan(0);
+    expect(rules.some((r) => r.groupBy === "mergeKey")).toBe(true);
+  });
+
+  it("坏数据被拒：mergeRule 缺 maxBatch 必须报错", () => {
+    const bad = { routeTable: {}, mergeRules: [{ groupBy: "mergeKey", windowMs: 5000 }] };
+    const errors = validateJsonSchema(bad, EVENT_ROUTING_SCHEMA);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it("坏数据被拒：mergeRule 缺 groupBy 必须报错", () => {
+    const bad = { routeTable: {}, mergeRules: [{ windowMs: 5000, maxBatch: 100 }] };
+    const errors = validateJsonSchema(bad, EVENT_ROUTING_SCHEMA);
     expect(errors.length).toBeGreaterThan(0);
   });
 });

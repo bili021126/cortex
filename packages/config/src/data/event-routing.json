@@ -1,5 +1,5 @@
 {
-  "description": "事件路由配置——四通道物理分层。routeTable 定义 eventType → channel + ackRequired，committeeRules 定义触发委员会召集的条件。2026-09-20 整理：删除 22 条 agents.json→agent-manifests.json 迁移遗留的死路由（无任何 Agent 声明 produces、无运行时代码发射）。",
+  "description": "事件路由配置——四通道物理分层。routeTable 定义 eventType → channel + ackRequired，committeeRules 定义触发委员会召集的条件，mergeRules 定义同源高频事件的归并窗口。2026-09-20 整理：删除 22 条 agents.json→agent-manifests.json 迁移遗留的死路由（无任何 Agent 声明 produces、无运行时代码发射）。2026-09-26：补上 mergeRules——此前工程侧（cross-field.validator 维度三）已在校验它，但配置里一直没有，导致 NotificationPipe 的归并子系统从未生效。",
   "routeTable": {
     "review_completed": {
       "channel": "important",
@@ -176,6 +176,13 @@
         "meta"
       ],
       "urgent": true
+    }
+  ],
+  "mergeRules": [
+    {
+      "groupBy": "mergeKey",
+      "windowMs": 5000,
+      "maxBatch": 100
     }
   ]
 }

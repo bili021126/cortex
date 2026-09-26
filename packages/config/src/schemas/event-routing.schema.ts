@@ -22,5 +22,17 @@ export const EVENT_ROUTING_SCHEMA: JsonSchema = {
       type: "array",
       items: { type: "object" },
     },
+    mergeRules: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["groupBy", "windowMs", "maxBatch"],
+        properties: {
+          groupBy: { type: "string" },
+          windowMs: { type: "number" },
+          maxBatch: { type: "number" },
+        },
+      },
+    },
   },
 };
