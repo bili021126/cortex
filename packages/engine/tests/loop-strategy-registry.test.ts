@@ -1,5 +1,5 @@
 // @ci: unit
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import type { TaskNode } from "@cortex/shared";
 import { LoopStrategyRegistry, loopStrategyRegistry } from "@cortex/engine";
 
@@ -20,6 +20,11 @@ function makeNode(overrides: Partial<TaskNode> = {}): TaskNode {
 }
 
 describe("LoopStrategyRegistry", () => {
+  beforeEach(() => {
+    // P2 fix: 重置静态管道，避免测试间状态污染
+    LoopStrategyRegistry.defaultPipeline.length = 0;
+    LoopStrategyRegistry.directPipeline.length = 0;
+  });
   describe("单例 loopStrategyRegistry", () => {
     it("应注册四条策略（direct, decompose, jury, react）", () => {
       const names = loopStrategyRegistry.list();
