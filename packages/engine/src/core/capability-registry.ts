@@ -125,5 +125,10 @@ export class CapabilityRegistry extends IndexedRegistry<AgentCapability> {
   }
 }
 
+// ⚠️ 运行时不可达（2026-09-26 核实，**未修**）
+// 本单例的唯一写入方是 `agents/registry.ts` 的 `registerAllCapabilities()`，
+// 而它全仓零调用；本类的读取方法（`toPromptDescription()` / `findByTags()` /
+// `findTeam()`）也全部零调用。所以这个注册表在运行时是空的，且没人读。
+// 详见 `agents/registry.ts` 该函数上方的说明与 `docs/core/core-3-design-backlog.md` N-25。
 /** 全局单例 */
 export const capabilityRegistry = new CapabilityRegistry();

@@ -185,6 +185,29 @@ export const AGENT_REGISTRY: AgentRegistration[] = [
 
 // ─── 自声明自动注册 ────────────────────────────────
 
+// ⚠️ 接线缺口（2026-09-26 核实，**未修**——本轮只做优化，不动代码）
+//
+// 本函数是 `capabilityRegistry` 的**唯一写入方**，而它**全仓零调用**：
+//   · `capabilityRegistry` 在 `src/` 里只有两处出现——它自己的定义，
+//     以及本函数体内的 `registerAllCapabilities` 那一行；没有任何调用点。
+//   · `CapabilityRegistry` 的全部读取方法（`toPromptDescription()` /
+//     `findByTags()` / `findTeam()`）**同样零调用**——其中 `toPromptDescription()`
+//     的注释写着「供 MetaAgent prompt 注入」，但没有任何地方读它。
+//   · 上面那 10 项 `capability` 声明（role/emoji/tags/produces/toolPermissions/
+//     applicableScenarios/outputFormat/collaborationMode）在 `engine/src` 里的
+//     **唯一读者就是本函数**（line 190 的 `AGENT_REGISTRY.map((r) => r.capability)`）。
+//
+// 于是这套「Agent 自声明能力画像」在运行时**完全惰性**：声明齐备、注册器与
+// 读取端都写好了，但两端之间没有接线。**不是死代码**（每一块都写完了、读得通），
+// 是**未接线的功能**——与 `memory` 的 `set*Path` 一族同类。
+//
+// 同类先例（说明这是复发而非孤例）：`engine/tests/manual/scripts/skill-system-roundtable.ts`
+// 记过「断裂3: 冷启动不加载——`registerAll()` 注释写好了，但代码库中没有任何地方调用它」，
+// 那条指的是 **skill** registry，后由 `bootstrap/init-skills.ts` 的
+// `skillRegistry.registerAll(...)` 修好。**同一个病在 capability registry 上还在。**
+//
+// 处置：见 `docs/core/core-3-design-backlog.md` N-25。要不要接、接到哪一段启动流程，
+// 属设计裁决，不在本轮的优化范围内。
 /** 将 AGENT_REGISTRY 中的全部能力声明注册到 CapabilityRegistry */
 export function registerAllCapabilities(): void {
   const caps = AGENT_REGISTRY.map((r) => r.capability);
