@@ -112,6 +112,32 @@ export class MetaAgent {
   }
 
   /** Core-2: 注入技能作用域上下文（包名 + agentType） */
+  // ⚠️ 依赖注入接了一半：本类四个 setter 里**三个从不被调用**（2026-09-26 核实，**未修**）
+  //
+  //   setPromptManager      ✅ 被调（bootstrap-engine.ts:275）——模式在用
+  //   setSimulationRunner   ❌ 零调用 → `_simulationRunner` 恒 undefined
+  //   setSkillScope         ❌ 零调用 → `_skillScope` 恒 undefined（下方读点 `?? {}` 兜底）
+  //   setResolveByScope     ❌ 零调用 → `_resolveByScope` 恒 undefined
+  //
+  // 三条功能链因此整条断路（每一环都写完了、彼此期待对方存在）：
+  //
+  // ① **仿真**：`simulationRunner`（planning/simulation-runner.ts:127 的单例）是**唯一**
+  //    构造出来的 SimulationRunner（`new SimulationRunner` 只此一处），而没人把它注进来。
+  //    于是下方 `if (this._simulationRunner)` 分支永不执行；`core/scheduler.ts:196` 的
+  //    `_simulationRunner !== "undefined"` 检查**恒为假**。整个仿真功能惰性。
+  // ② **技能作用域**：`tagSkillScope`（planning/skill-scope.ts:66）是**唯一**会写
+  //    `skill._scope` / `_packageName` 的地方，它零调用 → 没有任何技能带上作用域标记。
+  // ③ **作用域解析**：`resolveByScope` 只在 `index.ts` 的桶导出与**一行注释**里出现，
+  //    没有真实调用方；且即便注入了，② 决定了 `skill._scope === "cross-domain"/"package"`
+  //    那两个判断永不为真。四级作用域模型（L0 跨域/L1 项目/L2 包级/L3 Agent）从未生效。
+  //
+  // 注意 ③ 那处：审计工具之所以没把 `resolveByScope` 列为零消费，是因为
+  // `\bresolveByScope\b` 命中了下方的注释——这是该工具**口径里写明的**「含注释/字符串
+  // 误命中」弱点的一个实例，不是它活着。
+  //
+  // 同类：`registerAllCapabilities()`（agents/registry.ts）与 memory 的 `set*Path` 一族
+  // 是同一个病——**不是死代码，是未接线的功能**。处置见
+  // `docs/core/core-3-design-backlog.md` N-25 / N-27。
   private _skillScope?: SkillScope;
   /** Core-2: 注入仿真运行器（依赖注入替代直接 import） */
   private _simulationRunner?: SimRunner;
