@@ -120,8 +120,14 @@ export function injectRegistryFromConfig(definitions: AgentManifest[]): void {
 
 // ─── 主入口：加载配置 ────────────────────────────────
 
-export function loadConfig(projectRoot: string): BootstrapResult {
-  const config = bootstrap(projectRoot);
+/**
+ * 加载配置域并组装 BootstrapResult。
+ *
+ * @param projectRoot 项目根目录
+ * @param dataDirOverride 可选——覆盖 config data 目录（测试注入违规 fixture 用，见 bootstrap() 同名参数）
+ */
+export function loadConfig(projectRoot: string, dataDirOverride?: string): BootstrapResult {
+  const config = bootstrap(projectRoot, dataDirOverride);
   if (config.warnings.length > 0) {
     console.warn(`[bootstrapEngine] 配置警告:\n  ${config.warnings.join("\n  ")}`);
   }

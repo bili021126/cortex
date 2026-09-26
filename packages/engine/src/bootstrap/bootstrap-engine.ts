@@ -142,6 +142,11 @@ export interface BootstrapEngineOptions {
   dbPath?: string;
   engineConfig?: EngineConfig;
   workspaceRoot?: string;
+  /**
+   * 覆盖 config data 目录（默认走 resolveConfigDataDir()）。
+   * 测试用来注入带违规的配置 fixture，让「配置警告 → config_violation 落盘」可自包含验证。
+   */
+  configDataDir?: string;
   filterRead?: (entries: MemoryEntry[], mode: ReadMode) => MemoryEntry[];
   fs?: IFileSystemAdapter;
 }
@@ -162,7 +167,7 @@ export async function bootstrapEngine(
   options: BootstrapEngineOptions,
 ): Promise<BootstrapEngineResult> {
   // §1 加载配置
-  const config = loadConfig(projectRoot);
+  const config = loadConfig(projectRoot, options.configDataDir);
 
   // §1.1 PromptManager —— prompt-kit 编排器接入
   //     同步加载完成后，异步增强 Agent prompt（校验 + 缓存 + 模板渲染）
