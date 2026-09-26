@@ -1,7 +1,7 @@
 /**
  * layer-contract.ts — Cortex 依赖分层契约（机器可读单一真相源）
  *
- * 声明 29 个 workspace 包的架构层级（L0–L4），供依赖分层门禁校验。
+ * 声明 28 个 workspace 包的架构层级（L0–L4），供依赖分层门禁校验。
  *
  * 分层规则（PACKAGE_POSITIONING.md 边界原则 §1、§4）:
  *   - 包只能依赖 **同层或更低层** 的包（低层 ← 高层，严格单向）
@@ -29,7 +29,7 @@ export const LAYER_NAMES = [
 ] as const;
 
 /**
- * 29 包 → 层号映射（单一真相源）。
+ * 28 包 → 层号映射（单一真相源）。
  *
  * 键为包 id（packages/<id> 目录名，非 @cortex/ 全名）。
  * 新增包时必须在此登记，否则分层门禁的完整性校验会失败。

@@ -1,10 +1,10 @@
 # Cortex — 包定位文档
 
-> 29 个包的职责边界与分层关系。每个包独立发版，依赖图严格 DAG。
+> 28 个包的职责边界与分层关系。每个包独立发版，依赖图严格 DAG。
 >
 > **机器可读契约**：分层的可执行真相源在 `packages/tools/src/layer-contract.ts`，
 > 由 `packages/tools/tests/layer-contract.test.ts`（`@ci: contract`）门禁强制：
-> 新增包或跨包依赖若破坏单向分层，门禁即刻阻断。
+> 新增包或跨包依赖若破坏单向分层，门禁即刻阻断。包数由该门禁硬断言（当前 28）。
 
 ---
 
@@ -20,7 +20,7 @@ L2 复合服务    memory-store · platform
 L1 核心服务    llm · doctor · scheduler · memory · plugin-runner · prompt-kit · context-manager · client
                      │ 依赖 ↓
 L0 基础层      shared · config · tools · logging · resilience · telemetry
-               notification · parser · fsm-compiler · testing · pattern-extractor · protocol · design-tokens
+               notification · fsm-compiler · testing · pattern-extractor · protocol · design-tokens
 ```
 
 > 分层按**真实依赖 DAG** 划分（非概念角色）。高层依赖低层，反向即违规。
@@ -94,14 +94,17 @@ L0 基础层      shared · config · tools · logging · resilience · telemetr
 
 ---
 
-## DeepSeek V4 适配契约
+## DeepSeek V4.1 适配契约
 
-Cortex 全栈围绕 DeepSeek V4 双模型构建：
+Cortex 全栈围绕 DeepSeek V4.1 双模型构建：
 
 | 模型 | 定位 | 上下文 | 最大输出 | Thinking | 默认 Agent |
 |------|------|--------|----------|----------|-----------|
-| `deepseek-v4-flash` | 快速执行 | 1M tokens | 64K | 否 | fix/review/inspector/ops/browser/api/data/doc-govern/loop/butler |
-| `deepseek-v4-pro` | 深度推理 | 1M tokens | 384K | 是（七级） | code/analysis/meta |
+| `deepseek-v4-1-flash` | 快速执行 | 2M tokens | 64K | 否 | fix/review/inspector/ops/browser/api/data/doc-govern/loop/butler |
+| `deepseek-v4-1-pro` | 深度推理 | 2M tokens | 1M | 是（七级） | code/analysis/meta |
+
+另有 `deepseek-v4-1-flash-vision-exp`（视觉实验，暂不设 defaultFor，按需路由）。
+真相源为 `packages/config/src/data/models.json`——上表数值与该文件不一致时以该文件为准。
 
 **七级 reasoning_effort**：`off → minimal → low → medium → high → xhigh → max`
 

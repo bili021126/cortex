@@ -2,7 +2,7 @@
 
 > **自治理 AI Agent 运行时** — 带宪法、带人格、带 TUI。
 >
-> 29 个包 · 16 种角色人格 · 26 个预置技能
+> 28 个包 · 16 种角色人格 · 26 个预置技能
 >
 > **最新进展（2026-09-19）**：P0-P3 全量优化重整完成，DeepSeek V4.1 模型迁移成功，上下文窗口翻倍至 2M，推理速度 +30%，工具调用准确率 +25%
 
@@ -49,7 +49,7 @@ pnpm --version   # 需要 >= 9.0.0
 # 2. 安装依赖
 pnpm install
 
-# 3. 全量构建（29 个包）
+# 3. 全量构建（28 个包）
 pnpm build
 
 # 4. 启动 TUI（与昔涟对话；需先启动 daemon，见 USAGE.md）
@@ -68,7 +68,7 @@ pnpm ci
 ```
 cortex/
 │
-├── packages/                     # 29 个 npm 包（pnpm workspace）
+├── packages/                     # 28 个 npm 包（pnpm workspace）
 │   ├── engine/                   # ⭐ 运行时内核（调度、记忆、Agent、工具包）
 │   ├── scheduler/                #   调度执行引擎（三抽象架构）
 │   ├── cli/                      #   命令行入口 + EngineBridge + Ink TUI（内嵌）
@@ -84,7 +84,6 @@ cortex/
 │   ├── notification/             #   事件路由与通知
 │   ├── plugin-runner/            #   插件运行器
 │   ├── tools/                    #   工具注册与适配
-│   ├── parser/                   #   AST 解析
 │   ├── testing/                  #   测试基础设施
 │   ├── governance/               #   治理层——制度化制度
 │   ├── design-tokens/            #   设计令牌（CYRENE_PALETTE）
@@ -219,7 +218,7 @@ Cortex 六条不可变原则：
 | ① | **可替换** | 每个组件有接口定义，可替换实现 |
 | ② | **可验证** | 所有行为有测试覆盖，CI 门禁全绿方可合并 |
 | ③ | **安全边界** | 工具调用层统一管控，Agent 无裸 FS 权限 |
-| ④ | **职责清晰** | 包边界明确，21 个包各司其职 |
+| ④ | **职责清晰** | 包边界明确，28 个包各司其职 |
 | ⑤ | **可观测** | 事件走统一管道（PipelineObserver） |
 | ⑥ | **无循环依赖** | 依赖图严格 DAG |
 
@@ -343,10 +342,10 @@ npx tsx scripts/show-constitution.ts
 
 | 文档 | 位置 | 说明 |
 |------|------|------|
-| 📖 包定位文档 | `PACKAGE_POSITIONING.md` | 29 个包的职责边界与依赖关系 |
+| 📖 包定位文档 | `PACKAGE_POSITIONING.md` | 28 个包的职责边界与依赖关系 |
 | 📘 使用指南 | `USAGE.md` | 环境配置、CLI 操作、开发工作流 |
 | 🏗️ 调度器设计 | `DESIGN.md` | 三抽象架构、接口契约、数据流 |
 | 📜 宪法体系 | `docs/constitution/` | 不可变原则与治理规则 |
 | 🔍 架构审计 | `docs/auditing/` | 架构推演与一致性分析 |
-| 📋 Agent 注册表 | `cortex-agents.json` | 14 个 Agent 的完整配置 |
-| 🧠 认知配置 | `cortex-cognition.json` | 激活矩阵与注意力策略 |
+| 📋 Agent 注册表 | `packages/config/src/data/agent-manifests.json` | 18 个 Agent 条目的完整配置 |
+| 🧠 认知配置 | `packages/config/src/data/cognition.json` | 激活矩阵与注意力策略 |
