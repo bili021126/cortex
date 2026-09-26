@@ -39,6 +39,104 @@ export interface DaemonOptions {
   workspaceRoot?: string;
 }
 
+// ─── 浏览器来源 / 主机头校验（2026-09-26 新增）─────────────────────
+//
+// 起因：HTTP 监听此前无条件下发 `Access-Control-Allow-Origin: *`，并为**任意来源**
+// 回 `OPTIONS` 预检，而本 daemon 的 HTTP 面包含 `POST /api/v1/execute`
+// ——它把请求体里的 `input` 直接交给 `toolkit.execute({toolName:"execute"})`，
+// 即任意代码执行。两者相叠加的后果是**驱动式 RCE**：
+// 用户开着 daemon 时访问任意网页，该页即可预检通过并提交执行请求。
+//
+// 与 WS 侧的不对称：WS 早在 R12-P0-3 就有令牌鉴权（注释写明要「挡任意本地进程/网页 CSWSH」），
+// HTTP 侧一直没有。
+//
+// 本层先堵**不需要客户端配合**的那两条：
+//   1. 不再对任意来源发 ACAO——只回显本机来源（127.0.0.1 / localhost / [::1]，任意端口）
+//   2. 绑定 loopback 时校验 Host 头（挡 DNS rebinding：攻击页把自己的域名解析到 127.0.0.1）
+// 本仓没有任何浏览器来源的消费者（desktop 走 main 进程、CLI 走 Node），
+// 因此这两条不会打断现有客户端；保留本机来源白名单是为将来的本地 WebUI 留路。
+//
+// ⚠️ 未完成项：HTTP 侧仍**没有令牌鉴权**（对任意本地进程无防护）——
+// 那需要同时改 CLI/desktop 三个客户端，见 docs/core/core-3-design-backlog.md 【3】。
+
+/** 允许的浏览器来源：仅本机，任意端口 */
+export const LOOPBACK_ORIGIN_RE = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+/** 绑定 loopback 时允许的 Host 头 */
+export const LOOPBACK_HOST_RE = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+
+/** 监听地址是否为本机回环 */
+export function isLoopbackBind(host: string | undefined): boolean {
+  if (!host) return false;
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, "");
+  return h === "127.0.0.1" || h === "localhost" || h === "::1";
+}
+
+/**
+ * 计算应回显的 CORS 来源。
+ * 仅当请求来源匹配本机白名单时回显该来源；否则返回 null（不下发 ACAO 头，
+ * 浏览器随即拦截跨源读取与预检）。
+ */
+export function resolveCorsOrigin(origin: string | undefined): string | null {
+  if (typeof origin !== "string" || origin === "") return null;
+  return LOOPBACK_ORIGIN_RE.test(origin) ? origin : null;
+}
+
+/**
+ * 校验 Host 头。
+ * 仅在绑定 loopback 时启用——此时合法的 Host 只可能是本机名，
+ * 出现其它域名即意味着 DNS rebinding（攻击页把自己的域名指到 127.0.0.1）。
+ * 绑定非 loopback 时无法预知合法域名，返回 true 跳过校验（由启动告警兜底）。
+ */
+export function isAcceptableHost(hostHeader: string | undefined, boundToLoopback: boolean): boolean {
+  if (!boundToLoopback) return true;
+  if (typeof hostHeader !== "string" || hostHeader === "") return false;
+  return LOOPBACK_HOST_RE.test(hostHeader);
+}
+
+/**
+ * 应用安全响应头，并在绑定 loopback 时校验 Host 头。
+ *
+ * 抽成导出函数是为了能被**真实 http.Server 集成测试**覆盖——
+ * 只测纯函数证明不了「处理器真的调了它」。
+ *
+ * @returns true = 请求可继续；false = 已被拒绝且响应已发出
+ */
+export function applyRequestSecurity(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  boundToLoopback: boolean,
+  requestId: string,
+): boolean {
+  res.setHeader("X-Request-Id", requestId);
+  res.setHeader("X-API-Version", PROTOCOL_VERSION);
+  // 2026-09-26：此前是无条件 `Access-Control-Allow-Origin: *`。
+  // 本 daemon 的 HTTP 面含任意代码执行端点（POST /api/v1/execute），
+  // 对任意来源放行即等于「任意网页可驱动式 RCE」。改为只回显本机来源。
+  const corsOrigin = resolveCorsOrigin(req.headers.origin);
+  if (corsOrigin !== null) {
+    res.setHeader("Access-Control-Allow-Origin", corsOrigin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Cache-Control", "no-store");
+
+  // 2026-09-26：绑定 loopback 时校验 Host 头——挡 DNS rebinding。
+  if (!isAcceptableHost(req.headers.host, boundToLoopback)) {
+    res.writeHead(403, { "Content-Type": "application/problem+json" });
+    res.end(JSON.stringify({
+      type: "https://cortex.dev/errors/forbidden-host",
+      title: "Forbidden Host",
+      status: 403,
+      detail: `Host 头不被接受: ${String(req.headers.host)}。daemon 绑定在本机回环，只接受 127.0.0.1 / localhost / [::1]。`,
+      instance: requestId,
+    }));
+    return false;
+  }
+  return true;
+}
+
 const PID_FILE_NAME = ".cortex-daemon.pid";
 
 /** system.status 心跳间隔（ms） */
@@ -166,15 +264,10 @@ export class CortexDaemon {
     this.httpServer = new http.Server();
 
     // HTTP request handler
+    const boundToLoopback = isLoopbackBind(this.options.host);
     this.httpServer.on("request", (req, res) => {
       const requestId = crypto.randomUUID();
-      res.setHeader("X-Request-Id", requestId);
-      res.setHeader("X-API-Version", PROTOCOL_VERSION);
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.setHeader("Cache-Control", "no-store");
+      if (!applyRequestSecurity(req, res, boundToLoopback, requestId)) return;
 
       if (req.method === "OPTIONS") {
         res.writeHead(204);
@@ -206,7 +299,23 @@ export class CortexDaemon {
         reject(new Error("Daemon: httpServer not initialized"));
         return;
       }
-      this.httpServer.listen(this.options.port, this.options.host, () => resolve());
+      this.httpServer.listen(this.options.port, this.options.host, () => {
+        // 2026-09-26：非 loopback 绑定 = 把「无 HTTP 鉴权的任意代码执行端点」
+        // （POST /api/v1/execute）暴露到网络。此前没有任何提示。
+        if (!isLoopbackBind(this.options.host)) {
+          process.stderr.write(
+            "\n" +
+              "⚠️  [daemon] CORTEX_DAEMON_HOST 指向非本机地址（" + String(this.options.host) + "）——\n" +
+              "    HTTP API 将暴露到网络，而它**没有任何鉴权**，且包含任意代码执行端点\n" +
+              "    POST /api/v1/execute（把请求体 input 交给 toolkit.execute）。\n" +
+              "    任何能访问该端口的人都可在此机器上执行代码。\n" +
+              "    如非有意为之，请设 CORTEX_DAEMON_HOST=127.0.0.1。\n" +
+              "    另：WS 侧有令牌鉴权（CORTEX_DAEMON_WS_TOKEN），HTTP 侧尚无。\n\n",
+          );
+        }
+        resolve();
+      });
+
     });
 
     // Write PID file
