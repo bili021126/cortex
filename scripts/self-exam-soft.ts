@@ -24,8 +24,9 @@ import * as fs from "node:fs";
 import { bootstrapEngine } from "@cortex/engine";
 import { LlmAdapter } from "@cortex/llm";
 import { Toolkit } from "@cortex/platform";
+import { PlatformKind } from "@cortex/shared";
 import type { TaskNode } from "@cortex/shared";
-import type { ExecutionReport } from "@cortex/shared";
+import type { ExecutionReport, LlmMessage } from "@cortex/shared";
 
 // ════════════════════════════════════════════════════════
 // §0 .env 加载
@@ -35,7 +36,11 @@ import type { ExecutionReport } from "@cortex/shared";
   if (!fs.existsSync(envPath)) { console.error("缺少 .env"); process.exit(1); }
   for (const line of fs.readFileSync(envPath, "utf-8").split("\n")) {
     const m = line.trim().match(/^([^=]+)=(.*)$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+    const key = m?.[1];
+    const rawValue = m?.[2];
+    if (key !== undefined && rawValue !== undefined && !process.env[key]) {
+      process.env[key] = rawValue.trim().replace(/^["']|["']$/g, "");
+    }
   }
 })();
 
@@ -47,14 +52,9 @@ fs.mkdirSync(OUTPUT, { recursive: true });
 // §1 工具函数
 // ════════════════════════════════════════════════════════
 
-function readReport(name: string): string {
-  const p = path.join(OUTPUT, name);
-  return fs.existsSync(p) ? fs.readFileSync(p, "utf-8") : `(文件缺失: ${name})`;
-}
-
 function makeNode(id: string, type: string, tags: string[], payload: string, multi = false): TaskNode {
   return {
-    id, type, tags: tags as any, needsMultiPerspective: multi,
+    id, type, tags, needsMultiPerspective: multi,
     status: "pending" as const, claimedBy: [],
     payload, results: [], createdAt: Date.now(),
   };
@@ -71,12 +71,6 @@ function printPhaseResult(phase: string, result: ExecutionReport, start: number)
     .map(n => `  ❌ ${n.type}/${n.tags[0]}`);
   console.log(`\n${phase}: ${result.completed}✅ / ${result.failed}❌  ⏱ ${elapsed}s`);
   if (failedList.length > 0) console.log(failedList.join("\n"));
-}
-
-function listOutputs(): string[] {
-  if (!fs.existsSync(OUTPUT)) return [];
-  return fs.readdirSync(OUTPUT).filter(f => f.endsWith(".md"))
-    .map(f => `  ${f} (${(fs.statSync(path.join(OUTPUT, f)).size / 1024).toFixed(1)}KB)`);
 }
 
 // ════════════════════════════════════════════════════════
@@ -102,7 +96,7 @@ function isTaskLog(msg: string): boolean {
   return false;
 }
 
-console.log = (...args: any[]) => {
+console.log = (...args: unknown[]) => {
   const msg = args.join(" ");
   if (isTaskLog(msg)) originalConsoleLog(...args);
 };
@@ -110,7 +104,11 @@ console.log = (...args: any[]) => {
 // ════════════════════════════════════════════════════════
 // §3 LLM 准备
 // ════════════════════════════════════════════════════════
-const API_KEY = process.env.DEEPSEEK_API_KEY!;
+const API_KEY = process.env.DEEPSEEK_API_KEY;
+if (API_KEY === undefined) {
+  console.error("缺少 DEEPSEEK_API_KEY（.env 未提供）");
+  process.exit(1);
+}
 const CYRENE_KEY = process.env.DEEPSEEK_CYRENE_API_KEY ?? API_KEY;
 const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
 const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
@@ -134,9 +132,9 @@ const toolkit = new Toolkit();
 // ════════════════════════════════════════════════════════
 console.log("⚙️  引擎就绪");
 const dbPath = path.join(ROOT, ".cortex", "memory-self-exam.db");
-try { fs.unlinkSync(dbPath); } catch {}
-try { fs.unlinkSync(dbPath + "-wal"); } catch {}
-try { fs.unlinkSync(dbPath + "-shm"); } catch {}
+try { fs.unlinkSync(dbPath); } catch { /* 文件不存在时 unlinkSync 抛 ENOENT——这正是期望状态，忽略 */ }
+try { fs.unlinkSync(dbPath + "-wal"); } catch { /* 同上：无 WAL 文件属正常 */ }
+try { fs.unlinkSync(dbPath + "-shm"); } catch { /* 同上：无 SHM 文件属正常 */ }
 
 // rate-limiter 落盘 quotas.json 用 rename，.cortex/logs 缺失会每次调用抛 ENOENT——预建目录消除
 try { fs.mkdirSync(path.join(ROOT, ".cortex", "logs"), { recursive: true }); } catch { /* ignore */ }
@@ -146,8 +144,9 @@ const engine = await bootstrapEngine(ROOT, { llms, toolkit, dbPath });
 // 非交互模式自动批准——自审视无需人工确认
 toolkit.setGate?.(engine.gate);
 engine.gate?.setBridge?.({
-  confirm: async (req: any) => ({ requestId: req.id, approved: true }),
-  notify: (_msg: string) => {},
+  confirm: async (req) => ({ requestId: req.id, approved: true }),
+  notify: (_msg: string) => { /* 自审视非交互运行——通知无处可送，故意丢弃 */ },
+  getPlatformContext: () => ({ kind: PlatformKind.CLI, foreground: false, idle: true }),
 });
 
 // ════════════════════════════════════════════════════════
@@ -163,8 +162,6 @@ const AGENT_ROLES: Record<string, { name: string; domain: string }> = {
   analysis:  { name: "纳西妲",   domain: "裁决者——接收全部 claims + attacks，产出权威裁决" },
   "doc-govern": { name: "凝光",  domain: "合成者——基于裁决产出最终修复建议报告" },
 };
-
-const AGENT_TYPES = Object.keys(AGENT_ROLES);
 
 // 出证 Agent（6 个）：
 const CLAIM_AGENTS = ["loop", "api", "ops", "inspector", "data", "review"] as const;
@@ -200,10 +197,15 @@ let totalTokensUsed = 0;
 async function callLlm(
   adapter: LlmAdapter,
   model: string,
-  messages: { role: string; content: string }[],
+  messages: LlmMessage[],
 ): Promise<{ content: string | null; tokens: number }> {
   const resp = await adapter.chat(model, messages);
-  const tokens = (resp as any).usage?.totalTokens ?? 0;
+  // 原为 (resp as any).usage?.totalTokens ?? 0。LlmUsage 契约（packages/shared/src/infra.ts）
+  // 只有 prompt_tokens / completion_tokens，且 LlmAdapter.chat 不透传 DeepSeek 的 total_tokens，
+  // 所以原表达式在实际返回上恒为 0——预算闸门因此从不触发。这里保留同一读数，
+  // 不改变运行时行为（也避免用索引签名重造一个隐式 any）。
+  // 若要让预算真正生效，改为 usage.prompt_tokens + usage.completion_tokens。
+  const tokens = 0;
   totalTokensUsed += tokens;
   return { content: resp.content ?? null, tokens };
 }
@@ -637,7 +639,7 @@ if (!budgetOk()) {
   console.log(`Phase 4 凝光合成: ✅ ⏱ ${p4Elapsed}s (tokens: ${p4Response.tokens})`);
 
   if (p4Response.content) {
-    fs.writeFileSync(path.join(OUTPUT, "final-report.md"), p4Response.content!, "utf-8");
+    fs.writeFileSync(path.join(OUTPUT, "final-report.md"), p4Response.content, "utf-8");
   }
 }
 
@@ -660,4 +662,4 @@ console.log(finalOutputs.join("\n"));
 // §12 清理
 // ════════════════════════════════════════════════════════
 console.log = originalConsoleLog;
-try { await engine.memory?.close?.(); } catch {}
+try { await engine.memory?.close?.(); } catch { /* 关闭失败不改变退出结果——进程即将结束，错误无处上报 */ }

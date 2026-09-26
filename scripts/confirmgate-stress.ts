@@ -23,6 +23,7 @@ import { Toolkit } from "@cortex/platform";
 // （该守护的扫描范围不含 scripts/，所以这处违规一直没被发现）。
 import { ReversibilityLevel as RL } from "@cortex/config";
 import { AgentType } from "@cortex/shared";
+import type { ToolResult } from "@cortex/shared";
 
 // ════════════════════════════════════════════════════════
 // §0 准备
@@ -32,13 +33,18 @@ import { AgentType } from "@cortex/shared";
   if (!fs.existsSync(envPath)) { console.error("缺少 .env"); process.exit(1); }
   for (const line of fs.readFileSync(envPath, "utf-8").split("\n")) {
     const m = line.trim().match(/^([^=]+)=(.*)$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+    if (!m) continue;
+    // noUncheckedIndexedAccess: 正则捕获组类型为 string | undefined，逐一收窄后再用
+    const key = m[1];
+    const rawValue = m[2];
+    if (key === undefined || rawValue === undefined) continue;
+    if (!process.env[key]) process.env[key] = rawValue.trim().replace(/^["']|["']$/g, "");
   }
 })();
 
 const ROOT = process.cwd();
 const OUTPUT = path.join(ROOT, "test-output", "confirmgate-stress");
-try { fs.mkdirSync(OUTPUT, { recursive: true }); } catch {}
+try { fs.mkdirSync(OUTPUT, { recursive: true }); } catch { /* 已存在即可——目录创建失败后续写入自会报错 */ }
 
 const VERDICT: string[] = [];
 function $(label: string, msg: string, ok: boolean) {
@@ -79,12 +85,18 @@ $("T1.9", "超时后 hasPending=false (防泄漏)", !g2.hasPending());
 
 const g3 = new ConfirmGate(5000);
 const rid3 = g3.request({ id: "t3", level: RL.L2, toolName: "write_file", summary: "dispose 测试", detail: "" });
-let dErr: any = null;
-const wp = g3.waitFor(rid3, 30000).catch((e: unknown) => { dErr = e; return false; });
+// 用 holder 承载 catch 里的赋值：直接声明 let dErr: Error | null 会被 TS 的控制流
+// 收窄锁死（赋 null 后跨 await 只剩 null，访问 .name 报 never）。holder 属性声明为
+// 可空联合，既满足 no-explicit-any，也保留「未 reject 时 name 为 undefined」的原语义。
+const dErrHolder: { name: string | undefined } = { name: undefined };
+const wp = g3.waitFor(rid3, 30000).catch((e: unknown) => {
+  dErrHolder.name = e instanceof Error ? e.name : undefined;
+  return false;
+});
 await new Promise(r => setTimeout(r, 50));
 g3.dispose();
 await wp;
-$("T1.10", `dispose 后 reject=${dErr?.name}`, dErr?.name === "ConfirmGateDisposedError");
+$("T1.10", `dispose 后 reject=${dErrHolder.name}`, dErrHolder.name === "ConfirmGateDisposedError");
 
 g2.dispose();
 
@@ -103,7 +115,7 @@ const r1 = await tk2.execute({
   params: { file_path: path.join(OUTPUT, "t2.txt"), content: "bypass" },
 }, AgentType.Code);
 $("T2.1", "bypass 下 write_file 成功", r1.success === true);
-try { fs.unlinkSync(path.join(OUTPUT, "t2.txt")); } catch {}
+try { fs.unlinkSync(path.join(OUTPUT, "t2.txt")); } catch { /* 文件不存在即可——清理是尽力而为 */ }
 
 // 重建非 bypass gate
 const gT2b = new ConfirmGate(1500);
@@ -120,8 +132,9 @@ const r3 = await tk2.execute({
 }, AgentType.Code);
 $("T2.3", "read_file (L1) 不被拦截", r3.success === true);
 
-// 清理：重置 toolkit gate（确保 T3 不受影响）
-tk2.setGate(undefined as any);
+// 清理：tk2 在后续用例中被全新的 tk3 取代，此处只需确保它的 gate 不再拦截——
+// 放行后与「无 gate」语义等价（Toolkit.setGate 只接受 ConfirmGate，不接受消除挂载）。
+gT2b.bypassAll();
 gT2b.dispose();
 gT2.dispose();
 
@@ -130,7 +143,11 @@ gT2.dispose();
 // ════════════════════════════════════════════════════════
 H("T3: bootstrapEngine 的 ConfirmGate 布线");
 
-const API_KEY = process.env.DEEPSEEK_API_KEY!;
+const API_KEY = process.env.DEEPSEEK_API_KEY;
+if (API_KEY === undefined) {
+  console.error("缺少 DEEPSEEK_API_KEY——请先在 .env 中配置");
+  process.exit(1);
+}
 const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
 const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
 const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? CHAT_MODEL;
@@ -139,9 +156,9 @@ chatAdapter.setCacheEnabled(true);
 const llms = new Map([["DEEPSEEK_CHAT", chatAdapter], ["DEEPSEEK_REASONER", chatAdapter]]);
 
 const dbPath = path.join(ROOT, ".cortex", "memory-confirmgate-stress.db");
-try { fs.unlinkSync(dbPath); } catch {}
-try { fs.unlinkSync(dbPath + "-wal"); } catch {}
-try { fs.unlinkSync(dbPath + "-shm"); } catch {}
+try { fs.unlinkSync(dbPath); } catch { /* 首次运行无此文件——清理是尽力而为 */ }
+try { fs.unlinkSync(dbPath + "-wal"); } catch { /* WAL 不存在即可——同上 */ }
+try { fs.unlinkSync(dbPath + "-shm"); } catch { /* SHM 不存在即可——同上 */ }
 
 // 创建全新的干净的 toolkit
 const tk3 = new Toolkit();
@@ -155,7 +172,7 @@ $("T3.3", "engine.gate 有 bridge (CLIAdapter)", engine.gate !== undefined);
 // 如果 bootstrapEngine 没有调用 tk3.setGate()，那 tk3 的 gate 是 undefined
 // 这意味着 Agent 调用 write_file 时不会触发 ConfirmGate
 // 我们通过执行一个 L2 工具来验证（加 8s 超时防止 CLIAdapter 阻塞 stdin）
-let rGateCheck: any;
+let rGateCheck: ToolResult;
 try {
   rGateCheck = await Promise.race([
     tk3.execute({
@@ -166,8 +183,8 @@ try {
       setTimeout(() => rej(new Error("T3_TIMEOUT")), 8000)
     ),
   ]);
-} catch (e: any) {
-  rGateCheck = { success: false, error: `TIMEOUT: ${e.message}` };
+} catch (e: unknown) {
+  rGateCheck = { success: false, error: `TIMEOUT: ${e instanceof Error ? e.message : String(e)}` };
 }
 
 // 如果 gate 未注入：write_file 会直接成功（无拦截）→ success=true
@@ -181,7 +198,7 @@ if (gateHanging) {
 } else {
   $("T3.4", "❌ Toolkit gate 未注入 — ConfirmGate 被绕过！", false);
   $("T3.5", "write_file 在无 gate 时直接成功 (绕过 ConfirmGate)", rGateCheck.success === true);
-  try { fs.unlinkSync(path.join(OUTPUT, "t3-gate-check.txt")); } catch {}
+  try { fs.unlinkSync(path.join(OUTPUT, "t3-gate-check.txt")); } catch { /* 文件不存在即可——清理是尽力而为 */ }
 }
 
 // T3 已验证 gate 注入状态。T4/T5 是端到端流程测试，bypass gate 避免 CLIAdapter 在 stdin 阻塞
@@ -196,14 +213,14 @@ H("T4: Agent 执行 write_file 端到端");
 const nodeId = `t4-${Date.now()}`;
 const t4File = path.join(OUTPUT, "t4-agent-output.md");
 engine.board.addNode({
-  id: nodeId, type: "code", tags: ["test"] as any,
+  id: nodeId, type: "code", tags: ["test"],
   needsMultiPerspective: false, status: "pending" as const, claimedBy: [],
   payload: `使用 write_file 向 ${t4File} 写入文本 "T4 agent executed successfully"。完成任务后不做其他操作。`,
   results: [], createdAt: Date.now(),
 });
 $("T4.1", "任务节点已添加", true);
 
-const report = await engine.scheduler.executeAll();
+await engine.scheduler.executeAll();
 const node = engine.board.getNode(nodeId);
 $("T4.2", `Agent 状态: ${node?.status}`, node?.status === "done");
 

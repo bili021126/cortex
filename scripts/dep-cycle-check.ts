@@ -41,6 +41,8 @@ function walk(d: string, owner: string): void {
         if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) continue;
         for (const m of line.matchAll(/from\s+["'](@cortex\/[a-z-]+)/g)) {
           const dep = m[1];
+          // 该正则的捕获组恒参与匹配；显式守卫只为满足 noUncheckedIndexedAccess，运行语义不变。
+          if (dep === undefined) continue;
           if (pkgNames.has(dep) && dep !== owner) edges.get(owner)?.add(dep);
         }
       }

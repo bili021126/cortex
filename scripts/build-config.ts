@@ -27,6 +27,11 @@ const TARGETS: BuildTarget[] = [
 
 for (const t of TARGETS) {
   const basename = t.src.split(/[\\/]/).pop();
+  // split 至少产出一段，pop 理论上必有值；显式守卫替代非空断言
+  if (basename === undefined) {
+    console.error(`[build] 无法解析源文件名: ${t.src}`);
+    process.exit(1);
+  }
   console.log(`[build] ${basename} ...`);
 
   execSync(
@@ -35,7 +40,7 @@ for (const t of TARGETS) {
   );
 
   // tsc outputs to scripts/dist/<name>.js
-  const jsName = basename!.replace(/\.ts$/, ".js");
+  const jsName = basename.replace(/\.ts$/, ".js");
   const outFile = join(OUT_DIR, jsName);
 
   if (!existsSync(outFile)) {

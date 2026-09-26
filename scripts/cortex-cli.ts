@@ -24,11 +24,14 @@ import { spawn, execSync } from "node:child_process";
 function resolveConfigDir(): string {
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
-    if ((args[i] === "--dir" || args[i] === "-d") && i + 1 < args.length) {
-      return path.resolve(args[i + 1]);
+    const arg = args[i];
+    if (arg === undefined) continue;
+    const next = args[i + 1];
+    if ((arg === "--dir" || arg === "-d") && next !== undefined) {
+      return path.resolve(next);
     }
-    if (args[i].startsWith("--dir=")) {
-      return path.resolve(args[i].slice(6));
+    if (arg.startsWith("--dir=")) {
+      return path.resolve(arg.slice(6));
     }
   }
   return process.cwd();
@@ -129,7 +132,7 @@ function saveJson(filePath: string, data: unknown): boolean {
 const CORTEX_MAIN_JS = path.join(ROOT, "packages", "cli", "dist", "main.js");
 
 /** 兜底：使用 pnpm exec cortex（需要 pnpm 可用） */
-const CORTEX_FALLBACK = ["pnpm", "exec", "cortex"];
+const CORTEX_FALLBACK = ["pnpm", "exec", "cortex"] as const;
 
 function delegate(rl: readline.Interface | null, cmd: string, ...args: string[]): Promise<void> {
   return new Promise((resolve) => {
@@ -142,7 +145,8 @@ function delegate(rl: readline.Interface | null, cmd: string, ...args: string[])
 
     // 优先直调编译产物，免全局安装
     let spawnCmd: string;
-    let spawnArgs: string[] = [];
+    // 下面两个分支各自赋值，故不预置空数组（原预置值从未被读到）
+    let spawnArgs: string[];
     if (fs.existsSync(CORTEX_MAIN_JS)) {
       spawnCmd = "node";
       spawnArgs = [CORTEX_MAIN_JS, cmd, ...args];
@@ -211,9 +215,9 @@ async function screenInspect(rl: readline.Interface): Promise<void> {
   const lines: string[] = ["", "  \u25b6 项目侦察", ""];
 
   // 配置文件状态
-  const agentsCfg = loadJson(path.join(ROOT, "cortex-agents.json"));
-  const cognitionCfg = loadJson(path.join(ROOT, "cortex-cognition.json"));
-  const docsCfg = loadJson(path.join(ROOT, "cortex-docs.json"));
+  const agentsCfg = loadJson<AgentsConfig>(path.join(ROOT, "cortex-agents.json"));
+  const cognitionCfg = loadJson<CognitionConfig>(path.join(ROOT, "cortex-cognition.json"));
+  const docsCfg = loadJson<DocsConfig>(path.join(ROOT, "cortex-docs.json"));
 
   lines.push("  \u2500\u2500 配置文件 \u2500\u2500");
   lines.push(`    cortex-agents.json     ${agentsCfg ? "\u2713 存在" : "\u2717 缺失"}`);
@@ -223,9 +227,9 @@ async function screenInspect(rl: readline.Interface): Promise<void> {
 
   // Agent 统计
   if (agentsCfg) {
-    const agentCount = Object.keys((agentsCfg as any).agents ?? {}).length;
+    const agentCount = Object.keys(agentsCfg.agents ?? {}).length;
     const activeCount = cognitionCfg
-      ? ((cognitionCfg as any).activationMatrix as any[]).filter((e: any) => e.active).length
+      ? cognitionCfg.activationMatrix.filter((e) => e.active).length
       : "?";
     lines.push("");
     lines.push("  \u2500\u2500 Agent \u2500\u2500");
@@ -421,7 +425,9 @@ async function editAgent(rl: readline.Interface, agent: AgentDef): Promise<Agent
         boxPrint(["", `  \u25b6 systemPrompt for ${agent.id}`, ""]);
         const spLines = result.systemPrompt.split("\n");
         for (let i = 0; i < Math.min(spLines.length, 15); i++) {
-          const t = spLines[i].length > BOX_W - 4 ? spLines[i].slice(0, BOX_W - 7) + "..." : spLines[i];
+          const spLine = spLines[i];
+          if (spLine === undefined) continue;
+          const t = spLine.length > BOX_W - 4 ? spLine.slice(0, BOX_W - 7) + "..." : spLine;
           console.log(`  ${t}`);
         }
         if (spLines.length > 15) console.log(`  ... (\u5171 ${spLines.length} \u884c\uff0c\u6b64\u5904\u4ec5\u663e\u793a\u524d 15 \u884c)`);
@@ -460,12 +466,20 @@ async function screenAgentsConfig(rl: readline.Interface): Promise<void> {
     switch (c) {
       case "1": {
         clear();
-        const items = ids.map((id, i) => ({ key: String(i + 1), label: `${id} (${agents[id].type}) \u2014 ${agents[id].role}` }));
+        const items = ids.map((id, i) => {
+          const agent = agents[id];
+          if (agent === undefined) return { key: String(i + 1), label: id };
+          return { key: String(i + 1), label: `${id} (${agent.type}) \u2014 ${agent.role}` };
+        });
         showMenu("\u9009\u62e9 Agent \u7f16\u8f91", items);
         const ac = await ask(rl, "  > ");
         const idx = Number(ac);
         if (idx >= 1 && idx <= ids.length) {
-          agents[ids[idx - 1]] = await editAgent(rl, agents[ids[idx - 1]]);
+          const id = ids[idx - 1];
+          const current = id === undefined ? undefined : agents[id];
+          if (id !== undefined && current !== undefined) {
+            agents[id] = await editAgent(rl, current);
+          }
         }
         break;
       }
@@ -541,6 +555,7 @@ async function screenCognitionConfig(rl: readline.Interface): Promise<void> {
     const lines: string[] = ["", "  \u25b6 cortex-cognition.json", "", "  -- \u6fc0\u6d3b\u77e9\u9635 --"];
     for (let i = 0; i < matrix.length; i++) {
       const e = matrix[i];
+      if (e === undefined) continue;
       lines.push(`    [${String(i + 1).padStart(2)}] ${e.agentType.padEnd(14)} ${e.active ? "+ \u6fc0\u6d3b" : "- \u505c\u7528"}  ${e.orientation}`);
     }
     lines.push("", "  -- \u6ce8\u610f\u529b\u914d\u7f6e --",
@@ -557,8 +572,12 @@ async function screenCognitionConfig(rl: readline.Interface): Promise<void> {
       const istr = await ask(rl, `  \u8f93\u5165\u7f16\u53f7 (1-${matrix.length}): `);
       const idx = Number(istr);
       if (idx >= 1 && idx <= matrix.length) {
-        matrix[idx - 1] = { ...matrix[idx - 1], active: !matrix[idx - 1].active };
-        console.log(`  OK ${matrix[idx - 1].agentType}.active \u2192 ${matrix[idx - 1].active}`);
+        const current = matrix[idx - 1];
+        if (current !== undefined) {
+          const next = { ...current, active: !current.active };
+          matrix[idx - 1] = next;
+          console.log(`  OK ${next.agentType}.active \u2192 ${next.active}`);
+        }
         await pressAnyKey(rl);
       }
     } else if (c === "A" || c === "a") {
@@ -587,6 +606,7 @@ async function screenDocsConfig(rl: readline.Interface): Promise<void> {
     const lines: string[] = ["", "  \u25b6 cortex-docs.json", "", "  -- \u5baa\u6cd5\u8def\u5f84 --", `    ${conPath}`, "", "  -- \u6587\u6863\u6ce8\u518c\u8868 --"];
     for (let i = 0; i < registry.length; i++) {
       const e = registry[i];
+      if (e === undefined) continue;
       const can = e.canonical ? "\u2605" : " ";
       const short = e.path.length > 28 ? "..." + e.path.slice(-28) : e.path;
       lines.push(`    [${String(i + 1).padStart(2)}] ${can} ${e.type.padEnd(14)} v${e.version.padEnd(8)} ${short}`);
@@ -601,8 +621,12 @@ async function screenDocsConfig(rl: readline.Interface): Promise<void> {
       const istr = await ask(rl, `  \u8f93\u5165\u7f16\u53f7 (1-${registry.length}): `);
       const idx = Number(istr);
       if (idx >= 1 && idx <= registry.length) {
-        registry[idx - 1] = { ...registry[idx - 1], canonical: !registry[idx - 1].canonical };
-        console.log(`  OK canonical \u2192 ${registry[idx - 1].canonical}`);
+        const current = registry[idx - 1];
+        if (current !== undefined) {
+          const next = { ...current, canonical: !current.canonical };
+          registry[idx - 1] = next;
+          console.log(`  OK canonical \u2192 ${next.canonical}`);
+        }
         await pressAnyKey(rl);
       }
     } else if (c === "S" || c === "s") {
@@ -645,13 +669,18 @@ async function screenSetup(rl: readline.Interface): Promise<void> {
 // 主菜单
 // ═══════════════════════════════════════════════════════════
 
+/** 主菜单项：builtin 由控制台自处理；其余项一律委托 cortex CLI（此时 cmd 必定存在） */
+type MenuCommand =
+  | { key: string; label: string; hint: string; builtin: true; cmd?: string }
+  | { key: string; label: string; hint: string; builtin: false; cmd: string };
+
 async function mainMenu(rl: readline.Interface): Promise<void> {
   // 预加载配置
   gAgents = loadJson<AgentsConfig>(AGENTS_PATH);
   gCognition = loadJson<CognitionConfig>(COGNITION_PATH);
   gDocs = loadJson<DocsConfig>(DOCS_PATH);
 
-  const COMMANDS: { key: string; label: string; hint: string; builtin: boolean; cmd?: string }[] = [
+  const COMMANDS: MenuCommand[] = [
     { key: "1", label: "\u5355\u6b21\u6267\u884c", hint: "cortex run <file>", builtin: false, cmd: "run" },
     { key: "2", label: "Agent \u7ba1\u7406", hint: "cortex agent list | spawn | destroy", builtin: false, cmd: "agent" },
     { key: "3", label: "\u4efb\u52a1\u7ba1\u7406", hint: "cortex task submit | list | cancel", builtin: false, cmd: "task" },
@@ -697,7 +726,7 @@ async function mainMenu(rl: readline.Interface): Promise<void> {
       }
     } else {
       // 委托到 cortex CLI
-      await delegateWithArgs(rl, cmd.cmd!, `cortex ${cmd.cmd}` + (cmd.key === "1" ? " <file>" : ""));
+      await delegateWithArgs(rl, cmd.cmd, `cortex ${cmd.cmd}` + (cmd.key === "1" ? " <file>" : ""));
     }
   }
 }
@@ -713,12 +742,14 @@ async function main(): Promise<void> {
   let runMode: "full" | "setup" = "full";
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--mode" && i + 1 < args.length) {
+    const arg = args[i];
+    if (arg === undefined) continue;
+    if (arg === "--mode" && i + 1 < args.length) {
       if (args[i + 1] === "setup") runMode = "setup";
       break;
     }
-    if (args[i].startsWith("--mode=")) {
-      if (args[i].slice(7) === "setup") runMode = "setup";
+    if (arg.startsWith("--mode=")) {
+      if (arg.slice(7) === "setup") runMode = "setup";
       break;
     }
   }

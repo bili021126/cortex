@@ -53,7 +53,7 @@ function main(): void {
   console.log(`   ${constOk ? "✅ 存在" : "❌ 不存在"}`);
 
   // 2. 验证 docRegistry 中的所有路径
-  let total = registry.docRegistry.length;
+  const total = registry.docRegistry.length;
   let passed = 0;
   let failed = 0;
   const failures: { path: string; type: string; version: string }[] = [];
@@ -142,7 +142,11 @@ function main(): void {
   process.exit(0);
 }
 
-main().catch((e) => {
+// main() 是同步函数，抛出即异常终止；此处的 catch 与原先 .catch 的意图一致：
+// 打印一次异常信息并以退出码 1 结束，而不是让未捕获异常打印堆栈后退出。
+try {
+  main();
+} catch (e: unknown) {
   console.error("验证脚本异常:", e);
   process.exit(1);
-});
+}

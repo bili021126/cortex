@@ -20,21 +20,32 @@ import { Toolkit } from "@cortex/platform";
 import {
   evaluateAmendment,
   applyAmendment,
-  loadPendingProposals,
-  saveProposal,
-  judgeProposals,
 } from "@cortex/governance";
 import type { AmendmentProposal } from "@cortex/shared";
 
 // ════════════════════════════════════════════════════════
 // §0 准备
 // ════════════════════════════════════════════════════════
+
+/** 从 unknown 异常里取出可读信息——非 Error 时退回 String()，不引入 any。 */
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** 期望的"文件本来就不存在"——只吞这一种，其余照报。 */
+function isNotFound(e: unknown): boolean {
+  return e instanceof Error && (e as NodeJS.ErrnoException).code === "ENOENT";
+}
+
 (function loadEnv() {
   const envPath = path.resolve(process.cwd(), ".env");
   if (!fs.existsSync(envPath)) { console.error("缺少 .env"); process.exit(1); }
   for (const line of fs.readFileSync(envPath, "utf-8").split("\n")) {
     const m = line.trim().match(/^([^=]+)=(.*)$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+    // noUncheckedIndexedAccess: m[1]/m[2] 类型含 undefined，但能匹配成功的组必然存在，
+    // ?? "" 是不改变运行语义的显式收窄（未匹配时 m 为 null，本就进不了分支）。
+    const key = m?.[1] ?? "";
+    if (key && !process.env[key]) process.env[key] = (m?.[2] ?? "").trim().replace(/^["']|["']$/g, "");
   }
 })();
 
@@ -100,8 +111,13 @@ const badVersion: AmendmentProposal = {
   version: "v0.0.1",
 };
 const rBadVer = evaluateAmendment(badVersion, constitution);
-const vcCheck = rBadVer.checks.find(c => c.id === "version-continuity")!;
-$("T1.3", `版本倒退 → ${vcCheck.passed ? "通过(错!)" : "未通过"}`, !vcCheck.passed);
+const vcCheck = rBadVer.checks.find(c => c.id === "version-continuity");
+// 原假定该检查项必然存在；缺失时按"未通过"兜底，语义与原先一致。
+if (vcCheck === undefined) {
+  $("T1.3", "version-continuity 检查项缺失", false);
+} else {
+  $("T1.3", `版本倒退 → ${vcCheck.passed ? "通过(错!)" : "未通过"}`, !vcCheck.passed);
+}
 
 // before 伪造
 const fakeBefore: AmendmentProposal = {
@@ -110,8 +126,12 @@ const fakeBefore: AmendmentProposal = {
   before: "这段文字在宪法中绝对不存在 XYZ123",
 };
 const rFake = evaluateAmendment(fakeBefore, constitution);
-const scCheck = rFake.checks.find(c => c.id === "structural-consistency")!;
-$("T1.4", `before 伪造 → ${scCheck.passed ? "通过(错!)" : "阻塞"}`, !scCheck.passed && rFake.verdict === "BLOCKED");
+const scCheck = rFake.checks.find(c => c.id === "structural-consistency");
+if (scCheck === undefined) {
+  $("T1.4", "structural-consistency 检查项缺失", false);
+} else {
+  $("T1.4", `before 伪造 → ${scCheck.passed ? "通过(错!)" : "阻塞"}`, !scCheck.passed && rFake.verdict === "BLOCKED");
+}
 
 // 触及不可变原则
 const immutableProposal: AmendmentProposal = {
@@ -130,8 +150,12 @@ const emptyAfter: AmendmentProposal = {
   after: "",
 };
 const rEmpty = evaluateAmendment(emptyAfter, constitution);
-const fmtCheck = rEmpty.checks.find(c => c.id === "format-consistency")!;
-$("T1.6", "空 after → 格式一致性告警", !fmtCheck.passed);
+const fmtCheck = rEmpty.checks.find(c => c.id === "format-consistency");
+if (fmtCheck === undefined) {
+  $("T1.6", "format-consistency 检查项缺失", false);
+} else {
+  $("T1.6", "空 after → 格式一致性告警", !fmtCheck.passed);
+}
 
 // 交叉引用伪造
 const fakeRef: AmendmentProposal = {
@@ -140,8 +164,12 @@ const fakeRef: AmendmentProposal = {
   impact: { principles: [], crossReferences: ["§99.不存在"], agents: [], breaking: false },
 };
 const rFakeRef = evaluateAmendment(fakeRef, constitution);
-const crCheck = rFakeRef.checks.find(c => c.id === "cross-reference-integrity")!;
-$("T1.7", `伪造交叉引用 → ${crCheck.passed ? "通过(错!)" : "阻塞"}`, !crCheck.passed && rFakeRef.verdict === "BLOCKED");
+const crCheck = rFakeRef.checks.find(c => c.id === "cross-reference-integrity");
+if (crCheck === undefined) {
+  $("T1.7", "cross-reference-integrity 检查项缺失", false);
+} else {
+  $("T1.7", `伪造交叉引用 → ${crCheck.passed ? "通过(错!)" : "阻塞"}`, !crCheck.passed && rFakeRef.verdict === "BLOCKED");
+}
 
 // 过短 rationale
 const shortRationale: AmendmentProposal = {
@@ -159,7 +187,12 @@ $("T1.9", `加权总分计算正常 (${result.weightedScore.toFixed(2)})`, resul
 // ════════════════════════════════════════════════════════
 H("T2: MetaAgent→DocGovernAgent 生成修宪提案");
 
-const API_KEY = process.env.DEEPSEEK_API_KEY!;
+const API_KEY = process.env.DEEPSEEK_API_KEY;
+// 原假定 .env 已提供 key（loadEnv 缺 .env 时已 exit）；缺失时显式退出，语义与原先一致。
+if (API_KEY === undefined) {
+  console.error("缺少 DEEPSEEK_API_KEY");
+  process.exit(1);
+}
 const BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1";
 const CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? "deepseek-v4-flash";
 const REASONER_MODEL = process.env.DEEPSEEK_REASONER_MODEL ?? CHAT_MODEL;
@@ -175,9 +208,10 @@ llms.set("DEEPSEEK_REASONER", reasonerAdapter);
 
 const toolkit = new Toolkit();
 const dbPath = path.join(ROOT, ".cortex", "memory-amendment-stress.db");
-try { fs.unlinkSync(dbPath); } catch {}
-try { fs.unlinkSync(dbPath + "-wal"); } catch {}
-try { fs.unlinkSync(dbPath + "-shm"); } catch {}
+// 压测前清理上一次的库文件；不存在属正常情况，仅在其它错误时记一行。
+try { fs.unlinkSync(dbPath); } catch (e: unknown) { if (!isNotFound(e)) console.error(`清理 ${dbPath} 失败: ${errorText(e)}`); }
+try { fs.unlinkSync(dbPath + "-wal"); } catch (e: unknown) { if (!isNotFound(e)) console.error(`清理 ${dbPath}-wal 失败: ${errorText(e)}`); }
+try { fs.unlinkSync(dbPath + "-shm"); } catch (e: unknown) { if (!isNotFound(e)) console.error(`清理 ${dbPath}-shm 失败: ${errorText(e)}`); }
 
 const engine = await bootstrapEngine(ROOT, { llms, toolkit, dbPath });
 engine.gate.bypassAll(); // 压测模式绕过确认门
@@ -232,8 +266,8 @@ const constitutionSnippet = readConstitution()
 
 const t2NodeId = `t2-amend-${Date.now()}`;
 engine.board.addNode({
-  id: t2NodeId, type: "doc-govern", tags: ["doc-govern"] as any,
-  needsMultiPerspective: false, status: "pending" as const, claimedBy: [],
+  id: t2NodeId, type: "doc-govern", tags: ["doc-govern"],
+  needsMultiPerspective: false, status: "pending", claimedBy: [],
   payload: [
     constitutionSummary,
     "",
@@ -249,7 +283,7 @@ engine.board.addNode({
 
 $("T2.1", "凝光任务节点已注册", true);
 
-const t2Report = await engine.scheduler.executeAll();
+await engine.scheduler.executeAll();
 const t2Node = engine.board.getNode(t2NodeId);
 $("T2.2", `凝光执行: status=${t2Node?.status}`, t2Node?.status === "done");
 
@@ -271,8 +305,8 @@ if (hasP013) {
     const json = typeof raw === "string" ? JSON.parse(raw) : raw;
     p013Proposal = json as AmendmentProposal;
     $("T2.5", `提案结构: id=${p013Proposal.id} section=${p013Proposal.section}`, !!p013Proposal.id);
-  } catch (e: any) {
-    $(`T2.5`, `JSON 解析失败: ${e.message}`, false);
+  } catch (e: unknown) {
+    $(`T2.5`, `JSON 解析失败: ${errorText(e)}`, false);
   }
 }
 
@@ -282,8 +316,8 @@ if (hasP010) {
     const json = typeof raw === "string" ? JSON.parse(raw) : raw;
     p010Proposal = json as AmendmentProposal;
     $("T2.6", `提案结构: id=${p010Proposal.id} section=${p010Proposal.section}`, !!p010Proposal.id);
-  } catch (e: any) {
-    $(`T2.6`, `JSON 解析失败: ${e.message}`, false);
+  } catch (e: unknown) {
+    $(`T2.6`, `JSON 解析失败: ${errorText(e)}`, false);
   }
 }
 
@@ -317,8 +351,8 @@ if (p013Proposal) {
     if (j013.blocking.length > 0) {
       for (const b of j013.blocking) console.log(`     🚫 BLOCKED: ${b}`);
     }
-  } catch (e: any) {
-    $(`T3.2`, `评判异常: ${e.message}`, false);
+  } catch (e: unknown) {
+    $(`T3.2`, `评判异常: ${errorText(e)}`, false);
   }
 } else {
   $("T3.2", "无 FIND-013 提案，跳过", false);
@@ -342,8 +376,8 @@ if (p010Proposal) {
     if (j010.blocking.length > 0) {
       for (const b of j010.blocking) console.log(`     🚫 BLOCKED: ${b}`);
     }
-  } catch (e: any) {
-    $(`T3.3`, `评判异常: ${e.message}`, false);
+  } catch (e: unknown) {
+    $(`T3.3`, `评判异常: ${errorText(e)}`, false);
   }
 } else {
   $("T3.3", "无 FIND-010 提案，跳过", false);
@@ -374,7 +408,7 @@ if (applyResult.success) {
 
   // 恢复宪法（压测不应留下脏数据）—— 先删版本号文件，再从备份恢复
   if (fs.existsSync(versionedPath)) {
-    try { fs.unlinkSync(versionedPath); } catch {}
+    try { fs.unlinkSync(versionedPath); } catch (e: unknown) { if (!isNotFound(e)) console.error(`清理 ${versionedPath} 失败: ${errorText(e)}`); }
   }
   fs.copyFileSync(backupPath, CONSTITUTION_PATH);
   $("T4.5", `宪法已从备份恢复`, fs.readFileSync(CONSTITUTION_PATH, "utf-8").includes("10 Agent + MemoryStore"));
@@ -389,9 +423,9 @@ H("T5: 跨包 Agent 协作 — data barrel 补全");
 
 const t5NodeId = `t5-cross-${Date.now()}`;
 engine.board.addNode({
-  id: t5NodeId, type: "analysis", tags: ["analysis", "api"] as any,
+  id: t5NodeId, type: "analysis", tags: ["analysis", "api"],
   needsMultiPerspective: true, // 多 Agent 并行
-  status: "pending" as const, claimedBy: [],
+  status: "pending", claimedBy: [],
   payload: [
     "# 跨包协修任务：data 包 barrel 导出补全",
     "",
@@ -415,7 +449,6 @@ engine.board.addNode({
 $("T5.1", "跨包任务节点已注册 (needsMultiPerspective=true)", true);
 
 const t5Report = await engine.scheduler.executeAll();
-const t5Node = engine.board.getNode(t5NodeId);
 $("T5.2", `跨包执行: ${t5Report.completed}✅ ${t5Report.failed}❌`, t5Report.failed === 0);
 
 // 检查 data barrel 当前状态
@@ -436,8 +469,8 @@ H("T6: 圆桌验证 — 全员归因");
 // 简洁版：只让凝光+纳西妲互审
 const t6NodeId = `t6-roundtable-${Date.now()}`;
 engine.board.addNode({
-  id: t6NodeId, type: "doc-govern", tags: ["doc-govern"] as any,
-  needsMultiPerspective: false, status: "pending" as const, claimedBy: [],
+  id: t6NodeId, type: "doc-govern", tags: ["doc-govern"],
+  needsMultiPerspective: false, status: "pending", claimedBy: [],
   payload: [
     "# 归因圆桌：修宪压测结果总结",
     "",
@@ -454,7 +487,7 @@ engine.board.addNode({
 
 $("T6.1", "圆桌任务节点已注册", true);
 
-const t6Report = await engine.scheduler.executeAll();
+await engine.scheduler.executeAll();
 const t6Node = engine.board.getNode(t6NodeId);
 $("T6.2", `圆桌执行: status=${t6Node?.status}`, t6Node?.status === "done");
 

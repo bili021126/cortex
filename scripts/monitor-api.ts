@@ -127,6 +127,10 @@ function analyze(entries: AuditEntry[]): {
       ? (durations.reduce((a, b) => a + b, 0) / durations.length).toFixed(0)
       : "N/A";
 
+    const first = arr[0];
+    const last = arr[arr.length - 1];
+    if (first === undefined || last === undefined) continue; // 分组由 push 建立，必然非空；此处仅作类型收窄
+
     keyStats.push({
       key,
       label: KEY_MAP[key] ?? `未知(${key})`,
@@ -135,8 +139,8 @@ function analyze(entries: AuditEntry[]): {
       errorRate: arr.length > 0 ? `${((errors.length / arr.length) * 100).toFixed(1)}%` : "0%",
       avgDurationMs: avgDuration,
       models,
-      firstCall: arr[0].ts,
-      lastCall: arr[arr.length - 1].ts,
+      firstCall: first.ts,
+      lastCall: last.ts,
     });
   }
   keyStats.sort((a, b) => b.calls - a.calls);
@@ -185,8 +189,14 @@ function analyze(entries: AuditEntry[]): {
   }
 
   // 3. 单 Key 调用量异常（超过总调用 80%）
-  if (keyStats.length >= 2 && keyStats[0].calls > entries.length * 0.8 && entries.length > 20) {
-    alerts.push(`⚡ ${keyStats[0].label} 占总量 ${((keyStats[0].calls / entries.length) * 100).toFixed(0)}%，可能存在异常集中调用`);
+  const topKey = keyStats[0];
+  if (
+    keyStats.length >= 2 &&
+    topKey !== undefined &&
+    topKey.calls > entries.length * 0.8 &&
+    entries.length > 20
+  ) {
+    alerts.push(`⚡ ${topKey.label} 占总量 ${((topKey.calls / entries.length) * 100).toFixed(0)}%，可能存在异常集中调用`);
   }
 
   return { keyStats, hourly, recentErrors, alerts };
@@ -357,7 +367,8 @@ function main(): void {
 
   const exportCsvMode = args.includes("--export");
   const hoursIdx = args.indexOf("--hours");
-  const hours = hoursIdx >= 0 ? parseInt(args[hoursIdx + 1]) || 24 : 24;
+  const hoursArg = args[hoursIdx + 1];
+  const hours = hoursIdx >= 0 && hoursArg !== undefined ? parseInt(hoursArg) || 24 : 24;
 
   const entries = loadEntries(hours);
 

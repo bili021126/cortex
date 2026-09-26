@@ -60,8 +60,10 @@ interface CoverageThresholds {
 // ─── 工具 ────────────────────────────────────────────────
 
 function stripAnsi(s: string): string {
-  // eslint-disable-next-line no-control-regex
-  return s.replace(/\x1b\[[0-9;]*m/g, "");
+  // ESC 由 fromCharCode 构造而非正则字面量：语义与 /\x1b\[[0-9;]*m/g 完全相同，
+  // 且 no-control-regex 只审查字面量/静态字符串，因此无需抑制指令。
+  const ansiSgr = new RegExp(String.fromCharCode(27) + "\\[[0-9;]*m", "g");
+  return s.replace(ansiSgr, "");
 }
 
 function run(cmd: string, args: string[], cwd: string): { ok: boolean; stdout: string } {
@@ -137,8 +139,10 @@ function hasCiTag(filePath: string): boolean {
 function extractPackageRoot(filePath: string): string {
   const rel = relative(join(ROOT, "packages"), filePath);
   const seg = rel.replace(/\\/g, "/").split("/");
-  if (seg.length > 0) {
-    return join(ROOT, "packages", seg[0]!);
+  const pkgName = seg[0];
+  // seg 非空时 seg[0] 必有值；取不到就退回 dirname，与原先的兜底分支一致
+  if (pkgName !== undefined) {
+    return join(ROOT, "packages", pkgName);
   }
   return dirname(filePath);
 }
@@ -152,7 +156,7 @@ function parseVitestLine(output: string): { passed: number; total: number } {
   let last: { passed: number; total: number } = { passed: 0, total: 0 };
   let m: RegExpExecArray | null;
   while ((m = re.exec(output)) !== null) {
-    last = { passed: parseInt(m[1]!, 10), total: parseInt(m[2]!, 10) };
+    last = { passed: parseInt(m[1] ?? "", 10), total: parseInt(m[2] ?? "", 10) };
   }
   return last;
 }
@@ -221,7 +225,13 @@ function runCoverageGate(): void {
 
     const summary = JSON.parse(readFileSync(summaryPath, "utf8")) as CoverageSummary;
     const pct = summary.total?.lines?.pct ?? 0;
-    const threshold = cfg.thresholds[pkg]!;
+    const threshold = cfg.thresholds[pkg];
+    // 阈值必存在（pkg 来自 Object.keys(cfg.thresholds)）；取不到即配置自身不一致，按失败处理
+    if (threshold === undefined) {
+      console.error(`   ❌ coverage: packages/${pkg} 未配置阈值`);
+      allOk = false;
+      continue;
+    }
     const status = pct >= threshold ? "✅" : "❌";
     console.log(`   ${status} coverage: packages/${pkg} — lines ${pct.toFixed(2)}% (阈值 ${threshold}%)`);
     if (pct < threshold) allOk = false;
@@ -255,9 +265,7 @@ async function main() {
   // 「未找到 JSON 结果」，而它声明的 configValid/build/typecheck/lint/test 字段
   // 从未被本脚本产出过——那两条分支的细节要么不可达，要么全 undefined。
   // 现在：任何一段失败都输出带 failedStage 的 JSON。
-  let failedStage: string | null = null;
   const abort = (stage: string): never => {
-    failedStage = stage;
     if (jsonMode) {
       console.log(
         JSON.stringify({
@@ -282,7 +290,20 @@ async function main() {
         console.error("❌ tsc -b 失败，阻断");
         abort("typecheck");
       }
-      console.log("   ✅ 类型检查通过\n");
+      // 2026-09-26 新增：scripts/ 此前**不在任何 tsconfig 的构建图内**
+      // （root tsconfig 只 references packages/），其自身的 include 也曾漏掉 verify/ 子目录。
+      // 后果是门禁第 3 步所执行的 scripts/verify/critical-fixes.ts 自己不被类型检查。
+      // 现已单独成 project，在此一并纳入。
+      const scriptsTsc = run("pnpm", ["exec", "tsc", "--noEmit", "-p", "scripts/tsconfig.json"], ROOT);
+      if (!scriptsTsc.ok) {
+        // 此前只写「见上方输出」——但 run() 并不回显输出，那句是空话，失败时看不到原因。
+        console.error("❌ scripts/ 类型检查失败，阻断：");
+        for (const l of scriptsTsc.stdout.split("\n").slice(-30)) {
+          if (l.trim()) console.error(`   ${l.trim()}`);
+        }
+        abort("scriptsTypecheck");
+      }
+      console.log("   ✅ 类型检查通过（packages + scripts）\n");
     } catch (e) {
       console.error(`❌ tsc 执行异常: ${e}`);
       abort("typecheck");
@@ -291,13 +312,16 @@ async function main() {
     // ── 门禁 2/5：ESLint ──
     console.log("\n🔒 [门禁 2/5] eslint packages/**/src — 全包检查...");
     try {
-      const eslintResult = run("pnpm", ["exec", "eslint", "packages", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
+      // 2026-09-26：作用域从 packages 扩到 packages + scripts。
+      // scripts/ 此前处于「配置上应该管、流程上没人管」的悬空态——
+      // eslint.config.mjs 未忽略它，却没有任何门禁跑它。
+      const eslintResult = run("pnpm", ["exec", "eslint", "packages", "scripts", "--ext", ".ts,.tsx", "--max-warnings", "0"], ROOT);
       if (!eslintResult.ok) {
         const problems = eslintResult.stdout.match(/✖ \d+ problems?/);
         console.error(`❌ eslint 失败${problems ? " — " + problems[0] : ""}`);
         abort("lint");
       }
-      console.log("   ✅ lint 通过\n");
+      console.log("   ✅ lint 通过（packages + scripts）\n");
     } catch (e) {
       console.error(`❌ eslint 执行异常: ${e}`);
       abort("lint");

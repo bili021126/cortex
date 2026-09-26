@@ -165,7 +165,9 @@ function ingestAuditLog(db: TrackerDB): { processed: number; newEntries: number 
 
   for (let i = db.lastAuditCursor; i < lines.length; i++) {
     try {
-      const e = JSON.parse(lines[i]) as AuditEntry;
+      const line = lines[i];
+      if (line === undefined) continue; // 越界行不存在，与"跳过损坏行"同义
+      const e = JSON.parse(line) as AuditEntry;
       const date = e.ts.slice(0, 10);
       const hour = new Date(e.ts).getHours();
       const kr = ensureKey(db, e.key ?? "unknown");
@@ -210,8 +212,16 @@ function computeBaseline(kr: KeyRecord): void {
   const recent = dates.slice(-8, -1);
   if (recent.length === 0) return;
 
-  const callsArr = recent.map((d) => kr.days[d].calls);
-  const tokensArr = recent.map((d) => kr.days[d].totalTokens);
+  const callsArr = recent.map((d) => {
+    const day = kr.days[d];
+    if (day === undefined) return 0; // recent 取自 kr.days 的键，缺失即视为 0
+    return day.calls;
+  });
+  const tokensArr = recent.map((d) => {
+    const day = kr.days[d];
+    if (day === undefined) return 0; // 同上
+    return day.totalTokens;
+  });
   const avgCalls = callsArr.reduce((a, b) => a + b, 0) / recent.length;
   const avgTokens = tokensArr.reduce((a, b) => a + b, 0) / recent.length;
   const variance = callsArr.reduce((s, c) => s + (c - avgCalls) ** 2, 0) / recent.length;
@@ -288,8 +298,8 @@ function estimateCost(kr: KeyRecord): { totalCost: number; byModel: Record<strin
   const byModel: Record<string, { calls: number; cost: number }> = {};
 
   for (const day of Object.values(kr.days)) {
-    const price = PRICING[day.models[0]] ?? DEFAULT_PRICING;
     const key = day.models[0] ?? "unknown";
+    const price = PRICING[key] ?? DEFAULT_PRICING;
     if (!byModel[key]) byModel[key] = { calls: 0, cost: 0 };
 
     const cost = (day.promptTokens / 1_000_000) * price.input + (day.completionTokens / 1_000_000) * price.output;
@@ -470,7 +480,7 @@ function main(): void {
   // ── 守护模式 ──
   if (args.includes("--daemon")) {
     const idx = args.indexOf("--daemon");
-    const interval = parseInt(args[idx + 1]) || 300;
+    const interval = parseInt(args[idx + 1] ?? "") || 300;
     console.log(`🟢 守护模式启动（每 ${interval}s 检查一次，Ctrl+C 退出）\n`);
 
     const tick = () => {
@@ -515,7 +525,7 @@ function main(): void {
   }
 
   const daysIdx = args.indexOf("--days");
-  const days = daysIdx >= 0 ? parseInt(args[daysIdx + 1]) || 1 : 1;
+  const days = daysIdx >= 0 ? parseInt(args[daysIdx + 1] ?? "") || 1 : 1;
 
   if (days > 1) {
     printTrend(db, days);

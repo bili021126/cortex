@@ -40,8 +40,12 @@ async function main() {
   const byCategory = new Map<string, typeof results>();
   for (const entry of results) {
     const cat = (entry.content_blob as Record<string, unknown>)?.category as string ?? "未分类";
-    if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat)!.push(entry);
+    const bucket = byCategory.get(cat);
+    if (bucket === undefined) {
+      byCategory.set(cat, [entry]);
+    } else {
+      bucket.push(entry);
+    }
   }
 
   for (const [cat, entries] of byCategory) {

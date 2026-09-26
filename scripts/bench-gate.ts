@@ -60,7 +60,8 @@ function loadBaseline(): Baseline {
   if (!existsSync(BASELINE_PATH)) {
     return { version: 1, updatedAt: "", metrics: {} };
   }
-  return JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as Baseline;
+  const parsed: Baseline = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+  return parsed;
 }
 
 function saveBaseline(baseline: Baseline): void {
@@ -86,7 +87,13 @@ function main(): void {
   // 解析指标
   const metrics: Record<string, number> = {};
   for (const m of stdout.matchAll(BENCH_METRIC_RE)) {
-    metrics[m[1]] = Number(m[2]);
+    const name = m[1];
+    const value = m[2];
+    // 正则的两个捕获组必然匹配；守卫只为让索引访问在类型上成立。
+    if (name === undefined || value === undefined) {
+      continue;
+    }
+    metrics[name] = Number(value);
   }
 
   const names = Object.keys(metrics);
@@ -95,8 +102,14 @@ function main(): void {
     process.exit(1);
   }
   console.log(`[bench-gate] 解析到 ${names.length} 个指标:`);
+  const metricEntries: Array<[string, number]> = [];
   for (const n of names) {
-    console.log(`  ${n} = ${metrics[n].toFixed(6)}`);
+    const value = metrics[n];
+    if (value === undefined) {
+      continue;
+    }
+    metricEntries.push([n, value]);
+    console.log(`  ${n} = ${value.toFixed(6)}`);
   }
 
   const baseline = loadBaseline();
@@ -114,15 +127,15 @@ function main(): void {
   // 回归对比
   const failures: string[] = [];
   const newMetrics: string[] = [];
-  for (const n of names) {
+  for (const [n, value] of metricEntries) {
     const base = baseline.metrics[n];
     if (base === undefined) {
       newMetrics.push(n);
       continue;
     }
-    const ratio = metrics[n] / base;
+    const ratio = value / base;
     if (ratio < 1 - threshold) {
-      failures.push(`${n}: ${metrics[n].toFixed(6)} vs 基线 ${base.toFixed(6)}（退化 ${((1 - ratio) * 100).toFixed(2)}% > ${(threshold * 100).toFixed(0)}%）`);
+      failures.push(`${n}: ${value.toFixed(6)} vs 基线 ${base.toFixed(6)}（退化 ${((1 - ratio) * 100).toFixed(2)}% > ${(threshold * 100).toFixed(0)}%）`);
     }
   }
 

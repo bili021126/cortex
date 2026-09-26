@@ -29,7 +29,12 @@ function summarize(output: string): void {
     const pkg = block.match(/Package\s+([\w@/-]+)/);
     const patched = block.match(/Patched versions\s+([^\n]+)/);
     if (title && pkg) {
-      console.log(`  [${title[0]}] ${pkg[1]}${patched ? ` (修复: ${patched[1].trim()})` : ""}`);
+      // noUncheckedIndexedAccess：正则捕获组在类型上是 string | undefined。
+      // 该正则恒有捕获组，故空串兜底不可达——保留兜底只为类型收窄，运行语义不变。
+      const severity = title[0] ?? "";
+      const pkgName = pkg[1] ?? "";
+      const patchedVersion = patched?.[1]?.trim();
+      console.log(`  [${severity}] ${pkgName}${patchedVersion ? ` (修复: ${patchedVersion})` : ""}`);
     }
   }
 }

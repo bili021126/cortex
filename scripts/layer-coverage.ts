@@ -50,6 +50,10 @@ function validateLayerValue(value: string): { ok: boolean; reason?: string } {
   const cross = v.split("→");
   if (cross.length === 2) {
     const [from, to] = cross.map((s) => s.trim());
+    if (from === undefined || to === undefined) {
+      // cross.length === 2 时两侧必在；这是防御分支，返回形状与下面一致。
+      return { ok: false, reason: `跨层标注两侧须在词表内: "${from ?? ""}" / "${to ?? ""}"` };
+    }
     if (
       (LAYER_VOCABULARY as readonly string[]).includes(from) &&
       (LAYER_VOCABULARY as readonly string[]).includes(to)
@@ -72,7 +76,9 @@ function main(): void {
   const args = process.argv.slice(2);
   const jsonMode = args.includes("--json");
   const pathIdx = args.indexOf("--path");
-  const targetDir = pathIdx >= 0 ? join(ROOT, args[pathIdx + 1]!) : join(ROOT, "packages", "engine", "src");
+  const pathArg = pathIdx >= 0 ? args[pathIdx + 1] : undefined;
+  // `--path` 后面没跟值时 pathArg 为 undefined，此时退回默认目录；带值则与原先 join(ROOT, args[pathIdx + 1]) 完全一致。
+  const targetDir = pathArg === undefined ? join(ROOT, "packages", "engine", "src") : join(ROOT, pathArg);
 
   const files = walkFiles(targetDir);
   const reports: FileReport[] = [];
@@ -84,7 +90,13 @@ function main(): void {
       reports.push({ file: relative(ROOT, file), tagged: false });
       continue;
     }
-    const value = m[1]!.trim();
+    const rawValue = m[1];
+    // 正则捕获组参与匹配时必为 string（已实测），此分支纯属防御，不改变运行语义。
+    if (rawValue === undefined) {
+      reports.push({ file: relative(ROOT, file), tagged: false });
+      continue;
+    }
+    const value = rawValue.trim();
     const check = validateLayerValue(value);
     reports.push({
       file: relative(ROOT, file),

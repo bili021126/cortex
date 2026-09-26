@@ -14,7 +14,7 @@
  */
 
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
-import { join, resolve, relative, dirname } from "node:path";
+import { join, resolve, relative } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const PKG_ROOT = join(ROOT, "packages");

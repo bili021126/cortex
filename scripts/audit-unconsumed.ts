@@ -31,10 +31,16 @@ const EXPORT_LIST_RE = /export\s*\{([^}]+)\}/g;
 
 function extractExports(src: string): Set<string> {
   const names = new Set<string>();
-  for (const m of src.matchAll(EXPORT_DECL_RE)) names.add(m[1]!);
+  for (const m of src.matchAll(EXPORT_DECL_RE)) {
+    // 捕获组 1 必有值（正则要求至少一个标识符字符）；守卫保持原假定
+    const declared = m[1];
+    if (declared !== undefined) names.add(declared);
+  }
   for (const m of src.matchAll(EXPORT_LIST_RE)) {
-    for (const item of m[1]!.split(",")) {
-      const name = item.trim().split(/\s+as\s+/)[0]!.trim();
+    const list = m[1];
+    if (list === undefined) continue; // 同上：捕获组必有值
+    for (const item of list.split(",")) {
+      const name = (item.trim().split(/\s+as\s+/)[0] ?? "").trim();
       if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name);
     }
   }
