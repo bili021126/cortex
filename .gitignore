@@ -70,7 +70,12 @@ packages/skill-kit/err.txt
 docs/core/昔涟篇.txt
 docs/core/纳西妲.txt
 docs/core/缇宝偏.txt
-docs/core/[sxsy.org]*
+# 2026-09-26 修正：此行原写作 `docs/core/[sxsy.org]*`——那是 **glob 字符类**而不是字面量，
+#   实际含义是「文件名以 s/x/y/o/r/g/. 中任意一个字符开头」→ 误伤 docs/core 下
+#   remediation-roadmap.md、scene-retrieval-scheduler-design.md、standardization-checklist.md
+#   三个设计文档，使它们**从未进入版本控制**（而它们正被已跟踪文档引用）。
+#   改为字面前缀，保留原意（排除来自 sxsy.org 的文稿）而不误伤。
+docs/core/sxsy.org*
 docs/core/三人.md
 docs/core/三人-改写.md
 docs/core/小昔涟的翁法罗斯.md
