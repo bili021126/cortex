@@ -119,17 +119,46 @@ config/models.json（能力注册）→ shared/ModelCapabilities（类型协议�
 
 ---
 
-## RESTful API 契约（@cortex/cli 承载）
+## RESTful API 契约（`@cortex/server` 承载）
+
+> **2026-09-26 校正**：本节此前记「8 个端点、`@cortex/cli` 承载」——两处都不实。
+> 承载方是 `@cortex/server`（同文档上方包表即如此写）；端点为 **18 条**，
+> 原表 2 条不存在（`GET /agents/:type`、`GET /api/v1/events`——后者 `capabilities`
+> 明写 `events: false`）、漏列 12 条。
+> 现由 `packages/server/tests/api-contract.test.ts` 逐条比对本文档与本文件，
+> 表格与路由表**必须双向一致**，两边任一改动而另一未跟上即红。
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
+| `/api/v1/capabilities` | GET | 能力发现——共面/专化声明（`api.*` 域开关 + `wsChannels`） |
+| `/api/v1/health` | GET | 健康快照（HealthCollector 真实聚合，非硬编码零） |
+| `/api/v1/daemon/health` | GET | daemon 健康（含 pid / uptimeMs / version / engineReady / activeSessions） |
 | `/api/v1/state` | GET | 完整 WebUIState 快照 |
-| `/api/v1/nodes` | GET | TaskBoard 节点列表（分页 + 状态过滤） |
+| `/api/v1/nodes` | GET | TaskBoard 节点列表（分页 page+limit + 状态过滤） |
 | `/api/v1/nodes/:id` | GET | 单节点详情 |
-| `/api/v1/agents` | GET | AgentPool 全量状态 |
-| `/api/v1/agents/:type` | GET | 按类型查询 Agent |
-| `/api/v1/health` | GET | 健康快照 |
-| `/api/v1/execute` | POST | 触发执行（含请求体校验） |
-| `/api/v1/events` | GET | 最近事件（分页 + 类型过滤） |
+| `/api/v1/nodes` | POST | 提交任务节点到任务板（`node.id` 必填，成功 201） |
+| `/api/v1/agents` | GET | Agent 能力面（类型 → 工具权限） |
+| `/api/v1/scheduler` | GET | 调度器统计快照（按状态聚合） |
+| `/api/v1/scheduler/execute` | POST | 全量执行调度（executeAll） |
+| `/api/v1/execute` | POST | 工具执行入口（请求体校验） |
+| `/api/v1/chat` | POST | 非流式对话 |
+| `/api/v1/memory` | GET | 记忆检索（query + kind + limit） |
+| `/api/v1/memory` | POST | 记忆写入（`content` 必填） |
+| `/api/v1/memory/:id` | DELETE | 记忆删除 |
+| `/api/v1/sessions` | GET | 会话列表 |
+| `/api/v1/sessions` | POST | 创建会话 |
+| `/api/v1/sessions/:id` | DELETE | 删除会话 |
 
-**规范**：RFC 7807 错误格式 / X-Request-Id 链路追踪 / 分页（page+limit） / 405+Allow 头 / 413 体积限制
+**声明但未实现的域**（`capabilities.api` 显式声明 `false`，客户端经 `_assertSupported` 快速失败）：
+`events`、`config`。客户端另有 `models` / `keys` / `tuning` / `PATCH agents/:id` 等方法面，
+同属未实现域——由 `packages/client/tests/contract-gap.test.ts` 守护「有路由或有能力面守卫」二者之一。
+
+**规范现状**（2026-09-26 逐条核过，此前本节把未实现的也算进来了）：
+
+| 规范 | 状态 | 落点 |
+|------|------|------|
+| RFC 7807 错误格式 | ✅ 已实现 | `sendProblem()` → `application/problem+json` |
+| X-Request-Id 链路追踪 | ✅ 已实现 | `daemon.ts` 每请求生成并回写响应头 |
+| 分页（page + limit） | ✅ 已实现 | `GET /api/v1/nodes`、`GET /api/v1/memory` |
+| 请求体 1 MB 上限 | ⚠️ **有上限无 413** | `readBody()` 超限抛 `Payload too large`，但调用方 catch 统一映射为 **400「Invalid JSON body」**——状态码与消息都不准，413 待补 |
+| 405 + Allow 头 | ❌ **未实现** | 路由未命中即 404，没有按路径的方法匹配，也没有 `Allow` 头 |
