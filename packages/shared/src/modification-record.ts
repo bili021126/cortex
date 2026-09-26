@@ -9,6 +9,27 @@
 // 4. 每条记录必须关联一个 ModificationSession（对应一次 Agent 执行 run）
 // ============================================================
 
+// ⚠️ 本模块**零代码消费方**——是一份声明了但被明确延后的设计（2026-09-26 核实，**未修**）
+//
+// 事实：
+//   · 本文件全部导出（ModificationType / ReversibilityClass / FactAnchor /
+//     ModificationRecordItem / ModificationSession / ModificationRecordV1）在全仓的
+//     出现位置只有三类：**本定义文件内部互相引用**、`shared/src/index.ts` 的导出名单、
+//     以及若干份文档（`shared/DOMAINS.md` / `shared/REEXPORT_VERIFICATION.md` /
+//     `memory/DESIGN.md`）。**没有任何代码读它。**
+//   · `governance/src/consistency/schema-enforcer.ts:13` 明写：
+//     「**modification-record 全量 Schema 延后至 Core-2。**」
+//     所以这不是被遗忘的死代码，而是**有意的延后**——记录在此是为了让读的人
+//     知道它现在不生效，而不是去删它。
+//
+// 一处需要留意的对口：`config/src/vocabularies/tool-enums.ts:29` 的
+// `toReversibilityClass()` 自称是本文件 `ReversibilityClass` 的显式映射，其注释写着
+// 「@fix 艾尔海森 P0-1 — 两套枚举描述同一域但无映射，消费方需自己推断」。
+// **但它的返回类型是字符串字面量联合 `"reversible" | "irreversible" | "meta"`，
+// 不是 `ReversibilityClass` 枚举本身**——而字面量联合在 TS 里不可赋给字符串枚举，
+// 消费方要用它仍须 cast。即：那次修复**接上了值，没接上类型**。
+// （未改——改它属代码改动，越出本轮边界。见 core-3-design-backlog.md N-28。）
+
 import type { AgentType } from "./agent.js";
 
 /** 修改操作类型枚举 —— 封闭集合，禁止 Agent 自定义 */
