@@ -86,6 +86,13 @@ function stripReExportLists(src: string): string {
 
 // ─── 文件遍历 ─────────────────────────────────────────────
 
+/**
+ * 遍历 .ts / .tsx。
+ *
+ * 2026-09-26 修正：此前只收 `.ts`，**`.tsx` 完全不可见**。于是「只被 TSX 组件引用」
+ * 的符号（`cli/src/tui/ink/**` 那批、desktop 的 renderer 组件）会被当成死面——
+ * 实测 `cli` 的死面数因此虚高。.mts/.cts 一并收，免得下次换个扩展名又瞎。
+ */
 function walkFiles(dir: string, out: string[] = []): string[] {
   if (!existsSync(dir)) return out;
   for (const entry of readdirSync(dir)) {
@@ -93,7 +100,7 @@ function walkFiles(dir: string, out: string[] = []): string[] {
     const full = join(dir, entry);
     const st = statSync(full);
     if (st.isDirectory()) walkFiles(full, out);
-    else if (entry.endsWith(".ts")) out.push(full);
+    else if (/\.(ts|tsx|mts|cts)$/.test(entry)) out.push(full);
   }
   return out;
 }
@@ -143,10 +150,10 @@ function auditPkg(pkg: string): PkgReport {
   for (const [symbol, defFile] of exports) {
     const defName = symbol;
     const re = new RegExp(`\\b${defName}\\b`, "g");
-    const countRefs = (targets: string[]): number => {
+    const countRefs = (targets: string[], skipDefFile: boolean): number => {
       let n = 0;
       for (const file of targets) {
-        if (file === defFile) continue;
+        if (skipDefFile && file === defFile) continue;
         // 先剥 barrel 再导出列表：只出现在 `export { X }` 里不等于被使用
         const content = stripReExportLists(readFileSync(file, "utf-8"));
         n += content.match(re)?.length ?? 0;
@@ -154,13 +161,14 @@ function auditPkg(pkg: string): PkgReport {
       return n;
     };
 
-    // 定义文件自身内的引用不算（声明处必含一次）
-    const outsideRefs = countRefs(corpus);
+    // 包外引用：定义文件自身不算（声明处必含一次）
+    const outsideRefs = countRefs(corpus, true);
     if (outsideRefs === 0) {
-      // 顺带数一下包内引用：区分「谁都没用」与「只在包内用」——
-      // 后者不是死代码（例如 ENGINEERING 被同包的 ink-theme 用来构建 inkTheme，
-      // 而 inkTheme 有包外消费方），读的时候不该混为一谈。
-      const insideRefs = countRefs(walkFiles(join(PKG_ROOT, pkg)));
+      // 包内引用：**必须含定义文件**——否则「只在自己文件里用」的符号会被误判成死面。
+      // 实测踩过：desktop 的 PRESENCE_IPC_CHANNEL 在第 17 行定义、第 65 行同一文件里
+      // 就被 webContents.send 用了，先前把定义文件一并排除，于是它被错列进死面名单。
+      // 再减 1 是扣掉声明处那一次。
+      const insideRefs = Math.max(0, countRefs(walkFiles(join(PKG_ROOT, pkg)), false) - 1);
       zeroList.push({ symbol, file: relative(ROOT, defFile), insideRefs });
     }
   }
