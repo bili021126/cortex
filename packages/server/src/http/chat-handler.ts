@@ -21,7 +21,7 @@ export async function handleChat(
   sessionManager: SessionManager,
 ): Promise<void> {
   try {
-    const body = await readBody(req);
+    const body = await readBody(req, res);
     let parsed: ChatRequest;
     try {
       parsed = JSON.parse(body) as ChatRequest;

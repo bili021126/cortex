@@ -160,5 +160,5 @@ config/models.json（能力注册）→ shared/ModelCapabilities（类型协议�
 | RFC 7807 错误格式 | ✅ 已实现 | `sendProblem()` → `application/problem+json` |
 | X-Request-Id 链路追踪 | ✅ 已实现 | `daemon.ts` 每请求生成并回写响应头 |
 | 分页（page + limit） | ✅ 已实现 | `GET /api/v1/nodes`、`GET /api/v1/memory` |
-| 请求体 1 MB 上限 | ⚠️ **有上限无 413** | `readBody()` 超限抛 `Payload too large`，但调用方 catch 统一映射为 **400「Invalid JSON body」**——状态码与消息都不准，413 待补 |
+| 请求体 1 MB 上限 | ✅ **已实现 413**（2026-09-26 修） | `readBody(req, res)` 超限即回 `413 Payload Too Large`（problem+json）。**修正前**：只抛 `Error("Payload too large")`，被各 handler 的 catch 当内部错误处理——execute / nodes 走 dispatcher 的 500，chat / memory / sessions 走各自 catch 的 500，**超限一律 500**，与本节声明的 413 不符。守护测试：`packages/server/tests/body-limit.test.ts`（真实 http.Server 发 2 MB 请求验 413）。另有 `DRAIN_LIMIT_BYTES = 8 × 上限`：已回 413 后仍丢弃剩余上传以免堵住客户端，超过该量才真断 |
 | 405 + Allow 头 | ❌ **未实现** | 路由未命中即 404，没有按路径的方法匹配，也没有 `Allow` 头 |

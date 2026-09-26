@@ -74,7 +74,7 @@ export async function handleMemoryPost(
       return;
     }
 
-    const body = await readBody(req);
+    const body = await readBody(req, res);
     let parsed: MemoryWriteRequest;
     try {
       parsed = JSON.parse(body) as MemoryWriteRequest;

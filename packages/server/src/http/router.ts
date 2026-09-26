@@ -370,7 +370,7 @@ export class HttpRouter {
  * 与 WebUI 语义一致：toolkit.execute("execute", { input })——引擎正式工具链路。
  */
 async function handleExecute(req: IncomingMessage, res: ServerResponse, engine: EngineHost): Promise<void> {
-  const raw = await readBody(req);
+  const raw = await readBody(req, res);
   let body: { input?: unknown };
   try {
     body = JSON.parse(raw) as { input?: unknown };
@@ -413,22 +413,75 @@ export function sendProblem(res: ServerResponse, status: number, title: string, 
   res.end(json);
 }
 
-export function readBody(req: IncomingMessage): Promise<string> {
+/** 请求体上限（1 MB）。 */
+export const MAX_BODY_BYTES = 1024 * 1024;
+
+/**
+ * 已回 413 后仍愿意丢弃的上传量上限（8 × 上限）。
+ * 超过即断开——避免一个超大上传把连接长期占住。
+ */
+export const DRAIN_LIMIT_BYTES = 8 * MAX_BODY_BYTES;
+
+/** 请求体超过上限时抛出——让调用方能区分「体积超限」与「JSON 非法 / 内部错误」。 */
+export class PayloadTooLargeError extends Error {
+  readonly limitBytes: number;
+
+  constructor(limitBytes: number) {
+    super(`请求体超过 ${limitBytes} 字节上限`);
+    this.name = "PayloadTooLargeError";
+    this.limitBytes = limitBytes;
+  }
+}
+
+/**
+ * 读取请求体。
+ *
+ * 超过 {@link MAX_BODY_BYTES} 时：若传入 `res`，**直接回 413**（RFC 7807 problem+json），
+ * 随后销毁连接并抛 {@link PayloadTooLargeError}。调用方**不需要**再写响应——
+ * `sendProblem` / `sendJson` 都有 `headersSent` 守卫，后续写入自动失效，
+ * 所以各 handler 原有的 catch 分支无需改动也不会重复响应。
+ *
+ * 2026-09-26 修正：此前只抛 `new Error("Payload too large")`，而各调用方把它当成
+ * JSON 解析失败或内部错误处理，于是超限请求返回 500 / 400，与
+ * `PACKAGE_POSITIONING.md` 声明的「413 体积限制」不符——有上限、状态码错。
+ */
+export function readBody(req: IncomingMessage, res?: ServerResponse): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
-    const MAX_BODY = 1024 * 1024; // 1MB
+    let overflowed = false;
+    let drained = 0;
 
     req.on("data", (chunk: Buffer) => {
+      if (overflowed) {
+        // 已回过 413：还要继续消费剩余上传，否则客户端的写会被堵住、读不到响应。
+        // 但不能无界丢弃——超过 DRAIN_LIMIT_BYTES 就真断。
+        drained += chunk.length;
+        if (drained > DRAIN_LIMIT_BYTES) req.destroy();
+        return;
+      }
       size += chunk.length;
-      if (size > MAX_BODY) {
-        reject(new Error("Payload too large"));
-        req.destroy();
+      if (size > MAX_BODY_BYTES) {
+        overflowed = true;
+        if (res !== undefined) {
+          sendProblem(res, 413, "Payload Too Large", `请求体超过 ${MAX_BODY_BYTES} 字节上限`);
+          // 不 destroy：销毁会 RST 掉尚在途中的 413，客户端只看到 ECONNRESET
+          // 而收不到状态码（实测先 destroy 与 finish 后 destroy 两种时序都如此）。
+        } else {
+          req.destroy();
+        }
+        reject(new PayloadTooLargeError(MAX_BODY_BYTES));
         return;
       }
       chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-    req.on("error", reject);
+    req.on("end", () => {
+      if (overflowed) return;
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    });
+    req.on("error", (err) => {
+      if (overflowed) return;
+      reject(err);
+    });
   });
 }

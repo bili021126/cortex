@@ -29,7 +29,7 @@ export async function handleSessionPost(
   sessionManager: SessionManager,
 ): Promise<void> {
   try {
-    const body = await readBody(req);
+    const body = await readBody(req, res);
     let parsed: CreateSessionRequest = {};
     if (body.trim()) {
       try {

@@ -46,7 +46,7 @@ export function handleSchedulerGet(res: ServerResponse, engine: EngineHost): voi
 
 /** POST /api/v1/nodes——向任务板提交任务节点（TaskNode 全量 JSON） */
 export async function handleNodePost(req: IncomingMessage, res: ServerResponse, engine: EngineHost): Promise<void> {
-  const raw = await readBody(req);
+  const raw = await readBody(req, res);
   let node: TaskNode;
   try {
     node = JSON.parse(raw) as TaskNode;
