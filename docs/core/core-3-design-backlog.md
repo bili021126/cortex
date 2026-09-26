@@ -200,6 +200,13 @@
 | N-5 | **`design-tokens` 无测试** | 28 包中唯一不在门禁测试矩阵内 | — |
 | N-6 | **`skills/` 的口径分歧** | 27 个 JSON = 26 个 `skill-p*.json` + 1 个 `data-2pc-rollback-verify.json`（形状相同、无编号） | 「预置技能数」取哪个口径未定 |
 | N-7 | **PACKAGE_POSITIONING 的 RESTful API 契约已不完整** | 该节记 8 个端点且称「@cortex/cli 承载」，实测有 **6 个 handler**、端点含 `/capabilities`、`/daemon/health`、`/chat`、`/memory`、`/sessions`、`/scheduler`、`/scheduler/execute`、`POST /nodes`，且承载方是 `@cortex/server` | 已在本轮修 PACKAGE_POSITIONING 的模型表与包数，**此节未修** |
+| N-8 | ~~**`dist/data` 与 `src/data` 不同步**~~ **✅ 已修（2026-09-26）** | `dist/` 被 gitignore，门禁第 1 步只有 `tsc -b`（**不复制 JSON**——复制只发生在包自己的 build 脚本里，门禁从不跑它），而 loader 在 VITEST 下把数据目录解析到 `packages/config/dist/data`。实测缺失：`event-routing.json` 无 `mergeRules`（→ `setMergeRules([])`，NotificationPipe 归并静默失效）、`architecture-flows.json` 整文件不存在。**测试全绿**——因为没有任何东西在验证二者一致 | 已修：`copy-data.mjs` + 门禁同步步骤（`failedStage: "configDataSync"`） |
+| N-9 | ~~**用户数据目录只播种一次**~~ **✅ 已修（2026-09-26）** | `seedIfMissing` 是 `if (existsSync(userDataDir)) return`——只在首次创建时播种，于是上游配置改动**永远到不了已安装目录**。实测 `~/.cortex/config` 缺 `mergeRules` 与 `architecture-flows.json`；反讽的是 src 里那行 description 早写着「2026-09-26：补上 mergeRules」 | 已修：改 `seedMissingFiles`，每次解析补缺且 **add-only 不覆盖**；已备份并修复本机目录 |
+| N-10 | ~~**`audit.jsonl` 同一警告重复 882 条**~~ **✅ 已修（2026-09-26）** | `recordBootstrapAudit` 每次 bootstrap 无条件记 `config.warnings`，而跨字段警告是配置的**静态属性**。同一签名 882 条 ≈ 1.73 MB，**占该文件 2.55 MB 的 68%**；`audit-bootstrap` 的 T2/T3 正是靠这堆残留才「通过」——假绿 | 已修：`config_violation` 按内容幂等（跨进程靠读盘播种）；文件净化 2,603,117 → 92,267 字节 |
+| N-11 | **`scripts/doc-drift-check.ts` 恒退出 1** | 输出 40+ 条 `MISS <符号> refs=3`（`ViewportCoordinator`/`JuryStep`/`Seated` 等 UI 与设计期符号），脚本自己都注明「may be forward-design or deprecated — manual check」。一个永远红的检查等于没有信号 | **未修**：需逐条判定是前瞻设计还是死引用 |
+| N-12 | **`AuditTrail` / `FileTransport` 无大小上限、无轮转** | `AuditTrail` 以 `"a"` 打开 `audit.jsonl` + `fs.writeSync`；`telemetry-infrastructure-deepening.md` 写的「定期 rotate」**从未实现**。**但实测量级远小于提案担忧**：净化后 443 条 / 56 天 ≈ **0.6 MB/年** | **未修（有意）**：按实测不构成当下痛点。写进文档的教训是「先看数据再定紧迫度」——此前按未去重文件估出的「约 16 MB/年」是错的 |
+| N-13 | **`~/.cortex/config/models.json` 语义漂移待人工裁决** | 用户是 `deepseek-v4-flash` / `deepseek-v4-pro` 且无 `_pricing`；src 是 `deepseek-v4-1-flash` / `-pro` / `-flash-vision-exp`。可能是用户定制，也可能只是旧版 | **未动（有意）**：语义变更不自动迁移，覆盖不可逆，留给人决定 |
+| N-14 | **孤儿 `agents.json`** | `CONFIG_DOMAINS` 18 个域**无一引用它**（`agents` 域早已移除、由 `agentManifests` 取代）。dist 侧已由 `copy-data.mjs` 的孤儿清理删除；用户目录仍遗留一份（惰性，无害） | dist 已清；用户目录遗留待定 |
 
 ---
 
