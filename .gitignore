@@ -100,17 +100,35 @@ test-tmp.txt
 packages/engine/test-output.txt
 packages/engine/test-tmp.txt
 
-# Cyrene 记忆层的 cwd 相对运行时产物（2026-09-26 补，见 core-3-design-backlog.md N-22）
+# Cyrene 记忆层的 cwd 相对产物（2026-09-26 补，见 core-3-design-backlog.md N-22；
+# 2026-09-30 改为「按声明列」——见下）
+#
 # 这几处路径由 packages/memory/src/cyrene/** 的**兜底默认值**决定，落在 process.cwd()
 # 下而不是 .cortex/ 里。而 data/ 是**被跟踪**的目录（含 data/claims/），所以从仓库根
 # 跑一次、记忆层一写，工作树就脏——因此按文件忽略，不是整个 data/。
-#   · data/memory.json —— cyrene/memory-store.ts 单例的默认持久化文件（cwd/data/memory.json）
-#   · data/rag-data/   —— cyrene/rag/index.ts 的 getDataDir() 默认值（向量库落盘处）
-#   · memory-trace.log —— cyrene/memory-trace.ts 的 getTracePath() 默认值（追加写）
-# 注：cwd/models 是 RAG 的模型查找目录，只读不写，故不忽略（免得掩盖将来真要入库的目录）。
+#
+# ⚠️ 清单口径（2026-09-30 核对代码后改）：**按「源码里声明了会写」列，不按「现在写不写」列。**
+# 原来的清单只有三行，是按**当前有没有实例化点**列的——于是 `EntityGraph` 那处（声明了会写、
+# 但类还没有任何实例化点，属「未接线」那一批）没被列进去。**一旦有人把它接上，它立刻开始
+# 往 git 跟踪目录里写，而这份清单会静默过期。** 所以现在把声明的写落点全部列入，并标出状态。
+#
+#   【活跃】data/memory.json      —— cyrene/memory-store.ts:113 单例默认持久化（写）
+#   【活跃】data/rag-data/        —— cyrene/rag/index.ts:49  getDataDir() 默认值（向量库写）
+#   【活跃】memory-trace.log      —— cyrene/memory-trace.ts:35 getTracePath() 默认值（追加写）
+#   【未接线】data/entity-graph.json —— cyrene/entity-graph.ts:120/124/163
+#          `EntityGraph` 的 dataDir 兜底 + getPath() + writeFileSync。**当前无实例化点**
+#          （`entityGraph` 在审计里属「包内外皆无人用」），所以现在不写；接线后就会写。
+#
+# 只读、故不忽略的两处（保持原判断，2026-09-30 复核为真）：
+#   · cwd/models/                  —— rag/reranker.ts:50、rag/embedding.ts:60，只做模型查找
+#   · data/model-settings.json     —— memory-compressor.ts:48、memory-judge.ts:47、
+#                                     memory-resolver.ts:91，三处都只 loadSettings()，是 readFileSync
+# 不忽略它们，是免得掩盖将来真要入库的目录。
 data/memory.json
 data/rag-data/
+data/entity-graph.json
 memory-trace.log
+
 
 # 治理会话数据以顶层 doc-govern/ 为权威源
 packages/engine/doc-govern/
