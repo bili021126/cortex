@@ -35,7 +35,7 @@
 `packages/governance/src/constitution-validator.ts` 仍在按编号执行
 **检查⑦ 子约束修改规则 / ⑧ 硬编码禁令 / ⑨ 类型安全保障**。同一套编号还散见于
 `prompts/coding-standards.md`（写成「配置驱动开发铁律」）、`packages/doctor`、
-`docs/core/Cortex-架构映射-五流六层七原则.md`、`docs/auditing/AM-2026-0531-001.json`。
+`docs/core/Cortex-架构映射-五流六层七原则.md`、`docs/amendments/AM-2026-0531-001.json`。
 
 **选项**
 - **A 补回正文**：承认子约束体系仍在生效，把 9 条写进宪法
