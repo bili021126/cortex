@@ -8,6 +8,40 @@
 
 ---
 
+> ⚠️ **本文的代码锚点已系统性过期——文件搬了家，而路径还是旧的**（2026-09-30 核对）
+>
+> **实测**（口径：反引号包裹、且以仓库根目录名开头的路径，共 33 条）：**11 条解析不到**。
+> 逐条追查后——**10 条是「搬家」，1 条是「消失」**：
+>
+> | 本文写的 | 实际现在在哪 |
+> |---|---|
+> | `packages/engine/src/core/sentinel-signal-filter.ts` | → `packages/engine/src/**planning**/` 同名 |
+> | `packages/engine/src/core/notification-runtime.ts` | → `packages/engine/src/**planning**/` 同名 |
+> | `packages/engine/src/core/governance-events.ts` | → `packages/engine/src/**planning**/` 同名 |
+> | `packages/engine/src/core/skill-scope.ts` | → `packages/engine/src/**planning**/` 同名 |
+> | `packages/engine/src/core/decision-gate-bridge.ts` | → `packages/engine/src/**execution**/` 同名 |
+> | `packages/engine/src/core/resilience-integration.ts` | → `packages/engine/src/**execution**/` 同名 |
+> | `packages/engine/src/core/task-router.ts` | → `packages/engine/src/**execution**/` 同名 |
+> | `packages/engine/src/core/environment-aware-router.ts` | → `packages/engine/src/**execution**/` 同名 |
+> | `packages/consistency/src/consistency-layer.ts` | → `packages/**governance**/src/consistency/` 同名 |
+> | `packages/platform/src/file-lock-manager.ts` | → `packages/engine/src/core/` 或 `packages/shared/src/` 同名 |
+>
+> **两处最值得注意**：
+> ① **`packages/consistency` 这个包整体并入了 `packages/governance`**（现在在 `governance/src/consistency/`）；
+> ② **唯一真正消失的是 `packages/engine/src/agents/doc-govern-agent.ts`**——全仓无同名文件。
+> （按名字看，那是「凝光审计」那个 Agent；本文与
+> [`Cortex-架构映射-五流六层七原则.md`](Cortex-架构映射-五流六层七原则.md) **都还在引用它**。）
+>
+> **所以：要「流 ↔ 代码」的权威对应，请用
+> `packages/config/src/data/architecture-flows.json` + `packages/tools/tests/flow-contract.test.ts` 门禁。**
+> 本文的**概念内容**（六层怎么划、按什么界定）仍然有效；过期的是**它对代码位置的指认**。
+>
+> 另：本文是三份同批文档之一（`Cortex-五流映射-从抽象到代码.md` /
+> `Cortex-六层定位-五流框架下的重新界定.md` / `Cortex-七原则-五流定位.md`，皆 2026-06），
+> **已被 [`Cortex-架构映射-五流六层七原则.md`](Cortex-架构映射-五流六层七原则.md)（2026-06-23）合并吸收**。
+
+---
+
 ## 六层总览
 
 ```
