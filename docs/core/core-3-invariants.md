@@ -15,6 +15,9 @@
 
 ## 一、现有的守卫（穷举，实测）
 
+> **编号说明**：`I-n` 是**稳定 ID**，按**类别**分组排在下面（contract 类 → unit 类 →
+> 门禁外类），**所以编号不连续、也不是按行序**。要引用就引编号，别引位置。
+
 ### `@ci: contract` 里的跨表示守卫（8 个）
 
 | 不变量 | 守什么 ↔ 守什么 | 守卫 | 强度 |
@@ -27,6 +30,25 @@
 | **I-6** | client 的 REST 路径 ↔ server 路由 ∪ 能力面守卫 | `client/tests/contract-gap.test.ts`（**只守路径，不守 DTO 形状**） | 强（路径面） |
 | **I-7** | `CHAT_PALETTE` ↔ `renderer/ui/tokens.css` 的 `--rb-*` | `desktop/tests/chattokens-consistency.test.ts` | 强 |
 | **I-8** | `design-tokens` 的 persona 键集 / 色值合法性 / 发射覆盖 | `design-tokens/tests/tokens-contract.test.ts` | 强 |
+
+### `@ci: unit` 里的跨表示守卫（3 个 —— **它们不在「contract」名下，但守的正是这个**）
+
+| 不变量 | 守什么 ↔ 守什么 | 守卫 | 强度 |
+|---|---|---|---|
+| **I-14** | `protocol/src/index.ts` 6 条 `export *` 聚合出的符号面（**89 个：67 interface / 15 type / 7 function**）——**三端（TUI/WebUI/Desktop）与 engine daemon 之间唯一的契约** | `protocol/tests/barrel.test.ts`——**用 TypeScript 编译器 API 做静态分析**（因 82/89 是类型，运行时不存在）。覆盖三类失效：① barrel 指向不存在的子模块（悬空聚合）② 传递闭包重名（`export *` 静默取其一）③ 契约符号消失或表面规模缩水 | 强 |
+| **I-15** | 工具枚举与映射函数的值定义**唯一源**：`ToolCategory` / `ReversibilityLevel` / `TrustLevel` / `toReversibilityClass` / `toolNameToRiskDomain` / `RiskDomain` 唯一源在 `@cortex/config`（`vocabularies/tool-enums.ts`），**`@cortex/shared` 不得再定义或导出同名** | `shared/tests/toolkit-single-source.test.ts` | 强 |
+| **I-16** | **同一功能的第二实现不得存在**：`react-helper.ts` 已删、`components/react-loop.ts` 为唯一版本；`index.ts` 不得再导出 `runReActLoopLegacy` | `engine/tests/react-loop-canonical.test.ts` | 强 |
+
+> **⚠️ 守卫的「标签」决定它在不在门禁里。** `ci-gate` 第 4 步默认只跑
+> `@ci: unit` / `verify` / `contract`——**`@ci: integration` / `llm` / `e2e` / `manual`
+> 的文件会被跳过**（实测默认跳过 14 个文件）。例如 `engine/tests/trust-model.test.ts`
+> 标的是 `@ci: integration`，**不在默认门禁里**。
+> 所以判断一条守卫「算不算数」时，**不能只看它存在，要看它的标签**。
+>
+> **顺带纠正一处（写这份文档时的自查）**：`trust-model.test.ts:218` 读了一个源码路径，
+> 我一度以为它是「trust ↔ confirm」的守卫——**实际它读的是测试自己造的临时状态文件**
+> （`makeStatePath()` → 断言后 `rmDir(sp)`），测的是 TrustModel 自身的持久化。
+> **那里没有跨表示守卫。**
 
 ### 门禁之外／非测试形态的守卫
 
@@ -51,6 +73,12 @@
   `SchedulerSnapshot` / `SchedulerExecutionReport` / `NodeSubmitRequest`。
 - **守卫现状**：**I-6 只守路径**（`"/api/v1/scheduler"` 有路由），**不守形状**——
   server 改了返回字段，client 的类型不会红。
+- **一处精确的对照（同族，但处置相反）**：工具枚举有**值**的唯一源守卫（**I-15**），
+  但**类型**面没有——`config/src/vocabularies/tool-enums.ts:29` 的 `toReversibilityClass()`
+  自称是 `ReversibilityClass` 的显式映射，**却返回字符串字面量联合
+  `"reversible" | "irreversible" | "meta"` 而非枚举本身**，而字面量联合在 TS 里
+  不可赋给字符串枚举 → 消费方仍须 cast。
+  **即：那次修复接上了值，没接上类型，而守卫只覆盖了值那半。**
 - **这一轮怎么发现的**：`audit-unconsumed` 报 protocol 有 11 个零消费的包装别名，
   追进去才发现「缺的」和「没人用的」和「前瞻的」三类混在一个目录里。
 - **可能的方向**：给 DTO 配一个**由 server handler 实际返回推导**的契约测试（或反过来，
@@ -172,6 +200,54 @@
 3. **守卫是双向的吗？在门禁里吗？红了会拦吗？**
 
 任何一个答不上来，那就是**下一个 G-x**。
+
+---
+
+## 五、给 G-1…G-8 的守卫形状提案（**只写形状，未实施**）
+
+> 按 **性价比** 排序，前两条是我认为最值得先做的。
+> 「形状」指的是这份守卫**长什么样、能抓什么、抓不到什么**——不是实现。
+
+### ★ 优先两条（便宜、机械、能立刻挡住复发）
+
+**G-8 的守卫 —— 把「零消费分析」变成棘轮（ratchet）**
+- **形状**：落一份基线文件（如 `.cortex/audit-baseline.json`）记录**逐包**的
+  「无包外引用」与「包内外皆无人用」计数；门禁加一步，**数量增长就失败**。
+- **能抓**：新写一个永远没人调用的导出（这正是本仓库最常复发的那一种）。
+- **抓不到**：本来就存在的 135 个（它们进基线，不再报警）；也**不判断**哪个该删。
+- **为什么值得**：这一轮的分析全部是一次性的，做完就沉底了。**变成棘轮才叫收住。**
+
+**G-4 的守卫 —— 「有测试」必须「会被跑到」**
+- **形状**：`tools/tests` 里加一条：遍历 `packages/*`，断言
+  「`tests/` 下有测试文件」⇔「`package.json` 有 `test` 脚本」，**双向**。
+  再加一条「`vitest.config.ts` 的 `include` 覆盖 `tests/`，且不得 `passWithNoTests: true`」。
+- **能抓**：desktop 那种「37 个测试静默不跑」、design-tokens 那种「零测试静默通过」。
+- **抓不到**：测试跑到了但没有断言（那是另一回事）。
+- **成本**：两条断言，一个文件。
+
+### 其余六条
+
+| 缺口 | 守卫形状 | 能抓 | 抓不到 / 代价 |
+|---|---|---|---|
+| **G-1** protocol DTO ↔ client 自建类型 | 把 `contract-gap.test.ts` 从**路径面**扩到**类型面**：每个 client 调用的 `/api/v1/*` 要么有 protocol 类型覆盖其响应，要么在**具名豁免表**里（附理由）。**完整做法**是让 server handler 的实际返回推导形状——贵，但 80% 的价值在「必须有类型或有豁免」这一条 | 新增一个自建 DTO 却不登记 | **不比字段形状**（除非做完整推导）；豁免表本身会腐化，但**腐化是可见的** |
+| **G-5** barrel 声称的公开面 ↔ 实际 | 把 I-14 的**形态**推广到全仓：凡「只含 `export … from` 的文件」若自称是桶，断言其被本包 `index.ts` 引用 | `shared/src/agent.ts` 那种「自述是桶、实际被绕过」 | 用 TS 编译器 API（I-14 已有现成写法），**不是零成本** |
+| **G-2** 代码自称的落盘路径 ↔ 实际 | 断言「解析出的路径 === 常量声明的路径」；或在启动时让两个调用点用**同一个** store | 两份表示再次分叉 | **真正的修法是消掉那份重复**（属代码改动）。守卫只能让它**红**，不能让它对 |
+| **G-7** 文档提到的符号 ↔ 实际存在 | 把 `doc-drift-check` **收窄到可执行引用**：只查反引号里、以 `.ts`/`.mjs`/`.json` 结尾、且在 `scripts/` 或 `packages/` 下的路径，断言存在 | `dev.md` 那种「`check-doc-sync.mjs` 会拦」而文件不存在 | **不查散文里的概念名**——那正是上一轮证明「猜不出来」的部分 |
+| **G-3** 文档里的机制名 ↔ 源码 | **不配机械守卫**。理由见下 | — | — |
+| **G-6** 用户配置 ↔ src 配置「差异要有据」 | **不是测试**：一份**声明**（列出允许不同的文件与理由），让差异从「没人知道为什么」变成「已声明」 | 下一个人重复查同一件事 | 声明会腐化；但它**腐化时是可见的**，而沉默的差异不可见 |
+
+### G-3 为什么建议**不配**机械守卫
+
+`ToolGateway` 那处的本质是**同一份文档自相矛盾的一处旧名**。
+要机械抓住它，就得对宪法正文里的每个反引号名做**源码存在性**检查——
+而这**正是 `doc-drift-check` 已经失败的形状**：它扫全库、报 272 条、恒红；
+收敛到活跃口径后仍有 79 条，**逐条核对的真阳性为零**（全是设计稿里的前瞻概念）。
+
+> **一个抓不住真阳性的守卫，比没有守卫更糟**——它会让人习惯忽略红色。
+
+所以 G-3 的正解是**修掉那个名字**（走修宪流程，同名回填），
+**而不是造一个看不住它的门禁**。这跟上一轮那条教训是同一条：
+**猜出来的门禁就是同一种病。**
 
 ---
 
