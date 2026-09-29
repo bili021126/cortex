@@ -1,4 +1,17 @@
 /**
+ * ⚠️ 本模块是**孤儿**：不在 `presence/index.ts` 的导出面里，全仓无人 import（2026-09-26 核实，**未修**）
+ *
+ * 注意区分——**`presence/` 整个目录是在跑的**：`renderer/main.ts:94` 真的
+ * `new PresenceEngine(model, {...})`，且 barrel `presence/index.ts` 导出的是
+ * `PresenceEngine` / `PresenceEngineOptions`。**只有本文件这一支没接进去**：
+ * 它不在 barrel 里，也没有任何文件 import。于是本文件导出的 `BootSequence` 及其
+ * 配套类型（`BootPhase` / `BootSequenceCallbacks` / `DaemonBootInfo` / `BootSequenceOptions`）
+ * 全部零消费——审计报表里只有 `BootSequence` 被列为「包内外皆无人用」，另外几个之所以
+ * 没进那个名单，是因为**它们被本文件内的 `BootSequence` 引用**（同 N-25 那次的情况）。
+ *
+ * 它是一份写完整的设计（见下方注释里的「她刚醒来的时候」四阶段），**不是死代码**——
+ * 是**未接线的功能**。详见 core-3-design-backlog.md N-29。
+ *
  * presence/boot-sequence.ts — 启动时序
  *
  * 她刚醒来的时候：

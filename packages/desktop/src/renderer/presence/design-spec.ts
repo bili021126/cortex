@@ -185,6 +185,9 @@ export const RULES: Record<string, ExpressionRule> = {
 // §3 启动时序
 // ═══════════════════════════════════════════════════
 
+// ⚠️ 零消费（2026-09-26 核实，**未修**）：本常量是启动时序的**设计规格**（各阶段目标时长），
+// 但全仓无人读它——真正的启动流程在 `presence/boot-sequence.ts`，而那一支本身也是断的（见 N-29）。
+// 两个都留着、都不生效。详见 core-3-design-backlog.md N-29。
 /** Desktop 启动流程各阶段时长（ms） */
 export const BOOT_SEQUENCE = {
   /** Live2D 模型加载 + 站立 + 环顾四周 */
@@ -201,6 +204,11 @@ export const BOOT_SEQUENCE = {
 // §4 PRESENCE palette（收编自 @cortex/design-tokens）
 // ═══════════════════════════════════════════════════
 
+// ⚠️ 零消费（2026-09-26 核实，**未修**）——而且这一条有点反讽：
+// 上方注释说「S1-3 收编：双源清零——本地不再维护色值副本，**只保留消费层别名**」，
+// 但**这个别名层本身没有任何消费方**（全仓零引用）。Desktop 真正在用的色是
+// `src/renderer/ui/tokens.css` 那套 `--rb-*`（权威值 `CHAT_PALETTE`）。
+// 所谓「收编」收出了一个没人读的中间层。详见 core-3-design-backlog.md N-29。
 /**
  * 昔涟的 palette——直接引用 @cortex/design-tokens 的 CYRENE_PALETTE
  * （[权威] 逐区取自她的 Live2D 贴图 texture_0.png）。

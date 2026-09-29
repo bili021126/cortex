@@ -1,3 +1,13 @@
+// ⚠️ 本类**没有任何实例化点**（2026-09-26 核实，**未修**）
+//
+// `OpenerBubbleController` 是完整实现的气泡控制器——接了 `window.live2dSpeech.onShowBubble`、
+// 显示气泡文字、播 wav、走 `prepare/mouthStart/mouthStop` 口型同步、点击回
+// `window.openerBridge.feedback(...)`。全仓 grep：**没有 `new OpenerBubbleController`，
+// 也没有任何文件 import 本模块**。所以它是一整套**未接线的功能**，不是死代码——
+// 每一环都写完了、依赖的两个全局桥都定义好了，只缺一处 `new`。
+// 同类：N-25（`CapabilityRegistry`）、N-27（`MetaAgent` 三个 setter）。
+// 详见 core-3-design-backlog.md N-29。未删——删它是代码改动，越出本轮边界。
+
 // 桌宠气泡 controller：监听 onShowBubble + 显示气泡 + 播 wav + prepare/mouthStart/mouthStop
 // 复用 chat/main.ts playTtsBase64 的口型同步思路。荡秋千随 MOUTH_START 自动触发（SpeakingMotionController）。
 
