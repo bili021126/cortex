@@ -5,6 +5,25 @@
 // 所有适配后的核心类、类型、单例在此导出。
 // ============================================================
 
+// ⚠️ 本文件是「Cyrene-Agent 适配层」，其中 10 个导出全仓零消费（2026-09-30 核实，**未修**）
+//
+// 零消费清单（`audit-unconsumed.ts` 口径：包内外皆无引用）：
+//   `setTracePath` · `memoryJudge` · `setModelSettingsPath` · `setCompressorModelPath`
+//   · `setResolverModelPath` · `clearRecentMemoryInjections` · `recordRecentMemorySearchEntries`
+//   · `getRecentlyInjectedMemoryIds` · `resetTokenUsage` · `getTokenUsage`
+//
+// **前三类「set*」不是死代码，是没接上的配置入口。** 本包由 Cyrene-Agent 适配而来，
+// 适配动作的核心之一就是**把路径从硬编码改成可注入**（对照同目录 `rag/index.ts` 的
+// 「路径参数化」、`rag/reranker.ts` 的「路径改为参数注入」、`entity-graph.ts` 的
+// 「路径改为构造注入」）——**而这批注入点没有一个被调用过**。
+//
+// 后果是可验证的：记忆层的**文件位置全部是 cwd 相对的、无法从引擎配置**
+// （真正干活的是 `memory-store.ts` 里那个**不带参数**的模块级单例，
+// 兜底到 `process.cwd()/data/memory.json`，而不是代码自称的 `.cortex/cyrene-memory.json`）。
+//
+// 详见 `docs/core/core-3-open-decisions.md` **第 4 条（N-22）** 与
+// `docs/core/core-3-design-backlog.md` N-22。**只加注释，未加调用点、未删导出。**
+
 // ── 类型 ──
 export type {
   L0Profile, L1Profile, L2Memory, L2MemoryStatus, L2SyncStatus,

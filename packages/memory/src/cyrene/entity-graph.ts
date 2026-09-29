@@ -6,6 +6,15 @@
 // 移除 jieba 依赖（Cortex 用不同的分词方案）。
 // ============================================================
 
+// ⚠️ 「路径改为构造注入」这个适配动作**没有接上**——`entityGraph` 全仓零消费（2026-09-30 核实，**未修**）
+//
+// 本文件由 Cyrene-Agent 的 `entity-graph.ts` 适配而来，适配动作之一就是
+// **把路径从硬编码改成构造注入**；而注入点零调用 → 实例的落盘位置仍是 cwd 相对兜底。
+//
+// 与 `cyrene/index.ts`、`rag/index.ts`、`rag/reranker.ts` **同源**：
+// 这一整片适配层的注入点**一个都没接**。详见 `docs/core/core-3-open-decisions.md`
+// **第 4 条（N-22）**。**只加注释，未加调用点、未删导出。**
+
 import * as fs from "fs"
 import * as path from "path"
 

@@ -5,6 +5,24 @@
 // 适配：移除 Electron/IPC 依赖。路径参数化。
 // ============================================================
 
+// ⚠️ 「路径参数化」这个适配动作**没有接上**——本文件 9 个导出自全仓零消费（2026-09-30 核实，**未修**）
+//
+// 零消费清单：`setRagDataDir` · `setRagModelsDir` · `updateWorldbookActivation`
+//   · `getActiveWorldbookEntries` · `getCascadeWorldbookEntries` · `getPermanentWorldbookEntries`
+//   · `resetRAG` · `getRAGStats` · `INJECTION_HEADER` · `INJECTION_PREAMBLE`
+//
+// **上面第 5 行那句「适配：移除 Electron/IPC 依赖。路径参数化。」是这份文件的设计意图**——
+// 而 `setRagDataDir` / `setRagModelsDir` **零调用**，所以：
+//   · 模块级 `dataDir` 永远停在初始值 `""`；
+//   · RAG 数据落在 cwd 相对兜底位置，**无法从引擎配置**。
+//
+// 同一片还有两处（本会话已核实）：世界书（`worldbook`）因为构造时未传 `worldbookDir`
+// 而**从未被构造**，故那三个 `get*WorldbookEntries` 不可达；重排器在 `initRAG` 的第 5 个
+// 参数上被**刻意关闭**（`rerankerMode="none"`），故 `reranker.ts` 的三个 `get*` 不可达。
+// **这三组不是巧合，是同一件事的三种表现：适配时留的注入点，一个都没接。**
+//
+// 详见 `docs/core/core-3-open-decisions.md` **第 4 条（N-22）**。**只加注释，未加调用点。**
+
 import * as path from "path"
 import { getEmbeddingProvider, resetEmbeddingProvider, setLocalModelPath } from "./embedding.js"
 import type { EmbeddingProvider } from "./embedding.js"

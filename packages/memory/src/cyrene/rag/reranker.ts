@@ -6,6 +6,17 @@
 // @xenova/transformers 保持 ESM 动态导入。
 // ============================================================
 
+// ⚠️ 「路径改为参数注入」这个适配动作**没有接上**——本文件 3 个导出自全仓零消费（2026-09-30 核实，**未修**）
+//
+//   `getReranker` · `getRerankerMode` · `getRerankerInstallStatus`
+//
+// **它们不是三个孤立的死面，是同一个事实的三种读法**：
+// 重排器在 `rag/index.ts` 的 `initRAG` 第 5 个参数上被**刻意关闭**（`rerankerMode="none"`），
+// 所以「取重排器 / 取它的模式 / 取它的安装状态」都不可达。
+//
+// 与同目录另两处同源（见 `rag/index.ts` 的说明）：**适配时留的注入点，一个都没接**。
+// 详见 `docs/core/core-3-open-decisions.md` **第 4 条（N-22）**。**只加注释，未删导出。**
+
 import * as path from "path"
 /** 诊断输出——统一走 stderr（可观测性：不进 stdout/不被程序消费） */
 function diag(...args: unknown[]): void {
