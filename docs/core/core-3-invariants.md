@@ -232,9 +232,16 @@
   `set -o pipefail`（一行解决 1 与 2 的 `$?` 语义），或者在管道后改用
   `if ! …; then exit 1; fi` 直接判命令本身；eslint 那行同理。
   **成本约 3 行，收益是「那个绿勾重新携带信息」。**
+- **另一处独立缺陷（2026-09-30 补测）**：**钩子按「9 个文件名」排除，而不是按 `@ci` 标签**——
+  它 `--exclude` 的是 `manual` / `tests/e2e` / `system-stress` / `bench-memory-pipeline` 等具体文件，
+  **而项目的 `@ci` 词汇表（`unit|verify|contract|integration|llm|e2e|manual|stress`）是另一套口径。**
+  两者不对齐的实测后果：`packages/engine/tests` 里 **`@ci: integration` 4 个、`@ci: llm` 3 个**
+  是**真门禁不跑**的（门禁只跑 unit/verify/contract），而**钩子会跑它们**——
+  其中 `llm` 那类通常需要 API key，**正是门禁故意排除它们的原因**。
+  > 所以钩子不只是「坏了」，它还**替项目跑了一批按它自己的规矩不该在提交路径上跑的东西**，
+  > **然后不检查结果**。
 
-
-三条都要满足，缺一条就只是**看起来安全**：
+---
 
 ## 三、什么才算「配了守卫」
 
