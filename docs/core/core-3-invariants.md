@@ -1,0 +1,188 @@
+# Cortex 不变量清单 —— 哪些「两份表示」必须相等，各自由谁守
+
+> **这份文件的用途**：cortex 的绝大多数缺陷不是「代码写错了」，而是**同一件事有两份表示，
+> 而没有任何东西保证它们相等**。这份清单把这种地方**全部具名**，逐个写明「由谁守」。
+>
+> **用法**：新加一处表示（一个常量、一份配置、一张表、一种类型、一段文档）之前，
+> 先来这里看有没有对应的不变量；没有就**为它配一个守卫**，否则它会在某天静静地漂开。
+>
+> 生成于 2026-09-30，由 13 轮优化的实测结果**反推**而成——
+> 每一条「无守卫」都挂着一个真实事故，不是假想。
+> **强度口径**：**强** = 在 `ci-gate` 第 4 步默认口径内（`@ci: unit|verify|contract`），红了就拦；
+> **中** = 有检查但不自动拦；**弱** = 只盘点 / 靠人工。
+
+---
+
+## 一、现有的守卫（穷举，实测）
+
+### `@ci: contract` 里的跨表示守卫（8 个）
+
+| 不变量 | 守什么 ↔ 守什么 | 守卫 | 强度 |
+|---|---|---|---|
+| **I-1** | `@cortex/config` 的 `CONFIG_DOMAINS` ↔ `src/data/*.json` 实际文件 | `config/tests/contract/domains-data-consistency.test.ts`（每文件必注册 / required 域必有文件 / fileName 不重复） | 强 |
+| **I-2** | `docs.json` 文档注册表 ↔ 实际文档文件 + 版本头 | `config/tests/contract/docs-registry-integrity.test.ts`（path 存在 / canonical 指向宪法 / 版本头一致） | 强 |
+| **I-3** | **三条**（同一个文件）：① `CORTEX_LAYER_CONTRACT` ↔ 实际 workspace 包（**双向**：每个包都登记 **且** 契约无指向不存在包的陈旧条目）② 依赖图**严格 DAG 无环** ③ **分层单向**（无「低层依赖高层」） | `tools/tests/layer-contract.test.ts` | 强 |
+| **I-4** | **四条**（同一个文件）：① 声明的路径真实且落在已登记包内 ② **包全覆盖**（每个包至少被一条流认领——**双向，无幽灵包**）③ **模块全归类**（未认领的 `src` 顶层子目录 === `knownUnassigned`，**双向**）④ 词汇闭合（layer / principles 必须在名单内） | `tools/tests/flow-contract.test.ts` | 强 |
+| **I-5** | `PACKAGE_POSITIONING.md` 的 REST 表 ↔ `server/src/http/router.ts` 路由（**双向**） | `server/tests/api-contract.test.ts` | 强 |
+| **I-6** | client 的 REST 路径 ↔ server 路由 ∪ 能力面守卫 | `client/tests/contract-gap.test.ts`（**只守路径，不守 DTO 形状**） | 强（路径面） |
+| **I-7** | `CHAT_PALETTE` ↔ `renderer/ui/tokens.css` 的 `--rb-*` | `desktop/tests/chattokens-consistency.test.ts` | 强 |
+| **I-8** | `design-tokens` 的 persona 键集 / 色值合法性 / 发射覆盖 | `design-tokens/tests/tokens-contract.test.ts` | 强 |
+
+### 门禁之外／非测试形态的守卫
+
+| 不变量 | 守什么 ↔ 守什么 | 由谁守 | 强度 |
+|---|---|---|---|
+| **I-9** | `src/data/*.json` ↔ `dist/data/*.json` | `copy-data.mjs`（镜像 + 孤儿清理）**+ `ci-gate` 第 ①′ 步**（失败 `failedStage: "configDataSync"`） | 强 |
+| **I-10** | `src/data/*.json` ↔ **用户目录** `~/.cortex/config` | `seedMissingFiles`（**add-only，只补缺、不覆盖**） | 中（只保证「缺的会补上」，不保证「已有的一致」——**且这是有意的**） |
+| **I-11** | 包之间不得成环 | **由 I-3 同文件覆盖**（`layer-contract.test.ts` 断言「严格 DAG 无环」）——**在门禁里**。另可单独跑 `scripts/dep-cycle-check.ts`（`pnpm dep:cycle`） | **强**（更正：先前写成「中、不在默认链里」是错的，实测门禁里就有） |
+| **I-12** | 文档里提到的代码标识符 ↔ 代码里实际存在 | `scripts/doc-drift-check.ts` | **弱**（2026-09-26 已从「恒红的假门禁」改为**盘点**：默认 exit 0，`--strict` 才阻断） |
+| **I-13** | 根 `tsconfig.json` references ↔ 包结构 | `scripts/audit-amendment.ts`（断言 = 24） | **弱**（只在**按需审计一份修宪案**时跑，不在门禁里）；另有 `self-exam-soft.ts` 把它当作**人工巡检领域** |
+
+---
+
+## 二、已确认没有守卫的（每条都挂着一个真实事故）
+
+> 这一节是这份文件存在的理由。**每一条都发生过。**
+
+### G-1 · 某种「实体」有两份表示，且没有单一来源 —— **protocol 的 DTO ↔ client 自建的 DTO**
+
+- **事实**：`GET /agents`、`GET /scheduler`、`POST /scheduler/execute`、`POST /nodes`
+  在 `@cortex/protocol` 里**没有模块**，于是客户端在 `client/src/types.ts` 里**自建**
+  `SchedulerSnapshot` / `SchedulerExecutionReport` / `NodeSubmitRequest`。
+- **守卫现状**：**I-6 只守路径**（`"/api/v1/scheduler"` 有路由），**不守形状**——
+  server 改了返回字段，client 的类型不会红。
+- **这一轮怎么发现的**：`audit-unconsumed` 报 protocol 有 11 个零消费的包装别名，
+  追进去才发现「缺的」和「没人用的」和「前瞻的」三类混在一个目录里。
+- **可能的方向**：给 DTO 配一个**由 server handler 实际返回推导**的契约测试（或反过来，
+  让 client 不得不 import protocol）。**不建议**手工比对——那又是一份表示。
+
+### G-2 · 代码里的「位置/名字」↔ 实际运行时的位置/名字 —— **记忆落盘路径**
+
+- **事实**：`bootstrap-engine.ts:248` 调 `initCyreneMemory()` **不传参**，返回的
+  `{manager, store}` 在 541 行**只被 `await`、值从未被读取**；真正干活的是模块级单例
+  `new MemoryStoreManager()`（**不带参数**）→ 兜底 **`process.cwd()/data/memory.json`**。
+  **代码自称 `.cortex/cyrene-memory.json`。**
+- **守卫现状**：**没有**。已做的是「症状处理」——按文件加 `.gitignore`。
+- **这一轮怎么发现的**：顺着 24 个零消费的 `set*Path` 追进去。
+
+### G-3 · 文档里的机制名 ↔ 源码里的机制名 —— **`ToolGateway` ↔ `Toolkit`**
+
+- **事实**：宪法 v3.8 **第 67 行**写「所有工具调用经统一 `ToolGateway` 注册」，
+  而**同一份文件第 114 行**写 `Toolkit`、第 262 行代码锚点写
+  `packages/platform/src/toolkit.ts`。**源码里没有 `ToolGateway`。**
+- **守卫现状**：**没有**。I-12（doc-drift）**理论上**能发现，但它是「盘点不是门禁」，
+  且实测活跃口径里 79 条**逐条核对后真阳性为零**——**它抓不住这一类**。
+- **性质**：不是违宪，是**同一份文档自相矛盾**。已登记 N-15，须走修宪流程改正文。
+
+### G-4 · 「有测试」↔「测试会被跑到」 —— **包缺 `test` 脚本**
+
+- **事实**：`packages/desktop` 有 37 个测试但**没有 `test` 脚本**，而根 `pnpm test`
+  = `pnpm -r test`（只跑有该脚本的包）→ **退出 0、零输出，报告成功、什么都没跑**。
+  它之所以还能被跑到，只因为 `ci-gate` 第 4 步是**直接调 vitest**、不走 `pnpm -r test`。
+- **守卫现状**：**没有**。（本轮已补脚本，但**没有东西防止下一个包再漏**。）
+- **同族**：`design-tokens` 的 `vitest.config.ts` 写着 `include: ["src/**/*.test.ts"]`
+  **且 `passWithNoTests: true`** → 零测试也静默通过。**两个都是「静默通过」**。
+
+### G-5 · 桶（barrel）声称的公开面 ↔ 实际的公开面
+
+- **事实**：`shared/src/agent.ts` 头部自述「**所有子模块通过此桶统一导出，外部消费方
+  无需感知拆分细节**」，而 `shared/src/index.ts` **从不引用 `./agent.js`**——
+  它直接从那三个子模块再导出。于是 `agent.ts` 里**唯一独有的声明**
+  `SHARED_IDENTITY_ANCHOR` **不在包公开面上**，包外拿不到。
+- **守卫现状**：`protocol/tests/barrel.test.ts` 守的是 **protocol 自己的**桶；
+  **没有**仓库级的「barrel 必须被上层引用」检查。
+- **这一轮怎么发现的**：`audit-unconsumed` 把它列为零消费 → 顺引用追一层。
+
+### G-6 · 用户目录的配置 ↔ src 的配置 —— **差异「有没有据」**
+
+- **事实**：`~/.cortex/config/models.json` 是 `deepseek-v4-flash` / `-pro` 且无 `_pricing`；
+  src 是 `deepseek-v4-1-flash` / `-pro` / `-flash-vision-exp`。**可能是有意定制，
+  也可能只是旧版——没有东西记录这件事。**
+- **守卫现状**：**没有**。I-10 是 add-only，**刻意不覆盖**；但也没有任何地方写下
+  「这两份**有意**不同，理由是什么」。
+- **后果**：下一个人（包括我）会把它当成 bug 再查一遍。
+
+### G-7 · 文档/注释里提到的脚本名、路径、标识符 ↔ 实际存在
+
+- **事实**：活文件 `dev.md` 曾整篇写着「`scripts/check-doc-sync.mjs` 会拦」——
+  **那个文件不存在**。凭记忆写脚本名，代价是一轮白干。
+- **守卫现状**：**弱**（见 I-12）。且本轮实测：`doc-drift-check` 收敛后的活跃口径
+  79 条里，**逐条核对的真阳性为零**——**它对这一类基本无效**。
+- **同一片的**：`@cortex/logging` 的 README 把零调用的 `shutdownLoggers`
+  当公开 API 写进示例（README:100）。符号**真实存在**，所以不算说谎，
+  但**没有任何东西**保证 README 的示例与真实导出面一致。
+
+### G-8 · 「读起来像在用」↔「真的在用」—— **零消费导出 ≠ 死代码**
+
+- **事实**：这一轮把 8 个包的死面逐条定性完，**结论分成四类**：
+
+  | 性质 | 例子 | 处置 |
+  |---|---|---|
+  | **未接线的功能** | `CapabilityRegistry` + 10 份能力声明、`MetaAgent` 三个 setter、`OpenerBubbleController`、`set*Path`、`SPAN_PREFIX_*` | **标注**（别删——它是指出缺口的证据） |
+  | **有意延后** | `modification-record.ts`（`schema-enforcer.ts:13` 明写「延后至 Core-2」） | **别动** |
+  | **无害词汇表** | `IpcChannel`、`StrictNonEmptyArray`、`hasAgentFactory` | **记** |
+  | **主动误导/有陷阱** | `config/src/schemas/validators.ts`（与通用机制完全重复、只覆盖 6/18 域） | **删** |
+
+- **守卫现状**：`audit-unconsumed.ts` 本身**就曾是这份清单的反面教材**——
+  它有**四处假阳性**（barrel 再导出被当成消费、定义文件被排除、`.tsx` 完全不可见、
+  `export type {}` 形态漏了），**修之前它两个方向都在骗人**。
+  **实测口径因此从 168 变到 135（当前）**：照旧口径去重构，三分之一的力气会花在打鬼上。
+- **判据（已固化）**：见到「零消费」先问三句 ——
+  **为什么没人调用？**（可能是接线缺口）→ **有没有「已推迟」的声明？**（那它不是死代码）
+  → **顺着引用再追一层。**（「有包内引用」也不等于活着——`CapabilityRegistry` 就这么逃过报表。）
+
+---
+
+## 三、什么才算「配了守卫」
+
+三条都要满足，缺一条就只是**看起来安全**：
+
+1. **机械**——不靠人记得去比对。
+2. **双向或全称**——「表里每条都要有路由」**且**「路由每条都要在表里」（I-5 就是这么做的）；
+   只查一个方向的守卫会让另一侧静静漂开。
+3. **在门禁里，且红了会拦**——不在 `ci-gate` 默认口径里的检查，等于没有
+   （`doc-drift-check` 恒红 272 条的历史就是教训：**一个永远红的检查 = 没有信号**）。
+
+**正面范本 —— `flow-contract.test.ts`（这个仓库自己做的，值得照着学）**
+
+它的头注释写明了由来，值得逐字抄在这里：
+
+> 原文档 `Cortex-架构映射-五流六层七原则.md` 自称「每个节点标注文件、函数和行号」，
+> 但 **2026-09-26 实测共 45 条文件引用：12 条已搬家、5 条已消失、1 条行号越界；
+> 且只覆盖 16/28 包。**
+> 本门禁把「**流 → 代码**」的对应关系**从散文搬进数据文件并钉死**，
+> 使代码重构后坐标系不再静默漂移。
+
+**这一段就是这份清单要推荐的全部动作**：散文里的对应关系 → 数据文件 → 双向门禁。
+它做到之后，那份文档即使继续烂掉，**坐标系本身也不会漂**了。
+
+**反面教材（本轮亲测）**：想给 `doc-drift-check` 找一条便宜的修法，
+试了「按目录分角色」和「按编辑距离认改名」两条，**都不成立**——
+前者活跃口径仍余 32 条、逐条核对**真阳性为零**；后者把
+`Seated→started`、`Voting→routing`、`Footer→filter` 全判成改名（短词巧合）。
+**而文档角色无法可靠自动推断**：206 篇里 34 篇前 12 行没有任何角色标记。
+> **结论：猜出来的门禁就是同一种病。** 宁可把它降级为盘点，也不要留一个假门禁。
+
+---
+
+## 四、新加一处表示时，必须回答的三个问题
+
+1. **它的权威源是哪一个？**（不是「哪个对」，而是「谁是单一真相源」——必须是**一个**）
+2. **谁保证它和权威源相等？**（一个具体的测试 / 脚本 / 门禁步骤，**具名**）
+3. **守卫是双向的吗？在门禁里吗？红了会拦吗？**
+
+任何一个答不上来，那就是**下一个 G-x**。
+
+---
+
+## 附：这一节为什么不是「重构方案」
+
+**明确的判断**：这一轮 13 轮挖出的全部缺陷，**没有一条是「代码结构不对」**，
+全部落在三个筐里——**接线漏了一处**、**没有一致性守护**、**有意延后**。
+**重写不会修它们中的任何一个**：新代码会以同样的方式再漏一次，
+因为漏的原因不是形状，是**没有任何东西会问「它的调用点在哪」**。
+
+而本轮修好的每一处，**没有一处是重写**，全是加守卫：
+`copy-data.mjs` + 门禁加一步、`seedMissingFiles`、`config_violation` 幂等、
+`audit-unconsumed` 剥 barrel、`doc-drift-check` 收敛范围。
+**每一处都是「给两个必须相等的表示配一个检查」，且每一处都做过反向验证**（去掉守卫测试就红）。
