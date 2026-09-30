@@ -16,7 +16,6 @@ export default defineConfig({
     // 并行负载下首次冷启动偶发超时——失败自动重试一次
     retry: 1,
     include: ["tests/**/*.test.ts"],
-    passWithNoTests: true,
     env: {
       DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY ?? "",
       DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
