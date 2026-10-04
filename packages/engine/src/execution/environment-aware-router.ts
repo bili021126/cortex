@@ -251,6 +251,6 @@ export class EnvironmentAwareRouter {
       { key: "preferred", value: preferred },
       { key: "selected", value: selected },
       { key: "reason", value: reason },
-    ]).catch(err => console.error(`[router] environment telemetry failed: ${err instanceof Error ? err.message : String(err)}`));
+    ]).catch(err => console.warn(`[router] environment telemetry failed: ${err instanceof Error ? err.message : String(err)}`));
   }
 }

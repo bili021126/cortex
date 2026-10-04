@@ -189,7 +189,7 @@ export class Scheduler implements IScheduler {
 
     // FIX-06: 定期维护记忆存储
     if (this._memoryStore && typeof (this._memoryStore as Maintainable).maintain === "function") {
-      try { await (this._memoryStore as Maintainable).maintain(); } catch { void recordTelemetry("scheduler.maintain_failed", 1); }
+      try { await (this._memoryStore as Maintainable).maintain(); } catch { void recordTelemetry("scheduler.maintain_failed", 1).catch((err) => console.warn(`[scheduler] telemetry failed for maintain_failed: ${err instanceof Error ? err.message : String(err)}`)); }
     }
 
     // 仿真层检查：高风险计划建议重规划
@@ -199,7 +199,7 @@ export class Scheduler implements IScheduler {
         currentState: {},
         constraints: [],
       };
-      void recordTelemetry("scheduler.sim_check", simInput.planNodes.length);
+      void recordTelemetry("scheduler.sim_check", simInput.planNodes.length).catch((err) => console.warn(`[scheduler] telemetry failed for sim_check: ${err instanceof Error ? err.message : String(err)}`));
     }
 
     // 执行结束——清零 AgentTracker
@@ -260,7 +260,7 @@ export class Scheduler implements IScheduler {
           { key: "agent", value: String(agentType) },
           { key: "nodeType", value: node.type },
           { key: "reason", value: reason.slice(0, 80) },
-        ]);
+        ]).catch((err) => console.warn(`[scheduler] telemetry failed for replan: ${err instanceof Error ? err.message : String(err)}`));
         this.replanManager.enqueue(node, reason);
       }
     }

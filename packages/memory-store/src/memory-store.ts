@@ -354,7 +354,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
     // ── 遥测：Memory 检索耗时 ──
     const t0 = Date.now();
     let results = await this._backend.read(backendQuery, mode);
-    void recordTelemetry("memory.search_time_ms", Date.now() - t0, [{ key: "mode", value: mode }]).catch(() => {});
+    void recordTelemetry("memory.search_time_ms", Date.now() - t0, [{ key: "mode", value: mode }]).catch((err) => console.warn(`[memory-store] telemetry failed for memory.search_time_ms: ${err.message}`));
 
     // ── 适配器层过滤：30 天 TTL + 标记删除 ──
     // R12-C3：TTL 基于 lastAccessedAt（活跃条目不因创建满 30 天失明）——旧条目 fallback createdAt
@@ -640,7 +640,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           notificationType: "WARNING",
         });
       }).finally(() => {
-        void recordTelemetry("memory.write_duration_ms", Date.now() - t0, [{ key: "operation", value: "commit" }]).catch(() => {});
+        void recordTelemetry("memory.write_duration_ms", Date.now() - t0, [{ key: "operation", value: "commit" }]).catch((err) => console.warn(`[memory-store] telemetry failed for memory.write_duration_ms: ${err.message}`));
       });
     }
     return ok;
@@ -855,7 +855,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
         void recordTelemetry("memory.dedup_hit", 1, [
           { key: "matchType", value: "content_hash" },
           { key: "dupId", value: dupId },
-        ]).catch(() => {});
+        ]).catch((err) => console.warn(`[memory-store] telemetry failed for memory.dedup_hit(content_hash): ${err.message}`));
         return dupId;
       }
       return null;
@@ -908,7 +908,7 @@ export class MemoryStore implements IMemoryStore, ILifecycle {
           { key: "matchType", value: "vector" },
           { key: "newId", value: newId },
           { key: "existingId", value: bestMatch.existingId },
-        ]).catch(() => {});
+        ]).catch((err) => console.warn(`[memory-store] telemetry failed for memory.dedup_hit(vector): ${err.message}`));
         return bestMatch.existingId; // R1 fix: 返回已有条目 ID 供 write() 返回
       }
       return null;

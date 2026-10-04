@@ -187,6 +187,18 @@ class StdioTransport implements McpTransportImpl {
     // stderr 静默忽略
     this.process.stderr?.on("data", () => {});
 
+    // ChildProcess 是 EventEmitter：spawn 失败（常见如 MCP server 命令不存在 ENOENT、权限 EACCES）
+    // 会异步 emit 'error'；若无监听，Node 会把它当未捕获异常抛出 → 直接崩掉宿主/daemon 进程。
+    // 这里与下方 'exit' 同构地优雅降级：console.warn 记录（启动/配置类失败，不污染 error 指标）
+    // + 把失败作为 JSON-RPC error 通知所有 handler，让 MCP 层看到"server 未能启动"而非进程猝死。
+    this.process.on("error", (err) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[mcp:${this.serverId}] spawn error: ${msg}`);
+      for (const h of this.handlers) {
+        h(JSON.stringify({ jsonrpc: "2.0", id: -1, error: { code: -1, message: `Server "${this.serverId}" failed to start: ${msg}` } }));
+      }
+    });
+
     this.process.on("exit", () => {
       for (const h of this.handlers) {
         h(JSON.stringify({ jsonrpc: "2.0", id: -1, error: { code: -1, message: `Server "${this.serverId}" exited` } }));

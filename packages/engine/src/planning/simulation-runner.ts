@@ -59,7 +59,7 @@ export class SimulationRunner {
   async simulate(input: SimulationInput): Promise<SimulationResult> {
     // 如果没有 LLM 注入，退化为保守 stub
     if (!this._llm) {
-      void recordTelemetry("simulation.stub_fallback", input.planNodes.length, []);
+      void recordTelemetry("simulation.stub_fallback", input.planNodes.length, []).catch((err) => console.warn(`[simulation] telemetry failed for stub_fallback: ${err instanceof Error ? err.message : String(err)}`));
       // Core-3: 接入工具/记忆/调度仿真，替代节点数简单判定
       return {
         riskLevel: input.planNodes.length > 5 ? "medium" : "low",

@@ -171,7 +171,7 @@ export class DecisionGateBridge {
       { key: "requestId", value: result.requestId },
       { key: "approved", value: String(result.approved) },
       { key: "timedOut", value: String(result.timedOut ?? false) },
-    ]).catch(err => console.error(`[decision-gate] result telemetry failed: ${err instanceof Error ? err.message : String(err)}`));
+    ]).catch(err => console.warn(`[decision-gate] result telemetry failed: ${err instanceof Error ? err.message : String(err)}`));
 
     console.error(
       `[DecisionGateBridge] 决策结果: ${result.requestId} → ${result.approved ? "批准" : "拒绝"}` +

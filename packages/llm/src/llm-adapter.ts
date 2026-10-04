@@ -288,7 +288,7 @@ export class LlmAdapter {
 
     // ── 遥测：请求体大小 ──
     const bodySize = JSON.stringify(body).length;
-    void recordTelemetry("llm.request_body_size", bodySize, [{ key: "model", value: model }, { key: "stream", value: "false" }, { key: "tools_count", value: String(tools?.length ?? 0) }]);
+    void recordTelemetry("llm.request_body_size", bodySize, [{ key: "model", value: model }, { key: "stream", value: "false" }, { key: "tools_count", value: String(tools?.length ?? 0) }]).catch((err) => console.warn(`[llm-adapter] telemetry failed for llm.request_body_size: ${err instanceof Error ? err.message : String(err)}`));
 
     try {
       // ── 请求 + 读取响应体（含一次 body-read 重试）──
@@ -390,11 +390,11 @@ export class LlmAdapter {
           });
 
           // 记录 token 消耗（权限配额追踪，异步 fire-and-forget）
-          void limiter.recordTokens(fp, json.usage?.total_tokens ?? 0).catch(() => {});
+          void limiter.recordTokens(fp, json.usage?.total_tokens ?? 0).catch((err) => console.warn(`[llm-adapter] recordTokens failed: ${err.message}`));
 
           // ── 遥测：LLM 响应延迟 ──
           const callElapsed = Date.now() - t0;
-          void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "false" }]).catch(() => {});
+          void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "false" }]).catch((err) => console.warn(`[llm-adapter] telemetry failed for llm.response_time_ms: ${err.message}`));
 
           return response;
         } catch (bodyReadErr) {
@@ -443,7 +443,7 @@ export class LlmAdapter {
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
       const degradeTarget = this.config.capabilities?.degradesTo;
       if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
-        void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]);
+        void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]).catch((err) => console.warn(`[llm-adapter] telemetry failed for model.degraded: ${err instanceof Error ? err.message : String(err)}`));
         return await this.chat(degradeTarget, messages, tools, reasoningEffort, toolChoice, true, maxTokensOverride, signal);
       }
       throw e;
@@ -515,7 +515,7 @@ export class LlmAdapter {
 
     // ── 遥测：请求体大小 ──
     const bodySize = JSON.stringify(body).length;
-    void recordTelemetry("llm.request_body_size", bodySize, [{ key: "model", value: model }, { key: "stream", value: "true" }, { key: "tools_count", value: String(tools?.length ?? 0) }]);
+    void recordTelemetry("llm.request_body_size", bodySize, [{ key: "model", value: model }, { key: "stream", value: "true" }, { key: "tools_count", value: String(tools?.length ?? 0) }]).catch((err) => console.warn(`[llm-adapter] telemetry failed for llm.request_body_size: ${err instanceof Error ? err.message : String(err)}`));
 
     try {
       const res = await this._circuitBreaker.call(
@@ -570,11 +570,11 @@ export class LlmAdapter {
 
       // 流式调用消耗配额（异步 fire-and-forget）
       const totalTokens = (sse.streamUsage?.prompt_tokens ?? 0) + (sse.streamUsage?.completion_tokens ?? 0);
-      void limiter.recordTokens(fp, totalTokens);
+      void limiter.recordTokens(fp, totalTokens).catch((err) => console.warn(`[llm-adapter] recordTokens failed: ${err instanceof Error ? err.message : String(err)}`));
 
       // ── 遥测：LLM 响应延迟 ──
       const callElapsed = Date.now() - t0;
-      void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "true" }]);
+      void recordTelemetry("llm.response_time_ms", callElapsed, [{ key: "model", value: model }, { key: "stream", value: "true" }]).catch((err) => console.warn(`[llm-adapter] telemetry failed for llm.response_time_ms: ${err instanceof Error ? err.message : String(err)}`));
 
       return response;
     } catch (e) {
@@ -596,7 +596,7 @@ export class LlmAdapter {
       const extractedStatus = statusMatch ? parseInt(statusMatch[1] ?? "0") : 0;
       const degradeTarget = this.config.capabilities?.degradesTo;
       if (!_degradeAttempted && (extractedStatus === 429 || extractedStatus === 503) && degradeTarget) {
-        void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]);
+        void recordTelemetry("model.degraded", 1, [{ key: "from", value: model }, { key: "to", value: degradeTarget }]).catch((err) => console.warn(`[llm-adapter] telemetry failed for model.degraded: ${err instanceof Error ? err.message : String(err)}`));
         return await this.chatStream(degradeTarget, messages, tools, onChunk, reasoningEffort, _toolChoice, true, signal);
       }
       throw e;
@@ -649,7 +649,7 @@ export class LlmAdapter {
       return false; // 已由 extraBody 承载，chat() 不再重复设置
     }
     // 优先级 3：无 capabilities 时发遥测警告，返回 false（拒绝字符串猜测）
-    void recordTelemetry("llm.thinking_fallback", 1, [{ key: "model", value: model }]);
+    void recordTelemetry("llm.thinking_fallback", 1, [{ key: "model", value: model }]).catch((err) => console.warn(`[llm-adapter] telemetry failed for llm.thinking_fallback: ${err instanceof Error ? err.message : String(err)}`));
     return false;
   }
 

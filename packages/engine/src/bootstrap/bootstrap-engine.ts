@@ -115,7 +115,7 @@ function setupAlertEngine(auditTrail: AuditTrail, observer: PipelineObserver): N
           : points.some((p) => p.value > rule.threshold),
     });
   }
-  return setInterval(() => {
+  const alertTimer = setInterval(() => {
     for (const point of alertEngine.check(telemetryController)) {
       auditTrail.recordDegradation("alert-engine", point.level, point.metric);
       observer.emit({
@@ -132,6 +132,11 @@ function setupAlertEngine(auditTrail: AuditTrail, observer: PipelineObserver): N
       });
     }
   }, 60_000);
+  // 巡检定时器不应吊住宿主 event loop：daemon 常驻由 HTTP/WS server 维持；
+  // engine 作为库被 CLI 本地回退/测试复用时，不 unref 会因本定时器导致进程退不出去
+  //（对齐 state-handler / session-manager 既有 heartbeatTimer/gcTimer.unref()）。
+  alertTimer.unref();
+  return alertTimer;
 }
 
 export interface BootstrapEngineOptions {

@@ -213,7 +213,7 @@ async function compressMemories(getEntriesBySource: (source: string) => Array<{ 
         })
       } catch (err) {
         // 回滚：恢复已归档的原始条目为 active
-        await memoryStore.updateL2Status(subEntryIds, "active").catch(() => {})
+        await memoryStore.updateL2Status(subEntryIds, "active").catch((rollbackErr) => console.warn(`[memory-compressor] rollback updateL2Status→active failed (entries may stay archived): ${rollbackErr.message}`))
         throw err
       }
       
