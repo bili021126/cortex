@@ -143,6 +143,9 @@ tsc_check.txt
 tsc_engine.txt
 tsc_log.txt
 vitest_output.txt
+# cwd 相对垃圾：某些 GUI 进程（如搜狗输入法）会把 debug.log 写进当时的 process.cwd()，
+# 落在仓库根 / packages/desktop 等被跟踪目录里。无前导斜杠 ⇒ 匹配任意深度的 debug.log。
+debug.log
 test-output.txt
 tmp_lint.json
 tmp_lint_*.txt
