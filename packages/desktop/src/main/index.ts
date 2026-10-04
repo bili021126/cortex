@@ -29,6 +29,17 @@ let daemonWs: DaemonWsClient | null = null;
 let tray: Tray | null = null;
 const cortex = new CortexBridge();
 
+// ── 可选：免 GPU/沙箱启动开关（部分 Windows 机原生 abort 的缓解）──
+// 症状：Electron 43 在 GPU/沙箱初始化期原生 abort（exit 0x80000003，零 JS 日志），
+// 与前端代码/P0 无关。设 CORTEX_DESKTOP_NOGPU=1 时禁用硬件加速 + 关沙箱，换取"能起来"；
+// 默认不开，避免在 GPU 正常的机器上牺牲 Live2D 桌宠的合成流畅度。须在 app ready 前调用，故置于模块顶层。
+if (process.env["CORTEX_DESKTOP_NOGPU"] === "1") {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("no-sandbox");
+  app.commandLine.appendSwitch("disable-gpu");
+  app.commandLine.appendSwitch("disable-software-rasterizer");
+}
+
 function openChatWindow(): void {
   if (chatWindow && !chatWindow.isDestroyed()) {
     chatWindow.focus();
