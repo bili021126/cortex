@@ -428,3 +428,39 @@
 `copy-data.mjs` + 门禁加一步、`seedMissingFiles`、`config_violation` 幂等、
 `audit-unconsumed` 剥 barrel、`doc-drift-check` 收敛范围。
 **每一处都是「给两个必须相等的表示配一个检查」，且每一处都做过反向验证**（去掉守卫测试就红）。
+
+---
+
+## 追加 · 2026-10-04 全量静态自审（保留以上基础事实，仅追加）
+
+> 详见 `docs/analysis/audit-full-2026-10-04.md`。本节只把这一轮**改变了台账状态**的条目登记进来。
+
+### 状态更新：G-9 / G-4 已从「没守卫/假守卫」转为「已落地」
+
+- **G-9（pre-commit 永远报成功）**：已在 `41f38a9b` 重写为 fail-closed——`set -uo pipefail` + 每步 `if ! <cmd>; then exit 1; fi` 直接判退出码 + eslint `--max-warnings 0`；重型 vitest 交回 `ci-gate.ts`（避免机器内存抖动误拦）。**并在 `d8dd2aa5` 提交时真实触发通过**——这是它第一次在实战里证明「会拦」，绿勾重新携带信息。
+- **G-4（有测试⇔会被跑到）**：已落地 `packages/tools/tests/test-hygiene.test.ts`（@ci:contract，双向「有 `*.test.ts` ⇔ 有非空 test 脚本」+ 禁 `passWithNoTests`），并删了 llm/notification 两处 `passWithNoTests:true`。
+
+### 新增已实现守卫
+
+| 编号 | 守的是哪两份表示 | 谁守 | 强度 |
+|---|---|---|---|
+| **I-17** | `shared/fence.ts` 的 `escapeFence` 语义 ↔ 「注入内容无法破围栏」这一安全不变量（`[/UNTRUSTED]`→`[\/UNTRUSTED]`、`[UNTRUSTED`→`[\UNTRUSTED`） | `engine/tests/fence.test.ts`（@ci:unit，3 条对抗回归：提前闭合 / 伪装起始 / 首尾结构完整）——**去掉转义则测试红** | 强 |
+
+### G-10 · 「崩溃面 / 静默失败」↔「有没有兜底」——本轮逐点修了 24 处，但**没有机械守卫挡住新增**
+
+> 与 G-1…G-8 同族（两份必须相等的表示：一处是**代码里的异步/事件/定时器**，另一处是**它该有的兜底**），只是这份「第二表示」是"错误处理"而非"数据"。
+
+- **真实事故（本轮已修，均 tsc+eslint 绿，未提交）**：
+  - **崩溃级**：`platform/mcp-client.ts:175` `spawn()` 出的 ChildProcess 无 `on("error")`——MCP server 配的 `command` 不存在时 spawn emit `'error'`，无监听 → Node 当未捕获异常抛出 → **崩掉 daemon/宿主**。
+  - **未处理拒绝**：13 处裸 `void recordTelemetry()/recordTokens()`（`export async` 会 reject）。daemon 有 `server/main.ts` 的 `unhandledRejection` handler 兜（记 error 不崩），但 **CLI/测试/嵌入式无 handler → Node v15+ 直接崩进程**。
+  - **静默吞**：7 处 `.catch(() => {})`（空 catch 正则盲区里的箭头式，记忆④高发形态），遥测/回滚失败无声消失。
+  - **污染指标**：遥测失败日志用 `console.error` → 经 console-bridge 契约转成 error 指标 + ErrorReported（自我污染），应 `console.warn`。
+  - **进程悬挂**：`engine/bootstrap` 的 60s 巡检定时器未 `.unref()`——engine 作库被 CLI/测试复用时，会因它吊住 event loop 退不出去。
+- **守卫现状**：**没有**。全是逐点手工修的，下一个新增的 `spawn(` / 裸 `void async` / 库 `setInterval(` 仍会漏，且没有任何东西会问「它的 error 兜底在哪」。
+- **守卫形状提案（便宜、机械，但 grep 式需具名白名单）**：一条 @ci:contract 测试扫 daemon-core（engine/server/scheduler/platform/governance/config/memory-store 的 `src`）：① 每处 `spawn(`/`fork(` 同文件须有 `on("error"`；② 无裸 `void <async>(…)`（整条语句无 `.catch`/`await`/`try` 包裹）；③ library 包的 `setInterval(`/`setTimeout(`（周期/长驻类）须 `.unref()`。已知局限：静态 grep 有误阳/误阴，需像 `react-loop-canonical` 那样维护一份具名豁免表。
+
+### 待裁决（记入台账，属设计/决策层，非本轮擅动）
+
+- `as AgentType` 洗品牌：`agents.loader.ts:49` 把 manifest 字符串强转枚举，而 manifest 含不在 `AgentType` 的人格名（`ganyu/ningguang/…`）——「权威 agent-type 全集」缺单源，拼错值静默不命中。正解=运行时校验 / 加宽枚举 / 改 `string`，是类型模型决策。
+- CLI 入口缺全局 `unhandledRejection`/`uncaughtException`（仅 server 有）；给已降格的 CLI 补安全网 ROI 存疑。
+- `decision-gate-bridge.ts:176` 信息性"决策结果"横幅误用 console.error（同 main.ts 横幅类），级别待你定。
