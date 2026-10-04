@@ -15,6 +15,19 @@ import { IPC_CHANNELS } from "../shared/ipc-channels.js"; // D5 单源化
 
 // ── IPC 通道名（D5：单源化——定义见 src/shared/ipc-channels.ts）──
 
+/**
+ * P0 桥接通用信封：把一个 thunk 包成 {ok:true,data}|{ok:false,error}。
+ * 用于把 CortexHttpClient 的 typed 方法安全地过 IPC——异步拒绝被 catch 归一，
+ * renderer 拿到错误对象而不是崩溃的 ipcRenderer.invoke Promise。
+ */
+async function envelope<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  try {
+    return { ok: true, data: await fn() };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
   // 语音播放锁（防重复点击叠加）
   let ttsPlaying = false;
@@ -217,6 +230,62 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
       return { ok: true };
     },
   );
+
+  // ── P0：完整 Engine 接入 —— 把 CortexHttpClient typed 方法桥到 renderer ──
+  //   参数类型通过 `Parameters<typeof cortex.connection.http.X>[n]` 直接从 client 推出，
+  //   避免在 desktop 侧重复维护 DTO（协议单一源在 @cortex/protocol + @cortex/client）。
+  //   错误经 envelope 归一为 {ok:false,error:string}，永不 raw-throw 过 IPC。
+  //   双向覆盖由 desktop/tests/ipc-coverage.test.ts (@ci:contract) 守。
+
+  // memory 域
+  ipcMain.handle(IPC_CHANNELS.CORTEX_MEMORY_SEARCH, (_e, q: string, opts?: Parameters<typeof cortex.connection.http.searchMemory>[1]) =>
+    envelope(() => cortex.connection.http.searchMemory(q, opts)));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_MEMORY_WRITE, (_e, entry: Parameters<typeof cortex.connection.http.writeMemory>[0]) =>
+    envelope(() => cortex.connection.http.writeMemory(entry)));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_MEMORY_DELETE, (_e, id: string) =>
+    envelope(() => cortex.connection.http.deleteMemory(id)));
+
+  // scheduler 域
+  ipcMain.handle(IPC_CHANNELS.CORTEX_SCHEDULER_SNAPSHOT, () =>
+    envelope(() => cortex.connection.http.getSchedulerSnapshot()));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_SCHEDULER_EXECUTE, () =>
+    envelope(() => cortex.connection.http.executeScheduler()));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_NODE_SUBMIT, (_e, node: Parameters<typeof cortex.connection.http.submitNode>[0]) =>
+    envelope(() => cortex.connection.http.submitNode(node)));
+
+  // nodes 域
+  ipcMain.handle(IPC_CHANNELS.CORTEX_NODE_LIST, (_e, opts?: Parameters<typeof cortex.connection.http.getNodes>[0]) =>
+    envelope(() => cortex.connection.http.getNodes(opts)));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_NODE_GET, (_e, id: string) =>
+    envelope(() => cortex.connection.http.getNode(id)));
+
+  // sessions 域
+  ipcMain.handle(IPC_CHANNELS.CORTEX_SESSIONS_LIST, () =>
+    envelope(() => cortex.connection.http.getSessions()));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_SESSIONS_CREATE, (_e, req?: Parameters<typeof cortex.connection.http.createSession>[0]) =>
+    envelope(() => cortex.connection.http.createSession(req)));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_SESSIONS_DELETE, (_e, id: string) =>
+    envelope(() => cortex.connection.http.deleteSession(id)));
+
+  // 状态/健康/能力
+  ipcMain.handle(IPC_CHANNELS.CORTEX_STATE_GET, () =>
+    envelope(() => cortex.connection.http.getState()));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_HEALTH_GET, () =>
+    envelope(() => cortex.connection.http.getHealth()));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_DAEMON_HEALTH_GET, () =>
+    envelope(() => cortex.connection.http.getDaemonHealth()));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_CAPABILITIES_GET, () =>
+    envelope(() => cortex.connection.http.getCapabilities()));
+
+  // 通用 execute + events
+  ipcMain.handle(IPC_CHANNELS.CORTEX_EXECUTE, (_e, input: string) =>
+    envelope(() => cortex.connection.http.execute(input)));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_EVENTS_LIST, (_e, opts?: Parameters<typeof cortex.connection.http.getEvents>[0]) =>
+    envelope(() => cortex.connection.http.getEvents(opts)));
+
+  // agent config patch
+  ipcMain.handle(IPC_CHANNELS.CORTEX_AGENT_PATCH, (_e, id: string, patch: Record<string, unknown>) =>
+    envelope(() => cortex.connection.http.patchAgentConfig(id, patch)));
 }
 
 function getSettingsPath(): string {

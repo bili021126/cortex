@@ -9,6 +9,9 @@ import { IPC_CHANNELS } from "../shared/ipc-channels.js"; // D5 单源化
 
 // ── IPC 通道名（D5：单源化——定义见 src/shared/ipc-channels.ts）──
 
+/** P0 桥接统一信封：成功带 data、失败带 error。泛型默认 unknown 让 renderer 侧按调用点小化。 */
+type IpcResult<T = unknown> = { ok: true; data: T } | { ok: false; error: string };
+
 export interface CortexDesktopAPI {
   init: (projectRoot: string) => Promise<{ ok: boolean }>;
   chat: (input: string, agent?: string) => Promise<{ ok: boolean; data?: string }>;
@@ -43,6 +46,34 @@ export interface CortexDesktopAPI {
   };
   /** 订阅 Presence 事件（WS → main → IPC → renderer）。返回取消订阅函数。 */
   onPresenceEvent: (cb: (event: { type: string; chunkLength?: number; success?: boolean; toolName?: string }) => void) => () => void;
+
+  // ── P0：完整 Engine 接入面 —— renderer 通过 window.cortexDesktop.<domain>.<action>() 调用；
+  //   返回统一 IpcResult 信封。复杂 DTO 参数用 unknown，由 renderer 调用点做类型收窄。
+  memory: {
+    search: (q: string, opts?: { kind?: string; limit?: number }) => Promise<IpcResult>;
+    write: (entry: unknown) => Promise<IpcResult>;
+    delete: (id: string) => Promise<IpcResult>;
+  };
+  scheduler: {
+    snapshot: () => Promise<IpcResult>;
+    execute: () => Promise<IpcResult>;
+    submitNode: (node: unknown) => Promise<IpcResult>;
+  };
+  nodes: {
+    list: (opts?: { page?: number; limit?: number; status?: string }) => Promise<IpcResult>;
+    get: (id: string) => Promise<IpcResult>;
+  };
+  sessions: {
+    list: () => Promise<IpcResult>;
+    create: (req?: unknown) => Promise<IpcResult>;
+    delete: (id: string) => Promise<IpcResult>;
+  };
+  state: { get: () => Promise<IpcResult> };
+  health: { get: () => Promise<IpcResult>; daemonHealth: () => Promise<IpcResult> };
+  capabilities: { get: () => Promise<IpcResult> };
+  execute: (input: string) => Promise<IpcResult>;
+  events: { list: (opts?: { page?: number; limit?: number; type?: string }) => Promise<IpcResult> };
+  agent: { patch: (id: string, patch: Record<string, unknown>) => Promise<IpcResult> };
 }
 
 contextBridge.exposeInMainWorld("cyrene", {
@@ -153,4 +184,34 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     ipcRenderer.on(IPC_CHANNELS.PRESENCE_EVENT, handler);
     return () => { ipcRenderer.removeListener(IPC_CHANNELS.PRESENCE_EVENT, handler); };
   },
+
+  // ── P0：完整 Engine 接入 —— renderer 侧 typed 门面 ──
+  memory: {
+    search: (q, opts) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_MEMORY_SEARCH, q, opts),
+    write: (entry) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_MEMORY_WRITE, entry),
+    delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_MEMORY_DELETE, id),
+  },
+  scheduler: {
+    snapshot: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SCHEDULER_SNAPSHOT),
+    execute: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SCHEDULER_EXECUTE),
+    submitNode: (node) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_NODE_SUBMIT, node),
+  },
+  nodes: {
+    list: (opts) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_NODE_LIST, opts),
+    get: (id) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_NODE_GET, id),
+  },
+  sessions: {
+    list: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SESSIONS_LIST),
+    create: (req) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SESSIONS_CREATE, req),
+    delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SESSIONS_DELETE, id),
+  },
+  state: { get: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STATE_GET) },
+  health: {
+    get: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_HEALTH_GET),
+    daemonHealth: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_DAEMON_HEALTH_GET),
+  },
+  capabilities: { get: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_CAPABILITIES_GET) },
+  execute: (input) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_EXECUTE, input),
+  events: { list: (opts) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_EVENTS_LIST, opts) },
+  agent: { patch: (id, patch) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_AGENT_PATCH, id, patch) },
 } satisfies CortexDesktopAPI);
