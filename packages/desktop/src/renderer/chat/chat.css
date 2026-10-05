@@ -2644,6 +2644,18 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__setting-item-label { font-size: 13px; color: #5c4a5c; min-width: 90px; }
 .chat__setting-item-key { flex: 1; font-size: 11px; color: #c9a3b8; font-family: ui-monospace, Consolas, monospace; }
 .chat__setting-item-value { font-size: 12px; color: #d94685; font-weight: 500; padding: 2px 10px; background: rgba(236, 72, 153, 0.08); border-radius: 999px; }
+/* 递归配置值渲染：标量 / 数组逐条 / 对象折叠子菜单 */
+.chat__cfg-scalar { font-size: 12px; color: #d94685; font-weight: 500; }
+.chat__cfg-array { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.chat__cfg-array-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.chat__cfg-idx { min-width: 16px; text-align: right; font-size: 10px; color: #c9a3b8; font-family: ui-monospace, Consolas, monospace; }
+.chat__cfg-obj { margin-top: 2px; }
+.chat__cfg-obj-summary { cursor: pointer; font-size: 11px; color: #d94685; padding: 2px 10px; background: rgba(236, 72, 153, 0.08); border-radius: 999px; display: inline-block; user-select: none; list-style: none; }
+.chat__cfg-obj-summary::before { content: "▸ "; }
+.chat__cfg-obj[open] > .chat__cfg-obj-summary::before { content: "▾ "; }
+.chat__cfg-obj-body { margin: 4px 0 4px 14px; padding-left: 10px; border-left: 1px solid rgba(236, 72, 153, 0.18); display: flex; flex-direction: column; gap: 4px; }
+.chat__cfg-kv { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.chat__cfg-k { font-size: 12px; color: #5c4a5c; min-width: 90px; }
 /* 设置面板中栏（子组——左中右三栏） */
 .chat__settings-groups {
   width: 128px; min-width: 128px;

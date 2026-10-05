@@ -45,170 +45,65 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   return "fatal";
 }
 
-/** 设置域列表 + 子组（左中右三栏：域 → 子组 → 配置项） */
-const SETTINGS_DOMAINS = [
-  { id: "llm", name: "模型", icon: "🧠", desc: "LLM 配置", groups: ["主模型", "推理", "输出"] },
-  { id: "memory", name: "记忆", icon: "💭", desc: "记忆策略", groups: ["分层", "检索", "生命周期"] },
-  { id: "skills", name: "技能", icon: "🎯", desc: "技能系统", groups: ["注册", "行为"] },
-  { id: "scheduler", name: "调度", icon: "⏱️", desc: "调度参数", groups: ["执行", "限制"] },
-  { id: "timeouts", name: "超时", icon: "⏳", desc: "超时配置", groups: ["请求", "会话"] },
-  { id: "governance", name: "治理", icon: "⚖️", desc: "治理规则", groups: ["宪法", "流程", "记录"] },
-  { id: "env", name: "环境", icon: "🌐", desc: "环境变量", groups: ["运行", "服务"] },
-  { id: "file-paths", name: "路径", icon: "📁", desc: "文件路径", groups: ["项目", "数据"] },
-  { id: "agent-quota", name: "配额", icon: "📊", desc: "Agent 配额", groups: ["数量", "资源"] },
-  { id: "version", name: "版本", icon: "🏷️", desc: "版本信息", groups: ["产品", "运行环境"] },
-];
-
-/** 各子组配置项（静态——完整清单） */
-const SETTINGS_ITEMS: Record<string, Record<string, Array<{ label: string; key: string; value: string }>>> = {
-  llm: {
-    "主模型": [
-      { label: "默认模型", key: "llm.defaultModel", value: "DeepSeek-V4" },
-      { label: "备用模型", key: "llm.fallbackModel", value: "Qwen-Max" },
-      { label: "供应商", key: "llm.provider", value: "DeepSeek" },
-    ],
-    "推理": [
-      { label: "推理档位", key: "llm.reasoning", value: "Auto" },
-      { label: "温度", key: "llm.temperature", value: "0.7" },
-      { label: "Top-P", key: "llm.topP", value: "0.95" },
-    ],
-    "输出": [
-      { label: "最大 Token", key: "llm.maxTokens", value: "8192" },
-      { label: "流式输出", key: "llm.streaming", value: "开启" },
-      { label: "超时", key: "llm.timeoutMs", value: "60000" },
-      { label: "重试次数", key: "llm.maxRetries", value: "3" },
-    ],
-  },
-  memory: {
-    "分层": [
-      { label: "记忆分层", key: "memory.tiers", value: "L0/L1/L2" },
-      { label: "自动沉淀", key: "memory.autoConsolidate", value: "开启" },
-      { label: "Worldbook", key: "memory.worldbook", value: "开启" },
-    ],
-    "检索": [
-      { label: "检索条数", key: "memory.topK", value: "8" },
-      { label: "召回阈值", key: "memory.similarityThreshold", value: "0.72" },
-      { label: "检索方式", key: "memory.retrieval", value: "BFS+权重" },
-    ],
-    "生命周期": [
-      { label: "持久化", key: "memory.persist", value: "开启" },
-      { label: "冲突检测", key: "memory.conflictDetection", value: "开启" },
-      { label: "过期天数", key: "memory.ttlDays", value: "180" },
-    ],
-  },
-  skills: {
-    "注册": [
-      { label: "技能注册", key: "skills.registry", value: "内置 + 自定义" },
-      { label: "技能上限", key: "skills.maxCount", value: "64" },
-      { label: "技能目录", key: "skills.dir", value: ".qoder/skills" },
-    ],
-    "行为": [
-      { label: "Slash 命令", key: "skills.slashCommands", value: "开启" },
-      { label: "技能校验", key: "skills.validateOnLoad", value: "开启" },
-      { label: "技能缓存", key: "skills.cache", value: "开启" },
-      { label: "失败降级", key: "skills.degradeOnError", value: "开启" },
-      { label: "参考资料", key: "skills.references", value: "可注入" },
-    ],
-  },
-  scheduler: {
-    "执行": [
-      { label: "轮询间隔", key: "scheduler.intervalMs", value: "1000" },
-      { label: "任务超时", key: "scheduler.taskTimeoutMs", value: "300000" },
-      { label: "重试策略", key: "scheduler.retry", value: "指数退避" },
-      { label: "定时任务", key: "scheduler.cron", value: "开启" },
-    ],
-    "限制": [
-      { label: "并发上限", key: "scheduler.concurrency", value: "4" },
-      { label: "队列上限", key: "scheduler.queueLimit", value: "64" },
-      { label: "优先级", key: "scheduler.priority", value: "P0-P3" },
-      { label: "调度窗口", key: "scheduler.windowMs", value: "60000" },
-    ],
-  },
-  timeouts: {
-    "请求": [
-      { label: "请求超时", key: "timeouts.requestMs", value: "60000" },
-      { label: "工具超时", key: "timeouts.toolMs", value: "120000" },
-      { label: "编译超时", key: "timeouts.buildMs", value: "600000" },
-      { label: "连接超时", key: "timeouts.connectMs", value: "10000" },
-    ],
-    "会话": [
-      { label: "会话空闲", key: "timeouts.idleMs", value: "300000" },
-      { label: "确认门超时", key: "timeouts.confirmMs", value: "30000" },
-      { label: "流式空闲", key: "timeouts.streamIdleMs", value: "15000" },
-    ],
-  },
-  governance: {
-    "宪法": [
-      { label: "宪法版本", key: "governance.constitution", value: "v2.5" },
-      { label: "门禁等级", key: "governance.gateLevel", value: "五层" },
-      { label: "确认门", key: "governance.confirmGate", value: "开启" },
-    ],
-    "流程": [
-      { label: "修订流程", key: "governance.amendment", value: "委员会" },
-      { label: "事件路由", key: "governance.eventRouting", value: "声明式" },
-      { label: "共识机制", key: "governance.consensus", value: "圆桌" },
-    ],
-    "记录": [
-      { label: "审计日志", key: "governance.audit", value: "开启" },
-      { label: "决策记录", key: "governance.decisionLog", value: "ADR" },
-    ],
-  },
-  env: {
-    "运行": [
-      { label: "运行环境", key: "env.nodeEnv", value: "production" },
-      { label: "日志级别", key: "env.logLevel", value: "info" },
-      { label: "数据目录", key: "env.dataDir", value: ".cortex" },
-      { label: "调试模式", key: "env.debug", value: "关闭" },
-    ],
-    "服务": [
-      { label: "daemon 端口", key: "env.daemonPort", value: "3210" },
-      { label: "TTS 服务", key: "env.gptsovitsUrl", value: "9880" },
-      { label: "LLM API", key: "env.llmBaseUrl", value: "配置中" },
-      { label: "遥测上报", key: "env.telemetry", value: "开启" },
-    ],
-  },
-  "file-paths": {
-    "项目": [
-      { label: "工作区", key: "paths.workspace", value: "D:/cortex" },
-      { label: "技能目录", key: "paths.skills", value: ".qoder/skills" },
-      { label: "画布目录", key: "paths.canvases", value: "~/.qoder/projects" },
-    ],
-    "数据": [
-      { label: "数据目录", key: "paths.data", value: ".cortex" },
-      { label: "日志目录", key: "paths.logs", value: ".cortex/logs" },
-      { label: "配置目录", key: "paths.config", value: ".cortex/config" },
-      { label: "临时目录", key: "paths.tmp", value: ".tmp" },
-      { label: "记忆库", key: "paths.memoryDb", value: ".cortex/memory.db" },
-    ],
-  },
-  "agent-quota": {
-    "数量": [
-      { label: "Agent 上限", key: "quota.agents", value: "8" },
-      { label: "并行会话", key: "quota.sessions", value: "3" },
-      { label: "子任务上限", key: "quota.subTasks", value: "8" },
-    ],
-    "资源": [
-      { label: "每会话消息", key: "quota.messagesPerSession", value: "200" },
-      { label: "工具调用上限", key: "quota.toolCalls", value: "50" },
-      { label: "token 日配额", key: "quota.dailyTokens", value: "1M" },
-      { label: "重试上限", key: "quota.retries", value: "3" },
-      { label: "内存上限", key: "quota.memoryMb", value: "512" },
-    ],
-  },
-  version: {
-    "产品": [
-      { label: "Cortex", key: "version.cortex", value: "2.5.28" },
-      { label: "桌面端", key: "version.desktop", value: "0.1.0" },
-      { label: "引擎", key: "version.engine", value: "Core-2" },
-      { label: "宪法", key: "version.constitution", value: "v3.8" },
-    ],
-    "运行环境": [
-      { label: "Node.js", key: "version.node", value: "24 LTS" },
-      { label: "Electron", key: "version.electron", value: "43" },
-      // F10：删除硬编码 buildAt/gitHead 快照——静态假数据误导，真实版本以 daemon capabilities 为准
-    ],
-  },
+/** 配置域中文名（左列显示；未命中回退英文 name，tooltip 仍给原始域标识） */
+const DOMAIN_LABELS: Record<string, string> = {
+  engine: "引擎参数", enginePlugins: "引擎插件", tools: "工具集", eventRouting: "事件路由",
+  roundtable: "圆桌会议", searchProviders: "搜索源", mcpServers: "MCP 服务", selfExamination: "自我检查",
+  crossVerification: "交叉验证", seedMemories: "种子记忆", governancePipeline: "治理流程",
+  architectureFlows: "架构流向", cognition: "认知", docs: "文档注册", models: "模型清单",
+  keysContext: "密钥上下文", agentManifests: "Agent 清单", tuning: "调参",
 };
+
+/** 常见配置项 key 中文名（右列显示；未命中回退英文 key） */
+const KEY_LABELS: Record<string, string> = {
+  description: "说明", _description: "说明", inspectorMaxLoops: "巡检最大轮数",
+  maxReplanPerNode: "单节点最大重规划", maxTotalReplans: "总重规划上限",
+  executeAllTimeoutMs: "全量执行超时(ms)", reactLoopTimeoutMs: "ReAct 循环超时(ms)",
+  toolTimeouts: "工具超时", inspector: "巡检器", plugins: "插件", tools: "工具",
+  routeTable: "路由表", committeeRules: "委员会规则", mergeRules: "归并规则",
+  templates: "模板", providers: "供应商", servers: "服务器", agents: "智能体",
+  pairs: "验证配对", flows: "流程", principles: "原则", layers: "分层",
+  knownUnassigned: "未归类模块", constitutionPath: "宪法路径", docRegistry: "文档注册表",
+  keys: "密钥", contextLimits: "上下文限额", env: "环境", tuning: "调参",
+  activationMatrix: "激活矩阵", attention: "注意力", templates_: "模板",
+  enabled: "启用", stages: "阶段", ciGate: "CI 门禁", triggers: "触发器", _note: "备注",
+  script: "脚本", timeoutMs: "超时(ms)", blockOnFailure: "失败即阻断",
+  onAmendmentProposed: "提案时", onSchedule: "定时", onCommit: "提交时",
+};
+
+/** 递归渲染配置值：原始值→文本；数组→逐条列出；对象→可展开子菜单（<details>） */
+function CfgValue({ v }: { v: unknown }): React.ReactElement {
+  if (v === null || v === undefined) return <span className="chat__cfg-scalar">—</span>;
+  if (typeof v !== "object") return <span className="chat__cfg-scalar">{String(v)}</span>;
+  if (Array.isArray(v)) {
+    if (v.length === 0) return <span className="chat__cfg-scalar">（空）</span>;
+    return (
+      <div className="chat__cfg-array">
+        {v.map((item, i) => (
+          <div key={i} className="chat__cfg-array-item">
+            <span className="chat__cfg-idx">{i}</span>
+            <CfgValue v={item} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  const entries = Object.entries(v as Record<string, unknown>);
+  return (
+    <details className="chat__cfg-obj">
+      <summary className="chat__cfg-obj-summary">{entries.length} 项</summary>
+      <div className="chat__cfg-obj-body">
+        {entries.map(([k, val]) => (
+          <div key={k} className="chat__cfg-kv">
+            <span className="chat__cfg-k">{KEY_LABELS[k] ?? k}</span>
+            <CfgValue v={val} />
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 
 /** 任务面板：分组 + 任务数据（静态） */
 const TASK_FILTERS = [
@@ -397,32 +292,37 @@ export function ChatView({ onClose }: { onClose: () => void }) {
       setMode(m);
     }
   }, []);
-  // 设置面板：当前域 + 子组
-  const [settingsDomain, setSettingsDomain] = useState("llm");
-  const [settingsGroup, setSettingsGroup] = useState("主模型");
-  // 设置接真：settings:get 拉真值（覆盖静态默认）
-  const [settingsData, setSettingsData] = useState<Record<string, unknown> | null>(null);
-  // 设置编辑：正在编辑的配置项 key（点击值 → 输入框 → Enter 保存）
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editingVal, setEditingVal] = useState("");
-  const saveSetting = useCallback(async (key: string, val: string) => {
-    try {
-      await window.cortexDesktop.settings.set(key, val);
-      setSettingsData((prev) => ({ ...(prev ?? {}), [key]: val }));
-      setToast(`已保存: ${key} = ${val}`);
-    } catch (e) {
-      setToast(`保存失败: ${String(e)}`);
-    }
-    setEditingKey(null);
-  }, []);
+  // 真实配置面板：config.get() 拉引擎实际读取的 ~/.cortex/config 各域（替换 mock 渲染）
+  const [cfg, setCfg] = useState<{ dir: string; domains: Array<{ name: string; fileName: string; required: boolean; present: boolean; topKeys: string[] }> } | null>(null);
+  const [cfgSel, setCfgSel] = useState<string | null>(null);
+  const [cfgVal, setCfgVal] = useState<Record<string, unknown> | null>(null);
+  // 进设置 tab：拉引擎真实配置域概览（dir + 各域），默认选中第一个域
   useEffect(() => {
+    if (tab !== "settings") return;
     void (async () => {
       try {
-        const res = await window.cortexDesktop.settings.get() as { ok: boolean; data?: Record<string, unknown> };
-        if (res?.ok && res.data && Object.keys(res.data).length > 0) setSettingsData(res.data);
-      } catch { /* 保持静态默认 */ }
+        const res = await window.cortexDesktop.config.get() as { ok: boolean; data?: { dir?: string; domains?: Array<{ name: string; fileName: string; required: boolean; present: boolean; topKeys: string[] }> } };
+        if (res?.ok && res.data) {
+          const domains = res.data.domains ?? [];
+          setCfg({ dir: res.data.dir ?? "?", domains });
+          setCfgSel((prev) => prev ?? domains[0]?.name ?? null);
+        } else {
+          setCfg(null);
+        }
+      } catch { setCfg(null); }
     })();
-  }, []);
+  }, [tab]);
+  // 选中域变化：拉该域完整 JSON 值
+  useEffect(() => {
+    if (!cfgSel) { setCfgVal(null); return; }
+    void (async () => {
+      try {
+        const res = await window.cortexDesktop.config.get(cfgSel) as { ok: boolean; data?: { value?: unknown } };
+        const v = res?.ok ? res.data?.value : undefined;
+        setCfgVal(v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
+      } catch { setCfgVal(null); }
+    })();
+  }, [cfgSel]);
   // 任务面板：筛选 + 选中
   const [taskFilter, setTaskFilter] = useState("全部");
   const [taskSelected, setTaskSelected] = useState(0);
@@ -865,57 +765,39 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             </div>
           </div>
         )}
-        {/* 设置面板（左中右三栏：域 → 子组 → 配置项） */}
+        {/* 设置面板：真实配置域浏览器（config.get 拉引擎实际读取的 ~/.cortex/config） */}
         {tab === "settings" && (
           <div className="chat__panel chat__panel--settings">
             <div className="chat__settings-layout">
-              {/* 左：域列表（简） */}
+              {/* 左：真实配置域列表 */}
               <aside className="chat__settings-domains">
-                {SETTINGS_DOMAINS.map((d) => (
-                  <button key={d.id} type="button" className={`chat__settings-domain${settingsDomain === d.id ? " is-active" : ""}`} onClick={() => { setSettingsDomain(d.id); setSettingsGroup(d.groups[0]); }}>
-                    <span aria-hidden="true">{d.icon}</span>
-                    <span>{d.name}</span>
+                <div className="chat__settings-domain" style={{ opacity: 0.7, cursor: "default" }}>
+                  <span aria-hidden="true">📂</span>
+                  <span>{cfg ? `${cfg.domains.length} 域` : "加载中…"}</span>
+                </div>
+                {(cfg?.domains ?? []).map((d) => (
+                  <button key={d.name} type="button" className={`chat__settings-domain${cfgSel === d.name ? " is-active" : ""}`} onClick={() => setCfgSel(d.name)} title={`${d.name} · ${d.fileName}${d.required ? " · 必填" : ""}`}>
+                    <span aria-hidden="true">{d.present ? "🟢" : "⚪"}</span>
+                    <span>{DOMAIN_LABELS[d.name] ?? d.name}</span>
                   </button>
                 ))}
               </aside>
-              {/* 中：子组列表（中） */}
-              <aside className="chat__settings-groups">
-                {(SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.groups ?? []).map((g) => (
-                  <button key={g} type="button" className={`chat__settings-group${settingsGroup === g ? " is-active" : ""}`} onClick={() => setSettingsGroup(g)}>
-                    {g}
-                  </button>
-                ))}
-              </aside>
-              {/* 右：配置项（复） */}
+              {/* 右：选中域的真实配置值（只读；写回待 daemon config 写端点接线） */}
               <div className="chat__settings-config">
                 <div className="chat__panel-head">
-                  <span className="chat__panel-title">{settingsGroup}</span>
-                  <span className="chat__settings-domain-desc">{SETTINGS_DOMAINS.find((d) => d.id === settingsDomain)?.desc ?? ""}</span>
+                  <span className="chat__panel-title" title={cfgSel ?? ""}>{cfgSel ? (DOMAIN_LABELS[cfgSel] ?? cfgSel) : "选择配置域"}</span>
+                  <span className="chat__settings-domain-desc" title="引擎实际读取的配置目录">源：{cfg?.dir ?? "…"}</span>
                 </div>
                 <div className="chat__settings-items">
-                  {(SETTINGS_ITEMS[settingsDomain]?.[settingsGroup] ?? []).map((it) => {
-                    // 真值优先：settingsData 里有对应 key 时覆盖静态值
-                    const real = settingsData?.[it.key] ?? settingsData?.[it.key.split(".")[0]];
-                    const display = real !== undefined && real !== null ? String(real) : it.value;
-                    return (
-                      <div key={it.key} className="chat__setting-item">
-                        <span className="chat__setting-item-label">{it.label}</span>
-                        <span className="chat__setting-item-key">{it.key}</span>
-                        {editingKey === it.key ? (
-                          <input
-                            className="chat__setting-item-input"
-                            value={editingVal}
-                            autoFocus
-                            onChange={(e) => setEditingVal(e.target.value)}
-                            onBlur={() => { if (editingKey === it.key) void saveSetting(it.key, editingVal); }}
-                            onKeyDown={(e) => { if (e.key === "Enter") void saveSetting(it.key, editingVal); if (e.key === "Escape") setEditingKey(null); }}
-                          />
-                        ) : (
-                          <span className="chat__setting-item-value chat__setting-item-value--editable" title="点击编辑" onClick={() => { setEditingKey(it.key); setEditingVal(display); }}>{display} ✎</span>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {cfgSel && cfgVal && Object.entries(cfgVal).map(([k, v]) => (
+                    <div key={k} className="chat__setting-item">
+                      <span className="chat__setting-item-label">{KEY_LABELS[k] ?? k}</span>
+                      <span className="chat__setting-item-key">{k}</span>
+                      <CfgValue v={v} />
+                    </div>
+                  ))}
+                  {cfgSel && !cfgVal && <div className="chat__setting-item"><span className="chat__setting-item-label">（该域无数据或加载中）</span></div>}
+                  {!cfgSel && <div className="chat__setting-item"><span className="chat__setting-item-label">← 选择左侧配置域查看真实值</span></div>}
                 </div>
               </div>
             </div>
