@@ -8,8 +8,8 @@
   "scripts": {
     "build:main": "tsc -p tsconfig.main.json",
     "build": "npm run build:main && vite build",
-    "dev": "npm run build:main && concurrently \"vite\" \"electron .\"",
-    "start": "electron .",
+    "dev": "npm run build:main && concurrently \"vite\" \"electron . --no-sandbox --disable-gpu\"",
+    "start": "electron . --no-sandbox --disable-gpu",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
     "test": "vitest run",
     "lint": "eslint src/"

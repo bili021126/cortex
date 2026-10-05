@@ -314,7 +314,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [configOpen, setConfigOpen] = useState(false);
   // 通知铃（设计历史唯一持久三项之一——四通道路由小红点）
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifCount, setNotifCount] = useState(3);
+  const [notifCount, setNotifCount] = useState(0); // 真事件到达才 +1（见 onNotification），不再硬编码假未读数
   // 通知接真：daemon WS 事件 → 未读 +1（pipeline/notification 频道）
   const [notifItems, setNotifItems] = useState<Array<{ icon: string; text: string; time: string }>>([]);
   useEffect(() => {
@@ -433,19 +433,19 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     let alive = true;
     const load = async () => {
       try {
-        const res = await fetch("http://127.0.0.1:3210/api/v1/nodes?limit=50");
-        const j = await res.json() as { data?: Array<{ id: string; task?: string; status?: string; claimedBy?: string[] }> };
-        if (!alive) return;
-        const nodes = j.data ?? [];
+        // 走 P0 IPC 桥（不再硬编码 127.0.0.1:3210、不绕 renderer→daemon 边界）
+        const res = await window.cortexDesktop.nodes.list({ limit: 50 });
+        if (!alive || !res.ok) return;
+        const nodes = (res.data as { data: Array<{ id: string; nodeType: string; agent: string; description: string; status: string }> }).data; // PaginatedResponse<TaskNodeSnapshot>
         if (nodes.length > 0) {
           setRealTasks(nodes.map((n) => ({
             id: n.id,
-            title: n.task ?? n.id.slice(0, 12),
-            status: n.status ?? "pending",
-            agent: n.claimedBy?.[0] ?? "—",
+            title: n.description || n.nodeType || n.id.slice(0, 12), // 真字段 description/nodeType（此前误读 n.task）
+            status: n.status,
+            agent: n.agent || "—", // 真字段 agent（此前误读 claimedBy）
           })));
         }
-      } catch { /* 无 daemon——静态 */ }
+      } catch { /* 无 daemon——保持静态 */ }
     };
     void load();
     // 轮询刷新（瞬态化——任务状态实时可见）
@@ -483,28 +483,15 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
   const handleNewSession = useCallback(async () => {
     if (messages.length === 0) { setToast("已经是新会话"); return; }
+    // 走 P0 IPC 桥创建真实会话（不再硬编码 3210；不再用原生 window.confirm——F5 顺带消解）
+    const agentId = active?.id?.replace(/^agent-/, "") ?? "cyrene";
     try {
-      // 接真：POST /api/v1/sessions（daemon）——创建真实会话
-      const res = await fetch("http://127.0.0.1:3210/api/v1/sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: `会话 ${new Date().toLocaleTimeString()}`, agent: active?.id ?? "cyrene" }),
-      });
-      if (res.ok) {
-        setMessages([]);
-        setToast("已创建新会话 ✨");
-      } else {
-        // 兜底：本地清空
-        if (window.confirm("创建新会话？当前会话记录将保留在本地历史。")) {
-          setMessages([]);
-          setToast("已创建新会话 ✨（本地）");
-        }
-      }
+      const res = await window.cortexDesktop.sessions.create({ agent: agentId, mode: "chat" });
+      setMessages([]);
+      setToast(res.ok ? "已创建新会话 ✨" : "已清空当前会话（本地，daemon 未连接）");
     } catch {
-      if (window.confirm("创建新会话？当前会话记录将保留在本地历史。")) {
-        setMessages([]);
-        setToast("已创建新会话 ✨（本地）");
-      }
+      setMessages([]);
+      setToast("已清空当前会话（本地）");
     }
   }, [messages, active]);
 
@@ -814,6 +801,32 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               {/* 右：任务详情（复——渐进披露） */}
               <div className="chat__tasks-detail">
                 {(() => {
+                  // F2：真列表配真详情——realTasks 存在时按真实节点渲染，不再回退 mock（此前"真列表假详情"错位）
+                  if (realTasks && realTasks.length > 0) {
+                    const rt = realTasks[taskSelected] ?? realTasks[0];
+                    if (!rt) return <div className="chat__panel-head"><span className="chat__panel-title">未选择任务</span></div>;
+                    const statusCls = rt.status === "complete" ? "done" : rt.status === "failed" ? "failed" : "doing";
+                    return (
+                      <>
+                        <div className="chat__panel-head">
+                          <span className="chat__panel-title">{rt.title}</span>
+                          <span className={`chat__task-status chat__task-status--${statusCls}`}>{rt.status}</span>
+                        </div>
+                        <div className="chat__tasks-detail-meta">
+                          <span>Agent：{rt.agent}</span>
+                          <span>节点 ID：{rt.id.slice(0, 12)}</span>
+                        </div>
+                        <div className="chat__tasks-events">
+                          <div className="chat__task-event">步骤流 / 事件流：节点级明细待接入（当前 daemon 快照不含 steps/events）</div>
+                        </div>
+                        <div className="chat__tasks-actions">
+                          <button type="button" className="chat__session-btn" title="取消任务（功能待接线）" disabled>⏹ 取消</button>
+                          <button type="button" className="chat__session-btn" title="重试任务（功能待接线）" disabled>↻ 重试</button>
+                        </div>
+                      </>
+                    );
+                  }
+                  // 演示模式（daemon 无节点）：保留 mock 详情
                   const t = TASKS[taskSelected];
                   return (
                     <>
@@ -829,7 +842,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                       {/* 步骤流 */}
                       <div className="chat__tasks-steps">
                         {t.steps.map((st) => (
-                          <div key={st.name} className={`chat__task-step chat__task-step--${st.state}"`}>
+                          <div key={st.name} className={`chat__task-step chat__task-step--${st.state}`}>
                             <span className="chat__task-step-mark">{st.state === "done" ? "✓" : st.state === "doing" ? "●" : "○"}</span>
                             <span className="chat__task-step-name">{st.name}</span>
                           </div>
@@ -894,7 +907,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                             value={editingVal}
                             autoFocus
                             onChange={(e) => setEditingVal(e.target.value)}
-                            onBlur={() => setEditingKey(null)}
+                            onBlur={() => { if (editingKey === it.key) void saveSetting(it.key, editingVal); }}
                             onKeyDown={(e) => { if (e.key === "Enter") void saveSetting(it.key, editingVal); if (e.key === "Escape") setEditingKey(null); }}
                           />
                         ) : (
@@ -1186,7 +1199,7 @@ function CodeEditor() {
 }
 
 /* ── 记忆面板：接真（GET /api/v1/memory） ── */
-interface MemItem { id: string; summary: string; kind: string; domain: string; semanticState: string; agentType: string; createdAt: number; weight: number; accessCount: number; }
+interface MemItem { id: string; summary?: string; content?: string; kind: string; domain?: string; semanticState?: string; tags?: string[]; createdAt: number; }
 function MemoryPanel() {
   const [items, setItems] = useState<MemItem[] | null>(null);
   const [query, setQuery] = useState("");
@@ -1194,9 +1207,9 @@ function MemoryPanel() {
   const load = useCallback(async (q: string) => {
     setLoading(true);
     try {
-      const url = `http://127.0.0.1:3210/api/v1/memory?limit=50${q ? `&query=${encodeURIComponent(q)}` : ""}`;
-      const j = await (await fetch(url)).json() as { data?: MemItem[] };
-      setItems(j.data ?? []);
+      // 走 P0 IPC 桥（不再硬编码 3210、不绕 renderer→daemon 边界）
+      const res = await window.cortexDesktop.memory.search(q, { limit: 50 });
+      setItems(res.ok ? (res.data as MemItem[]) : []);
     } catch { setItems([]); }
     setLoading(false);
   }, []);
@@ -1226,8 +1239,8 @@ function MemoryPanel() {
           <div key={m.id} className="chat__memory-item">
             <span className="chat__memory-dot" style={{ background: kindColor(m.kind) }} aria-hidden="true" />
             <span className="chat__memory-meta">
-              <span className="chat__memory-summary">{m.summary}</span>
-              <span className="chat__memory-sub">{m.kind} · {m.domain} · {m.agentType} · w{m.weight}</span>
+              <span className="chat__memory-summary">{m.summary || m.content?.slice(0, 80) || "（无摘要）"}</span>
+              <span className="chat__memory-sub">{m.kind} · {m.domain || "—"}{m.tags?.length ? ` · ${m.tags.slice(0, 2).join(", ")}` : ""}</span>
             </span>
             <span className="chat__memory-state">{m.semanticState}</span>
           </div>
