@@ -239,11 +239,11 @@ export class SemanticModelRouter implements IModelRouter {
    * 用 flash 模型做语义三选一，适合绝大多数场景。
    *
    * @param llm LLM 调用入口（通常来自 MetaAgent.llm.chat）
-   * @param model 分类用的模型名，默认 "deepseek-v4-flash"
+   * @param model 分类用的模型名，默认 "deepseek-flash"
    */
   static createSimpleClassifier(
     llm: (model: string, messages: Array<{ role: string; content: string }>) => Promise<string>,
-    model = "deepseek-v4-flash",
+    model = "deepseek-flash",
   ): (payload: string) => Promise<ModelTier> {
     return async (payload: string): Promise<ModelTier> => {
       const resp = await llm(model, [{

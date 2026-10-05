@@ -10,7 +10,7 @@
 //   registry.register({
 //     type: "code",
 //     persona: "你是阿贝多...",
-//     model: "deepseek-v4-flash",
+//     model: "deepseek-flash",
 //     tags: ["code", "implementation"],
 //     active: true,
 //     toolPermissions: ["read_file", "write_file", ...],

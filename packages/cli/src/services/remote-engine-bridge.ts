@@ -90,11 +90,11 @@ export class RemoteEngineBridge implements ITuiEngineBridge {
   // ─── 模型名 ──────────────────────────────────────────
 
   getChatModelName(): string {
-    return this._chatModelName || "deepseek-v4-flash";
+    return this._chatModelName || "deepseek-flash";
   }
 
   getReasonerModelName(): string {
-    return this._reasonerModelName || "deepseek-v4-flash";
+    return this._reasonerModelName || "deepseek-flash";
   }
 
   // ─── 工具定义 ────────────────────────────────────────

@@ -93,7 +93,7 @@ const KEY_LABELS: Record<string, string> = {
 // 参考: https://api-docs.deepseek.com/zh-cn/quick_start/pricing
 
 const PRICING: Record<string, { input: number; output: number }> = {
-  "deepseek-v4-flash":   { input: 1, output: 2 },
+  "deepseek-flash":   { input: 1, output: 2 },
   "deepseek-v4-pro":     { input: 3, output: 6 },
 };
 const DEFAULT_PRICING = { input: 1, output: 2 };

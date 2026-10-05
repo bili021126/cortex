@@ -380,7 +380,7 @@ export async function bootstrapEngine(
   ].filter(Boolean);
   // C3 fix: 当所有环境变量为空时回退到硬编码默认模型，避免空优先级列表导致全路由不可用
   if (envModelPriority.length === 0) {
-    envModelPriority.push("deepseek-v4-flash");
+    envModelPriority.push("deepseek-flash");
   }
   const envRouter = new EnvironmentAwareRouter({
     modelPriority: envModelPriority,

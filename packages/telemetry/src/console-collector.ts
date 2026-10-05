@@ -33,7 +33,7 @@ export interface ConsoleCollectorOptions {
  *   id: "evt-001",
  *   name: "llm.chat.duration_ms",
  *   value: 1234,
- *   tags: [{ key: "model", value: "deepseek-v4-flash" }],
+ *   tags: [{ key: "model", value: "deepseek-flash" }],
  *   timestamp: Date.now(),
  * });
  * ```

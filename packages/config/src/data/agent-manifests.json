@@ -39,7 +39,7 @@
       "memoryQueryStrategy": "code"
     },
     "code-fixer": {
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "key": "DEEPSEEK_CHAT",
       "tags": [
         "fix",
@@ -66,7 +66,7 @@
       "memoryQueryStrategy": "fix"
     },
     "read-only": {
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "key": "DEEPSEEK_CHAT",
       "toolPermissions": [
         "read_file",
@@ -85,7 +85,7 @@
       "memoryQueryStrategy": "analysis"
     },
     "read-write-gov": {
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "key": "DEEPSEEK_CHAT",
       "toolPermissions": [
         "read_file",
@@ -110,7 +110,7 @@
       "memoryQueryStrategy": "doc-govern"
     },
     "read-only-inspect": {
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "key": "DEEPSEEK_CHAT",
       "toolPermissions": [
         "read_file",
@@ -318,7 +318,7 @@
       "role": "昔涟 — 管道路由+用户交互面",
       "emoji": "🌸",
       "key": "DEEPSEEK_CYRENE",
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "maxInstances": 1,
       "produces": [
         "memory_queried",
@@ -329,8 +329,8 @@
     "api": {
       "type": "api",
       "profile": "read-only",
-      "role": "API 设计",
-      "emoji": "🔌",
+      "role": "久岐忍 — API 设计",
+      "emoji": "😈",
       "produces": [
         "api_designed"
       ],
@@ -339,8 +339,8 @@
     "data": {
       "type": "data",
       "profile": "read-only",
-      "role": "数据模型",
-      "emoji": "🗄️",
+      "role": "艾尔海森 — 数据模型",
+      "emoji": "📚",
       "produces": [
         "data_modeled"
       ],
@@ -353,7 +353,7 @@
       "emoji": "🪨",
       "status": "awake",
       "key": "DEEPSEEK_CHAT",
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "produces": [
         "strategy_assessed"
       ],
@@ -370,7 +370,7 @@
       "role": "烟绯 — 确认门决策(Core-2预留)",
       "emoji": "⚖️",
       "key": "DEEPSEEK_CHAT",
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "produces": [
         "confirmation_decision"
       ]
@@ -381,7 +381,7 @@
       "role": "久岐忍 — 荒泷派外务奉行",
       "emoji": "😈",
       "key": "DEEPSEEK_CHAT",
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "maxInstances": 1,
       "tags": [
         "api",
@@ -430,7 +430,7 @@
       "role": "艾尔海森 — 教令院大书记官",
       "emoji": "📚",
       "key": "DEEPSEEK_CHAT",
-      "model": "deepseek-v4-flash",
+      "model": "deepseek-flash",
       "maxInstances": 1,
       "tags": [
         "data",

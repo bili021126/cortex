@@ -8,17 +8,17 @@
 /** DeepSeek API 默认 Base URL */
 export const DEFAULT_LLM_BASE_URL = "https://api.deepseek.com/v1";
 
-/** DeepSeek V4 Flash 默认模型名 */
-export const DEFAULT_LLM_CHAT_MODEL = "deepseek-v4-flash";
+/** DeepSeek Flash (V4.1) 默认模型名 */
+export const DEFAULT_LLM_CHAT_MODEL = "deepseek-flash";
 
-/** DeepSeek V4 Flash 思考模式默认模型名（同一模型开启 reasoning_effort 即为推理模式） */
-export const DEFAULT_LLM_REASONER_MODEL = "deepseek-v4-flash";
+/** DeepSeek Flash 思考模式默认模型名（同一模型开启 reasoning_effort 即为推理模式） */
+export const DEFAULT_LLM_REASONER_MODEL = "deepseek-flash";
 
 /** ConfigManager 默认聊天模型 */
-export const DEFAULT_CLI_CHAT_MODEL = "deepseek-v4-flash";
+export const DEFAULT_CLI_CHAT_MODEL = "deepseek-flash";
 
 /** LLM 回退模型名 */
-export const DEFAULT_LLM_FALLBACK_MODEL = "deepseek-v4-flash";
+export const DEFAULT_LLM_FALLBACK_MODEL = "deepseek-flash";
 
 /** LLM 实例键名——三路隔离的标准键标识 */
 export const LLM_KEY_NAMES = {

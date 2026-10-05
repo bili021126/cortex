@@ -195,7 +195,7 @@ export class LlmAdapter {
 
   /** Get reasoner model name (MetaAgent specific). Falls back to chatModel if not set. */
   get reasonerModel(): string {
-    return this.config.reasonerModel ?? this.config.chatModel ?? "deepseek-v4-flash";
+    return this.config.reasonerModel ?? this.config.chatModel ?? "deepseek-flash";
   }
 
   /** 模型能力声明——由 models.json 注册表注入，替代字符串匹配推断 */

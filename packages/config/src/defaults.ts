@@ -57,8 +57,8 @@ export const DEFAULT_ENGINE_CONFIG: Required<EngineConfig> = {
 
   llm: {
     baseUrl: "https://api.deepseek.com/v1",
-    chatModel: "deepseek-v4-flash",
-    reasonerModel: "deepseek-v4-flash",
+    chatModel: "deepseek-flash",
+    reasonerModel: "deepseek-flash",
   },
 
   filePaths: {

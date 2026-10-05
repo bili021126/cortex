@@ -237,7 +237,7 @@ export async function* queryLoop(p: QueryLoopParams): AsyncGenerator<TuiEvent, s
   const reasonerModel = bridge.getReasonerModelName();
   const chatModel = (mode === "plan" && reasonerModel)
     ? reasonerModel
-    : (bridge.getChatModelName() || "deepseek-v4-flash");
+    : (bridge.getChatModelName() || "deepseek-flash");
 
   // 获取工具定义——plan/talk/party 模式零工具
   const rawTools = bridge.getToolDefs(agent);

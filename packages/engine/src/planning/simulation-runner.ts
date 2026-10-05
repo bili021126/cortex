@@ -80,7 +80,7 @@ export class SimulationRunner {
     try {
       const res = await resilienceFactory.execute("llm-call", async () =>
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await this._llm!.chat("deepseek-v4-flash", [
+        await this._llm!.chat("deepseek-flash", [
           { role: "user", content: prompt }
         ], [], undefined, undefined),
       );
