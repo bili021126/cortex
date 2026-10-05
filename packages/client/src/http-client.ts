@@ -242,6 +242,12 @@ export class CortexHttpClient {
     return res.data;
   }
 
+  /** 写回某配置域中已存在的标量叶（path 为定位键路径的段数组）。返回落盘后的域值。 */
+  async setConfig(body: { domain: string; path: Array<string | number>; value: unknown }): Promise<unknown> {
+    const res = await this.request<SingleResponse<unknown>>("POST", "/api/v1/config", body);
+    return res.data;
+  }
+
   // ─── Scheduler action API（R14 CLI 降格）────────────────────
 
   /** 调度器统计快照（GET /api/v1/scheduler） */

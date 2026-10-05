@@ -285,6 +285,13 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
   ipcMain.handle(IPC_CHANNELS.CORTEX_CONFIG_GET, (_e, domain?: string) =>
     envelope(() => cortex.connection.http.getConfig(domain)));
 
+  // config 写回（设置面板编辑已存在标量叶 → daemon 原子写引擎实读文件）
+  ipcMain.handle(
+    IPC_CHANNELS.CORTEX_CONFIG_SET,
+    (_e, body: { domain: string; path: Array<string | number>; value: unknown }) =>
+      envelope(() => cortex.connection.http.setConfig(body)),
+  );
+
   // sessions 域
   ipcMain.handle(IPC_CHANNELS.CORTEX_SESSIONS_LIST, () =>
     envelope(() => cortex.connection.http.getSessions()));

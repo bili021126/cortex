@@ -71,10 +71,139 @@ const KEY_LABELS: Record<string, string> = {
   onAmendmentProposed: "提案时", onSchedule: "定时", onCommit: "提交时",
 };
 
-/** 递归渲染配置值：原始值→文本；数组→逐条列出；对象→可展开子菜单（<details>） */
-function CfgValue({ v }: { v: unknown }): React.ReactElement {
+/** 已知枚举键 → 真实候选值（源自现有配置词表）。用作 datalist 建议，仍可自由填写（当前值≠全部合法值） */
+const ENUM_OPTIONS: Record<string, string[]> = {
+  profile: ["code-writer", "code-fixer", "read-only", "read-write-gov", "read-only-inspect"],
+  channel: ["routine", "important", "urgent"],
+  model: ["deepseek-flash", "deepseek-v4-pro"],
+  chatModel: ["deepseek-flash", "deepseek-v4-pro"],
+  reasonerModel: ["deepseek-flash", "deepseek-v4-pro"],
+  fallbackModel: ["deepseek-flash", "deepseek-v4-pro"],
+  key: ["DEEPSEEK_CHAT", "DEEPSEEK_REASONER", "DEEPSEEK_CYRENE", "DEEPSEEK_GANYU", "DEEPSEEK_API_KEY"],
+  modelFallback: ["DEEPSEEK_CHAT", "DEEPSEEK_REASONER", "DEEPSEEK_API_KEY"],
+  reasoningEffort: ["high", "max"],
+  logLevel: ["debug", "info", "warn", "error"],
+  nodeEnv: ["development", "production"],
+};
+
+/** 布尔叶：开关按钮，点击即翻 开/关 并立即写回（值以 "true"/"false" 串提交，daemon 按原布尔类型强转） */
+function ToggleLeaf({
+  v,
+  path,
+  onCommit,
+}: {
+  v: boolean;
+  path: Array<string | number>;
+  onCommit: (path: Array<string | number>, value: string) => Promise<boolean>;
+}): React.ReactElement {
+  const [busy, setBusy] = useState(false);
+  const flip = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    await onCommit(path, !v ? "true" : "false");
+    setBusy(false);
+  };
+  return (
+    <button
+      type="button"
+      className={`chat__cfg-toggle${v ? " is-on" : ""}${busy ? " is-busy" : ""}`}
+      disabled={busy}
+      onClick={() => { void flip(); }}
+      title="点击切换 开/关（写回引擎实读配置）"
+    >
+      <span className="chat__cfg-toggle-knob" />
+      <span className="chat__cfg-toggle-txt">{v ? "开" : "关"}</span>
+    </button>
+  );
+}
+
+/** 可编辑标量叶（字符串/数字）：点击→输入框→Enter/失焦提交（走 config.set 写回），Esc 取消。
+ *  命中 ENUM_OPTIONS 的键附 datalist 真实候选（仍可自由填，当前值≠全部合法值）。 */
+function EditableLeaf({
+  v,
+  path,
+  onCommit,
+}: {
+  v: string | number;
+  path: Array<string | number>;
+  onCommit: (path: Array<string | number>, value: string) => Promise<boolean>;
+}): React.ReactElement {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const cancelled = useRef(false);
+  const listId = "cdl" + React.useId().replace(/[^a-zA-Z0-9_-]/g, "");
+
+  const leafKey = typeof path[path.length - 1] === "string" ? String(path[path.length - 1]) : "";
+  const opts = leafKey ? ENUM_OPTIONS[leafKey] : undefined;
+
+  const start = (): void => {
+    if (busy) return;
+    setDraft(String(v));
+    setEditing(true);
+  };
+  const commit = async (): Promise<void> => {
+    setEditing(false);
+    if (String(draft) === String(v)) return; // 未改动不写
+    setBusy(true);
+    await onCommit(path, draft);
+    setBusy(false);
+  };
+
+  if (editing) {
+    const input = (
+      <input
+        type="text"
+        className={`chat__cfg-input${opts ? " chat__cfg-input--enum" : ""}`}
+        list={opts ? listId : undefined}
+        autoFocus
+        value={draft}
+        onChange={(e) => { setDraft(e.target.value); }}
+        onBlur={() => {
+          if (cancelled.current) { cancelled.current = false; return; }
+          void commit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            (e.target as HTMLInputElement).blur();
+          } else if (e.key === "Escape") {
+            cancelled.current = true;
+            setEditing(false);
+          }
+        }}
+      />
+    );
+    return opts ? (
+      <>
+        {input}
+        <datalist id={listId}>{opts.map((o) => (<option key={o} value={o} />))}</datalist>
+      </>
+    ) : input;
+  }
+  return (
+    <span
+      className={`chat__cfg-scalar chat__cfg-edit${opts ? " chat__cfg-enum" : ""}${busy ? " is-busy" : ""}`}
+      onClick={start}
+      title={opts ? `点击编辑（候选：${opts.join(" / ")}，可自由填）` : "点击编辑（写回引擎实读配置）"}
+    >
+      {String(v)}
+    </span>
+  );
+}
+
+/** 递归渲染配置值：原始值→可编辑；数组→逐条列出；对象→可展开子菜单（<details>） */
+function CfgValue({
+  v,
+  path,
+  onCommit,
+}: {
+  v: unknown;
+  path: Array<string | number>;
+  onCommit: (path: Array<string | number>, value: string) => Promise<boolean>;
+}): React.ReactElement {
   if (v === null || v === undefined) return <span className="chat__cfg-scalar">—</span>;
-  if (typeof v !== "object") return <span className="chat__cfg-scalar">{String(v)}</span>;
+  if (typeof v === "boolean") return <ToggleLeaf v={v} path={path} onCommit={onCommit} />;
+  if (typeof v !== "object") return <EditableLeaf v={v as string | number} path={path} onCommit={onCommit} />;
   if (Array.isArray(v)) {
     if (v.length === 0) return <span className="chat__cfg-scalar">（空）</span>;
     return (
@@ -82,7 +211,7 @@ function CfgValue({ v }: { v: unknown }): React.ReactElement {
         {v.map((item, i) => (
           <div key={i} className="chat__cfg-array-item">
             <span className="chat__cfg-idx">{i}</span>
-            <CfgValue v={item} />
+            <CfgValue v={item} path={[...path, i]} onCommit={onCommit} />
           </div>
         ))}
       </div>
@@ -93,12 +222,16 @@ function CfgValue({ v }: { v: unknown }): React.ReactElement {
     <details className="chat__cfg-obj">
       <summary className="chat__cfg-obj-summary">{entries.length} 项</summary>
       <div className="chat__cfg-obj-body">
-        {entries.map(([k, val]) => (
-          <div key={k} className="chat__cfg-kv">
-            <span className="chat__cfg-k">{KEY_LABELS[k] ?? k}</span>
-            <CfgValue v={val} />
-          </div>
-        ))}
+        {entries.map(([k, val]) => {
+          const t = val === null ? "null" : Array.isArray(val) ? "arr" : typeof val === "object" ? "obj" : typeof val === "number" ? "num" : typeof val === "boolean" ? "bool" : "str";
+          return (
+            <div key={k} className="chat__cfg-kv">
+              <span className={`chat__cfg-type chat__cfg-type--${t}`}>{t}</span>
+              <span className="chat__cfg-k">{KEY_LABELS[k] ?? k}</span>
+              <CfgValue v={val} path={[...path, k]} onCommit={onCommit} />
+            </div>
+          );
+        })}
       </div>
     </details>
   );
@@ -258,22 +391,28 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   // A2 吸收：工具调用内联状态（🔧 调用中 → ✅ 完成 → ❌ 失败）
   const [toolLogs, setToolLogs] = useState<Array<{ id: string; toolName: string; state: "running" | "done" | "failed" }>>([]);
   // Agent 配置接真：思考模式/上下文/档位（settings:get 拉 + settings:set 写）
-  const [thinkingOn, setThinkingOn] = useState(true);
-  const [ctxLen, setCtxLen] = useState(32);
-  const [reasoningLevel, setReasoningLevel] = useState("Auto");
+  // Agent 配置弹窗：从 config.get("agentManifests") 拉当前 agent 真实配置
+  const [agentCfg, setAgentCfg] = useState<Record<string, unknown> | null>(null);
   useEffect(() => {
-    if (!configOpen) return;
+    if (!configOpen || !active) { setAgentCfg(null); return; }
+    const agentId = active.id.replace(/^agent-/, "");
     void (async () => {
       try {
-        const res = await window.cortexDesktop.settings.get() as { ok: boolean; data?: Record<string, unknown> };
-        if (res?.ok && res.data) {
-          if (typeof res.data.thinking === "boolean") setThinkingOn(res.data.thinking);
-          if (typeof res.data.contextLength === "number") setCtxLen(res.data.contextLength);
-          if (typeof res.data.reasoning === "string") setReasoningLevel(res.data.reasoning);
-        }
-      } catch { /* 保持默认 */ }
+        const res = await window.cortexDesktop.config.get("agentManifests") as { ok: boolean; data?: { value?: { agents?: Record<string, Record<string, unknown>> } } };
+        const agents = res?.ok ? res.data?.value?.agents : undefined;
+        setAgentCfg(agents?.[agentId] ?? null);
+      } catch { setAgentCfg(null); }
     })();
-  }, [configOpen]);
+  }, [configOpen, active]);
+  const commitAgentField = useCallback(async (field: string, value: unknown) => {
+    const agentId = active?.id?.replace(/^agent-/, "") ?? "";
+    if (!agentId) return;
+    try {
+      const res = await window.cortexDesktop.config.set("agentManifests", ["agents", agentId, field], String(value)) as { ok: boolean; error?: string };
+      setToast(res?.ok ? `已保存 ${field}` : `保存失败：${res?.error ?? "未知"}`);
+      if (res?.ok) setAgentCfg((prev) => prev ? { ...prev, [field]: value } : prev);
+    } catch (e) { setToast(`保存失败：${String(e)}`); }
+  }, [active]);
   // 模式状态（Chat/Work/Code/Learn/Daily——UI 先装，功能后接）
   const [mode, setMode] = useState("Chat");
   const [modeOpen, setModeOpen] = useState(false);
@@ -296,6 +435,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [cfg, setCfg] = useState<{ dir: string; domains: Array<{ name: string; fileName: string; required: boolean; present: boolean; topKeys: string[] }> } | null>(null);
   const [cfgSel, setCfgSel] = useState<string | null>(null);
   const [cfgVal, setCfgVal] = useState<Record<string, unknown> | null>(null);
+  const [flashKey, setFlashKey] = useState<string | null>(null);
+  const [cfgLoading, setCfgLoading] = useState(false);
   // 进设置 tab：拉引擎真实配置域概览（dir + 各域），默认选中第一个域
   useEffect(() => {
     if (tab !== "settings") return;
@@ -316,14 +457,39 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     if (!cfgSel) { setCfgVal(null); return; }
     void (async () => {
+      setCfgLoading(true);
       try {
         const res = await window.cortexDesktop.config.get(cfgSel) as { ok: boolean; data?: { value?: unknown } };
         const v = res?.ok ? res.data?.value : undefined;
         setCfgVal(v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
       } catch { setCfgVal(null); }
+      setCfgLoading(false);
     })();
   }, [cfgSel]);
-  // 任务面板：筛选 + 选中
+  // 写回某标量叶 → daemon 落盘到引擎实读文件 → 回读刷新该域（编辑所见即所存）
+  const commitCfg = useCallback(
+    async (path: Array<string | number>, value: string): Promise<boolean> => {
+      if (!cfgSel) return false;
+      try {
+        const res = await window.cortexDesktop.config.set(cfgSel, path, value) as { ok: boolean; error?: string };
+        if (res?.ok) {
+          setToast(`已保存 ${String(path[path.length - 1])}`);
+          setFlashKey(path.join("."));
+          setTimeout(() => setFlashKey(null), 1500);
+          const g = await window.cortexDesktop.config.get(cfgSel) as { ok: boolean; data?: { value?: unknown } };
+          const v = g?.ok ? g.data?.value : undefined;
+          setCfgVal(v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
+          return true;
+        }
+        setToast(`保存失败：${res?.error ?? "未知错误"}`);
+        return false;
+      } catch (e) {
+        setToast(`保存失败：${String(e)}`);
+        return false;
+      }
+    },
+    [cfgSel],
+  );
   const [taskFilter, setTaskFilter] = useState("全部");
   const [taskSelected, setTaskSelected] = useState(0);
   // 任务接真：打开任务面板时拉真实节点（GET /api/v1/nodes——无节点时静态）
@@ -358,23 +524,42 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await window.cortexDesktop.getAgents() as { ok: boolean; data?: string[] };
-        const data = res?.data;
-        if (res?.ok && Array.isArray(data) && data.length > 0) {
-          setFriends(data.map((name, i) => ({
-            id: "agent-" + name,
-            name,
+        const res = await window.cortexDesktop.config.get("agentManifests") as { ok: boolean; data?: { value?: { agents?: Record<string, { type?: string; emoji?: string; role?: string; model?: string; key?: string }> } } };
+        const agents = res?.ok ? res.data?.value?.agents : undefined;
+        if (agents && Object.keys(agents).length > 0) {
+          const list: Contact[] = Object.entries(agents).map(([id, a]) => ({
+            id: "agent-" + id,
+            name: id,
             type: "friend" as const,
-            avatar: name.slice(0, 1).toUpperCase(),
-            desc: "Cortex Agent",
+            avatar: a.emoji || id.slice(0, 1).toUpperCase(),
+            desc: a.role || a.type || "Cortex Agent",
             online: true,
-          })));
-          const first = data[0];
-          setActive((prev) => prev ?? { id: "agent-" + first, name: first ?? "", type: "friend", avatar: (first ?? "").slice(0, 1).toUpperCase(), desc: "Cortex Agent", online: true });
+          })).sort((a, b) => a.name === "cyrene" ? -1 : b.name === "cyrene" ? 1 : a.name.localeCompare(b.name));
+          setFriends(list);
+          setActive((prev) => prev ?? list[0] ?? null);
         }
       } catch { /* daemon 未起时保持空 */ }
     })();
   }, []);
+  // 会话列表：按当前 agent 拉真实 sessions + 切换/删除
+  const [sessions, setSessions] = useState<Array<{ id: string; agent: string; mode: string; createdAt: number; lastActiveAt: number; messageCount: number }> | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const loadSessions = useCallback(async () => {
+    try {
+      const res = await window.cortexDesktop.sessions.list() as { ok: boolean; data?: unknown };
+      const list = res?.ok && Array.isArray(res.data) ? res.data as Array<{ id: string; agent: string; mode: string; createdAt: number; lastActiveAt: number; messageCount: number }> : null;
+      setSessions(list);
+    } catch { setSessions(null); }
+  }, []);
+  useEffect(() => { void loadSessions(); }, [active, loadSessions]);
+  const handleDeleteSession = useCallback(async (id: string) => {
+    try {
+      await window.cortexDesktop.sessions.delete(id);
+      if (activeSessionId === id) setActiveSessionId(null);
+      void loadSessions();
+      setToast("会话已删除");
+    } catch { setToast("删除失败"); }
+  }, [activeSessionId, loadSessions]);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2500);
@@ -383,17 +568,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
   const handleNewSession = useCallback(async () => {
     if (messages.length === 0) { setToast("已经是新会话"); return; }
-    // 走 P0 IPC 桥创建真实会话（不再硬编码 3210；不再用原生 window.confirm——F5 顺带消解）
     const agentId = active?.id?.replace(/^agent-/, "") ?? "cyrene";
     try {
       const res = await window.cortexDesktop.sessions.create({ agent: agentId, mode: "chat" });
       setMessages([]);
+      void loadSessions();
       setToast(res.ok ? "已创建新会话 ✨" : "已清空当前会话（本地，daemon 未连接）");
     } catch {
       setMessages([]);
       setToast("已清空当前会话（本地）");
     }
-  }, [messages, active]);
+  }, [messages, active, loadSessions]);
 
   // 重启桌面：自动编译并重启
   const handleRestart = useCallback(() => {
@@ -588,7 +773,15 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           <div className="chat__rail-list" role="list">
             {railList.map((c) => (
               <button key={c.id} type="button" className={`chat__rail-item${active?.id === c.id ? " is-active" : ""}`} onClick={() => selectContact(c)}>
-                <span className="chat__rail-avatar" aria-hidden="true">{c.avatar}</span>
+                <span className="chat__rail-avatar" aria-hidden="true">
+                  <img
+                    className="chat__rail-avatar-img"
+                    src={resolveAsset(`../avatars/${c.name}-avatar.png`)}
+                    alt={c.name}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("chat__rail-avatar-fallback--hidden"); }}
+                  />
+                  <span className="chat__rail-avatar-fallback chat__rail-avatar-fallback--hidden">{c.avatar}</span>
+                </span>
                 <span className="chat__rail-meta">
                   <span className="chat__rail-name">{c.name}</span>
                   <span className="chat__rail-desc">{c.desc}</span>
@@ -777,26 +970,35 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 </div>
                 {(cfg?.domains ?? []).map((d) => (
                   <button key={d.name} type="button" className={`chat__settings-domain${cfgSel === d.name ? " is-active" : ""}`} onClick={() => setCfgSel(d.name)} title={`${d.name} · ${d.fileName}${d.required ? " · 必填" : ""}`}>
-                    <span aria-hidden="true">{d.present ? "🟢" : "⚪"}</span>
+                    <span className={`chat__cfg-dot${d.present ? " is-ok" : d.required ? " is-missing" : " is-idle"}`} />
                     <span>{DOMAIN_LABELS[d.name] ?? d.name}</span>
                   </button>
                 ))}
               </aside>
-              {/* 右：选中域的真实配置值（只读；写回待 daemon config 写端点接线） */}
+              {/* 右：选中域的真实配置值（可编辑标量 + 递归展开） */}
               <div className="chat__settings-config">
                 <div className="chat__panel-head">
                   <span className="chat__panel-title" title={cfgSel ?? ""}>{cfgSel ? (DOMAIN_LABELS[cfgSel] ?? cfgSel) : "选择配置域"}</span>
                   <span className="chat__settings-domain-desc" title="引擎实际读取的配置目录">源：{cfg?.dir ?? "…"}</span>
                 </div>
                 <div className="chat__settings-items">
-                  {cfgSel && cfgVal && Object.entries(cfgVal).map(([k, v]) => (
-                    <div key={k} className="chat__setting-item">
-                      <span className="chat__setting-item-label">{KEY_LABELS[k] ?? k}</span>
-                      <span className="chat__setting-item-key">{k}</span>
-                      <CfgValue v={v} />
+                  {cfgSel && cfgVal && Object.entries(cfgVal).map(([k, v]) => {
+                    const type = v === null ? "null" : Array.isArray(v) ? "arr" : typeof v === "object" ? "obj" : typeof v === "number" ? "num" : typeof v === "boolean" ? "bool" : "str";
+                    return (
+                      <div key={k} className={`chat__setting-item${flashKey === k ? " is-flash" : ""}`}>
+                        <span className={`chat__cfg-type chat__cfg-type--${type}`}>{type}</span>
+                        <span className="chat__setting-item-label">{KEY_LABELS[k] ?? k}</span>
+                        <span className="chat__setting-item-key">{k}</span>
+                        <CfgValue v={v} path={[k]} onCommit={commitCfg} />
+                      </div>
+                    );
+                  })}
+                  {cfgSel && !cfgVal && cfgLoading && (
+                    <div className="chat__cfg-skeleton">
+                      <div className="chat__cfg-sk-line" /><div className="chat__cfg-sk-line" /><div className="chat__cfg-sk-line" /><div className="chat__cfg-sk-line" />
                     </div>
-                  ))}
-                  {cfgSel && !cfgVal && <div className="chat__setting-item"><span className="chat__setting-item-label">（该域无数据或加载中）</span></div>}
+                  )}
+                  {cfgSel && !cfgVal && !cfgLoading && <div className="chat__setting-item"><span className="chat__setting-item-label">（该域无数据）</span></div>}
                   {!cfgSel && <div className="chat__setting-item"><span className="chat__setting-item-label">← 选择左侧配置域查看真实值</span></div>}
                 </div>
               </div>
@@ -894,8 +1096,22 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 {active?.online ? "在线" : "离线"}
               </div>
               <div className="chat__side-divider" />
-              <div className="chat__side-label">会话信息</div>
-              <div className="chat__side-info">消息 {messages.length} 条</div>
+              <div className="chat__side-label">当前消息</div>
+              <div className="chat__side-info">{messages.length} 条</div>
+              <div className="chat__side-divider" />
+              <div className="chat__side-label">会话列表（{sessions?.length ?? "…"}）</div>
+              <div className="chat__side-sessions">
+                {sessions === null && <div className="chat__side-info">加载中…</div>}
+                {sessions?.length === 0 && <div className="chat__side-info">暂无会话</div>}
+                {sessions?.map((s) => (
+                  <div key={s.id} className={`chat__side-session${activeSessionId === s.id ? " is-active" : ""}`} onClick={() => setActiveSessionId(s.id)}>
+                    <span className="chat__side-session-mode">{s.mode}</span>
+                    <span className="chat__side-session-time">{new Date(s.lastActiveAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="chat__side-session-count">{s.messageCount}</span>
+                    <button type="button" className="chat__side-session-del" onClick={(e) => { e.stopPropagation(); void handleDeleteSession(s.id); }} title="删除会话">×</button>
+                  </div>
+                ))}
+              </div>
             </aside>
           </div>
         )}
@@ -951,21 +1167,29 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           <div className="chat__modal" onClick={(e) => e.stopPropagation()}>
             <div className="chat__modal-title">⚙ Agent 配置 · {active?.name ?? "昔涟"}</div>
             <div className="chat__modal-body">
-              <div className="chat__cfg-row">
-                <span className="chat__cfg-label">思考模式</span>
-                <span className="chat__cfg-desc">是否开启深度思考</span>
-                <span className={`chat__cfg-toggle${thinkingOn ? " is-on" : ""}`} onClick={() => { setThinkingOn((v) => !v); void window.cortexDesktop.settings.set("thinking", !thinkingOn); }} aria-hidden="true"><span /></span>
-              </div>
-              <div className="chat__cfg-row">
-                <span className="chat__cfg-label">上下文长度</span>
-                <span className="chat__cfg-desc">单次会话携带的历史消息数</span>
-                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const n = ctxLen >= 64 ? 16 : ctxLen * 2; setCtxLen(n); void window.cortexDesktop.settings.set("contextLength", n); }}>{ctxLen}</button>
-              </div>
-              <div className="chat__cfg-row">
-                <span className="chat__cfg-label">思考档位</span>
-                <span className="chat__cfg-desc">推理强度（低/中/高）</span>
-                <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const next = reasoningLevel === "Auto" ? "Low" : reasoningLevel === "Low" ? "Medium" : reasoningLevel === "Medium" ? "High" : "Auto"; setReasoningLevel(next); void window.cortexDesktop.settings.set("reasoning", next); }}>{reasoningLevel}</button>
-              </div>
+              {!agentCfg && <div className="chat__cfg-row"><span className="chat__cfg-label">加载中…</span></div>}
+              {agentCfg && (<>
+                <div className="chat__cfg-row">
+                  <span className="chat__cfg-label">模型</span>
+                  <span className="chat__cfg-desc">路由到的 LLM（点击切换）</span>
+                  <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const cur = String(agentCfg.model ?? ""); const next = cur.includes("flash") ? "deepseek-v4-pro" : "deepseek-flash"; void commitAgentField("model", next); }}>{String(agentCfg.model ?? "—")}</button>
+                </div>
+                <div className="chat__cfg-row">
+                  <span className="chat__cfg-label">密钥</span>
+                  <span className="chat__cfg-desc">API 密钥路由（点击切换）</span>
+                  <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const keys = ["DEEPSEEK_CHAT","DEEPSEEK_REASONER","DEEPSEEK_CYRENE","DEEPSEEK_GANYU"]; const cur = String(agentCfg.key ?? keys[0]); const idx = keys.indexOf(cur); void commitAgentField("key", keys[(idx + 1) % keys.length]!); }}>{String(agentCfg.key ?? "—")}</button>
+                </div>
+                <div className="chat__cfg-row">
+                  <span className="chat__cfg-label">类型</span>
+                  <span className="chat__cfg-desc">Agent 职能分类</span>
+                  <span className="chat__cfg-value">{String(agentCfg.type ?? "—")}</span>
+                </div>
+                <div className="chat__cfg-row">
+                  <span className="chat__cfg-label">最大并发</span>
+                  <span className="chat__cfg-desc">同时运行实例数（点击 +1，最大 8）</span>
+                  <button type="button" className="chat__cfg-value chat__cfg-value--btn" onClick={() => { const cur = Number(agentCfg.maxInstances ?? 1); void commitAgentField("maxInstances", cur >= 8 ? 1 : cur + 1); }}>{String(agentCfg.maxInstances ?? "—")}</button>
+                </div>
+              </>)}
             </div>
             <div className="chat__modal-footer">
               <button type="button" className="chat__modal-btn" onClick={() => setConfigOpen(false)}>关闭</button>

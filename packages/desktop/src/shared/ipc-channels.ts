@@ -12,6 +12,7 @@ export const IPC_CHANNELS = {
   CORTEX_STREAM_CANCEL: "cortex:stream-cancel",
   CORTEX_GET_AGENTS: "cortex:get-agents",
   CORTEX_CONFIG_GET: "cortex:config-get",
+  CORTEX_CONFIG_SET: "cortex:config-set",
   LIVE2D_SPEAK: "live2d:speak",
   LIVE2D_EXPRESSION: "live2d:expression",
   SETTINGS_GET: "settings:get",

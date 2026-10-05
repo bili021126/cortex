@@ -55,6 +55,7 @@ const BRIDGED: Record<string, keyof typeof IPC_CHANNELS> = {
   getNodes: "CORTEX_NODE_LIST",
   getNode: "CORTEX_NODE_GET",
   getConfig: "CORTEX_CONFIG_GET",
+  setConfig: "CORTEX_CONFIG_SET",
   getSessions: "CORTEX_SESSIONS_LIST",
   createSession: "CORTEX_SESSIONS_CREATE",
   deleteSession: "CORTEX_SESSIONS_DELETE",
