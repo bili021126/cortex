@@ -231,6 +231,17 @@ export class CortexHttpClient {
     return res.data;
   }
 
+  /**
+   * 读取引擎真实配置（GET /api/v1/config）。domain 省略 → 全部域概览 + 解析出的真实 dir；
+   * 给定 domain → 该域完整 JSON。不走 _assertSupported("config")——那个 flag 只 gate
+   * validate/version 写端点；此读端点常驻可用，供 desktop 设置面板显示真配置（替换硬编码 mock）。
+   */
+  async getConfig(domain?: string): Promise<unknown> {
+    const qs = domain ? `?domain=${encodeURIComponent(domain)}` : "";
+    const res = await this.request<SingleResponse<unknown>>("GET", `/api/v1/config${qs}`);
+    return res.data;
+  }
+
   // ─── Scheduler action API（R14 CLI 降格）────────────────────
 
   /** 调度器统计快照（GET /api/v1/scheduler） */

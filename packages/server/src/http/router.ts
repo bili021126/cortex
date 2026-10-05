@@ -15,6 +15,7 @@ import { problem, PROTOCOL_VERSION } from "@cortex/protocol";
 import { AgentType } from "@cortex/shared";
 import { handleChat } from "./chat-handler.js";
 import { handleMemoryGet, handleMemoryPost, handleMemoryDelete } from "./memory-handler.js";
+import { handleConfigGet } from "./config-handler.js";
 import { handleSessionGet, handleSessionPost, handleSessionDelete } from "./session-handler.js";
 import { StateAggregator } from "./state-handler.js";
 import { handleNodePost, handleSchedulerExecute, handleSchedulerGet } from "./scheduler-handler.js";
@@ -124,6 +125,12 @@ export class HttpRouter {
     // GET /api/v1/agents
     if (method === "GET" && path === "/api/v1/agents") {
       this.handleAgents(res);
+      return true;
+    }
+
+    // GET /api/v1/config — 配置域只读（路径由 resolveConfigDataDir 解析，响应回带真实 dir）
+    if (method === "GET" && path === "/api/v1/config") {
+      handleConfigGet(req, res);
       return true;
     }
 

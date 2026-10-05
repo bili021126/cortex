@@ -28,6 +28,28 @@ async function envelope<T>(fn: () => Promise<T>): Promise<{ ok: true; data: T } 
   }
 }
 
+/**
+ * Windows 写文件加固：fs.writeFileSync 对配置类文件偶发 EPERM/EACCES/EBUSY
+ * （实时防护扫描、或上一次写句柄尚未释放）。对这类"瞬时锁"按线性退避重试，
+ * 其余错误照抛。避免用户改设置时看到 `EPERM: operation not permitted` 保存失败。
+ */
+async function writeFileSyncRetry(path: string, data: string, tries = 5): Promise<void> {
+  for (let i = 0; i < tries; i++) {
+    try {
+      fs.writeFileSync(path, data, "utf-8");
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      const transient = code === "EPERM" || code === "EACCES" || code === "EBUSY";
+      if (transient && i < tries - 1) {
+        await new Promise((r) => setTimeout(r, 40 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
 export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): void {
   // 语音播放锁（防重复点击叠加）
   let ttsPlaying = false;
@@ -226,7 +248,7 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
         data = {};
       }
       data[key] = value;
-      fs.writeFileSync(settingsPath, JSON.stringify(data, null, 2), "utf-8");
+      await writeFileSyncRetry(settingsPath, JSON.stringify(data, null, 2));
       return { ok: true };
     },
   );
@@ -258,6 +280,10 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
     envelope(() => cortex.connection.http.getNodes(opts)));
   ipcMain.handle(IPC_CHANNELS.CORTEX_NODE_GET, (_e, id: string) =>
     envelope(() => cortex.connection.http.getNode(id)));
+
+  // config 域（只读引擎真实配置，供设置面板显示真值，替换硬编码 mock）
+  ipcMain.handle(IPC_CHANNELS.CORTEX_CONFIG_GET, (_e, domain?: string) =>
+    envelope(() => cortex.connection.http.getConfig(domain)));
 
   // sessions 域
   ipcMain.handle(IPC_CHANNELS.CORTEX_SESSIONS_LIST, () =>
