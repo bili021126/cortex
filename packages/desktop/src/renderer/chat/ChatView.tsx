@@ -367,6 +367,32 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     } catch { /* 旧版 preload */ }
     return () => { try { off?.(); } catch { /* 已卸载 */ } };
   }, []);
+  // 通知接真实系统健康：拉 health 降级告警（WS 事件之外的补充源）
+  const loadNotifications = useCallback(async () => {
+    try {
+      const res = await window.cortexDesktop.health.get() as { ok: boolean; data?: { totalDegradations?: number; bySource?: Record<string, number>; byLevel?: Record<string, number>; recentSources?: string[]; degradedSince?: number | null } };
+      const h = res?.ok ? res.data : undefined;
+      if (!h || !h.totalDegradations) return;
+      const time = new Date(h.degradedSince ?? Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const critical = (h.byLevel?.critical ?? 0) > 0;
+      const alerts = (h.recentSources ?? Object.keys(h.bySource ?? {})).slice(0, 8).map((src) => ({
+        icon: critical ? "🚨" : "⚠️",
+        text: `系统降级：${src}（${h.bySource?.[src] ?? 1}）`,
+        time,
+      }));
+      setNotifItems((prev) => {
+        const seen = new Set(prev.map((p) => p.text));
+        return [...alerts.filter((a) => !seen.has(a.text)), ...prev].slice(0, 8);
+      });
+      setNotifCount((c) => Math.max(c, h.totalDegradations ?? 0));
+    } catch { /* health 不可用 */ }
+  }, []);
+  useEffect(() => {
+    if (!notifOpen) return;
+    void loadNotifications();
+    const t = setInterval(() => { void loadNotifications(); }, 30000);
+    return () => clearInterval(t);
+  }, [notifOpen, loadNotifications]);
   // D7b：确认门浮层——gate.request 订阅（L2/L3 工具调用需人工确认）
   const [gateRequests, setGateRequests] = useState<Array<{ requestId: string; toolName: string; level: string; summary: string; detail?: string }>>([]);
   useEffect(() => {
@@ -1170,11 +1196,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             <div key={i} className="chat__notif-item chat__notif-item--unread"><span>{n.icon}</span><span>{n.text}</span><span className="chat__notif-time">{n.time}</span></div>
           ))}
           {notifItems.length === 0 && (
-            <>
-              <div className="chat__notif-item chat__notif-item--unread"><span>💬</span><span>聊天：新消息</span><span className="chat__notif-time">10:32</span></div>
-              <div className="chat__notif-item chat__notif-item--unread"><span>📋</span><span>任务：布局静态化完成</span><span className="chat__notif-time">10:15</span></div>
-              <div className="chat__notif-item"><span>📝</span><span>文档：审计报告更新</span><span className="chat__notif-time">09:48</span></div>
-            </>
+            <div className="chat__notif-item"><span>✅</span><span>暂无通知——系统正常，等待实时事件</span></div>
           )}
         </div>
       )}
