@@ -79,3 +79,30 @@ export function handleSessionDelete(
 
   sendJson(res, 200, { deleted: existed });
 }
+
+/**
+ * Handle GET /api/v1/sessions/:id — 返回该会话的消息历史（供桌面端切换会话时加载）
+ */
+export function handleSessionMessages(
+  res: ServerResponse,
+  sessionManager: SessionManager,
+  id: string,
+): void {
+  if (!id) {
+    sendProblem(res, 400, "Bad Request", "Session ID is required");
+    return;
+  }
+  const session = sessionManager.get(id);
+  if (!session) {
+    sendProblem(res, 404, "Not Found", `会话不存在: ${id}`);
+    return;
+  }
+  sendJson(res, 200, {
+    data: {
+      id: session.id,
+      agent: session.agent,
+      mode: session.mode,
+      history: session.history,
+    },
+  });
+}

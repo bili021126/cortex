@@ -299,6 +299,8 @@ ipcMain.handle(IPC_CHANNELS.LIVE2D_SPEAK, async (_event, text: string) => {
     envelope(() => cortex.connection.http.createSession(req)));
   ipcMain.handle(IPC_CHANNELS.CORTEX_SESSIONS_DELETE, (_e, id: string) =>
     envelope(() => cortex.connection.http.deleteSession(id)));
+  ipcMain.handle(IPC_CHANNELS.CORTEX_SESSIONS_GET, (_e, id: string) =>
+    envelope(() => cortex.connection.http.getSessionMessages(id)));
 
   // 状态/健康/能力
   ipcMain.handle(IPC_CHANNELS.CORTEX_STATE_GET, () =>

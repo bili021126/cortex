@@ -560,6 +560,22 @@ export function ChatView({ onClose }: { onClose: () => void }) {
       setToast("会话已删除");
     } catch { setToast("删除失败"); }
   }, [activeSessionId, loadSessions]);
+  const handleSelectSession = useCallback(async (id: string) => {
+    setActiveSessionId(id);
+    try {
+      const res = await window.cortexDesktop.sessions.get(id) as { ok: boolean; data?: { history?: Array<{ role: string; content: string }> } };
+      if (res?.ok && Array.isArray(res.data?.history)) {
+        const now = Date.now();
+        setMessages(res.data.history.map((h, i) => ({
+          id: `sess-${id}-${i}`,
+          role: h.role === "user" ? "user" : "assistant",
+          content: h.content ?? "",
+          at: now,
+          state: h.role === "user" ? undefined : "complete",
+        })));
+      }
+    } catch { setToast("加载会话历史失败"); }
+  }, []);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2500);
@@ -1104,7 +1120,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 {sessions === null && <div className="chat__side-info">加载中…</div>}
                 {sessions?.length === 0 && <div className="chat__side-info">暂无会话</div>}
                 {sessions?.map((s) => (
-                  <div key={s.id} className={`chat__side-session${activeSessionId === s.id ? " is-active" : ""}`} onClick={() => setActiveSessionId(s.id)}>
+                  <div key={s.id} className={`chat__side-session${activeSessionId === s.id ? " is-active" : ""}`} onClick={() => { void handleSelectSession(s.id); }}>
                     <span className="chat__side-session-mode">{s.mode}</span>
                     <span className="chat__side-session-time">{new Date(s.lastActiveAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}</span>
                     <span className="chat__side-session-count">{s.messageCount}</span>

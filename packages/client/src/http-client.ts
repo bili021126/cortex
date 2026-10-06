@@ -218,6 +218,12 @@ export class CortexHttpClient {
     await this.request<DeleteSessionResponse>("DELETE", `/api/v1/sessions/${encodeURIComponent(id)}`);
   }
 
+  /** 取某会话的消息历史（供桌面端切换会话时加载） */
+  async getSessionMessages(id: string): Promise<{ id: string; agent: string; mode: string; history: Array<{ role: string; content: string }> }> {
+    const res = await this.request<SingleResponse<{ id: string; agent: string; mode: string; history: Array<{ role: string; content: string }> }>>("GET", `/api/v1/sessions/${encodeURIComponent(id)}`);
+    return res.data;
+  }
+
   /** Daemon 健康检查 */
   async getDaemonHealth(): Promise<DaemonHealthSnapshot> {
     const res = await this.request<SingleResponse<DaemonHealthSnapshot>>("GET", "/api/v1/daemon/health");

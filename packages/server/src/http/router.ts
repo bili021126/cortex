@@ -16,7 +16,7 @@ import { AgentType } from "@cortex/shared";
 import { handleChat } from "./chat-handler.js";
 import { handleMemoryGet, handleMemoryPost, handleMemoryDelete } from "./memory-handler.js";
 import { handleConfigGet, handleConfigSet } from "./config-handler.js";
-import { handleSessionGet, handleSessionPost, handleSessionDelete } from "./session-handler.js";
+import { handleSessionGet, handleSessionPost, handleSessionDelete, handleSessionMessages } from "./session-handler.js";
 import { StateAggregator } from "./state-handler.js";
 import { handleNodePost, handleSchedulerExecute, handleSchedulerGet } from "./scheduler-handler.js";
 
@@ -170,6 +170,13 @@ export class HttpRouter {
     // GET /api/v1/sessions
     if (method === "GET" && path === "/api/v1/sessions") {
       handleSessionGet(res, this.sessionManager);
+      return true;
+    }
+
+    // GET /api/v1/sessions/:id — 会话消息历史
+    if (method === "GET" && path.startsWith("/api/v1/sessions/")) {
+      const id = path.slice("/api/v1/sessions/".length);
+      handleSessionMessages(res, this.sessionManager, id);
       return true;
     }
 

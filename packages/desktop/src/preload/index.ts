@@ -67,6 +67,7 @@ export interface CortexDesktopAPI {
     list: () => Promise<IpcResult>;
     create: (req?: unknown) => Promise<IpcResult>;
     delete: (id: string) => Promise<IpcResult>;
+    get: (id: string) => Promise<IpcResult>;
   };
   state: { get: () => Promise<IpcResult> };
   health: { get: () => Promise<IpcResult>; daemonHealth: () => Promise<IpcResult> };
@@ -205,6 +206,7 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     list: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SESSIONS_LIST),
     create: (req) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SESSIONS_CREATE, req),
     delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SESSIONS_DELETE, id),
+    get: (id) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_SESSIONS_GET, id),
   },
   state: { get: () => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STATE_GET) },
   health: {

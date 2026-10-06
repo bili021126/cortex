@@ -44,6 +44,7 @@ export const IPC_CHANNELS = {
   CORTEX_SESSIONS_LIST: "cortex:sessions-list",
   CORTEX_SESSIONS_CREATE: "cortex:sessions-create",
   CORTEX_SESSIONS_DELETE: "cortex:sessions-delete",
+  CORTEX_SESSIONS_GET: "cortex:sessions-get",
   CORTEX_STATE_GET: "cortex:state-get",
   CORTEX_HEALTH_GET: "cortex:health-get",
   CORTEX_DAEMON_HEALTH_GET: "cortex:daemon-health-get",
