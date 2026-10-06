@@ -624,7 +624,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     try {
       await window.cortexDesktop.streamChat(
         text,
-        undefined,
+        active?.id?.replace(/^agent-/, ""),
         (chunk) => {
           if (first) { first = false; dispatch(aiId, "first-token"); }
           setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, content: m.content + chunk } : m)));
@@ -658,7 +658,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     } finally {
       inputRef.current?.focus();
     }
-  }, [dispatch, messages]);
+  }, [dispatch, messages, active]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
