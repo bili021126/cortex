@@ -139,6 +139,12 @@ export class ChatExecutor {
           usage: result.usage ? { promptTokens: result.usage.prompt_tokens, completionTokens: result.usage.completion_tokens } : undefined,
         },
       } satisfies WSChatCompleteEvent);
+
+      // 落库 assistant 回复——否则 session.history 只有 user 消息，重载会话丢失 agent 回复
+      if (result.output) {
+        session.history.push({ role: "assistant", content: result.output });
+        session.lastActiveAt = Date.now();
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       session.send({
