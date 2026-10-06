@@ -128,13 +128,13 @@ export function registerIpcHandlers(ipcMain: IpcMain, cortex: CortexBridge): voi
   // cortex:stream-chat — 流式对话（UX 完全体：history 多轮上下文透传）
   ipcMain.handle(
     IPC_CHANNELS.CORTEX_STREAM_CHAT,
-    async (event, input: string, agent: string | undefined, history?: Array<{ role: "user" | "assistant"; content: string }>) => {
+    async (event, input: string, agent: string | undefined, history?: Array<{ role: "user" | "assistant"; content: string }>, sessionId?: string) => {
       const result = await cortex.streamChat(input, agent, (chunk) => {
         event.sender.send(IPC_CHANNELS.CORTEX_STREAM_CHAT, { chunk, done: false });
       }, history, (evt) => {
         // A2 吸收：工具调用内联事件转发（renderer 消息流显示 🔧 调用中 → ✅ 完成）
         event.sender.send(IPC_CHANNELS.CHAT_TOOL, evt);
-      });
+      }, sessionId);
       event.sender.send(IPC_CHANNELS.CORTEX_STREAM_CHAT, { chunk: "", done: true, full: result });
       return { ok: true };
     },

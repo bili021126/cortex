@@ -52,10 +52,11 @@ export function streamChat(
   conn: CortexConnection,
   input: string,
   callbacks: ChatStreamCallbacks,
-  opts?: { agent?: string; mode?: "chat" | "talk" | "plan" | "party" | "command"; history?: LlmMessageDTO[] },
+  opts?: { agent?: string; mode?: "chat" | "talk" | "plan" | "party" | "command"; history?: LlmMessageDTO[]; sessionId?: string },
 ): ChatStreamHandle {
   // UX 完全体：多轮上下文——history 透传（daemon 侧 chat.start 恢复会话历史）
-  const sessionId = conn.ws.startChat({ input, agent: opts?.agent, mode: opts?.mode, history: opts?.history });
+  // 会话连贯：调用方可传稳定 sessionId，让一个对话线程复用同一 session（否则每消息新建）
+  const sessionId = conn.ws.startChat({ input, agent: opts?.agent, mode: opts?.mode, history: opts?.history, sessionId: opts?.sessionId });
 
   const unsubChat = conn.ws.on("chat", (msg) => {
     // B1：data 类型已按通道收窄为 WSChatServerEvent["data"]，无需 as cast

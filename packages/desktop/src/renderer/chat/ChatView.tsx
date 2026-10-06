@@ -325,6 +325,13 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const activeKey = active?.id ?? "cyrene";
   const activeKeyRef = useRef(activeKey);
   activeKeyRef.current = activeKey;
+  // 每线程稳定 sessionId：一个对话线程复用同一 daemon session（否则每消息新建刷屏）
+  const sessionIdsRef = useRef<Map<string, string>>(new Map());
+  const getOrCreateSessionId = useCallback((key: string): string => {
+    let sid = sessionIdsRef.current.get(key);
+    if (!sid) { sid = crypto.randomUUID(); sessionIdsRef.current.set(key, sid); }
+    return sid;
+  }, []);
   const messages = useMemo(() => threads[activeKey] ?? [], [threads, activeKey]);
   const setMessages = useCallback(
     (action: Message[] | ((prev: Message[]) => Message[])) => {
@@ -582,19 +589,13 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const handleNewSession = useCallback(async () => {
+  const handleNewSession = useCallback(() => {
     if (messages.length === 0) { setToast("已经是新会话"); return; }
-    const agentId = active?.id?.replace(/^agent-/, "") ?? "cyrene";
-    try {
-      const res = await window.cortexDesktop.sessions.create({ agent: agentId, mode: "chat" });
-      setMessages([]);
-      void loadSessions();
-      setToast(res.ok ? "已创建新会话 ✨" : "已清空当前会话（本地，daemon 未连接）");
-    } catch {
-      setMessages([]);
-      setToast("已清空当前会话（本地）");
-    }
-  }, [messages, active, loadSessions]);
+    setMessages([]);
+    sessionIdsRef.current.delete(activeKey);
+    setActiveSessionId(null);
+    setToast("已开始新会话 ✨（首条消息起新建 daemon 会话）");
+  }, [messages, activeKey]);
 
   // 重启桌面：自动编译并重启
   const handleRestart = useCallback(() => {
@@ -650,6 +651,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             if (m.id !== aiId) return m;
             try { return { ...m, content: full, state: messageReducer(m.state ?? "idle", { type: "complete" }) }; } catch { return m; }
           }));
+          void loadSessions();
         },
         history,
         // A2 吸收：工具调用内联状态（🔧 调用中 → ✅ 完成 → 淡出保留）
@@ -662,6 +664,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             return prev.map((t) => (t.id === tid ? { ...t, state: evt.success ? ("done" as const) : ("failed" as const) } : t));
           });
         },
+        getOrCreateSessionId(activeKey),
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -674,7 +677,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     } finally {
       inputRef.current?.focus();
     }
-  }, [dispatch, messages, active]);
+  }, [dispatch, messages, active, getOrCreateSessionId, activeKey, loadSessions]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();

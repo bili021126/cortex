@@ -22,6 +22,7 @@ export interface CortexDesktopAPI {
     onDone: (full: string) => void,
     history?: Array<{ role: "user" | "assistant"; content: string }>,
     onTool?: (evt: { type: "start" | "result"; toolName: string; input?: string; success?: boolean; toolCallId: string }) => void,
+    sessionId?: string,
   ) => Promise<{ ok: boolean }>;
   /** UX 停止：中断当前流式会话 */
   cancelStreamChat: () => Promise<{ ok: boolean }>;
@@ -111,6 +112,7 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     onDone: (full: string) => void,
     history?: Array<{ role: "user" | "assistant"; content: string }>,
     onTool?: (evt: { type: "start" | "result"; toolName: string; input?: string; success?: boolean; toolCallId: string }) => void,
+    sessionId?: string,
   ) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
@@ -127,7 +129,7 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
     // A2 吸收：工具调用内联事件订阅（🔧 调用中 → ✅ 完成）
     const toolHandler = (_event: Electron.IpcRendererEvent, evt: { type: "start" | "result"; toolName: string; input?: string; success?: boolean; toolCallId: string }) => onTool?.(evt);
     ipcRenderer.on(IPC_CHANNELS.CHAT_TOOL, toolHandler);
-    return ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STREAM_CHAT, input, agent, history).then(
+    return ipcRenderer.invoke(IPC_CHANNELS.CORTEX_STREAM_CHAT, input, agent, history, sessionId).then(
       () => {
         ipcRenderer.removeListener(IPC_CHANNELS.CHAT_TOOL, toolHandler);
         return { ok: true };
