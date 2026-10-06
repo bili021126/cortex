@@ -2392,6 +2392,7 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .msg__action-btn:active { transform: translateY(0.5px); }
 /* 状态徽章 */
 .msg__state-badge { background: #f9f9f9; color: #a3a3a3; border-radius: 4px; font-size: 11px; padding: 1px 6px; margin-left: 6px; }
+.msg__json-badge { display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-family: ui-monospace, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.3px; background: rgba(236, 72, 153, 0.1); color: #d94685; vertical-align: middle; }
 /* 输入区：Quest 风格（白色、顶部工具行、深色发送） */
 .chat__input {
   background: #ffffff;

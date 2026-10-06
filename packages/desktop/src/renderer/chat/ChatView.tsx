@@ -45,6 +45,29 @@ function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   return "fatal";
 }
 
+/** meta/规划 agent 常把结构化 JSON 直接吐进气泡——提取人话部分渲染，type 作徽标；非 JSON 原样返回 */
+function extractAgentPayload(content: string): { display: string; badge?: string } {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("{")) return { display: content };
+  const jsonText = trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  if (!jsonText.startsWith("{")) return { display: content };
+  try {
+    const obj = JSON.parse(jsonText) as Record<string, unknown>;
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return { display: content };
+    const textFields = ["payload", "output", "summary", "result", "content", "message", "answer", "text"];
+    for (const f of textFields) {
+      const v = obj[f];
+      if (typeof v === "string" && v.trim()) {
+        const badge = typeof obj.type === "string" ? obj.type : undefined;
+        return { display: v, badge };
+      }
+    }
+    return { display: content };
+  } catch {
+    return { display: content };
+  }
+}
+
 /** 配置域中文名（左列显示；未命中回退英文 name，tooltip 仍给原始域标识） */
 const DOMAIN_LABELS: Record<string, string> = {
   engine: "引擎参数", enginePlugins: "引擎插件", tools: "工具集", eventRouting: "事件路由",
@@ -1076,9 +1099,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                         {(msg.state === "sending" || msg.state === "queued" || msg.state === "regenerating") && !msg.content && (
                           <span className="msg__typing" aria-label="正在输入"><span /><span /><span /></span>
                         )}
-                        {msg.content.split("\n").map((line, i) => (
-                          <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>
-                        ))}
+                        {(() => {
+                          const parsed = msg.role === "assistant" ? extractAgentPayload(msg.content) : { display: msg.content };
+                          return (
+                            <>
+                              {parsed.badge && <span className="msg__json-badge">{parsed.badge}</span>}
+                              {parsed.display.split("\n").map((line, i) => (
+                                <React.Fragment key={i}>{i > 0 && <br />}{line}</React.Fragment>
+                              ))}
+                            </>
+                          );
+                        })()}
                         {msg.state === "stopped" && <span className="msg__state-badge">已停止</span>}
                         {msg.state === "interrupted" && <span className="msg__state-badge">连接中断</span>}
                         {msg.state === "error_timeout" && <span className="msg__state-badge">超时</span>}
