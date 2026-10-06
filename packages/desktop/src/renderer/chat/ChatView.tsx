@@ -33,11 +33,6 @@ interface Contact {
   online?: boolean;
 }
 
-const PRESET_GROUPS: Contact[] = [
-  { id: "group-proj", name: "Cortex 项目组", type: "group", avatar: "🏗️", desc: "工程协作 · 3 人" },
-  { id: "group-life", name: "翁法罗斯", type: "group", avatar: "🌙", desc: "日常闲聊 · 5 人" },
-];
-
 function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
   const t = msg.toLowerCase();
   if (/timeout|timed out|超时/.test(t)) return "timeout";
@@ -267,55 +262,6 @@ const TASK_FILTERS = [
   { id: "doing", name: "进行中", icon: "⏳" },
   { id: "done", name: "已完成", icon: "✅" },
   { id: "failed", name: "失败", icon: "❌" },
-];
-
-const TASKS = [
-  {
-    id: 1, icon: "🔍", title: "调研接口全景", agent: "analysis", duration: "3min",
-    status: "doing", statusCls: "doing", statusText: "● 进行中", source: "cmd",
-    stepDone: 3, stepTotal: 5,
-    steps: [
-      { name: "盘点 HTTP 路由", state: "done" },
-      { name: "盘点 IPC 通道", state: "done" },
-      { name: "盘点 WS 事件", state: "doing" },
-      { name: "统计包导出", state: "todo" },
-      { name: "汇总报告", state: "todo" },
-    ],
-    events: ["10:32:01 开始", "10:32:04 读取 router.ts", "10:32:09 匹配 WS 事件", "10:32:15 统计导出符号"],
-  },
-  {
-    id: 2, icon: "🛠️", title: "修复 daemon 僵死", agent: "fix", duration: "2min",
-    status: "done", statusCls: "done", statusText: "✓ 完成", source: "cmd",
-    stepDone: 4, stepTotal: 4,
-    steps: [
-      { name: "定位僵死进程", state: "done" },
-      { name: "清理 PID", state: "done" },
-      { name: "重启 daemon", state: "done" },
-      { name: "验证 3210", state: "done" },
-    ],
-    events: ["09:15:02 开始", "09:15:10 定位 20920", "09:15:30 重启完成", "09:16:00 验证通过"],
-  },
-  {
-    id: 3, icon: "🌤️", title: "查询天气", agent: "daily", duration: "8s",
-    status: "done", statusCls: "done", statusText: "✓ 完成", source: "tool",
-    stepDone: 2, stepTotal: 2,
-    steps: [
-      { name: "调用天气工具", state: "done" },
-      { name: "返回结果", state: "done" },
-    ],
-    events: ["11:20:00 工具调用", "11:20:08 返回结果"],
-  },
-  {
-    id: 4, icon: "⚙️", title: "Agent 配置接入", agent: "core", duration: "0s",
-    status: "failed", statusCls: "failed", statusText: "✕ 失败", source: "cmd",
-    stepDone: 1, stepTotal: 3,
-    steps: [
-      { name: "读取配置域", state: "done" },
-      { name: "映射 UI 配置项", state: "failed" },
-      { name: "写入生效", state: "todo" },
-    ],
-    events: ["11:02:00 开始", "11:02:05 读取配置域", "11:02:11 映射失败——key 不匹配"],
-  },
 ];
 
 export function ChatView({ onClose }: { onClose: () => void }) {
@@ -814,7 +760,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
 
   const railList = railTab === "friends"
     ? friends
-    : PRESET_GROUPS.filter((c) => c.type === "group");
+    : [];
 
   return (
     <div className="chat">
@@ -857,6 +803,9 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 {c.online && <span className="chat__rail-dot" aria-label="在线" />}
               </button>
             ))}
+            {railList.length === 0 && (
+              <div style={{ fontSize: 12, color: "#c9a3b8", padding: "20px 12px", textAlign: "center" }}>暂无群聊</div>
+            )}
           </div>
         </aside>
       )}
@@ -945,18 +894,11 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                     <span className={`chat__task-status chat__task-status--${t.status === "done" ? "done" : t.status === "failed" ? "failed" : "doing"}`}>{t.status}</span>
                   </button>
                 ))}
-                {realTasks === null && TASKS.filter((t) => taskFilter === "全部" || t.status === taskFilter).map((t, i) => (
-                  <button key={t.id} type="button" className={`chat__task-item${taskSelected === i ? " is-active" : ""}`} onClick={() => setTaskSelected(i)}>
-                    <span className="chat__task-icon" aria-hidden="true">{t.icon}</span>
-                    <span className="chat__task-meta">
-                      <span className="chat__task-title">{t.title} <span className={`chat__task-source chat__task-source--${t.source}`}>{t.source === "cmd" ? "命令" : "工具"}</span></span>
-                      <span className="chat__task-desc">{t.agent} · {t.duration}</span>
-                    </span>
-                    <span className={`chat__task-status chat__task-status--${t.statusCls}`}>{t.statusText}</span>
-                  </button>
-                ))}
                 {realTasks !== null && realTasks.length === 0 && (
                   <div style={{ fontSize: 12, color: "#c9a3b8", padding: "12px", textAlign: "center" }}>暂无任务节点</div>
+                )}
+                {realTasks === null && (
+                  <div style={{ fontSize: 12, color: "#c9a3b8", padding: "12px", textAlign: "center" }}>暂无任务（daemon 未连接）</div>
                 )}
               </aside>
               {/* 右：任务详情（复——渐进披露） */}
@@ -987,39 +929,11 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                       </>
                     );
                   }
-                  // 演示模式（daemon 无节点）：保留 mock 详情
-                  const t = TASKS[taskSelected];
                   return (
-                    <>
-                      <div className="chat__panel-head">
-                        <span className="chat__panel-title">{t.icon} {t.title}</span>
-                        <span className={`chat__task-status chat__task-status--${t.statusCls}`}>{t.statusText}</span>
-                      </div>
-                      <div className="chat__tasks-detail-meta">
-                        <span>Agent：{t.agent}</span>
-                        <span>耗时：{t.duration}</span>
-                        <span>进度：{t.stepDone}/{t.stepTotal} 步</span>
-                      </div>
-                      {/* 步骤流 */}
-                      <div className="chat__tasks-steps">
-                        {t.steps.map((st) => (
-                          <div key={st.name} className={`chat__task-step chat__task-step--${st.state}`}>
-                            <span className="chat__task-step-mark">{st.state === "done" ? "✓" : st.state === "doing" ? "●" : "○"}</span>
-                            <span className="chat__task-step-name">{st.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                      {/* 事件流 */}
-                      <div className="chat__tasks-events">
-                        {t.events.map((ev) => (
-                          <div key={ev} className="chat__task-event">{ev}</div>
-                        ))}
-                      </div>
-                      <div className="chat__tasks-actions">
-                        <button type="button" className="chat__session-btn" onClick={() => setToast("取消任务——待实现")} title="取消任务（F10：功能待接线，暂禁用）" disabled>⏹ 取消</button>
-                        <button type="button" className="chat__session-btn" onClick={() => setToast("重试任务——待实现")} title="重试任务（F10：功能待接线，暂禁用）" disabled>↻ 重试</button>
-                      </div>
-                    </>
+                    <div className="chat__tasks-empty">
+                      <div className="chat__panel-head"><span className="chat__panel-title">暂无任务</span></div>
+                      <div style={{ fontSize: 12, color: "#c9a3b8", padding: "16px 12px", textAlign: "center" }}>daemon 未连接或当前无任务节点</div>
+                    </div>
                   );
                 })()}
               </div>
