@@ -9,6 +9,7 @@
 
 import type { CommandHandler, CommandResult } from "../types.js";
 import type { EngineBridge } from "../services/engine-bridge.js";
+import { daemonFetchJson } from "../services/daemon-client.js";
 import type { TaskNode, Tag } from "@cortex/shared";
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -68,18 +69,52 @@ function _createTaskNode(content: string, agentType: string | undefined): TaskNo
   };
 }
 
-/** 通过 Engine 调度执行 */
+/** 通过 Engine 调度执行——daemon-first：优先连运行中的 daemon（引擎完整），不可达才回落本地 bridge */
 async function _handleRunExecution(
   bridge: EngineBridge,
   content: string,
   agentType: string | undefined,
 ): Promise<CommandResult> {
+  const node = _createTaskNode(content, agentType);
+
+  // ── daemon-first ──
+  const submitted = await daemonFetchJson<{ data?: { id?: string } }>("/api/v1/nodes", {
+    method: "POST",
+    body: JSON.stringify(node),
+  });
+  if (submitted) {
+    const exec = await daemonFetchJson<{
+      data?: { totalNodes: number; completed: number; failed: number; durationMs: number; results?: Array<{ nodeId: string; output?: string; success: boolean; error?: string }> };
+    }>("/api/v1/scheduler/execute", { method: "POST", timeoutMs: 180000 });
+    const rep = exec?.data;
+    if (!rep) {
+      return { success: false, error: "daemon 已接收节点但 /scheduler/execute 无响应", exitCode: 2 };
+    }
+    if (rep.completed > 0) {
+      const r = rep.results?.find((x) => x.nodeId === node.id) ?? rep.results?.[0];
+      return {
+        success: true,
+        output: r?.output ?? "✓ 执行完成（结果已沉淀进记忆）",
+        data: { via: "daemon", totalNodes: rep.totalNodes, completed: rep.completed, failed: rep.failed, durationMs: rep.durationMs, result: r },
+        exitCode: 0,
+      };
+    }
+    const r = rep.results?.[0];
+    return {
+      success: false,
+      error: `执行失败: ${rep.failed}/${rep.totalNodes} 节点失败${r?.error ? `\n${r.error}` : ""}`,
+      data: { via: "daemon", ...rep },
+      exitCode: 2,
+    };
+  }
+
+  // ── 本地回落（daemon 不可达）──
   if (bridge.isBootstrapConfigured) await bridge.ensureBootstrapped();
   else await bridge.ensureInitialized();
   const board = await bridge.getTaskBoard();
   const scheduler = await bridge.getScheduler();
 
-  board.addNode(_createTaskNode(content, agentType));
+  board.addNode(node);
   const report = await scheduler.executeAll();
 
   if (report.completed > 0) {
@@ -87,7 +122,7 @@ async function _handleRunExecution(
     return {
       success: true,
       output: result?.output ?? "✓ 执行完成",
-      data: { totalNodes: report.totalNodes, completed: report.completed, failed: report.failed, durationMs: report.durationMs, result },
+      data: { via: "local", totalNodes: report.totalNodes, completed: report.completed, failed: report.failed, durationMs: report.durationMs, result },
       exitCode: 0,
     };
   }
