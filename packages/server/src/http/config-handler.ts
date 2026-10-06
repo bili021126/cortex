@@ -91,6 +91,67 @@ function deepSetScalar(
   return null;
 }
 
+/** 导航到 path 除最后一段外的父容器（每段必须已存在），返回 {parent,last} 或错误串 */
+function parentAndLast(
+  root: unknown,
+  path: Array<string | number>,
+): { parent: unknown; last: string | number } | string {
+  let cur: unknown = root;
+  for (let i = 0; i < path.length - 1; i++) {
+    const k = path[i];
+    if (k === undefined) return "路径含空段";
+    if (cur === null || typeof cur !== "object") return `路径第 ${i} 段父节点不存在`;
+    if (!(k in (cur as Record<string, unknown>))) return `路径段 "${String(k)}" 不存在`;
+    cur = (cur as Record<string, unknown>)[k as string];
+  }
+  const last = path[path.length - 1];
+  if (last === undefined) return "path 末段为空";
+  return { parent: cur, last };
+}
+
+/** 结构写操作：数组增/删、对象加/删键。成功返回 null，否则返回拒绝原因。 */
+function applyStructuralOp(
+  root: Record<string, unknown>,
+  path: Array<string | number>,
+  value: unknown,
+  op: string,
+): string | null {
+  if (path.length < 1) return "path 至少一段";
+  if (op === "array-append") {
+    let cur: unknown = root;
+    for (const k of path) {
+      if (k === undefined || cur === null || typeof cur !== "object" || !(k in (cur as Record<string, unknown>))) return `数组路径不存在: ${path.join(".")}`;
+      cur = (cur as Record<string, unknown>)[k as string];
+    }
+    if (!Array.isArray(cur)) return "目标不是数组";
+    cur.push(value);
+    return null;
+  }
+  const pl = parentAndLast(root, path);
+  if (typeof pl === "string") return pl;
+  const { parent, last } = pl;
+  if (op === "array-remove") {
+    if (!Array.isArray(parent)) return "父节点不是数组";
+    const idx = typeof last === "number" ? last : Number(last);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= parent.length) return "数组下标越界";
+    parent.splice(idx, 1);
+    return null;
+  }
+  if (op === "obj-add") {
+    if (parent === null || typeof parent !== "object" || Array.isArray(parent)) return "父节点不是对象";
+    if (typeof last !== "string") return "对象键必须是字符串";
+    (parent as Record<string, unknown>)[last] = value;
+    return null;
+  }
+  if (op === "obj-remove") {
+    if (parent === null || typeof parent !== "object" || Array.isArray(parent)) return "父节点不是对象";
+    if (!(String(last) in (parent as Record<string, unknown>))) return "键不存在";
+    delete (parent as Record<string, unknown>)[last as string];
+    return null;
+  }
+  return `未知操作: ${op}`;
+}
+
 /** 原子写：先备份 .bak，再写临时文件并 rename 覆盖；对瞬时 EPERM/EACCES/EBUSY 退避重试（Windows 防护）。 */
 function atomicWriteRetry(fp: string, data: string, tries = 5): void {
   let lastErr: unknown;
@@ -126,7 +187,7 @@ export async function handleConfigSet(req: IncomingMessage, res: ServerResponse)
   try {
     const dir = resolveConfigDataDir();
     const raw = await readBody(req, res);
-    let body: { domain?: unknown; path?: unknown; value?: unknown };
+    let body: { domain?: unknown; path?: unknown; value?: unknown; op?: unknown };
     try {
       body = JSON.parse(raw) as typeof body;
     } catch {
@@ -167,7 +228,10 @@ export async function handleConfigSet(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
-    const reject = deepSetScalar(doc as Record<string, unknown>, path, body.value);
+    const op = typeof body.op === "string" ? body.op : "set";
+    const reject = op === "set"
+      ? deepSetScalar(doc as Record<string, unknown>, path, body.value)
+      : applyStructuralOp(doc as Record<string, unknown>, path, body.value, op);
     if (reject) {
       sendProblem(res, 400, "Bad Request", `拒绝写入：${reject}`);
       return;

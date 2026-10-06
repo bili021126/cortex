@@ -72,6 +72,25 @@ describe.skipIf(!up)("daemon E2E 回归", () => {
     expect(bad.status).toBe(422);
   });
 
+  it("config 结构写回：数组 append/remove + 对象 add/remove（还原）", async () => {
+    const gpFile = join(CFG, "governance-pipeline.json");
+    const origStages = JSON.parse(readFileSync(gpFile, "utf8")).stages as string[];
+    const ap = await jpost("/api/v1/config", { domain: "governancePipeline", path: ["stages"], op: "array-append", value: "e2e_stage" });
+    expect(ap.status).toBe(200);
+    expect((JSON.parse(readFileSync(gpFile, "utf8")).stages as string[]).includes("e2e_stage")).toBe(true);
+    const idx = (JSON.parse(readFileSync(gpFile, "utf8")).stages as string[]).indexOf("e2e_stage");
+    const rm = await jpost("/api/v1/config", { domain: "governancePipeline", path: ["stages", idx], op: "array-remove" });
+    expect(rm.status).toBe(200);
+    expect(JSON.parse(readFileSync(gpFile, "utf8")).stages).toEqual(origStages);
+
+    const engFile = join(CFG, "engine.json");
+    const origTT = JSON.parse(readFileSync(engFile, "utf8")).toolTimeouts;
+    expect((await jpost("/api/v1/config", { domain: "engine", path: ["toolTimeouts", "_e2e_tmp"], op: "obj-add", value: 5 })).status).toBe(200);
+    expect(JSON.parse(readFileSync(engFile, "utf8")).toolTimeouts._e2e_tmp).toBe(5);
+    expect((await jpost("/api/v1/config", { domain: "engine", path: ["toolTimeouts", "_e2e_tmp"], op: "obj-remove" })).status).toBe(200);
+    expect(JSON.parse(readFileSync(engFile, "utf8")).toolTimeouts).toEqual(origTT);
+  });
+
   it("会话生命周期：create → get → delete → get(404)", async () => {
     const c = await jpost("/api/v1/sessions", { agent: "verify", mode: "chat" });
     expect(c.status).toBe(201);
@@ -82,10 +101,10 @@ describe.skipIf(!up)("daemon E2E 回归", () => {
   });
 
   it("memory 写 → 查命中 → 删", async () => {
-    const mark = "E2E-" + Date.now();
-    const w = await jpost("/api/v1/memory", { content: `回归标记 ${mark}`, kind: "Insight", metadata: { agentType: "cyrene" } });
+    const mark = "e2emark" + Date.now();
+    const w = await jpost("/api/v1/memory", { content: `回归验证标记 ${mark}`, kind: "Insight", metadata: { agentType: "cyrene" } });
     expect(w.status).toBe(201);
-    const found = await jget(`/api/v1/memory?query=${mark}&limit=10`);
+    const found = await jget(`/api/v1/memory?query=${mark}&limit=100`);
     expect(found.status).toBe(200);
     expect((found.data ?? []).some((e: any) => (e.summary || "").includes(mark))).toBe(true);
     expect((await fetch(`${BASE}/api/v1/memory/${w.data.id}`, { method: "DELETE" })).status).toBe(200);

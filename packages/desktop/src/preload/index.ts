@@ -76,7 +76,7 @@ export interface CortexDesktopAPI {
   execute: (input: string) => Promise<IpcResult>;
   events: { list: (opts?: { page?: number; limit?: number; type?: string }) => Promise<IpcResult> };
   agent: { patch: (id: string, patch: Record<string, unknown>) => Promise<IpcResult> };
-  config: { get: (domain?: string) => Promise<IpcResult>; set: (domain: string, path: Array<string | number>, value: unknown) => Promise<IpcResult> };
+  config: { get: (domain?: string) => Promise<IpcResult>; set: (domain: string, path: Array<string | number>, value: unknown, op?: "set" | "array-append" | "array-remove" | "obj-add" | "obj-remove") => Promise<IpcResult> };
 }
 
 contextBridge.exposeInMainWorld("cyrene", {
@@ -221,6 +221,6 @@ contextBridge.exposeInMainWorld("cortexDesktop", {
   agent: { patch: (id, patch) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_AGENT_PATCH, id, patch) },
   config: {
     get: (domain) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_CONFIG_GET, domain),
-    set: (domain, path, value) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_CONFIG_SET, { domain, path, value }),
+    set: (domain, path, value, op) => ipcRenderer.invoke(IPC_CHANNELS.CORTEX_CONFIG_SET, { domain, path, value, op }),
   },
 } satisfies CortexDesktopAPI);

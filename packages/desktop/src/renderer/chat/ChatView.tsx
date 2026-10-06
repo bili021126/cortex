@@ -209,29 +209,33 @@ function EditableLeaf({
   );
 }
 
-/** 递归渲染配置值：原始值→可编辑；数组→逐条列出；对象→可展开子菜单（<details>） */
+/** 递归渲染配置值：原始值→可编辑；数组→逐条列出(可增删)；对象→可展开子菜单(可删键) */
 function CfgValue({
   v,
   path,
   onCommit,
+  onStructural,
 }: {
   v: unknown;
   path: Array<string | number>;
   onCommit: (path: Array<string | number>, value: string) => Promise<boolean>;
+  onStructural: (path: Array<string | number>, op: "array-append" | "array-remove" | "obj-add" | "obj-remove", value?: unknown) => Promise<void>;
 }): React.ReactElement {
   if (v === null || v === undefined) return <span className="chat__cfg-scalar">—</span>;
   if (typeof v === "boolean") return <ToggleLeaf v={v} path={path} onCommit={onCommit} />;
   if (typeof v !== "object") return <EditableLeaf v={v as string | number} path={path} onCommit={onCommit} />;
   if (Array.isArray(v)) {
-    if (v.length === 0) return <span className="chat__cfg-scalar">（空）</span>;
     return (
       <div className="chat__cfg-array">
+        {v.length === 0 && <span className="chat__cfg-scalar" style={{ opacity: 0.6 }}>（空数组）</span>}
         {v.map((item, i) => (
           <div key={i} className="chat__cfg-array-item">
             <span className="chat__cfg-idx">{i}</span>
-            <CfgValue v={item} path={[...path, i]} onCommit={onCommit} />
+            <CfgValue v={item} path={[...path, i]} onCommit={onCommit} onStructural={onStructural} />
+            <button type="button" className="chat__cfg-struct-del" title="删除此项" onClick={() => { void onStructural([...path, i], "array-remove"); }}>×</button>
           </div>
         ))}
+        <button type="button" className="chat__cfg-struct-add" title="追加一项（追加空串后可编辑）" onClick={() => { void onStructural(path, "array-append", ""); }}>+ 追加</button>
       </div>
     );
   }
@@ -246,7 +250,8 @@ function CfgValue({
             <div key={k} className="chat__cfg-kv">
               <span className={`chat__cfg-type chat__cfg-type--${t}`}>{t}</span>
               <span className="chat__cfg-k">{KEY_LABELS[k] ?? k}</span>
-              <CfgValue v={val} path={[...path, k]} onCommit={onCommit} />
+              <CfgValue v={val} path={[...path, k]} onCommit={onCommit} onStructural={onStructural} />
+              <button type="button" className="chat__cfg-struct-del" title="删除该键" onClick={() => { void onStructural([...path, k], "obj-remove"); }}>×</button>
             </div>
           );
         })}
@@ -488,6 +493,26 @@ export function ChatView({ onClose }: { onClose: () => void }) {
       } catch (e) {
         setToast(`保存失败：${String(e)}`);
         return false;
+      }
+    },
+    [cfgSel],
+  );
+  // 结构写操作：数组增删 / 对象加删键 → config.set(op) → 回读刷新
+  const structuralOp = useCallback(
+    async (path: Array<string | number>, op: "array-append" | "array-remove" | "obj-add" | "obj-remove", value?: unknown): Promise<void> => {
+      if (!cfgSel) return;
+      try {
+        const res = await window.cortexDesktop.config.set(cfgSel, path, value ?? null, op) as { ok: boolean; error?: string };
+        if (res?.ok) {
+          setToast("已更新结构");
+          const g = await window.cortexDesktop.config.get(cfgSel) as { ok: boolean; data?: { value?: unknown } };
+          const v = g?.ok ? g.data?.value : undefined;
+          setCfgVal(v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : null);
+        } else {
+          setToast(`操作失败：${res?.error ?? "未知错误"}`);
+        }
+      } catch (e) {
+        setToast(`操作失败：${String(e)}`);
       }
     },
     [cfgSel],
@@ -971,7 +996,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                         <span className={`chat__cfg-type chat__cfg-type--${type}`}>{type}</span>
                         <span className="chat__setting-item-label">{KEY_LABELS[k] ?? k}</span>
                         <span className="chat__setting-item-key">{k}</span>
-                        <CfgValue v={v} path={[k]} onCommit={commitCfg} />
+                        <CfgValue v={v} path={[k]} onCommit={commitCfg} onStructural={structuralOp} />
                       </div>
                     );
                   })}

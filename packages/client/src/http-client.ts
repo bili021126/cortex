@@ -248,8 +248,8 @@ export class CortexHttpClient {
     return res.data;
   }
 
-  /** 写回某配置域中已存在的标量叶（path 为定位键路径的段数组）。返回落盘后的域值。 */
-  async setConfig(body: { domain: string; path: Array<string | number>; value: unknown }): Promise<unknown> {
+  /** 写回配置：op 默认 "set"(改已存在标量叶)；结构操作 array-append/array-remove/obj-add/obj-remove */
+  async setConfig(body: { domain: string; path: Array<string | number>; value: unknown; op?: "set" | "array-append" | "array-remove" | "obj-add" | "obj-remove" }): Promise<unknown> {
     const res = await this.request<SingleResponse<unknown>>("POST", "/api/v1/config", body);
     return res.data;
   }
