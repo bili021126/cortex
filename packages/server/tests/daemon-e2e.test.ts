@@ -91,6 +91,14 @@ describe.skipIf(!up)("daemon E2E 回归", () => {
     expect(JSON.parse(readFileSync(engFile, "utf8")).toolTimeouts).toEqual(origTT);
   });
 
+  it("config 写回受 JSON Schema 约束：非法值 422 且不污染文件", async () => {
+    const gpFile = join(CFG, "governance-pipeline.json");
+    const before = JSON.parse(readFileSync(gpFile, "utf8")).stages as string[];
+    const bad = await jpost("/api/v1/config", { domain: "governancePipeline", path: ["stages"], op: "array-append", value: 123 });
+    expect(bad.status).toBe(422);
+    expect(JSON.parse(readFileSync(gpFile, "utf8")).stages).toEqual(before);
+  });
+
   it("会话生命周期：create → get → delete → get(404)", async () => {
     const c = await jpost("/api/v1/sessions", { agent: "verify", mode: "chat" });
     expect(c.status).toBe(201);

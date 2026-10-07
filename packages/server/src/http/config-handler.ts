@@ -11,7 +11,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFileSync, existsSync, writeFileSync, renameSync, copyFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { CONFIG_DOMAINS, resolveConfigDataDir } from "@cortex/config";
+import { CONFIG_DOMAINS, resolveConfigDataDir, validateSafe } from "@cortex/config";
 import { sendJson, sendProblem, readBody } from "./router.js";
 
 /** 读并解析某域文件；不存在或解析失败返回 undefined。 */
@@ -234,6 +234,15 @@ export async function handleConfigSet(req: IncomingMessage, res: ServerResponse)
       : applyStructuralOp(doc as Record<string, unknown>, path, body.value, op);
     if (reject) {
       sendProblem(res, 400, "Bad Request", `拒绝写入：${reject}`);
+      return;
+    }
+
+    // 写盘前按域 JSON Schema 校验（此前直接写文件绕过了 store.write 的校验）——
+    // 校验失败则丢弃内存改动、绝不落盘，保证文件不被非法值破坏
+    const check = validateSafe(domainName, doc);
+    if (!check.ok) {
+      const detail = check.errors.slice(0, 5).map((e) => `${e.path}: ${e.message}`).join("; ");
+      sendProblem(res, 422, "Validation Error", `Schema 校验失败（${check.errors.length} 处）：${detail}`);
       return;
     }
 
