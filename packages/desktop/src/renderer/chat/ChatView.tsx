@@ -27,10 +27,16 @@ interface Message {
 interface Contact {
   id: string;
   name: string;
+  label?: string;
   type: "friend" | "group";
   avatar: string;
   desc: string;
   online?: boolean;
+}
+
+/** 展示名：优先中文名（label），回退英文 id，再回退昔涟 */
+function dispName(c: Contact | null | undefined): string {
+  return c?.label ?? c?.name ?? "昔涟";
 }
 
 function localErrorKind(msg: string): "timeout" | "fatal" | "network" {
@@ -571,6 +577,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
           const list: Contact[] = Object.entries(agents).map(([id, a]) => ({
             id: "agent-" + id,
             name: id,
+            label: ((a.role ?? "").split(/[—–-]/)[0] ?? "").trim() || id,
             type: "friend" as const,
             avatar: a.emoji || id.slice(0, 1).toUpperCase(),
             desc: a.role || a.type || "Cortex Agent",
@@ -836,7 +843,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                   <span className="chat__rail-avatar-fallback chat__rail-avatar-fallback--hidden">{c.avatar}</span>
                 </span>
                 <span className="chat__rail-meta">
-                  <span className="chat__rail-name">{c.name}</span>
+                  <span className="chat__rail-name">{dispName(c)}</span>
                   <span className="chat__rail-desc">{c.desc}</span>
                 </span>
                 {c.online && <span className="chat__rail-dot" aria-label="在线" />}
@@ -857,7 +864,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
               {/* agent 站位：仅聊天界面显示 */}
               {tab === "chat" && (
                 <>
-                  <span className="chat__name">{active?.name ?? "昔涟"}</span>
+                  <span className="chat__name">{dispName(active)}</span>
                   <span className="chat__name-sep" aria-hidden="true">·</span>
                   <span className={`chat__hint${busy ? " chat__hint--busy" : ""}`}>{busy ? "思考中…" : (active?.online ? "在线" : "离线")}</span>
                   {/* 模式状态 */}
@@ -1058,14 +1065,17 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 {messages.length === 0 && (
                   <div className="chat__empty-state">
                     <div className="chat__empty-icon">💬</div>
-                    <p className="chat__empty-text">和 {active?.name ?? "昔涟"} 说点什么吧 ✨</p>
+                    <p className="chat__empty-text">和 {dispName(active)} 说点什么吧 ✨</p>
                   </div>
                 )}
                 {messages.map((msg) => (
                   <div key={msg.id} className={`msg msg--${msg.role === "user" ? "user" : "model"}`}>
                     <div className="msg__avatar">
                       {msg.role === "assistant" ? (
-                        <img className="msg__avatar-img" src={resolveAsset("../avatars/cyrene-avatar.png")} alt="昔涟" />
+                        <>
+                          <img className="msg__avatar-img" src={resolveAsset(`../avatars/${active?.name ?? "cyrene"}-avatar.png`)} alt={dispName(active)} onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.classList.remove("chat__rail-avatar-fallback--hidden"); }} />
+                          <span className="msg__avatar-fallback chat__rail-avatar-fallback--hidden">{active?.avatar ?? "🌸"}</span>
+                        </>
                       ) : (
                         <span className="msg__avatar-user">⭐</span>
                       )}
@@ -1121,7 +1131,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                 <div className="chat__input-row">
                   <textarea ref={inputRef} rows={1} value={input}
                     onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
-                    placeholder={`和 ${active?.name ?? "昔涟"} 说点什么…  Enter 发送 / Shift+Enter 换行`}
+                    placeholder={`和 ${dispName(active)} 说点什么…  Enter 发送 / Shift+Enter 换行`}
                     autoComplete="off" spellCheck={false} disabled={busy}
                   />
                   <button type="submit" className="chat__send" aria-label="发送" disabled={busy || !input.trim()}>
@@ -1142,7 +1152,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
             {/* ④ 右侧信息栏（默认收起） */}
             <aside className={`chat__side${sideOpen ? "" : " is-collapsed"}`} aria-label="联系人信息">
               <div className="chat__side-avatar">{active?.avatar ?? "🌸"}</div>
-              <div className="chat__side-name">{active?.name ?? "昔涟"}</div>
+              <div className="chat__side-name">{dispName(active)}</div>
               <div className="chat__side-desc">{active?.desc ?? ""}</div>
               <div className={`chat__side-status${active?.online ? " is-online" : ""}`}>
                 {active?.online ? "在线" : "离线"}
@@ -1213,7 +1223,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
       {configOpen && (
         <div className="chat__modal-mask" onClick={() => setConfigOpen(false)}>
           <div className="chat__modal" onClick={(e) => e.stopPropagation()}>
-            <div className="chat__modal-title">⚙ Agent 配置 · {active?.name ?? "昔涟"}</div>
+            <div className="chat__modal-title">⚙ Agent 配置 · {dispName(active)}</div>
             <div className="chat__modal-body">
               {!agentCfg && <div className="chat__cfg-row"><span className="chat__cfg-label">加载中…</span></div>}
               {agentCfg && (<>

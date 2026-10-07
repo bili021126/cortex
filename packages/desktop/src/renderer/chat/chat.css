@@ -2070,8 +2070,8 @@ body {
 .chat__rail-item:hover { background: rgba(255, 255, 255, 0.06); }
 .chat__rail-item.is-active { background: rgba(249, 168, 200, 0.15); }
 .chat__rail-avatar {
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -2186,8 +2186,9 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .msg { gap: 16px; margin-top: 18px; max-width: 68%; }
 .msg--user { align-self: flex-end; }
 .msg--user + .msg--user, .msg--model + .msg--model { margin-top: 10px; }
-.msg__avatar { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); }
+.msg__avatar { width: 52px; height: 52px; border-radius: 50%; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); }
 .msg__avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.msg__avatar-fallback { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 24px; }
 .msg__avatar-user { font-size: 18px; }
 .msg__bubble { font-size: 14px; line-height: 1.65; letter-spacing: 0.2px; }
 .msg__time { font-size: 11px; }
