@@ -58,6 +58,20 @@ export async function handleNodePost(req: IncomingMessage, res: ServerResponse, 
     sendProblem(res, 422, "Validation Error", "node.id 必填且为非空字符串");
     return;
   }
+  // TaskNode 结构校验——畸形节点会在 scheduler 派发时崩（如 node.type.replace）
+  const errs: string[] = [];
+  if (typeof node.type !== "string" || node.type === "") errs.push("type 必填非空字符串");
+  if (!Array.isArray(node.tags) || node.tags.some((t) => typeof t !== "string")) errs.push("tags 须为字符串数组");
+  if (typeof node.needsMultiPerspective !== "boolean") errs.push("needsMultiPerspective 须为布尔");
+  const statuses = ["pending", "claimed", "running", "done", "failed"];
+  if (!statuses.includes(node.status)) errs.push(`status 须为 ${statuses.join("/")} 之一`);
+  if (typeof node.payload !== "string") errs.push("payload 须为字符串");
+  if (!Array.isArray(node.results)) errs.push("results 须为数组");
+  if (typeof node.createdAt !== "number" || !Number.isFinite(node.createdAt)) errs.push("createdAt 须为数字");
+  if (errs.length > 0) {
+    sendProblem(res, 422, "Validation Error", `TaskNode 校验失败：${errs.join("; ")}`);
+    return;
+  }
   engine.board.addNode(node);
   sendJson(res, 201, { data: { id: node.id } });
 }

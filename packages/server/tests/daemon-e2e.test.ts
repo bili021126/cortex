@@ -126,6 +126,14 @@ describe.skipIf(!up)("daemon E2E 回归", () => {
     expect((l.data ?? []).some((n: any) => n.id === id)).toBe(true);
   });
 
+  it("node 提交结构校验：缺 type/错 status → 422 且不入板", async () => {
+    const id = "e2e-badnode-" + Date.now();
+    const bad = await jpost("/api/v1/nodes", { id, tags: [], needsMultiPerspective: true, status: "weird", payload: "x", results: [], createdAt: Date.now() });
+    expect(bad.status).toBe(422);
+    const l = await jget("/api/v1/nodes");
+    expect((l.data ?? []).some((n: any) => n.id === id)).toBe(false);
+  });
+
   it("health 返回真实降级结构（非恒零硬编码）", async () => {
     const { status, data } = await jget("/api/v1/health");
     expect(status).toBe(200);
