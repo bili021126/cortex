@@ -16,7 +16,7 @@ export const MODELS_SCHEMA: JsonSchema = {
       label: { type: "string", minLength: 1, _message: "模型 label 必须为非空字符串" },
       capabilities: {
         type: "array",
-        items: { type: "string", enum: ["chat", "function-calling", "streaming", "thinking", "reasoning", "vision"] },
+        items: { type: "string", enum: ["chat", "function-calling", "streaming", "thinking", "reasoning", "vision", "json-output", "responses-api", "anthropic-api", "fim"] },
       },
       thinking: { type: "boolean" },
       thinkingNote: { type: "string" },

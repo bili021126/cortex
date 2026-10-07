@@ -238,8 +238,10 @@ export async function handleConfigSet(req: IncomingMessage, res: ServerResponse)
     }
 
     // 写盘前按域 JSON Schema 校验（此前直接写文件绕过了 store.write 的校验）——
-    // 校验失败则丢弃内存改动、绝不落盘，保证文件不被非法值破坏
-    const check = validateSafe(domainName, doc);
+    // schema 是为 dataKey 解包后的内层数据写的（与 store.write 一致），故先解包再校验，
+    // 否则带 _description 等 wrapper 字段的域会误判。校验失败则丢弃内存改动、绝不落盘。
+    const toValidate = d.dataKey ? (doc as Record<string, unknown>)[d.dataKey] : doc;
+    const check = validateSafe(domainName, toValidate);
     if (!check.ok) {
       const detail = check.errors.slice(0, 5).map((e) => `${e.path}: ${e.message}`).join("; ");
       sendProblem(res, 422, "Validation Error", `Schema 校验失败（${check.errors.length} 处）：${detail}`);
