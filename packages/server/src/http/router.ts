@@ -136,7 +136,7 @@ export class HttpRouter {
 
     // POST /api/v1/config — 配置标量写回（deep-set 到引擎实读的域文件，原子写 + .bak）
     if (method === "POST" && path === "/api/v1/config") {
-      void handleConfigSet(req, res).catch((err) =>
+      void handleConfigSet(req, res, (domain) => this.engine.notifyConfigChange(domain)).catch((err) =>
         sendProblem(res, 500, "Config Error", err instanceof Error ? err.message : String(err)),
       );
       return true;

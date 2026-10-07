@@ -519,6 +519,18 @@ export function ChatView({ onClose }: { onClose: () => void }) {
     },
     [cfgSel],
   );
+  // config WS 接真：daemon 广播 config.changed 且命中当前域 → 自动刷新（免手点"↻"）
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    try {
+      off = window.cortexDesktop.onNotification((e) => {
+        if (e.channel !== "config") return;
+        const d = e.data as { type?: string; domain?: string };
+        if (d?.type === "config.changed" && d.domain && d.domain === cfgSel) setCfgTick((t) => t + 1);
+      });
+    } catch { /* 旧版 preload */ }
+    return () => { try { off?.(); } catch { /* 已卸载 */ } };
+  }, [cfgSel]);
   const [taskFilter, setTaskFilter] = useState("全部");
   const [taskSelected, setTaskSelected] = useState(0);
   // 任务接真：打开任务面板时拉真实节点（GET /api/v1/nodes——无节点时静态）

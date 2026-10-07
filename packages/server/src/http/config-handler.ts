@@ -183,7 +183,7 @@ function atomicWriteRetry(fp: string, data: string, tries = 5): void {
  * POST /api/v1/config  body = { domain, path: (string|number)[], value }
  * 把设置面板编辑的标量值写回引擎实际读取的配置域文件（resolveConfigDataDir），非孤儿路径。
  */
-export async function handleConfigSet(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleConfigSet(req: IncomingMessage, res: ServerResponse, onChanged?: (domain: string) => void): Promise<void> {
   try {
     const dir = resolveConfigDataDir();
     const raw = await readBody(req, res);
@@ -255,10 +255,20 @@ export async function handleConfigSet(req: IncomingMessage, res: ServerResponse)
       return;
     }
 
+    // 写回成功——触发配置变更通知（复用 store.write 的下游广播链），让客户端知晓
+    onChanged?.(domainName);
+
     // 回带真实 dir + 落盘后的该域新值，供客户端核对「写的就是引擎读的这份」
     const after = readDomain(dir, d.fileName);
+    // 生效分级：boot 烘焙域（LLM 适配器/agent 实例）需重启；其余引擎 per-call 从磁盘重读→即时生效
+    const BOOT_BAKED = new Set(["models", "keysContext", "agentManifests"]);
+    const reloaded: "live" | "restart-required" = BOOT_BAKED.has(domainName) ? "restart-required" : "live";
     sendJson(res, 200, {
-      data: { domain: domainName, file: fp, dir, present: after !== undefined, value: after ?? null, reloaded: false },
+      data: {
+        domain: domainName, file: fp, dir, present: after !== undefined, value: after ?? null,
+        reloaded,
+        note: reloaded === "restart-required" ? "该域在启动时烘焙进引擎（LLM 适配器/agent 实例），已落盘并广播，需重启 daemon 生效" : undefined,
+      },
     });
   } catch (e) {
     sendProblem(res, 500, "Config Error", `写回配置失败: ${e instanceof Error ? e.message : String(e)}`);

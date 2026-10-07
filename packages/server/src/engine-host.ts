@@ -82,6 +82,8 @@ export class EngineHost {
   private readonly stores: ConfigStores;
   /** 复用 bootstrap 内部真实 HealthCollector（S2-9：不再自建孤儿实例） */
   private readonly _healthCollector: HealthCollector;
+  /** 配置变更监听者列表——notifyConfigChange 手动触发用（HTTP 写回路径） */
+  private readonly _configChangeFns: Array<(domain: string) => void> = [];
 
   private constructor(
     result: BootstrapEngineResult,
@@ -193,10 +195,18 @@ export class EngineHost {
 
   /** 注册配置变更监听——任一配置域写入后以域名触发 */
   onConfigChange(fn: (domain: string) => void): void {
+    this._configChangeFns.push(fn);
     this.stores.modelStore.onChange(fn);
     this.stores.keyStore.onChange(fn);
     this.stores.agentStore.onChange(fn);
     this.stores.tuningStore.onChange(fn);
+  }
+
+  /** 手动触发某域的变更通知——HTTP 写回（绕过 store.write）后调用，复用与 store.write 相同的下游广播链 */
+  notifyConfigChange(domain: string): void {
+    for (const fn of this._configChangeFns) {
+      try { fn(domain); } catch { /* 监听者异常不得阻断写回主流程 */ }
+    }
   }
 }
 

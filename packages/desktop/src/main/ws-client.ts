@@ -6,6 +6,16 @@
  *
  * 令牌：env CORTEX_DAEMON_WS_TOKEN（未配置时不连接——静默降级）
  */
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+/** 令牌：env 优先，否则读 daemon 随机生成并落盘的 ~/.cortex/ws-token（与 cortex-bridge 一致） */
+function resolveWsToken(): string | undefined {
+  if (process.env["CORTEX_DAEMON_WS_TOKEN"]) return process.env["CORTEX_DAEMON_WS_TOKEN"];
+  try { return readFileSync(join(homedir(), ".cortex", "ws-token"), "utf-8").trim() || undefined; } catch { return undefined; }
+}
+
 export class DaemonWsClient {
   private ws: WebSocket | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -17,16 +27,16 @@ export class DaemonWsClient {
   ) {}
 
   start(): void {
-    const token = process.env["CORTEX_DAEMON_WS_TOKEN"];
-    // 令牌未配置——daemon 可能随机生成了令牌，无法连接（静默降级为静态通知）
+    const token = resolveWsToken();
+    // 令牌缺失（daemon 未起且 env 未配置）——静默降级为静态通知
     if (!token) return;
     const url = `ws://127.0.0.1:${this.port}?token=${encodeURIComponent(token)}`;
     try {
       const ws = new WebSocket(url);
       this.ws = ws;
       ws.onopen = () => {
-        // 连接成功——订阅 pipeline/notification/gate 频道（显式订阅，广播只发订阅者）
-        ws.send(JSON.stringify({ type: "subscribe", channels: ["pipeline", "notification", "gate"] }));
+        // 连接成功——订阅 pipeline/notification/gate/config 频道（显式订阅，广播只发订阅者）
+        ws.send(JSON.stringify({ type: "subscribe", channels: ["pipeline", "notification", "gate", "config"] }));
       };
       ws.onmessage = (ev) => {
         try {

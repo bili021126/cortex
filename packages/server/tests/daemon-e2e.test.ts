@@ -64,6 +64,15 @@ describe.skipIf(!up)("daemon E2E 回归", () => {
     await jpost("/api/v1/config", { domain: "agentManifests", path: ["agents", "ganyu", "maxInstances"], value: orig });
   });
 
+  it("config 写回生效分级：engine→live，models→restart-required", async () => {
+    const eng = await jpost("/api/v1/config", { domain: "engine", path: ["maxReplanPerNode"], value: 3 });
+    expect(eng.status).toBe(200);
+    expect(eng.data.reloaded).toBe("live");
+    const mod = await jpost("/api/v1/config", { domain: "models", path: ["models", "deepseek-flash", "maxOutputTokens"], value: 393216 });
+    expect(mod.status).toBe(200);
+    expect(mod.data.reloaded).toBe("restart-required");
+  });
+
   it("config fail-closed：拒建新键 / 拒覆写对象 / 未知域 / 非法 JSON", async () => {
     expect((await jpost("/api/v1/config", { domain: "engine", path: ["nopeKey"], value: "1" })).status).toBe(400);
     expect((await jpost("/api/v1/config", { domain: "engine", path: ["inspector"], value: "x" })).status).toBe(400);
