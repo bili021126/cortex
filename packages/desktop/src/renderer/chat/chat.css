@@ -2679,6 +2679,11 @@ html, body { height: 100%; margin: 0; padding: 0; }
 .chat__cfg-struct-del:hover { background: rgba(248, 113, 113, 0.15); color: #f87171; }
 .chat__cfg-struct-add { align-self: flex-start; margin-top: 3px; padding: 1px 10px; border: 1px dashed rgba(236, 72, 153, 0.35); border-radius: 999px; background: transparent; color: #d94685; font-size: 11px; cursor: pointer; }
 .chat__cfg-struct-add:hover { background: rgba(236, 72, 153, 0.08); }
+.chat__cfg-toolbar { display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; margin-bottom: 4px; border-bottom: 1px solid rgba(236, 72, 153, 0.1); }
+.chat__cfg-search { flex: 1; min-width: 0; font-size: 12px; color: #5c4a5c; padding: 5px 12px; border: 1px solid rgba(236, 72, 153, 0.2); border-radius: 999px; background: rgba(255, 255, 255, 0.7); outline: none; }
+.chat__cfg-search:focus { border-color: #d94685; box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.12); }
+.chat__cfg-refresh { flex-shrink: 0; font-size: 12px; color: #d94685; padding: 5px 12px; border: 1px solid rgba(236, 72, 153, 0.25); border-radius: 999px; background: rgba(236, 72, 153, 0.06); cursor: pointer; transition: background 0.12s; }
+.chat__cfg-refresh:hover { background: rgba(236, 72, 153, 0.12); }
 .chat__cfg-k { font-size: 12px; color: #5c4a5c; min-width: 90px; }
 .chat__cfg-edit { cursor: pointer; border-bottom: 1px dashed rgba(217, 70, 133, 0.35); padding: 0 2px; border-radius: 3px; transition: background 0.12s; }
 .chat__cfg-edit:hover { background: rgba(236, 72, 153, 0.1); }

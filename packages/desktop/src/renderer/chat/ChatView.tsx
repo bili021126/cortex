@@ -442,6 +442,8 @@ export function ChatView({ onClose }: { onClose: () => void }) {
   const [cfg, setCfg] = useState<{ dir: string; domains: Array<{ name: string; fileName: string; required: boolean; present: boolean; topKeys: string[] }> } | null>(null);
   const [cfgSel, setCfgSel] = useState<string | null>(null);
   const [cfgVal, setCfgVal] = useState<Record<string, unknown> | null>(null);
+  const [cfgFilter, setCfgFilter] = useState("");
+  const [cfgTick, setCfgTick] = useState(0);
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const [cfgLoading, setCfgLoading] = useState(false);
   // 进设置 tab：拉引擎真实配置域概览（dir + 各域），默认选中第一个域
@@ -472,7 +474,7 @@ export function ChatView({ onClose }: { onClose: () => void }) {
       } catch { setCfgVal(null); }
       setCfgLoading(false);
     })();
-  }, [cfgSel]);
+  }, [cfgSel, cfgTick]);
   // 写回某标量叶 → daemon 落盘到引擎实读文件 → 回读刷新该域（编辑所见即所存）
   const commitCfg = useCallback(
     async (path: Array<string | number>, value: string): Promise<boolean> => {
@@ -988,8 +990,25 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                   <span className="chat__panel-title" title={cfgSel ?? ""}>{cfgSel ? (DOMAIN_LABELS[cfgSel] ?? cfgSel) : "选择配置域"}</span>
                   <span className="chat__settings-domain-desc" title="引擎实际读取的配置目录">源：{cfg?.dir ?? "…"}</span>
                 </div>
+                {cfgSel && (
+                  <div className="chat__cfg-toolbar">
+                    <input
+                      type="text"
+                      className="chat__cfg-search"
+                      placeholder="过滤键名…"
+                      value={cfgFilter}
+                      onChange={(e) => { setCfgFilter(e.target.value); }}
+                      aria-label="过滤配置键"
+                    />
+                    <button type="button" className="chat__cfg-refresh" title="重新拉取该域" onClick={() => setCfgTick((t) => t + 1)}>↻ 刷新</button>
+                  </div>
+                )}
                 <div className="chat__settings-items">
-                  {cfgSel && cfgVal && Object.entries(cfgVal).map(([k, v]) => {
+                  {cfgSel && cfgVal && Object.entries(cfgVal).filter(([k]) => {
+                    const q = cfgFilter.trim().toLowerCase();
+                    if (!q) return true;
+                    return k.toLowerCase().includes(q) || (KEY_LABELS[k] ?? "").toLowerCase().includes(q);
+                  }).map(([k, v]) => {
                     const type = v === null ? "null" : Array.isArray(v) ? "arr" : typeof v === "object" ? "obj" : typeof v === "number" ? "num" : typeof v === "boolean" ? "bool" : "str";
                     return (
                       <div key={k} className={`chat__setting-item${flashKey === k ? " is-flash" : ""}`}>
@@ -1000,6 +1019,12 @@ export function ChatView({ onClose }: { onClose: () => void }) {
                       </div>
                     );
                   })}
+                  {cfgSel && cfgVal && cfgFilter.trim() && Object.entries(cfgVal).filter(([k]) => {
+                    const q = cfgFilter.trim().toLowerCase();
+                    return k.toLowerCase().includes(q) || (KEY_LABELS[k] ?? "").toLowerCase().includes(q);
+                  }).length === 0 && (
+                    <div style={{ fontSize: 12, color: "#c9a3b8", padding: "16px", textAlign: "center" }}>无匹配键</div>
+                  )}
                   {cfgSel && !cfgVal && cfgLoading && (
                     <div className="chat__cfg-skeleton">
                       <div className="chat__cfg-sk-line" /><div className="chat__cfg-sk-line" /><div className="chat__cfg-sk-line" /><div className="chat__cfg-sk-line" />
